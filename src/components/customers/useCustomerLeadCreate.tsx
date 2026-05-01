@@ -89,6 +89,8 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   logoUploadMode: "url",
   manager: defaultManagerLabel,
   managerId: "",
+  taxId: "",
+  legalAddress: "",
   iban: "",
   signatoryName: "",
   signatoryPosition: "",
@@ -100,6 +102,41 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   eventComment: "",
   notes: "",
 });
+
+const normalizeOptionalDate = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (!dotted) return trimmed;
+  const [, day, month, year] = dotted;
+  return `${year}-${String(Number(month)).padStart(2, "0")}-${String(Number(day)).padStart(2, "0")}`;
+};
+
+const CUSTOMER_OPTIONAL_COLUMNS: Record<string, string[]> = {
+  manager_user_id: ["manager_user_id"],
+  ownership_type: ["ownership_type"],
+  vat_rate: ["vat_rate"],
+  tax_id: ["tax_id"],
+  website: ["website"],
+  iban: ["iban"],
+  logo_url: ["logo_url"],
+  contacts: ["contacts"],
+  contact_name: ["contact_name"],
+  contact_position: ["contact_position"],
+  contact_phone: ["contact_phone"],
+  contact_email: ["contact_email"],
+  contact_birthday: ["contact_birthday"],
+  legal_entities: ["legal_entities"],
+  signatory_name: ["signatory_name"],
+  signatory_position: ["signatory_position"],
+  reminder_at: ["reminder_at"],
+  reminder_comment: ["reminder_comment"],
+  event_name: ["event_name"],
+  event_at: ["event_at"],
+  event_comment: ["event_comment"],
+  notes: ["notes"],
+};
 
 export const useCustomerLeadCreate = ({
   teamId,
@@ -242,14 +279,16 @@ export const useCustomerLeadCreate = ({
         position: contact.position.trim(),
         phone: contact.phone.trim(),
         email: contact.email.trim(),
-        birthday: contact.birthday.trim(),
+        birthday: normalizeOptionalDate(contact.birthday),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
     if (!contacts.some((contact) => contact.phone)) {
+      setCustomerSaving(false);
       setCustomerError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
       return;
     }
     if (!contacts.some((contact) => contact.email)) {
+      setCustomerSaving(false);
       setCustomerError("Для замовника обовʼязково вкажіть email.");
       return;
     }
@@ -294,21 +333,26 @@ export const useCustomerLeadCreate = ({
           .select("id,name,legal_name,logo_url")
           .single();
       };
-      let { data, error } = await createWithPayload(payload);
-      if (error) {
-        const message = error.message ?? "";
-        if (message.includes("column") && message.includes("legal_entities")) {
-          const fallbackPayload = { ...payload };
-          delete fallbackPayload.legal_entities;
-          const fallbackRes = await createWithPayload(fallbackPayload);
-          data = fallbackRes.data;
-          error = fallbackRes.error;
-        } else if (message.includes("column") && message.includes("manager_user_id")) {
-          const fallbackPayload = { ...payload };
-          delete fallbackPayload.manager_user_id;
-          const fallbackRes = await createWithPayload(fallbackPayload);
-          data = fallbackRes.data;
-          error = fallbackRes.error;
+      let insertPayload = { ...payload };
+      let data: unknown = null;
+      let error: unknown = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const result = await createWithPayload(insertPayload);
+        data = result.data;
+        error = result.error;
+        if (!error) break;
+        const message = resolveErrorMessage(error, "");
+        const missingColumn = Object.keys(CUSTOMER_OPTIONAL_COLUMNS).find(
+          (column) => message.includes("column") && message.includes(column)
+        );
+        if (!missingColumn) break;
+        const nextPayload = { ...insertPayload };
+        CUSTOMER_OPTIONAL_COLUMNS[missingColumn].forEach((field) => {
+          delete nextPayload[field];
+        });
+        insertPayload = nextPayload;
+        if (missingColumn === "contact_birthday") {
+          insertPayload.contacts = contacts.map((contact) => ({ ...contact, birthday: "" }));
         }
       }
       if (error) throw error;
@@ -422,6 +466,8 @@ export const useCustomerLeadCreate = ({
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
+      tax_id: leadForm.taxId.trim() || null,
+      legal_address: leadForm.legalAddress.trim() || null,
       logo_url: optimizedLogoUrl,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
@@ -465,12 +511,6 @@ export const useCustomerLeadCreate = ({
           const fallbackRes = await createWithPayload(fallbackPayload);
           data = fallbackRes.data;
           error = fallbackRes.error;
-        } else if (message.includes("column") && message.includes("ownership_type")) {
-          const fallbackPayload = { ...basePayload };
-          delete fallbackPayload.ownership_type;
-          const fallbackRes = await createWithPayload(fallbackPayload);
-          data = fallbackRes.data;
-          error = fallbackRes.error;
         } else if (message.includes("column") && message.includes("manager_user_id")) {
           const fallbackPayload = { ...basePayload };
           delete fallbackPayload.manager_user_id;
@@ -499,6 +539,10 @@ export const useCustomerLeadCreate = ({
       const message = resolveErrorMessage(error, "Не вдалося створити ліда.");
       if (message.includes("relation") && message.includes("leads")) {
         setLeadError("Таблиця lead ще не створена. Запустіть SQL-скрипт scripts/leads-schema.sql.");
+      } else if (message.includes("column") && message.includes("ownership_type")) {
+        setLeadError("У базі немає колонки ownership_type для лідів. Запустіть оновлений scripts/leads-schema.sql.");
+      } else if (message.includes("column") && (message.includes("tax_id") || message.includes("legal_address"))) {
+        setLeadError("У базі немає нових колонок tax_id/legal_address для лідів. Запустіть оновлений scripts/leads-schema.sql.");
       } else {
         setLeadError(message);
       }

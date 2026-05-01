@@ -46,6 +46,8 @@ export type LeadFormState = {
   logoUploadMode: ImageUploadMode;
   manager: string;
   managerId: string;
+  taxId: string;
+  legalAddress: string;
   iban: string;
   signatoryName: string;
   signatoryPosition: string;
@@ -89,6 +91,8 @@ export type LeadDialogProps = {
   title?: string;
   description?: string;
   submitLabel?: string;
+  secondarySubmitLabel?: string;
+  onSecondarySubmit?: () => void;
   onSubmit: () => void;
   calculations?: LeadLinkedItem[];
   orders?: LeadLinkedItem[];
@@ -175,6 +179,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   title = "Новий лід",
   description = "Додайте контакт ліда для подальшої роботи.",
   submitLabel = "Створити ліда",
+  secondarySubmitLabel,
+  onSecondarySubmit,
   onSubmit,
   calculations = [],
   orders = [],
@@ -871,6 +877,15 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
+                      <Label>{isFopOwnership ? "ІПН" : "ЄДРПОУ / ІПН"}</Label>
+                      <Input
+                        value={form.taxId}
+                        onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                        placeholder={isFopOwnership ? "ІПН" : "Код або ІПН"}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid gap-2">
                       <Label>IBAN</Label>
                       <Input
                         value={form.iban}
@@ -879,6 +894,17 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         className="h-9"
                       />
                     </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{isFopOwnership ? "Прописка" : "Юридична адреса"}</Label>
+                    <Textarea
+                      value={form.legalAddress}
+                      onChange={(e) => setForm((prev) => ({ ...prev, legalAddress: e.target.value }))}
+                      placeholder={isFopOwnership ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
+                      className="min-h-[76px]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
                       <Label>Підписант</Label>
                       <Input
@@ -1136,6 +1162,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Скасувати
             </Button>
+            {onSecondarySubmit && secondarySubmitLabel ? (
+              <Button variant="secondary" onClick={onSecondarySubmit} disabled={saving}>
+                {saving ? "Збереження..." : secondarySubmitLabel}
+              </Button>
+            ) : null}
             <Button onClick={onSubmit} disabled={saving}>
               {saving ? "Збереження..." : submitLabel}
             </Button>

@@ -237,6 +237,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "related">(
     "basic"
   );
+  const [quickMode, setQuickMode] = React.useState(true);
   const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
   const [logoPreviewUrl, setLogoPreviewUrl] = React.useState<string | null>(null);
   const hasInvalidLogoUrl = React.useMemo(
@@ -659,6 +660,115 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         </div>
 
         <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 p-1.5">
+            <span className="text-xs text-muted-foreground">Режим форми</span>
+            <div className="inline-flex items-center gap-1 rounded-md bg-background p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={quickMode ? "secondary" : "ghost"}
+                className="h-7 px-2 text-xs"
+                onClick={() => {
+                  setQuickMode(true);
+                  setSection("basic");
+                }}
+              >
+                Швидко
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={!quickMode ? "secondary" : "ghost"}
+                className="h-7 px-2 text-xs"
+                onClick={() => setQuickMode(false)}
+              >
+                Повна картка
+              </Button>
+            </div>
+          </div>
+
+          {quickMode ? (
+            <div className="space-y-4">
+              <SectionHeader>Основне</SectionHeader>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
+                    <Input
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>{isFopOwnership ? "Instagram" : "Сайт"}</Label>
+                    <Input
+                      value={form.website}
+                      onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                      placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Імʼя контакту</Label>
+                    <Input
+                      value={form.contacts[0]?.name ?? ""}
+                      onChange={(e) => updateContact(0, { name: e.target.value })}
+                      placeholder="Імʼя та прізвище"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Телефон *</Label>
+                    <Input
+                      value={form.contacts[0]?.phone ?? ""}
+                      onChange={(e) => updateContact(0, { phone: e.target.value })}
+                      placeholder="+380..."
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Email *</Label>
+                    <Input
+                      type="email"
+                      value={form.contacts[0]?.email ?? ""}
+                      onChange={(e) => updateContact(0, { email: e.target.value })}
+                      placeholder="name@company.com"
+                      className="h-9"
+                    />
+                  </div>
+                  {!isFopOwnership ? (
+                    <div className="grid gap-2">
+                      <Label>Посада</Label>
+                      <Select
+                        value={form.contacts[0]?.position ?? ""}
+                        onValueChange={(value) => updateContact(0, { position: value })}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Оберіть посаду" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POSITION_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
+                Відкрити повну картку
+              </Button>
+            </div>
+          ) : (
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
             <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
               <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
@@ -994,6 +1104,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
 
+                    <div className="mt-4 grid gap-2">
+                      <Label>{activeLegalEntityIsPerson ? "Прописка" : "Юридична адреса"}</Label>
+                      <Textarea
+                        value={activeLegalEntity.legalAddress}
+                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalAddress: e.target.value })}
+                        placeholder={activeLegalEntityIsPerson ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
+                        className="min-h-[76px]"
+                      />
+                    </div>
+
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                       {activeLegalEntityIsPerson ? (
                         <div className="grid gap-2">
@@ -1257,6 +1377,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </Tabs>
             </TabsContent>
           </Tabs>
+          )}
 
           {error ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

@@ -112,6 +112,8 @@ type LeadRow = {
   company_name?: string | null;
   legal_name?: string | null;
   ownership_type?: string | null;
+  tax_id?: string | null;
+  legal_address?: string | null;
   logo_url?: string | null;
   first_name?: string | null;
   last_name?: string | null;
@@ -364,6 +366,8 @@ const LEAD_COLUMNS = [
   "company_name",
   "legal_name",
   "ownership_type",
+  "tax_id",
+  "legal_address",
   "logo_url",
   "first_name",
   "last_name",
@@ -385,6 +389,20 @@ const LEAD_COLUMNS = [
   "created_at",
   "updated_at",
 ].join(",");
+const LEAD_COLUMNS_WITHOUT_REQUISITES = LEAD_COLUMNS.replace("tax_id,", "").replace("legal_address,", "");
+const LEAD_COLUMNS_LEGACY = LEAD_COLUMNS_WITHOUT_REQUISITES.replace("ownership_type,", "");
+type LeadColumnsVariant = "full" | "no_requisites" | "no_ownership";
+const getLeadColumns = (variant: LeadColumnsVariant) => {
+  if (variant === "no_ownership") return LEAD_COLUMNS_LEGACY;
+  if (variant === "no_requisites") return LEAD_COLUMNS_WITHOUT_REQUISITES;
+  return LEAD_COLUMNS;
+};
+const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, message: string): LeadColumnsVariant | null => {
+  if (!/column/i.test(message)) return null;
+  if (variant === "full" && (/tax_id/i.test(message) || /legal_address/i.test(message))) return "no_requisites";
+  if ((variant === "full" || variant === "no_requisites") && /ownership_type/i.test(message)) return "no_ownership";
+  return null;
+};
 const isManagerFilterMember = (member: Pick<WorkspaceMemberDisplayRow, "accessRole" | "jobRole">) =>
   isQuoteManagerJobRole(member.jobRole) ||
   (member.jobRole ?? "").trim().toLowerCase() === "seo" ||
@@ -395,6 +413,18 @@ const normalizeManagerKey = (value?: string | null) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 const escapePostgrestTerm = (value: string) => value.replace(/[%_,]/g, (char) => `\\${char}`);
+
+const getLeadConversionMissingFields = (form: LeadFormState, phones: string[]) => {
+  const missing: string[] = [];
+  if (!form.ownershipType.trim()) missing.push("форма власності");
+  if (!form.taxId.trim()) missing.push(form.ownershipType === "fop" ? "ІПН" : "ЄДРПОУ / ІПН");
+  if (!form.legalAddress.trim()) missing.push(form.ownershipType === "fop" ? "прописка" : "юридична адреса");
+  if (!form.iban.trim()) missing.push("IBAN");
+  if (!form.signatoryPosition.trim()) missing.push("посада підписанта");
+  if (!phones.length) missing.push("телефон");
+  if (!form.email.trim()) missing.push("email");
+  return missing;
+};
 
 type CustomersPageCachePayload = {
   activeTab: "customers" | "leads";
@@ -539,6 +569,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     website: "",
     manager: "",
     managerId: "",
+    taxId: "",
+    legalAddress: "",
     iban: "",
     signatoryName: "",
     signatoryPosition: "",
@@ -1197,6 +1229,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       website: "",
       manager: currentManagerLabel || defaultManagerName,
       managerId: userId ?? "",
+      taxId: "",
+      legalAddress: "",
       iban: "",
       signatoryName: "",
       signatoryPosition: "",
@@ -1523,6 +1557,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       companyName: lead.company_name ?? "",
       legalName: lead.legal_name ?? "",
       ownershipType: lead.ownership_type ?? "",
+      taxId: lead.tax_id ?? "",
+      legalAddress: lead.legal_address ?? "",
       logoUrl: normalizeCustomerLogoUrl(lead.logo_url) ?? "",
       logoFile: null,
       logoUploadMode: "url",
@@ -1586,13 +1622,25 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   const fetchLeadById = useCallback(
     async (leadId: string) => {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("leads")
-        .select(LEAD_COLUMNS)
-        .eq("team_id", teamId)
-        .eq("id", leadId)
-        .maybeSingle<LeadRow>();
+      const loadLead = async (variant: LeadColumnsVariant) =>
+        await supabase
+          .schema("tosho")
+          .from("leads")
+          .select(getLeadColumns(variant))
+          .eq("team_id", teamId)
+          .eq("id", leadId)
+          .maybeSingle<LeadRow>();
+
+      let variant: LeadColumnsVariant = "full";
+      let { data, error } = await loadLead(variant);
+      let fallbackVariant: LeadColumnsVariant | null = error
+        ? getFallbackLeadColumnsVariant(variant, error.message ?? "")
+        : null;
+      while (error && fallbackVariant) {
+        variant = fallbackVariant;
+        ({ data, error } = await loadLead(variant));
+        fallbackVariant = error ? getFallbackLeadColumnsVariant(variant, error.message ?? "") : null;
+      }
       if (error) throw error;
       return data ?? null;
     },
@@ -1756,7 +1804,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadsError(null);
     try {
       const runLoadLeads = async (
-        variant: "full" | "no_ownership",
+        variant: LeadColumnsVariant,
         rangeOffset: number,
         pageSize: number,
         searchTerm?: string | null
@@ -1764,7 +1812,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         let query = supabase
           .schema("tosho")
           .from("leads")
-          .select(variant === "full" ? LEAD_COLUMNS : LEAD_COLUMNS.replace("ownership_type,", ""), { count: "exact" })
+          .select(getLeadColumns(variant), { count: "exact" })
           .eq("team_id", teamId)
           .order("company_name", { ascending: true });
 
@@ -1797,7 +1845,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const nextLeads: LeadRow[] = [];
       let nextOffset = offset;
       let totalCount: number | null = null;
-      let variant: "full" | "no_ownership" = "full";
+      let variant: LeadColumnsVariant = "full";
       const normalizedSearch = search.trim();
 
       if (normalizedSearch) {
@@ -1805,16 +1853,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const variants = buildCompanySearchVariants(normalizedSearch);
         const responses = await Promise.all(
           variants.map(async (term) => {
-            let activeVariant: "full" | "no_ownership" = "full";
+            let activeVariant: LeadColumnsVariant = "full";
             let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term);
-            if (
-              loadError &&
-              activeVariant === "full" &&
-              /column/i.test(loadError.message ?? "") &&
-              /ownership_type/i.test(loadError.message ?? "")
-            ) {
-              activeVariant = "no_ownership";
+            let fallbackVariant: LeadColumnsVariant | null = loadError
+              ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
+              : null;
+            while (loadError && fallbackVariant) {
+              activeVariant = fallbackVariant;
               ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term));
+              fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
             }
             if (loadError) throw loadError;
             return ((data as unknown) as LeadRow[]) ?? [];
@@ -1862,14 +1909,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
       while (true) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
         let { data, error: loadError, count } = await runLoadLeads(variant, nextOffset, pageSize);
-        if (
-          loadError &&
-          variant === "full" &&
-          /column/i.test(loadError.message ?? "") &&
-          /ownership_type/i.test(loadError.message ?? "")
-        ) {
-          variant = "no_ownership";
+        let fallbackVariant: LeadColumnsVariant | null = loadError
+          ? getFallbackLeadColumnsVariant(variant, loadError.message ?? "")
+          : null;
+        while (loadError && fallbackVariant) {
+          variant = fallbackVariant;
           ({ data, error: loadError, count } = await runLoadLeads(variant, nextOffset, pageSize));
+          fallbackVariant = loadError ? getFallbackLeadColumnsVariant(variant, loadError.message ?? "") : null;
         }
         if (loadError) throw loadError;
         const pageRows = ((data as unknown) as LeadRow[]) ?? [];
@@ -2115,6 +2161,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
           if (!customer || cancelled) return;
           openEdit(customer);
         }
+      } catch (error: unknown) {
+        const message = getErrorMessage(error, "Не вдалося відкрити картку.");
+        if (leadId || leadName) {
+          setActiveTab("leads");
+          setLeadsError(message);
+          return;
+        }
+        setActiveTab("customers");
+        setCustomersError(message);
       } finally {
         if (!cancelled) setHandledDeepLink(linkKey);
       }
@@ -2356,7 +2411,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   };
 
-  const handleSaveLead = async () => {
+  const handleSaveLead = async (options?: { convertToCustomer?: boolean }) => {
     if (!leadForm.companyName.trim()) {
       setLeadFormError("Вкажіть назву компанії.");
       return;
@@ -2380,6 +2435,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
     if (phones.length === 0) {
       setLeadFormError("Вкажіть хоча б один номер телефону.");
       return;
+    }
+    if (options?.convertToCustomer && !leadEditingId) {
+      setLeadFormError("Спочатку створіть ліда, потім переведіть його в замовника.");
+      return;
+    }
+    if (options?.convertToCustomer) {
+      const missing = getLeadConversionMissingFields(leadForm, phones);
+      if (missing.length > 0) {
+        setLeadFormError(`Щоб перевести ліда в замовника, заповніть: ${missing.join(", ")}.`);
+        return;
+      }
     }
 
     setLeadSaving(true);
@@ -2428,6 +2494,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       company_name: leadForm.companyName.trim(),
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
+      tax_id: leadForm.taxId.trim() || null,
+      legal_address: leadForm.legalAddress.trim() || null,
       logo_url: optimizedLogoUrl,
       first_name: leadForm.firstName.trim(),
       last_name: leadForm.lastName.trim() || null,
@@ -2478,16 +2546,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
               .eq("id", leadEditingId)
               .eq("team_id", teamId);
             if (fallbackError) throw fallbackError;
-          } else if (message.includes("column") && message.includes("ownership_type")) {
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.ownership_type;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .update(fallbackPayload)
-              .eq("id", leadEditingId)
-              .eq("team_id", teamId);
-            if (fallbackError) throw fallbackError;
           } else {
             throw updateError;
           }
@@ -2515,14 +2573,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
               .from("leads")
               .insert(fallbackPayload);
             if (fallbackError) throw fallbackError;
-          } else if (message.includes("column") && message.includes("ownership_type")) {
-            const fallbackPayload = { ...payload };
-            delete fallbackPayload.ownership_type;
-            const { error: fallbackError } = await supabase
-              .schema("tosho")
-              .from("leads")
-              .insert(fallbackPayload);
-            if (fallbackError) throw fallbackError;
           } else {
             throw insertError;
           }
@@ -2533,9 +2583,81 @@ function CustomersPage({ teamId }: { teamId: string }) {
         void removeManagedCustomerLogoByUrl(previousLogoUrl);
       }
 
+      if (options?.convertToCustomer && leadEditingId) {
+        const contactName = [leadForm.firstName.trim(), leadForm.lastName.trim()].filter(Boolean).join(" ");
+        const conversionLegalEntity = {
+          ...createEmptyCustomerLegalEntity(),
+          ownershipType: leadForm.ownershipType.trim(),
+          legalName: leadForm.legalName.trim() || leadForm.companyName.trim(),
+          taxId: leadForm.taxId.trim(),
+          legalAddress: leadForm.legalAddress.trim(),
+          iban: leadForm.iban.trim(),
+          signatoryName: leadForm.signatoryName.trim(),
+          signatoryPosition: leadForm.signatoryPosition.trim(),
+        };
+        const legalEntities = serializeCustomerLegalEntities([conversionLegalEntity]);
+        const primaryLegalEntity = legalEntities[0] ?? null;
+        const contacts = [
+          {
+            name: contactName || leadForm.companyName.trim(),
+            position: leadForm.signatoryPosition.trim(),
+            phone: phones[0] ?? "",
+            email: leadForm.email.trim(),
+            birthday: "",
+          },
+        ];
+        const customerPayload: Record<string, unknown> = {
+          team_id: teamId,
+          name: leadForm.companyName.trim(),
+          legal_name: primaryLegalEntity?.legal_name ?? null,
+          manager: selectedManagerLabel || currentManagerLabel || defaultManagerName || null,
+          manager_user_id: selectedManagerUserId,
+          ownership_type: primaryLegalEntity?.ownership_type ?? null,
+          vat_rate: primaryLegalEntity?.vat_rate ?? null,
+          tax_id: primaryLegalEntity?.tax_id ?? null,
+          website: leadForm.website.trim() || null,
+          iban: primaryLegalEntity?.iban ?? null,
+          logo_url: optimizedLogoUrl,
+          legal_entities: legalEntities.length > 0 ? legalEntities : null,
+          contacts,
+          contact_name: contacts[0]?.name || null,
+          contact_position: contacts[0]?.position || null,
+          contact_phone: contacts[0]?.phone || null,
+          contact_email: contacts[0]?.email || null,
+          contact_birthday: null,
+          signatory_name: primaryLegalEntity?.signatory_name ?? null,
+          signatory_position: primaryLegalEntity?.signatory_position ?? null,
+          reminder_at: buildReminderAtIso(leadForm.reminderDate, leadForm.reminderTime),
+          reminder_comment: leadForm.reminderComment.trim() || null,
+          event_name: leadForm.eventName.trim() || null,
+          event_at: leadForm.eventDate || null,
+          event_comment: leadForm.eventComment.trim() || null,
+          notes: leadForm.notes.trim() || null,
+        };
+
+        const { error: customerInsertError } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .insert(customerPayload);
+        if (customerInsertError) throw customerInsertError;
+
+        const { error: leadDeleteError } = await supabase
+          .schema("tosho")
+          .from("leads")
+          .delete()
+          .eq("id", leadEditingId)
+          .eq("team_id", teamId);
+        if (leadDeleteError) throw leadDeleteError;
+
+        toast.success("Ліда переведено в замовника.");
+      }
+
       setLeadDialogOpen(false);
       resetLeadForm();
       await loadLeads();
+      if (options?.convertToCustomer) {
+        await loadCustomers();
+      }
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("design:customers-updated", { detail: { teamId } }));
       }
@@ -2543,6 +2665,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const message = getErrorMessage(err, "Не вдалося зберегти ліда.");
       if (message.includes("relation") && message.includes("leads")) {
         setLeadFormError("Таблиця lead ще не створена. Запустіть SQL-скрипт scripts/leads-schema.sql.");
+      } else if (message.includes("column") && message.includes("ownership_type")) {
+        setLeadFormError("У базі немає колонки ownership_type для лідів. Запустіть оновлений scripts/leads-schema.sql.");
+      } else if (message.includes("column") && (message.includes("tax_id") || message.includes("legal_address"))) {
+        setLeadFormError("У базі немає нових колонок tax_id/legal_address для лідів. Запустіть оновлений scripts/leads-schema.sql.");
       } else {
         setLeadFormError(message);
       }
@@ -3454,6 +3580,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         title={leadEditingId ? "Редагувати ліда" : "Новий лід"}
         description={leadEditingId ? undefined : "Додайте всі дані ліда для першого контакту."}
         submitLabel={leadEditingId ? "Зберегти" : "Створити ліда"}
+        secondarySubmitLabel={leadEditingId ? "Зберегти і перевести в замовника" : undefined}
         calculations={calculationQuotes}
         orders={orderQuotes}
         designTasks={linkedDesignTasks}
@@ -3461,7 +3588,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
         onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
         onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
         onOpenDesignTask={(id) => navigate(`/design/${id}`)}
-        onSubmit={handleSaveLead}
+        onSecondarySubmit={leadEditingId ? () => void handleSaveLead({ convertToCustomer: true }) : undefined}
+        onSubmit={() => void handleSaveLead()}
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

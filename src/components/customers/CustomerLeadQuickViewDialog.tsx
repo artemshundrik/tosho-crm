@@ -13,10 +13,11 @@ import { Button } from "@/components/ui/button";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { supabase } from "@/lib/supabaseClient";
-import { listCustomerQuotes } from "@/lib/toshoApi";
+import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { areCompanyNamesEquivalent } from "@/lib/companyNameSearch";
 import {
   parseCustomerLegalEntities,
   formatCustomerLegalEntitySummary,
@@ -137,6 +138,32 @@ const LEAD_COLUMNS = [
   "manager_user_id",
   "logo_url",
 ].join(",");
+const LEAD_COLUMNS_WITHOUT_MANAGER_USER_ID = LEAD_COLUMNS.replace("manager_user_id,", "");
+const LEAD_COLUMNS_BASE = LEAD_COLUMNS_WITHOUT_MANAGER_USER_ID.replace("logo_url,", "");
+
+type LeadColumnsVariant = "full" | "no_manager_user_id" | "base";
+
+const getLeadColumns = (variant: LeadColumnsVariant) => {
+  if (variant === "base") return LEAD_COLUMNS_BASE;
+  if (variant === "no_manager_user_id") return LEAD_COLUMNS_WITHOUT_MANAGER_USER_ID;
+  return LEAD_COLUMNS;
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return "";
+};
+
+const getFallbackLeadColumnsVariant = (variant: LeadColumnsVariant, message: string): LeadColumnsVariant | null => {
+  if (!/column/i.test(message)) return null;
+  if (variant === "full" && /manager_user_id/i.test(message)) return "no_manager_user_id";
+  if ((variant === "full" || variant === "no_manager_user_id") && /logo_url/i.test(message)) return "base";
+  return null;
+};
 
 const normalizePartyMatch = (value?: string | null) =>
   (value ?? "")
@@ -150,6 +177,28 @@ const normalizeMemberKey = (value?: string | null) =>
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+
+const escapePostgrestTerm = (value: string) => value.replace(/[%_]/g, (char) => `\\${char}`);
+
+const pickBestLeadMatch = (rows: LeadRow[], name: string) => {
+  const normalizedName = normalizePartyMatch(name);
+  return (
+    rows.find((row) =>
+      [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
+    ) ??
+    rows.find((row) =>
+      [row.company_name ?? "", row.legal_name ?? ""].some((value) => areCompanyNamesEquivalent(value, name))
+    ) ??
+    rows.find((row) =>
+      [row.company_name ?? "", row.legal_name ?? ""].some((value) => {
+        const normalizedValue = normalizePartyMatch(value);
+        return Boolean(normalizedName && normalizedValue && (normalizedValue.includes(normalizedName) || normalizedName.includes(normalizedValue)));
+      })
+    ) ??
+    rows[0] ??
+    null
+  );
+};
 
 const getInitials = (value?: string | null) => {
   const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
@@ -268,48 +317,135 @@ export function CustomerLeadQuickViewDialog({
         let nextCustomer: CustomerRow | null = null;
         let nextLead: LeadRow | null = null;
 
-        if (customerId) {
+        const loadCustomerById = async (id: string) => {
           const { data, error: customerError } = await supabase
             .schema("tosho")
             .from("customers")
             .select(CUSTOMER_COLUMNS)
             .eq("team_id", teamId)
-            .eq("id", customerId)
+            .eq("id", id)
             .maybeSingle<CustomerRow>();
           if (customerError) throw customerError;
-          nextCustomer = data ?? null;
-        }
+          return data ?? null;
+        };
 
-        if (!nextCustomer && normalizedName) {
-          const [{ data: customersData, error: customersError }, { data: leadsData, error: leadsError }] = await Promise.all([
-            supabase
+        const loadLeadById = async (id: string) => {
+          const runLeadQuery = async (variant: LeadColumnsVariant) =>
+            await supabase
               .schema("tosho")
-              .from("customers")
-              .select(CUSTOMER_COLUMNS)
+              .from("leads")
+              .select(getLeadColumns(variant))
               .eq("team_id", teamId)
-              .or(`name.eq.${customerName},legal_name.eq.${customerName}`)
-              .limit(20),
+              .eq("id", id)
+              .maybeSingle<LeadRow>();
+
+          let variant: LeadColumnsVariant = "full";
+          let { data, error: leadError } = await runLeadQuery(variant);
+          let fallbackVariant: LeadColumnsVariant | null = leadError
+            ? getFallbackLeadColumnsVariant(variant, getErrorMessage(leadError))
+            : null;
+          while (leadError && fallbackVariant) {
+            variant = fallbackVariant;
+            ({ data, error: leadError } = await runLeadQuery(variant));
+            fallbackVariant = leadError ? getFallbackLeadColumnsVariant(variant, getErrorMessage(leadError)) : null;
+          }
+          if (leadError) throw leadError;
+          return data ?? null;
+        };
+
+        const loadLeadByName = async (name: string) => {
+          const trimmedName = name.trim();
+          if (!trimmedName) return null;
+          const escapedName = escapePostgrestTerm(trimmedName);
+
+          const runQueryWithFallback = async (
+            buildQuery: (columns: string) => any
+          ) => {
+            let variant: LeadColumnsVariant = "full";
+            let response = await buildQuery(getLeadColumns(variant));
+            let fallbackVariant: LeadColumnsVariant | null = response.error
+              ? getFallbackLeadColumnsVariant(variant, getErrorMessage(response.error))
+              : null;
+            while (response.error && fallbackVariant) {
+              variant = fallbackVariant;
+              response = await buildQuery(getLeadColumns(variant));
+              fallbackVariant = response.error
+                ? getFallbackLeadColumnsVariant(variant, getErrorMessage(response.error))
+                : null;
+            }
+            if (response.error) throw response.error;
+            return (((response.data ?? []) as unknown) as LeadRow[]);
+          };
+
+          const [companyRows, legalRows] = await Promise.all([
+            runQueryWithFallback((columns) =>
+              supabase
+                .schema("tosho")
+                .from("leads")
+                .select(columns)
+                .eq("team_id", teamId)
+                .ilike("company_name", `%${escapedName}%`)
+                .limit(20)
+            ),
+            runQueryWithFallback((columns) =>
+              supabase
+                .schema("tosho")
+                .from("leads")
+                .select(columns)
+                .eq("team_id", teamId)
+                .ilike("legal_name", `%${escapedName}%`)
+                .limit(20)
+            ),
+          ]);
+          const directMatches = [...companyRows, ...legalRows].filter(
+            (row, index, rows) => row.id && rows.findIndex((candidate) => candidate.id === row.id) === index
+          );
+          const directMatch = pickBestLeadMatch(directMatches, trimmedName);
+          if (directMatch) return directMatch;
+
+          const allRows = await runQueryWithFallback((columns) =>
             supabase
               .schema("tosho")
               .from("leads")
-              .select(LEAD_COLUMNS)
+              .select(columns)
               .eq("team_id", teamId)
-              .or(`company_name.eq.${customerName},legal_name.eq.${customerName}`)
-              .limit(20),
-          ]);
-          if (customersError) throw customersError;
-          if (leadsError) throw leadsError;
+              .order("company_name", { ascending: true })
+              .limit(1000)
+          );
+          return pickBestLeadMatch(allRows, trimmedName);
+        };
 
-          nextCustomer =
-            (((customersData as unknown) as CustomerRow[]) ?? []).find((row) =>
-              [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
-            ) ?? null;
+        if (customerId) {
+          nextCustomer = await loadCustomerById(customerId);
+        }
 
-          if (!nextCustomer) {
-            nextLead =
-              (((leadsData as unknown) as LeadRow[]) ?? []).find((row) =>
+        if (!nextCustomer && normalizedName) {
+          nextLead = await loadLeadByName(customerName ?? "");
+
+          const [leadMatches, customerMatches] = nextLead
+            ? [[], await listCustomersBySearch(teamId, customerName ?? "")]
+            : await Promise.all([
+                listLeadsBySearch(teamId, customerName ?? ""),
+                listCustomersBySearch(teamId, customerName ?? ""),
+              ]);
+
+          const matchedLead = nextLead
+            ? null
+            : leadMatches.find((row) =>
                 [row.company_name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
-              ) ?? null;
+              ) ?? leadMatches[0] ?? null;
+          if (!nextLead && matchedLead?.id) {
+            nextLead = await loadLeadById(matchedLead.id);
+          }
+
+          if (!nextLead) {
+            const matchedCustomer =
+              customerMatches.find((row) =>
+                [row.name ?? "", row.legal_name ?? ""].some((value) => normalizePartyMatch(value) === normalizedName)
+              ) ?? customerMatches[0] ?? null;
+            if (matchedCustomer?.id) {
+              nextCustomer = await loadCustomerById(matchedCustomer.id);
+            }
           }
         }
 
@@ -631,13 +767,20 @@ export function CustomerLeadQuickViewDialog({
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() =>
-                    navigate(
-                      entityKind === "customer"
-                        ? `/orders/customers?customerId=${customer?.id ?? ""}`
-                        : `/orders/customers?tab=leads&leadId=${lead?.id ?? ""}`
-                    )
-                  }
+                  onClick={() => {
+                    if (entityKind === "customer" && customer?.id) {
+                      navigate(`/orders/customers?customerId=${customer.id}`);
+                      return;
+                    }
+                    if (entityKind === "lead" && lead?.id) {
+                      navigate(`/orders/customers?tab=leads&leadId=${lead.id}`);
+                      return;
+                    }
+                    if (entityKind === "lead" && title) {
+                      navigate(`/orders/customers?tab=leads&leadName=${encodeURIComponent(title)}`);
+                    }
+                  }}
+                  disabled={entityKind === "customer" ? !customer?.id : !lead?.id && !title}
                 >
                   Відкрити у замовниках
                 </Button>

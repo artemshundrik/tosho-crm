@@ -3,6 +3,7 @@ export type CustomerLegalEntity = {
   ownershipType: string;
   legalName: string;
   taxId: string;
+  legalAddress: string;
   vatRate: string;
   cardNumber: string;
   iban: string;
@@ -33,6 +34,7 @@ type CustomerLegalEntityRow = {
   ownership_type?: unknown;
   legal_name?: unknown;
   tax_id?: unknown;
+  legal_address?: unknown;
   vat_rate?: unknown;
   card_number?: unknown;
   iban?: unknown;
@@ -56,6 +58,7 @@ export const createEmptyCustomerLegalEntity = (): CustomerLegalEntity => ({
   ownershipType: "",
   legalName: "",
   taxId: "",
+  legalAddress: "",
   vatRate: "none",
   cardNumber: "",
   iban: "",
@@ -74,6 +77,7 @@ const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntit
   ownershipType: typeof value.ownership_type === "string" ? value.ownership_type : "",
   legalName: typeof value.legal_name === "string" ? value.legal_name : "",
   taxId: typeof value.tax_id === "string" ? value.tax_id : "",
+  legalAddress: typeof value.legal_address === "string" ? value.legal_address : "",
   vatRate: normalizeVatRate(value.vat_rate),
   cardNumber: typeof value.card_number === "string" ? value.card_number : "",
   iban: typeof value.iban === "string" ? value.iban : "",
@@ -86,6 +90,7 @@ const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
     value.ownershipType.trim() ||
       value.legalName.trim() ||
       value.taxId.trim() ||
+      value.legalAddress.trim() ||
       value.cardNumber.trim() ||
       value.iban.trim() ||
       value.signatoryName.trim() ||
@@ -112,6 +117,7 @@ export const parseCustomerLegalEntities = (row?: CustomerLegalEntitySource | nul
     ownership_type: row?.ownership_type,
     legal_name: row?.legal_name,
     tax_id: row?.tax_id,
+    legal_address: row?.legal_address,
     vat_rate: row?.vat_rate,
     card_number: row?.card_number,
     iban: row?.iban,
@@ -128,6 +134,7 @@ export const serializeCustomerLegalEntities = (value: CustomerLegalEntity[]) =>
       ownership_type: entity.ownershipType.trim() || null,
       legal_name: entity.legalName.trim() || null,
       tax_id: entity.taxId.trim() || null,
+      legal_address: entity.legalAddress.trim() || null,
       vat_rate: entity.vatRate === "none" ? null : Number(entity.vatRate),
       card_number: entity.cardNumber.trim() || null,
       iban: entity.iban.trim() || null,
@@ -186,12 +193,13 @@ export const formatCustomerLegalEntityTitle = (
 };
 
 export const hasCustomerLegalEntityIdentity = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "cardNumber" | "iban" | "signatoryName" | "signatoryPosition">
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "cardNumber" | "iban" | "signatoryName" | "signatoryPosition">
 ) =>
   Boolean(
     entity.ownershipType.trim() ||
       entity.legalName.trim() ||
       entity.taxId.trim() ||
+      entity.legalAddress.trim() ||
       entity.cardNumber.trim() ||
       entity.iban.trim() ||
       entity.signatoryName.trim() ||
@@ -199,17 +207,20 @@ export const hasCustomerLegalEntityIdentity = (
   );
 
 export const getCustomerLegalEntityDocumentMissingFields = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId"> | null | undefined
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryPosition"> | null | undefined
 ) => {
-  if (!entity) return ["тип", "назву", "код"];
+  if (!entity) return ["тип", "назву", "код", "IBAN", "юридичну адресу", "посаду підписанта"];
 
   const missing: string[] = [];
   if (!entity.ownershipType.trim()) missing.push("тип");
   if (!entity.legalName.trim()) missing.push("назву");
   if (!entity.taxId.trim()) missing.push("код");
+  if (!entity.iban.trim()) missing.push("IBAN");
+  if (!entity.legalAddress.trim()) missing.push(entity.ownershipType === "fop" ? "прописку" : "юридичну адресу");
+  if (!entity.signatoryPosition.trim()) missing.push("посаду підписанта");
   return missing;
 };
 
 export const hasCustomerLegalEntityDocumentEssentials = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId"> | null | undefined
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryPosition"> | null | undefined
 ) => getCustomerLegalEntityDocumentMissingFields(entity).length === 0;

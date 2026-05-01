@@ -6,6 +6,9 @@ create table if not exists tosho.leads (
   team_id uuid not null,
   company_name text not null,
   legal_name text,
+  ownership_type text,
+  tax_id text,
+  legal_address text,
   logo_url text,
   first_name text not null,
   last_name text,
@@ -28,6 +31,9 @@ create table if not exists tosho.leads (
 );
 
 alter table if exists tosho.leads
+  add column if not exists ownership_type text,
+  add column if not exists tax_id text,
+  add column if not exists legal_address text,
   add column if not exists logo_url text,
   add column if not exists iban text,
   add column if not exists signatory_name text,
