@@ -11,6 +11,7 @@ import {
   listQuoteItemsForQuotes,
   listQuotesByIds,
   listQuotes,
+  type CatalogModelLookupRow,
   type QuoteItemExportRow,
   type QuoteListRow,
   type QuoteRun,
@@ -36,6 +37,7 @@ type CustomerRecord = {
   contact_phone?: string | null;
   contact_email?: string | null;
   tax_id?: string | null;
+  iban?: string | null;
   signatory_name?: string | null;
   signatory_position?: string | null;
   legal_entities?: unknown;
@@ -168,6 +170,10 @@ export type DerivedOrderItem = {
   quoteItemId?: string | null;
   position: number;
   name: string;
+  description?: string | null;
+  methodsSummary?: string | null;
+  catalogModelId?: string | null;
+  catalogSourceUrl?: string | null;
   qty: number;
   unit: string;
   unitPrice: number;
@@ -199,14 +205,27 @@ export type DerivedOrderRecord = {
   total: number;
   items: DerivedOrderItem[];
   itemCount: number;
+  paymentMethodId: string;
   paymentRail: string;
+  paymentTerms: string;
+  incotermsCode: string;
+  incotermsPlace: string | null;
   orderStatus: string;
   paymentStatus: string;
   deliveryStatus: string;
   contactEmail: string | null;
   contactPhone: string | null;
   legalEntityLabel: string | null;
+  customerTaxId: string | null;
+  customerIban: string | null;
+  customerBankDetails: string | null;
+  customerLegalAddress: string | null;
+  customerSignatoryName: string | null;
+  customerSignatoryPosition: string | null;
+  customerSignatoryAuthority: string | null;
   signatoryLabel: string | null;
+  contractCreatedAt: string | null;
+  specificationCreatedAt: string | null;
   designStatuses: string[];
   docs: {
     contract: boolean;
@@ -238,14 +257,25 @@ type StoredOrderRow = {
   updated_at?: string | null;
   currency?: string | null;
   total?: number | null;
+  payment_method_id?: string | null;
   payment_method_label?: string | null;
+  payment_terms?: string | null;
+  incoterms_code?: string | null;
+  incoterms_place?: string | null;
   order_status?: string | null;
   payment_status?: string | null;
   delivery_status?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
   legal_entity_label?: string | null;
+  customer_tax_id?: string | null;
+  customer_iban?: string | null;
+  customer_bank_details?: string | null;
+  customer_legal_address?: string | null;
   signatory_label?: string | null;
+  customer_signatory_authority?: string | null;
+  contract_created_at?: string | null;
+  specification_created_at?: string | null;
   design_statuses?: string[] | null;
   documents?: {
     contract?: boolean;
@@ -266,10 +296,15 @@ type StoredOrderItemRow = {
   quote_item_id?: string | null;
   position?: number | null;
   name?: string | null;
+  description?: string | null;
   qty?: number | null;
   unit?: string | null;
   unit_price?: number | null;
   line_total?: number | null;
+  methods?: unknown[] | null;
+  catalog_model_id?: string | null;
+  image_url?: string | null;
+  thumb_url?: string | null;
 };
 
 const parseQuoteItemAttachmentImage = (attachment: unknown) => {
@@ -296,12 +331,57 @@ const isValidCurrency = (value?: string | null) => {
   return normalized === "UAH" || normalized === "USD" || normalized === "EUR";
 };
 
+const DEFAULT_PAYMENT_TERMS = "70/30";
+const DEFAULT_INCOTERMS_CODE = "FCA";
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Готівкові / на карту",
+  bank_uah: "Безготівкові, грн.",
+  bank_fx: "Безготівкові (валютні), $ / €",
+  crypto: "Криптовалюта",
+  pending: "Потрібно обрати після конвертації ліда",
+};
+
+const normalizePaymentMethodId = (value?: string | null) => {
+  const normalized = (value ?? "").trim();
+  return normalized in PAYMENT_METHOD_LABELS ? normalized : "";
+};
+
+export const isCashlessPaymentMethod = (methodId?: string | null, label?: string | null) => {
+  const normalizedId = normalizePaymentMethodId(methodId);
+  if (normalizedId === "bank_uah" || normalizedId === "bank_fx") return true;
+  return (label ?? "").trim().toLowerCase().includes("безготів");
+};
+
+const resolvePaymentMethod = (
+  quote: QuoteListRow,
+  partyType: "customer" | "lead",
+  hasLegalEntityIdentity: boolean
+) => {
+  if (partyType === "lead") {
+    return { id: "pending", label: PAYMENT_METHOD_LABELS.pending };
+  }
+  const currency = (quote.currency ?? "UAH").trim().toUpperCase();
+  if (currency === "USD" || currency === "EUR") {
+    return { id: "bank_fx", label: PAYMENT_METHOD_LABELS.bank_fx };
+  }
+  if (hasLegalEntityIdentity) {
+    return { id: "bank_uah", label: PAYMENT_METHOD_LABELS.bank_uah };
+  }
+  return { id: "cash", label: PAYMENT_METHOD_LABELS.cash };
+};
+
 const isMissingOrdersRelationMessage = (message?: string | null) => {
   const normalized = (message ?? "").toLowerCase();
   return (
     normalized.includes("relation") &&
     (normalized.includes("orders") || normalized.includes("order_items"))
   );
+};
+
+const isMissingOrdersColumnMessage = (message?: string | null) => {
+  const normalized = (message ?? "").toLowerCase();
+  return normalized.includes("column") || normalized.includes("schema cache") || normalized.includes("could not find");
 };
 
 const parseCustomerContacts = (row?: CustomerRecord | null): CustomerContact[] => {
@@ -325,16 +405,77 @@ const parseCustomerContacts = (row?: CustomerRecord | null): CustomerContact[] =
   return Object.values(legacy).some(Boolean) ? [legacy] : [];
 };
 
-const resolvePaymentRail = (
-  quote: QuoteListRow,
-  partyType: "customer" | "lead",
-  hasLegalEntityIdentity: boolean
-) => {
-  if (partyType === "lead") return "Потрібно обрати після конвертації ліда";
-  const currency = (quote.currency ?? "UAH").trim().toUpperCase();
-  if (currency === "USD" || currency === "EUR") return "Безготівкові (валютні), $ / €";
-  if (hasLegalEntityIdentity) return "Безготівкові, грн.";
-  return "Готівкові / на карту";
+const parseQuoteItemMethodIds = (methods: unknown) => {
+  if (!Array.isArray(methods)) return [];
+  return methods
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const raw = (entry as Record<string, unknown>).method_id;
+      return typeof raw === "string" ? raw.trim() : "";
+    })
+    .filter(Boolean);
+};
+
+async function listCatalogMethodNamesByIds(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return new Map<string, string>();
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("catalog_methods")
+    .select("id,name")
+    .in("id", uniqueIds);
+  if (error) throw error;
+  return new Map(
+    (((data ?? []) as Array<{ id?: string | null; name?: string | null }>) ?? [])
+      .filter((row): row is { id: string; name?: string | null } => Boolean(row.id))
+      .map((row) => [row.id, row.name?.trim() || "Метод нанесення"])
+  );
+}
+
+const formatQuoteItemMethodsSummary = (methods: unknown, methodNamesById: Map<string, string>) => {
+  if (!Array.isArray(methods) || methods.length === 0) return null;
+  const labels = methods
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const record = entry as Record<string, unknown>;
+      const label = typeof record.label === "string" ? record.label.trim() : "";
+      if (label) return label;
+      const methodId = typeof record.method_id === "string" ? record.method_id.trim() : "";
+      const methodName = methodId ? methodNamesById.get(methodId) ?? "Метод нанесення" : "Метод нанесення";
+      const width = Number(record.print_width_mm ?? 0) || 0;
+      const height = Number(record.print_height_mm ?? 0) || 0;
+      const size = width > 0 || height > 0 ? `${width || "?"}x${height || "?"} мм` : "";
+      return [methodName, size].filter(Boolean).join(" ");
+    })
+    .filter(Boolean);
+  return labels.length > 0 ? labels.join("; ") : null;
+};
+
+const resolveQuoteItemDescription = (
+  quoteItem: QuoteItemExportRow | null | undefined,
+  catalogModel: CatalogModelLookupRow | null | undefined
+) => quoteItem?.description?.trim?.() || catalogModel?.description?.trim?.() || null;
+
+const resolveDeliveryPlace = (quote: QuoteListRow) => {
+  const details = quote.delivery_details && typeof quote.delivery_details === "object" ? quote.delivery_details : {};
+  const record = details as Record<string, unknown>;
+  const parts = [
+    typeof record.region === "string" ? record.region.trim() : "",
+    typeof record.city === "string" ? record.city.trim() : "",
+    typeof record.street === "string" ? record.street.trim() : "",
+    typeof record.address === "string" ? record.address.trim() : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+};
+
+const getOrderDocuments = (order: StoredOrderRow) =>
+  order.documents && typeof order.documents === "object" ? order.documents : {};
+
+const buildSignatoryLabel = (name?: string | null, position?: string | null) => {
+  const normalizedName = name?.trim() ?? "";
+  const normalizedPosition = position?.trim() ?? "";
+  if (normalizedName && normalizedPosition) return `${normalizedName}, ${normalizedPosition}`;
+  return normalizedName || normalizedPosition || null;
 };
 
 export const formatOrderMoney = (value: number, currency?: string | null) =>
@@ -356,15 +497,22 @@ export const formatOrderDate = (value?: string | null) => {
 };
 
 async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("orders")
-    .select(
-      "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout"
-    )
-    .eq("team_id", teamId)
-    .order("created_at", { ascending: false });
+  const baseColumns =
+    "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
+  const extendedColumns =
+    `${baseColumns},payment_method_id,payment_terms,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at`;
+  const readRows = async (columns: string) =>
+    await supabase
+      .schema("tosho")
+      .from("orders")
+      .select(columns)
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
 
+  let { data, error } = await readRows(extendedColumns);
+  if (error && isMissingOrdersColumnMessage(error.message)) {
+    ({ data, error } = await readRows(baseColumns));
+  }
   if (error) {
     if (isMissingOrdersRelationMessage(error.message)) return [];
     throw error;
@@ -377,15 +525,22 @@ async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise
   const uniqueOrderIds = Array.from(new Set(orderIds.filter(Boolean)));
   if (uniqueOrderIds.length === 0) return [];
 
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("order_items")
-    .select("id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total")
-    .eq("team_id", teamId)
-    .in("order_id", uniqueOrderIds)
-    .order("order_id", { ascending: true })
-    .order("position", { ascending: true });
+  const baseColumns = "id,order_id,quote_item_id,position,name,qty,unit,unit_price,line_total";
+  const extendedColumns = `${baseColumns},description,methods,catalog_model_id,image_url,thumb_url`;
+  const readRows = async (columns: string) =>
+    await supabase
+      .schema("tosho")
+      .from("order_items")
+      .select(columns)
+      .eq("team_id", teamId)
+      .in("order_id", uniqueOrderIds)
+      .order("order_id", { ascending: true })
+      .order("position", { ascending: true });
 
+  let { data, error } = await readRows(extendedColumns);
+  if (error && isMissingOrdersColumnMessage(error.message)) {
+    ({ data, error } = await readRows(baseColumns));
+  }
   if (error) {
     if (isMissingOrdersRelationMessage(error.message)) return [];
     throw error;
@@ -427,7 +582,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           .schema("tosho")
           .from("customers")
           .select(
-            "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,signatory_name,signatory_position,legal_entities"
+            "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
           )
           .in("id", uniqueCustomerIds)
       : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -471,6 +626,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
   const itemsByQuoteId = new Map<string, DerivedOrderItem[]>();
   const quoteItemById = new Map<string, QuoteItemExportRow>();
   const catalogModelIds = new Set<string>();
+  const quoteMethodIds = new Set<string>();
   (((itemRows ?? []) as QuoteItemExportRow[]) ?? []).forEach((item) => {
     const quoteId = item.quote_id;
     if (!quoteId) return;
@@ -478,11 +634,16 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
       catalogModelIds.add(item.catalog_model_id.trim());
     }
+    parseQuoteItemMethodIds(item.methods).forEach((methodId) => quoteMethodIds.add(methodId));
     const list = itemsByQuoteId.get(quoteId) ?? [];
     list.push({
       id: item.id,
       position: Number(item.position ?? list.length + 1) || list.length + 1,
       name: (item.name ?? "").trim() || "Позиція без назви",
+      description: item.description?.trim?.() || null,
+      methodsSummary: null,
+      catalogModelId: item.catalog_model_id?.trim?.() || null,
+      catalogSourceUrl: null,
       qty: Number(item.qty ?? 0) || 0,
       unit: normalizeUnitLabel(item.unit ?? "шт."),
       unitPrice: Number(item.unit_price ?? 0) || 0,
@@ -492,7 +653,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     });
     itemsByQuoteId.set(quoteId, list);
   });
-  const catalogModelsById = await listCatalogModelsByIds(Array.from(catalogModelIds));
+  const [catalogModelsById, methodNamesById] = await Promise.all([
+    listCatalogModelsByIds(Array.from(catalogModelIds)),
+    listCatalogMethodNamesByIds(Array.from(quoteMethodIds)),
+  ]);
 
   const runsByQuoteId = new Map<string, QuoteRun[]>();
   quoteRunsResult.forEach((entry) => {
@@ -572,12 +736,17 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       const attachmentImage = parseQuoteItemAttachmentImage(quoteItem?.attachment);
       const nextThumbUrl = catalogModel?.thumb_url ?? catalogModel?.image_url ?? attachmentImage ?? null;
       const nextImageUrl = catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
+      const description = resolveQuoteItemDescription(quoteItem, catalogModel);
+      const methodsSummary = formatQuoteItemMethodsSummary(quoteItem?.methods, methodNamesById);
       const itemRun =
         quoteRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
         (baseItems.length === 1 ? firstRun : null);
       if (!itemRun) {
         return {
           ...item,
+          description,
+          methodsSummary,
+          catalogSourceUrl: catalogModel?.source_url ?? null,
           imageUrl: nextImageUrl,
           thumbUrl: nextThumbUrl,
         };
@@ -590,6 +759,9 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
         qty: runQuantity > 0 ? runQuantity : item.qty,
         unitPrice: unitPrice > 0 ? unitPrice : item.unitPrice,
         lineTotal: lineTotal > 0 ? lineTotal : item.lineTotal,
+        description,
+        methodsSummary,
+        catalogSourceUrl: catalogModel?.source_url ?? null,
         imageUrl: nextImageUrl,
         thumbUrl: nextThumbUrl,
       };
@@ -613,6 +785,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
         ? formatCustomerLegalEntityTitle(primaryLegalEntity)
         : customer?.legal_name?.trim?.() ?? null;
     const taxId = primaryLegalEntity?.taxId?.trim() || customer?.tax_id?.trim?.() || "";
+    const customerIban = primaryLegalEntity?.iban?.trim() || customer?.iban?.trim?.() || "";
+    const customerLegalAddress = primaryLegalEntity?.legalAddress?.trim() || "";
     const signatoryName =
       primaryLegalEntity?.signatoryName?.trim() ||
       customer?.signatory_name?.trim?.() ||
@@ -623,6 +797,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       customer?.signatory_position?.trim?.() ||
       lead?.signatory_position?.trim?.() ||
       "";
+    const signatoryAuthority = primaryLegalEntity?.signatoryAuthority?.trim() || "";
     const tasks = designTasksByQuoteId.get(quote.id) ?? [];
     const requiresVisualization = tasks.some(
       (task) => !task.type || task.type === "visualization" || task.type === "visualization_layout_adaptation"
@@ -666,8 +841,12 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     if (!requiresLayout && tasks.length > 0) {
       hasApprovedLayout = true;
     }
-    const hasLegalEntityIdentity = Boolean(legalEntityLabel && taxId && signatoryName && signatoryPosition);
+    const hasLegalEntityIdentity = Boolean(
+      legalEntityLabel && taxId && customerIban && customerLegalAddress && signatoryName && signatoryPosition && signatoryAuthority
+    );
     const partyType = quote.customer_id ? "customer" : "lead";
+    const paymentMethod = resolvePaymentMethod(quote, partyType, hasLegalEntityIdentity);
+    const canCreateSpecification = false;
     const readinessSteps: DerivedReadinessStep[] = [
       { label: "Прорахунок затверджено менеджером", done: true },
       { label: "Ліда переведено у Замовника", done: partyType === "customer", blocking: true },
@@ -709,19 +888,32 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       total: Number(quote.total ?? 0) || items.reduce((sum, item) => sum + item.lineTotal, 0),
       items: items.map((item) => ({ ...item, quoteItemId: item.id })),
       itemCount: items.length,
-      paymentRail: resolvePaymentRail(quote, partyType, hasLegalEntityIdentity),
+      paymentMethodId: paymentMethod.id,
+      paymentRail: paymentMethod.label,
+      paymentTerms: DEFAULT_PAYMENT_TERMS,
+      incotermsCode: DEFAULT_INCOTERMS_CODE,
+      incotermsPlace: resolveDeliveryPlace(quote),
       orderStatus: "new",
       paymentStatus: "awaiting_payment",
       deliveryStatus: "not_shipped",
       contactEmail,
       contactPhone,
       legalEntityLabel: legalEntityLabel ?? null,
-      signatoryLabel: signatoryName && signatoryPosition ? `${signatoryName}, ${signatoryPosition}` : signatoryName || signatoryPosition || null,
+      customerTaxId: taxId || null,
+      customerIban: customerIban || null,
+      customerBankDetails: null,
+      customerLegalAddress: customerLegalAddress || null,
+      customerSignatoryName: signatoryName || null,
+      customerSignatoryPosition: signatoryPosition || null,
+      customerSignatoryAuthority: signatoryAuthority || null,
+      signatoryLabel: buildSignatoryLabel(signatoryName, signatoryPosition),
+      contractCreatedAt: null,
+      specificationCreatedAt: null,
       designStatuses: Array.from(new Set(tasks.map((task) => DESIGN_STATUS_LABELS[task.status] ?? task.status))),
       docs: {
         contract: partyType === "customer" && hasLegalEntityIdentity && Boolean(contactEmail && contactPhone),
         invoice: items.length > 0,
-        specification: items.length > 0,
+        specification: canCreateSpecification,
         techCard: items.length > 0 && hasApprovedVisualization && hasApprovedLayout,
       },
       readinessSteps,
@@ -789,7 +981,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .schema("tosho")
             .from("customers")
             .select(
-              "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,signatory_name,signatory_position,legal_entities"
+              "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
             )
             .in("id", storedCustomerIds)
         : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -824,13 +1016,24 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
     if (storedCustomersResult.error) throw storedCustomersResult.error;
     const storedQuoteItemById = new Map<string, QuoteItemExportRow>();
     const storedCatalogModelIds = new Set<string>();
+    const storedMethodIds = new Set<string>();
     (storedQuoteItems ?? []).forEach((item) => {
       storedQuoteItemById.set(item.id, item);
       if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
         storedCatalogModelIds.add(item.catalog_model_id.trim());
       }
+      parseQuoteItemMethodIds(item.methods).forEach((methodId) => storedMethodIds.add(methodId));
     });
-    const storedCatalogModelsById = await listCatalogModelsByIds(Array.from(storedCatalogModelIds));
+    orderItems.forEach((item) => {
+      if (typeof item.catalog_model_id === "string" && item.catalog_model_id.trim()) {
+        storedCatalogModelIds.add(item.catalog_model_id.trim());
+      }
+      parseQuoteItemMethodIds(item.methods).forEach((methodId) => storedMethodIds.add(methodId));
+    });
+    const [storedCatalogModelsById, storedMethodNamesById] = await Promise.all([
+      listCatalogModelsByIds(Array.from(storedCatalogModelIds)),
+      listCatalogMethodNamesByIds(Array.from(storedMethodIds)),
+    ]);
     const itemsByOrderId = new Map<string, DerivedOrderItem[]>();
     orderItems.forEach((item) => {
       const orderId = item.order_id ?? "";
@@ -841,12 +1044,16 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         quoteItemId: item.quote_item_id ?? null,
         position: Number(item.position ?? list.length + 1) || list.length + 1,
         name: (item.name ?? "").trim() || "Позиція без назви",
+        description: item.description?.trim?.() || null,
+        methodsSummary: formatQuoteItemMethodsSummary(item.methods, storedMethodNamesById),
+        catalogModelId: item.catalog_model_id?.trim?.() || null,
+        catalogSourceUrl: null,
         qty: Number(item.qty ?? 0) || 0,
         unit: normalizeUnitLabel(item.unit ?? "шт."),
         unitPrice: Number(item.unit_price ?? 0) || 0,
         lineTotal: Number(item.line_total ?? 0) || 0,
-        imageUrl: null,
-        thumbUrl: null,
+        imageUrl: item.image_url?.trim?.() || null,
+        thumbUrl: item.thumb_url?.trim?.() || null,
       });
       itemsByOrderId.set(orderId, list);
     });
@@ -902,17 +1109,23 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const firstRun = linkedRuns[0] ?? null;
       const items = baseItems.map((item) => {
         const quoteItem = item.quoteItemId ? storedQuoteItemById.get(item.quoteItemId) ?? null : null;
-        const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || "";
+        const catalogModelId = quoteItem?.catalog_model_id?.trim?.() || item.catalogModelId?.trim?.() || "";
         const catalogModel = catalogModelId ? storedCatalogModelsById.get(catalogModelId) ?? null : null;
         const attachmentImage = parseQuoteItemAttachmentImage(quoteItem?.attachment);
-        const nextThumbUrl = catalogModel?.thumb_url ?? catalogModel?.image_url ?? attachmentImage ?? null;
-        const nextImageUrl = catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
+        const nextThumbUrl = item.thumbUrl ?? catalogModel?.thumb_url ?? catalogModel?.image_url ?? attachmentImage ?? null;
+        const nextImageUrl = item.imageUrl ?? catalogModel?.image_url ?? catalogModel?.thumb_url ?? attachmentImage ?? null;
+        const description = resolveQuoteItemDescription(quoteItem, catalogModel) ?? item.description ?? null;
+        const methodsSummary =
+          quoteItem?.methods ? formatQuoteItemMethodsSummary(quoteItem.methods, storedMethodNamesById) : item.methodsSummary;
         const itemRun =
           linkedRuns.find((run) => run.quote_item_id === item.quoteItemId || run.quote_item_id === item.id) ??
           (baseItems.length === 1 ? firstRun : null);
         if (!itemRun) {
           return {
             ...item,
+            description,
+            methodsSummary,
+            catalogSourceUrl: catalogModel?.source_url ?? item.catalogSourceUrl ?? null,
             imageUrl: nextImageUrl,
             thumbUrl: nextThumbUrl,
           };
@@ -925,6 +1138,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           qty: runQuantity > 0 ? runQuantity : item.qty,
           unitPrice: unitPrice > 0 ? unitPrice : item.unitPrice,
           lineTotal: lineTotal > 0 ? lineTotal : item.lineTotal,
+          description,
+          methodsSummary,
+          catalogSourceUrl: catalogModel?.source_url ?? item.catalogSourceUrl ?? null,
           imageUrl: nextImageUrl,
           thumbUrl: nextThumbUrl,
         };
@@ -941,6 +1157,62 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         !customer && leadLookupName
           ? storedLeadByLookup.get(normalizeLookupKey(leadLookupName)) ?? null
           : null;
+      const primaryLegalEntity = customer ? parseCustomerLegalEntities(customer)[0] ?? null : null;
+      const orderSignatoryParts = (order.signatory_label ?? "").split(",");
+      const customerSignatoryName =
+        orderSignatoryParts[0]?.trim() ||
+        primaryLegalEntity?.signatoryName?.trim() ||
+        customer?.signatory_name?.trim?.() ||
+        lead?.signatory_name?.trim?.() ||
+        null;
+      const customerSignatoryPosition =
+        orderSignatoryParts.slice(1).join(",").trim() ||
+        primaryLegalEntity?.signatoryPosition?.trim() ||
+        customer?.signatory_position?.trim?.() ||
+        lead?.signatory_position?.trim?.() ||
+        null;
+      const customerTaxId =
+        order.customer_tax_id?.trim?.() ||
+        primaryLegalEntity?.taxId?.trim() ||
+        customer?.tax_id?.trim?.() ||
+        null;
+      const customerIban =
+        order.customer_iban?.trim?.() ||
+        primaryLegalEntity?.iban?.trim() ||
+        customer?.iban?.trim?.() ||
+        null;
+      const customerLegalAddress =
+        order.customer_legal_address?.trim?.() ||
+        primaryLegalEntity?.legalAddress?.trim() ||
+        null;
+      const customerSignatoryAuthority =
+        order.customer_signatory_authority?.trim?.() ||
+        primaryLegalEntity?.signatoryAuthority?.trim() ||
+        null;
+      const paymentMethodId =
+        normalizePaymentMethodId(order.payment_method_id) ||
+        (isCashlessPaymentMethod(null, order.payment_method_label) ? "bank_uah" : "cash");
+      const paymentMethodLabel =
+        order.payment_method_label?.trim() || PAYMENT_METHOD_LABELS[paymentMethodId] || "Не вказано";
+      const contractCreatedAt = order.contract_created_at ?? null;
+      const orderDocuments = getOrderDocuments(order);
+      const contractReady = Boolean(
+        order.party_type !== "lead" &&
+          (order.legal_entity_label?.trim() || customer?.legal_name?.trim?.()) &&
+          customerTaxId &&
+          customerIban &&
+          customerLegalAddress &&
+          customerSignatoryName &&
+          customerSignatoryPosition &&
+          customerSignatoryAuthority &&
+          (order.contact_email?.trim?.() || customer?.contact_email?.trim?.()) &&
+          (order.contact_phone?.trim?.() || customer?.contact_phone?.trim?.())
+      );
+      const specificationReady = Boolean(
+        items.length > 0 &&
+          isCashlessPaymentMethod(paymentMethodId, paymentMethodLabel) &&
+          contractCreatedAt
+      );
       return {
         id: order.id,
         source: "stored",
@@ -963,20 +1235,36 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         total: Number(order.total ?? 0) || Number(linkedQuote?.total ?? 0) || computedTotal,
         items,
         itemCount: items.length,
-        paymentRail: order.payment_method_label?.trim() || "Не вказано",
+        paymentMethodId,
+        paymentRail: paymentMethodLabel,
+        paymentTerms: order.payment_terms?.trim() || DEFAULT_PAYMENT_TERMS,
+        incotermsCode: order.incoterms_code?.trim() || DEFAULT_INCOTERMS_CODE,
+        incotermsPlace: order.incoterms_place?.trim?.() || (linkedQuote ? resolveDeliveryPlace(linkedQuote) : null),
         orderStatus: order.order_status?.trim() || "new",
         paymentStatus: order.payment_status?.trim() || "awaiting_payment",
         deliveryStatus: order.delivery_status?.trim() || "not_shipped",
         contactEmail: order.contact_email?.trim?.() || null,
         contactPhone: order.contact_phone?.trim?.() || null,
-        legalEntityLabel: order.legal_entity_label?.trim?.() || null,
-        signatoryLabel: order.signatory_label?.trim?.() || null,
+        legalEntityLabel:
+          order.legal_entity_label?.trim?.() ||
+          (primaryLegalEntity ? formatCustomerLegalEntityTitle(primaryLegalEntity) : customer?.legal_name?.trim?.()) ||
+          null,
+        customerTaxId,
+        customerIban,
+        customerBankDetails: order.customer_bank_details?.trim?.() || null,
+        customerLegalAddress,
+        customerSignatoryName,
+        customerSignatoryPosition,
+        customerSignatoryAuthority,
+        signatoryLabel: buildSignatoryLabel(customerSignatoryName, customerSignatoryPosition),
+        contractCreatedAt,
+        specificationCreatedAt: order.specification_created_at ?? null,
         designStatuses: Array.isArray(order.design_statuses) ? order.design_statuses : [],
         docs: {
-          contract: Boolean(order.documents?.contract),
-          invoice: Boolean(order.documents?.invoice),
-          specification: Boolean(order.documents?.specification),
-          techCard: Boolean(order.documents?.techCard),
+          contract: contractReady,
+          invoice: items.length > 0 || Boolean(orderDocuments.invoice),
+          specification: specificationReady,
+          techCard: (items.length > 0 && Boolean(order.has_approved_visualization) && Boolean(order.has_approved_layout)) || Boolean(orderDocuments.techCard),
         },
         readinessSteps: Array.isArray(order.readiness_steps) ? order.readiness_steps : [],
         blockers: Array.isArray(order.blockers) ? order.blockers : [],
@@ -1071,16 +1359,30 @@ export async function createOrderFromApprovedQuote(params: {
     manager_label: draft.readiness.managerLabel,
     currency: draft.readiness.currency,
     total: orderTotal,
+    payment_method_id: draft.readiness.paymentMethodId,
     payment_method_label: draft.readiness.paymentRail,
+    payment_terms: draft.readiness.paymentTerms,
+    incoterms_code: draft.readiness.incotermsCode,
+    incoterms_place: draft.readiness.incotermsPlace,
     order_status: "new",
     payment_status: "awaiting_payment",
     delivery_status: "not_shipped",
     contact_email: draft.readiness.contactEmail,
     contact_phone: draft.readiness.contactPhone,
     legal_entity_label: draft.readiness.legalEntityLabel,
+    customer_tax_id: draft.readiness.customerTaxId,
+    customer_iban: draft.readiness.customerIban,
+    customer_bank_details: draft.readiness.customerBankDetails,
+    customer_legal_address: draft.readiness.customerLegalAddress,
     signatory_label: draft.readiness.signatoryLabel,
+    customer_signatory_authority: draft.readiness.customerSignatoryAuthority,
     design_statuses: draft.readiness.designStatuses,
-    documents: draft.readiness.docs,
+    documents: {
+      contract: draft.readiness.docs.contract,
+      invoice: draft.readiness.docs.invoice,
+      specification: false,
+      techCard: draft.readiness.docs.techCard,
+    },
     readiness_steps: draft.readiness.readinessSteps,
     blockers: [],
     readiness_column: "ready",
@@ -1095,6 +1397,9 @@ export async function createOrderFromApprovedQuote(params: {
     if (isMissingOrdersRelationMessage(insertOrderError.message)) {
       throw new Error("Таблиці замовлень ще не створені. Запустіть scripts/orders-schema.sql.");
     }
+    if (isMissingOrdersColumnMessage(insertOrderError.message)) {
+      throw new Error("Таблиця замовлень не має полів для СП. Запустіть оновлений scripts/orders-schema.sql.");
+    }
     throw insertOrderError;
   }
 
@@ -1105,14 +1410,24 @@ export async function createOrderFromApprovedQuote(params: {
     quote_item_id: item.quoteItemId ?? item.id,
     position: Number(item.position ?? index + 1) || index + 1,
     name: item.name,
+    description: item.description ?? null,
     qty: item.qty,
     unit: item.unit,
     unit_price: item.unitPrice,
     line_total: item.lineTotal,
+    methods: item.methodsSummary ? [{ label: item.methodsSummary }] : null,
+    catalog_model_id: item.catalogModelId ?? null,
+    image_url: item.imageUrl ?? null,
+    thumb_url: item.thumbUrl ?? null,
   }));
 
   const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);
-  if (insertItemsError) throw insertItemsError;
+  if (insertItemsError) {
+    if (isMissingOrdersRelationMessage(insertItemsError.message) || isMissingOrdersColumnMessage(insertItemsError.message)) {
+      throw new Error("Таблиці позицій замовлень не мають полів для СП. Запустіть оновлений scripts/orders-schema.sql.");
+    }
+    throw insertItemsError;
+  }
 
   return { id: orderId, created: true as const };
 }
@@ -1144,4 +1459,69 @@ export async function updateOrderStatuses(params: {
     }
     throw error;
   }
+}
+
+export async function updateOrderDocumentSettings(params: {
+  teamId: string;
+  orderId: string;
+  paymentMethodId?: string;
+  paymentMethodLabel?: string;
+  paymentTerms?: string;
+  incotermsCode?: string;
+  incotermsPlace?: string | null;
+}) {
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (params.paymentMethodId !== undefined) payload.payment_method_id = params.paymentMethodId;
+  if (params.paymentMethodLabel !== undefined) payload.payment_method_label = params.paymentMethodLabel;
+  if (params.paymentTerms !== undefined) payload.payment_terms = params.paymentTerms;
+  if (params.incotermsCode !== undefined) payload.incoterms_code = params.incotermsCode;
+  if (params.incotermsPlace !== undefined) payload.incoterms_place = params.incotermsPlace;
+
+  const { error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .update(payload)
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId);
+
+  if (error) {
+    if (isMissingOrdersRelationMessage(error.message) || isMissingOrdersColumnMessage(error.message)) {
+      throw new Error("Таблиця замовлень не має полів для СП. Запустіть оновлений scripts/orders-schema.sql.");
+    }
+    throw error;
+  }
+}
+
+export async function markOrderDocumentCreated(params: {
+  teamId: string;
+  orderId: string;
+  documentKind: "contract" | "specification";
+}) {
+  const nowIso = new Date().toISOString();
+  const payload: Record<string, unknown> = {
+    updated_at: nowIso,
+  };
+  if (params.documentKind === "contract") {
+    payload.contract_created_at = nowIso;
+  } else {
+    payload.specification_created_at = nowIso;
+  }
+
+  const { error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .update(payload)
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId);
+
+  if (error) {
+    if (isMissingOrdersRelationMessage(error.message) || isMissingOrdersColumnMessage(error.message)) {
+      throw new Error("Таблиця замовлень не має полів для документів. Запустіть оновлений scripts/orders-schema.sql.");
+    }
+    throw error;
+  }
+
+  return nowIso;
 }

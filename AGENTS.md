@@ -29,6 +29,7 @@ When sources disagree, use this order:
 - Design tasks are primarily `activity_log`-backed entities with metadata, not a simple `design_tasks` table. Confirm this model before changing design flows.
 - Orders/production screens use derived records assembled in `src/features/orders/orderRecords.ts`; do not assume `tosho.orders` alone explains the UI.
 - For user-initiated server actions, prefer the established pattern: user-scoped auth/RLS check first, privileged write second.
+- When a change adds or updates tracked SQL in `scripts/*.sql`, apply the migration yourself against the configured Supabase/Postgres database using available local credentials such as `.env.backup`/`BACKUP_DB_URL` and `psql`; do not ask the user to run SQL manually unless database access is actually blocked.
 - Be conservative around permissions, route/module access, quote workflow state, design-task metadata contracts, attachment deletion, and admin observability queries.
 - Treat performance as a required review dimension for every change. Reuse caches/directories before adding queries, avoid N+1 lookups or broad unbounded reads, and sanity-check whether the first render now does more work than before.
 - Treat backup/ops automation as a partially legacy zone. Verify actual tracked files and local machine state before relying on old doc snippets.

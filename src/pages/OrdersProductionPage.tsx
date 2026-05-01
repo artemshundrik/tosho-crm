@@ -13,6 +13,7 @@ import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -23,12 +24,14 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ORDER_READINESS_COLUMNS } from "@/features/orders/config";
+import { ORDER_DOCUMENT_EXECUTOR, ORDER_PAYMENT_TERMS_OPTIONS, ORDER_READINESS_COLUMNS } from "@/features/orders/config";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import {
   formatOrderDate,
   formatOrderMoney,
+  isCashlessPaymentMethod,
   loadDerivedOrders,
+  markOrderDocumentCreated,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
 import { cn } from "@/lib/utils";
@@ -37,6 +40,7 @@ import {
   AlertTriangle,
   Building2,
   CheckCircle2,
+  FileText,
   LayoutGrid,
   List,
   Loader2,
@@ -127,6 +131,191 @@ const renderDocBadge = (label: string, ready: boolean) => (
   </Badge>
 );
 
+const SPEC_VAT_RATE = 20;
+const CONTRACT_EXECUTOR = ORDER_DOCUMENT_EXECUTOR;
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const formatPlainMoney = (value: number) =>
+  new Intl.NumberFormat("uk-UA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+
+const formatSpecDate = (value = new Date()) =>
+  new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(value);
+
+const getSpecificationRecordBlocker = (record: DerivedOrderRecord) => {
+  if (record.source !== "stored") return "СП можна додавати тільки зі створених замовлень.";
+  if (record.items.length === 0) return "У замовленні немає позицій.";
+  if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) return "СП створюється тільки для безготівки.";
+  if (!record.contractCreatedAt) return "Спочатку потрібно створити договір.";
+  if (!record.docs.specification) return "У замовленні ще не виконані умови для СП.";
+  return null;
+};
+
+const getSpecificationCustomerKey = (record: DerivedOrderRecord) =>
+  [
+    record.customerId || "",
+    normalizeText(record.legalEntityLabel || record.customerName),
+    normalizeText(record.customerTaxId),
+  ].join("|");
+
+const getSpecificationGroupBlocker = (records: DerivedOrderRecord[]) => {
+  if (records.length === 0) return "Обери хоча б одне замовлення для СП.";
+  const first = records[0];
+  const firstKey = getSpecificationCustomerKey(first);
+  for (const record of records) {
+    const blocker = getSpecificationRecordBlocker(record);
+    if (blocker) return `${record.quoteNumber}: ${blocker}`;
+    if (getSpecificationCustomerKey(record) !== firstKey) return "В одну СП можна додати тільки замовлення одного Замовника.";
+    if (record.paymentTerms !== first.paymentTerms) return "Для групової СП обери замовлення з однаковими умовами оплати.";
+    if (record.incotermsCode !== first.incotermsCode || (record.incotermsPlace ?? "") !== (first.incotermsPlace ?? "")) {
+      return "Для групової СП обери замовлення з однаковими умовами Incoterms.";
+    }
+  }
+  return null;
+};
+
+const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[]) => {
+  const first = records[0];
+  const rows = records.flatMap((record) =>
+    record.items.map((item) => ({
+      orderNumber: record.quoteNumber,
+      item,
+    }))
+  );
+  const totalWithVat = rows.reduce((sum, row) => sum + Number(row.item.lineTotal || 0), 0);
+  const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
+  const vatAmount = totalWithVat - totalWithoutVat;
+  const terms =
+    ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === first.paymentTerms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
+  const advanceAmount = totalWithVat * (terms.advance / 100);
+  const balanceAmount = totalWithVat - advanceAmount;
+  const deliveryTerms = `${first.incotermsCode || "FCA"} (Incoterms 2020)${
+    first.incotermsPlace ? `, ${first.incotermsPlace}` : ""
+  }`;
+  const dateLabel = formatSpecDate();
+  const numberLabel = records.map((record) => record.quoteNumber).join(", ");
+  const customerTitle = first.legalEntityLabel || first.customerName;
+  const customerSignatoryRole = first.customerSignatoryPosition || "уповноваженої особи";
+  const customerSignatoryName = first.customerSignatoryName || "Не вказано";
+  const customerAuthority = first.customerSignatoryAuthority || "Не вказано";
+  const itemRows = rows
+    .map(({ orderNumber, item }, index) => {
+      const unitPriceWithVat = Number(item.unitPrice || 0);
+      const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      const imageUrl = item.thumbUrl || item.imageUrl || "";
+      const details = [
+        item.description ? `<div class="muted small">${escapeHtml(item.description)}</div>` : "",
+        item.methodsSummary ? `<div class="muted small">Нанесення: ${escapeHtml(item.methodsSummary)}</div>` : "",
+        item.catalogSourceUrl ? `<div class="muted tiny">${escapeHtml(item.catalogSourceUrl)}</div>` : "",
+      ].join("");
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(orderNumber)}</td>
+          <td>${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.name)}" />` : ""}<strong>${escapeHtml(item.name)}</strong>${details}</td>
+          <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(item.lineTotal))}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+  <html lang="uk">
+    <head>
+      <meta charset="utf-8" />
+      <title>СП ${escapeHtml(numberLabel)}</title>
+      <style>
+        @page { size: A4; margin: 16mm; }
+        body { font-family: Arial, sans-serif; color: #111827; font-size: 12px; line-height: 1.42; }
+        h1, h2 { margin: 0; text-align: center; }
+        h1 { font-size: 18px; letter-spacing: .04em; }
+        h2 { margin-top: 6px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+        th, td { border: 1px solid #d1d5db; padding: 6px; vertical-align: top; }
+        th { background: #f3f4f6; text-align: left; }
+        img { display: block; width: 52px; height: 52px; object-fit: cover; border-radius: 6px; border: 1px solid #d1d5db; margin-bottom: 6px; }
+        .topline { display: flex; justify-content: space-between; gap: 16px; margin: 18px 0 12px; }
+        .section { margin-top: 16px; font-weight: 700; text-transform: uppercase; }
+        .muted { color: #4b5563; }
+        .small { margin-top: 4px; font-size: 11px; }
+        .tiny { margin-top: 4px; font-size: 10px; }
+        .num { text-align: right; white-space: nowrap; }
+        .totals { margin-left: auto; width: 280px; }
+        .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+        .party { border: 1px solid #d1d5db; padding: 10px; min-height: 150px; }
+        .signature { margin-top: 32px; border-top: 1px solid #111827; padding-top: 4px; }
+      </style>
+    </head>
+    <body>
+      <h1>СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</h1>
+      <h2>до замовлень ${escapeHtml(numberLabel)}</h2>
+      <div class="topline">
+        <div>Дата: ${escapeHtml(dateLabel)}</div>
+        <div>Замовник: <strong>${escapeHtml(customerTitle)}</strong></div>
+      </div>
+      <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, що діє на підставі ${escapeHtml(customerAuthority)}, з іншої сторони, підписали цю Специфікацію щодо наступної продукції:</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px;">№</th>
+            <th style="width:92px;">Замовлення</th>
+            <th>Назва продукції</th>
+            <th style="width:70px;">К-сть</th>
+            <th style="width:92px;">Ціна з ПДВ</th>
+            <th style="width:92px;">Ціна без ПДВ</th>
+            <th style="width:100px;">Сума з ПДВ</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <table class="totals">
+        <tr><td>Разом без ПДВ</td><td class="num">${escapeHtml(formatPlainMoney(totalWithoutVat))} грн</td></tr>
+        <tr><td>ПДВ ${SPEC_VAT_RATE}%</td><td class="num">${escapeHtml(formatPlainMoney(vatAmount))} грн</td></tr>
+        <tr><td><strong>Разом з ПДВ</strong></td><td class="num"><strong>${escapeHtml(formatPlainMoney(totalWithVat))} грн</strong></td></tr>
+      </table>
+      <div class="section">Порядок оплати</div>
+      <p>Оплата: ${escapeHtml(terms.label)}. Перед запуском: ${terms.advance}% (${escapeHtml(formatPlainMoney(advanceAmount))} грн з ПДВ). Після готовності: ${terms.balance}% (${escapeHtml(formatPlainMoney(balanceAmount))} грн з ПДВ). Спосіб оплати: ${escapeHtml(first.paymentRail)}.</p>
+      <div class="section">Доставка</div>
+      <p>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</p>
+      <div class="parties">
+        <div class="party">
+          <strong>ВИКОНАВЕЦЬ</strong>
+          <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
+          <p>Місцезнаходження: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
+          <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
+          <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
+          <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
+          <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
+          <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
+          <p class="signature">${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+        </div>
+        <div class="party">
+          <strong>ЗАМОВНИК</strong>
+          <p>${escapeHtml(customerTitle)}</p>
+          <p>Код / ІПН: ${escapeHtml(first.customerTaxId || "Не вказано")}</p>
+          <p>IBAN / банк: ${escapeHtml(first.customerBankDetails || first.customerIban || "Не вказано")}</p>
+          <p>Адреса: ${escapeHtml(first.customerLegalAddress || "Не вказано")}</p>
+          <p class="signature">${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}</p>
+        </div>
+      </div>
+    </body>
+  </html>`;
+};
+
 export default function OrdersProductionPage() {
   const navigate = useNavigate();
   const navigationType = useNavigationType();
@@ -147,6 +336,7 @@ export default function OrdersProductionPage() {
     () => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER
   );
   const [viewTab, setViewTab] = useState<"queue" | "register">(() => restoredFilters?.viewTab ?? "register");
+  const [selectedSpecificationIds, setSelectedSpecificationIds] = useState<string[]>([]);
 
   const openRecord = (record: DerivedOrderRecord) => {
     if (record.source === "stored") {
@@ -183,6 +373,88 @@ export default function OrdersProductionPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const toggleSpecificationSelection = (record: DerivedOrderRecord, checked: boolean) => {
+    if (!checked) {
+      setSelectedSpecificationIds((current) => current.filter((id) => id !== record.id));
+      return;
+    }
+
+    const currentRecords = records.filter((entry) => selectedSpecificationIds.includes(entry.id));
+    const nextRecords = currentRecords.some((entry) => entry.id === record.id)
+      ? currentRecords
+      : [...currentRecords, record];
+    const blocker = getSpecificationGroupBlocker(nextRecords);
+    if (blocker) {
+      setError(blocker);
+      return;
+    }
+    setError(null);
+    setSelectedSpecificationIds(nextRecords.map((entry) => entry.id));
+  };
+
+  const openGroupedSpecification = async () => {
+    if (!teamId) return;
+    const selectedRecords = records.filter((record) => selectedSpecificationIds.includes(record.id));
+    const blocker = getSpecificationGroupBlocker(selectedRecords);
+    if (blocker) {
+      setError(blocker);
+      return;
+    }
+
+    const html = buildGroupedSpecificationHtml(selectedRecords);
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      setError("Браузер заблокував відкриття документа. Дозволь popup для цього сайту.");
+      return;
+    }
+
+    let wroteDocument = false;
+    try {
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      wroteDocument = true;
+    } catch {
+      // Fallback for browsers/extensions that prevent document.write into a popup.
+    }
+
+    if (!wroteDocument) {
+      const objectUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+      popup.location.href = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    }
+
+    try {
+      const markedAt = await Promise.all(
+        selectedRecords.map((record) =>
+          markOrderDocumentCreated({
+            teamId,
+            orderId: record.id,
+            documentKind: "specification",
+          })
+        )
+      );
+      const markedById = new Map(selectedRecords.map((record, index) => [record.id, markedAt[index] ?? new Date().toISOString()]));
+      setRecords((current) =>
+        current.map((record) => {
+          const specificationCreatedAt = markedById.get(record.id);
+          if (!specificationCreatedAt) return record;
+          return {
+            ...record,
+            specificationCreatedAt,
+            docs: {
+              ...record.docs,
+              specification: true,
+            },
+          };
+        })
+      );
+    } catch (markError: unknown) {
+      setError(markError instanceof Error ? markError.message : "СП відкрито, але не вдалося зберегти позначку створення.");
     }
   };
 
@@ -304,6 +576,19 @@ export default function OrdersProductionPage() {
     };
   }, [records]);
 
+  const selectedSpecificationRecords = useMemo(
+    () => records.filter((record) => selectedSpecificationIds.includes(record.id)),
+    [records, selectedSpecificationIds]
+  );
+
+  const selectedSpecificationBlocker = useMemo(
+    () =>
+      selectedSpecificationRecords.length > 0
+        ? getSpecificationGroupBlocker(selectedSpecificationRecords)
+        : null,
+    [selectedSpecificationRecords]
+  );
+
   useEffect(() => {
     if (viewTab !== "queue") return;
     if (typeof window === "undefined") return;
@@ -349,6 +634,19 @@ export default function OrdersProductionPage() {
     <UnifiedPageToolbar
       topRight={
         <>
+          {selectedSpecificationIds.length > 0 ? (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => void openGroupedSpecification()}
+              disabled={Boolean(selectedSpecificationBlocker)}
+              title={selectedSpecificationBlocker ?? undefined}
+              className="w-full sm:w-auto"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>СП з обраних ({selectedSpecificationIds.length})</span>
+            </Button>
+          ) : null}
           <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
             <Button
               variant="segmented"
@@ -452,6 +750,8 @@ export default function OrdersProductionPage() {
     viewTab,
     managerFilter,
     managerFilterOptions,
+    selectedSpecificationBlocker,
+    selectedSpecificationIds,
     workspacePresence.activeHereEntries,
   ]);
 
@@ -552,7 +852,8 @@ export default function OrdersProductionPage() {
                   <Table variant="list" size="md" className="table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[160px] pl-6 whitespace-nowrap">Прорахунок</TableHead>
+                        <TableHead className="w-[58px] pl-6 whitespace-nowrap">СП</TableHead>
+                        <TableHead className="w-[160px] whitespace-nowrap">Прорахунок</TableHead>
                         <TableHead className="w-[260px] whitespace-nowrap">Контрагент</TableHead>
                         <TableHead className="w-[180px] whitespace-nowrap">Стан</TableHead>
                         <TableHead className="w-auto">Позиції</TableHead>
@@ -563,13 +864,28 @@ export default function OrdersProductionPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRecords.map((record) => (
+                      {filteredRecords.map((record) => {
+                        const specificationBlocker = getSpecificationRecordBlocker(record);
+                        const selectedForSpecification = selectedSpecificationIds.includes(record.id);
+                        return (
                         <TableRow
                           key={record.id}
                           className="cursor-pointer hover:bg-muted/10"
                           onClick={() => openRecord(record)}
                         >
-                          <TableCell className="pl-6 align-top">
+                          <TableCell
+                            className="pl-6 align-top"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Checkbox
+                              checked={selectedForSpecification}
+                              disabled={Boolean(specificationBlocker)}
+                              aria-label={`Додати ${record.quoteNumber} до групової СП`}
+                              title={specificationBlocker ?? undefined}
+                              onCheckedChange={(checked) => toggleSpecificationSelection(record, Boolean(checked))}
+                            />
+                          </TableCell>
+                          <TableCell className="align-top">
                             <div className="space-y-1">
                               <HoverCopyText
                                 value={record.quoteNumber}
@@ -662,7 +978,8 @@ export default function OrdersProductionPage() {
                             {formatOrderMoney(record.total, record.currency)}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

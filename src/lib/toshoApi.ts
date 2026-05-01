@@ -86,6 +86,9 @@ export type CatalogModelLookupRow = {
   image_url?: string | null;
   thumb_url?: string | null;
   sku?: string | null;
+  description?: string | null;
+  source_url?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 export type CatalogModelMetadataLookup = {
@@ -218,8 +221,8 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
   if (missingIds.length > 0) {
     const loadModels = async (withImage: boolean) => {
       const columns = withImage
-        ? "id,name,image_url,thumb_url:metadata->imageAsset->>thumbUrl,sku:metadata->>sku"
-        : "id,name,sku:metadata->>sku";
+        ? "id,name,image_url,thumb_url:metadata->imageAsset->>thumbUrl,sku:metadata->>sku,metadata"
+        : "id,name,sku:metadata->>sku,metadata";
       return await supabase.schema("tosho").from("catalog_models").select(columns).in("id", missingIds);
     };
 
@@ -233,6 +236,11 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
     const seenIds = new Set<string>();
     rows.forEach((row) => {
       if (!row?.id) return;
+      const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : null;
+      const source =
+        metadata?.source && typeof metadata.source === "object" && !Array.isArray(metadata.source)
+          ? (metadata.source as Record<string, unknown>)
+          : null;
       seenIds.add(row.id);
       catalogModelLookupCache.set(row.id, {
         id: row.id,
@@ -240,6 +248,8 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
         image_url: typeof row.image_url === "string" ? row.image_url : null,
         thumb_url: typeof row.thumb_url === "string" ? row.thumb_url : null,
         sku: typeof row.sku === "string" ? row.sku : null,
+        description: typeof metadata?.description === "string" ? metadata.description : null,
+        source_url: typeof source?.url === "string" ? source.url : null,
       });
     });
     missingIds.forEach((id) => {
@@ -540,14 +550,13 @@ export async function listCustomersBySearch(teamId: string, search: string) {
         : variant === "no_logo"
           ? "id,name,legal_name,manager,manager_user_id"
           : "id,name,legal_name";
-    let query = supabase
+    return supabase
       .schema("tosho")
       .from("customers")
       .select(columns)
       .eq("team_id", teamId)
       .order("name", { ascending: true })
       .limit(20);
-    return query;
   };
 
   const executeWithFallback = async (term?: string | null) => {
@@ -607,7 +616,7 @@ export async function listCustomersBySearch(teamId: string, search: string) {
 export async function listLeadsBySearch(teamId: string, search: string) {
   const q = search.trim();
   const buildQuery = (variant: "full" | "base") => {
-    let query = supabase
+    return supabase
       .schema("tosho")
       .from("leads")
       .select(
@@ -618,7 +627,6 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       .eq("team_id", teamId)
       .order("company_name", { ascending: true })
       .limit(20);
-    return query;
   };
 
   const executeWithFallback = async (term?: string | null) => {
@@ -1153,15 +1161,14 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     /column/i.test(error.message ?? "") &&
     /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
   ) {
-    const fallbackPayload = payload.map(
-      ({
-        desired_manager_income: _desiredManagerIncome,
-        manager_rate: _managerRate,
-        fixed_cost_rate: _fixedCostRate,
-        vat_rate: _vatRate,
-        ...legacyPayload
-      }) => legacyPayload
-    );
+    const fallbackPayload = payload.map((entry) => {
+      const legacyPayload = { ...entry };
+      delete legacyPayload.desired_manager_income;
+      delete legacyPayload.manager_rate;
+      delete legacyPayload.fixed_cost_rate;
+      delete legacyPayload.vat_rate;
+      return legacyPayload;
+    });
     ({ data, error } = await supabase
       .schema("tosho")
       .from("quote_item_runs")

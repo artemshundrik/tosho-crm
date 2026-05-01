@@ -21,6 +21,37 @@ export const ORDER_PAYMENT_METHOD_OPTIONS = [
   },
 ] as const;
 
+export const ORDER_PAYMENT_TERMS_OPTIONS = [
+  { id: "50/50", label: "50/50", advance: 50, balance: 50 },
+  { id: "70/30", label: "70/30", advance: 70, balance: 30 },
+  { id: "100_prepaid", label: "100% передплата", advance: 100, balance: 0 },
+  { id: "100_after", label: "100% після готовності", advance: 0, balance: 100 },
+] as const;
+
+export const ORDER_INCOTERMS_OPTIONS = [
+  { id: "EXW", label: "EXW" },
+  { id: "FCA", label: "FCA" },
+  { id: "CPT", label: "CPT" },
+  { id: "CIP", label: "CIP" },
+  { id: "DPU", label: "DPU" },
+  { id: "DDP", label: "DDP" },
+] as const;
+
+export const ORDER_DOCUMENT_EXECUTOR = {
+  companyName: "Товариство з обмеженою відповідальністю «АВАНПРІНТ»",
+  shortName: "ТОВ «АВАНПРІНТ»",
+  signatory: "Борщ Олена Вікторівна",
+  signatoryPosition: "директора",
+  authority: "Статуту",
+  address: "Україна, 03035, м. Київ, вул. Монастирського Дениса, буд. 3, корпус 3",
+  taxId: "43024297",
+  vatId: "430242926591",
+  iban: "UA233003350000000026006645092",
+  bank: "АТ «РАЙФФАЙЗЕН БАНК АВАЛЬ» в м. Києві",
+  taxStatus: "Є платником ПДВ на загальних підставах.",
+  signatureLabel: "О.В. Борщ",
+} as const;
+
 export const ORDER_READINESS_COLUMNS = [
   {
     id: "counterparty",

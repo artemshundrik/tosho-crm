@@ -1031,9 +1031,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           onValueChange={(value) =>
                             updateLegalEntity(activeLegalEntityIndex, {
                               ownershipType: value,
-                              ...(value === "fop"
-                                ? { vatRate: "none", signatoryName: "", signatoryPosition: "" }
-                                : {}),
+                              ...(value === "fop" ? { vatRate: "none" } : {}),
                             })
                           }
                         >
@@ -1137,31 +1135,36 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
 
-                    {!activeLegalEntityIsPerson ? (
-                      <>
-                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                          <div className="grid gap-2">
-                            <Label>Підписант</Label>
-                            <Input
-                              value={activeLegalEntity.signatoryName}
-                              onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryName: e.target.value })}
-                              placeholder="ПІБ підписанта"
-                              className="h-9"
-                            />
-                          </div>
-                        </div>
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>{activeLegalEntityIsPerson ? "ПІБ ФОП / підписанта" : "Підписант"}</Label>
+                        <Input
+                          value={activeLegalEntity.signatoryName}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryName: e.target.value })}
+                          placeholder="ПІБ підписанта"
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>{activeLegalEntityIsPerson ? "Статус підписанта" : "Посада підписанта"}</Label>
+                        <Input
+                          value={activeLegalEntity.signatoryPosition}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
+                          placeholder={activeLegalEntityIsPerson ? "Напр. ФОП" : "Напр. Директор"}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
 
-                        <div className="mt-4 grid gap-2">
-                          <Label>Посада підписанта</Label>
-                          <Input
-                            value={activeLegalEntity.signatoryPosition}
-                            onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
-                            placeholder="Напр. Директор"
-                            className="h-9"
-                          />
-                        </div>
-                      </>
-                    ) : null}
+                    <div className="mt-4 grid gap-2">
+                      <Label>Підстава підпису / діяльності</Label>
+                      <Input
+                        value={activeLegalEntity.signatoryAuthority}
+                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: e.target.value })}
+                        placeholder={activeLegalEntityIsPerson ? "Напр. Виписки з ЄДР" : "Напр. Статуту або довіреності"}
+                        className="h-9"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>

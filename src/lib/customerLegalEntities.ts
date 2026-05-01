@@ -9,6 +9,7 @@ export type CustomerLegalEntity = {
   iban: string;
   signatoryName: string;
   signatoryPosition: string;
+  signatoryAuthority: string;
 };
 
 const OWNERSHIP_LABELS: Record<string, string> = {
@@ -40,6 +41,7 @@ type CustomerLegalEntityRow = {
   iban?: unknown;
   signatory_name?: unknown;
   signatory_position?: unknown;
+  signatory_authority?: unknown;
 };
 
 type CustomerLegalEntitySource = CustomerLegalEntityRow & {
@@ -64,6 +66,7 @@ export const createEmptyCustomerLegalEntity = (): CustomerLegalEntity => ({
   iban: "",
   signatoryName: "",
   signatoryPosition: "",
+  signatoryAuthority: "",
 });
 
 const normalizeVatRate = (value: unknown) => {
@@ -83,6 +86,7 @@ const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntit
   iban: typeof value.iban === "string" ? value.iban : "",
   signatoryName: typeof value.signatory_name === "string" ? value.signatory_name : "",
   signatoryPosition: typeof value.signatory_position === "string" ? value.signatory_position : "",
+  signatoryAuthority: typeof value.signatory_authority === "string" ? value.signatory_authority : "",
 });
 
 const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
@@ -95,6 +99,7 @@ const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
       value.iban.trim() ||
       value.signatoryName.trim() ||
       value.signatoryPosition.trim() ||
+      value.signatoryAuthority.trim() ||
       value.vatRate !== "none"
   );
 
@@ -123,6 +128,7 @@ export const parseCustomerLegalEntities = (row?: CustomerLegalEntitySource | nul
     iban: row?.iban,
     signatory_name: row?.signatory_name,
     signatory_position: row?.signatory_position,
+    signatory_authority: row?.signatory_authority,
   });
 
   return hasMeaningfulLegalEntity(legacy) ? [legacy] : [createEmptyCustomerLegalEntity()];
@@ -140,6 +146,7 @@ export const serializeCustomerLegalEntities = (value: CustomerLegalEntity[]) =>
       iban: entity.iban.trim() || null,
       signatory_name: entity.signatoryName.trim() || null,
       signatory_position: entity.signatoryPosition.trim() || null,
+      signatory_authority: entity.signatoryAuthority.trim() || null,
     }))
     .filter((entity) =>
       Object.values(entity).some((entry) => entry !== null && entry !== "")
@@ -193,7 +200,7 @@ export const formatCustomerLegalEntityTitle = (
 };
 
 export const hasCustomerLegalEntityIdentity = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "cardNumber" | "iban" | "signatoryName" | "signatoryPosition">
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "cardNumber" | "iban" | "signatoryName" | "signatoryPosition" | "signatoryAuthority">
 ) =>
   Boolean(
     entity.ownershipType.trim() ||
@@ -203,13 +210,14 @@ export const hasCustomerLegalEntityIdentity = (
       entity.cardNumber.trim() ||
       entity.iban.trim() ||
       entity.signatoryName.trim() ||
-      entity.signatoryPosition.trim()
+      entity.signatoryPosition.trim() ||
+      entity.signatoryAuthority.trim()
   );
 
 export const getCustomerLegalEntityDocumentMissingFields = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryPosition"> | null | undefined
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryName" | "signatoryPosition" | "signatoryAuthority"> | null | undefined
 ) => {
-  if (!entity) return ["тип", "назву", "код", "IBAN", "юридичну адресу", "посаду підписанта"];
+  if (!entity) return ["тип", "назву", "код", "IBAN", "юридичну адресу", "ПІБ підписанта", "посаду підписанта", "підставу підпису"];
 
   const missing: string[] = [];
   if (!entity.ownershipType.trim()) missing.push("тип");
@@ -217,10 +225,12 @@ export const getCustomerLegalEntityDocumentMissingFields = (
   if (!entity.taxId.trim()) missing.push("код");
   if (!entity.iban.trim()) missing.push("IBAN");
   if (!entity.legalAddress.trim()) missing.push(entity.ownershipType === "fop" ? "прописку" : "юридичну адресу");
+  if (!entity.signatoryName.trim()) missing.push("ПІБ підписанта");
   if (!entity.signatoryPosition.trim()) missing.push("посаду підписанта");
+  if (!entity.signatoryAuthority.trim()) missing.push("підставу підпису");
   return missing;
 };
 
 export const hasCustomerLegalEntityDocumentEssentials = (
-  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryPosition"> | null | undefined
+  entity: Pick<CustomerLegalEntity, "ownershipType" | "legalName" | "taxId" | "legalAddress" | "iban" | "signatoryName" | "signatoryPosition" | "signatoryAuthority"> | null | undefined
 ) => getCustomerLegalEntityDocumentMissingFields(entity).length === 0;

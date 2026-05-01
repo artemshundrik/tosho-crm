@@ -7,19 +7,29 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ORDER_STATUS_SECTIONS } from "@/features/orders/config";
+import {
+  ORDER_DOCUMENT_EXECUTOR,
+  ORDER_INCOTERMS_OPTIONS,
+  ORDER_PAYMENT_METHOD_OPTIONS,
+  ORDER_PAYMENT_TERMS_OPTIONS,
+  ORDER_STATUS_SECTIONS,
+} from "@/features/orders/config";
 import {
   formatOrderDate,
   formatOrderMoney,
+  isCashlessPaymentMethod,
   loadDerivedOrders,
+  markOrderDocumentCreated,
+  updateOrderDocumentSettings,
   updateOrderStatuses,
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
-import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -133,20 +143,7 @@ const documentTitleByKind: Record<OrderDocumentKind, string> = {
   techCard: "Технологічний додаток",
 };
 
-const CONTRACT_EXECUTOR = {
-  companyName: 'Товариство з обмеженою відповідальністю «АВАНПРІНТ»',
-  shortName: "ТОВ «АВАНПРІНТ»",
-  signatory: "Борщ Олена Вікторівна",
-  signatoryPosition: "директора",
-  authority: "Статуту",
-  address: "Україна, 03035, м. Київ, вул. Монастирського Дениса, буд. 3, корпус 3",
-  taxId: "43024297",
-  vatId: "430242926591",
-  iban: "UA233003350000000026006645092",
-  bank: 'АТ «РАЙФФАЙЗЕН БАНК АВАЛЬ» в м. Києві',
-  taxStatus: "Є платником ПДВ на загальних підставах.",
-  signatureLabel: "О.В. Борщ",
-};
+const CONTRACT_EXECUTOR = ORDER_DOCUMENT_EXECUTOR;
 
 const formatContractDateParts = (value?: string | null) => {
   const source = value ? new Date(value) : new Date();
@@ -184,19 +181,54 @@ const formatPlainMoney = (value: number) =>
   }).format(value || 0);
 
 const SPEC_VAT_RATE = 20;
-const SPEC_ADVANCE_SHARE = 0.7;
 const SPEC_DEFAULT_WORK_DAYS = 15;
-const SPEC_DEFAULT_DELIVERY_TERMS = "FCA (Incoterms 2020)";
+
+const getPaymentTermsParts = (terms: string, total: number) => {
+  const option = ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === terms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
+  const advanceAmount = total * (option.advance / 100);
+  const balanceAmount = total - advanceAmount;
+  return {
+    ...option,
+    advanceAmount,
+    balanceAmount,
+  };
+};
+
+const formatIncotermsLabel = (record: Pick<DerivedOrderRecord, "incotermsCode" | "incotermsPlace">) => {
+  const code = record.incotermsCode?.trim() || "FCA";
+  const place = record.incotermsPlace?.trim();
+  return `${code} (Incoterms 2020)${place ? `, ${place}` : ""}`;
+};
+
+const canCreateSpecification = (record: DerivedOrderRecord) =>
+  record.items.length > 0 &&
+  isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
+  Boolean(record.contractCreatedAt);
+
+const getSpecificationBlocker = (record: DerivedOrderRecord) => {
+  if (record.items.length === 0) return "Немає позицій для СП.";
+  if (!isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail)) {
+    return "СП створюється тільки для безготівкового розрахунку.";
+  }
+  if (!record.contractCreatedAt) {
+    return "Перед СП потрібно створити Договір.";
+  }
+  return null;
+};
+
+const normalizeDocumentDocs = (record: DerivedOrderRecord) => ({
+  ...record.docs,
+  specification: canCreateSpecification(record),
+});
 
 const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentKind) => {
   const title = documentTitleByKind[kind];
   const contractDate = formatContractDateParts(record.updatedAt ?? record.createdAt);
   const contractEndDate = formatContractEndDate(record.updatedAt ?? record.createdAt);
   const customerTitle = record.legalEntityLabel || record.customerName;
-  const customerSignatoryName =
-    record.signatoryLabel?.split(",")[0]?.trim() || "Не вказано";
-  const customerSignatoryRole =
-    record.signatoryLabel?.split(",").slice(1).join(",").trim() || "уповноваженої особи";
+  const customerSignatoryName = record.customerSignatoryName?.trim() || "Не вказано";
+  const customerSignatoryRole = record.customerSignatoryPosition?.trim() || "уповноваженої особи";
+  const customerSignatoryAuthority = record.customerSignatoryAuthority?.trim() || "Не вказано";
   const rows = record.items
     .map(
       (item, index) => `
@@ -210,22 +242,27 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
         </tr>`
     )
     .join("");
-  const customerBankDetails = "Не вказано";
-  const customerTaxId = "Не вказано";
+  const customerBankDetails = record.customerBankDetails?.trim() || record.customerIban?.trim() || "Не вказано";
+  const customerTaxId = record.customerTaxId?.trim() || "Не вказано";
   const specificationNumber = record.quoteNumber;
   const specificationDate = formatSlashDate(record.updatedAt ?? record.createdAt);
   const totalWithVat = Number(record.total || 0);
   const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
-  const advanceAmount = totalWithVat * SPEC_ADVANCE_SHARE;
-  const finalAmount = totalWithVat - advanceAmount;
+  const paymentTerms = getPaymentTermsParts(record.paymentTerms, totalWithVat);
+  const deliveryTerms = formatIncotermsLabel(record);
   const specificationRows = record.items
     .map((item, index) => {
       const unitPriceWithVat = Number(item.unitPrice || 0);
       const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      const itemDetails = [
+        item.description?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#374151;">${escapeHtml(item.description)}</div>` : "",
+        item.methodsSummary?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#4b5563;">Нанесення: ${escapeHtml(item.methodsSummary)}</div>` : "",
+        item.catalogSourceUrl?.trim() ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;">${escapeHtml(item.catalogSourceUrl)}</div>` : "",
+      ].join("");
       return `
         <tr>
           <td>${index + 1}</td>
-          <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}</td>
+          <td>${item.thumbUrl || item.imageUrl ? `<img src="${escapeHtml(item.thumbUrl || item.imageUrl)}" alt="${escapeHtml(item.name)}" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;margin-bottom:8px;" />` : ""}${escapeHtml(item.name)}${itemDetails}</td>
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
@@ -283,7 +320,7 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
           <div>«${escapeHtml(contractDate.day)}» ${escapeHtml(contractDate.monthLabel)} ${escapeHtml(contractDate.year)} р.</div>
         </div>
 
-        <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, яка діє на підставі Статуту, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
+        <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
 
         <h3>1. Предмет договору</h3>
         <p>Виконавець зобов’язується виготовити та поставити Замовнику рекламно-сувенірну продукцію (надалі – Продукція) в асортименті, кількості та по ціні згідно Специфікаціям, що є невід’ємними частинами цього Договору, а Замовник зобов’язується прийняти Продукцію та оплатити її в порядку та на умовах, визначених Договором.</p>
@@ -347,11 +384,14 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
             <div class="party-title">ЗАМОВНИК</div>
             <p>${escapeHtml(customerTitle)}</p>
             <p>${escapeHtml(record.legalEntityLabel || "Юридична назва не вказана")}</p>
-            <p>Код / ІПН: ${escapeHtml("Не вказано")}</p>
+            <p>Код / ІПН: ${escapeHtml(customerTaxId)}</p>
+            <p>IBAN / банк: ${escapeHtml(customerBankDetails)}</p>
+            <p>Адреса: ${escapeHtml(record.customerLegalAddress || "Не вказано")}</p>
             <p>Email: ${escapeHtml(record.contactEmail || "Не вказано")}</p>
             <p>Телефон: ${escapeHtml(record.contactPhone || "Не вказано")}</p>
             <p>Підписант: ${escapeHtml(record.signatoryLabel || "Не вказано")}</p>
-            <p>Умови оплати: ${escapeHtml(record.paymentRail || "Не вказано")}</p>
+            <p>Підстава: ${escapeHtml(customerSignatoryAuthority)}</p>
+            <p>Умови оплати: ${escapeHtml([record.paymentRail, record.paymentTerms].filter(Boolean).join(" · ") || "Не вказано")}</p>
             <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatoryName)}</p>
           </div>
         </div>
@@ -413,7 +453,7 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
             <div>${escapeHtml(specificationDate)} р.</div>
           </div>
 
-          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, що діє на підставі Статуту, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
+          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
 
           <div class="section-title center">СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
 
@@ -447,9 +487,9 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
 
           <div class="section-title">ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
           <ul>
-            <li>Оплата продукції здійснюється Замовником у розмірі 70% (${escapeHtml(formatPlainMoney(advanceAmount))} грн з урахуванням ПДВ) від загальної суми та 30% (${escapeHtml(formatPlainMoney(finalAmount))} грн з урахуванням ПДВ) після отримання готової продукції, протягом 3-х робочих днів.</li>
-            <li>Базовий спосіб оплати в CRM: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
-            <li>Доставка продукції здійснюється на умовах ${escapeHtml(SPEC_DEFAULT_DELIVERY_TERMS)}.</li>
+            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн з урахуванням ПДВ) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн з урахуванням ПДВ) після готовності продукції, протягом 3-х робочих днів.</li>
+            <li>Спосіб оплати: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
+            <li>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</li>
           </ul>
 
           <div class="section-title">АДРЕСИ І РЕКВІЗИТИ СТОРІН</div>
@@ -564,6 +604,7 @@ export default function OrdersProductionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [documentSettingsSaving, setDocumentSettingsSaving] = useState(false);
   const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -636,6 +677,34 @@ export default function OrdersProductionDetailsPage() {
     }
   };
 
+  const handleDocumentSettingChange = async (
+    patch: Partial<
+      Pick<DerivedOrderRecord, "paymentMethodId" | "paymentRail" | "paymentTerms" | "incotermsCode" | "incotermsPlace">
+    >
+  ) => {
+    if (!record || record.source !== "stored" || !teamId) return;
+    const previous = record;
+    const next = { ...record, ...patch };
+    setRecord({ ...next, docs: normalizeDocumentDocs(next) });
+    setDocumentSettingsSaving(true);
+    try {
+      await updateOrderDocumentSettings({
+        teamId,
+        orderId: record.id,
+        paymentMethodId: patch.paymentMethodId,
+        paymentMethodLabel: patch.paymentRail,
+        paymentTerms: patch.paymentTerms,
+        incotermsCode: patch.incotermsCode,
+        incotermsPlace: patch.incotermsPlace,
+      });
+    } catch (settingsError: unknown) {
+      setRecord(previous);
+      setError(settingsError instanceof Error ? settingsError.message : "Не вдалося зберегти умови СП.");
+    } finally {
+      setDocumentSettingsSaving(false);
+    }
+  };
+
   const handleOpenDesignAsset = async (asset: OrderDesignAsset) => {
     if (asset.kind === "link") {
       if (asset.url) window.open(asset.url, "_blank", "noopener,noreferrer");
@@ -662,8 +731,19 @@ export default function OrdersProductionDetailsPage() {
     }
   };
 
-  const openDocumentPrint = (kind: OrderDocumentKind) => {
+  const openDocumentPrint = async (kind: OrderDocumentKind) => {
     if (!record) return;
+    if (kind === "specification") {
+      const blocker = getSpecificationBlocker(record);
+      if (blocker) {
+        setError(blocker);
+        return;
+      }
+    }
+    if (kind === "contract" && !record.docs.contract) {
+      setError("Для договору не вистачає реквізитів замовника.");
+      return;
+    }
     const html = buildOrderDocumentHtml(record, kind);
     const popup = window.open("", "_blank");
     if (!popup) {
@@ -671,20 +751,43 @@ export default function OrdersProductionDetailsPage() {
       return;
     }
 
+    let wroteDocument = false;
     try {
       popup.document.open();
       popup.document.write(html);
       popup.document.close();
       popup.focus();
-      return;
+      wroteDocument = true;
     } catch {
       // Fallback for browsers/extensions that prevent document.write into a popup.
     }
 
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-    popup.location.href = objectUrl;
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    if (!wroteDocument) {
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const objectUrl = URL.createObjectURL(blob);
+      popup.location.href = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    }
+
+    if (record.source === "stored" && teamId && (kind === "contract" || kind === "specification")) {
+      try {
+        const createdAt = await markOrderDocumentCreated({
+          teamId,
+          orderId: record.id,
+          documentKind: kind,
+        });
+        setRecord((current) => {
+          if (!current || current.id !== record.id) return current;
+          const next =
+            kind === "contract"
+              ? { ...current, contractCreatedAt: createdAt }
+              : { ...current, specificationCreatedAt: createdAt };
+          return { ...next, docs: normalizeDocumentDocs(next) };
+        });
+      } catch (markError: unknown) {
+        setError(markError instanceof Error ? markError.message : "Документ відкрито, але не вдалося зберегти позначку створення.");
+      }
+    }
   };
 
   const openEmailDraft = () => {
@@ -910,6 +1013,7 @@ export default function OrdersProductionDetailsPage() {
             Оплата
           </div>
           <div className="mt-2 text-sm font-semibold text-foreground">{record.paymentRail}</div>
+          <div className="mt-1 text-sm text-muted-foreground">{record.paymentTerms}</div>
         </Card>
 
         <Card className="border-border/60 p-4">
@@ -933,6 +1037,130 @@ export default function OrdersProductionDetailsPage() {
           <div className="mt-2 text-sm text-muted-foreground">{record.signatoryLabel || "Підписанта не вказано"}</div>
         </Card>
       </div>
+
+      <Card className="border-border/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-foreground">Умови СП</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              СП доступна тільки для безготівки і після створення договору.
+            </div>
+          </div>
+          {documentSettingsSaving ? (
+            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+              Зберігаємо...
+            </Badge>
+          ) : null}
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Тип оплати</Label>
+            {record.source === "stored" ? (
+              <Select
+                value={record.paymentMethodId}
+                onValueChange={(value) => {
+                  const option = ORDER_PAYMENT_METHOD_OPTIONS.find((item) => item.id === value);
+                  void handleDocumentSettingChange({
+                    paymentMethodId: value,
+                    paymentRail: option?.label ?? value,
+                  });
+                }}
+                disabled={documentSettingsSaving}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_PAYMENT_METHOD_OPTIONS.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-sm text-muted-foreground">{record.paymentRail}</div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Умови оплати</Label>
+            {record.source === "stored" ? (
+              <Select
+                value={record.paymentTerms}
+                onValueChange={(value) => void handleDocumentSettingChange({ paymentTerms: value })}
+                disabled={documentSettingsSaving}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_PAYMENT_TERMS_OPTIONS.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-sm text-muted-foreground">{record.paymentTerms}</div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Incoterms 2020</Label>
+            {record.source === "stored" ? (
+              <Select
+                value={record.incotermsCode}
+                onValueChange={(value) => void handleDocumentSettingChange({ incotermsCode: value })}
+                disabled={documentSettingsSaving}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_INCOTERMS_OPTIONS.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-sm text-muted-foreground">{record.incotermsCode}</div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Місце поставки</Label>
+            {record.source === "stored" ? (
+              <Input
+                value={record.incotermsPlace ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setRecord((current) => {
+                    if (!current) return current;
+                    const next = { ...current, incotermsPlace: value };
+                    return { ...next, docs: normalizeDocumentDocs(next) };
+                  });
+                }}
+                onBlur={(event) =>
+                  void handleDocumentSettingChange({
+                    incotermsPlace: event.target.value.trim() || null,
+                  })
+                }
+                placeholder="Напр. склад НП, Київ"
+                className="h-9"
+                disabled={documentSettingsSaving}
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">{record.incotermsPlace || "Не вказано"}</div>
+            )}
+          </div>
+        </div>
+        {getSpecificationBlocker(record) ? (
+          <div className="mt-3 rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2 text-sm text-muted-foreground">
+            {getSpecificationBlocker(record)}
+          </div>
+        ) : null}
+      </Card>
 
       <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
         <Table variant="list" size="md">
@@ -962,7 +1190,15 @@ export default function OrdersProductionDetailsPage() {
                         loading="lazy"
                       />
                     ) : null}
-                    <span>{item.name}</span>
+                    <div className="min-w-0">
+                      <div>{item.name}</div>
+                      {item.description ? (
+                        <div className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">{item.description}</div>
+                      ) : null}
+                      {item.methodsSummary ? (
+                        <div className="mt-0.5 text-xs font-normal text-muted-foreground">Нанесення: {item.methodsSummary}</div>
+                      ) : null}
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="text-center">{item.unit}</TableCell>
@@ -1034,7 +1270,7 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {record.docs.contract ? (
-                  <Button size="sm" variant="outline" onClick={() => openDocumentPrint("contract")}>
+                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("contract")}>
                     PDF
                   </Button>
                 ) : null}
@@ -1048,7 +1284,7 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {record.docs.invoice ? (
-                  <Button size="sm" variant="outline" onClick={() => openDocumentPrint("invoice")}>
+                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("invoice")}>
                     PDF
                   </Button>
                 ) : null}
@@ -1062,11 +1298,11 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {record.docs.specification ? (
-                  <Button size="sm" variant="outline" onClick={() => openDocumentPrint("specification")}>
+                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("specification")}>
                     PDF
                   </Button>
                 ) : null}
-                {renderDocBadge(record.docs.specification ? "Готова" : "Немає позицій", record.docs.specification)}
+                {renderDocBadge(record.docs.specification ? "Готова" : "Потрібні умови", record.docs.specification)}
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2">
@@ -1076,7 +1312,7 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {record.docs.techCard ? (
-                  <Button size="sm" variant="outline" onClick={() => openDocumentPrint("techCard")}>
+                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("techCard")}>
                     PDF
                   </Button>
                 ) : null}

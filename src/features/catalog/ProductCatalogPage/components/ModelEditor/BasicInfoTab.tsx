@@ -87,7 +87,7 @@ export function BasicInfoTab({
     setImageErrored(false);
   }, [draftImageUrl]);
 
-  const variants = draftMetadata.variants ?? [];
+  const variants = React.useMemo(() => draftMetadata.variants ?? [], [draftMetadata.variants]);
   const baseVariantName = draftMetadata.baseVariantName ?? variants[0]?.name ?? "";
   const primarySku = draftMetadata.sku ?? variants[0]?.sku ?? "";
   const primaryImageUrl = draftImageUrl || (variants[0] ? getVariantPreviewUrl(variants[0]) ?? "" : "");
@@ -117,6 +117,7 @@ export function BasicInfoTab({
   const showActiveImagePreview = Boolean(activeImageUrl) && !activeImageFailed;
   const descriptionValue = draftMetadata.description ?? "";
   const descriptionPreview = descriptionValue.replace(/\s+/g, " ").trim();
+  const productSourceUrl = draftMetadata.source?.url ?? "";
 
   React.useEffect(() => {
     if (variants.length === 0) {
@@ -301,6 +302,23 @@ export function BasicInfoTab({
       description: value.trim() ? value : null,
     });
   };
+  const updateProductSourceUrl = (value: string) => {
+    const normalizedUrl = value.trim();
+    onMetadataChange({
+      ...draftMetadata,
+      source: normalizedUrl
+        ? {
+            ...(draftMetadata.source ?? {}),
+            url: normalizedUrl,
+          }
+        : draftMetadata.source?.vendor || draftMetadata.source?.importedAt
+          ? {
+              ...(draftMetadata.source ?? {}),
+              url: null,
+            }
+          : null,
+    });
+  };
   const handleActiveVariantFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isActivePrimary) {
       onImageFileUpload(event);
@@ -454,7 +472,7 @@ export function BasicInfoTab({
             />
           </button>
           {descriptionOpen ? (
-            <div className="border-t border-border/50 p-3">
+            <div className="space-y-3 border-t border-border/50 p-3">
               <Textarea
                 value={descriptionValue}
                 onChange={(event) => updateDescription(event.target.value)}
@@ -462,6 +480,15 @@ export function BasicInfoTab({
                 rows={4}
                 className="min-h-[112px] resize-y bg-background/70"
               />
+              <div className="grid gap-2">
+                <Label>Посилання на товар</Label>
+                <Input
+                  value={productSourceUrl}
+                  onChange={(event) => updateProductSourceUrl(event.target.value)}
+                  placeholder="https://avanprint.ua/... або сторінка товару на нашому сайті"
+                  className="bg-background/70"
+                />
+              </div>
             </div>
           ) : null}
         </div>
