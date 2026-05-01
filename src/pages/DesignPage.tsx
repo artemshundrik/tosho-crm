@@ -3335,6 +3335,109 @@ export default function DesignPage() {
     setCreateFiles((prev) => [...prev, ...next].slice(0, MAX_BRIEF_FILES));
   };
 
+  const getDroppedString = (item: DataTransferItem) =>
+    new Promise<string>((resolve) => {
+      item.getAsString((value) => resolve(value ?? ""));
+    });
+
+  const getExtensionFromMime = (mimeType: string) => {
+    if (mimeType.includes("png")) return "png";
+    if (mimeType.includes("webp")) return "webp";
+    if (mimeType.includes("gif")) return "gif";
+    if (mimeType.includes("svg")) return "svg";
+    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
+    return "bin";
+  };
+
+  const extractImageUrlsFromDropText = (value: string, mimeType: string) => {
+    const urls = new Set<string>();
+    if (!value.trim()) return [];
+
+    if (mimeType === "text/html") {
+      const doc = new DOMParser().parseFromString(value, "text/html");
+      doc.querySelectorAll("img[src], a[href]").forEach((node) => {
+        const raw = node instanceof HTMLImageElement ? node.src : node instanceof HTMLAnchorElement ? node.href : "";
+        if (raw) urls.add(raw);
+      });
+    }
+
+    value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .forEach((line) => {
+        const match = line.match(/(?:https?:\/\/|blob:|data:image\/)[^\s"'<>]+/i);
+        if (match?.[0]) urls.add(match[0]);
+      });
+
+    return Array.from(urls);
+  };
+
+  const createFileFromDroppedUrl = async (url: string, index: number) => {
+    if (!/^(https?:\/\/|blob:|data:image\/)/i.test(url)) return null;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      if (!blob.size) return null;
+      const mimeType = blob.type || response.headers.get("content-type") || "application/octet-stream";
+      if (!mimeType.startsWith("image/")) return null;
+      let baseName = `dropped-image-${index + 1}`;
+      try {
+        const parsed = new URL(url);
+        const lastPathPart = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "");
+        if (lastPathPart) baseName = lastPathPart.replace(/[^\p{L}\p{N}._-]+/gu, "-");
+      } catch {
+        // Data URLs do not have a useful path.
+      }
+      const hasExtension = /\.[a-z0-9]{2,5}$/i.test(baseName);
+      const fileName = hasExtension ? baseName : `${baseName}.${getExtensionFromMime(mimeType)}`;
+      return new File([blob], fileName, { type: mimeType });
+    } catch {
+      return null;
+    }
+  };
+
+  const collectCreateFilesFromDrop = async (dataTransfer: DataTransfer) => {
+    const files = new Map<string, File>();
+    const addFile = (file: File | null | undefined) => {
+      if (!file || !file.size) return;
+      files.set(`${file.name}:${file.size}:${file.lastModified}`, file);
+    };
+
+    Array.from(dataTransfer.files ?? []).forEach(addFile);
+
+    const items = Array.from(dataTransfer.items ?? []);
+    items
+      .filter((item) => item.kind === "file")
+      .forEach((item) => addFile(item.getAsFile()));
+
+    const stringItems = items.filter((item) => item.kind === "string");
+    const droppedStrings = await Promise.all(
+      stringItems.map(async (item) => ({
+        type: item.type,
+        value: await getDroppedString(item),
+      }))
+    );
+    const urls = Array.from(
+      new Set(droppedStrings.flatMap((entry) => extractImageUrlsFromDropText(entry.value, entry.type)))
+    );
+    const urlFiles = await Promise.all(urls.map((url, index) => createFileFromDroppedUrl(url, index)));
+    urlFiles.forEach(addFile);
+
+    return Array.from(files.values()).slice(0, MAX_BRIEF_FILES);
+  };
+
+  const handleCreateFilesDrop = async (dataTransfer: DataTransfer) => {
+    const droppedFiles = await collectCreateFilesFromDrop(dataTransfer);
+    if (droppedFiles.length > 0) {
+      addFilesToCreate(droppedFiles);
+      setCreateError(null);
+      return;
+    }
+    setCreateError("Не вдалося отримати файл із перетягування. Спробуйте перетягнути саме файл або зберегти картинку і додати її через вибір файлу.");
+  };
+
   const removeCreateFile = (index: number) => {
     setCreateFiles((prev) => prev.filter((_, i) => i !== index));
   };
@@ -5879,14 +5982,20 @@ export default function DesignPage() {
               <div
                 onDrop={(event) => {
                   event.preventDefault();
+                  event.stopPropagation();
                   setCreateFilesDragActive(false);
-                  addFilesToCreate(event.dataTransfer.files);
+                  void handleCreateFilesDrop(event.dataTransfer);
                 }}
                 onDragOver={(event) => {
                   event.preventDefault();
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "copy";
                   if (!createFilesDragActive) setCreateFilesDragActive(true);
                 }}
-                onDragLeave={() => setCreateFilesDragActive(false)}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setCreateFilesDragActive(false);
+                }}
                 className={cn(
                   "relative border-2 border-dashed rounded-[var(--radius-md)] p-6 text-center transition-colors cursor-pointer",
                   createFilesDragActive
