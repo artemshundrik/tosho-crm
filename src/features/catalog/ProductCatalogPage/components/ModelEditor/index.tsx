@@ -37,6 +37,10 @@ interface ModelEditorProps {
   draftImageUrl: string;
   draftMetadata: CatalogModelMetadata;
   imageUploadMode: ImageUploadMode;
+  avanprintImportUrl: string;
+  avanprintImporting: boolean;
+  avanprintImportError: string | null;
+  avanprintImportSummary: string | null;
   
   // Methods
   availableMethods: CatalogMethod[];
@@ -64,6 +68,8 @@ interface ModelEditorProps {
   onImageFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onVariantImageUrlChange: (variantId: string, value: string) => void;
   onVariantImageFileUpload: (variantId: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+  onAvanprintImportUrlChange: (value: string) => void;
+  onAvanprintImport: () => void;
   onSave: () => void;
   onDelete: () => void;
 }
@@ -84,6 +90,10 @@ export function ModelEditor({
   draftImageUrl,
   draftMetadata,
   imageUploadMode,
+  avanprintImportUrl,
+  avanprintImporting,
+  avanprintImportError,
+  avanprintImportSummary,
   availableMethods,
   newMethodName,
   newMethodPrice,
@@ -107,6 +117,8 @@ export function ModelEditor({
   onImageFileUpload,
   onVariantImageUrlChange,
   onVariantImageFileUpload,
+  onAvanprintImportUrlChange,
+  onAvanprintImport,
   onSave,
   onDelete,
 }: ModelEditorProps) {
@@ -138,6 +150,10 @@ export function ModelEditor({
               draftImageUrl={draftImageUrl}
               draftMetadata={draftMetadata}
               imageUploadMode={imageUploadMode}
+              avanprintImportUrl={avanprintImportUrl}
+              avanprintImporting={avanprintImporting}
+              avanprintImportError={avanprintImportError}
+              avanprintImportSummary={avanprintImportSummary}
               onTypeChange={onTypeChange}
               onKindChange={onKindChange}
               onNameChange={onNameChange}
@@ -147,6 +163,8 @@ export function ModelEditor({
               onImageFileUpload={onImageFileUpload}
               onVariantImageUrlChange={onVariantImageUrlChange}
               onVariantImageFileUpload={onVariantImageFileUpload}
+              onAvanprintImportUrlChange={onAvanprintImportUrlChange}
+              onAvanprintImport={onAvanprintImport}
             />
 
             <div className="space-y-4">

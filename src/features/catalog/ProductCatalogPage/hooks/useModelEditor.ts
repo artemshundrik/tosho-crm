@@ -29,6 +29,33 @@ import { DEFAULT_PRICE } from "@/constants/catalog";
 
 const CATALOG_IMAGE_BUCKET = "public-assets";
 
+type AvanprintImportedProduct = {
+  source: "avanprint";
+  sourceUrl: string;
+  name: string;
+  sku: string | null;
+  brand: string | null;
+  typeHints: string[];
+  kindHints: string[];
+  price: number | null;
+  imageUrl: string | null;
+  variants: Array<{
+    name: string;
+    sku: string | null;
+    imageUrl: string | null;
+  }>;
+  methods: string[];
+  sizes: string[];
+  description: string;
+  specs: Array<{ label: string; value: string }>;
+};
+
+type AvanprintImportResponse = {
+  success?: boolean;
+  error?: string;
+  product?: AvanprintImportedProduct;
+};
+
 const syncKindModelCounts = (catalog: CatalogType[]) =>
   catalog.map((type) => ({
     ...type,
@@ -96,6 +123,10 @@ export function useModelEditor({
   const [persistedVariantImageAssets, setPersistedVariantImageAssets] = useState<Record<string, CatalogImageAsset | null>>({});
   const [draftMetadata, setDraftMetadata] = useState<CatalogModelMetadata>({});
   const [imageUploadMode, setImageUploadMode] = useState<ImageUploadMode>("url");
+  const [avanprintImportUrl, setAvanprintImportUrl] = useState("");
+  const [avanprintImporting, setAvanprintImporting] = useState(false);
+  const [avanprintImportError, setAvanprintImportError] = useState<string | null>(null);
+  const [avanprintImportSummary, setAvanprintImportSummary] = useState<string | null>(null);
 
   // Methods management
   const [newMethodName, setNewMethodName] = useState("");
@@ -208,6 +239,126 @@ export function useModelEditor({
       };
     });
   };
+
+  const normalizeCatalogLookup = (value?: string | null) =>
+    (value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[«»"']/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const getMethodLookupKeys = (name: string) => {
+    const normalized = normalizeCatalogLookup(name);
+    const keys = new Set([normalized]);
+    if (normalized.includes("термодрук") || normalized.includes("термоперенос") || normalized.includes("термотрансфер")) {
+      keys.add("термодрук");
+      keys.add("термоперенос");
+      keys.add("термотрансфер");
+      keys.add(normalizeCatalogLookup("FLEX плівка"));
+    }
+    if (normalized.includes("шовкодрук") || normalized.includes("шовкограф")) {
+      keys.add("шовкодрук");
+      keys.add("шовкографія");
+    }
+    if (normalized.includes("вишив")) {
+      keys.add("вишивка");
+    }
+    if (normalized.includes("dtf")) {
+      keys.add("dtf");
+    }
+    return keys;
+  };
+
+  const findTypeByHints = (hints: string[]) => {
+    const hintKeys = hints.map(normalizeCatalogLookup).filter(Boolean);
+    return (
+      catalog.find((type) => hintKeys.includes(normalizeCatalogLookup(type.name))) ??
+      catalog.find((type) => hintKeys.some((hint) => normalizeCatalogLookup(type.name).includes(hint) || hint.includes(normalizeCatalogLookup(type.name)))) ??
+      null
+    );
+  };
+
+  const findKindByHints = (type: CatalogType | null, hints: string[]) => {
+    const kinds = type?.kinds ?? catalog.flatMap((catalogType) => catalogType.kinds);
+    const hintKeys = hints.map(normalizeCatalogLookup).filter(Boolean);
+    return (
+      kinds.find((kind) => hintKeys.includes(normalizeCatalogLookup(kind.name))) ??
+      kinds.find((kind) => hintKeys.some((hint) => normalizeCatalogLookup(kind.name).includes(hint) || hint.includes(normalizeCatalogLookup(kind.name)))) ??
+      null
+    );
+  };
+
+  const ensureImportedMethodIds = useCallback(
+    async (kindId: string, methodNames: string[]) => {
+      if (!teamId || !kindId || methodNames.length === 0) return [];
+
+      const normalizedNames = Array.from(new Set(methodNames.map((name) => name.trim()).filter(Boolean)));
+      if (normalizedNames.length === 0) return [];
+
+      const targetKind = catalog.flatMap((type) => type.kinds).find((kind) => kind.id === kindId);
+      const existingMethods = targetKind?.methods ?? [];
+      const selectedIds = new Set<string>();
+      const missingNames: string[] = [];
+
+      for (const methodName of normalizedNames) {
+        const importKeys = getMethodLookupKeys(methodName);
+        const existing = existingMethods.find((method) => {
+          const methodKeys = getMethodLookupKeys(method.name);
+          return Array.from(importKeys).some((key) => methodKeys.has(key));
+        });
+        if (existing) {
+          selectedIds.add(existing.id);
+        } else {
+          missingNames.push(methodName);
+        }
+      }
+
+      if (missingNames.length === 0) return Array.from(selectedIds);
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_methods")
+        .insert(
+          missingNames.map((name) => ({
+            team_id: teamId,
+            kind_id: kindId,
+            name,
+            price: null,
+          }))
+        )
+        .select("id,name,price,kind_id");
+
+      if (error) throw error;
+
+      const createdMethods = (data ?? []).map((method) => ({
+        id: method.id as string,
+        name: method.name as string,
+        price: method.price ?? undefined,
+      }));
+
+      createdMethods.forEach((method) => selectedIds.add(method.id));
+      if (createdMethods.length > 0) {
+        setCatalog((prev) =>
+          prev.map((type) => ({
+            ...type,
+            kinds: type.kinds.map((kind) =>
+              kind.id === kindId
+                ? {
+                    ...kind,
+                    methods: [...kind.methods, ...createdMethods],
+                  }
+                : kind
+            ),
+          }))
+        );
+      }
+
+      return Array.from(selectedIds);
+    },
+    [catalog, teamId, setCatalog]
+  );
 
   const getCatalogAssetPayload = useCallback((storagePath: string) => {
     const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
@@ -333,6 +484,9 @@ export function useModelEditor({
     setPersistedVariantImageAssets({});
     setDraftMetadata({});
     setImageUploadMode("url");
+    setAvanprintImportUrl("");
+    setAvanprintImportError(null);
+    setAvanprintImportSummary(null);
     setDrawerOpen(true);
   };
 
@@ -393,6 +547,9 @@ export function useModelEditor({
     setPersistedVariantImageAssets(getVariantImageAssetMap(fullMetadata));
     setDraftMetadata(fullMetadata);
     setImageUploadMode("url");
+    setAvanprintImportUrl("");
+    setAvanprintImportError(null);
+    setAvanprintImportSummary(null);
 
     if (model.priceTiers && model.priceTiers.length > 0) {
       setDraftPriceMode("tiers");
@@ -817,6 +974,125 @@ export function useModelEditor({
           : variant
       ),
     }));
+  };
+
+  const handleAvanprintImport = async () => {
+    const sourceUrl = avanprintImportUrl.trim();
+    if (!sourceUrl || avanprintImporting) return;
+
+    setAvanprintImporting(true);
+    setAvanprintImportError(null);
+    setAvanprintImportSummary(null);
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error("Не вдалося підтвердити сесію для імпорту.");
+      }
+
+      const response = await fetch("/.netlify/functions/catalog-avanprint-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
+      const payload = (await response.json().catch(() => null)) as AvanprintImportResponse | null;
+      if (!response.ok || !payload?.product) {
+        throw new Error(payload?.error || `Не вдалося імпортувати товар (${response.status}).`);
+      }
+
+      const product = payload.product;
+      const matchedType = findTypeByHints(product.typeHints);
+      const matchedKind = findKindByHints(matchedType, product.kindHints);
+      const nextTypeId = matchedType?.id ?? draftTypeId;
+      const nextKindId =
+        matchedKind?.id ??
+        (matchedType && matchedType.kinds.some((kind) => kind.id === draftKindId)
+          ? draftKindId
+          : matchedType?.kinds[0]?.id ?? draftKindId);
+
+      if (nextTypeId) setDraftTypeId(nextTypeId);
+      if (nextKindId) setDraftKindId(nextKindId);
+      setDraftName(product.name);
+      setDraftImageFile(null);
+      setVariantImageFiles({});
+      setPersistedVariantImageAssets({});
+      setImageUploadMode("url");
+
+      const importedVariants = product.variants
+        .filter((variant) => variant.name || variant.sku || variant.imageUrl)
+        .map((variant, index): CatalogModelVariant => ({
+          id: crypto.randomUUID(),
+          name: variant.name || (index === 0 ? "" : `Модифікація ${index + 1}`),
+          sku: variant.sku,
+          imageUrl: variant.imageUrl,
+          imageAsset: null,
+          active: true,
+        }));
+      const primaryVariant = importedVariants[0] ?? null;
+      const primaryImageUrl = primaryVariant?.imageUrl || product.imageUrl || "";
+      setDraftImageUrl(primaryImageUrl);
+      const nextMetadata: CatalogModelMetadata = {
+        source: {
+          vendor: "Avanprint",
+          url: product.sourceUrl,
+          importedAt: new Date().toISOString(),
+        },
+        brand: product.brand,
+        description: product.description,
+        specs: product.specs,
+        sizes: product.sizes,
+      };
+
+      if (primaryVariant?.name) {
+        nextMetadata.baseVariantName = primaryVariant.name;
+      }
+      if (primaryVariant?.sku || product.sku) {
+        nextMetadata.sku = primaryVariant?.sku || product.sku;
+      }
+      if (importedVariants.length > 1) {
+        nextMetadata.variants = importedVariants.map((variant, index) =>
+          index === 0 && !variant.imageUrl && primaryImageUrl
+            ? { ...variant, imageUrl: primaryImageUrl }
+            : variant
+        );
+      }
+      setDraftMetadata(nextMetadata);
+
+      if (typeof product.price === "number" && Number.isFinite(product.price) && product.price > 0) {
+        setDraftPriceMode("fixed");
+        setDraftFixedPrice(String(product.price));
+        setDraftTiers([]);
+      }
+
+      if (nextKindId && product.methods.length > 0) {
+        const methodIds = await ensureImportedMethodIds(nextKindId, product.methods);
+        setDraftMethodIds(methodIds);
+      } else {
+        setDraftMethodIds([]);
+      }
+
+      const variantSkuCount = product.variants.filter((variant) => variant.sku).length;
+      setAvanprintImportSummary(
+        [
+          product.variants.length > 0 ? `${product.variants.length} модиф.` : null,
+          variantSkuCount > 0 ? `${variantSkuCount} арт.` : null,
+          product.methods.length > 0 ? `${product.methods.length} метод.` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Дані підтягнуто"
+      );
+      toast.success("Дані з Avanprint підтягнуто. Перевірте й збережіть товар.");
+    } catch (error) {
+      const message = getErrorMessage(error, "Не вдалося імпортувати товар з Avanprint.");
+      setAvanprintImportError(message);
+      toast.error(message);
+    } finally {
+      setAvanprintImporting(false);
+    }
   };
 
   /**
@@ -1502,6 +1778,12 @@ export function useModelEditor({
     setDraftMetadata,
     imageUploadMode,
     setImageUploadMode: handleImageUploadModeChange,
+    avanprintImportUrl,
+    setAvanprintImportUrl,
+    avanprintImporting,
+    avanprintImportError,
+    avanprintImportSummary,
+    handleAvanprintImport,
     newMethodName,
     setNewMethodName,
     newMethodPrice,

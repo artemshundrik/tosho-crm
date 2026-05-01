@@ -80,7 +80,12 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
-import { getAttachmentVariantPath, getSignedAttachmentUrl, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
+import {
+  getAttachmentVariantPath,
+  getSignedAttachmentUrl,
+  removeAttachmentWithVariants,
+  uploadAttachmentWithVariants,
+} from "@/lib/attachmentPreview";
 import { 
   Search,
   X,
@@ -186,9 +191,11 @@ type CatalogModel = {
   id: string;
   name: string;
   price?: number;
+  methodIds?: string[];
   imageUrl?: string;
   metadata?: {
     sku?: string | null;
+    baseVariantName?: string | null;
     variants?: Array<{
       id: string;
       name: string;
@@ -211,6 +218,15 @@ type CatalogModel = {
       previewUrl?: string | null;
       thumbUrl?: string | null;
     } | null;
+    source?: {
+      vendor?: string | null;
+      url?: string | null;
+      importedAt?: string | null;
+    } | null;
+    brand?: string | null;
+    description?: string | null;
+    specs?: Array<{ label: string; value: string }>;
+    sizes?: string[];
   };
 };
 type CatalogModelRow = {
@@ -237,6 +253,37 @@ type CatalogType = { id: string; name: string; quote_type?: string | null; kinds
 void DELIVERY_TYPE_OPTIONS;
 
 const sanitizeCatalogFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
+
+const normalizeCatalogLookup = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[«»"']/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getCatalogMethodLookupKeys = (name: string) => {
+  const normalized = normalizeCatalogLookup(name);
+  const keys = new Set([normalized]);
+  if (normalized.includes("термодрук") || normalized.includes("термоперенос") || normalized.includes("термотрансфер")) {
+    keys.add("термодрук");
+    keys.add("термоперенос");
+    keys.add("термотрансфер");
+    keys.add(normalizeCatalogLookup("FLEX плівка"));
+  }
+  if (normalized.includes("шовкодрук") || normalized.includes("шовкограф")) {
+    keys.add("шовкодрук");
+    keys.add("шовкографія");
+  }
+  if (normalized.includes("вишив")) {
+    keys.add("вишивка");
+  }
+  if (normalized.includes("dtf")) {
+    keys.add("dtf");
+  }
+  return keys;
+};
 
 const getCatalogImageImportErrorMessage = (error: unknown) => {
   const message = getErrorMessage(error, "Не вдалося підготувати фото товару.");
@@ -1700,7 +1747,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, []);
 
   const importCatalogImageFromUrl = useCallback(
-    async (params: { sourceUrl: string; persistedModelId: string }) => {
+    async (params: { sourceUrl: string; persistedModelId: string; storageSubdir?: string }) => {
       const sourceUrl = params.sourceUrl.trim();
       const fileNameFromUrl = (() => {
         try {
@@ -1710,7 +1757,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }
       })();
       const safeName = sanitizeCatalogFileName(fileNameFromUrl.replace(/\?.*$/, "") || "catalog-image");
-      const storagePath = `teams/${teamId}/catalog-models/${params.persistedModelId}/${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
+      const subdir = params.storageSubdir?.trim().replace(/^\/+|\/+$/g, "");
+      const storagePath = `teams/${teamId}/catalog-models/${params.persistedModelId}/${subdir ? `${subdir}/` : ""}${Date.now()}-${safeName.includes(".") ? safeName : `${safeName}.jpg`}`;
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -1745,6 +1793,75 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     [getCatalogAssetPayload, teamId]
   );
 
+  const ensureImportedCatalogMethodIds = useCallback(
+    async (kindId: string, methodNames?: string[] | null) => {
+      if (!teamId || !kindId || !methodNames?.length) return [];
+
+      const normalizedNames = Array.from(new Set(methodNames.map((name) => name.trim()).filter(Boolean)));
+      if (normalizedNames.length === 0) return [];
+
+      const targetKind = catalogTypes.flatMap((type) => type.kinds).find((kind) => kind.id === kindId);
+      const existingMethods = targetKind?.methods ?? [];
+      const selectedIds = new Set<string>();
+      const missingNames: string[] = [];
+
+      for (const methodName of normalizedNames) {
+        const importKeys = getCatalogMethodLookupKeys(methodName);
+        const existing = existingMethods.find((method) => {
+          const methodKeys = getCatalogMethodLookupKeys(method.name);
+          return Array.from(importKeys).some((key) => methodKeys.has(key));
+        });
+        if (existing) selectedIds.add(existing.id);
+        else missingNames.push(methodName);
+      }
+
+      if (missingNames.length === 0) return Array.from(selectedIds);
+
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("catalog_methods")
+        .insert(
+          missingNames.map((name) => ({
+            team_id: teamId,
+            kind_id: kindId,
+            name,
+            price: null,
+          }))
+        )
+        .select("id,name,price,kind_id");
+
+      if (error) throw error;
+
+      const createdMethods = (data ?? []).map((method) => ({
+        id: method.id as string,
+        name: method.name as string,
+        price: method.price == null ? undefined : Number(method.price),
+      }));
+      createdMethods.forEach((method) => selectedIds.add(method.id));
+
+      if (createdMethods.length > 0) {
+        setCatalogTypes((current) =>
+          current.map((type) => ({
+            ...type,
+            kinds: type.kinds.map((kind) =>
+              kind.id === kindId
+                ? {
+                    ...kind,
+                    methods: [...kind.methods, ...createdMethods].sort((a, b) =>
+                      a.name.localeCompare(b.name, "uk", { sensitivity: "base" })
+                    ),
+                  }
+                : kind
+            ),
+          }))
+        );
+      }
+
+      return Array.from(selectedIds);
+    },
+    [catalogTypes, teamId]
+  );
+
   const handleCreateCatalogModelFromQuote = useCallback(
     async (input: {
       typeId: string;
@@ -1753,14 +1870,62 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       sku?: string | null;
       price: number | null;
       imageUrl?: string | null;
+      variants?: Array<{
+        name: string;
+        sku?: string | null;
+        imageUrl?: string | null;
+      }>;
+      methodNames?: string[];
+      metadata?: {
+        source?: {
+          vendor?: string | null;
+          url?: string | null;
+          importedAt?: string | null;
+        } | null;
+        brand?: string | null;
+        description?: string | null;
+        specs?: Array<{ label: string; value: string }>;
+        sizes?: string[];
+      };
     }) => {
       const name = input.name.trim();
       if (!teamId) throw new Error("Команда не визначена. Оновіть сторінку й спробуйте ще раз.");
       if (!input.kindId || !name) throw new Error("Оберіть вид і вкажіть назву товару.");
 
       const sourceImageUrl = input.imageUrl?.trim() || null;
-      const sku = input.sku?.trim() || null;
-      const initialMetadata = sku ? { sku } : null;
+      const normalizedVariantInputs = (input.variants ?? [])
+        .map((variant) => ({
+          name: variant.name?.trim() ?? "",
+          sku: variant.sku?.trim() || null,
+          imageUrl: variant.imageUrl?.trim() || null,
+        }))
+        .filter((variant) => variant.name || variant.sku || variant.imageUrl);
+      const primaryVariantInput = normalizedVariantInputs[0] ?? null;
+      const sku = primaryVariantInput?.sku || input.sku?.trim() || null;
+      const baseVariantName = primaryVariantInput?.name || null;
+      const variantDrafts =
+        normalizedVariantInputs.length > 1
+          ? normalizedVariantInputs.map((variant, index) => ({
+              id: crypto.randomUUID(),
+              name: variant.name || (index === 0 ? "" : `Модифікація ${index + 1}`),
+              sku: variant.sku,
+              imageUrl: variant.imageUrl,
+              imageAsset: null,
+              active: true,
+            }))
+          : [];
+      const initialMetadata: NonNullable<CatalogModel["metadata"]> = {
+        ...(input.metadata ?? {}),
+      };
+      if (sku) initialMetadata.sku = sku;
+      if (baseVariantName) initialMetadata.baseVariantName = baseVariantName;
+      if (variantDrafts.length > 0) {
+        initialMetadata.variants = variantDrafts.map((variant) => ({
+          ...variant,
+          imageUrl: null,
+          imageAsset: null,
+        }));
+      }
       const { data, error } = await supabase
         .schema("tosho")
         .from("catalog_models")
@@ -1770,7 +1935,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           name,
           price: Math.max(0, Number(input.price ?? 0) || 0),
           image_url: null,
-          metadata: initialMetadata,
+          metadata: Object.keys(initialMetadata).length > 0 ? initialMetadata : null,
         })
         .select("id,kind_id,name,price,image_url,sku:metadata->>sku")
         .single();
@@ -1785,30 +1950,88 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       let imageUrl: string | null = null;
       let imageAsset: NonNullable<NonNullable<CatalogModel["metadata"]>["imageAsset"]> | null = null;
-      if (sourceImageUrl) {
-        try {
+      let finalMetadata: NonNullable<CatalogModel["metadata"]> = { ...initialMetadata };
+      let linkedMethodIds: string[] = [];
+      const uploadedCatalogAssetPaths: string[] = [];
+      try {
+        if (sourceImageUrl) {
           const imported = await importCatalogImageFromUrl({
             sourceUrl: sourceImageUrl,
             persistedModelId: data.id as string,
           });
+          uploadedCatalogAssetPaths.push(imported.storagePath);
           imageUrl = imported.assetPayload.imageUrl;
           imageAsset = imported.assetPayload.imageAsset;
+          finalMetadata = {
+            ...finalMetadata,
+            imageAsset,
+          };
+        }
 
+        if (variantDrafts.length > 0) {
+          const finalVariants = await Promise.all(
+            variantDrafts.map(async (variant) => {
+              const variantSourceImageUrl = variant.imageUrl?.trim() || null;
+              const usesPrimaryImage = variantSourceImageUrl && sourceImageUrl && variantSourceImageUrl === sourceImageUrl;
+              if (usesPrimaryImage && imageUrl) {
+                return {
+                  ...variant,
+                  imageUrl,
+                  imageAsset,
+                };
+              }
+              if (variantSourceImageUrl) {
+                const imported = await importCatalogImageFromUrl({
+                  sourceUrl: variantSourceImageUrl,
+                  persistedModelId: data.id as string,
+                  storageSubdir: `variants/${variant.id}`,
+                });
+                uploadedCatalogAssetPaths.push(imported.storagePath);
+                return {
+                  ...variant,
+                  imageUrl: imported.assetPayload.imageUrl,
+                  imageAsset: imported.assetPayload.imageAsset,
+                };
+              }
+              return {
+                ...variant,
+                imageUrl: null,
+                imageAsset: null,
+              };
+            })
+          );
+          finalMetadata = {
+            ...finalMetadata,
+            variants: finalVariants,
+          };
+        }
+
+        if (sourceImageUrl || variantDrafts.length > 0) {
           const { error: updateError } = await supabase
             .schema("tosho")
             .from("catalog_models")
             .update({
               image_url: imageUrl,
-              metadata: {
-                ...(sku ? { sku } : {}),
-                imageAsset,
-              },
+              metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : null,
             })
             .eq("id", data.id)
             .eq("team_id", teamId);
 
           if (updateError) throw updateError;
-        } catch (importError) {
+        }
+
+        linkedMethodIds = await ensureImportedCatalogMethodIds(input.kindId, input.methodNames);
+        if (linkedMethodIds.length > 0) {
+          const { error: methodsError } = await supabase
+            .schema("tosho")
+            .from("catalog_model_methods")
+            .insert(linkedMethodIds.map((methodId) => ({ model_id: data.id, method_id: methodId })));
+          if (methodsError) throw methodsError;
+        }
+      } catch (importError) {
+        await Promise.all(
+          uploadedCatalogAssetPaths.map((path) => removeAttachmentWithVariants(CATALOG_IMAGE_BUCKET, path))
+        );
           await supabase
             .schema("tosho")
             .from("catalog_models")
@@ -1816,21 +2039,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             .eq("id", data.id)
             .eq("team_id", teamId);
           throw new Error(getCatalogImageImportErrorMessage(importError));
-        }
       }
 
       const createdModel: CatalogModel = {
         id: data.id as string,
         name: (data.name as string) ?? name,
         price: data.price == null ? undefined : Number(data.price),
+        methodIds: linkedMethodIds.length > 0 ? linkedMethodIds : undefined,
         imageUrl: imageUrl ?? undefined,
-        metadata:
-          sku || imageAsset
-            ? {
-                ...(sku ? { sku } : {}),
-                ...(imageAsset ? { imageAsset } : {}),
-              }
-            : undefined,
+        metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
       };
 
       setCatalogTypes((current) =>
@@ -1859,7 +2076,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       toast.success("Товар створено і вибрано в прорахунку.");
       return createdModel;
     },
-    [importCatalogImageFromUrl, teamId]
+    [ensureImportedCatalogMethodIds, importCatalogImageFromUrl, teamId]
   );
 
   const openCreate = useCallback(() => {

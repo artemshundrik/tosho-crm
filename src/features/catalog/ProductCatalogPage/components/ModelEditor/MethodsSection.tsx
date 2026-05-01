@@ -62,7 +62,7 @@ export function MethodsSection({
       ) : (
         <div className="grid grid-cols-1 gap-3">
           <div className="rounded-lg border border-border/50 bg-muted/10 p-3">
-            <div className="flex gap-3 items-end">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div className="flex-1 space-y-2">
                 <Label className="text-xs font-medium text-muted-foreground">Назва методу</Label>
                 <Input
@@ -79,7 +79,7 @@ export function MethodsSection({
                 size="sm"
               >
                 <Plus className="h-4 w-4" />
-                {methodSaving ? "Додавання..." : "Додати метод"}
+                {methodSaving ? "Додавання..." : "Додати"}
               </Button>
             </div>
             {methodError && <div className="mt-2 text-xs text-destructive">{methodError}</div>}
@@ -92,28 +92,32 @@ export function MethodsSection({
             </div>
           ) : null}
 
-          {availableMethods.map((method) => {
-            const isSelected = selectedMethodIds.includes(method.id);
-            return (
-              <label
-                key={method.id}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all duration-200",
-                  isSelected
-                    ? "border-primary/50 bg-gradient-to-r from-primary/10 to-primary/5 shadow-md shadow-primary/10"
-                    : "border-border/40 bg-card/50 hover:bg-muted/20 hover:border-border/60"
-                )}
-              >
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={() => onToggleMethod(method.id)}
-                />
-                <span className={cn("text-sm font-medium", isSelected && "text-primary")}>
-                  {method.name}
-                </span>
-              </label>
-            );
-          })}
+          {availableMethods.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {availableMethods.map((method) => {
+                const isSelected = selectedMethodIds.includes(method.id);
+                return (
+                  <label
+                    key={method.id}
+                    className={cn(
+                      "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
+                      isSelected
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border/50 bg-background/50 text-foreground hover:border-border/80 hover:bg-muted/20"
+                    )}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => onToggleMethod(method.id)}
+                    />
+                    <span className="min-w-0 truncate text-sm font-medium">
+                      {method.name}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       )}
     </div>

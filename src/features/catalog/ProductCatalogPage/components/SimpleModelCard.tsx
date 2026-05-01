@@ -197,7 +197,7 @@ export function SimpleModelCard({
                   type="button"
                   title={variant.sku?.trim() ? `${variant.name || "Модифікація"} · ${variant.sku}` : variant.name}
                   className={cn(
-                    "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-white transition-all",
+                    "relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-white transition-all",
                     selected
                       ? "border-primary"
                       : "border-muted-foreground/35 hover:border-muted-foreground/50"

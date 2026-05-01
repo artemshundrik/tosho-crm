@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { Image as ImageIcon, Link2, Plus, Trash2, Upload, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
 
 interface BasicInfoTabProps {
@@ -22,6 +23,10 @@ interface BasicInfoTabProps {
   draftImageUrl: string;
   draftMetadata: CatalogModelMetadata;
   imageUploadMode: ImageUploadMode;
+  avanprintImportUrl: string;
+  avanprintImporting: boolean;
+  avanprintImportError: string | null;
+  avanprintImportSummary: string | null;
   onTypeChange: (value: string) => void;
   onKindChange: (value: string) => void;
   onNameChange: (value: string) => void;
@@ -31,6 +36,8 @@ interface BasicInfoTabProps {
   onImageFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onVariantImageUrlChange: (variantId: string, value: string) => void;
   onVariantImageFileUpload: (variantId: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+  onAvanprintImportUrlChange: (value: string) => void;
+  onAvanprintImport: () => void;
 }
 
 const getVariantLabel = (variant: CatalogModelVariant, index: number) =>
@@ -52,6 +59,10 @@ export function BasicInfoTab({
   draftImageUrl,
   draftMetadata,
   imageUploadMode,
+  avanprintImportUrl,
+  avanprintImporting,
+  avanprintImportError,
+  avanprintImportSummary,
   onTypeChange,
   onKindChange,
   onNameChange,
@@ -61,6 +72,8 @@ export function BasicInfoTab({
   onImageFileUpload,
   onVariantImageUrlChange,
   onVariantImageFileUpload,
+  onAvanprintImportUrlChange,
+  onAvanprintImport,
 }: BasicInfoTabProps) {
   const draftKinds = catalog.find((t) => t.id === draftTypeId)?.kinds ?? [];
   const draftType = catalog.find((t) => t.id === draftTypeId);
@@ -68,6 +81,7 @@ export function BasicInfoTab({
   const [imageErrored, setImageErrored] = React.useState(false);
   const [activeVariantId, setActiveVariantId] = React.useState<string | null>(null);
   const [variantImageErrors, setVariantImageErrors] = React.useState<Record<string, boolean>>({});
+  const [descriptionOpen, setDescriptionOpen] = React.useState(false);
 
   React.useEffect(() => {
     setImageErrored(false);
@@ -101,6 +115,8 @@ export function BasicInfoTab({
   const activeImageUrl = isActivePrimary || !activeVariant ? primaryImageUrl : getVariantPreviewUrl(activeVariant) ?? "";
   const activeImageFailed = isActivePrimary ? imageErrored : Boolean(activeVariant && variantImageErrors[activeVariant.id]);
   const showActiveImagePreview = Boolean(activeImageUrl) && !activeImageFailed;
+  const descriptionValue = draftMetadata.description ?? "";
+  const descriptionPreview = descriptionValue.replace(/\s+/g, " ").trim();
 
   React.useEffect(() => {
     if (variants.length === 0) {
@@ -279,6 +295,12 @@ export function BasicInfoTab({
       onVariantImageUrlChange(activeVariant.id, value);
     }
   };
+  const updateDescription = (value: string) => {
+    onMetadataChange({
+      ...draftMetadata,
+      description: value.trim() ? value : null,
+    });
+  };
   const handleActiveVariantFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isActivePrimary) {
       onImageFileUpload(event);
@@ -291,6 +313,51 @@ export function BasicInfoTab({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-border/50 bg-card/70 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1 space-y-2">
+            <Label className="inline-flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Імпорт з Avanprint
+            </Label>
+            <Input
+              value={avanprintImportUrl}
+              onChange={(event) => onAvanprintImportUrlChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onAvanprintImport();
+                }
+              }}
+              placeholder="https://avanprint.ua/..."
+              className="bg-background/60"
+              disabled={avanprintImporting}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onAvanprintImport}
+            disabled={!avanprintImportUrl.trim() || avanprintImporting}
+            className="gap-2 lg:w-[150px]"
+          >
+            {avanprintImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {avanprintImporting ? "Тягнемо" : "Підтягнути"}
+          </Button>
+        </div>
+        {avanprintImportError ? (
+          <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {avanprintImportError}
+          </div>
+        ) : null}
+        {avanprintImportSummary ? (
+          <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-success-soft-border bg-success-soft px-3 py-1.5 text-xs font-medium text-success-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{avanprintImportSummary}</span>
+          </div>
+        ) : null}
+      </div>
+
       <div className="rounded-xl border border-border/50 bg-card/70 p-4">
         <div className="mb-4">
           <Label className="text-sm font-semibold">Товар</Label>
@@ -365,6 +432,36 @@ export function BasicInfoTab({
                   <SelectItem value="print_note_blocks">Блоки для записів</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-border/50 bg-background/40">
+          <button
+            type="button"
+            onClick={() => setDescriptionOpen((value) => !value)}
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/20"
+          >
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-muted-foreground">Опис товару</div>
+              <div className={cn("mt-0.5 truncate text-sm", descriptionPreview ? "text-foreground" : "text-muted-foreground/70")}>
+                {descriptionPreview || "Додати короткий опис для каталогу та прорахунків"}
+              </div>
+            </div>
+            <ChevronDown
+              className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", descriptionOpen && "rotate-180")}
+            />
+          </button>
+          {descriptionOpen ? (
+            <div className="border-t border-border/50 p-3">
+              <Textarea
+                value={descriptionValue}
+                onChange={(event) => updateDescription(event.target.value)}
+                placeholder="Опис з Avanprint або власний опис товару"
+                rows={4}
+                className="min-h-[112px] resize-y bg-background/70"
+              />
             </div>
           ) : null}
         </div>

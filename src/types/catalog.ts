@@ -51,6 +51,15 @@ export type CatalogModelMetadata = {
   variants?: CatalogModelVariant[];
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
   imageAsset?: CatalogImageAsset | null;
+  source?: {
+    vendor?: string | null;
+    url?: string | null;
+    importedAt?: string | null;
+  } | null;
+  brand?: string | null;
+  description?: string | null;
+  specs?: Array<{ label: string; value: string }>;
+  sizes?: string[];
 };
 
 export type CatalogModelVariant = {

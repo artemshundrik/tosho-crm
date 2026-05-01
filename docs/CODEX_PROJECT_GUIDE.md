@@ -147,6 +147,7 @@ Current catalog variant contract:
 - Each variant can carry `name`, `sku`, `colorHex`, `imageUrl`, and `imageAsset`.
 - Variant photos must use the same `public-assets` catalog image pipeline as model photos: original plus generated preview/thumb WebP variants.
 - Quote creation stores the selected variant snapshot in `quote_items.metadata.catalogVariant`, including its SKU, color, and preview image URL for stable quote display.
+- Quote quick-create can import an Avanprint product link inline from the quote builder. Keep it confirm-before-create: parse the page into draft name/SKU/photo/variants/methods, then persist through the same catalog image pipeline and `catalog_model_methods` links only after the user clicks create.
 
 ### Contractors
 

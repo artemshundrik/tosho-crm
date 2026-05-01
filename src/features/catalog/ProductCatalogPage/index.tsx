@@ -483,6 +483,10 @@ export default function ProductCatalogPage() {
         draftImageUrl={modelEditor.draftImageUrl}
         draftMetadata={modelEditor.draftMetadata}
         imageUploadMode={modelEditor.imageUploadMode}
+        avanprintImportUrl={modelEditor.avanprintImportUrl}
+        avanprintImporting={modelEditor.avanprintImporting}
+        avanprintImportError={modelEditor.avanprintImportError}
+        avanprintImportSummary={modelEditor.avanprintImportSummary}
         availableMethods={availableMethodsForDraft}
         newMethodName={modelEditor.newMethodName}
         newMethodPrice={modelEditor.newMethodPrice}
@@ -506,6 +510,8 @@ export default function ProductCatalogPage() {
         onImageFileUpload={modelEditor.handleImageFileUpload}
         onVariantImageUrlChange={modelEditor.handleVariantImageUrlChange}
         onVariantImageFileUpload={modelEditor.handleVariantImageFileUpload}
+        onAvanprintImportUrlChange={modelEditor.setAvanprintImportUrl}
+        onAvanprintImport={modelEditor.handleAvanprintImport}
         onSave={modelEditor.handleSaveModel}
         onDelete={() => {
           if (modelEditor.editingModelId) {
