@@ -91,6 +91,8 @@ export const OWNERSHIP_OPTIONS: OwnershipOption[] = [
   { value: "vp", label: "ВП", description: "Відокремлений підрозділ", group: "Бізнес" },
   { value: "go", label: "ГО", description: "Громадська організація", group: "Бізнес" },
   { value: "at", label: "АТ", description: "Акціонерне товариство", group: "Бізнес" },
+  { value: "prat", label: "ПрАТ", description: "Приватне акціонерне товариство", group: "Бізнес" },
+  { value: "td", label: "ТД", description: "Торговий дім", group: "Бізнес" },
   { value: "du", label: "ДУ", description: "Державна установа", group: "Державний сектор" },
   { value: "ku", label: "КУ", description: "Комунальна установа", group: "Державний сектор" },
   { value: "dp", label: "ДП", description: "Державне підприємство", group: "Державний сектор" },

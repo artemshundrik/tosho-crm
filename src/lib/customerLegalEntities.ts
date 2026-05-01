@@ -18,6 +18,8 @@ const OWNERSHIP_LABELS: Record<string, string> = {
   vp: "ВП",
   go: "ГО",
   at: "АТ",
+  prat: "ПрАТ",
+  td: "ТД",
   dp: "ДП",
   ku: "КУ",
   kp: "КП",
