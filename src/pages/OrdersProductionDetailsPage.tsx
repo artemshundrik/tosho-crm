@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { EntityAvatar } from "@/components/app/avatar-kit";
+import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +39,7 @@ import {
   CheckCircle2,
   ExternalLink,
   FileText,
+  Info,
   Mail,
   Palette,
   Phone,
@@ -74,6 +76,229 @@ const renderDocBadge = (label: string, ready: boolean) => (
   >
     {label}
   </Badge>
+);
+
+const InfoHint = ({ title, children }: { title: string; children: ReactNode }) => (
+  <span className="group relative inline-flex">
+    <button
+      type="button"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      aria-label={title}
+    >
+      <Info className="h-3.5 w-3.5" />
+    </button>
+    <span className="pointer-events-none absolute right-0 top-8 z-50 hidden w-[320px] rounded-lg border border-border/60 bg-popover/95 p-3 text-left text-xs leading-5 text-popover-foreground shadow-[var(--shadow-overlay)] backdrop-blur-xl group-hover:block group-focus-within:block">
+      <span className="mb-1 block font-semibold text-foreground">{title}</span>
+      {children}
+    </span>
+  </span>
+);
+
+type RequirementCheck = {
+  label: string;
+  done: boolean;
+  help: string;
+};
+
+const hasValue = (value?: string | null) => Boolean(value?.trim());
+
+const getMissingRequirementLabels = (checks: RequirementCheck[]) =>
+  checks.filter((check) => !check.done).map((check) => check.label);
+
+const getContractRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
+  {
+    label: "Замовник створений",
+    done: record.partyType === "customer",
+    help: "СП і договір не формуються напряму з ліда. Спочатку лід має бути переведений у Замовника.",
+  },
+  {
+    label: "Юр. назва / форма власності",
+    done: hasValue(record.legalEntityLabel),
+    help: "Береться з картки Замовника, з блоку юридичних осіб.",
+  },
+  {
+    label: "Код / ІПН",
+    done: hasValue(record.customerTaxId),
+    help: "Потрібен для реквізитів сторін у договорі та СП.",
+  },
+  {
+    label: "IBAN",
+    done: hasValue(record.customerIban) || hasValue(record.customerBankDetails),
+    help: "Потрібен для реквізитів Замовника. Заповнюється у картці Замовника.",
+  },
+  {
+    label: "Юридична адреса",
+    done: hasValue(record.customerLegalAddress),
+    help: "Для ФОП це може бути адреса реєстрації, для компанії - юридична адреса.",
+  },
+  {
+    label: "ПІБ підписанта",
+    done: hasValue(record.customerSignatoryName),
+    help: "ПІБ особи, яка підписує договір зі сторони Замовника.",
+  },
+  {
+    label: "Посада підписанта",
+    done: hasValue(record.customerSignatoryPosition),
+    help: "Наприклад: Директор, ФОП, Генеральний директор.",
+  },
+  {
+    label: "Підстава підпису",
+    done: hasValue(record.customerSignatoryAuthority),
+    help: "Наприклад: Статуту, довіреності, виписки з ЄДР. Без цього договір не є коректним.",
+  },
+  {
+    label: "Email і телефон",
+    done: hasValue(record.contactEmail) && hasValue(record.contactPhone),
+    help: "Контакти потрібні для реквізитів і відправки документів Замовнику.",
+  },
+];
+
+const getSpecificationRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
+  {
+    label: "Є позиції",
+    done: record.items.length > 0,
+    help: "СП формується тільки якщо у замовленні є хоча б одна позиція.",
+  },
+  {
+    label: "Безготівковий розрахунок",
+    done: isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail),
+    help: "За бізнес-правилом СП створюється тільки для безготівкового розрахунку.",
+  },
+  {
+    label: "Договір створено",
+    done: Boolean(record.contractCreatedAt),
+    help: "Спочатку натисни PDF у рядку Договір. Після відкриття договору CRM позначить його створеним і розблокує СП.",
+  },
+  {
+    label: "Умови оплати",
+    done: hasValue(record.paymentTerms),
+    help: "Наприклад 50/50 або 70/30. Береться з блоку умов СП у цьому замовленні.",
+  },
+  {
+    label: "Incoterms",
+    done: hasValue(record.incotermsCode),
+    help: "Для СП використовується Incoterms 2020. За потреби вкажи також місце поставки.",
+  },
+];
+
+const getInvoiceRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
+  {
+    label: "Є позиції",
+    done: record.items.length > 0,
+    help: "Рахунок формується з позицій замовлення.",
+  },
+];
+
+const getTechCardRequirementChecks = (record: DerivedOrderRecord): RequirementCheck[] => [
+  {
+    label: "Є позиції",
+    done: record.items.length > 0,
+    help: "Техкарта описує позиції замовлення.",
+  },
+  {
+    label: "Візуал погоджено",
+    done: record.hasApprovedVisualization,
+    help: "Потрібен затверджений візуал із дизайн-задачі.",
+  },
+  {
+    label: "Макет погоджено",
+    done: record.hasApprovedLayout,
+    help: "Потрібен затверджений макет із дизайн-задачі.",
+  },
+];
+
+const getDocumentActionState = (
+  record: DerivedOrderRecord,
+  kind: OrderDocumentKind
+): {
+  title: string;
+  ready: boolean;
+  created?: boolean;
+  statusLabel: string;
+  statusReady: boolean;
+  blockedLabel: string | null;
+  checks: RequirementCheck[];
+  hint: string;
+} => {
+  if (kind === "contract") {
+    const checks = getContractRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    return {
+      title: "Договір",
+      ready,
+      created: Boolean(record.contractCreatedAt),
+      statusLabel: record.contractCreatedAt ? "Створено" : ready ? "Можна створити" : "Немає даних",
+      statusReady: ready,
+      blockedLabel: missing.length > 0 ? `Не вистачає: ${missing.join(", ")}` : null,
+      checks,
+      hint:
+        "Договір використовує реквізити з картки Замовника і контактні дані з замовлення. Якщо тут є жовті пункти, їх треба виправити в картці Замовника або в замовленні.",
+    };
+  }
+
+  if (kind === "specification") {
+    const checks = getSpecificationRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    return {
+      title: "СП",
+      ready,
+      created: Boolean(record.specificationCreatedAt),
+      statusLabel: record.specificationCreatedAt ? "Створено" : ready ? "Можна створити" : "Потрібні умови",
+      statusReady: ready,
+      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+      checks,
+      hint:
+        "СП має окремі правила: тільки безготівка, тільки після створення договору, і з умовами оплати та Incoterms із замовлення.",
+    };
+  }
+
+  if (kind === "invoice") {
+    const checks = getInvoiceRequirementChecks(record);
+    const missing = getMissingRequirementLabels(checks);
+    const ready = missing.length === 0;
+    return {
+      title: "Рахунок",
+      ready,
+      statusLabel: ready ? "Готовий" : "Немає позицій",
+      statusReady: ready,
+      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+      checks,
+      hint: "Рахунок формується з товарних позицій замовлення і не потребує створеного договору.",
+    };
+  }
+
+  const checks = getTechCardRequirementChecks(record);
+  const missing = getMissingRequirementLabels(checks);
+  const ready = missing.length === 0;
+  return {
+    title: "Техкарта",
+    ready,
+    statusLabel: ready ? "Готова" : "Очікує дизайн",
+    statusReady: ready,
+    blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+    checks,
+    hint: "Техкарта доступна, коли є позиції і затверджені виробничі матеріали: візуал та макет.",
+  };
+};
+
+const RequirementList = ({ checks }: { checks: RequirementCheck[] }) => (
+  <div className="space-y-1.5">
+    {checks.map((check) => (
+      <div key={check.label} className="flex items-start gap-2">
+        {check.done ? (
+          <CheckCircle2 className="tone-text-success mt-0.5 h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <AlertTriangle className="tone-text-warning mt-0.5 h-3.5 w-3.5 shrink-0" />
+        )}
+        <div>
+          <div className={cn("font-medium", check.done ? "text-foreground" : "tone-text-warning")}>{check.label}</div>
+          <div className="text-muted-foreground">{check.help}</div>
+        </div>
+      </div>
+    ))}
+  </div>
 );
 
 const renderDesignAssetList = (
@@ -853,9 +1078,18 @@ export default function OrdersProductionDetailsPage() {
     );
   }
 
+  const documentActions = (["contract", "invoice", "specification", "techCard"] as OrderDocumentKind[]).map((kind) => ({
+    kind,
+    ...getDocumentActionState(record, kind),
+  }));
+  const specificationBlocker = getSpecificationBlocker(record);
+
   return (
-    <div className="space-y-6 pb-20 md:pb-0">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <PageCanvas>
+      <PageCanvasBody className="px-4 py-4 pb-20 sm:px-6 lg:px-8 2xl:px-10 md:pb-8">
+        <div className="mx-auto max-w-[1760px] space-y-5">
+      <Card className="border-border/60 bg-card/95 p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-3">
           <Button variant="outline" className="gap-2" onClick={() => navigate("/orders/production")}>
             <ArrowLeft className="h-4 w-4" />
@@ -985,8 +1219,11 @@ export default function OrdersProductionDetailsPage() {
           </Card>
         </div>
       </div>
+      </Card>
 
-      <div className="grid gap-4 xl:grid-cols-4">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <Card className="border-border/60 p-4">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
             <Building2 className="h-3.5 w-3.5" />
@@ -1041,7 +1278,12 @@ export default function OrdersProductionDetailsPage() {
       <Card className="border-border/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-foreground">Умови СП</div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              Умови СП
+              <InfoHint title="Коли можна створити СП">
+                <RequirementList checks={getSpecificationRequirementChecks(record)} />
+              </InfoHint>
+            </div>
             <div className="mt-1 text-xs text-muted-foreground">
               СП доступна тільки для безготівки і після створення договору.
             </div>
@@ -1155,11 +1397,22 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
         </div>
-        {getSpecificationBlocker(record) ? (
-          <div className="mt-3 rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2 text-sm text-muted-foreground">
-            {getSpecificationBlocker(record)}
+        {specificationBlocker ? (
+          <div className="tone-warning-subtle mt-3 flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm">
+            <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <div className="tone-text-warning font-medium">{specificationBlocker}</div>
+              <div className="mt-1 text-muted-foreground">
+                Наведи на іконку біля заголовка або подивись блок “Документи” справа: там показано конкретні умови, які блокують СП.
+              </div>
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="tone-success-subtle mt-3 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm">
+            <CheckCircle2 className="tone-text-success h-4 w-4" />
+            <span className="tone-text-success font-medium">Умови СП виконані. Документ можна сформувати в блоці “Документи”.</span>
+          </div>
+        )}
       </Card>
 
       <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
@@ -1229,11 +1482,109 @@ export default function OrdersProductionDetailsPage() {
           })}
         </div>
       </Card>
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <aside className="space-y-5 xl:sticky xl:top-4 xl:self-start">
+        <Card className="border-border/60 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Документи</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Тут показані саме умови для PDF-документів. Це окремо від чекліста переходу в замовлення.
+              </div>
+            </div>
+            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+              {documentActions.filter((item) => item.ready).length} / {documentActions.length}
+            </Badge>
+          </div>
+          <div className="mt-4 space-y-2.5">
+            {documentActions.map((document) => (
+              <div
+                key={document.kind}
+                className={cn(
+                  "rounded-lg border px-3 py-3",
+                  document.ready ? "border-border/60 bg-muted/[0.04]" : "tone-warning-subtle"
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span>{document.title}</span>
+                    <InfoHint title={`${document.title}: що перевіряється`}>
+                      <p className="mb-2 text-muted-foreground">{document.hint}</p>
+                      <RequirementList checks={document.checks} />
+                    </InfoHint>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void openDocumentPrint(document.kind)}
+                      disabled={!document.ready}
+                      title={document.blockedLabel ?? undefined}
+                    >
+                      PDF
+                    </Button>
+                    {renderDocBadge(document.statusLabel, document.statusReady)}
+                  </div>
+                </div>
+                {document.blockedLabel ? (
+                  <div className="mt-2 text-xs leading-5 text-muted-foreground">{document.blockedLabel}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          {documentActions.some((item) => item.kind === "contract" && item.blockedLabel) && record.customerId ? (
+            <div className="tone-warning-subtle mt-4 rounded-lg border p-3 text-sm">
+              <div className="tone-text-warning font-medium">Договір блокується реквізитами Замовника.</div>
+              <div className="mt-1 text-muted-foreground">
+                Найчастіше треба додати підставу підпису, IBAN або юридичну адресу в картці Замовника.
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => navigate(`/orders/customers?customerId=${record.customerId}`)}
+              >
+                Відкрити картку Замовника
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="mt-4 border-t border-border/60 pt-4">
+            <div className="mb-2 text-sm font-semibold text-foreground">Відправити замовнику</div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={openEmailDraft} disabled={!record.contactEmail}>
+                <Mail className="mr-2 h-4 w-4" />
+                Email
+              </Button>
+              <Button size="sm" variant="outline" onClick={openTelegramDraft}>
+                <Send className="mr-2 h-4 w-4" />
+                Telegram
+              </Button>
+              <Button size="sm" variant="outline" onClick={openViberDraft} disabled={!record.contactPhone}>
+                <Phone className="mr-2 h-4 w-4" />
+                Viber
+              </Button>
+            </div>
+          </div>
+        </Card>
+
         <Card className="border-border/60 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-foreground">Чекліст переходу з прорахунку в замовлення</div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                Чекліст створення замовлення
+                <InfoHint title="Чому тут 6/6, але документи можуть бути заблоковані">
+                  <p className="text-muted-foreground">
+                    Цей чекліст відповідає тільки за перехід із прорахунку в замовлення: контрагент, контакти, позиції і дизайн.
+                    Договір і СП мають додаткові юридичні умови, тому винесені в окремий блок “Документи”.
+                  </p>
+                </InfoHint>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">Не плутати з готовністю Договору та СП.</div>
+            </div>
             <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
               {doneSteps} / {record.readinessSteps.length}
             </Badge>
@@ -1259,87 +1610,10 @@ export default function OrdersProductionDetailsPage() {
             ))}
           </div>
         </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="text-sm font-semibold text-foreground">Документи</div>
-          <div className="mt-3 space-y-2">
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2">
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                Договір
-              </div>
-              <div className="flex items-center gap-2">
-                {record.docs.contract ? (
-                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("contract")}>
-                    PDF
-                  </Button>
-                ) : null}
-                {renderDocBadge(record.docs.contract ? "Готовий" : "Немає даних", record.docs.contract)}
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2">
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                Рахунок
-              </div>
-              <div className="flex items-center gap-2">
-                {record.docs.invoice ? (
-                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("invoice")}>
-                    PDF
-                  </Button>
-                ) : null}
-                {renderDocBadge(record.docs.invoice ? "Готовий" : "Немає позицій", record.docs.invoice)}
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2">
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                СП
-              </div>
-              <div className="flex items-center gap-2">
-                {record.docs.specification ? (
-                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("specification")}>
-                    PDF
-                  </Button>
-                ) : null}
-                {renderDocBadge(record.docs.specification ? "Готова" : "Потрібні умови", record.docs.specification)}
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/[0.04] px-3 py-2">
-              <div className="flex items-center gap-2 text-sm text-foreground">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                Техкарта
-              </div>
-              <div className="flex items-center gap-2">
-                {record.docs.techCard ? (
-                  <Button size="sm" variant="outline" onClick={() => void openDocumentPrint("techCard")}>
-                    PDF
-                  </Button>
-                ) : null}
-                {renderDocBadge(record.docs.techCard ? "Готова" : "Очікує дизайн", record.docs.techCard)}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 border-t border-border/60 pt-4">
-            <div className="mb-2 text-sm font-semibold text-foreground">Відправити замовнику</div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={openEmailDraft} disabled={!record.contactEmail}>
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button size="sm" variant="outline" onClick={openTelegramDraft}>
-                <Send className="mr-2 h-4 w-4" />
-                Telegram
-              </Button>
-              <Button size="sm" variant="outline" onClick={openViberDraft} disabled={!record.contactPhone}>
-                <Phone className="mr-2 h-4 w-4" />
-                Viber
-              </Button>
-            </div>
-          </div>
-        </Card>
+      </aside>
       </div>
-    </div>
+        </div>
+      </PageCanvasBody>
+    </PageCanvas>
   );
 }

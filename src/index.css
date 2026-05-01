@@ -89,9 +89,10 @@
     --success-soft-border: 137 36% 78%;
     --success-foreground: 137 63.5% 38.6%;
 
-    --warning-soft: 47 88% 91%;
-    --warning-soft-border: 47 84% 74%;
-    --warning-foreground: 47 88.4% 38%;
+    --warning-soft: 36 100% 94%;
+    --warning-soft-border: 32 86% 64%;
+    --warning-foreground: 28 92% 34%;
+    --warning-copy-foreground: 24 18% 30%;
 
     --danger-soft: 357 88% 95.2%;
     --danger-soft-border: 357 78% 83%;
@@ -106,9 +107,9 @@
     --cmd-kind-customer-bg: 137 46% 93.5%;
     --cmd-kind-customer-border: 137 36% 78%;
     --cmd-kind-customer-foreground: 137 63.5% 38.6%;
-    --cmd-kind-lead-bg: 47 88% 91%;
-    --cmd-kind-lead-border: 47 84% 74%;
-    --cmd-kind-lead-foreground: 47 88.4% 38%;
+    --cmd-kind-lead-bg: var(--warning-soft);
+    --cmd-kind-lead-border: var(--warning-soft-border);
+    --cmd-kind-lead-foreground: var(--warning-foreground);
     --cmd-kind-quote-bg: 216 100% 95.8%;
     --cmd-kind-quote-border: 216 100% 84.5%;
     --cmd-kind-quote-foreground: 219 99.2% 52.7%;
@@ -130,10 +131,10 @@
     --entity-avatar-2-fg: 137 63.5% 38.6%;
     --entity-avatar-2-fallback: 137 36% 78%;
 
-    --entity-avatar-3-bg: 47 88% 91%;
-    --entity-avatar-3-border: 47 84% 74%;
-    --entity-avatar-3-fg: 47 88.4% 38%;
-    --entity-avatar-3-fallback: 47 84% 74%;
+    --entity-avatar-3-bg: var(--warning-soft);
+    --entity-avatar-3-border: var(--warning-soft-border);
+    --entity-avatar-3-fg: var(--warning-foreground);
+    --entity-avatar-3-fallback: var(--warning-soft-border);
 
     --entity-avatar-4-bg: 357 88% 95.2%;
     --entity-avatar-4-border: 357 78% 83%;
@@ -206,9 +207,9 @@
     --kanban-col-estimated-bg: 264 100% 97.8%;
     --kanban-col-estimated-border: 264 82% 88%;
     --kanban-col-estimated-accent: 264 96.9% 61.8%;
-    --kanban-col-awaiting-bg: 47 88% 95.8%;
-    --kanban-col-awaiting-border: 47 70% 84%;
-    --kanban-col-awaiting-accent: 47 88.4% 38%;
+    --kanban-col-awaiting-bg: 36 100% 96%;
+    --kanban-col-awaiting-border: 32 76% 80%;
+    --kanban-col-awaiting-accent: var(--warning-foreground);
     --kanban-col-approved-bg: 137 40% 96%;
     --kanban-col-approved-border: 137 30% 84%;
     --kanban-col-approved-accent: 137 63.5% 38.6%;
@@ -290,9 +291,10 @@
     --success-soft-border: 137 18% 24.8%;
     --success-foreground: 137 48.8% 50.2%;
 
-    --warning-soft: 47 18% 14%;
-    --warning-soft-border: 47 20% 25.4%;
-    --warning-foreground: 47 88.4% 52.5%;
+    --warning-soft: 32 34% 15%;
+    --warning-soft-border: 33 72% 39%;
+    --warning-foreground: 40 96% 68%;
+    --warning-copy-foreground: 35 24% 82%;
 
     --danger-soft: 357 18% 14.2%;
     --danger-soft-border: 357 20% 25.2%;
@@ -307,9 +309,9 @@
     --cmd-kind-customer-bg: 137 22% 17%;
     --cmd-kind-customer-border: 137 24% 28.5%;
     --cmd-kind-customer-foreground: 137 48.8% 50.2%;
-    --cmd-kind-lead-bg: 47 24% 17%;
-    --cmd-kind-lead-border: 47 28% 30%;
-    --cmd-kind-lead-foreground: 47 88.4% 52.5%;
+    --cmd-kind-lead-bg: var(--warning-soft);
+    --cmd-kind-lead-border: var(--warning-soft-border);
+    --cmd-kind-lead-foreground: var(--warning-foreground);
     --cmd-kind-quote-bg: 218 30% 16.5%;
     --cmd-kind-quote-border: 218 34% 29%;
     --cmd-kind-quote-foreground: 218 100% 63.5%;
@@ -331,10 +333,10 @@
     --entity-avatar-2-fg: 137 48.8% 50.2%;
     --entity-avatar-2-fallback: 137 24% 28.5%;
 
-    --entity-avatar-3-bg: 47 24% 17%;
-    --entity-avatar-3-border: 47 28% 30%;
-    --entity-avatar-3-fg: 47 88.4% 52.5%;
-    --entity-avatar-3-fallback: 47 28% 30%;
+    --entity-avatar-3-bg: var(--warning-soft);
+    --entity-avatar-3-border: var(--warning-soft-border);
+    --entity-avatar-3-fg: var(--warning-foreground);
+    --entity-avatar-3-fallback: var(--warning-soft-border);
 
     --entity-avatar-4-bg: 357 24% 17.2%;
     --entity-avatar-4-border: 357 26% 29.5%;
@@ -407,9 +409,9 @@
     --kanban-col-estimated-bg: 264 18% 9.4%;
     --kanban-col-estimated-border: 264 18% 19.8%;
     --kanban-col-estimated-accent: 263 100% 79.2%;
-    --kanban-col-awaiting-bg: 47 16% 9.4%;
-    --kanban-col-awaiting-border: 47 16% 19.8%;
-    --kanban-col-awaiting-accent: 47 88.4% 52.5%;
+    --kanban-col-awaiting-bg: 32 26% 10.8%;
+    --kanban-col-awaiting-border: 33 44% 23%;
+    --kanban-col-awaiting-accent: var(--warning-foreground);
     --kanban-col-approved-bg: 137 14% 9.4%;
     --kanban-col-approved-border: 137 14% 19.4%;
     --kanban-col-approved-accent: 137 48.8% 50.2%;
@@ -532,8 +534,8 @@
   }
 
   .design-task-panel-card[data-tone="warning"] {
-    background-color: hsl(var(--warning-soft) / 0.7);
-    border-color: hsl(var(--warning-soft-border));
+    background-color: hsl(var(--warning-soft) / 0.82);
+    border-color: hsl(var(--warning-soft-border) / 0.72);
   }
 
   .design-task-panel-card[data-tone="neutral"] {
@@ -572,8 +574,8 @@
   }
 
   .design-task-side-action[data-tone="warning"] {
-    background-color: hsl(var(--warning-soft) / 0.72);
-    border-color: hsl(var(--warning-soft-border));
+    background-color: hsl(var(--warning-soft) / 0.82);
+    border-color: hsl(var(--warning-soft-border) / 0.72);
   }
 
   .design-task-side-action[data-tone="success"] {
@@ -636,6 +638,15 @@
   .text-info-foreground {
     color: hsl(var(--info-foreground));
   }
+  .bg-info-foreground {
+    background-color: hsl(var(--info-foreground));
+  }
+  .bg-info-foreground\/75 {
+    background-color: hsl(var(--info-foreground) / 0.75);
+  }
+  .bg-info-foreground\/80 {
+    background-color: hsl(var(--info-foreground) / 0.8);
+  }
 
   .bg-success-soft {
     background-color: hsl(var(--success-soft));
@@ -646,15 +657,57 @@
   .text-success-foreground {
     color: hsl(var(--success-foreground));
   }
+  .bg-success-foreground {
+    background-color: hsl(var(--success-foreground));
+  }
+  .bg-success-foreground\/80 {
+    background-color: hsl(var(--success-foreground) / 0.8);
+  }
 
   .bg-warning-soft {
     background-color: hsl(var(--warning-soft));
   }
+  .bg-warning-soft\/10 {
+    background-color: hsl(var(--warning-soft) / 0.1);
+  }
+  .bg-warning-soft\/15 {
+    background-color: hsl(var(--warning-soft) / 0.15);
+  }
+  .bg-warning-soft\/40 {
+    background-color: hsl(var(--warning-soft) / 0.4);
+  }
+  .bg-warning-soft\/50 {
+    background-color: hsl(var(--warning-soft) / 0.5);
+  }
+  .bg-warning-soft\/60 {
+    background-color: hsl(var(--warning-soft) / 0.6);
+  }
+  .bg-warning-soft\/70 {
+    background-color: hsl(var(--warning-soft) / 0.7);
+  }
+  .bg-warning-soft\/80 {
+    background-color: hsl(var(--warning-soft) / 0.8);
+  }
   .border-warning-soft-border {
     border-color: hsl(var(--warning-soft-border));
   }
+  .border-warning-soft-border\/80 {
+    border-color: hsl(var(--warning-soft-border) / 0.8);
+  }
   .text-warning-foreground {
     color: hsl(var(--warning-foreground));
+  }
+  .text-warning-foreground\/80 {
+    color: hsl(var(--warning-foreground) / 0.8);
+  }
+  .text-warning-foreground\/90 {
+    color: hsl(var(--warning-foreground) / 0.9);
+  }
+  .bg-warning-foreground {
+    background-color: hsl(var(--warning-foreground));
+  }
+  .bg-warning-foreground\/80 {
+    background-color: hsl(var(--warning-foreground) / 0.8);
   }
 
   .bg-danger-soft {
@@ -665,6 +718,12 @@
   }
   .text-danger-foreground {
     color: hsl(var(--danger-foreground));
+  }
+  .bg-danger-foreground {
+    background-color: hsl(var(--danger-foreground));
+  }
+  .bg-danger-foreground\/80 {
+    background-color: hsl(var(--danger-foreground) / 0.8);
   }
 
   .tone-neutral {
@@ -700,11 +759,11 @@
   }
 
   .design-task-side-action-tone-warning {
-    background-color: hsl(var(--warning-soft) / 0.72);
-    border-color: hsl(var(--warning-soft-border));
+    background-color: hsl(var(--warning-soft) / 0.82);
+    border-color: hsl(var(--warning-soft-border) / 0.72);
   }
   .design-task-side-action-tone-warning:hover {
-    background-color: hsl(var(--warning-soft));
+    background-color: hsl(var(--warning-soft) / 0.95);
   }
 
   .design-task-side-action-tone-success {
@@ -720,8 +779,8 @@
     color: hsl(var(--success-foreground));
   }
   .tone-warning {
-    background-color: hsl(var(--warning-soft));
-    border-color: hsl(var(--warning-soft-border));
+    background-color: hsl(var(--warning-soft) / 0.94);
+    border-color: hsl(var(--warning-soft-border) / 0.78);
     color: hsl(var(--warning-foreground));
   }
   .tone-danger {
@@ -747,8 +806,18 @@
     border-color: hsl(var(--success-soft-border));
   }
   .tone-warning-subtle {
-    background-color: hsl(var(--warning-soft) / 0.72);
-    border-color: hsl(var(--warning-soft-border));
+    background:
+      linear-gradient(135deg, hsl(var(--warning-foreground) / 0.1), transparent 44%),
+      hsl(var(--warning-soft) / 0.82);
+    border-color: hsl(var(--warning-soft-border) / 0.72);
+    box-shadow: inset 0 1px 0 hsl(var(--warning-foreground) / 0.08);
+    color: hsl(var(--warning-copy-foreground));
+  }
+  .tone-warning-subtle :where(.text-muted-foreground) {
+    color: hsl(var(--warning-copy-foreground) / 0.82);
+  }
+  .tone-warning-subtle :where(.tone-text-warning, .text-warning-foreground) {
+    color: hsl(var(--warning-foreground));
   }
   .tone-danger-subtle {
     background-color: hsl(var(--danger-soft) / 0.72);
@@ -787,7 +856,7 @@
     color: hsl(var(--success-foreground) / 0.86);
   }
   .tone-copy-warning {
-    color: hsl(var(--warning-foreground) / 0.86);
+    color: hsl(var(--warning-copy-foreground) / 0.9);
   }
   .tone-copy-danger {
     color: hsl(var(--danger-foreground) / 0.84);
@@ -833,8 +902,8 @@
     color: hsl(var(--success-foreground));
   }
   .tone-icon-box-warning {
-    background-color: hsl(var(--background) / 0.72);
-    border-color: hsl(var(--warning-soft-border));
+    background-color: hsl(var(--warning-soft) / 0.58);
+    border-color: hsl(var(--warning-soft-border) / 0.72);
     color: hsl(var(--warning-foreground));
   }
   .tone-icon-box-danger {

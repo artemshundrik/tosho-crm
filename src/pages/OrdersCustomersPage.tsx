@@ -292,6 +292,18 @@ const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerConta
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
 };
 
+const normalizeCustomerBirthday = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
+  if (!dotted) return trimmed;
+  const [, day, month, year] = dotted;
+  const normalizedDay = String(Number(day)).padStart(2, "0");
+  const normalizedMonth = String(Number(month)).padStart(2, "0");
+  return year ? `${year}-${normalizedMonth}-${normalizedDay}` : `${normalizedDay}.${normalizedMonth}`;
+};
+
 const getInitials = (value?: string | null) => {
   if (!value) return "?";
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -1105,7 +1117,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
           .filter((row) => row.score > 0)
           .sort((left, right) => right.score - left.score || left.label.localeCompare(right.label, "uk"))
           .slice(0, 5)
-          .map(({ score, ...row }) => row);
+          .map((entry) => ({
+            id: entry.id,
+            label: entry.label,
+            entityType: entry.entityType,
+            managerLabel: entry.managerLabel,
+          }));
 
         setCrossManagerMatches(nextMatches);
       } catch {
@@ -1184,12 +1201,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const primary = getCustomerPrimaryLegalEntity(row);
     if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
     return formatOwnershipTypeLabel(primary.ownershipType) || null;
-  };
-  const getCustomerPrimaryLegalEntityTypeDescription = (row: CustomerRow) => {
-    const primary = getCustomerPrimaryLegalEntity(row);
-    if (!primary || !hasCustomerLegalEntityIdentity(primary)) return null;
-    const option = OWNERSHIP_OPTIONS.find((entry) => entry.value === (primary.ownershipType ?? "").trim().toLowerCase());
-    return option?.description ?? null;
   };
   const hasCustomerMissingRequisites = (row: CustomerRow) =>
     !hasCustomerLegalEntityDocumentEssentials(getCustomerPrimaryLegalEntity(row));
@@ -1949,7 +1960,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
   }, [currentManagerLabel, isManagerUser, leadManagerFilter, memberByLabel, search, teamId, userId]);
 
-  const loadTeamMembers = async () => {
+  const loadTeamMembers = useCallback(async () => {
     try {
       const workspaceId = await resolveWorkspaceId(userId);
       if (!workspaceId) {
@@ -1973,7 +1984,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setTeamMembers([]);
       setTeamMembersReady(true);
     }
-  };
+  }, [defaultManagerFilterApplied, isManagerUser, userId]);
 
   const handleLoadMoreCustomers = useCallback(() => {
     if (customersLoading || customersRefreshing || !customersHasMore) return;
@@ -2001,7 +2012,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
   useEffect(() => {
     void loadTeamMembers();
-  }, [teamId, userId]);
+  }, [loadTeamMembers, teamId, userId]);
 
   useEffect(() => {
     if (!teamMembersReady) return;
@@ -2236,7 +2247,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         position: contact.position.trim(),
         phone: contact.phone.trim(),
         email: contact.email.trim(),
-        birthday: contact.birthday.trim(),
+        birthday: normalizeCustomerBirthday(contact.birthday),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
 
@@ -2950,13 +2961,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       const primaryEntity = getCustomerPrimaryLegalEntity(row);
                       const missingRequisites = hasCustomerMissingRequisites(row);
                       const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
+                      const missingRequisitesTooltip = missingRequisitesLabel ?? "Реквізити не заповнені";
 
                       return (
                         <div
                           key={row.id}
                           className={cn(
                             "rounded-[var(--radius-inner)] border bg-card p-4",
-                            missingRequisites ? "border-warning-soft-border/80 bg-warning-soft/10" : "border-border"
+                            missingRequisites ? "border-warning-soft-border/80" : "border-border"
                           )}
                           onClick={() => openEdit(row)}
                         >
@@ -3026,7 +3038,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               <span className="text-muted-foreground">
                                 {legalEntities.length > 1 ? "Основна юр. особа:" : "Юр. особа:"}
                               </span>{" "}
-                              <span className={missingRequisites ? "text-warning-foreground" : undefined}>
+                              <span>
                                 {renderPrimaryEntityLabel(row)}
                               </span>
                             </div>
@@ -3036,20 +3048,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                   tone="warning"
                                   variant="outline"
                                   className="rounded-full px-2.5 py-1 text-[11px] font-medium normal-case tracking-normal"
+                                  title={missingRequisitesTooltip}
                                 >
                                   Реквізити не заповнені
                                 </Badge>
-                                <span className="text-xs text-warning-foreground/90">{missingRequisitesLabel}</span>
                               </div>
                             ) : null}
-                            {!primaryEntity || !hasCustomerLegalEntityDocumentEssentials(primaryEntity) ? (
-                              <div>
-                                <span className={cn("text-muted-foreground", missingRequisites ? "text-warning-foreground/80" : undefined)}>
-                                  ЄДРПОУ / ІПН:
-                                </span>{" "}
-                                <span className={missingRequisites ? "text-warning-foreground" : undefined}>Додайте реквізити</span>
-                              </div>
-                            ) : primaryEntity.taxId ? (
+                            {primaryEntity?.taxId ? (
                               <div>
                                 <span className="text-muted-foreground">ЄДРПОУ / ІПН:</span> {primaryEntity.taxId}
                               </div>
@@ -3099,16 +3104,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         const legalEntities = getCustomerLegalEntities(row);
                         const primaryEntity = getCustomerPrimaryLegalEntity(row);
                         const primaryEntityType = getCustomerPrimaryLegalEntityType(row);
-                        const primaryEntityTypeDescription = getCustomerPrimaryLegalEntityTypeDescription(row);
                         const missingRequisites = hasCustomerMissingRequisites(row);
                         const missingRequisitesLabel = getCustomerMissingRequisitesLabel(row);
+                        const missingRequisitesTooltip = missingRequisitesLabel ?? "Реквізити не заповнені";
 
                         return (
                           <TableRow
                             key={row.id}
                             className={cn(
                               "group cursor-pointer border-b border-border/30 last:border-0 transition-colors",
-                              missingRequisites ? "bg-warning-soft/10 hover:bg-warning-soft/15" : "hover:bg-muted/30"
+                              missingRequisites ? "border-l-2 border-l-warning-soft-border/80 hover:bg-muted/30" : "hover:bg-muted/30"
                             )}
                             onClick={() => openEdit(row)}
                           >
@@ -3140,7 +3145,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top pl-2 max-w-[360px]">
                               <div className="space-y-1">
-                                <div className={cn("truncate font-medium", missingRequisites ? "text-warning-foreground" : undefined)}>
+                                <div className="truncate font-medium text-foreground">
                                   {renderPrimaryEntityLabel(row)}
                                 </div>
                                 {missingRequisitesLabel ? (
@@ -3149,10 +3154,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                       tone="warning"
                                       variant="outline"
                                       className="rounded-full px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal"
+                                      title={missingRequisitesTooltip}
                                     >
                                       Реквізити не заповнені
                                     </Badge>
-                                    <span className="truncate text-warning-foreground/90">{missingRequisitesLabel}</span>
                                   </div>
                                 ) : null}
                                 {(primaryEntity && hasCustomerLegalEntityDocumentEssentials(primaryEntity) && primaryEntity.taxId) || legalEntities.length > 1 ? (

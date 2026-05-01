@@ -107,10 +107,12 @@ const normalizeOptionalDate = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  const dotted = trimmed.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?$/);
   if (!dotted) return trimmed;
   const [, day, month, year] = dotted;
-  return `${year}-${String(Number(month)).padStart(2, "0")}-${String(Number(day)).padStart(2, "0")}`;
+  const normalizedDay = String(Number(day)).padStart(2, "0");
+  const normalizedMonth = String(Number(month)).padStart(2, "0");
+  return year ? `${year}-${normalizedMonth}-${normalizedDay}` : `${normalizedDay}.${normalizedMonth}`;
 };
 
 const CUSTOMER_OPTIONAL_COLUMNS: Record<string, string[]> = {

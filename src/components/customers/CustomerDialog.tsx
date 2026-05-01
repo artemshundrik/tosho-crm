@@ -28,6 +28,7 @@ import {
   formatOwnershipTypeLabel,
   formatCustomerLegalEntitySummary,
   formatVatRateLabel,
+  getCustomerLegalEntityDocumentMissingFields,
   hasCustomerLegalEntityIdentity,
   type CustomerLegalEntity,
 } from "@/lib/customerLegalEntities";
@@ -152,6 +153,7 @@ const POSITION_OPTIONS = [
   "Власник",
   "Адміністратор",
   "Маркетолог",
+  "Дизайнер",
   "Керівник відділу маркетингу",
   "Директор з маркетингу",
   "Менеджер відділу закупівель",
@@ -179,6 +181,23 @@ const normalizeTime = (value: string) => {
   hour = Math.max(0, Math.min(23, hour));
   minute = Math.max(0, Math.min(59, minute));
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+};
+
+const formatBirthdayForInput = (value: string) => {
+  const trimmed = value.trim();
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const [, year, month, day] = iso;
+    return `${day}.${month}.${year}`;
+  }
+  return trimmed;
+};
+
+const normalizeBirthdayInput = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
 };
 
 const formatLinkedMoney = (value?: number | null) => {
@@ -418,6 +437,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const activeLegalEntity = form.legalEntities[activeLegalEntityIndex] ?? form.legalEntities[0] ?? null;
   const activeLegalEntityIsPerson = activeLegalEntity?.ownershipType === "fop";
   const hasMultipleLegalEntities = form.legalEntities.length > 1;
+  const contactMissingFields = React.useMemo(() => {
+    const hasPhone = form.contacts.some((contact) => contact.phone.trim());
+    const hasEmail = form.contacts.some((contact) => contact.email.trim());
+    return [
+      !hasPhone ? "мобільний номер телефону" : null,
+      !hasEmail ? "email" : null,
+    ].filter((entry): entry is string => Boolean(entry));
+  }, [form.contacts]);
+  const activeLegalEntityMissingFields = React.useMemo(
+    () => getCustomerLegalEntityDocumentMissingFields(activeLegalEntity),
+    [activeLegalEntity]
+  );
 
   const addContact = () => {
     setForm((prev) => ({
@@ -818,9 +849,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     Додати контакт
                   </Button>
                 </div>
-                <div className="rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5 text-foreground">
-                  Для створення договору та відправки документів у замовника обовʼязково мають бути email і мобільний номер телефону.
-                </div>
+                {contactMissingFields.length > 0 ? (
+                  <div className="rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5">
+                    Для договору та відправки документів додайте: {contactMissingFields.join(", ")}.
+                  </div>
+                ) : null}
                 {form.contacts.map((contact, index) => (
                   <div key={`customer-contact-${index}`} className="space-y-3 rounded-lg border border-border/50 p-3">
                     <div className="flex items-center justify-between">
@@ -892,9 +925,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <div className="grid gap-2">
                       <Label>День народження</Label>
                       <Input
-                        type="date"
-                        value={contact.birthday}
-                        onChange={(e) => updateContact(index, { birthday: e.target.value })}
+                        value={formatBirthdayForInput(contact.birthday)}
+                        onChange={(e) => updateContact(index, { birthday: normalizeBirthdayInput(e.target.value) })}
+                        inputMode="numeric"
+                        maxLength={10}
+                        placeholder="дд.мм або дд.мм.рррр"
                         className="h-9"
                       />
                     </div>
@@ -1020,6 +1055,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     {!hasCustomerLegalEntityIdentity(activeLegalEntity) ? (
                       <div className="mb-4 rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
                         Ця юрособа ще порожня. Вкажіть хоча б тип, назву та код, щоб менеджер міг використовувати її в документах.
+                      </div>
+                    ) : null}
+                    {activeLegalEntityMissingFields.length > 0 ? (
+                      <div className="mb-4 rounded-lg border tone-warning-subtle px-3 py-2 text-sm leading-6">
+                        <div className="font-medium text-warning-foreground">Реквізити не заповнені повністю</div>
+                        <div className="mt-1">Не вистачає: {activeLegalEntityMissingFields.join(", ")}.</div>
                       </div>
                     ) : null}
 
