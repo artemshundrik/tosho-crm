@@ -200,6 +200,40 @@ export function useModelEditor({
     );
   };
 
+  const getCatalogImageAssetFromUrl = (value?: string | null): CatalogImageAsset | null => {
+    const normalized = value?.trim() ?? "";
+    if (!normalized || !isManagedCatalogImageUrl(normalized)) return null;
+
+    try {
+      const parsed = new URL(normalized);
+      const marker = `/storage/v1/object/public/${CATALOG_IMAGE_BUCKET}/`;
+      const markerIndex = parsed.pathname.indexOf(marker);
+      if (markerIndex < 0) return null;
+
+      const rawPath = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+      if (!rawPath.includes("/catalog-models/")) return null;
+
+      const originalPath = rawPath.replace(/__(preview|thumb)\.webp$/i, ".webp");
+      const originalUrl = supabase.storage.from(CATALOG_IMAGE_BUCKET).getPublicUrl(originalPath).data.publicUrl;
+      const previewUrl = supabase.storage
+        .from(CATALOG_IMAGE_BUCKET)
+        .getPublicUrl(getAttachmentVariantPath(originalPath, "preview")).data.publicUrl;
+      const thumbUrl = supabase.storage
+        .from(CATALOG_IMAGE_BUCKET)
+        .getPublicUrl(getAttachmentVariantPath(originalPath, "thumb")).data.publicUrl;
+
+      return {
+        bucket: CATALOG_IMAGE_BUCKET,
+        path: originalPath,
+        originalUrl,
+        previewUrl,
+        thumbUrl,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const getVariantImageAssetMap = (metadata?: CatalogModelMetadata | null) => {
     const map: Record<string, CatalogImageAsset | null> = {};
     (metadata?.variants ?? []).forEach((variant) => {
@@ -1120,7 +1154,7 @@ export function useModelEditor({
     const modelId = editingModelId ?? createLocalId();
     const fixedPrice = Math.max(0, Number(draftFixedPrice) || 0);
     const normalizedImageUrl = draftImageUrl.trim();
-    const existingImageAsset = draftMetadata.imageAsset ?? null;
+    const existingImageAsset = draftMetadata.imageAsset ?? getCatalogImageAssetFromUrl(normalizedImageUrl);
     const nextMetadata: CatalogModelMetadata = { ...(draftMetadata ?? {}) };
     delete nextMetadata.imageAsset;
     const normalizedDraftVariants = (nextMetadata.variants ?? []).map(normalizeVariantForSave);
@@ -1156,7 +1190,7 @@ export function useModelEditor({
       variants?.map((variant) => {
         const hasFile = Boolean(variantImageFiles[variant.id]);
         const imageUrl = variant.imageUrl?.trim() || null;
-        const imageAsset = variant.imageAsset ?? null;
+        const imageAsset = variant.imageAsset ?? getCatalogImageAssetFromUrl(imageUrl);
         const shouldKeepManagedImage =
           !hasFile &&
           Boolean(imageUrl) &&
@@ -1194,6 +1228,9 @@ export function useModelEditor({
           ? normalizedImageUrl || null
           : null;
       let currentMetadata: CatalogModelMetadata = { ...nextMetadata };
+      if (currentImageUrl && existingImageAsset) {
+        currentMetadata.imageAsset = existingImageAsset;
+      }
       
       if (editingModelId) {
         const { error } = await supabase
@@ -1330,7 +1367,10 @@ export function useModelEditor({
             const sourceImageUrl = variant.imageUrl?.trim() || null;
             const variantFile = variantImageFiles[variant.id] ?? null;
             const existingVariantAsset =
-              variant.imageAsset ?? persistedVariantImageAssets[variant.id] ?? null;
+              variant.imageAsset ??
+              persistedVariantImageAssets[variant.id] ??
+              getCatalogImageAssetFromUrl(sourceImageUrl) ??
+              null;
             const currentBaseImageAsset = currentMetadata.imageAsset ?? null;
             const usesBaseDraftImage =
               Boolean(sourceImageUrl) &&

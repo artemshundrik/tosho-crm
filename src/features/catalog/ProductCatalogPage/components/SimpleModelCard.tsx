@@ -33,7 +33,7 @@ export function SimpleModelCard({
 }: SimpleModelCardProps) {
   const { model, kindName, validation } = item;
   const [isHovered, setIsHovered] = useState(false);
-  const [imageErrored, setImageErrored] = useState(false);
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(() => new Set());
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
   const hasNoMethods = !model.methodIds || model.methodIds.length === 0;
@@ -53,14 +53,52 @@ export function SimpleModelCard({
   );
   const selectedVariant =
     variants.find((variant) => variant.id === selectedVariantId) ?? variants[0] ?? null;
-  const selectedVariantImageUrl =
-    selectedVariant?.imageUrl?.trim() ||
-    selectedVariant?.imageAsset?.thumbUrl ||
-    selectedVariant?.imageAsset?.previewUrl ||
-    null;
+  const getUniqueImageUrls = (urls: Array<string | null | undefined>) => {
+    const normalized = urls.map((url) => url?.trim()).filter((url): url is string => Boolean(url));
+    return Array.from(new Set(normalized));
+  };
+  const getVariantImageUrls = (variant: (typeof variants)[number] | null | undefined, mode: "preview" | "thumb") =>
+    getUniqueImageUrls(
+      mode === "preview"
+        ? [
+            variant?.imageAsset?.previewUrl,
+            variant?.imageAsset?.originalUrl,
+            variant?.imageAsset?.thumbUrl,
+            variant?.imageUrl,
+          ]
+        : [
+            variant?.imageAsset?.thumbUrl,
+            variant?.imageAsset?.previewUrl,
+            variant?.imageAsset?.originalUrl,
+            variant?.imageUrl,
+          ]
+    );
+  const getModelImageUrls = (mode: "preview" | "thumb") =>
+    getUniqueImageUrls(
+      mode === "preview"
+        ? [
+            model.metadata?.imageAsset?.previewUrl,
+            model.metadata?.imageAsset?.originalUrl,
+            model.metadata?.imageAsset?.thumbUrl,
+            model.imageUrl,
+          ]
+        : [
+            model.metadata?.imageAsset?.thumbUrl,
+            model.metadata?.imageAsset?.previewUrl,
+            model.metadata?.imageAsset?.originalUrl,
+            model.imageUrl,
+          ]
+    );
+  const getAvailableImageUrl = (urls: string[]) => urls.find((url) => !failedImageUrls.has(url)) ?? null;
+  const selectedVariantImageUrls = getVariantImageUrls(selectedVariant, "preview");
+  const fallbackVariantImageUrls = variants.flatMap((variant) => getVariantImageUrls(variant, "preview"));
   const selectedVariantSku = selectedVariant?.sku?.trim();
   const selectedVariantName = selectedVariant?.name.trim();
-  const displayImageUrl = selectedVariantImageUrl || model.imageUrl || null;
+  const displayImageUrl = getAvailableImageUrl([
+    ...selectedVariantImageUrls,
+    ...getModelImageUrls("preview"),
+    ...fallbackVariantImageUrls,
+  ]);
   const displayTitle = selectedVariantName ? `${model.name} · ${selectedVariantName}` : model.name;
   const displaySku = selectedVariantSku || sku || null;
 
@@ -79,8 +117,18 @@ export function SimpleModelCard({
   const productTypeLabel = getProductTypeLabel(kindName);
 
   useEffect(() => {
-    setImageErrored(false);
-  }, [model.id, displayImageUrl]);
+    setFailedImageUrls(new Set());
+  }, [model.id]);
+
+  const markImageFailed = (url: string | null | undefined) => {
+    if (!url) return;
+    setFailedImageUrls((prev) => {
+      if (prev.has(url)) return prev;
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (variants.length === 0) {
@@ -167,12 +215,12 @@ export function SimpleModelCard({
       </div>
 
       <div className="relative aspect-[4/5] w-full overflow-hidden rounded-t-xl bg-gradient-to-br from-muted/30 to-muted/10">
-        {displayImageUrl && !imageErrored ? (
+        {displayImageUrl ? (
           <img
             src={displayImageUrl}
             alt={displayTitle}
             className="h-full w-full object-cover"
-            onError={() => setImageErrored(true)}
+            onError={() => markImageFailed(displayImageUrl)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -185,11 +233,7 @@ export function SimpleModelCard({
         {variants.length > 0 ? (
           <div className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-2 overflow-x-auto">
             {variants.slice(0, 7).map((variant) => {
-              const imageUrl =
-                variant.imageUrl?.trim() ||
-                variant.imageAsset?.thumbUrl ||
-                variant.imageAsset?.previewUrl ||
-                null;
+              const imageUrl = getAvailableImageUrl(getVariantImageUrls(variant, "thumb"));
               const selected = variant.id === selectedVariant?.id;
               return (
                 <button
@@ -209,7 +253,13 @@ export function SimpleModelCard({
                 >
                   {imageUrl ? (
                     <>
-                      <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      <img
+                        src={imageUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        onError={() => markImageFailed(imageUrl)}
+                      />
                       {!selected ? <span className="absolute inset-0 bg-white/45" /> : null}
                     </>
                   ) : (
