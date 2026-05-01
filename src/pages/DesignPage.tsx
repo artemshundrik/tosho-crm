@@ -3355,10 +3355,30 @@ export default function DesignPage() {
 
     if (mimeType === "text/html") {
       const doc = new DOMParser().parseFromString(value, "text/html");
-      doc.querySelectorAll("img[src], a[href]").forEach((node) => {
-        const raw = node instanceof HTMLImageElement ? node.src : node instanceof HTMLAnchorElement ? node.href : "";
-        if (raw) urls.add(raw);
+      doc.querySelectorAll("img, a, source").forEach((node) => {
+        ["src", "href", "data-src", "data-original", "data-url"].forEach((attribute) => {
+          const raw = node.getAttribute(attribute);
+          if (raw) urls.add(raw);
+        });
+        const srcset = node.getAttribute("srcset");
+        if (srcset) {
+          srcset.split(",").forEach((entry) => {
+            const raw = entry.trim().split(/\s+/)[0];
+            if (raw) urls.add(raw);
+          });
+        }
       });
+      doc.querySelectorAll<HTMLElement>("[style]").forEach((node) => {
+        const style = node.getAttribute("style") ?? "";
+        Array.from(style.matchAll(/url\((["']?)(.*?)\1\)/gi)).forEach((match) => {
+          if (match[2]) urls.add(match[2]);
+        });
+      });
+    }
+
+    if (mimeType === "DownloadURL") {
+      const match = value.match(/(?:https?:\/\/|blob:|data:image\/).+$/i);
+      if (match?.[0]) urls.add(match[0]);
     }
 
     value
@@ -3366,11 +3386,12 @@ export default function DesignPage() {
       .map((line) => line.trim())
       .filter((line) => line && !line.startsWith("#"))
       .forEach((line) => {
-        const match = line.match(/(?:https?:\/\/|blob:|data:image\/)[^\s"'<>]+/i);
-        if (match?.[0]) urls.add(match[0]);
+        Array.from(line.matchAll(/(?:https?:\/\/|blob:|data:image\/)[^\s"'<>\\)]+/gi)).forEach((match) => {
+          if (match[0]) urls.add(match[0]);
+        });
       });
 
-    return Array.from(urls);
+    return Array.from(urls).map((url) => url.replace(/&amp;/g, "&"));
   };
 
   const createFileFromDroppedUrl = async (url: string, index: number) => {
@@ -3398,6 +3419,14 @@ export default function DesignPage() {
     }
   };
 
+  const getTransferData = (dataTransfer: DataTransfer, type: string) => {
+    try {
+      return dataTransfer.getData(type);
+    } catch {
+      return "";
+    }
+  };
+
   const collectCreateFilesFromDrop = async (dataTransfer: DataTransfer) => {
     const files = new Map<string, File>();
     const addFile = (file: File | null | undefined) => {
@@ -3419,8 +3448,15 @@ export default function DesignPage() {
         value: await getDroppedString(item),
       }))
     );
+    const directStrings = ["DownloadURL", "text/html", "text/uri-list", "text/plain"]
+      .map((type) => ({ type, value: getTransferData(dataTransfer, type) }))
+      .filter((entry) => entry.value.trim());
     const urls = Array.from(
-      new Set(droppedStrings.flatMap((entry) => extractImageUrlsFromDropText(entry.value, entry.type)))
+      new Set(
+        [...droppedStrings, ...directStrings].flatMap((entry) =>
+          extractImageUrlsFromDropText(entry.value, entry.type)
+        )
+      )
     );
     const urlFiles = await Promise.all(urls.map((url, index) => createFileFromDroppedUrl(url, index)));
     urlFiles.forEach(addFile);
@@ -3435,8 +3471,39 @@ export default function DesignPage() {
       setCreateError(null);
       return;
     }
-    setCreateError("Не вдалося отримати файл із перетягування. Спробуйте перетягнути саме файл або зберегти картинку і додати її через вибір файлу.");
+    setCreateError("Не вдалося отримати файл із перетягування. Спробуйте перетягнути саме файл, вставити картинку через Cmd/Ctrl+V або додати її через вибір файлу.");
   };
+
+  const hasAttachmentPayload = (dataTransfer: DataTransfer | null) => {
+    if (!dataTransfer) return false;
+    if (Array.from(dataTransfer.files ?? []).some((file) => file.size > 0)) return true;
+    const items = Array.from(dataTransfer.items ?? []);
+    if (items.some((item) => item.kind === "file")) return true;
+    return ["DownloadURL", "text/html", "text/uri-list", "text/plain"].some((type) =>
+      extractImageUrlsFromDropText(getTransferData(dataTransfer, type), type).length > 0
+    );
+  };
+
+  const isTextEditingTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+    return target.isContentEditable;
+  };
+
+  useEffect(() => {
+    if (!createDialogOpen) return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (isTextEditingTarget(event.target)) return;
+      const clipboardData = event.clipboardData;
+      if (!clipboardData || !hasAttachmentPayload(clipboardData)) return;
+      event.preventDefault();
+      void handleCreateFilesDrop(clipboardData);
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [createDialogOpen]);
 
   const removeCreateFile = (index: number) => {
     setCreateFiles((prev) => prev.filter((_, i) => i !== index));
@@ -5980,11 +6047,18 @@ export default function DesignPage() {
             <div className="space-y-2">
               <Label>Файли / картинки</Label>
               <div
+                tabIndex={0}
                 onDrop={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   setCreateFilesDragActive(false);
                   void handleCreateFilesDrop(event.dataTransfer);
+                }}
+                onPaste={(event) => {
+                  if (!hasAttachmentPayload(event.clipboardData)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void handleCreateFilesDrop(event.clipboardData);
                 }}
                 onDragOver={(event) => {
                   event.preventDefault();
@@ -6013,7 +6087,7 @@ export default function DesignPage() {
                 <div className="flex flex-col items-center gap-2">
                   <Paperclip className={cn("h-5 w-5", createFilesDragActive ? "text-primary" : "text-muted-foreground")} />
                   <div className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
-                    {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                    {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть, вставте або клікніть для вибору"}
                   </div>
                   <div className="text-xs text-muted-foreground">до {MAX_BRIEF_FILES} файлів</div>
                 </div>

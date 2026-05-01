@@ -1623,7 +1623,62 @@ export default function DesignTaskPage() {
           metadataCustomerTypeRaw === "lead" || metadataCustomerTypeRaw === "customer"
             ? metadataCustomerTypeRaw
             : null;
-        const logoDirectory = effectiveTeamId ? await listCustomerLeadLogoDirectory(effectiveTeamId) : [];
+        const loadDirectCustomerLogoEntry = async (
+          entityType: "customer" | "lead",
+          entityId: string
+        ): Promise<{ label: string | null; legalName: string | null; logoUrl: string | null } | null> => {
+          if (!effectiveTeamId || !entityId) return null;
+          if (entityType === "lead") {
+            const { data, error } = await supabase
+              .schema("tosho")
+              .from("leads")
+              .select("company_name,legal_name,logo_url")
+              .eq("team_id", effectiveTeamId)
+              .eq("id", entityId)
+              .maybeSingle();
+            if (error) return null;
+            const row = (data ?? null) as { company_name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+            return row
+              ? {
+                  label: row.company_name?.trim() || row.legal_name?.trim() || null,
+                  legalName: row.legal_name?.trim() || null,
+                  logoUrl: normalizeLogoUrl(row.logo_url ?? null),
+                }
+              : null;
+          }
+
+          const { data, error } = await supabase
+            .schema("tosho")
+            .from("customers")
+            .select("name,legal_name,logo_url")
+            .eq("team_id", effectiveTeamId)
+            .eq("id", entityId)
+            .maybeSingle();
+          if (error) return null;
+          const row = (data ?? null) as { name?: string | null; legal_name?: string | null; logo_url?: string | null } | null;
+          return row
+            ? {
+                label: row.name?.trim() || row.legal_name?.trim() || null,
+                legalName: row.legal_name?.trim() || null,
+                logoUrl: normalizeLogoUrl(row.logo_url ?? null),
+              }
+            : null;
+        };
+
+        const directPartyId = quote?.customer_id ?? metadataCustomerId;
+        const directPartyType: "customer" | "lead" | null = quote?.customer_id
+          ? "customer"
+          : metadataCustomerId && metadataCustomerType
+            ? metadataCustomerType
+            : null;
+        const directPartyLogoEntry =
+          directPartyId && directPartyType ? await loadDirectCustomerLogoEntry(directPartyType, directPartyId) : null;
+        if (directPartyLogoEntry) {
+          customerName = directPartyLogoEntry.label || directPartyLogoEntry.legalName || customerName;
+          customerLogoUrl = directPartyLogoEntry.logoUrl ?? customerLogoUrl;
+        }
+
+        const logoDirectory = effectiveTeamId ? await listCustomerLeadLogoDirectory(effectiveTeamId, { force: true }) : [];
         const entryByTypedId = new Map(
           logoDirectory.map((entry) => [`${entry.entityType}:${entry.id}`, entry] as const)
         );
