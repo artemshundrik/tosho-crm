@@ -127,6 +127,14 @@ type DesignTaskActivityRow = {
   created_at: string;
 };
 
+type DesignTaskListActivityRow = {
+  id: string;
+  entity_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+  title?: string | null;
+  created_at: string;
+};
+
 type CustomerOption = CustomerLeadOption;
 
 type DesignViewMode = "kanban" | "timeline" | "assignee";
@@ -143,6 +151,7 @@ const DESIGN_KANBAN_INITIAL_PAGE_SIZE = 120;
 const DESIGN_KANBAN_PAGE_INCREMENT = 60;
 const DESIGN_SEARCH_FETCH_PAGE_SIZE = 500;
 const DESIGN_PAGE_CACHE_LIMIT = DESIGN_KANBAN_INITIAL_PAGE_SIZE;
+const DESIGN_MANAGER_QUOTE_ID_CHUNK_SIZE = 80;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
 const KANBAN_AUTOLOAD_LOCK_MS = 1200;
 type DesignPageCachePayload = {
@@ -454,6 +463,118 @@ const isResourceExhaustionLikeError = (error: unknown) => {
     message.includes("load failed")
   );
 };
+
+const sortDesignTaskActivityRows = (rows: DesignTaskListActivityRow[]) =>
+  [...rows].sort((a, b) => {
+    const aTime = new Date(a.created_at ?? 0).getTime();
+    const bTime = new Date(b.created_at ?? 0).getTime();
+    if (aTime !== bTime) return bTime - aTime;
+    return b.id.localeCompare(a.id);
+  });
+
+async function listQuoteIdsForManager(teamId: string, managerUserId: string) {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("assigned_to", managerUserId);
+  if (error) throw error;
+  return Array.from(
+    new Set(
+      ((data ?? []) as Array<{ id?: string | null }>)
+        .map((row) => row.id?.trim() ?? "")
+        .filter((value) => value && isUuid(value))
+    )
+  );
+}
+
+function applyDesignTaskActivityStatusFilter<T extends { eq: (column: string, value: unknown) => T }>(
+  query: T,
+  status?: DesignStatus | null
+) {
+  return status ? query.eq("metadata->>status", status) : query;
+}
+
+async function listManagerDesignTaskActivityRows(params: {
+  teamId: string;
+  managerUserId: string;
+  status?: DesignStatus | null;
+  offset: number;
+  pageSize: number;
+  fetchAll: boolean;
+}) {
+  const quoteIds = await listQuoteIdsForManager(params.teamId, params.managerUserId);
+  const rowById = new Map<string, DesignTaskListActivityRow>();
+  const directLimit = params.fetchAll ? DESIGN_SEARCH_FETCH_PAGE_SIZE : params.offset + params.pageSize + 1;
+  let directOffset = 0;
+  let directMayHaveMore = false;
+
+  while (true) {
+    const directPageSize = params.fetchAll ? DESIGN_SEARCH_FETCH_PAGE_SIZE : directLimit;
+    const fetchLimit = directPageSize + 1;
+    let query = supabase
+      .from("activity_log")
+      .select("id,entity_id,metadata,title,created_at")
+      .eq("team_id", params.teamId)
+      .eq("action", "design_task")
+      .eq("metadata->>manager_user_id", params.managerUserId)
+      .order("created_at", { ascending: false })
+      .range(directOffset, directOffset + fetchLimit - 1);
+    query = applyDesignTaskActivityStatusFilter(query, params.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = (data ?? []) as DesignTaskListActivityRow[];
+    const limitedRows = rows.slice(0, directPageSize);
+    limitedRows.forEach((row) => rowById.set(row.id, row));
+
+    directMayHaveMore = rows.length > directPageSize;
+    if (!params.fetchAll || !directMayHaveMore) break;
+    directOffset += DESIGN_SEARCH_FETCH_PAGE_SIZE;
+  }
+
+  for (let index = 0; index < quoteIds.length; index += DESIGN_MANAGER_QUOTE_ID_CHUNK_SIZE) {
+    const chunk = quoteIds.slice(index, index + DESIGN_MANAGER_QUOTE_ID_CHUNK_SIZE);
+    if (chunk.length === 0) continue;
+
+    const queries = [
+      supabase
+        .from("activity_log")
+        .select("id,entity_id,metadata,title,created_at")
+        .eq("team_id", params.teamId)
+        .eq("action", "design_task")
+        .in("metadata->>quote_id", chunk)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("activity_log")
+        .select("id,entity_id,metadata,title,created_at")
+        .eq("team_id", params.teamId)
+        .eq("action", "design_task")
+        .in("entity_id", chunk)
+        .order("created_at", { ascending: false }),
+    ].map((query) => applyDesignTaskActivityStatusFilter(query, params.status));
+
+    const [metadataResult, entityResult] = await Promise.all(queries);
+    if (metadataResult.error) throw metadataResult.error;
+    if (entityResult.error) throw entityResult.error;
+
+    ([...(metadataResult.data ?? []), ...(entityResult.data ?? [])] as DesignTaskListActivityRow[]).forEach((row) => {
+      rowById.set(row.id, row);
+    });
+  }
+
+  const sortedRows = sortDesignTaskActivityRows(Array.from(rowById.values()));
+  const limitedRows = params.fetchAll
+    ? sortedRows
+    : sortedRows.slice(params.offset, params.offset + params.pageSize);
+
+  return {
+    rows: limitedRows,
+    hasMore: params.fetchAll ? false : sortedRows.length > params.offset + params.pageSize || directMayHaveMore,
+  };
+}
 
 function readDesignPageCache(teamId: string): DesignPageCachePayload | null {
   if (typeof window === "undefined" || !teamId) return null;
@@ -1345,49 +1466,49 @@ export default function DesignPage() {
     }
     setError(null);
     try {
-      const fetchedRows: Array<{
-        id: string;
-        entity_id?: string | null;
-        metadata?: Record<string, unknown> | null;
-        title?: string | null;
-        created_at: string;
-      }> = [];
-      let nextOffset = offset;
       let nextHasMoreTasks = false;
+      let limitedRows: DesignTaskListActivityRow[] = [];
 
-      while (true) {
-        const fetchLimit = pageSize + 1;
-        let query = supabase
-          .from("activity_log")
-          .select("id,entity_id,metadata,title,created_at")
-          .eq("team_id", effectiveTeamId)
-          .eq("action", "design_task")
-          .order("created_at", { ascending: false });
-        if (serverFilters.managerUserId) {
-          query = query.eq("metadata->>manager_user_id", serverFilters.managerUserId);
+      if (serverFilters.managerUserId) {
+        const managerRowsResult = await listManagerDesignTaskActivityRows({
+          teamId: effectiveTeamId,
+          managerUserId: serverFilters.managerUserId,
+          status: serverFilters.status,
+          offset,
+          pageSize,
+          fetchAll,
+        });
+        limitedRows = managerRowsResult.rows;
+        nextHasMoreTasks = managerRowsResult.hasMore;
+      } else {
+        const fetchedRows: DesignTaskListActivityRow[] = [];
+        let nextOffset = offset;
+
+        while (true) {
+          const fetchLimit = pageSize + 1;
+          let query = supabase
+            .from("activity_log")
+            .select("id,entity_id,metadata,title,created_at")
+            .eq("team_id", effectiveTeamId)
+            .eq("action", "design_task")
+            .order("created_at", { ascending: false });
+          if (serverFilters.status) {
+            query = query.eq("metadata->>status", serverFilters.status);
+          }
+          const { data, error: fetchError } = await query.range(nextOffset, nextOffset + fetchLimit - 1);
+          if (fetchError) throw fetchError;
+
+          const pageRows = (data ?? []) as DesignTaskListActivityRow[];
+          const limitedPageRows = pageRows.slice(0, pageSize);
+          fetchedRows.push(...limitedPageRows);
+
+          nextHasMoreTasks = pageRows.length > pageSize;
+          if (!fetchAll || !nextHasMoreTasks) break;
+          nextOffset += pageSize;
         }
-        if (serverFilters.status) {
-          query = query.eq("metadata->>status", serverFilters.status);
-        }
-        const { data, error: fetchError } = await query.range(nextOffset, nextOffset + fetchLimit - 1);
-        if (fetchError) throw fetchError;
 
-        const pageRows = (data ?? []) as Array<{
-          id: string;
-          entity_id?: string | null;
-          metadata?: Record<string, unknown> | null;
-          title?: string | null;
-          created_at: string;
-        }>;
-        const limitedPageRows = pageRows.slice(0, pageSize);
-        fetchedRows.push(...limitedPageRows);
-
-        nextHasMoreTasks = pageRows.length > pageSize;
-        if (!fetchAll || !nextHasMoreTasks) break;
-        nextOffset += pageSize;
+        limitedRows = fetchedRows;
       }
-
-      const limitedRows = fetchedRows;
       setHasMoreTasks(fetchAll ? false : nextHasMoreTasks);
       if (!append) {
         fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;

@@ -6382,6 +6382,12 @@ export default function DesignTaskPage() {
     setDropboxExporting(true);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error("Сесія закінчилась. Увійдіть знову, щоб експортувати в Dropbox.");
+      }
+
       const projectResponse = await fetch("/.netlify/functions/dropbox-manage", {
         method: "POST",
         headers: {
@@ -6403,13 +6409,9 @@ export default function DesignTaskPage() {
       const projectPath = projectPayload.projectPath.trim();
       const filesPayload = [];
       for (const entry of dropboxExportPlan) {
-        const signedUrl = await getSignedAttachmentUrl(
-          entry.file.storage_bucket,
-          entry.file.storage_path,
-          "original",
-          60 * 60 * 24 * 7
-        );
-        if (!signedUrl) {
+        const storageBucket = entry.file.storage_bucket?.trim();
+        const storagePath = entry.file.storage_path?.trim();
+        if (!storageBucket || !storagePath) {
           throw new Error(`Не вдалося підготувати файл «${entry.file.file_name}» до експорту.`);
         }
         const fileName = buildDropboxExportFileName({
@@ -6423,7 +6425,8 @@ export default function DesignTaskPage() {
           exportLabel: entry.exportLabel,
         });
         filesPayload.push({
-          sourceUrl: signedUrl,
+          storageBucket,
+          storagePath,
           sourceFileId: entry.file.id,
           fileName,
           outputKind: entry.outputKind,
@@ -6436,8 +6439,11 @@ export default function DesignTaskPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          teamId: effectiveTeamId,
+          taskId: task.id,
           projectPath,
           files: filesPayload,
         }),
