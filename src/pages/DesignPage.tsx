@@ -7,6 +7,7 @@ import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +47,7 @@ import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -4543,7 +4544,61 @@ export default function DesignPage() {
 
       {viewMode === "kanban" ? (
         <EstimatesKanbanCanvas>
-          <div className="space-y-3 md:hidden">
+          {loading && tasks.length === 0 ? (
+            <>
+              <div className="space-y-3 md:hidden">
+                {DESIGN_COLUMNS.map((col) => {
+                  const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
+                  return (
+                    <section key={col.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60">
+                      <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
+                          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                            {col.label}
+                          </span>
+                        </div>
+                        <Skeleton className="h-3 w-5 rounded-full" />
+                      </div>
+                      <div className="space-y-2 p-2.5">
+                        {Array.from({ length: 2 }).map((_, index) => (
+                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-[var(--radius-md)] border border-border/50 bg-card/82 p-3">
+                            <div className="flex items-center gap-3">
+                              <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[68%]" : "w-[54%]")} />
+                                <Skeleton className="h-3 w-[48%] rounded-full opacity-75" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+              <div
+                ref={desktopKanbanViewportRef}
+                className="hidden min-h-0 overflow-hidden md:block"
+                style={
+                  desktopKanbanViewportHeight
+                    ? { height: `${desktopKanbanViewportHeight}px` }
+                    : undefined
+                }
+              >
+                <KanbanSkeleton
+                  columns={DESIGN_COLUMNS.map((column) => ({
+                    id: column.id,
+                    label: column.label,
+                    className: `kanban-column-status-${column.id}`,
+                  }))}
+                  rowClassName="min-w-[1100px] h-full items-stretch"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3 md:hidden">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
               const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
@@ -4571,16 +4626,16 @@ export default function DesignPage() {
               );
             })}
           </div>
-          <div
-            ref={desktopKanbanViewportRef}
-            className="hidden min-h-0 overflow-hidden md:block"
-            style={
-              desktopKanbanViewportHeight
-                ? { height: `${desktopKanbanViewportHeight}px` }
-                : undefined
-            }
-          >
-            <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="min-w-[1100px] h-full items-stretch">
+              <div
+                ref={desktopKanbanViewportRef}
+                className="hidden min-h-0 overflow-hidden md:block"
+                style={
+                  desktopKanbanViewportHeight
+                    ? { height: `${desktopKanbanViewportHeight}px` }
+                    : undefined
+                }
+              >
+                <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="min-w-[1100px] h-full items-stretch">
               {DESIGN_COLUMNS.map((col) => {
                 const items = grouped[col.id] ?? [];
                 return (
@@ -4640,8 +4695,10 @@ export default function DesignPage() {
                   </KanbanColumn>
                 );
               })}
-            </KanbanBoard>
-          </div>
+                </KanbanBoard>
+              </div>
+            </>
+          )}
         </EstimatesKanbanCanvas>
       ) : null}
 

@@ -9,7 +9,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton } from "@/components/kanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -755,7 +755,7 @@ export default function OrdersProductionPage() {
     workspacePresence.activeHereEntries,
   ]);
 
-  if (authLoading || (loading && records.length === 0)) {
+  if (authLoading) {
     return <AppPageLoader title="Завантаження" subtitle="Підтягуємо затверджені прорахунки та чергу замовлень." />;
   }
 
@@ -990,8 +990,22 @@ export default function OrdersProductionPage() {
       ) : (
         <EstimatesKanbanCanvas className="py-3 pb-3">
           {loading ? (
-            <div className="px-5">
-              <AppSectionLoader label="Завантаження черги..." />
+            <div
+              ref={desktopKanbanViewportRef}
+              className="min-h-0 overflow-hidden"
+              style={
+                desktopKanbanViewportHeight
+                  ? { height: `${desktopKanbanViewportHeight}px` }
+                  : undefined
+              }
+            >
+              <KanbanSkeleton
+                columns={ORDER_READINESS_COLUMNS.map((column) => ({
+                  id: column.id,
+                  label: column.label,
+                  className: "basis-1/3",
+                }))}
+              />
             </div>
           ) : error ? (
               <div className="mx-5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

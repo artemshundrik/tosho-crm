@@ -153,7 +153,7 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 
 type QuotesPageProps = {
   teamId: string;
@@ -6775,9 +6775,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       ) : (
         <EstimatesKanbanCanvas>
           {loading ? (
-            <div className="p-12 text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">Завантаження прорахунків...</p>
+            <div
+              ref={desktopKanbanViewportRef}
+              className="min-h-0 overflow-hidden"
+              style={
+                desktopKanbanViewportHeight
+                  ? { height: `${desktopKanbanViewportHeight}px` }
+                  : undefined
+              }
+            >
+              <KanbanSkeleton
+                columns={KANBAN_COLUMNS.map((column) => ({
+                  id: column.id,
+                  label: column.label,
+                  className: `kanban-column-status-${column.id}`,
+                }))}
+              />
             </div>
           ) : error ? (
             <div className="p-12 text-center">
