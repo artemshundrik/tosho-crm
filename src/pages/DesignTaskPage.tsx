@@ -82,6 +82,7 @@ import {
   getAttachmentDownloadFileName,
   getAttachmentVariantPath,
   getSignedAttachmentUrl,
+  getSignedAttachmentDownloadUrl,
   isServerPreviewableStoragePath,
   removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
@@ -1141,6 +1142,7 @@ export default function DesignTaskPage() {
   const [designOutputLinks, setDesignOutputLinks] = useState<DesignOutputLink[]>(() => initialCache?.designOutputLinks ?? []);
   const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
   const [fileAccessUrlByKey, setFileAccessUrlByKey] = useState<Record<string, string>>({});
+  const [downloadPreparingKey, setDownloadPreparingKey] = useState<string | null>(null);
   const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
   const [clientShareSelectionIds, setClientShareSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
@@ -3114,25 +3116,32 @@ export default function DesignTaskPage() {
     return objectUrl;
   }, [fileAccessUrlByKey, getStorageFileKey]);
 
+  const triggerBrowserDownload = useCallback((url: string, filename?: string | null) => {
+    const link = document.createElement("a");
+    link.href = url;
+    const normalizedFilename = filename?.trim();
+    if (normalizedFilename) link.download = normalizedFilename;
+    link.rel = "noopener";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, []);
+
   const downloadFileToDevice = useCallback(async (url: string, filename?: string | null) => {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = (filename && filename.trim()) || "file";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      triggerBrowserDownload(blobUrl, (filename && filename.trim()) || "file");
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
       toast.error("Не вдалося завантажити файл", {
         description: getErrorMessage(error, "Спробуйте ще раз."),
       });
     }
-  }, []);
+  }, [triggerBrowserDownload]);
 
   const getPreviewOpenVariant = useCallback((fileName?: string | null): AttachmentPreviewVariant => {
     const extension = getFileExtension(fileName);
@@ -3151,16 +3160,46 @@ export default function DesignTaskPage() {
   }, [ensureFileAccessUrl, getPreviewOpenVariant]);
 
   const downloadStorageBackedFile = useCallback(async (file: StorageBackedFile) => {
-    const url = await ensureFileAccessUrl(file);
-    if (!url) {
+    if (!file.storage_bucket || !file.storage_path) {
       toast.error("Не вдалося завантажити файл");
       return;
     }
-    await downloadFileToDevice(
-      url,
-      getAttachmentDownloadFileName(file.file_name, file.storage_path, file.mime_type)
-    );
-  }, [downloadFileToDevice, ensureFileAccessUrl]);
+    const downloadKey = getStorageFileKey(file);
+    if (downloadKey && downloadPreparingKey === downloadKey) return;
+
+    const filename = getAttachmentDownloadFileName(file.file_name, file.storage_path, file.mime_type);
+    if (downloadKey) setDownloadPreparingKey(downloadKey);
+    try {
+      const downloadUrl = await getSignedAttachmentDownloadUrl(
+        file.storage_bucket,
+        file.storage_path,
+        filename,
+        60 * 60 * 24 * 7
+      );
+      if (downloadUrl) {
+        triggerBrowserDownload(downloadUrl, filename);
+        return;
+      }
+
+      const url = await ensureFileAccessUrl(file);
+      if (!url) throw new Error("Не вдалося отримати посилання на файл.");
+      await downloadFileToDevice(url, filename);
+    } catch (error) {
+      toast.error("Не вдалося завантажити файл", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    } finally {
+      if (downloadKey) {
+        setDownloadPreparingKey((current) => (current === downloadKey ? null : current));
+      }
+    }
+  }, [
+    downloadFileToDevice,
+    downloadPreparingKey,
+    ensureFileAccessUrl,
+    getStorageFileKey,
+    triggerBrowserDownload,
+  ]);
 
   const openStorageFilePreview = useCallback(async (file: StorageBackedFile & { file_name?: string | null }) => {
     const extension = getFileExtension(file.file_name);
@@ -6885,6 +6924,8 @@ export default function DesignTaskPage() {
                       const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
                       const ext = getFileExtension(displayName);
                       const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path);
+                      const downloadKey = getStorageFileKey(file);
+                      const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
                       return (
                         <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                           <div className="flex items-start justify-between gap-2">
@@ -6973,8 +7014,15 @@ export default function DesignTaskPage() {
                                   <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" aria-label="Завантажити файл" onClick={() => void downloadStorageBackedFile(file)}>
-                                    <Download className="h-4 w-4" />
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
+                                    title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
+                                    disabled={isDownloadPreparing}
+                                    onClick={() => void downloadStorageBackedFile(file)}
+                                  >
+                                    {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                   </Button>
                                 </>
                               ) : (
@@ -7088,6 +7136,17 @@ export default function DesignTaskPage() {
       </div>
     );
   };
+
+  const filePreviewDownloadKey =
+    filePreview?.storageBucket && filePreview.storagePath
+      ? getStorageFileKey({
+          storage_bucket: filePreview.storageBucket,
+          storage_path: filePreview.storagePath,
+        })
+      : null;
+  const filePreviewDownloadPreparing = Boolean(
+    filePreviewDownloadKey && downloadPreparingKey === filePreviewDownloadKey
+  );
 
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
@@ -7802,6 +7861,8 @@ export default function DesignTaskPage() {
                     const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
                     const extension = getFileExtension(displayName);
                     const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
+                    const downloadKey = getStorageFileKey(file);
+                    const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
                     return (
                       <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                         <div className="flex items-start justify-between gap-2">
@@ -7852,8 +7913,15 @@ export default function DesignTaskPage() {
                                 <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button size="icon" variant="ghost" aria-label="Завантажити файл" onClick={() => void downloadStorageBackedFile(file)}>
-                                  <Download className="h-4 w-4" />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
+                                  title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
+                                  disabled={isDownloadPreparing}
+                                  onClick={() => void downloadStorageBackedFile(file)}
+                                >
+                                  {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                 </Button>
                               </>
                             ) : (
@@ -9174,18 +9242,23 @@ export default function DesignTaskPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  className="gap-2"
+                  disabled={filePreviewDownloadPreparing}
                   onClick={async () => {
-                    const url =
-                      filePreview.storageBucket && filePreview.storagePath
-                        ? await getSignedAttachmentUrl(filePreview.storageBucket, filePreview.storagePath, "original", 60 * 60 * 24 * 7)
-                        : filePreview.url;
-                    if (!url) return;
-                    await downloadFileToDevice(
-                      url,
-                      getAttachmentDownloadFileName(filePreview.name, filePreview.storagePath, filePreview.mimeType)
-                    );
+                    const filename = getAttachmentDownloadFileName(filePreview.name, filePreview.storagePath, filePreview.mimeType);
+                    if (filePreview.storageBucket && filePreview.storagePath) {
+                      await downloadStorageBackedFile({
+                        file_name: filePreview.name,
+                        mime_type: filePreview.mimeType,
+                        storage_bucket: filePreview.storageBucket,
+                        storage_path: filePreview.storagePath,
+                      });
+                      return;
+                    }
+                    await downloadFileToDevice(filePreview.url, filename);
                   }}
                 >
+                  {filePreviewDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Завантажити
                 </Button>
               </>

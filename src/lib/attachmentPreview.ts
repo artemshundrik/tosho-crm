@@ -49,6 +49,15 @@ function replaceStoragePathExtension(storagePath: string, extension: string) {
   return `${basename}.${extension}`;
 }
 
+function getSignedUrlDownloadFileName(fileName?: string | null) {
+  const normalized = fileName
+    ?.trim()
+    .replace(/[\r\n]+/g, " ")
+    .replace(/[\\/:*?"<>|&=#%]/g, "_")
+    .replace(/\s+/g, " ");
+  return normalized || null;
+}
+
 export function getAttachmentVariantCandidatePaths(storagePath: string, variant: AttachmentPreviewVariant) {
   if (variant === "original") return [storagePath];
   const { basename } = splitStoragePath(storagePath);
@@ -311,7 +320,11 @@ export async function removeAttachmentWithVariants(bucket: string, storagePath: 
   ];
   await supabase.storage.from(bucket).remove(paths);
   paths.forEach((path) => {
-    SIGNED_URL_CACHE.delete(`${bucket}:${path}`);
+    const cacheKey = `${bucket}:${path}`;
+    SIGNED_URL_CACHE.delete(cacheKey);
+    Array.from(SIGNED_URL_CACHE.keys()).forEach((key) => {
+      if (key.startsWith(`${cacheKey}:download:`)) SIGNED_URL_CACHE.delete(key);
+    });
   });
 }
 
@@ -331,6 +344,30 @@ export async function getSignedAttachmentUrl(
       SIGNED_URL_CACHE.set(cacheKey, signedUrl);
       return signedUrl;
     }
+  }
+  return null;
+}
+
+export async function getSignedAttachmentDownloadUrl(
+  bucket: string,
+  storagePath: string,
+  fileName?: string | null,
+  ttlSeconds = SIGNED_URL_TTL_SECONDS
+) {
+  const normalizedFileName = getSignedUrlDownloadFileName(fileName);
+  const cacheKey = `${bucket}:${storagePath}:download:${normalizedFileName ?? ""}`;
+  const cached = SIGNED_URL_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, ttlSeconds, {
+      download: normalizedFileName || true,
+    });
+  const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
+  if (signedUrl && !error) {
+    SIGNED_URL_CACHE.set(cacheKey, signedUrl);
+    return signedUrl;
   }
   return null;
 }
