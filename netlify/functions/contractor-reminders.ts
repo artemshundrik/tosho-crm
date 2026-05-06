@@ -222,8 +222,10 @@ export const handler = async (event: HttpEvent) => {
 
     let pushDelivered = 0;
     let pushFailed = 0;
+    let delivered = 0;
     if (pendingRows.length > 0) {
-      const delivery = await deliverNotifications(adminClient, pendingRows);
+      const delivery = await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true });
+      delivered = delivery.delivered;
       pushDelivered = delivery.pushDelivered;
       pushFailed = delivery.pushFailed;
     }
@@ -231,7 +233,7 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(200, {
       success: true,
       scanned: contractors.length,
-      delivered: pendingRows.length,
+      delivered,
       pushDelivered,
       pushFailed,
     });

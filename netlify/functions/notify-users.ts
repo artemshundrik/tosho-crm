@@ -7,6 +7,7 @@ type RequestBody = {
   body?: string | null;
   href?: string | null;
   type?: "info" | "success" | "warning";
+  dedupeByHref?: boolean;
 };
 
 type HttpEvent = {
@@ -98,7 +99,7 @@ export const handler = async (event: HttpEvent) => {
   }));
 
   try {
-    const result = await deliverNotifications(adminClient, rows);
+    const result = await deliverNotifications(adminClient, rows, { dedupeByHref: payload.dedupeByHref === true });
     return jsonResponse(200, { success: true, ...result });
   } catch (error) {
     return jsonResponse(500, {

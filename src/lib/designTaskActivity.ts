@@ -19,6 +19,7 @@ type NotifyUsersParams = {
   body?: string | null;
   href?: string | null;
   type?: "info" | "success" | "warning";
+  dedupeByHref?: boolean;
 };
 
 const toActorName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
@@ -76,6 +77,7 @@ export async function notifyUsers(params: NotifyUsersParams) {
     body: params.body ?? null,
     href: params.href ?? null,
     type: params.type ?? "info",
+    dedupeByHref: params.dedupeByHref === true,
   };
 
   const { data: sessionData } = await supabase.auth.getSession();
@@ -90,7 +92,9 @@ export async function notifyUsers(params: NotifyUsersParams) {
         type: payload.type,
       }))
     );
-    if (error) throw error;
+    if (error && !(payload.dedupeByHref && (error.code === "23505" || /duplicate key/i.test(error.message ?? "")))) {
+      throw error;
+    }
     return;
   }
 

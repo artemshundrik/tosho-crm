@@ -78,7 +78,7 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
-import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
+import { ACTIVE_DESIGN_STATUSES, calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds, listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
@@ -903,6 +903,8 @@ export default function DesignPage() {
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
+  const [teamWorkloadTasks, setTeamWorkloadTasks] = useState<DesignTask[]>([]);
+  const [teamWorkloadLoaded, setTeamWorkloadLoaded] = useState(false);
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
     (restoredFilters?.viewMode ?? "kanban") === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE
   );
@@ -1430,6 +1432,82 @@ export default function DesignPage() {
     }
     setDefaultManagerFilterApplied(true);
   }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
+
+  const loadTeamWorkloadTasks = useCallback(async () => {
+    if (!effectiveTeamId) {
+      setTeamWorkloadTasks([]);
+      setTeamWorkloadLoaded(false);
+      return;
+    }
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
+    try {
+      const rows: DesignTaskListActivityRow[] = [];
+      const pageSize = 1000;
+      let offset = 0;
+
+      while (true) {
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("id,entity_id,metadata,created_at,title")
+          .eq("team_id", effectiveTeamId)
+          .eq("action", "design_task")
+          .in("metadata->>status", ACTIVE_DESIGN_STATUSES)
+          .order("created_at", { ascending: false })
+          .range(offset, offset + pageSize - 1);
+        if (fetchError) throw fetchError;
+
+        const pageRows = (data ?? []) as DesignTaskListActivityRow[];
+        rows.push(...pageRows);
+        if (pageRows.length < pageSize) break;
+        offset += pageSize;
+      }
+
+      const parsed = rows
+        .map((row) => {
+          const metadata = (row.metadata as Record<string, unknown> | null) ?? {};
+          const metadataQuoteId =
+            typeof metadata.quote_id === "string" && metadata.quote_id.trim()
+              ? metadata.quote_id.trim()
+              : null;
+          const entityQuoteId = typeof row.entity_id === "string" ? row.entity_id : "";
+          const resolvedQuoteId = metadataQuoteId ?? entityQuoteId;
+          const status = (metadata.status as DesignStatus) ?? "new";
+          return {
+            id: row.id as string,
+            quoteId: resolvedQuoteId,
+            title: (row.title as string) ?? null,
+            status,
+            designTaskType: parseDesignTaskType(metadata.design_task_type),
+            assigneeUserId:
+              typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
+                ? metadata.assignee_user_id
+                : null,
+            assignedAt: typeof metadata.assigned_at === "string" ? metadata.assigned_at : null,
+            quoteManagerUserId:
+              typeof metadata.manager_user_id === "string" && metadata.manager_user_id.trim()
+                ? metadata.manager_user_id.trim()
+                : null,
+            metadata,
+            methodsCount: metadata.methods_count ?? 0,
+            hasFiles: metadata.has_files ?? false,
+            designDeadline: metadata.design_deadline ?? metadata.deadline ?? null,
+            createdAt: row.created_at as string,
+          } as DesignTask;
+        })
+        .filter((task) => ACTIVE_DESIGN_STATUSES.includes(task.status));
+
+      setTeamWorkloadTasks(parsed);
+      setTeamWorkloadLoaded(true);
+    } catch (workloadError) {
+      console.warn("Failed to load team design workload", workloadError);
+      setTeamWorkloadLoaded(false);
+    }
+  }, [effectiveTeamId]);
+
+  useEffect(() => {
+    void loadTeamWorkloadTasks();
+  }, [loadTeamWorkloadTasks]);
 
   const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!effectiveTeamId) return;
@@ -2465,16 +2543,22 @@ export default function DesignPage() {
   }, [filteredTasks]);
 
   const workloadSourceTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    const byId = new Map<string, DesignTask>();
+    const sourceTasks = teamWorkloadLoaded ? teamWorkloadTasks : tasks;
+    sourceTasks.forEach((task) => {
+      byId.set(task.id, task);
+    });
+    tasks.forEach((task) => {
+      byId.set(task.id, task);
+    });
+
+    return Array.from(byId.values()).filter((task) => {
       const isLinkedTask = isUuid(task.quoteId);
       if (contentView === "linked" && !isLinkedTask) return false;
       if (contentView === "standalone" && isLinkedTask) return false;
-      if (!isManagerUser && managerFilter !== ALL_MANAGERS_FILTER && task.quoteManagerUserId !== managerFilter) {
-        return false;
-      }
       return true;
     });
-  }, [contentView, isManagerUser, managerFilter, tasks]);
+  }, [contentView, tasks, teamWorkloadLoaded, teamWorkloadTasks]);
 
   const getTaskEstimateMinutes = (task: DesignTask) => {
     return getDesignTaskEstimateMinutes(task);

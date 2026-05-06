@@ -734,6 +734,7 @@ const statusColors: Record<DesignStatus, string> = {
 const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
 const DESIGN_TASK_HISTORY_PAGE_SIZE = 50;
+const CHANGE_REQUEST_AUTO_CHANGES_STATUSES = new Set<DesignStatus>(["pm_review", "client_review"]);
 
 const CAPACITY_BADGE_CLASS_BY_LEVEL = {
   low: "border-success-soft-border bg-success-soft text-success-foreground",
@@ -4843,12 +4844,38 @@ export default function DesignTaskPage() {
       applied_version_id: null,
     };
     const nextRequests = [nextChangeRequest, ...briefChangeRequests];
+    const previousStatus = task.status;
+    const shouldAutoMoveToChanges =
+      CHANGE_REQUEST_AUTO_CHANGES_STATUSES.has(previousStatus) &&
+      canChangeDesignStatus({
+        currentStatus: previousStatus,
+        nextStatus: "changes",
+        canManageAssignments: canManageDesignStatuses,
+        isAssignedToCurrentUser: isAssignedToMe,
+      });
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       design_brief_change_requests: nextRequests,
+      ...(shouldAutoMoveToChanges
+        ? {
+            status: "changes",
+            status_changed_at: nowIso,
+            methods_count: task.methodsCount ?? 0,
+            has_files: task.hasFiles ?? false,
+            quote_id: task.quoteId,
+            design_deadline: task.designDeadline ?? null,
+            deadline: task.designDeadline ?? null,
+            assignee_user_id: task.assigneeUserId ?? null,
+            assigned_at: task.assignedAt ?? null,
+            estimate_minutes: getTaskEstimateMinutes(task),
+            estimate_set_at: ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null,
+            estimated_by_user_id: ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null,
+          }
+        : {}),
     };
 
     setChangeRequestSaving(true);
+    if (shouldAutoMoveToChanges) setStatusSaving("changes");
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
@@ -4857,7 +4884,15 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
-      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: shouldAutoMoveToChanges ? "changes" : prev.status,
+              metadata: nextMetadata,
+            }
+          : prev
+      );
 
       setChangeRequestDraft("");
       setChangeRequestOpen(false);
@@ -4877,15 +4912,56 @@ export default function DesignTaskPage() {
             status: "pending",
           },
         });
+        if (shouldAutoMoveToChanges) {
+          await logDesignTaskActivity({
+            teamId: effectiveTeamId,
+            designTaskId: task.id,
+            quoteId: task.quoteId,
+            userId,
+            actorName: actorLabel,
+            action: "design_task_status",
+            title: `Статус: ${statusLabels[previousStatus] ?? previousStatus} → ${statusLabels.changes}`,
+            metadata: {
+              source: "design_task_status",
+              from_status: previousStatus,
+              to_status: "changes",
+              assignee_user_id: task.assigneeUserId ?? null,
+              design_task_type: task.designTaskType ?? null,
+              reason: "brief_change_request",
+              change_request_id: nextChangeRequest.id,
+            },
+          });
+        }
         await loadHistory(task.id);
       } catch (logError) {
         console.warn("Failed to log design task brief change request event", logError);
       }
-      toast.success("Правку додано");
+      if (shouldAutoMoveToChanges) {
+        try {
+          await notifyQuoteInitiatorOnDesignStatusChange({
+            quoteId: task.quoteId,
+            designTaskId: task.id,
+            toStatus: "changes",
+            actorUserId: userId ?? null,
+          });
+          await notifyDesignTaskCollaboratorsOnStatusChange({
+            designTaskId: task.id,
+            taskLabel: `#${getTaskDisplayNumber(task)}`,
+            toStatus: "changes",
+            actorUserId: userId ?? null,
+            actorName: actorLabel,
+            collaboratorUserIds: taskCollaborators.map((entry) => entry.userId),
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify quote initiator about design status change", notifyError);
+        }
+      }
+      toast.success(shouldAutoMoveToChanges ? "Правку додано, статус оновлено: Правки" : "Правку додано");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося додати правку"));
     } finally {
       setChangeRequestSaving(false);
+      if (shouldAutoMoveToChanges) setStatusSaving(null);
     }
   };
 

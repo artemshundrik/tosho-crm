@@ -1198,15 +1198,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           body: row.body,
           href: row.href,
           type: "warning",
+          dedupeByHref: true,
         });
       } catch {
-        await supabase.from("notifications").insert({
+        const { error } = await supabase.from("notifications").insert({
           user_id: userId,
           title: row.title,
           body: row.body,
           href: row.href,
           type: "warning",
         });
+        if (error && !(error.code === "23505" || /duplicate key/i.test(error.message ?? ""))) {
+          throw error;
+        }
       }
     };
 

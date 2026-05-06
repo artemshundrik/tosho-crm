@@ -201,14 +201,15 @@ export const handler = async (event: HttpEvent) => {
       }
     }
 
-    if (pendingRows.length > 0) {
-      await deliverNotifications(adminClient, pendingRows);
-    }
+    const delivery =
+      pendingRows.length > 0
+        ? await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true })
+        : { delivered: 0 };
 
     return jsonResponse(200, {
       success: true,
       scanned: quotes.length,
-      delivered: pendingRows.length,
+      delivered: delivery.delivered,
     });
   } catch (error: unknown) {
     const message =

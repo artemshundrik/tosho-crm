@@ -2,7 +2,7 @@ import webpush from "web-push";
 
 type AdminClient = {
   from: (table: string) => {
-    insert: (rows: unknown[]) => Promise<{ error: { message: string } | null }>;
+    insert: (rows: unknown[]) => Promise<{ error: { message: string; code?: string } | null }>;
     select: (columns: string) => {
       in: (column: string, values: string[]) => {
         is: (column: string, value: null) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
@@ -32,25 +32,63 @@ type PushSubscriptionRow = {
   disabled_at?: string | null;
 };
 
-export async function deliverNotifications(adminClient: AdminClient, rows: NotificationInsertRow[]) {
+type DeliverNotificationsOptions = {
+  dedupeByHref?: boolean;
+};
+
+function isDuplicateNotificationError(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key/i.test(error.message ?? "");
+}
+
+async function insertNotificationRows(
+  adminClient: AdminClient,
+  rows: NotificationInsertRow[],
+  options?: DeliverNotificationsOptions
+) {
+  if (!options?.dedupeByHref) {
+    const { error } = await adminClient.from("notifications").insert(rows);
+    if (error) throw new Error(error.message);
+    return rows;
+  }
+
+  const insertedRows: NotificationInsertRow[] = [];
+  for (const row of rows) {
+    const { error } = await adminClient.from("notifications").insert([row]);
+    if (error) {
+      if (isDuplicateNotificationError(error)) continue;
+      throw new Error(error.message);
+    }
+    insertedRows.push(row);
+  }
+  return insertedRows;
+}
+
+export async function deliverNotifications(
+  adminClient: AdminClient,
+  rows: NotificationInsertRow[],
+  options?: DeliverNotificationsOptions
+) {
   if (rows.length === 0) {
     return { delivered: 0, pushDelivered: 0, pushFailed: 0 };
   }
 
-  const { error } = await adminClient.from("notifications").insert(rows);
-  if (error) throw new Error(error.message);
+  const insertedRows = await insertNotificationRows(adminClient, rows, options);
+  if (insertedRows.length === 0) {
+    return { delivered: 0, pushDelivered: 0, pushFailed: 0 };
+  }
 
   const vapidPublicKey = process.env.WEB_PUSH_VAPID_PUBLIC_KEY;
   const vapidPrivateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY;
   const vapidSubject = process.env.WEB_PUSH_VAPID_SUBJECT || "mailto:hello@tosho.agency";
 
   if (!vapidPublicKey || !vapidPrivateKey) {
-    return { delivered: rows.length, pushDelivered: 0, pushFailed: 0 };
+    return { delivered: insertedRows.length, pushDelivered: 0, pushFailed: 0 };
   }
 
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-  const userIds = Array.from(new Set(rows.map((row) => row.user_id)));
+  const userIds = Array.from(new Set(insertedRows.map((row) => row.user_id)));
   const { data: subscriptions, error: subscriptionsError } = await adminClient
     .from("push_subscriptions")
     .select("endpoint,user_id,p256dh,auth,origin,scope,disabled_at")
@@ -58,7 +96,7 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
     .is("disabled_at", null);
 
   if (subscriptionsError) {
-    return { delivered: rows.length, pushDelivered: 0, pushFailed: 0 };
+    return { delivered: insertedRows.length, pushDelivered: 0, pushFailed: 0 };
   }
 
   const subscriptionsByUserId = new Map<string, PushSubscriptionRow[]>();
@@ -71,7 +109,7 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
   let pushDelivered = 0;
   let pushFailed = 0;
 
-  for (const row of rows) {
+  for (const row of insertedRows) {
     const userSubscriptions = subscriptionsByUserId.get(row.user_id) ?? [];
     const dedupedSubscriptions = Array.from(
       new Map(
@@ -118,5 +156,5 @@ export async function deliverNotifications(adminClient: AdminClient, rows: Notif
     }
   }
 
-  return { delivered: rows.length, pushDelivered, pushFailed };
+  return { delivered: insertedRows.length, pushDelivered, pushFailed };
 }
