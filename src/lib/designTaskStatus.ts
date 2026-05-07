@@ -33,6 +33,7 @@ export const DESIGN_STATUS_QUICK_ACTIONS: Partial<Record<DesignStatus, Array<{ n
   in_progress: [{ next: "pm_review", label: "Позначити як дизайн готовий" }],
   pm_review: [
     { next: "client_review", label: "Передати замовнику" },
+    { next: "changes", label: "Повернути на правки" },
     { next: "in_progress", label: "Повернути в роботу" },
   ],
   client_review: [

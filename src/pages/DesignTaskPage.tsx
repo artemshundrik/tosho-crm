@@ -736,6 +736,11 @@ const allStatuses = DESIGN_ALL_STATUSES;
 const DESIGN_TASK_HISTORY_PAGE_SIZE = 50;
 const CHANGE_REQUEST_AUTO_CHANGES_STATUSES = new Set<DesignStatus>(["pm_review", "client_review"]);
 
+const parseDesignStatus = (value: unknown, fallback: DesignStatus = "new"): DesignStatus => {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return allStatuses.includes(normalized as DesignStatus) ? (normalized as DesignStatus) : fallback;
+};
+
 const CAPACITY_BADGE_CLASS_BY_LEVEL = {
   low: "border-success-soft-border bg-success-soft text-success-foreground",
   medium: "border-info-soft-border bg-info-soft text-info-foreground",
@@ -962,7 +967,23 @@ function syncDesignPageCacheTask(
   teamId: string,
   task: Pick<
     DesignTask,
-    "id" | "title" | "quoteId" | "quoteNumber" | "customerName" | "customerLogoUrl" | "quoteManagerUserId"
+    | "id"
+    | "title"
+    | "quoteId"
+    | "status"
+    | "designTaskType"
+    | "assigneeUserId"
+    | "assignedAt"
+    | "metadata"
+    | "methodsCount"
+    | "hasFiles"
+    | "designDeadline"
+    | "designTaskNumber"
+    | "quoteNumber"
+    | "customerName"
+    | "customerLogoUrl"
+    | "quoteManagerUserId"
+    | "createdAt"
   > | null
 ) {
   if (typeof window === "undefined" || !teamId || !task) return;
@@ -977,10 +998,20 @@ function syncDesignPageCacheTask(
             ...row,
             title: task.title ?? row.title ?? null,
             quoteId: task.quoteId,
+            status: task.status,
+            designTaskType: task.designTaskType ?? row.designTaskType ?? null,
+            assigneeUserId: task.assigneeUserId ?? null,
+            assignedAt: task.assignedAt ?? null,
+            metadata: task.metadata ?? row.metadata ?? undefined,
+            methodsCount: task.methodsCount ?? row.methodsCount ?? 0,
+            hasFiles: task.hasFiles ?? row.hasFiles ?? false,
+            designDeadline: task.designDeadline ?? row.designDeadline ?? null,
+            designTaskNumber: task.designTaskNumber ?? row.designTaskNumber ?? null,
             quoteNumber: task.quoteNumber ?? row.quoteNumber ?? null,
             customerName: task.customerName ?? row.customerName ?? null,
             customerLogoUrl: task.customerLogoUrl ?? row.customerLogoUrl ?? null,
             quoteManagerUserId: task.quoteManagerUserId ?? row.quoteManagerUserId ?? null,
+            createdAt: task.createdAt ?? row.createdAt ?? null,
           }
         : row
     );
@@ -1553,6 +1584,39 @@ export default function DesignTaskPage() {
           typeof meta.quote_id === "string" && meta.quote_id.trim() ? meta.quote_id.trim() : null;
         const entityQuoteId = typeof row?.entity_id === "string" ? row.entity_id : "";
         const quoteId = metadataQuoteId ?? entityQuoteId;
+        const rowStatus = parseDesignStatus(meta.status);
+        const rowDesignTaskType = parseDesignTaskType(meta.design_task_type);
+        const rowCreatorUserId =
+          typeof row?.user_id === "string" && row.user_id.trim()
+            ? row.user_id.trim()
+            : (typeof meta.created_by_user_id === "string" && meta.created_by_user_id.trim()
+                ? meta.created_by_user_id.trim()
+                : null);
+        const rowAssigneeUserId =
+          typeof meta.assignee_user_id === "string" && meta.assignee_user_id ? meta.assignee_user_id : null;
+        const rowAssignedAt = typeof meta.assigned_at === "string" ? meta.assigned_at : null;
+        const rowDesignDeadline =
+          (typeof meta.design_deadline === "string" ? meta.design_deadline : null) ??
+          (typeof meta.deadline === "string" ? meta.deadline : null);
+        const rowCreatedAt = typeof row?.created_at === "string" && row.created_at ? row.created_at : null;
+
+        setTask((prev) =>
+          prev && prev.id === id
+            ? {
+                ...prev,
+                quoteId,
+                title: typeof row?.title === "string" ? row.title : prev.title ?? null,
+                status: rowStatus,
+                designTaskType: rowDesignTaskType ?? prev.designTaskType ?? null,
+                creatorUserId: rowCreatorUserId,
+                assigneeUserId: rowAssigneeUserId,
+                assignedAt: rowAssignedAt,
+                metadata: meta,
+                designDeadline: rowDesignDeadline ?? prev.designDeadline ?? null,
+                createdAt: rowCreatedAt ?? prev.createdAt ?? null,
+              }
+            : prev
+        );
 
         // quote basics
         let quote: {
@@ -1783,7 +1847,7 @@ export default function DesignTaskPage() {
         const standaloneBriefFilesWithUrls = parsedStandaloneBriefFiles.map((file) => ({ ...file, signed_url: null }));
 
         const rawDesignFiles = Array.isArray(meta.design_output_files) ? meta.design_output_files : [];
-        const designOutputFallbackType = parseDesignTaskType(meta.design_task_type);
+        const designOutputFallbackType = rowDesignTaskType;
         const parsedDesignFiles: DesignOutputFile[] = parseStoredDesignOutputFiles(rawDesignFiles).map((file) => ({
           ...file,
           group_label: normalizeOutputGroupLabel(file.group_label),
@@ -1844,25 +1908,17 @@ export default function DesignTaskPage() {
           id,
           quoteId,
           title: (row?.title as string) ?? null,
-          status: (meta.status as DesignStatus) ?? "new",
-          designTaskType: parseDesignTaskType(meta.design_task_type),
-          creatorUserId:
-            typeof row?.user_id === "string" && row.user_id.trim()
-              ? row.user_id.trim()
-              : (typeof meta.created_by_user_id === "string" && meta.created_by_user_id.trim()
-                  ? meta.created_by_user_id.trim()
-                  : null),
+          status: rowStatus,
+          designTaskType: rowDesignTaskType,
+          creatorUserId: rowCreatorUserId,
           designTaskNumber,
-          assigneeUserId:
-            typeof meta.assignee_user_id === "string" && meta.assignee_user_id ? meta.assignee_user_id : null,
-          assignedAt: typeof meta.assigned_at === "string" ? meta.assigned_at : null,
+          assigneeUserId: rowAssigneeUserId,
+          assignedAt: rowAssignedAt,
           metadata: meta,
           methodsCount: meta.methods_count ?? (item?.methods?.length ?? 0),
           hasFiles:
             typeof meta.has_files === "boolean" ? meta.has_files : parsedStandaloneBriefFiles.length > 0,
-          designDeadline:
-            (typeof meta.design_deadline === "string" ? meta.design_deadline : null) ??
-            (typeof meta.deadline === "string" ? meta.deadline : null),
+          designDeadline: rowDesignDeadline,
           quoteNumber:
             (typeof meta.quote_number === "string" && meta.quote_number.trim() ? meta.quote_number.trim() : null) ??
             (quote?.number as string) ??
@@ -1884,9 +1940,7 @@ export default function DesignTaskPage() {
             quote?.design_brief ??
             quote?.comment ??
             null,
-          createdAt:
-            (typeof row?.created_at === "string" && row.created_at ? row.created_at : null) ??
-            (quote?.created_at as string | null),
+          createdAt: rowCreatedAt ?? (quote?.created_at as string | null),
         };
         const designOutputKeys = new Set(
           designFilesWithUrls.map((file) => `${file.storage_bucket}:${file.storage_path}`)
