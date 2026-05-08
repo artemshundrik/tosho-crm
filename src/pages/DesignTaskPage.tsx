@@ -116,8 +116,10 @@ import {
   notifyQuoteInitiatorOnDesignStatusChange,
 } from "@/lib/workflowNotifications";
 import {
+  DESIGN_TASK_TIMER_UPDATED_EVENT,
   formatElapsedSeconds,
   getDesignTaskTimerSummary,
+  getTimerElapsedSeconds,
   pauseDesignTaskTimer,
   startDesignTaskTimer,
   type DesignTaskTimerSummary,
@@ -1417,9 +1419,11 @@ export default function DesignTaskPage() {
     if (!effectiveTeamId) return;
     try {
       const summary = await getDesignTaskTimerSummary(effectiveTeamId, taskId);
+      setTimerNowMs(Date.now());
       setTimerSummary(summary);
     } catch (e) {
       console.warn("Failed to load timer summary", e);
+      setTimerNowMs(Date.now());
       setTimerSummary({
         totalSeconds: 0,
         activeSessionId: null,
@@ -2209,6 +2213,23 @@ export default function DesignTaskPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, effectiveTeamId]);
 
+  useEffect(() => {
+    if (!task?.id || !effectiveTeamId) return;
+    const handleTimerUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ teamId?: string | null; taskId?: string | null }>).detail;
+      if (detail?.teamId && detail.teamId !== effectiveTeamId) return;
+      if (detail?.taskId && detail.taskId !== task.id) return;
+      void loadTimerSummary(task.id);
+    };
+    window.addEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
+    window.addEventListener("focus", handleTimerUpdated);
+    return () => {
+      window.removeEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
+      window.removeEventListener("focus", handleTimerUpdated);
+    };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id, effectiveTeamId]);
+
   const taskIdForMentions = task?.id ?? null;
   const taskQuoteIdForMentions = task?.quoteId ?? null;
   useEffect(() => {
@@ -2643,11 +2664,8 @@ export default function DesignTaskPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.metadata]);
   const isTimerRunning = !!timerSummary.activeSessionId && !!timerSummary.activeStartedAt;
-  const timerElapsedSeconds =
-    timerSummary.totalSeconds +
-    (timerSummary.activeStartedAt
-      ? Math.max(0, Math.floor((timerNowMs - new Date(timerSummary.activeStartedAt).getTime()) / 1000))
-      : 0);
+  const timerElapsedSeconds = getTimerElapsedSeconds(timerSummary, timerNowMs);
+  const isTimerPaused = !isTimerRunning && timerElapsedSeconds > 0;
   const timerElapsedLabel = formatElapsedSeconds(timerElapsedSeconds);
   const canStartTimer =
     !!task &&
@@ -6313,11 +6331,13 @@ export default function DesignTaskPage() {
   const showSidebarPrimaryAction = !!primaryActionClick || primaryActionLoading;
   const SidebarPrimaryActionIcon =
     !task?.assigneeUserId || primaryActionLabel.includes("себе") ? UserPlus : task?.status === "changes" ? AlertTriangle : Play;
-  const timerCardTone: SidebarActionTone = isTimerRunning ? "success" : "neutral";
+  const timerCardTone: SidebarActionTone = isTimerRunning ? "success" : isTimerPaused ? "warning" : "neutral";
   const timerHelperText = isTimerRunning
     ? `Активний${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}. Постав на паузу після завершення роботи.`
-    : startTimerBlockedReason ?? "Запускай таймер на старті роботи і став на паузу одразу після завершення.";
-  const timerActionLabel = isTimerRunning ? "Поставити на паузу" : "Запустити таймер";
+    : isTimerPaused
+      ? "На паузі. Запусти таймер, коли продовжуєш роботу."
+      : startTimerBlockedReason ?? "Запускай таймер на старті роботи і став на паузу одразу після завершення.";
+  const timerActionLabel = isTimerRunning ? "Поставити на паузу" : isTimerPaused ? "Продовжити таймер" : "Запустити таймер";
 
   const dropboxFolderNameDefault = useMemo(
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
@@ -8886,8 +8906,22 @@ export default function DesignTaskPage() {
                     <div className="design-task-side-heading flex items-center gap-2 text-foreground/70">
                       <Timer className="h-3.5 w-3.5" />
                       Таймер
+                      {isTimerPaused ? (
+                        <span className="rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning-foreground">
+                          На паузі
+                        </span>
+                      ) : null}
                     </div>
-                    <div className={cn("design-task-timer-value mt-3", isTimerRunning ? "text-success-foreground" : "text-foreground")}>
+                    <div
+                      className={cn(
+                        "design-task-timer-value mt-3",
+                        isTimerRunning
+                          ? "text-success-foreground"
+                          : isTimerPaused
+                            ? "text-warning-foreground"
+                            : "text-foreground"
+                      )}
+                    >
                       {timerElapsedLabel}
                     </div>
                   </div>
@@ -8916,8 +8950,10 @@ export default function DesignTaskPage() {
                     </Button>
                   )}
                 </div>
-                {!isTimerRunning && startTimerBlockedReason ? (
-                  <div className="mt-3 text-xs leading-5 text-muted-foreground">{startTimerBlockedReason}</div>
+                {!isTimerRunning && (isTimerPaused || startTimerBlockedReason) ? (
+                  <div className="mt-3 text-xs leading-5 text-muted-foreground">
+                    {isTimerPaused ? timerHelperText : startTimerBlockedReason}
+                  </div>
                 ) : null}
               </div>
             </div>

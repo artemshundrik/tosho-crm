@@ -32,8 +32,10 @@ import {
 } from "@/lib/designTaskStatus";
 import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
+  DESIGN_TASK_TIMER_UPDATED_EVENT,
   formatElapsedSeconds,
   getDesignTasksTimerSummaryMap,
+  getTimerElapsedSeconds,
   pauseDesignTaskTimer,
   type DesignTaskTimerSummary,
 } from "@/lib/designTaskTimer";
@@ -1178,10 +1180,7 @@ export default function DesignPage() {
 
   const getTaskTrackedSeconds = useCallback((taskId: string) => {
     const summary = getTaskTimerSummary(taskId);
-    const activeSeconds = summary.activeStartedAt
-      ? Math.max(0, Math.floor((timerNowMs - new Date(summary.activeStartedAt).getTime()) / 1000))
-      : 0;
-    return summary.totalSeconds + activeSeconds;
+    return getTimerElapsedSeconds(summary, timerNowMs);
   }, [getTaskTimerSummary, timerNowMs]);
 
   useEffect(() => {
@@ -2402,6 +2401,36 @@ export default function DesignPage() {
     }, 1000);
     return () => window.clearInterval(interval);
   }, [timerSummaryByTaskId]);
+
+  useEffect(() => {
+    if (!effectiveTeamId) return;
+    const refreshTimerSummaries = async (taskIds: string[]) => {
+      if (taskIds.length === 0) return;
+      try {
+        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, taskIds);
+        const timerSummaryObj: Record<string, DesignTaskTimerSummary> = {};
+        timerSummaryMap.forEach((summary, taskId) => {
+          timerSummaryObj[taskId] = summary;
+        });
+        setTimerNowMs(Date.now());
+        setTimerSummaryByTaskId((current) => ({ ...current, ...timerSummaryObj }));
+      } catch (timerError) {
+        console.warn("Failed to sync design timer summaries", timerError);
+      }
+    };
+    const handleTimerUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ teamId?: string | null; taskId?: string | null }>).detail;
+      if (detail?.teamId && detail.teamId !== effectiveTeamId) return;
+      const taskIds = detail?.taskId ? [detail.taskId] : tasksRef.current.map((task) => task.id);
+      void refreshTimerSummaries(taskIds);
+    };
+    window.addEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
+    window.addEventListener("focus", handleTimerUpdated);
+    return () => {
+      window.removeEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
+      window.removeEventListener("focus", handleTimerUpdated);
+    };
+  }, [effectiveTeamId]);
 
   useEffect(() => {
     setTasksFetchLimit(viewMode === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE);
