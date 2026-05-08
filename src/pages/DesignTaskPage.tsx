@@ -607,6 +607,9 @@ type DesignBriefChangeRequest = {
   decided_by_label: string | null;
   decision_note: string | null;
   applied_version_id: string | null;
+  edited_at?: string | null;
+  edited_by?: string | null;
+  edited_by_label?: string | null;
 };
 
 type DesignTaskPageCachePayload = {
@@ -1063,6 +1066,9 @@ const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] =>
         decided_by_label: toNonEmptyString(row.decided_by_label),
         decision_note: toNonEmptyString(row.decision_note),
         applied_version_id: toNonEmptyString(row.applied_version_id),
+        edited_at: toNonEmptyString(row.edited_at),
+        edited_by: toNonEmptyString(row.edited_by),
+        edited_by_label: toNonEmptyString(row.edited_by_label),
       } satisfies DesignBriefChangeRequest;
     })
     .filter(Boolean) as DesignBriefChangeRequest[];
@@ -1270,6 +1276,9 @@ export default function DesignTaskPage() {
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
   const [changeRequestSaving, setChangeRequestSaving] = useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  const [changeRequestEditingId, setChangeRequestEditingId] = useState<string | null>(null);
+  const [changeRequestEditDraft, setChangeRequestEditDraft] = useState("");
+  const [changeRequestEditSavingId, setChangeRequestEditSavingId] = useState<string | null>(null);
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
     totalSeconds: 0,
     activeSessionId: null,
@@ -1289,6 +1298,7 @@ export default function DesignTaskPage() {
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
+  const canEditBriefChangeRequests = permissions.canEditDesignBriefChangeRequests;
   const canSelfAssign = permissions.canSelfAssignDesign;
   const designTaskLock = useEntityLock({
     teamId: effectiveTeamId,
@@ -2993,6 +3003,18 @@ export default function DesignTaskPage() {
           actorLabel,
           actorUserId: row.user_id ?? null,
           icon: Clock,
+          accentClass: "quote-activity-accent-comment",
+        };
+      }
+
+      if (source === "design_task_brief_change_request_edit") {
+        return {
+          id: row.id,
+          created_at: row.created_at,
+          title: "Оновлено правку до ТЗ",
+          actorLabel,
+          actorUserId: row.user_id ?? null,
+          icon: PencilLine,
           accentClass: "quote-activity-accent-comment",
         };
       }
@@ -5016,6 +5038,104 @@ export default function DesignTaskPage() {
     } finally {
       setChangeRequestSaving(false);
       if (shouldAutoMoveToChanges) setStatusSaving(null);
+    }
+  };
+
+  const cancelBriefChangeRequestEdit = () => {
+    setChangeRequestEditingId(null);
+    setChangeRequestEditDraft("");
+  };
+
+  const startBriefChangeRequestEdit = (request: DesignBriefChangeRequest) => {
+    if (!canEditBriefChangeRequests || designTaskLockedByOther) return;
+    setChangeRequestOpen(false);
+    setChangeRequestEditingId(request.id);
+    setChangeRequestEditDraft(request.request_text);
+  };
+
+  const saveBriefChangeRequestEdit = async (requestId: string) => {
+    if (!task || !effectiveTeamId || changeRequestEditSavingId) return;
+    if (!canEditBriefChangeRequests) {
+      toast.error("Редагувати правки можуть тільки SEO або адміністратор.");
+      return;
+    }
+    if (!ensureCanEdit()) return;
+
+    const previousRequest = briefChangeRequests.find((request) => request.id === requestId);
+    if (!previousRequest) {
+      toast.error("Правку не знайдено");
+      cancelBriefChangeRequestEdit();
+      return;
+    }
+
+    const nextText = changeRequestEditDraft.trim();
+    if (!nextText) {
+      toast.error("Правка не може бути порожньою");
+      return;
+    }
+    if (nextText === previousRequest.request_text) {
+      cancelBriefChangeRequestEdit();
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const actorLabel = userId ? getMemberLabel(userId) : "System";
+    const nextRequests: DesignBriefChangeRequest[] = briefChangeRequests.map((request) =>
+      request.id === requestId
+        ? {
+            ...request,
+            request_text: nextText,
+            edited_at: nowIso,
+            edited_by: userId ?? null,
+            edited_by_label: actorLabel,
+          }
+        : request
+    );
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_brief_change_requests: nextRequests,
+    };
+
+    const previousTask = task;
+    setChangeRequestEditSavingId(requestId);
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_brief_change_request",
+          title: "Оновлено правку до ТЗ",
+          metadata: {
+            source: "design_task_brief_change_request_edit",
+            change_request_id: requestId,
+            from_request_text: previousRequest.request_text,
+            to_request_text: nextText,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log design task brief change request edit", logError);
+      }
+
+      cancelBriefChangeRequestEdit();
+      toast.success("Правку оновлено");
+    } catch (e: unknown) {
+      setTask(previousTask);
+      toast.error(getErrorMessage(e, "Не вдалося оновити правку"));
+    } finally {
+      setChangeRequestEditSavingId(null);
     }
   };
 
@@ -7675,16 +7795,75 @@ export default function DesignTaskPage() {
 
                 {briefChangeRequests.length > 0 ? (
                   <div className="space-y-2 border-t border-border/25 pt-3">
-                    <div className="text-xs text-muted-foreground">Останні правки ({briefChangeRequests.length})</div>
+                    <div className="text-xs text-muted-foreground">Правки ({briefChangeRequests.length})</div>
                     <div className="space-y-1.5">
-                      {briefChangeRequests.slice(0, 3).map((request) => (
-                        <div key={request.id} className="text-sm whitespace-pre-wrap break-words">
-                          <span className="text-muted-foreground">
-                            {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
-                          </span>{" "}
-                          <span>{renderInlineRichText(request.request_text)}</span>
-                        </div>
-                      ))}
+                      {briefChangeRequests.map((request) => {
+                        const isEditingChangeRequest = changeRequestEditingId === request.id;
+                        const isSavingChangeRequest = changeRequestEditSavingId === request.id;
+                        return (
+                          <div key={request.id} className="space-y-2">
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1 text-sm whitespace-pre-wrap break-words">
+                                <span className="text-muted-foreground">
+                                  {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
+                                </span>{" "}
+                                {isEditingChangeRequest ? (
+                                  <Textarea
+                                    value={changeRequestEditDraft}
+                                    onChange={(event) => setChangeRequestEditDraft(event.target.value)}
+                                    disabled={isSavingChangeRequest || designTaskLockedByOther}
+                                    className="mt-2 min-h-[96px] resize-y whitespace-normal"
+                                  />
+                                ) : (
+                                  <>
+                                    <span>{renderInlineRichText(request.request_text)}</span>
+                                    {request.edited_at ? (
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        ред. {formatDate(request.edited_at, true)}
+                                      </span>
+                                    ) : null}
+                                  </>
+                                )}
+                              </div>
+                              {canEditBriefChangeRequests && !isEditingChangeRequest ? (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 shrink-0"
+                                  disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
+                                  onClick={() => startBriefChangeRequestEdit(request)}
+                                  aria-label="Редагувати правку"
+                                  title="Редагувати правку"
+                                >
+                                  <PencilLine className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
+                            {isEditingChangeRequest ? (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isSavingChangeRequest || designTaskLockedByOther || !changeRequestEditDraft.trim()}
+                                  onClick={() => void saveBriefChangeRequestEdit(request.id)}
+                                >
+                                  {isSavingChangeRequest ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                                  Зберегти
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={isSavingChangeRequest}
+                                  onClick={cancelBriefChangeRequestEdit}
+                                >
+                                  Скасувати
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}

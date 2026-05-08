@@ -13,6 +13,7 @@ export type AppPermissions = {
   canEditMemberRoles: boolean;
   canManageAssignments: boolean;
   canManageDesignStatuses: boolean;
+  canEditDesignBriefChangeRequests: boolean;
   canSelfAssignDesign: boolean;
   canWriteStandings: boolean;
   canViewManagerOverview: boolean;
@@ -71,6 +72,7 @@ export function buildPermissions({
   const canEditMemberRoles = isSuperAdmin || isAdmin;
   const canManageAssignments = canManageMembers || isManagerJob;
   const canManageDesignStatuses = canManageAssignments && !isDesigner;
+  const canEditDesignBriefChangeRequests = isSuperAdmin || isAdmin || isSeo;
   const canSelfAssignDesign = canManageAssignments || isDesigner;
   const canWriteStandings = canManageMembers || isManagerJob;
   const canViewManagerOverview = canManageMembers || isManagerJob;
@@ -85,6 +87,7 @@ export function buildPermissions({
     canEditMemberRoles,
     canManageAssignments,
     canManageDesignStatuses,
+    canEditDesignBriefChangeRequests,
     canSelfAssignDesign,
     canWriteStandings,
     canViewManagerOverview,
