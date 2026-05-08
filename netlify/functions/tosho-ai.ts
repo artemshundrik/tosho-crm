@@ -182,6 +182,17 @@ type AnalyticsBadge = {
   value: number | string;
 };
 
+type AnalyticsDetail = {
+  id: string;
+  label: string;
+  groupLabel?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  href?: string | null;
+  target?: "_blank" | "_self" | null;
+  badges?: AnalyticsBadge[];
+};
+
 type SuggestedAction = {
   label: string;
   text: string;
@@ -194,6 +205,7 @@ type AnalyticsRow = {
   primary: string;
   secondary?: string | null;
   badges?: AnalyticsBadge[];
+  details?: AnalyticsDetail[];
 };
 
 type AnalyticsPayload = {
@@ -751,6 +763,34 @@ function formatInteger(value: number) {
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatUsd(value: number) {
+  return `$${new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(Math.max(0, value))}`;
+}
+
+function formatUsdRange(min: number, max: number) {
+  if (min <= 0 && max <= 0) return "без прайсу";
+  if (min === max) return formatUsd(min);
+  return `${formatUsd(min)}-${formatUsd(max)}`;
+}
+
+function secondsBetweenIso(startedAt?: string | null, finishedAt?: string | null) {
+  if (!startedAt || !finishedAt) return 0;
+  const startMs = new Date(startedAt).getTime();
+  const finishMs = new Date(finishedAt).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(finishMs)) return 0;
+  return Math.max(0, Math.floor((finishMs - startMs) / 1000));
+}
+
+function formatDurationCompact(totalSeconds: number) {
+  const minutes = Math.max(0, Math.round((Number.isFinite(totalSeconds) ? totalSeconds : 0) / 60));
+  if (minutes === 0) return "0 хв";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours <= 0) return `${formatInteger(minutes)} хв`;
+  if (mins === 0) return `${formatInteger(hours)} год`;
+  return `${formatInteger(hours)} год ${formatInteger(mins)} хв`;
 }
 
 const DEFAULT_MANAGER_RATE = 10;
@@ -2301,6 +2341,57 @@ function formatDesignTaskTypeLabel(value: string) {
   return labels[normalized] ?? value.replace(/_/g, " ");
 }
 
+function isDesignPayrollAnalyticsQuery(message: string) {
+  const normalized = normalizeText(message).toLowerCase();
+  return (
+    /(зарплат|зп|виплат|оплат|нарахув|payroll|salary|компенсац)/u.test(normalized) &&
+    /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)
+  );
+}
+
+const DESIGN_TASK_PRICE_RANGES_USD: Record<string, { min: number; max: number; source: string }> = {
+  visualization: {
+    min: 100,
+    max: 100,
+    source: "Digital дизайн / Ілюстрація: базовий пакет 100$",
+  },
+  layout_adaptation: {
+    min: 80,
+    max: 100,
+    source: "Бренд-точки контакту: прості адаптації в існуючому стилі 80-100$ / 100$",
+  },
+  visualization_layout_adaptation: {
+    min: 150,
+    max: 250,
+    source: "Бренд-точки контакту Make it love: складніша ідея + адаптація 150-250$",
+  },
+  layout: {
+    min: 100,
+    max: 100,
+    source: "Бренд-точки контакту: базова верстка/макет у межах готової структури 100$",
+  },
+  creative: {
+    min: 100,
+    max: 250,
+    source: "Digital дизайн / Креативний дизайн: 100$ або 200-250$ для розширеної ідеї",
+  },
+  presentation: {
+    min: 100,
+    max: 100,
+    source: "Прайс містить презентаційні візуали як складову більшості пакетів; окремої ставки немає",
+  },
+};
+
+const DESIGNER_PAY_SHARE_FROM_PRICE = 0.15;
+
+function getDesignTaskPriceRangeUsd(taskType: string) {
+  return DESIGN_TASK_PRICE_RANGES_USD[normalizeText(taskType).toLowerCase()] ?? null;
+}
+
+function formatDesignerPayFromPriceRange(min: number, max: number) {
+  return formatUsdRange(min * DESIGNER_PAY_SHARE_FROM_PRICE, max * DESIGNER_PAY_SHARE_FROM_PRICE);
+}
+
 function formatQuoteStatusLabel(value: string) {
   const normalized = normalizeText(value).toLowerCase();
   const labels: Record<string, string> = {
@@ -2377,10 +2468,31 @@ function formatAnalyticsBadgeLine(input: Record<string, number>, labelFn: (value
     .join(" · ");
 }
 
+function formatDesignPayrollBadges(typeCounts: Record<string, number>, typeSeconds: Record<string, number>) {
+  return Object.entries(typeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([taskType, count]) => {
+      const priceRange = getDesignTaskPriceRangeUsd(taskType);
+      const priceLabel = priceRange
+        ? ` · ${formatDesignerPayFromPriceRange(priceRange.min * count, priceRange.max * count)}`
+        : "";
+      return {
+        label: formatDesignTaskTypeLabel(taskType),
+        value: `${formatInteger(count)} · ${formatDurationCompact(typeSeconds[taskType] ?? 0)}${priceLabel}`,
+      };
+    });
+}
+
+function buildDesignTaskHref(taskId: string) {
+  return `/design/${encodeURIComponent(taskId)}`;
+}
+
 function parsePeriodFromMessage(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   const now = new Date();
   let start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  let until: Date | null = null;
   let label = "за останні 30 днів";
   const wordToNumber: Record<string, number> = {
     "один": 1,
@@ -2403,12 +2515,53 @@ function parsePeriodFromMessage(message: string) {
     const rawCount = digits ? Number(digits) : wordToNumber[word ?? ""] ?? fallback;
     return Math.max(1, Math.min(3650, Number.isFinite(rawCount) ? rawCount : fallback));
   };
+  const exactMonthNames: Array<{ index: number; names: string[]; label: string; rangeLabel: string }> = [
+    { index: 0, names: ["січень", "січні", "січня"], label: "січень", rangeLabel: "січня" },
+    { index: 1, names: ["лютий", "лютому", "лютого"], label: "лютий", rangeLabel: "лютого" },
+    { index: 2, names: ["березень", "березні", "березня"], label: "березень", rangeLabel: "березня" },
+    { index: 3, names: ["квітень", "квітні", "квітня"], label: "квітень", rangeLabel: "квітня" },
+    { index: 4, names: ["травень", "травні", "травня"], label: "травень", rangeLabel: "травня" },
+    { index: 5, names: ["червень", "червні", "червня"], label: "червень", rangeLabel: "червня" },
+    { index: 6, names: ["липень", "липні", "липня"], label: "липень", rangeLabel: "липня" },
+    { index: 7, names: ["серпень", "серпні", "серпня"], label: "серпень", rangeLabel: "серпня" },
+    { index: 8, names: ["вересень", "вересні", "вересня"], label: "вересень", rangeLabel: "вересня" },
+    { index: 9, names: ["жовтень", "жовтні", "жовтня"], label: "жовтень", rangeLabel: "жовтня" },
+    { index: 10, names: ["листопад", "листопаді", "листопада"], label: "листопад", rangeLabel: "листопада" },
+    { index: 11, names: ["грудень", "грудні", "грудня"], label: "грудень", rangeLabel: "грудня" },
+  ];
+
+  const exactMonth = exactMonthNames.find((month) =>
+    month.names.some((name) =>
+      new RegExp(`(?:^|[\\s([{]|за\\s+|у\\s+|в\\s+)${escapeRegExp(name)}(?=$|[\\s.,!?;:)\\]])`, "u").test(
+        normalized
+      )
+    )
+  );
+  if (exactMonth) {
+    const yearMatch = normalized.match(/\b(20\d{2}|19\d{2})\b/u);
+    const explicitYear = yearMatch ? Number(yearMatch[1]) : null;
+    const inferredYear =
+      explicitYear ??
+      (exactMonth.index <= now.getMonth() ? now.getFullYear() : now.getFullYear() - 1);
+    start = new Date(inferredYear, exactMonth.index, 1);
+    until = new Date(inferredYear, exactMonth.index + 1, 1);
+    const lastDay = new Date(inferredYear, exactMonth.index + 1, 0).getDate();
+    return {
+      sinceIso: start.toISOString() as string | null,
+      untilIso: until.toISOString() as string | null,
+      label: `за ${exactMonth.label} ${inferredYear} (1-${lastDay} ${exactMonth.rangeLabel})`,
+    };
+  }
 
   if (/весь\s+час|за\s+весь\s+час|за\s+всі\s+часи|all\s*time|увесь\s+час/u.test(normalized)) {
-    return { sinceIso: null as string | null, label: "за весь час" };
+    return { sinceIso: null as string | null, untilIso: null as string | null, label: "за весь час" };
   }
   if (/цей\s+рік|цього\s+року|поточн(ий|ого|ому)\s+р(ік|оці)/u.test(normalized)) {
-    return { sinceIso: new Date(now.getFullYear(), 0, 1).toISOString(), label: "за поточний календарний рік" };
+    return {
+      sinceIso: new Date(now.getFullYear(), 0, 1).toISOString(),
+      untilIso: null as string | null,
+      label: "за поточний календарний рік",
+    };
   }
 
   const monthCountMatch = normalized.match(
@@ -2449,13 +2602,14 @@ function parsePeriodFromMessage(message: string) {
     label = "за останні 7 днів";
   } else if (/поточн(ий|ому|ого)\s+місяц|цього\s+місяц/u.test(normalized)) {
     start = new Date(now.getFullYear(), now.getMonth(), 1);
+    until = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     label = "за поточний календарний місяць";
   } else if (/квартал|90\s*д/u.test(normalized)) {
     start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
     label = "за останні 90 днів";
   }
 
-  return { sinceIso: start.toISOString() as string | null, label };
+  return { sinceIso: start.toISOString() as string | null, untilIso: until?.toISOString() ?? null, label };
 }
 
 function normalizeAnalyticsName(value: string | null | undefined) {
@@ -3052,6 +3206,13 @@ function designerActions(): SuggestedAction[] {
   return [
     ...periodFollowUpActions(),
     { label: "Усі дизайнери", text: "скільки дизайн-задач зробили дизайнери за місяць?" },
+  ];
+}
+
+function payrollActions(): SuggestedAction[] {
+  return [
+    ...periodFollowUpActions(),
+    { label: "База зарплати", text: "порахуй базу для зарплати дизайнерів за місяць" },
   ];
 }
 
@@ -3934,6 +4095,7 @@ async function buildDesignCompletionAnalytics(params: {
   targetMember?: AnalyticsPersonTarget | null;
 }) {
   const period = parsePeriodFromMessage(params.message);
+  const payrollRequested = isDesignPayrollAnalyticsQuery(params.message);
   const members = await listRoutingCandidates(params.adminClient, params.auth.workspaceId);
   const memberById = new Map(members.map((member) => [member.userId, member]));
 
@@ -3944,11 +4106,26 @@ async function buildDesignCompletionAnalytics(params: {
     .eq("action", "design_task_status")
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  const buckets = new Map<string, { userId: string; label: string; avatarUrl: string | null; total: number; byType: Record<string, number> }>();
-  for (const row of (data ?? []) as Array<{ metadata?: JsonRecord | null }>) {
+  const buckets = new Map<
+    string,
+    {
+      userId: string;
+      label: string;
+      avatarUrl: string | null;
+      total: number;
+      byType: Record<string, number>;
+      totalSeconds: number;
+      byTypeSeconds: Record<string, number>;
+      priceMinUsd: number;
+      priceMaxUsd: number;
+    }
+  >();
+  const approvedTaskById = new Map<string, { userId: string; taskType: string; approvedAt: string | null }>();
+  for (const row of (data ?? []) as Array<{ entity_id?: string | null; created_at?: string | null; metadata?: JsonRecord | null }>) {
     const metadata = row.metadata ?? {};
     if (metadata.to_status !== "approved") continue;
     const userId = normalizeText(typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : "");
@@ -3958,16 +4135,156 @@ async function buildDesignCompletionAnalytics(params: {
     const rawLabel = member?.label ?? normalizeText(typeof metadata.assignee_label === "string" ? metadata.assignee_label : "") ?? userId.slice(0, 8);
     const label = formatShortPersonName(rawLabel) || rawLabel;
     const taskType = normalizeText(typeof metadata.design_task_type === "string" ? metadata.design_task_type : "") || "без типу";
-    const bucket = buckets.get(userId) ?? { userId, label, avatarUrl: member?.avatarUrl ?? null, total: 0, byType: {} };
+    const bucket = buckets.get(userId) ?? {
+      userId,
+      label,
+      avatarUrl: member?.avatarUrl ?? null,
+      total: 0,
+      byType: {},
+      totalSeconds: 0,
+      byTypeSeconds: {},
+      priceMinUsd: 0,
+      priceMaxUsd: 0,
+    };
     bucket.total += 1;
     bucket.byType[taskType] = (bucket.byType[taskType] ?? 0) + 1;
+    const priceRange = getDesignTaskPriceRangeUsd(taskType);
+    if (priceRange) {
+      bucket.priceMinUsd += priceRange.min;
+      bucket.priceMaxUsd += priceRange.max;
+    }
     buckets.set(userId, bucket);
+    const taskId = normalizeText(row.entity_id);
+    if (taskId) approvedTaskById.set(taskId, { userId, taskType, approvedAt: row.created_at ?? null });
+  }
+
+  const taskIds = payrollRequested ? Array.from(approvedTaskById.keys()).slice(0, 10000) : [];
+  const taskInfoById = new Map<
+    string,
+    { number: string; title: string; customer: string; quoteNumber: string; taskType: string }
+  >();
+  if (payrollRequested && taskIds.length > 0) {
+    const { data: taskRows, error: taskError } = await params.adminClient
+      .from("activity_log")
+      .select("id,title,metadata")
+      .eq("team_id", params.auth.teamId)
+      .eq("action", "design_task")
+      .in("id", taskIds)
+      .limit(10000);
+    if (taskError) throw new Error(taskError.message);
+    for (const taskRow of (taskRows ?? []) as Array<{ id?: string | null; title?: string | null; metadata?: JsonRecord | null }>) {
+      const taskId = normalizeText(taskRow.id);
+      if (!taskId) continue;
+      const metadata = taskRow.metadata ?? {};
+      const approvedTask = approvedTaskById.get(taskId);
+      taskInfoById.set(taskId, {
+        number:
+          normalizeText(typeof metadata.design_task_number === "string" ? metadata.design_task_number : "") ||
+          taskId.slice(0, 8),
+        title:
+          normalizeText(taskRow.title) ||
+          normalizeText(typeof metadata.title === "string" ? metadata.title : "") ||
+          "Дизайн-задача",
+        customer:
+          normalizeText(typeof metadata.customer_name === "string" ? metadata.customer_name : "") ||
+          normalizeText(typeof metadata.lead_name === "string" ? metadata.lead_name : "") ||
+          "Клієнт не вказаний",
+        quoteNumber: normalizeText(typeof metadata.quote_number === "string" ? metadata.quote_number : ""),
+        taskType:
+          normalizeText(typeof metadata.design_task_type === "string" ? metadata.design_task_type : "") ||
+          approvedTask?.taskType ||
+          "без типу",
+      });
+    }
+  }
+
+  let timerDataAvailable = false;
+  const taskSecondsById = new Map<string, number>();
+  if (payrollRequested && approvedTaskById.size > 0) {
+    const { data: timerData, error: timerError } = await params.adminClient
+      .from("design_task_timer_sessions")
+      .select("design_task_id,started_at,paused_at")
+      .eq("team_id", params.auth.teamId)
+      .in("design_task_id", taskIds)
+      .not("paused_at", "is", null)
+      .limit(10000);
+    if (timerError) {
+      if (!/does not exist|relation|schema cache|could not find the table/i.test(timerError.message ?? "")) {
+        throw new Error(timerError.message);
+      }
+    } else {
+      timerDataAvailable = true;
+      for (const session of (timerData ?? []) as Array<{
+        design_task_id?: string | null;
+        started_at?: string | null;
+        paused_at?: string | null;
+      }>) {
+        const taskId = normalizeText(session.design_task_id);
+        const task = approvedTaskById.get(taskId);
+        if (!task) continue;
+        const seconds = secondsBetweenIso(session.started_at, session.paused_at);
+        if (seconds <= 0) continue;
+        const bucket = buckets.get(task.userId);
+        if (!bucket) continue;
+        bucket.totalSeconds += seconds;
+        bucket.byTypeSeconds[task.taskType] = (bucket.byTypeSeconds[task.taskType] ?? 0) + seconds;
+        taskSecondsById.set(taskId, (taskSecondsById.get(taskId) ?? 0) + seconds);
+      }
+    }
   }
 
   const rows = Array.from(buckets.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "uk"));
   const total = rows.reduce((sum, row) => sum + row.total, 0);
-  const body =
-    rows.length > 0
+  const totalSeconds = rows.reduce((sum, row) => sum + row.totalSeconds, 0);
+  const totalPriceMinUsd = rows.reduce((sum, row) => sum + row.priceMinUsd, 0);
+  const totalPriceMaxUsd = rows.reduce((sum, row) => sum + row.priceMaxUsd, 0);
+  const totalPayLabel = formatDesignerPayFromPriceRange(totalPriceMinUsd, totalPriceMaxUsd);
+  const detailsByUserId = new Map<string, AnalyticsDetail[]>();
+  if (payrollRequested) {
+    for (const [taskId, task] of approvedTaskById.entries()) {
+      const info = taskInfoById.get(taskId);
+      const priceRange = getDesignTaskPriceRangeUsd(task.taskType);
+      const payLabel = priceRange ? formatDesignerPayFromPriceRange(priceRange.min, priceRange.max) : "без прайсу";
+      const detail: AnalyticsDetail = {
+        id: taskId,
+        label: info?.number ?? taskId.slice(0, 8),
+        groupLabel: formatDesignTaskTypeLabel(info?.taskType ?? task.taskType),
+        title: info?.title ?? "Дизайн-задача",
+        subtitle: [
+          info?.customer,
+          info?.quoteNumber ? `КП ${info.quoteNumber}` : "",
+        ]
+          .map(normalizeText)
+          .filter(Boolean)
+          .join(" · "),
+        href: buildDesignTaskHref(taskId),
+        target: "_blank",
+        badges: [
+          { label: "Час", value: formatDurationCompact(taskSecondsById.get(taskId) ?? 0) },
+          { label: "ЗП", value: payLabel },
+        ],
+      };
+      const details = detailsByUserId.get(task.userId) ?? [];
+      details.push(detail);
+      detailsByUserId.set(task.userId, details);
+    }
+    for (const details of detailsByUserId.values()) {
+      details.sort((a, b) => {
+        const left = approvedTaskById.get(a.id)?.approvedAt ?? "";
+        const right = approvedTaskById.get(b.id)?.approvedAt ?? "";
+        return right.localeCompare(left) || a.label.localeCompare(b.label, "uk");
+      });
+    }
+  }
+  const body = payrollRequested
+    ? rows.length > 0
+      ? params.targetMember
+        ? `Порахував базу для зарплати **${rows[0].label}** ${period.label}: **${formatInteger(rows[0].total)}** approved дизайн-задач, час **${formatDurationCompact(rows[0].totalSeconds)}**, орієнтовна виплата **${formatDesignerPayFromPriceRange(rows[0].priceMinUsd, rows[0].priceMaxUsd)}**.`
+        : `Порахував базу для зарплати дизайнерів ${period.label}: **${formatInteger(total)}** approved дизайн-задач, час **${formatDurationCompact(totalSeconds)}**, орієнтовна виплата **${totalPayLabel}**.`
+      : params.targetMember
+        ? `За цей період не знайшов approved дизайн-задач у **${formatShortPersonName(params.targetMember.label) || params.targetMember.label}** для бази зарплати.`
+        : "За цей період не знайшов approved дизайн-задач для бази зарплати."
+    : rows.length > 0
       ? params.targetMember
         ? `Готово. **${rows[0].label}** має ${formatInteger(rows[0].total)} завершених дизайн-задач ${period.label}.`
         : `Готово. Найбільше завершених дизайн-задач ${period.label}: **${rows[0].label}** — ${formatInteger(rows[0].total)}. Нижче розклав по людях і типах задач.`
@@ -3978,27 +4295,43 @@ async function buildDesignCompletionAnalytics(params: {
     id: row.userId,
     label: row.label,
     avatarUrl: row.avatarUrl,
-    primary: `${formatInteger(row.total)} задач`,
-    secondary: null,
-    badges: formatAnalyticsBadges(row.byType, formatDesignTaskTypeLabel),
+    primary: payrollRequested
+      ? `${formatInteger(row.total)} задач · ${formatDurationCompact(row.totalSeconds)} · ${formatDesignerPayFromPriceRange(row.priceMinUsd, row.priceMaxUsd)}`
+      : `${formatInteger(row.total)} задач`,
+    secondary: payrollRequested
+      ? timerDataAvailable
+        ? `Час за таймером: ${formatDurationCompact(row.totalSeconds)} · орієнтовна виплата: ${formatDesignerPayFromPriceRange(row.priceMinUsd, row.priceMaxUsd)}`
+        : "Час не підтягнувся: таблиця таймера недоступна"
+      : null,
+    badges: payrollRequested ? formatDesignPayrollBadges(row.byType, row.byTypeSeconds) : formatAnalyticsBadges(row.byType, formatDesignTaskTypeLabel),
+    details: payrollRequested ? detailsByUserId.get(row.userId) ?? [] : undefined,
   }));
 
   return {
-    title: "Дизайн-задачі по дизайнерах",
-    summary: `Пораховано ${formatInteger(total)} завершених дизайн-задач ${period.label}.`,
+    title: payrollRequested ? "База зарплати дизайнерів" : "Дизайн-задачі по дизайнерах",
+    summary: payrollRequested
+      ? `Пораховано ${formatInteger(total)} approved дизайн-задач, ${formatDurationCompact(totalSeconds)} і ${totalPayLabel} ${period.label}.`
+      : `Пораховано ${formatInteger(total)} завершених дизайн-задач ${period.label}.`,
     markdown: body,
     domain: "design",
     confidence: 0.94,
-    suggestedActions: rows.length === 0 ? compactSuggestedActions(designerActions()) : compactSuggestedActions(periodFollowUpActions()),
+    suggestedActions: rows.length === 0 ? compactSuggestedActions(designerActions()) : compactSuggestedActions(payrollRequested ? payrollActions() : periodFollowUpActions()),
     analytics: {
       kind: "people",
+      variant: payrollRequested ? "design_payroll" : null,
       title: params.targetMember
-        ? `Дизайн: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
-        : "Дизайн-задачі",
-      caption: `${formatInteger(total)} завершених задач ${period.label}`,
-      metricLabel: "Завершено",
+        ? payrollRequested
+          ? `Зарплата: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
+          : `Дизайн: ${formatShortPersonName(params.targetMember.label) || params.targetMember.label}`
+        : payrollRequested
+          ? "База зарплати"
+          : "Дизайн-задачі",
+      caption: payrollRequested
+        ? `${formatInteger(total)} approved задач ${period.label} · ${formatDurationCompact(totalSeconds)} · ${totalPayLabel}`
+        : `${formatInteger(total)} завершених задач ${period.label}`,
+      metricLabel: payrollRequested ? "База" : "Завершено",
       rows: analyticsRows,
-      note: "Рахую переходи дизайн-задач у статус approved.",
+      note: payrollRequested ? null : "Рахую переходи дизайн-задач у статус approved.",
     },
   } satisfies AnalyticsResult;
 }
@@ -4047,6 +4380,7 @@ async function buildPartyDesignCompletionAnalytics(params: {
     .eq("action", "design_task_status")
     .limit(10000);
   if (period.sinceIso) activityQuery = activityQuery.gte("created_at", period.sinceIso);
+  if (period.untilIso) activityQuery = activityQuery.lt("created_at", period.untilIso);
   const { data, error } = await activityQuery;
   if (error) throw new Error(error.message);
 
@@ -4128,6 +4462,7 @@ async function buildManagerQuoteAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   const quotes = (data ?? []) as Array<{
@@ -4242,6 +4577,7 @@ async function buildManagerOrderAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -4315,6 +4651,7 @@ async function buildLogisticsDeliveryAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -4780,6 +5117,7 @@ async function buildCustomerQuoteAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   const quotes = (data ?? []) as Array<{
@@ -4869,6 +5207,7 @@ async function buildCustomerOrderAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -4936,6 +5275,7 @@ async function buildManagerCustomerAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) query = query.gte("created_at", period.sinceIso);
+  if (period.untilIso) query = query.lt("created_at", period.untilIso);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   const quotes = (data ?? []) as Array<{
@@ -5145,6 +5485,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) quoteQuery = quoteQuery.gte("created_at", period.sinceIso);
+  if (period.untilIso) quoteQuery = quoteQuery.lt("created_at", period.untilIso);
 
   let orderQuery = params.adminClient
     .schema("tosho")
@@ -5153,6 +5494,7 @@ async function buildPartyQuoteOrderAnalytics(params: {
     .eq("team_id", params.auth.teamId)
     .limit(10000);
   if (period.sinceIso) orderQuery = orderQuery.gte("created_at", period.sinceIso);
+  if (period.untilIso) orderQuery = orderQuery.lt("created_at", period.untilIso);
 
   const [quoteResult, orderResult] = await Promise.all([quoteQuery, orderQuery]);
   if (quoteResult.error) throw new Error(quoteResult.error.message);

@@ -128,6 +128,17 @@ type AnalyticsBadge = {
   value: number | string;
 };
 
+type AnalyticsDetail = {
+  id: string;
+  label: string;
+  groupLabel?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  href?: string | null;
+  target?: "_blank" | "_self" | null;
+  badges?: AnalyticsBadge[];
+};
+
 type AnalyticsRow = {
   id: string;
   label: string;
@@ -135,6 +146,7 @@ type AnalyticsRow = {
   primary: string;
   secondary?: string | null;
   badges?: AnalyticsBadge[];
+  details?: AnalyticsDetail[];
 };
 
 type AnalyticsPayload = {
@@ -342,6 +354,31 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
           return [{ label: badge.label, value }];
         })
       : [];
+    const details = Array.isArray(row.details)
+      ? row.details.flatMap((detail): AnalyticsDetail[] => {
+          if (!isRecord(detail) || typeof detail.id !== "string" || typeof detail.label !== "string") return [];
+          const detailBadges = Array.isArray(detail.badges)
+            ? detail.badges.flatMap((badge): AnalyticsBadge[] => {
+                if (!isRecord(badge) || typeof badge.label !== "string") return [];
+                const value = badge.value;
+                if (typeof value !== "string" && typeof value !== "number") return [];
+                return [{ label: badge.label, value }];
+              })
+            : [];
+          return [
+            {
+              id: detail.id,
+              label: detail.label,
+              groupLabel: typeof detail.groupLabel === "string" ? detail.groupLabel : null,
+              title: typeof detail.title === "string" ? detail.title : null,
+              subtitle: typeof detail.subtitle === "string" ? detail.subtitle : null,
+              href: typeof detail.href === "string" ? detail.href : null,
+              target: detail.target === "_blank" || detail.target === "_self" ? detail.target : null,
+              badges: detailBadges,
+            },
+          ];
+        })
+      : [];
     return [
       {
         id: row.id,
@@ -350,6 +387,7 @@ function readAnalyticsPayload(metadata: Record<string, unknown> | null): Analyti
         primary: typeof row.primary === "string" ? row.primary : String(row.primary ?? ""),
         secondary: typeof row.secondary === "string" ? row.secondary : null,
         badges,
+        details,
       },
     ];
   });
@@ -565,6 +603,10 @@ function buildPromptSuggestionGroups(input: {
           text: "скільки візуалізацій і адаптацій зробили дизайнери за місяць?",
         },
         {
+          label: "База зарплати",
+          text: "порахуй базу для зарплати дизайнерів за місяць",
+        },
+        {
           label: "Дизайн за тиждень",
           text: "скільки дизайн-задач закрили за тиждень?",
         },
@@ -740,6 +782,62 @@ function ThreadCard({
   );
 }
 
+function splitAnalyticsParts(value: number | string) {
+  return String(value)
+    .split(" · ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getAnalyticsAmountLabel(variant?: string | null) {
+  return variant === "design_payroll" ? "ЗП" : "Прайс";
+}
+
+function buildAnalyticsMetricSummary(primary: string, metricLabel: string, variant?: string | null) {
+  const parts = splitAnalyticsParts(primary);
+  if (parts.length >= 3) {
+    return [
+      { label: "Задачі", value: parts[0] },
+      { label: "Час", value: parts[1] },
+      { label: getAnalyticsAmountLabel(variant), value: parts.slice(2).join(" · ") },
+    ];
+  }
+  return parts.map((part, index) => ({
+    label: index === 0 ? metricLabel : "Показник",
+    value: part,
+  }));
+}
+
+function buildAnalyticsBadgeSummary(value: number | string, variant?: string | null) {
+  const parts = splitAnalyticsParts(value);
+  if (parts.length >= 3) {
+    return [
+      { label: "Задачі", value: parts[0] },
+      { label: "Час", value: parts[1] },
+      { label: getAnalyticsAmountLabel(variant), value: parts.slice(2).join(" · ") },
+    ];
+  }
+  if (parts.length === 2) {
+    return [
+      { label: "Задачі", value: parts[0] },
+      { label: "Час", value: parts[1] },
+    ];
+  }
+  return parts.map((part) => ({ label: "Разом", value: part }));
+}
+
+function getAnalyticsMetricValue(metrics: Array<{ label: string; value: string }>, label: string) {
+  return metrics.find((metric) => metric.label === label)?.value ?? "—";
+}
+
+function analyticsDetailMatchesBadge(detail: AnalyticsDetail, badgeLabel: string) {
+  const badgeKey = normalizeSearch(badgeLabel);
+  if (!badgeKey) return false;
+  const groupKey = normalizeSearch(detail.groupLabel ?? "");
+  if (groupKey && groupKey === badgeKey) return true;
+  return normalizeSearch(detail.subtitle ?? "").includes(badgeKey);
+}
+
 function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
   const isQuoteDraft = analytics.variant === "quote_draft";
   return (
@@ -769,74 +867,187 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
         <div className="divide-y divide-border/45">
           {analytics.rows.map((row) => {
             const displayLabel = analytics.kind === "people" ? formatShortDisplayName(row.label) : row.label;
+            const hasDetails = Boolean(row.details?.length);
+            const amountLabel = getAnalyticsAmountLabel(analytics.variant);
+            const metricSummary = buildAnalyticsMetricSummary(row.primary, analytics.metricLabel, analytics.variant);
             const secondaryIsBadgeDuplicate =
               Boolean(row.secondary) &&
               Boolean(row.badges?.length) &&
               row.badges!.every((badge) => row.secondary?.includes(badge.label));
             const RowIcon = getAnalyticsRowIcon(row.label, analytics.metricLabel);
             return (
-              <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-3.5 py-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  {analytics.kind === "people" ? (
-                    <PlayerAvatar
-                      src={row.avatarUrl ?? null}
-                      name={displayLabel}
-                      size={34}
-                      className="mt-0.5 shrink-0 ring-1 ring-border/60"
-                      fallbackClassName="text-[11px] font-semibold"
-                    />
-                  ) : row.avatarUrl ? (
-                    isQuoteDraft ? (
-                      <img
-                        src={row.avatarUrl}
-                        alt=""
-                        className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover shadow-sm sm:h-[72px] sm:w-[72px]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <EntityAvatar
-                        src={row.avatarUrl}
+              <div key={row.id} className="px-3.5 py-3.5">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    {analytics.kind === "people" ? (
+                      <PlayerAvatar
+                        src={row.avatarUrl ?? null}
                         name={displayLabel}
-                        size={34}
-                        className="mt-0.5 ring-1 ring-border/60"
+                        size={38}
+                        className="mt-0.5 shrink-0 ring-1 ring-border/60"
                         fallbackClassName="text-[11px] font-semibold"
                       />
-                    )
-                  ) : (
-                    <div
-                      className={cn(
-                        "mt-0.5 flex shrink-0 items-center justify-center border border-border/70 bg-muted/35 text-muted-foreground",
-                        isQuoteDraft ? "h-16 w-16 rounded-xl sm:h-[72px] sm:w-[72px]" : "h-[34px] w-[34px] rounded-full"
-                      )}
-                    >
-                      <RowIcon className="h-4 w-4" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{displayLabel}</div>
-                    {row.secondary && !secondaryIsBadgeDuplicate ? (
-                      <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{row.secondary}</div>
-                    ) : null}
-                    {row.badges && row.badges.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {row.badges.map((badge) => {
-                          const BadgeIcon = getAnalyticsBadgeIcon(badge.label);
-                          return (
-                            <span
-                              key={`${row.id}:${badge.label}`}
-                              className="inline-flex h-6 items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-2.5 text-[11px] font-medium text-primary"
-                            >
-                              {BadgeIcon ? <BadgeIcon className="h-3.5 w-3.5" /> : null}
-                              <span>{badge.label}</span>
-                              <span className="font-semibold">{badge.value}</span>
-                            </span>
-                          );
-                        })}
+                    ) : row.avatarUrl ? (
+                      isQuoteDraft ? (
+                        <img
+                          src={row.avatarUrl}
+                          alt=""
+                          className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover shadow-sm sm:h-[72px] sm:w-[72px]"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <EntityAvatar
+                          src={row.avatarUrl}
+                          name={displayLabel}
+                          size={38}
+                          className="mt-0.5 ring-1 ring-border/60"
+                          fallbackClassName="text-[11px] font-semibold"
+                        />
+                      )
+                    ) : (
+                      <div
+                        className={cn(
+                          "mt-0.5 flex shrink-0 items-center justify-center border border-border/70 bg-muted/35 text-muted-foreground",
+                          isQuoteDraft ? "h-16 w-16 rounded-xl sm:h-[72px] sm:w-[72px]" : "h-[38px] w-[38px] rounded-full"
+                        )}
+                      >
+                        <RowIcon className="h-4 w-4" />
                       </div>
-                    ) : null}
+                    )}
+                    <div className="min-w-0 pt-0.5">
+                      <div className="text-[15px] font-semibold leading-5 text-foreground">{displayLabel}</div>
+                      {row.secondary && !secondaryIsBadgeDuplicate && !hasDetails ? (
+                        <div className="mt-1 text-xs leading-5 text-muted-foreground">{row.secondary}</div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-5 sm:justify-end sm:text-right">
+                    {metricSummary.map((metric) => (
+                      <span
+                        key={`${row.id}:${metric.label}:${metric.value}`}
+                        className="inline-flex items-baseline gap-1 whitespace-nowrap"
+                      >
+                        <span className="text-muted-foreground">{metric.label}:</span>
+                        <span className="font-semibold text-foreground">{metric.value}</span>
+                      </span>
+                    ))}
                   </div>
                 </div>
-                <div className="text-right text-sm font-semibold text-foreground">{row.primary}</div>
+
+                {row.badges && row.badges.length > 0 ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-border/55 bg-background/55">
+                    {row.badges.map((badge, badgeIndex) => {
+                      const BadgeIcon = getAnalyticsBadgeIcon(badge.label);
+                      const badgeMetrics = buildAnalyticsBadgeSummary(badge.value, analytics.variant);
+                      const detailRows = hasDetails
+                        ? row.details!.filter((detail) => analyticsDetailMatchesBadge(detail, badge.label))
+                        : [];
+                      const taskCount = getAnalyticsMetricValue(badgeMetrics, "Задачі");
+                      const timeValue = getAnalyticsMetricValue(badgeMetrics, "Час");
+                      const amountValue = getAnalyticsMetricValue(badgeMetrics, amountLabel);
+                      const rowClassName = cn(
+                        "min-w-0 border-t border-border/45",
+                        badgeIndex === 0 && "border-t-0"
+                      );
+                      const summaryClassName =
+                        "grid min-w-0 gap-x-3 gap-y-1 px-3 py-2.5 text-sm leading-5 transition-colors md:grid-cols-[minmax(13rem,1fr)_5.5rem_8rem_minmax(9rem,auto)_1.25rem] md:items-center";
+                      const typeSummary = (
+                        <>
+                          <div className="flex min-w-0 items-center gap-2 text-primary">
+                            {BadgeIcon ? <BadgeIcon className="h-4 w-4 shrink-0" /> : null}
+                            <span className="min-w-0 break-words font-semibold">{badge.label}</span>
+                          </div>
+                          <div className="whitespace-nowrap text-xs text-muted-foreground">
+                            Задачі: <span className="font-semibold text-foreground">{taskCount}</span>
+                          </div>
+                          <div className="whitespace-nowrap text-xs text-muted-foreground">
+                            Час: <span className="font-semibold text-foreground">{timeValue}</span>
+                          </div>
+                          <div className="whitespace-nowrap text-xs text-muted-foreground">
+                            {amountLabel}: <span className="font-semibold text-foreground">{amountValue}</span>
+                          </div>
+                          <div className="hidden justify-end md:flex">
+                            {detailRows.length > 0 ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                            ) : null}
+                          </div>
+                        </>
+                      );
+                      if (detailRows.length === 0) {
+                        return (
+                          <div key={`${row.id}:${badge.label}`} className={rowClassName}>
+                            <div className={summaryClassName}>{typeSummary}</div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <details key={`${row.id}:${badge.label}`} className={cn("group", rowClassName)}>
+                          <summary
+                            className={cn(
+                              summaryClassName,
+                              "cursor-pointer list-none hover:bg-muted/20 [&::-webkit-details-marker]:hidden"
+                            )}
+                          >
+                            {typeSummary}
+                          </summary>
+                          <div className="divide-y divide-border/45 border-t border-border/45 bg-muted/10">
+                            {detailRows.map((detail) => {
+                              const detailBadges = detail.badges ?? [];
+                              const detailContent = (
+                                <>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                                      <span className="shrink-0 text-xs font-semibold leading-5 text-primary">
+                                        № {detail.label}
+                                      </span>
+                                      <span className="min-w-[14rem] flex-1 break-words text-sm font-medium leading-5 text-foreground">
+                                        {detail.title || "Дизайн-задача"}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground">
+                                      <span className="min-w-0 break-words">
+                                        {detail.subtitle || "Клієнт не вказаний"}
+                                      </span>
+                                      {detailBadges.length > 0
+                                        ? detailBadges.map((detailBadge) => (
+                                            <span key={`${detail.id}:${detailBadge.label}`} className="whitespace-nowrap">
+                                              {detailBadge.label}:{" "}
+                                              <span className="font-medium text-foreground">{detailBadge.value}</span>
+                                            </span>
+                                          ))
+                                        : null}
+                                    </div>
+                                  </div>
+                                  {detail.href ? (
+                                    <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                  ) : null}
+                                </>
+                              );
+                              const itemClassName =
+                                "flex min-w-0 items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/25";
+                              return detail.href ? (
+                                <a
+                                  key={detail.id}
+                                  href={detail.href}
+                                  target={detail.target === "_blank" ? "_blank" : undefined}
+                                  rel={detail.target === "_blank" ? "noreferrer" : undefined}
+                                  className={itemClassName}
+                                >
+                                  {detailContent}
+                                </a>
+                              ) : (
+                                <div key={detail.id} className={itemClassName}>
+                                  {detailContent}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             );
           })}
