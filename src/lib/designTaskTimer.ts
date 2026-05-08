@@ -98,6 +98,13 @@ function toNonEmptyString(value: unknown) {
   return normalized ? normalized : null;
 }
 
+function getTimerTaskSortBucket(task: DesignerTimerTaskOverview) {
+  if (task.summary.activeSessionId && task.summary.activeStartedAt) return 0;
+  if (task.status === "in_progress") return 1;
+  if (task.status === "changes" || task.status === "new") return 2;
+  return 3;
+}
+
 export function formatElapsedSeconds(totalSeconds: number) {
   const safe = Math.max(0, Math.floor(totalSeconds || 0));
   const hours = Math.floor(safe / 3600);
@@ -203,14 +210,11 @@ export async function getDesignerTimerTaskOverview(params: {
 
   const taskIds = Array.from(latestByTaskId.keys());
   ((assignedTaskRows as Array<{ id: string }> | null) ?? []).forEach((row) => {
-    if (taskIds.length >= limit) return;
     if (!taskIds.includes(row.id)) taskIds.push(row.id);
   });
   ((collaboratorTaskRows as Array<{ id: string }> | null) ?? []).forEach((row) => {
-    if (taskIds.length >= limit) return;
     if (!taskIds.includes(row.id)) taskIds.push(row.id);
   });
-  taskIds.splice(limit);
   if (taskIds.length === 0) return [];
 
   const [{ data: allSessions, error: sessionsError }, { data: taskRows, error: taskError }] = await Promise.all([
@@ -244,6 +248,7 @@ export async function getDesignerTimerTaskOverview(params: {
     ])
   );
 
+  const recentRankByTaskId = new Map(taskIds.map((taskId, index) => [taskId, index] as const));
   return taskIds.map((taskId) => {
     const task = taskById.get(taskId) ?? null;
     const metadata = parseActivityMetadata(task?.metadata);
@@ -261,7 +266,11 @@ export async function getDesignerTimerTaskOverview(params: {
       latestPausedAt: latest?.paused_at ?? null,
       summary: summarizeSessions(sessionsByTaskId.get(taskId) ?? []),
     } satisfies DesignerTimerTaskOverview;
-  });
+  }).sort((a, b) => {
+    const bucketDiff = getTimerTaskSortBucket(a) - getTimerTaskSortBucket(b);
+    if (bucketDiff !== 0) return bucketDiff;
+    return (recentRankByTaskId.get(a.taskId) ?? Number.MAX_SAFE_INTEGER) - (recentRankByTaskId.get(b.taskId) ?? Number.MAX_SAFE_INTEGER);
+  }).slice(0, limit);
 }
 
 export async function startDesignTaskTimer(params: {

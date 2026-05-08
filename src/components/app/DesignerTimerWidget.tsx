@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Button } from "@/components/ui/button";
+import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { cn } from "@/lib/utils";
 import {
   DESIGN_TASK_TIMER_UPDATED_EVENT,
@@ -72,10 +73,38 @@ function hasTimerProgress(task: DesignerTimerTaskOverview) {
   return task.summary.totalSeconds > 0 || Boolean(task.latestStartedAt);
 }
 
+function isTaskPaused(task: DesignerTimerTaskOverview) {
+  return task.status === "in_progress" && !isTaskRunning(task) && hasTimerProgress(task);
+}
+
+function isTaskReadyForTimer(task: DesignerTimerTaskOverview) {
+  return task.status === "in_progress" && !isTaskRunning(task) && !hasTimerProgress(task);
+}
+
+function isQueuedTimerTask(task: DesignerTimerTaskOverview) {
+  return task.status === "new" || task.status === "changes";
+}
+
+function getDesignStatusLabel(status: string | null) {
+  if (!status || !(status in DESIGN_STATUS_LABELS)) return null;
+  return DESIGN_STATUS_LABELS[status as keyof typeof DESIGN_STATUS_LABELS];
+}
+
 function getTimerStateLabel(task: DesignerTimerTaskOverview) {
   if (isTaskRunning(task)) return "Активний";
-  if (hasTimerProgress(task)) return "На паузі";
-  return "Готовий";
+  if (isTaskPaused(task)) return "На паузі";
+  if (isTaskReadyForTimer(task)) return "Готовий до старту";
+  return getDesignStatusLabel(task.status) ?? (hasTimerProgress(task) ? "Зупинено" : "Недоступно");
+}
+
+function getPrimaryTimerTask(tasks: DesignerTimerTaskOverview[], activeTask: DesignerTimerTaskOverview | null) {
+  return (
+    activeTask ??
+    tasks.find((task) => task.status === "in_progress") ??
+    tasks.find((task) => isQueuedTimerTask(task)) ??
+    tasks[0] ??
+    null
+  );
 }
 
 function formatShortDateTime(value?: string | null) {
@@ -278,9 +307,11 @@ function TimerTaskRow({
   compact?: boolean;
 }) {
   const running = isTaskRunning(task);
+  const paused = isTaskPaused(task);
   const busy = controller.busyTaskId === task.taskId;
   const elapsedLabel = formatElapsedSeconds(getTimerElapsedSeconds(task.summary, controller.nowMs));
   const canStart = controller.canStartTask(task);
+  const statusLabel = getDesignStatusLabel(task.status);
 
   return (
     <div
@@ -288,6 +319,8 @@ function TimerTaskRow({
         "rounded-lg border px-3 py-2",
         running
           ? "border-success-soft-border bg-success-soft text-success-foreground"
+          : paused
+            ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
           : "border-border/60 bg-muted/10 text-foreground"
       )}
     >
@@ -302,9 +335,15 @@ function TimerTaskRow({
                 активний
               </span>
             ) : hasTimerProgress(task) ? (
-              <span className="shrink-0 rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-warning-foreground">
+              paused ? (
+                <span className="shrink-0 rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-warning-foreground">
                 пауза
-              </span>
+                </span>
+              ) : statusLabel ? (
+                <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-muted-foreground">
+                  {statusLabel}
+                </span>
+              ) : null
             ) : null}
           </div>
           <div className={cn("mt-0.5 truncate font-semibold", compact ? "text-xs" : "text-sm")}>
@@ -403,9 +442,9 @@ export function DesignerHeaderTimerWidget({
 }) {
   if (!controller.enabled) return null;
 
-  const currentTask = controller.activeTask ?? controller.tasks[0] ?? null;
+  const currentTask = getPrimaryTimerTask(controller.tasks, controller.activeTask);
   const currentRunning = currentTask ? isTaskRunning(currentTask) : false;
-  const currentPaused = Boolean(currentTask && !currentRunning && hasTimerProgress(currentTask));
+  const currentPaused = Boolean(currentTask && isTaskPaused(currentTask));
   const currentElapsedLabel = currentTask
     ? formatElapsedSeconds(getTimerElapsedSeconds(currentTask.summary, controller.nowMs))
     : null;
@@ -540,9 +579,9 @@ export function DesignerFloatingTimerWidget({
     originY: number;
   } | null>(null);
 
-  const currentTask = controller.activeTask ?? controller.tasks[0] ?? null;
+  const currentTask = getPrimaryTimerTask(controller.tasks, controller.activeTask);
   const currentRunning = currentTask ? isTaskRunning(currentTask) : false;
-  const currentPaused = Boolean(currentTask && !currentRunning && hasTimerProgress(currentTask));
+  const currentPaused = Boolean(currentTask && isTaskPaused(currentTask));
   const currentElapsedLabel = currentTask
     ? formatElapsedSeconds(getTimerElapsedSeconds(currentTask.summary, controller.nowMs))
     : "00:00:00";
@@ -716,7 +755,9 @@ export function DesignerFloatingTimerWidget({
                   ? `Запущено ${formatShortDateTime(currentTask.latestStartedAt)}`
                   : currentPaused
                     ? `На паузі · ${formatShortDateTime(currentTask.latestPausedAt ?? currentTask.latestStartedAt)}`
-                    : `Готово до запуску #${getTaskNumber(currentTask)}`}
+                    : currentTask.status === "in_progress"
+                      ? `Готово до запуску #${getTaskNumber(currentTask)}`
+                      : getDesignStatusLabel(currentTask.status) ?? `Недоступно #${getTaskNumber(currentTask)}`}
               </span>
               <Link
                 to={`/design/${currentTask.taskId}`}
