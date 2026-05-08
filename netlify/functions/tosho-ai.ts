@@ -2344,9 +2344,37 @@ function formatDesignTaskTypeLabel(value: string) {
 function isDesignPayrollAnalyticsQuery(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   return (
-    /(зарплат|зп|виплат|оплат|нарахув|payroll|salary|компенсац)/u.test(normalized) &&
+    /(зарплат|зп|виплат|оплат|нарахув|payroll|salary|компенсац|гонорар|винагород|зароб|заробіт|заплат|платити|отрима|отримат|ставк|відсот|процент|15\s*%)/u.test(normalized) &&
     /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)
   );
+}
+
+function canViewDesignPayrollAnalytics(auth: Pick<AuthContext, "accessRole" | "jobRole">) {
+  const accessRole = normalizeRole(auth.accessRole);
+  const jobRole = normalizeRole(auth.jobRole);
+  return jobRole === "seo" || accessRole === "owner" || accessRole === "super_admin" || accessRole === "superadmin";
+}
+
+function restrictedDesignPayrollDecision(message: string): AssistantDecision {
+  return {
+    title: "Зріз недоступний",
+    summary: "Зарплатні дані дизайнерів приховані для цієї ролі.",
+    answerMarkdown:
+      "Не можу показати зарплатний зріз або розрахунок виплат для цієї ролі. Можу порахувати звичайну статистику дизайн-задач без зарплатних сум.",
+    playfulLine: "Обмежив доступ до чутливого зрізу.",
+    status: "waiting_user",
+    priority: "low",
+    domain: deriveDomainFromMessage(message, "design"),
+    confidence: 0.98,
+    shouldEscalate: false,
+    shouldNotify: false,
+    knowledgeIds: [],
+    internalSummary: "Blocked design payroll analytics for a non-SEO/non-SuperAdmin user.",
+    suggestedActions: compactSuggestedActions([
+      { label: "Дизайн-задачі", text: "скільки дизайн-задач зробили дизайнери за місяць?" },
+      { label: "За тиждень", text: "скільки дизайн-задач закрили за тиждень?" },
+    ]),
+  };
 }
 
 const DESIGN_TASK_PRICE_RANGES_USD: Record<string, { min: number; max: number; source: string }> = {
@@ -2933,6 +2961,7 @@ function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsInte
 }
 
 function shouldRunAnalytics(message: string) {
+  if (isDesignPayrollAnalyticsQuery(message)) return true;
   return detectSupportedAnalyticsIntent(message) !== null;
 }
 
@@ -6233,8 +6262,12 @@ async function buildAnalyticsDecision(params: {
   message: string;
   routeContext: ReturnType<typeof sanitizeRouteContext>;
 }) {
+  const payrollRequested = isDesignPayrollAnalyticsQuery(params.message);
+  if (payrollRequested && !canViewDesignPayrollAnalytics(params.auth)) {
+    return restrictedDesignPayrollDecision(params.message);
+  }
   const supportedIntent = detectSupportedAnalyticsIntent(params.message);
-  if (!supportedIntent) return null;
+  if (!supportedIntent) return payrollRequested ? unsupportedAnalyticsDecision(params.message) : null;
   const normalized = normalizeText(params.message).toLowerCase();
   const hasAdminTerm = hasAdminObservabilityTerm(normalized);
   const hasDesignTerm = /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized);
@@ -6973,11 +7006,32 @@ async function selectAccessibleRequest(
   return row;
 }
 
-function mapRequestSummary(row: SupportRequestRow) {
+function hasDesignPayrollAnalyticsMetadata(metadata: JsonRecord | null | undefined) {
+  const analytics = metadata?.analytics;
+  if (analytics && typeof analytics === "object" && !Array.isArray(analytics)) {
+    const variant = (analytics as JsonRecord).variant;
+    if (variant === "design_payroll") return true;
+  }
+  const analyticsMessage = typeof metadata?.analyticsMessage === "string" ? metadata.analyticsMessage : "";
+  return Boolean(analyticsMessage && isDesignPayrollAnalyticsQuery(analyticsMessage));
+}
+
+function hasDesignPayrollRequestContext(row: SupportRequestRow) {
+  const context = (row.context ?? {}) as JsonRecord;
+  const lastAnalyticsMessage =
+    typeof context.last_analytics_message === "string" ? context.last_analytics_message : "";
+  return (
+    isDesignPayrollAnalyticsQuery(lastAnalyticsMessage) ||
+    isDesignPayrollAnalyticsQuery(`${row.title ?? ""} ${row.summary ?? ""}`)
+  );
+}
+
+function mapRequestSummary(row: SupportRequestRow, auth?: AuthContext) {
+  const hidePayroll = auth ? !canViewDesignPayrollAnalytics(auth) && hasDesignPayrollRequestContext(row) : false;
   return {
     id: row.id,
-    title: row.title,
-    summary: row.summary ?? null,
+    title: hidePayroll ? "Обмежений зріз" : row.title,
+    summary: hidePayroll ? "Зарплатний зріз приховано для твоєї ролі." : row.summary ?? null,
     mode: row.mode,
     status: row.status,
     priority: row.priority,
@@ -7033,8 +7087,21 @@ async function loadThread(
 
   const messages = ((messagesData ?? []) as SupportMessageRow[]).map((row) => {
     const metadata = (row.metadata ?? {}) as JsonRecord;
-    const rawSources = Array.isArray(metadata.sources) ? metadata.sources : [];
-    const rawAttachments = toSupportAttachments(metadata.attachments);
+    const hidePayroll =
+      !canViewDesignPayrollAnalytics(auth) &&
+      (hasDesignPayrollAnalyticsMetadata(metadata) ||
+        (row.role === "assistant" && isDesignPayrollAnalyticsQuery(row.body)));
+    const visibleMetadata: JsonRecord = hidePayroll
+      ? {
+          ...metadata,
+          analytics: null,
+          suggestedActions: compactSuggestedActions([
+            { label: "Дизайн-задачі", text: "скільки дизайн-задач зробили дизайнери за місяць?" },
+          ]),
+        }
+      : metadata;
+    const rawSources = hidePayroll ? [] : Array.isArray(metadata.sources) ? metadata.sources : [];
+    const rawAttachments = hidePayroll ? [] : toSupportAttachments(metadata.attachments);
     const sources = rawSources
       .map((source) => {
         if (!source || typeof source !== "object") return null;
@@ -7057,13 +7124,13 @@ async function loadThread(
     return {
       id: row.id,
       role: row.role,
-      body: row.body,
+      body: hidePayroll ? "Зарплатний зріз приховано для твоєї ролі." : row.body,
       actorLabel: row.actor_label ?? null,
       createdAt: row.created_at,
       feedback: feedbackByMessageId.get(row.id) ?? null,
       sources,
       attachments: rawAttachments,
-      metadata: metadata,
+      metadata: visibleMetadata,
     };
   });
 
@@ -7077,7 +7144,7 @@ async function loadThread(
   );
 
   return {
-    ...mapRequestSummary(request),
+    ...mapRequestSummary(request, auth),
     context: (request.context ?? {}) as JsonRecord,
     messages: signedMessages,
   };
@@ -7115,7 +7182,7 @@ async function buildSnapshot(params: {
 
   if (recentResult.error) throw new Error(recentResult.error.message);
 
-  const recentRequests = ((recentResult.data ?? []) as SupportRequestRow[]).map(mapRequestSummary);
+  const recentRequests = ((recentResult.data ?? []) as SupportRequestRow[]).map((row) => mapRequestSummary(row, auth));
 
   const selectedRequestId = normalizeText(params.selectedRequestId) || "";
   const selectedThread = selectedRequestId ? await loadThread(adminClient, auth, selectedRequestId) : null;

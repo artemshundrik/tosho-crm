@@ -520,6 +520,7 @@ function normalizeRoleText(value?: string | null) {
 function buildPromptSuggestionGroups(input: {
   jobRole?: string | null;
   canManageQueue?: boolean;
+  canViewDesignPayroll?: boolean;
   domainHint: ToShoAiRouteContext["domainHint"];
 }): PromptSuggestionGroup[] {
   const jobRole = normalizeRoleText(input.jobRole);
@@ -527,6 +528,7 @@ function buildPromptSuggestionGroups(input: {
   const isManager = ["manager", "менеджер", "sales_manager", "junior_sales_manager"].includes(jobRole);
   const isOps = jobRole === "pm" || jobRole === "logistics";
   const isAdminLike = input.canManageQueue || jobRole === "seo";
+  const canViewDesignPayroll = input.canViewDesignPayroll === true || jobRole === "seo";
   const groups: PromptSuggestionGroup[] = [
     {
       id: "operations",
@@ -602,10 +604,14 @@ function buildPromptSuggestionGroups(input: {
           label: "Візуали та адаптації",
           text: "скільки візуалізацій і адаптацій зробили дизайнери за місяць?",
         },
-        {
-          label: "База зарплати",
-          text: "порахуй базу для зарплати дизайнерів за місяць",
-        },
+        ...(canViewDesignPayroll
+          ? [
+              {
+                label: "База зарплати",
+                text: "порахуй базу для зарплати дизайнерів за місяць",
+              },
+            ]
+          : []),
         {
           label: "Дизайн за тиждень",
           text: "скільки дизайн-задач закрили за тиждень?",
@@ -1502,9 +1508,17 @@ export function ToShoAiConsole({
       buildPromptSuggestionGroups({
         jobRole,
         canManageQueue: snapshot?.permissions.canManageQueue ?? permissions.canManageMembers,
+        canViewDesignPayroll: permissions.isSuperAdmin || permissions.isSeo,
         domainHint: resolvedContext.domainHint,
       }),
-    [jobRole, permissions.canManageMembers, resolvedContext.domainHint, snapshot?.permissions.canManageQueue]
+    [
+      jobRole,
+      permissions.canManageMembers,
+      permissions.isSeo,
+      permissions.isSuperAdmin,
+      resolvedContext.domainHint,
+      snapshot?.permissions.canManageQueue,
+    ]
   );
 
   useEffect(() => {
