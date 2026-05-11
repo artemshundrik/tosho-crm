@@ -309,12 +309,24 @@ async function uploadLargeFile(filePath, targetPath) {
 }
 
 async function copyFile(fromPath, toPath) {
+  const normalizedToPath = normalizeDropboxPath(toPath);
+  await deleteFile(normalizedToPath).catch((error) => {
+    if (error instanceof Error && error.message.includes("path_lookup/not_found")) return null;
+    throw error;
+  });
+
   return await dropboxApiRequest("/files/copy_v2", {
     from_path: normalizeDropboxPath(fromPath),
-    to_path: normalizeDropboxPath(toPath),
+    to_path: normalizedToPath,
     autorename: false,
     allow_shared_folder: true,
     allow_ownership_transfer: false,
+  });
+}
+
+async function deleteFile(dropboxPath) {
+  return await dropboxApiRequest("/files/delete_v2", {
+    path: normalizeDropboxPath(dropboxPath),
   });
 }
 
