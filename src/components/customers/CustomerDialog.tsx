@@ -1081,7 +1081,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                               {activeOwnershipOption?.label}
                             </SelectValue>
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent
+                            side="bottom"
+                            sideOffset={6}
+                            align="start"
+                            avoidCollisions={false}
+                          >
                             {groupedOwnershipOptions.map(([groupName, options], groupIndex) => (
                               <React.Fragment key={groupName}>
                                 {groupIndex > 0 ? <SelectSeparator /> : null}

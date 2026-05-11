@@ -1160,7 +1160,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       resolveManagerMember(managerUserId, manager) ??
       memberByLabel.get(managerLabel);
     return (
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex max-w-full min-w-0 items-center gap-2" title={managerLabel}>
         <AvatarBase
           src={member?.avatarDisplayUrl ?? null}
           name={managerLabel}
@@ -3088,14 +3088,14 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md">
+                  <Table variant="list" size="md" className="min-w-[860px] table-fixed [&_td]:px-4 [&_th]:px-4">
                     <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[34%] pl-6">Компанія</TableHead>
-                        <TableHead className="w-[92px] px-2">Тип</TableHead>
+                        <TableHead className="w-[26%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[76px] px-2">Тип</TableHead>
                         <TableHead className="w-[30%] pl-2">Юрособа</TableHead>
-                        <TableHead className="w-[18%]">Сайт</TableHead>
-                        <TableHead className="w-[16%]">Менеджер</TableHead>
+                        <TableHead className="w-[15%]">Сайт</TableHead>
+                        <TableHead className="w-[14%]">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3118,15 +3118,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             onClick={() => openEdit(row)}
                           >
                             <TableCell className="pl-6">
-                              <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <EntityAvatar
                                   src={row.logo_url ?? null}
                                   name={row.name ?? row.legal_name ?? "Компанія"}
                                   fallback={getInitials(row.name ?? row.legal_name)}
                                   size={36}
                                 />
-                                <div>
-                                  <div className="font-medium">{row.name ?? "Не вказано"}</div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium">{row.name ?? "Не вказано"}</div>
                                   {legalEntities.length > 1 ? (
                                     <div className="text-xs text-muted-foreground">{legalEntities.length} юр. ос.</div>
                                   ) : null}
@@ -3189,12 +3189,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             </TableCell>
                             <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
                             <TableCell
-                              className="text-right pr-4 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100"
+                              className="w-12 pr-4 text-right"
                               onClick={(event) => event.stopPropagation()}
                             >
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                    aria-label="Дії замовника"
+                                  >
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -3336,16 +3341,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md">
+                  <Table variant="list" size="md" className="min-w-[960px] table-fixed [&_td]:px-4 [&_th]:px-4">
                     <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="pl-6">Компанія</TableHead>
-                        <TableHead>Контакт</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Телефони</TableHead>
-                        <TableHead>Джерело</TableHead>
-                        <TableHead>Сайт</TableHead>
-                        <TableHead>Менеджер</TableHead>
+                        <TableHead className="w-[20%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[12%]">Контакт</TableHead>
+                        <TableHead className="w-[16%]">Email</TableHead>
+                        <TableHead className="w-[12%]">Телефони</TableHead>
+                        <TableHead className="w-[10%]">Джерело</TableHead>
+                        <TableHead className="w-[14%]">Сайт</TableHead>
+                        <TableHead className="w-[11%]">Менеджер</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3357,36 +3362,49 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           onClick={() => openEditLead(lead)}
                         >
                           <TableCell className="pl-6">
-                            <div className="flex items-center gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
                               <EntityAvatar
                                 src={lead.logo_url ?? null}
                                 name={lead.company_name ?? lead.legal_name ?? "Лід"}
                                 fallback={getInitials(lead.company_name ?? lead.legal_name)}
                                 size={36}
                               />
-                              <div>
-                                <div className="font-medium">{lead.company_name ?? "Не вказано"}</div>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">{lead.company_name ?? "Не вказано"}</div>
                                 {lead.legal_name ? (
-                                  <div className="text-xs text-muted-foreground">{lead.legal_name}</div>
+                                  <div className="truncate text-xs text-muted-foreground">{lead.legal_name}</div>
                                 ) : null}
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
-                            {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}
+                            <div className="truncate">
+                              {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Не вказано"}
+                            </div>
                           </TableCell>
-                          <TableCell className="truncate max-w-[220px]">{lead.email ?? "Не вказано"}</TableCell>
-                          <TableCell className="truncate max-w-[220px]">
-                            {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
+                          <TableCell>
+                            <div className="truncate" title={lead.email ?? undefined}>
+                              {lead.email ?? "Не вказано"}
+                            </div>
                           </TableCell>
-                          <TableCell>{lead.source ?? "Не вказано"}</TableCell>
-                          <TableCell className="truncate max-w-[200px]">
+                          <TableCell>
+                            <div className="truncate" title={lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : undefined}>
+                              {lead.phone_numbers?.length ? lead.phone_numbers.join(", ") : "Не вказано"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="truncate" title={lead.source ?? undefined}>
+                              {lead.source ?? "Не вказано"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             {lead.website ? (
                               <a
                                 href={lead.website}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-primary underline underline-offset-2"
+                                className="block truncate text-primary underline underline-offset-2"
+                                title={lead.website}
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 {lead.website}
@@ -3397,12 +3415,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           </TableCell>
                           <TableCell>{renderManagerCell(lead.manager_user_id, lead.manager)}</TableCell>
                           <TableCell
-                            className="text-right pr-4 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100"
+                            className="w-12 pr-4 text-right"
                             onClick={(event) => event.stopPropagation()}
                           >
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                                  aria-label="Дії ліда"
+                                >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
