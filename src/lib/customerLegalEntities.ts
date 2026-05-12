@@ -18,6 +18,7 @@ const OWNERSHIP_LABELS: Record<string, string> = {
   bf: "БФ",
   pp: "ПП",
   ao: "АО",
+  dp_subsidiary: "ДП",
   vp: "ВП",
   go: "ГО",
   at: "АТ",

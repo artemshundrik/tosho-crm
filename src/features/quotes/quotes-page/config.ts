@@ -89,6 +89,7 @@ export const OWNERSHIP_OPTIONS: OwnershipOption[] = [
   { value: "bf", label: "БФ", description: "Благодійний фонд", group: "Бізнес" },
   { value: "pp", label: "ПП", description: "Приватне підприємство", group: "Бізнес" },
   { value: "ao", label: "АО", description: "Адвокатське об'єднання", group: "Бізнес" },
+  { value: "dp_subsidiary", label: "ДП", description: "Дочірнє підприємство", group: "Бізнес" },
   { value: "vp", label: "ВП", description: "Відокремлений підрозділ", group: "Бізнес" },
   { value: "go", label: "ГО", description: "Громадська організація", group: "Бізнес" },
   { value: "at", label: "АТ", description: "Акціонерне товариство", group: "Бізнес" },
