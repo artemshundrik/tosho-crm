@@ -57,6 +57,7 @@ import {
   getLocalReminderDateInputValue,
   getLocalReminderTimeInputValue,
 } from "@/lib/reminderDateTime";
+import { notifyCustomerLeadManagerAssigned } from "@/lib/workflowNotifications";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -2267,8 +2268,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
     let optimizedLogoUrl: string | null = null;
+    const previousCustomer = editingId ? rows.find((row) => row.id === editingId) ?? null : null;
+    const previousCustomerManagerMember = previousCustomer
+      ? resolveManagerMember(previousCustomer.manager_user_id, previousCustomer.manager)
+      : null;
+    const previousCustomerManagerUserId =
+      previousCustomerManagerMember?.userId ?? previousCustomer?.manager_user_id?.trim() ?? null;
+    const previousCustomerManagerLabel = previousCustomer
+      ? resolveManagerLabel(previousCustomer.manager_user_id, previousCustomer.manager)
+      : "";
     const previousLogoUrl =
-      editingId ? rows.find((row) => row.id === editingId)?.logo_url ?? null : null;
+      previousCustomer?.logo_url ?? null;
 
     try {
       if (form.logoUploadMode === "file" && form.logoFile) {
@@ -2362,6 +2372,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return clone;
     };
 
+    let managerFieldsPersisted = true;
+
     try {
       if (editingId) {
         const { error: updateError } = await supabase
@@ -2373,6 +2385,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         if (updateError) {
           const message = updateError.message ?? "";
           if (message.includes("column")) {
+            managerFieldsPersisted = false;
             const fallbackPayload = removeOptionalFields();
             const { error: fallbackError } = await supabase
               .schema("tosho")
@@ -2407,6 +2420,28 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       if (editingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
         void removeManagedCustomerLogoByUrl(previousLogoUrl);
+      }
+
+      const customerManagerChangedFromAnother =
+        Boolean(selectedManagerUserId) &&
+        (previousCustomerManagerUserId
+          ? previousCustomerManagerUserId !== selectedManagerUserId
+          : Boolean(previousCustomerManagerLabel && previousCustomerManagerLabel !== selectedManagerLabel));
+
+      if (editingId && managerFieldsPersisted && customerManagerChangedFromAnother) {
+        try {
+          await notifyCustomerLeadManagerAssigned({
+            entityType: "customer",
+            entityId: editingId,
+            entityName: form.name.trim(),
+            newManagerUserId: selectedManagerUserId,
+            previousManagerLabel: previousCustomerManagerLabel,
+            actorUserId: userId,
+            actorName: currentManagerLabel || defaultManagerName,
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify customer manager assignment", notifyError);
+        }
       }
 
       setDialogOpen(false);
@@ -2463,8 +2498,17 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadFormError(null);
 
     let optimizedLogoUrl: string | null = null;
+    const previousLead = leadEditingId ? leads.find((lead) => lead.id === leadEditingId) ?? null : null;
+    const previousLeadManagerMember = previousLead
+      ? resolveManagerMember(previousLead.manager_user_id, previousLead.manager)
+      : null;
+    const previousLeadManagerUserId =
+      previousLeadManagerMember?.userId ?? previousLead?.manager_user_id?.trim() ?? null;
+    const previousLeadManagerLabel = previousLead
+      ? resolveManagerLabel(previousLead.manager_user_id, previousLead.manager)
+      : "";
     const previousLogoUrl =
-      leadEditingId ? leads.find((lead) => lead.id === leadEditingId)?.logo_url ?? null : null;
+      previousLead?.logo_url ?? null;
 
     try {
       if (leadForm.logoUploadMode === "file" && leadForm.logoFile) {
@@ -2527,6 +2571,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       notes: leadForm.notes.trim() || null,
     };
 
+    let managerFieldsPersisted = true;
+
     try {
       if (leadEditingId) {
         const { error: updateError } = await supabase
@@ -2548,6 +2594,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               .eq("team_id", teamId);
             if (fallbackError) throw fallbackError;
           } else if (message.includes("column") && message.includes("manager_user_id")) {
+            managerFieldsPersisted = false;
             const fallbackPayload = { ...payload };
             delete fallbackPayload.manager_user_id;
             const { error: fallbackError } = await supabase
@@ -2592,6 +2639,28 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       if (leadEditingId && previousLogoUrl && previousLogoUrl !== optimizedLogoUrl) {
         void removeManagedCustomerLogoByUrl(previousLogoUrl);
+      }
+
+      const leadManagerChangedFromAnother =
+        Boolean(selectedManagerUserId) &&
+        (previousLeadManagerUserId
+          ? previousLeadManagerUserId !== selectedManagerUserId
+          : Boolean(previousLeadManagerLabel && previousLeadManagerLabel !== selectedManagerLabel));
+
+      if (leadEditingId && !options?.convertToCustomer && managerFieldsPersisted && leadManagerChangedFromAnother) {
+        try {
+          await notifyCustomerLeadManagerAssigned({
+            entityType: "lead",
+            entityId: leadEditingId,
+            entityName: leadForm.companyName.trim(),
+            newManagerUserId: selectedManagerUserId,
+            previousManagerLabel: previousLeadManagerLabel,
+            actorUserId: userId,
+            actorName: currentManagerLabel || defaultManagerName,
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify lead manager assignment", notifyError);
+        }
       }
 
       if (options?.convertToCustomer && leadEditingId) {

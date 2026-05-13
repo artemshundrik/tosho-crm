@@ -403,3 +403,33 @@ export async function notifyDesignTaskCollaboratorsOnStatusChange(params: {
     type: alert.type,
   });
 }
+
+export async function notifyCustomerLeadManagerAssigned(params: {
+  entityType: "customer" | "lead";
+  entityId: string;
+  entityName: string;
+  newManagerUserId?: string | null;
+  previousManagerLabel?: string | null;
+  actorUserId?: string | null;
+  actorName?: string | null;
+}) {
+  const recipient = params.newManagerUserId?.trim();
+  if (!recipient || recipient === params.actorUserId) return;
+
+  const isLead = params.entityType === "lead";
+  const entityLabel = isLead ? "ліда" : "замовника";
+  const title = isLead ? "Вам передали ліда" : "Вам передали замовника";
+  const name = params.entityName.trim() || (isLead ? "Лід" : "Замовник");
+  const actorName = params.actorName?.trim() || "Менеджер";
+  const previousManager = params.previousManagerLabel?.trim();
+  const previousManagerSentence = previousManager ? previousManager.replace(/[.!?]+$/, "") : "";
+  const previousSuffix = previousManagerSentence ? ` Попередній менеджер: ${previousManagerSentence}.` : "";
+
+  await notifyUsers({
+    userIds: [recipient],
+    title,
+    body: `${actorName} передав(ла) вам ${entityLabel} «${name}».${previousSuffix}`,
+    href: isLead ? `/orders/customers?tab=leads&leadId=${params.entityId}` : `/orders/customers?customerId=${params.entityId}`,
+    type: "info",
+  });
+}
