@@ -156,6 +156,21 @@ Checklist:
 - keep catalog hooks modular
 - verify downstream quote consumers if catalog schema or model fields change
 
+## 7A. Sample Stock Change
+
+Read first:
+
+- [src/pages/SampleStockPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SampleStockPage.tsx)
+- [scripts/sample-stock-schema.sql](/Users/artem/Projects/tosho-crm/scripts/sample-stock-schema.sql)
+- [scripts/sample-stock-seed-from-numbers.sql](/Users/artem/Projects/tosho-crm/scripts/sample-stock-seed-from-numbers.sql)
+
+Checklist:
+
+- keep sample stock separate from catalog products used for quote configuration
+- preserve `team_id` scoping and RLS on item and movement rows
+- prefer movement RPC changes for quantity/reserve adjustments so the audit log stays complete
+- keep route access aligned with the dedicated `stock` module key; its default access is enabled for Super Admin and SEO, disabled for other roles unless explicitly toggled
+
 ## 8. Permissions / Membership / Module Access Change
 
 Read first:

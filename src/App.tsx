@@ -75,6 +75,7 @@ const LogisticsPage = lazyWithRetry(() => import("./pages/LogisticsPage"));
 const DesignPage = lazyWithRetry(() => import("./pages/DesignPage"));
 const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
+const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
@@ -252,6 +253,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/design", scope: "page", group: "operations", test: (value) => value === "/design" },
     { pattern: "/design/:id", scope: "details", group: "operations", test: (value) => /^\/design\/[^/]+$/.test(value) },
     { pattern: "/contractors", scope: "page", group: "operations", test: (value) => value.startsWith("/contractors") },
+    { pattern: "/stock/samples", scope: "page", group: "operations", test: (value) => value.startsWith("/stock/samples") },
   ];
 
   const matched = routeMatchers.find((entry) => entry.test(normalized));
@@ -983,6 +985,22 @@ function AppRoutes() {
             >
               <RouteSuspense shell>
                 <ContractorsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="stock/samples"
+          element={
+            <ModuleRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              isSuperAdmin={permissions.isSuperAdmin}
+              moduleKey="stock"
+              moduleLabel="Склад"
+            >
+              <RouteSuspense shell>
+                <SampleStockPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

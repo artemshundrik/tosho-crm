@@ -18,6 +18,7 @@ import {
   Factory,
   FolderKanban,
   History,
+  Package,
   Palette,
   Search,
   Truck,
@@ -156,6 +157,7 @@ function getPathSummary(path: string) {
   if (path.startsWith("/orders/customers")) return "База замовників і лідів";
   if (path.startsWith("/orders/production")) return "Черга замовлень";
   if (path.startsWith("/catalog/products")) return "Каталог продукції";
+  if (path.startsWith("/stock/samples")) return "Склад і резерви";
   if (path.startsWith("/team")) return "Сторінка команди";
   if (path.startsWith("/notifications")) return "Центр сповіщень";
   if (path.startsWith("/profile")) return "Профіль користувача";
@@ -216,6 +218,13 @@ function getRoutePresentation(path: string) {
     return {
       label: "Каталог продукції",
       description: "Каталог товарів і моделей",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/stock/samples")) {
+    return {
+      label: "Склад",
+      description: "Залишки товарів, резерви і складські рухи",
       kindLabel: "Сторінка",
     };
   }
@@ -353,6 +362,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         keywords: ["каталог", "products", "items"],
         to: "/catalog/products",
         icon: FolderKanban,
+      },
+      {
+        key: "route-sample-stock",
+        label: "Склад",
+        description: "Залишки товарів, резерви і складські рухи",
+        kindLabel: "Сторінка",
+        keywords: ["склад", "взірці", "samples", "stock", "залишки", "товари", "резерв"],
+        to: "/stock/samples",
+        icon: Package,
       },
       {
         key: "route-design",

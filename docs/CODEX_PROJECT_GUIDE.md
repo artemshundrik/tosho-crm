@@ -38,6 +38,7 @@ These are important and current as of April 19, 2026:
   - production / orders / ready-to-ship / logistics
   - product catalog
   - contractors
+  - sample stock / warehouse samples
   - team management and HR
   - notifications
   - ToSho AI support / knowledge / escalation
@@ -154,6 +155,14 @@ Current catalog variant contract:
 - [src/pages/ContractorsPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/ContractorsPage.tsx)
 - [scripts/contractors-schema.sql](/Users/artem/Projects/tosho-crm/scripts/contractors-schema.sql)
 
+### Sample Stock
+
+- [src/pages/SampleStockPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/SampleStockPage.tsx)
+- [scripts/sample-stock-schema.sql](/Users/artem/Projects/tosho-crm/scripts/sample-stock-schema.sql)
+- [scripts/sample-stock-seed-from-numbers.sql](/Users/artem/Projects/tosho-crm/scripts/sample-stock-seed-from-numbers.sql)
+- Route `/stock/samples` is grouped under operations and uses the dedicated `stock` module access key.
+- Stock rows are operational inventory for samples/promotional goods, not the product catalog used by quote configuration.
+
 ### Team / HR
 
 - [src/pages/TeamPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/TeamPage.tsx)
@@ -219,6 +228,7 @@ Current UI contract:
 - `/design`
 - `/design/:id`
 - `/contractors`
+- `/stock/samples`
 - `/settings/members`
 - `/profile`
 - `/admin/observability`

@@ -136,6 +136,7 @@ type MemberProfileMeta = {
     logistics: boolean;
     catalog: boolean;
     contractors: boolean;
+    stock: boolean;
     team: boolean;
   };
 };
@@ -257,6 +258,7 @@ const DEFAULT_MODULE_ACCESS = {
   logistics: false,
   catalog: false,
   contractors: false,
+  stock: false,
   team: false,
 };
 
@@ -267,6 +269,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   logistics: "Логістика",
   catalog: "Каталог",
   contractors: "Підрядники та постачальники",
+  stock: "Склад",
   team: "Управління командою",
 };
 
@@ -277,6 +280,7 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "logistics",
   "catalog",
   "contractors",
+  "stock",
   "team",
 ];
 
@@ -347,7 +351,21 @@ function getAvailabilityBadgeClass(value: MemberProfileMeta["availabilityStatus"
   return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
-function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"] {
+function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+}
+
+function isForcedModuleAccess(key: keyof MemberProfileMeta["moduleAccess"], accessRole?: string | null, jobRole?: string | null) {
+  if (key === "contractors" && (accessRole ?? "").trim().toLowerCase() === "owner") return true;
+  if (key === "stock" && hasDefaultStockAccess(accessRole, jobRole)) return true;
+  return false;
+}
+
+function normalizeModuleAccess(
+  value: unknown,
+  accessRole?: string | null,
+  jobRole?: string | null
+): MemberProfileMeta["moduleAccess"] {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
     overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
@@ -356,17 +374,21 @@ function normalizeModuleAccess(value: unknown): MemberProfileMeta["moduleAccess"
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
+    stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
 
 function normalizeMemberModuleAccessForRole(
   moduleAccess: MemberProfileMeta["moduleAccess"],
-  accessRole: string | null | undefined
+  accessRole: string | null | undefined,
+  jobRole: string | null | undefined
 ): MemberProfileMeta["moduleAccess"] {
+  const normalizedAccessRole = (accessRole ?? "").trim().toLowerCase();
   return {
     ...moduleAccess,
-    contractors: accessRole === "owner" ? true : moduleAccess.contractors,
+    contractors: normalizedAccessRole === "owner" ? true : moduleAccess.contractors,
+    stock: hasDefaultStockAccess(accessRole, jobRole) ? true : moduleAccess.stock,
   };
 }
 
@@ -564,7 +586,9 @@ export function TeamMembersPage() {
     setEditProfileStartDate(meta?.startDate ?? "");
     setEditProfileProbationEndDate(meta?.probationEndDate ?? "");
     setEditProfileManagerUserId(meta?.managerUserId ?? "");
-    setEditProfileModuleAccess(normalizeMemberModuleAccessForRole(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS, member.access_role));
+    setEditProfileModuleAccess(
+      normalizeMemberModuleAccessForRole(meta?.moduleAccess ?? DEFAULT_MODULE_ACCESS, member.access_role, member.job_role)
+    );
   }, [memberMetaByUserId]);
 
   useEffect(() => {
@@ -820,7 +844,7 @@ export function TeamMembersPage() {
             probationReviewedBy: row.probationReviewedBy,
             probationExtensionCount: row.probationExtensionCount,
             managerUserId: row.managerUserId,
-            moduleAccess: normalizeModuleAccess(row.moduleAccess),
+            moduleAccess: normalizeModuleAccess(row.moduleAccess, row.accessRole, row.jobRole),
           };
           return acc;
         }, {});
@@ -1203,7 +1227,11 @@ export function TeamMembersPage() {
       const startDate = editProfileStartDate.trim();
       const probationEndDate = editProfileProbationEndDate.trim();
       const managerUserId = editProfileManagerUserId.trim();
-      const moduleAccess = normalizeMemberModuleAccessForRole(editProfileModuleAccess, editProfileMember.access_role);
+      const moduleAccess = normalizeMemberModuleAccessForRole(
+        editProfileModuleAccess,
+        editProfileMember.access_role,
+        editProfileMember.job_role
+      );
       const currentEmploymentStatus = normalizeEmploymentStatus(currentMeta.employmentStatus, currentMeta.probationEndDate);
       const nextEmploymentStatus =
         currentEmploymentStatus === "rejected" || currentEmploymentStatus === "inactive"
@@ -3552,11 +3580,14 @@ export function TeamMembersPage() {
                       >
                         <Checkbox
                           checked={
-                            key === "contractors" && (editProfileMember?.access_role ?? null) === "owner"
+                            isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
                               ? true
                               : editProfileModuleAccess[key]
                           }
-                          disabled={!canManage || (key === "contractors" && (editProfileMember?.access_role ?? null) === "owner")}
+                          disabled={
+                            !canManage ||
+                            isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
+                          }
                           onCheckedChange={(checked) =>
                             setEditProfileModuleAccess((prev) => ({
                               ...prev,

@@ -24,6 +24,7 @@ import {
   X,
   BadgeCheck,
   CircleDot,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -95,7 +96,7 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "team";
+  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "stock" | "team";
 };
 
 type HeaderConfig = {
@@ -372,7 +373,14 @@ function shouldSuppressInAppNotificationToast(currentPath: string, href?: string
 
   if (hrefPathname === currentPathname) return true;
 
-  const entityRoutes = [ROUTES.ordersEstimates, ROUTES.ordersCustomers, ROUTES.ordersProduction, ROUTES.design, ROUTES.contractors];
+  const entityRoutes = [
+    ROUTES.ordersEstimates,
+    ROUTES.ordersCustomers,
+    ROUTES.ordersProduction,
+    ROUTES.design,
+    ROUTES.contractors,
+    ROUTES.sampleStock,
+  ];
   return entityRoutes.some((route) => currentPathname.startsWith(`${route}/`) && hrefPathname === currentPathname);
 }
 
@@ -383,6 +391,7 @@ function getNotificationActionLabel(href?: string) {
   if (normalizedHref.startsWith(ROUTES.ordersEstimates)) return "До прорахунку";
   if (normalizedHref.startsWith(ROUTES.ordersCustomers)) return "До замовника";
   if (normalizedHref.startsWith(ROUTES.ordersProduction)) return "До замовлення";
+  if (normalizedHref.startsWith(ROUTES.sampleStock)) return "До складу";
   if (normalizedHref.startsWith(ROUTES.notifications)) return "До сповіщень";
   return "Відкрити";
 }
@@ -401,6 +410,7 @@ const ROUTES = {
   logistics: "/logistics",
   design: "/design",
   contractors: "/contractors",
+  sampleStock: "/stock/samples",
   team: "/team",
 
   workspaceSettings: "/workspace-settings",
@@ -431,6 +441,13 @@ const baseSidebarLinks: SidebarLink[] = [
     group: "operations",
     icon: BriefcaseBusiness,
     moduleKey: "contractors",
+  },
+  {
+    label: "Склад",
+    to: ROUTES.sampleStock,
+    group: "operations",
+    icon: Package,
+    moduleKey: "stock",
   },
 
   // Акаунт
@@ -512,6 +529,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "",
       breadcrumbLabel: "Підрядники",
       breadcrumbTo: ROUTES.contractors,
+      showPageHeader: false,
+    };
+  if (pathname.startsWith(ROUTES.sampleStock))
+    return {
+      title: "Склад",
+      subtitle: "Залишки товарів, резерви та складські рухи.",
+      breadcrumbLabel: "Склад",
+      breadcrumbTo: ROUTES.sampleStock,
       showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.team))
@@ -700,7 +725,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           return false;
         }
         if (link.moduleKey) {
-          if (link.moduleKey === "contractors" && permissions.isSuperAdmin) {
+          if ((link.moduleKey === "contractors" || link.moduleKey === "stock") && permissions.isSuperAdmin) {
+            return true;
+          }
+          if (link.moduleKey === "stock" && permissions.isSeo) {
             return true;
           }
           if (currentModuleAccess === undefined) {
@@ -710,7 +738,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         }
         return true;
       }),
-    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSuperAdmin]
+    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSeo, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
@@ -733,6 +761,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(ROUTES.ordersProduction) ||
     location.pathname.startsWith(ROUTES.design) ||
     location.pathname.startsWith(ROUTES.contractors) ||
+    location.pathname.startsWith(ROUTES.sampleStock) ||
     location.pathname.startsWith(ROUTES.notifications) ||
     location.pathname.startsWith(ROUTES.membersAccess);
 

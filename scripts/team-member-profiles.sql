@@ -18,7 +18,7 @@ create table if not exists tosho.team_member_profiles (
   start_date date,
   probation_end_date date,
   manager_user_id uuid,
-  module_access jsonb not null default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false}'::jsonb,
+  module_access jsonb not null default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false, "stock": false}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   updated_by uuid,
@@ -50,8 +50,28 @@ set module_access = coalesce(
 )
 where module_access is null;
 
+update tosho.team_member_profiles p
+set module_access = jsonb_set(
+  coalesce(p.module_access, '{}'::jsonb),
+  '{stock}',
+  to_jsonb(
+    exists (
+      select 1
+      from tosho.memberships_view mv
+      where mv.workspace_id = p.workspace_id
+        and mv.user_id = p.user_id
+        and (
+          lower(coalesce(mv.access_role::text, '')) = 'owner'
+          or lower(coalesce(mv.job_role::text, '')) = 'seo'
+        )
+    )
+  ),
+  true
+)
+where not (coalesce(p.module_access, '{}'::jsonb) ? 'stock');
+
 alter table tosho.team_member_profiles
-  alter column module_access set default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false}'::jsonb,
+  alter column module_access set default '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false, "stock": false}'::jsonb,
   alter column module_access set not null;
 
 alter table tosho.team_member_profiles
@@ -74,7 +94,8 @@ insert into tosho.team_member_profiles (
   last_name,
   full_name,
   birth_date,
-  phone
+  phone,
+  module_access
 )
 select
   mv.workspace_id,
@@ -83,7 +104,16 @@ select
   nullif(trim(coalesce(u.raw_user_meta_data ->> 'last_name', '')), ''),
   nullif(trim(coalesce(u.raw_user_meta_data ->> 'full_name', '')), ''),
   nullif(trim(coalesce(u.raw_user_meta_data ->> 'birth_date', '')), '')::date,
-  nullif(trim(coalesce(u.raw_user_meta_data ->> 'phone', '')), '')
+  nullif(trim(coalesce(u.raw_user_meta_data ->> 'phone', '')), ''),
+  jsonb_set(
+    '{"overview": true, "orders": true, "finance": false, "design": true, "logistics": false, "catalog": false, "contractors": false, "stock": false}'::jsonb,
+    '{stock}',
+    to_jsonb(
+      lower(coalesce(mv.access_role::text, '')) = 'owner'
+      or lower(coalesce(mv.job_role::text, '')) = 'seo'
+    ),
+    true
+  )
 from tosho.memberships_view mv
 join auth.users u on u.id = mv.user_id
 where mv.workspace_id is not null

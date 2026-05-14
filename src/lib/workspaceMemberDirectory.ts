@@ -145,6 +145,7 @@ const DEFAULT_MODULE_ACCESS = {
   logistics: false,
   catalog: false,
   contractors: false,
+  stock: false,
   team: false,
 };
 
@@ -170,7 +171,11 @@ function isMissingColumn(error: unknown, column?: string) {
   return !column || normalized.includes(column.toLowerCase());
 }
 
-function normalizeModuleAccess(value: unknown) {
+function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+}
+
+function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
     overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
@@ -179,6 +184,7 @@ function normalizeModuleAccess(value: unknown) {
     logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
+    stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
@@ -295,7 +301,7 @@ function buildRow(input: {
     probationReviewedBy: input.probationReviewedBy?.trim() || "",
     probationExtensionCount: Math.max(0, Number(input.probationExtensionCount) || 0),
     managerUserId: input.managerUserId?.trim() || "",
-    moduleAccess: normalizeModuleAccess(input.moduleAccess),
+    moduleAccess: normalizeModuleAccess(input.moduleAccess, input.accessRole, input.jobRole),
   };
 }
 

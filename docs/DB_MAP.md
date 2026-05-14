@@ -184,6 +184,20 @@ Practical implication:
 
 These tables together power the product catalog and quote item configuration.
 
+## Sample Stock / Warehouse Samples
+
+- `sample_stock_items`
+  - operational stock rows for sample/promotional goods
+  - key fields include `team_id`, `name`, `visual_ref`, `sku`, `category`, `color`, `specifications`, `quantity_on_hand`, `reserved_quantity`, `unit_price`, `location`, `comments`, and `is_archived`
+
+- `sample_stock_movements`
+  - append-only movement log for stock changes
+  - movement types are `incoming`, `outgoing`, `reserve`, `release`, and `adjustment`
+  - stores previous/next on-hand and reserved quantities for auditability
+
+Practical implication:
+- sample stock is separate from catalog configuration; do not use catalog model tables for warehouse sample balances.
+
 ## Notifications, Activity, And Runtime
 
 - `notifications`
