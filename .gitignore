@@ -29,3 +29,7 @@ tmp/
 
 # Local Netlify folder
 .netlify
+
+# Claude Code local-only settings (per-machine permissions, env)
+.claude/settings.local.json
+CLAUDE.local.md

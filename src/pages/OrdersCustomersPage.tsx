@@ -21,7 +21,17 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
-import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import { loadDerivedOrders, formatOrderMoney } from "@/features/orders/orderRecords";
+// LTV (MVP, frontend-only): see src/lib/customerLtv.ts
+import {
+  aggregateCustomerLtv,
+  buildCustomerLtvTooltip,
+  buildSegmentMap,
+  RFM_SEGMENT_LABELS,
+  RFM_SEGMENT_TONE,
+  type CustomerLtvEntry,
+  type RfmSegment,
+} from "@/lib/customerLtv";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
@@ -607,6 +617,37 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [attachDropboxTarget, setAttachDropboxTarget] = useState<{ customerId: string; clientName: string } | null>(null);
   const [attachDropboxPath, setAttachDropboxPath] = useState("");
 
+  // LTV (MVP, frontend-only): map customer.id -> aggregated lifetime value.
+  // Loaded lazily once per teamId; failures are swallowed (LTV column shows "—").
+  const [customerLtvMap, setCustomerLtvMap] = useState<Map<string, CustomerLtvEntry>>(new Map());
+  // LTV (MVP): default to "desc" so top customers are visible on first paint.
+  // Cycle: desc -> asc -> default (server order).
+  const [ltvSortDirection, setLtvSortDirection] = useState<"default" | "desc" | "asc">("desc");
+  // LTV (MVP): "all" disables segment filtering.
+  const [segmentFilter, setSegmentFilter] = useState<RfmSegment | "all">("all");
+
+  useEffect(() => {
+    if (!teamId) {
+      setCustomerLtvMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const orders = await loadDerivedOrders(teamId, userId);
+        if (cancelled) return;
+        setCustomerLtvMap(aggregateCustomerLtv(orders));
+      } catch (err) {
+        // Silent: LTV is purely additive — log for debug, keep the page working.
+        console.warn("[LTV] failed to load derived orders for customer LTV", err);
+        if (!cancelled) setCustomerLtvMap(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, userId]);
+
   useEffect(() => {
     setCustomerDropboxLinks(readCustomerDropboxLinks(teamId));
   }, [teamId]);
@@ -1066,7 +1107,57 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadManagerFilter(ALL_MANAGERS_FILTER);
     }
   }, [isManagerUser]);
-  const filteredRows = rows;
+  // LTV (MVP): derived segment map + counts, recomputed when LTV data changes.
+  const customerSegmentMap = useMemo(() => buildSegmentMap(customerLtvMap), [customerLtvMap]);
+  const segmentCounts = useMemo(() => {
+    const counts: Record<RfmSegment | "all", number> = {
+      all: rows.length,
+      champion: 0,
+      new: 0,
+      loyal: 0,
+      at_risk: 0,
+      dormant: 0,
+      none: 0,
+    };
+    for (const row of rows) {
+      const seg = customerSegmentMap.get(row.id) ?? "none";
+      counts[seg] += 1;
+    }
+    return counts;
+  }, [rows, customerSegmentMap]);
+
+  // LTV (MVP): apply segment filter then LTV sort (stable, in-place copy).
+  const filteredRows = useMemo(() => {
+    let next = rows;
+    if (segmentFilter !== "all") {
+      next = next.filter((row) => (customerSegmentMap.get(row.id) ?? "none") === segmentFilter);
+    }
+    if (ltvSortDirection !== "default") {
+      const dir = ltvSortDirection === "desc" ? -1 : 1;
+      next = [...next].sort((a, b) => {
+        const av = customerLtvMap.get(a.id)?.lifetimeRevenue ?? -1;
+        const bv = customerLtvMap.get(b.id)?.lifetimeRevenue ?? -1;
+        if (av === bv) return 0;
+        return av < bv ? dir : -dir;
+      });
+    }
+    return next;
+  }, [rows, segmentFilter, customerSegmentMap, ltvSortDirection, customerLtvMap]);
+
+  // LTV (MVP): only show segment-filter pills when at least one customer has a non-empty segment.
+  const hasAnyLtv = customerLtvMap.size > 0;
+
+  const cycleLtvSort = useCallback(() => {
+    setLtvSortDirection((dir) => (dir === "default" ? "desc" : dir === "desc" ? "asc" : "default"));
+  }, []);
+
+  // LTV (MVP): when user interacts with LTV sort or segment filter, the
+  // paginated 50-row default is incorrect — segment counts and sort would
+  // reflect a subset only. Only trigger fetchAll AFTER LTV data has loaded,
+  // so the first paint stays fast. Actual trigger lives further down — search
+  // for "LTV (MVP): full-fetch trigger".
+  const ltvNeedsFullFetch =
+    (ltvSortDirection !== "default" || segmentFilter !== "all") && customerLtvMap.size > 0;
 
   const filteredLeads = leads;
 
@@ -2064,6 +2155,30 @@ function CustomersPage({ teamId }: { teamId: string }) {
     teamId,
   ]);
 
+  // LTV (MVP): full-fetch trigger — see `ltvNeedsFullFetch` above.
+  // Reuses the same `loadCustomers({ fetchAll, fullFetchKey })` pattern as
+  // search, so a second toggle is cached and won't re-fetch.
+  useEffect(() => {
+    if (!ltvNeedsFullFetch || !teamId) return;
+    if (activeTab !== "customers") return;
+    if (customersLoading || customersRefreshing) return;
+    if (!customersHasMore && rows.length >= (customersTotal || rows.length)) return;
+    void loadCustomers({
+      fetchAll: true,
+      fullFetchKey: `ltv:${teamId}`,
+    });
+  }, [
+    ltvNeedsFullFetch,
+    teamId,
+    activeTab,
+    customersLoading,
+    customersRefreshing,
+    customersHasMore,
+    customersTotal,
+    rows.length,
+    loadCustomers,
+  ]);
+
   useEffect(() => {
     if (shouldPrioritizeDeepLink) return;
     const activeManagerFilter =
@@ -3015,6 +3130,53 @@ function CustomersPage({ teamId }: { teamId: string }) {
         ) : null}
         <TabsContent value="customers" className="mt-0 pt-0">
             <div className="overflow-hidden">
+              {/* LTV (MVP): RFM segment filter pills */}
+              {hasAnyLtv ? (
+                <div className="flex flex-wrap items-center gap-1.5 px-4 pt-4 pb-3 md:px-6">
+                  {ltvNeedsFullFetch && (customersRefreshing || customersHasMore) ? (
+                    <span className="mr-1 text-[11px] text-muted-foreground" title="Для коректного сорту/сегментації треба всі замовники, не тільки перші 50">
+                      Завантажую всіх клієнтів…
+                    </span>
+                  ) : null}
+                  {(["all", "champion", "loyal", "new", "at_risk", "dormant", "none"] as const).map((seg) => {
+                    const count = segmentCounts[seg];
+                    if (seg !== "all" && count === 0) return null;
+                    const active = segmentFilter === seg;
+                    const label = seg === "all" ? "Усі" : RFM_SEGMENT_LABELS[seg];
+                    const tone = seg === "all" ? "neutral" : RFM_SEGMENT_TONE[seg];
+                    return (
+                      <Badge
+                        key={seg}
+                        tone={tone}
+                        variant={active ? "default" : "outline"}
+                        className={cn(
+                          "cursor-pointer select-none rounded-full px-2.5 py-0.5 text-[11px] font-medium normal-case tracking-normal",
+                          active ? "ring-1 ring-foreground/20" : "hover:bg-muted/40"
+                        )}
+                        onClick={() => setSegmentFilter(seg)}
+                        title={
+                          seg === "champion"
+                            ? "Top-20% за оборотом, активні (< 90 днів), 3+ замовлень"
+                            : seg === "loyal"
+                            ? "3+ замовлень, активні (< 180 днів)"
+                            : seg === "at_risk"
+                            ? "2+ замовлень, тиша 180–365 днів — час нагадати"
+                            : seg === "dormant"
+                            ? "Не замовляли > 365 днів"
+                            : seg === "new"
+                            ? "Перше замовлення < 90 днів тому"
+                            : seg === "none"
+                            ? "Без замовлень / немає даних"
+                            : "Усі замовники"
+                        }
+                      >
+                        {label}
+                        <span className="ml-1 opacity-70">{count}</span>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              ) : null}
               {customersLoading ? (
               <AppSectionLoader label="Готуємо список замовників..." variant="table" />
               ) : customersError ? (
@@ -3051,11 +3213,38 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               />
                               <div className="min-w-0">
                                 <div className="font-medium truncate">{row.name ?? "Не вказано"}</div>
-                                {legalEntities.length > 1 ? (
-                                  <div className="text-xs text-muted-foreground truncate">
-                                    {legalEntities.length} юр. ос.
-                                  </div>
-                                ) : null}
+                                {/* LTV (MVP): mobile — compact line with sum + segment chip */}
+                                {(() => {
+                                  const ltv = customerLtvMap.get(row.id);
+                                  const segment = customerSegmentMap.get(row.id) ?? "none";
+                                  if (!ltv) {
+                                    return legalEntities.length > 1 ? (
+                                      <div className="text-xs text-muted-foreground truncate">
+                                        {legalEntities.length} юр. ос.
+                                      </div>
+                                    ) : null;
+                                  }
+                                  return (
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                      <span className="font-medium text-foreground tabular-nums">
+                                        {formatOrderMoney(ltv.lifetimeRevenue, ltv.currency)}
+                                      </span>
+                                      <span className="opacity-70">· {ltv.ordersCount} зам.</span>
+                                      {segment !== "none" ? (
+                                        <Badge
+                                          tone={RFM_SEGMENT_TONE[segment]}
+                                          variant="outline"
+                                          className="rounded-full px-1.5 py-0 text-[10px] font-medium normal-case tracking-normal"
+                                        >
+                                          {RFM_SEGMENT_LABELS[segment]}
+                                        </Badge>
+                                      ) : null}
+                                      {legalEntities.length > 1 ? (
+                                        <span className="opacity-70">· {legalEntities.length} юр.ос.</span>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                             <div onClick={(event) => event.stopPropagation()}>
@@ -3157,14 +3346,32 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md" className="min-w-[860px] table-fixed [&_td]:px-4 [&_th]:px-4">
+                  <Table variant="list" size="md" className="min-w-[980px] table-fixed [&_td]:px-4 [&_th]:px-4">
                     <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="w-[26%] pl-6">Компанія</TableHead>
+                        <TableHead className="w-[24%] pl-6">Компанія</TableHead>
                         <TableHead className="w-[76px] px-2">Тип</TableHead>
-                        <TableHead className="w-[30%] pl-2">Юрособа</TableHead>
-                        <TableHead className="w-[15%]">Сайт</TableHead>
-                        <TableHead className="w-[14%]">Менеджер</TableHead>
+                        <TableHead className="w-[26%] pl-2">Юрособа</TableHead>
+                        <TableHead className="w-[13%]">Сайт</TableHead>
+                        <TableHead className="w-[12%]">Менеджер</TableHead>
+                        {/* LTV (MVP) */}
+                        <TableHead className="w-[120px] text-right pr-2">
+                          <button
+                            type="button"
+                            onClick={cycleLtvSort}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-[11px] tracking-wide transition-colors",
+                              "hover:bg-muted/60 cursor-pointer",
+                              ltvSortDirection !== "default" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                            title="Lifetime Value — сума всіх замовлень клієнта. Клік перемикає: ↓ ↑ ↕"
+                          >
+                            LTV
+                            <span className="text-[11px]">
+                              {ltvSortDirection === "desc" ? "↓" : ltvSortDirection === "asc" ? "↑" : "↕"}
+                            </span>
+                          </button>
+                        </TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -3257,6 +3464,36 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               ) : null}
                             </TableCell>
                             <TableCell className="align-top">{renderManagerCell(row.manager_user_id, row.manager)}</TableCell>
+                            {/* LTV (MVP) */}
+                            <TableCell className="align-top text-right pr-2 tabular-nums">
+                              {(() => {
+                                const ltv = customerLtvMap.get(row.id);
+                                const segment = customerSegmentMap.get(row.id) ?? "none";
+                                if (!ltv) {
+                                  return <span className="text-muted-foreground">—</span>;
+                                }
+                                return (
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span
+                                      className="font-medium"
+                                      title={buildCustomerLtvTooltip(ltv)}
+                                    >
+                                      {formatOrderMoney(ltv.lifetimeRevenue, ltv.currency)}
+                                      {ltv.mixedCurrencies ? <sup className="ml-0.5 text-muted-foreground">*</sup> : null}
+                                    </span>
+                                    {segment !== "none" ? (
+                                      <Badge
+                                        tone={RFM_SEGMENT_TONE[segment]}
+                                        variant="outline"
+                                        className="rounded-full px-2 py-0 text-[10px] font-medium normal-case tracking-normal"
+                                      >
+                                        {RFM_SEGMENT_LABELS[segment]}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
+                            </TableCell>
                             <TableCell
                               className="w-12 pr-4 text-right"
                               onClick={(event) => event.stopPropagation()}
@@ -3568,6 +3805,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
         orders={orderQuotes}
         designTasks={linkedDesignTasks}
         linkedLoading={linkedQuotesLoading}
+        // LTV (MVP)
+        ltvEntry={editingId ? customerLtvMap.get(editingId) ?? null : null}
+        ltvSegment={editingId ? customerSegmentMap.get(editingId) : undefined}
         onOpenCalculation={(id) => navigate(`/orders/estimates/${id}`)}
         onOpenOrder={(id) => navigate(`/orders/production/${id}`)}
         onOpenDesignTask={(id) => navigate(`/design/${id}`)}

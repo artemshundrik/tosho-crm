@@ -19,6 +19,15 @@ import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+// LTV (MVP, frontend-only): summary card data — purely additive props.
+import {
+  buildCustomerLtvTooltip,
+  RFM_SEGMENT_LABELS,
+  RFM_SEGMENT_TONE,
+  type CustomerLtvEntry,
+  type RfmSegment,
+} from "@/lib/customerLtv";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
@@ -133,6 +142,10 @@ export type CustomerDialogProps = {
   onCreateDropboxFolder?: () => void;
   onAttachDropboxFolder?: () => void;
   onDetachDropboxFolder?: () => void;
+  // LTV (MVP): optional. When provided, a "Lifetime Value" card renders at the
+  // top of the "Пов'язані сутності" tab. Pass `null`/`undefined` to hide.
+  ltvEntry?: CustomerLtvEntry | null;
+  ltvSegment?: RfmSegment;
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
@@ -246,6 +259,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   onCreateDropboxFolder,
   onAttachDropboxFolder,
   onDetachDropboxFolder,
+  ltvEntry,
+  ltvSegment,
 }) => {
   const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const primaryLegalEntity = form.legalEntities[0] ?? createEmptyCustomerLegalEntity();
@@ -1370,6 +1385,75 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             </TabsContent>
 
             <TabsContent value="related" className="space-y-3 mt-3">
+              {/* LTV (MVP): summary card. Only renders when caller supplies ltvEntry. */}
+              {ltvEntry ? (
+                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <SectionHeader>Lifetime value</SectionHeader>
+                    {ltvSegment && ltvSegment !== "none" ? (
+                      <Badge
+                        tone={RFM_SEGMENT_TONE[ltvSegment]}
+                        variant="outline"
+                        className="rounded-full px-2 py-0 text-[10px] font-medium normal-case tracking-normal"
+                      >
+                        {RFM_SEGMENT_LABELS[ltvSegment]}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <div
+                    className="mt-2 flex items-baseline gap-2 tabular-nums"
+                    title={buildCustomerLtvTooltip(ltvEntry)}
+                  >
+                    <span className="text-2xl font-semibold">
+                      {new Intl.NumberFormat("uk-UA", {
+                        style: "currency",
+                        currency: ltvEntry.currency || "UAH",
+                        maximumFractionDigits: 0,
+                      }).format(ltvEntry.lifetimeRevenue)}
+                    </span>
+                    {ltvEntry.mixedCurrencies ? (
+                      <span className="text-xs text-muted-foreground" title="Є замовлення в інших валютах — показана домінантна">
+                        · мульти-валютне
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide">Замовлень</div>
+                      <div className="text-sm text-foreground">{ltvEntry.ordersCount}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide">Сер. чек</div>
+                      <div className="text-sm text-foreground">
+                        {new Intl.NumberFormat("uk-UA", {
+                          style: "currency",
+                          currency: ltvEntry.currency || "UAH",
+                          maximumFractionDigits: 0,
+                        }).format(ltvEntry.lifetimeRevenue / Math.max(ltvEntry.ordersCount, 1))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide">Останнє</div>
+                      <div className="text-sm text-foreground">
+                        {ltvEntry.lastOrderAt
+                          ? format(new Date(ltvEntry.lastOrderAt), "dd.MM.yyyy", { locale: uk })
+                          : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide">Тиша</div>
+                      <div className="text-sm text-foreground">
+                        {ltvEntry.lastOrderAt
+                          ? `${Math.floor((Date.now() - new Date(ltvEntry.lastOrderAt).getTime()) / 86400000)} дн`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[10px] text-muted-foreground">
+                    Сума по всіх замовленнях клієнта. Без врахування собівартості та повернень.
+                  </div>
+                </div>
+              ) : null}
               <SectionHeader>Пов'язані сутності</SectionHeader>
               <Tabs defaultValue="calculations" className="w-full">
                 <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
