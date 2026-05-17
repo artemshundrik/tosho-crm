@@ -78,7 +78,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, ExternalLink, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Unlink, Users, X } from "lucide-react";
+import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Unlink, Users, X } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { toast } from "sonner";
 
@@ -620,9 +620,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
   // LTV (MVP, frontend-only): map customer.id -> aggregated lifetime value.
   // Loaded lazily once per teamId; failures are swallowed (LTV column shows "—").
   const [customerLtvMap, setCustomerLtvMap] = useState<Map<string, CustomerLtvEntry>>(new Map());
-  // LTV (MVP): default to "desc" so top customers are visible on first paint.
-  // Cycle: desc -> asc -> default (server order).
-  const [ltvSortDirection, setLtvSortDirection] = useState<"default" | "desc" | "asc">("desc");
+  // LTV (MVP): start in "default" (server order) so the 50-row pagination
+  // optimization is preserved on first paint. User explicitly opting into
+  // LTV sort triggers a one-shot full-fetch below. Cycle: default -> desc -> asc -> default.
+  const [ltvSortDirection, setLtvSortDirection] = useState<"default" | "desc" | "asc">("default");
   // LTV (MVP): "all" disables segment filtering.
   const [segmentFilter, setSegmentFilter] = useState<RfmSegment | "all">("all");
 
@@ -1133,12 +1134,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
       next = next.filter((row) => (customerSegmentMap.get(row.id) ?? "none") === segmentFilter);
     }
     if (ltvSortDirection !== "default") {
-      const dir = ltvSortDirection === "desc" ? -1 : 1;
       next = [...next].sort((a, b) => {
         const av = customerLtvMap.get(a.id)?.lifetimeRevenue ?? -1;
         const bv = customerLtvMap.get(b.id)?.lifetimeRevenue ?? -1;
-        if (av === bv) return 0;
-        return av < bv ? dir : -dir;
+        // desc → bigger first (positive when av < bv pushes 'a' after 'b'); asc → smaller first.
+        return ltvSortDirection === "desc" ? bv - av : av - bv;
       });
     }
     return next;
@@ -3360,16 +3360,26 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             type="button"
                             onClick={cycleLtvSort}
                             className={cn(
-                              "inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-[11px] tracking-wide transition-colors",
+                              "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-[11px] tracking-wide transition-colors",
                               "hover:bg-muted/60 cursor-pointer",
-                              ltvSortDirection !== "default" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                              ltvSortDirection !== "default" ? "text-foreground bg-muted/40" : "text-muted-foreground hover:text-foreground"
                             )}
-                            title="Lifetime Value — сума всіх замовлень клієнта. Клік перемикає: ↓ ↑ ↕"
+                            title={
+                              ltvSortDirection === "desc"
+                                ? "Сортовано: від найбільшої. Клік: від найменшої"
+                                : ltvSortDirection === "asc"
+                                ? "Сортовано: від найменшої. Клік: скинути сортування"
+                                : "Lifetime Value — клік щоб сортувати від найбільшої. Завантажить всіх клієнтів"
+                            }
                           >
                             LTV
-                            <span className="text-[11px]">
-                              {ltvSortDirection === "desc" ? "↓" : ltvSortDirection === "asc" ? "↑" : "↕"}
-                            </span>
+                            {ltvSortDirection === "desc" ? (
+                              <ChevronDown className="h-3 w-3" />
+                            ) : ltvSortDirection === "asc" ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronsUpDown className="h-3 w-3 opacity-50" />
+                            )}
                           </button>
                         </TableHead>
                         <TableHead className="w-12"></TableHead>
