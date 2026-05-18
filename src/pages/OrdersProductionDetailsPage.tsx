@@ -34,6 +34,7 @@ import {
 } from "@/features/orders/orderRecords";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { declineToGenitive } from "@/lib/nameDeclension";
+import { toSignatureInitials } from "@/lib/signatureFormat";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -493,6 +494,8 @@ const buildOrderDocumentHtml = (
   const contractEndDate = formatContractEndDate(record.contractCreatedAt ?? null);
   const customerTitle = record.legalEntityLabel || record.customerName;
   const customerSignatoryName = record.customerSignatoryName?.trim() || "Не вказано";
+  // Підпис унизу документа — короткий формат "І.П. Прізвище" (як у Виконавця "О.В. Борщ").
+  const customerSignatureLabel = toSignatureInitials(record.customerSignatoryName) || customerSignatoryName;
   // Genitive form for body text ("в особі директора ..."), fallback to nominative if not provided.
   const customerSignatoryNameBody = options.customerSignatoryNameGenitive?.trim() || customerSignatoryName;
   const customerSignatoryRole = record.customerSignatoryPosition?.trim() || "уповноваженої особи";
@@ -725,7 +728,7 @@ const buildOrderDocumentHtml = (
             <p>ІПН: ${escapeHtml(customerVatId)}</p>
             <p>IBAN: ${escapeHtml(customerBankDetails)}</p>
             <p>${escapeHtml(customerVatStatus)}</p>
-            <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatoryName)}</p>
+            <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatureLabel)}</p>
           </div>
         </div>
         </div>
@@ -842,12 +845,13 @@ const buildOrderDocumentHtml = (
             <div>
               <div class="party-title">ЗАМОВНИК:</div>
               <p>${escapeHtml(customerTitle)}</p>
-              <p>Код ЄДРПОУ / ІПН: ${escapeHtml(customerTaxId)}</p>
-              <p>IBAN / банк: ${escapeHtml(customerBankDetails)}</p>
-              <p>Тел.: ${escapeHtml(record.contactPhone || "Не вказано")}</p>
-              <p>Email: ${escapeHtml(record.contactEmail || "Не вказано")}</p>
+              <p>Юридична адреса: ${escapeHtml(record.customerLegalAddress || "Не вказано")}</p>
+              <p>Код ЄДРПОУ: ${escapeHtml(customerTaxId)}</p>
+              <p>ІПН: ${escapeHtml(customerVatId)}</p>
+              <p>IBAN: ${escapeHtml(customerBankDetails)}</p>
+              <p>${escapeHtml(customerVatStatus)}</p>
               <p class="signature-line">${escapeHtml(customerSignatoryRole)}</p>
-              <p>______________________ ${escapeHtml(customerSignatoryName)}</p>
+              <p>______________________ ${escapeHtml(customerSignatureLabel)}</p>
             </div>
           </div>
         </div>

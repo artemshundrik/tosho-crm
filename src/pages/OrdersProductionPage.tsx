@@ -36,6 +36,7 @@ import {
 } from "@/features/orders/orderRecords";
 import { cn } from "@/lib/utils";
 import { declineToGenitive } from "@/lib/nameDeclension";
+import { toSignatureInitials } from "@/lib/signatureFormat";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import {
   AlertTriangle,
@@ -222,9 +223,22 @@ const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: B
     ? customerSignatoryRoleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRoleGenitive.slice(1)
     : customerSignatoryRoleGenitive;
   const customerSignatoryName = first.customerSignatoryName || "Не вказано";
+  // Підпис унизу СП — формат "І.П. Прізвище".
+  const customerSignatureLabel = toSignatureInitials(first.customerSignatoryName) || customerSignatoryName;
   // Genitive form for body text; fallback to nominative if not supplied.
   const customerSignatoryNameBody = options.customerSignatoryNameGenitive?.trim() || customerSignatoryName;
   const customerAuthority = first.customerSignatoryAuthority || "Не вказано";
+  // Статус ПДВ замовника — береться зі ставки в карті клієнта (як у договорі/details-spec).
+  const buildVatStatusLabel = (rate?: string | null) => {
+    const normalized = (rate ?? "").trim();
+    if (!normalized || normalized === "none") return "Не є платником ПДВ.";
+    const numeric = Number(normalized);
+    if (!Number.isFinite(numeric) || numeric < 0) return "Не є платником ПДВ.";
+    if (numeric === 20) return "Є платником ПДВ на загальних підставах.";
+    if (numeric === 0) return "Є платником ПДВ за нульовою ставкою.";
+    return `Є платником ПДВ за ставкою ${numeric}%.`;
+  };
+  const customerVatStatus = buildVatStatusLabel(first.customerVatRate);
   const itemRows = rows
     .map(({ orderNumber, item }, index) => {
       const unitPriceWithVat = Number(item.unitPrice || 0);
@@ -321,10 +335,12 @@ const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: B
         <div class="party">
           <strong>ЗАМОВНИК</strong>
           <p>${escapeHtml(customerTitle)}</p>
-          <p>Код / ІПН: ${escapeHtml(first.customerTaxId || "Не вказано")}</p>
-          <p>IBAN / банк: ${escapeHtml(first.customerBankDetails || first.customerIban || "Не вказано")}</p>
-          <p>Адреса: ${escapeHtml(first.customerLegalAddress || "Не вказано")}</p>
-          <p class="signature">${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}</p>
+          <p>Юридична адреса: ${escapeHtml(first.customerLegalAddress || "Не вказано")}</p>
+          <p>Код ЄДРПОУ: ${escapeHtml(first.customerTaxId || "Не вказано")}</p>
+          <p>ІПН: ${escapeHtml(first.customerVatId || "Не вказано")}</p>
+          <p>IBAN: ${escapeHtml(first.customerBankDetails || first.customerIban || "Не вказано")}</p>
+          <p>${escapeHtml(customerVatStatus)}</p>
+          <p class="signature">${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatureLabel)}</p>
         </div>
       </div>
     </body>
