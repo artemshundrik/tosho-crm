@@ -40,8 +40,11 @@ export const ORDER_INCOTERMS_OPTIONS = [
 export const ORDER_DOCUMENT_EXECUTOR = {
   companyName: "Товариство з обмеженою відповідальністю «АВАНПРІНТ»",
   shortName: "ТОВ «АВАНПРІНТ»",
-  signatory: "Борщ Олена Вікторівна",
+  // Використовується у тілі документа після "в особі ..." — родовий відмінок.
+  signatory: "Борщ Олени Вікторівни",
   signatoryPosition: "директора",
+  // Капіталізована форма для підписного рядка унизу документа.
+  signatoryPositionDisplay: "Директор",
   authority: "Статуту",
   address: "Україна, 03035, м. Київ, вул. Монастирського Дениса, буд. 3, корпус 3",
   taxId: "43024297",

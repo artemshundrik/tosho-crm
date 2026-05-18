@@ -31,6 +31,7 @@ import {
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
+import { declineToGenitive } from "@/lib/nameDeclension";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -446,13 +447,29 @@ const normalizeDocumentDocs = (record: DerivedOrderRecord) => ({
   specification: canCreateSpecification(record),
 });
 
-const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentKind) => {
+type BuildOrderDocumentOptions = {
+  /** Підписант замовника у родовому відмінку (Кого?) — використовується у тілі документа після "в особі ...". */
+  customerSignatoryNameGenitive?: string;
+};
+
+const buildOrderDocumentHtml = (
+  record: DerivedOrderRecord,
+  kind: OrderDocumentKind,
+  options: BuildOrderDocumentOptions = {}
+) => {
   const title = documentTitleByKind[kind];
-  const contractDate = formatContractDateParts(record.updatedAt ?? record.createdAt);
-  const contractEndDate = formatContractEndDate(record.updatedAt ?? record.createdAt);
+  // Дата документа = коли менеджер натиснув "Створити". Якщо ще не створено — сьогодні (fallback всередині форматера).
+  const contractDate = formatContractDateParts(record.contractCreatedAt ?? null);
+  const contractEndDate = formatContractEndDate(record.contractCreatedAt ?? null);
   const customerTitle = record.legalEntityLabel || record.customerName;
   const customerSignatoryName = record.customerSignatoryName?.trim() || "Не вказано";
+  // Genitive form for body text ("в особі директора ..."), fallback to nominative if not provided.
+  const customerSignatoryNameBody = options.customerSignatoryNameGenitive?.trim() || customerSignatoryName;
   const customerSignatoryRole = record.customerSignatoryPosition?.trim() || "уповноваженої особи";
+  // Для тіла документа ("в особі ...") — позиція з малої літери.
+  const customerSignatoryRoleBody = customerSignatoryRole
+    ? customerSignatoryRole.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRole.slice(1)
+    : customerSignatoryRole;
   const customerSignatoryAuthority = record.customerSignatoryAuthority?.trim() || "Не вказано";
   const rows = record.items
     .map(
@@ -470,7 +487,8 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
   const customerBankDetails = record.customerBankDetails?.trim() || record.customerIban?.trim() || "Не вказано";
   const customerTaxId = record.customerTaxId?.trim() || "Не вказано";
   const specificationNumber = record.quoteNumber;
-  const specificationDate = formatSlashDate(record.updatedAt ?? record.createdAt);
+  const specificationDate = formatSlashDate(record.specificationCreatedAt ?? null);
+  const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
   const totalWithVat = Number(record.total || 0);
   const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
   const paymentTerms = getPaymentTermsParts(record.paymentTerms, totalWithVat);
@@ -545,7 +563,7 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
           <div>«${escapeHtml(contractDate.day)}» ${escapeHtml(contractDate.monthLabel)} ${escapeHtml(contractDate.year)} р.</div>
         </div>
 
-        <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
+        <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
 
         <h3>1. Предмет договору</h3>
         <p>Виконавець зобов’язується виготовити та поставити Замовнику рекламно-сувенірну продукцію (надалі – Продукція) в асортименті, кількості та по ціні згідно Специфікаціям, що є невід’ємними частинами цього Договору, а Замовник зобов’язується прийняти Продукцію та оплатити її в порядку та на умовах, визначених Договором.</p>
@@ -603,7 +621,7 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
             <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
             <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
             <p>${escapeHtml(CONTRACT_EXECUTOR.taxStatus)}</p>
-            <p class="signature">${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ____________________ ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
+            <p class="signature">${escapeHtml(CONTRACT_EXECUTOR.signatoryPositionDisplay)} ____________________ ${escapeHtml(CONTRACT_EXECUTOR.signatureLabel)}</p>
           </div>
           <div class="party-card">
             <div class="party-title">ЗАМОВНИК</div>
@@ -675,10 +693,10 @@ const buildOrderDocumentHtml = (record: DerivedOrderRecord, kind: OrderDocumentK
 
           <div class="topline">
             <div>м. Київ</div>
-            <div>${escapeHtml(specificationDate)} р.</div>
+            <div>«${escapeHtml(specificationDateLong.day)}» ${escapeHtml(specificationDateLong.monthLabel)} ${escapeHtml(specificationDateLong.year)} р.</div>
           </div>
 
-          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRole)} ${escapeHtml(customerSignatoryName)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
+          <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
 
           <div class="section-title center">СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
 
@@ -969,7 +987,12 @@ export default function OrdersProductionDetailsPage() {
       setError("Для договору не вистачає реквізитів замовника.");
       return;
     }
-    const html = buildOrderDocumentHtml(record, kind);
+    // Відмінюємо ПІБ замовника у родовий відмінок через OpenAI (з кешем у Supabase).
+    // Якщо API недоступний або повертає помилку — fallback на називний (документ не зламається).
+    const customerSignatoryNameGenitive = record.customerSignatoryName
+      ? await declineToGenitive(record.customerSignatoryName)
+      : "";
+    const html = buildOrderDocumentHtml(record, kind, { customerSignatoryNameGenitive });
     const popup = window.open("", "_blank");
     if (!popup) {
       setError("Браузер заблокував нове вікно для документа.");
