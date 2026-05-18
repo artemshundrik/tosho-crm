@@ -741,7 +741,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
+                    <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -761,7 +761,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Імʼя контакту</Label>
+                    <Label>Імʼя контакту <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.contacts[0]?.name ?? ""}
                       onChange={(e) => updateContact(0, { name: e.target.value })}
@@ -770,7 +770,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Телефон *</Label>
+                    <Label>Телефон <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.contacts[0]?.phone ?? ""}
                       onChange={(e) => updateContact(0, { phone: e.target.value })}
@@ -781,7 +781,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Email *</Label>
+                    <Label>Email <span className="text-destructive">*</span></Label>
                     <Input
                       type="email"
                       value={form.contacts[0]?.email ?? ""}
@@ -835,7 +835,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
+                    <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
@@ -889,7 +889,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
-                        <Label>Імʼя контакту</Label>
+                        <Label>Імʼя контакту <span className="text-destructive">*</span></Label>
                         <Input
                           value={contact.name}
                           onChange={(e) => updateContact(index, { name: e.target.value })}

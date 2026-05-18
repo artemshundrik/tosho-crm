@@ -206,6 +206,10 @@ export const useCustomerLeadCreate = ({
       setCustomerError("Вкажіть назву компанії.");
       return;
     }
+    if (!customerForm.contacts.some((contact) => contact.name.trim())) {
+      setCustomerError("Вкажіть імʼя контакту.");
+      return;
+    }
     const normalizedLogoUrl = normalizeCustomerLogoUrl(customerForm.logoUrl);
     if (customerForm.logoUploadMode === "url" && customerForm.logoUrl.trim() && !normalizedLogoUrl) {
       setCustomerError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");

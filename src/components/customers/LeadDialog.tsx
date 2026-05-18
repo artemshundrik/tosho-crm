@@ -656,7 +656,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
+                    <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.companyName}
                       onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
@@ -665,7 +665,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Джерело *</Label>
+                    <Label>Джерело <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.source}
                       onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
@@ -676,7 +676,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Імʼя *</Label>
+                    <Label>Імʼя <span className="text-destructive">*</span></Label>
                     <Input
                       value={form.firstName}
                       onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
@@ -709,7 +709,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <div className="flex h-8 items-center justify-between">
-                      <Label>Телефон *</Label>
+                      <Label>Телефон <span className="text-destructive">*</span></Label>
                       <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addPhone}>
                         <PlusCircle className="mr-1 h-4 w-4" />
                         Додати номер
@@ -764,7 +764,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>{isFopOwnership ? "ПІБ *" : "Назва компанії *"}</Label>
+                      <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
                       <Input
                         value={form.companyName}
                         onChange={(e) => setForm((prev) => ({ ...prev, companyName: e.target.value }))}
@@ -793,7 +793,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>Джерело *</Label>
+                      <Label>Джерело <span className="text-destructive">*</span></Label>
                       <Input
                         value={form.source}
                         onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
@@ -808,7 +808,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>Імʼя *</Label>
+                      <Label>Імʼя <span className="text-destructive">*</span></Label>
                       <Input
                         value={form.firstName}
                         onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
@@ -841,7 +841,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </div>
                     <div className="grid gap-2">
                       <div className="flex h-8 items-center justify-between">
-                        <Label>Телефон *</Label>
+                        <Label>Телефон <span className="text-destructive">*</span></Label>
                         <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addPhone}>
                           <PlusCircle className="mr-1 h-4 w-4" />
                           Додати номер
