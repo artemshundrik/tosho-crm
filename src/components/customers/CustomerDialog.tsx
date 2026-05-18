@@ -1155,15 +1155,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         />
                       </div>
                       <div className="grid gap-2">
-                        <Label>{activeLegalEntityIsPerson ? "ІПН" : "ЄДРПОУ / ІПН"}</Label>
+                        <Label>{activeLegalEntityIsPerson ? "ІПН" : "Код ЄДРПОУ"}</Label>
                         <Input
                           value={activeLegalEntity.taxId}
                           onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { taxId: e.target.value })}
-                          placeholder={activeLegalEntityIsPerson ? "ІПН" : "Код або ІПН"}
+                          placeholder={activeLegalEntityIsPerson ? "ІПН" : "8-значний код"}
                           className="h-9"
                         />
                       </div>
                     </div>
+
+                    {!activeLegalEntityIsPerson ? (
+                      <div className="mt-4 grid gap-2">
+                        <Label>ІПН платника ПДВ</Label>
+                        <Input
+                          value={activeLegalEntity.vatId}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { vatId: e.target.value })}
+                          placeholder="12-значний ІПН"
+                          className="h-9"
+                        />
+                      </div>
+                    ) : null}
 
                     <div className="mt-4 grid gap-2">
                       <Label>{activeLegalEntityIsPerson ? "Прописка" : "Юридична адреса"}</Label>

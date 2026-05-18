@@ -190,6 +190,8 @@ const getSpecificationGroupBlocker = (records: DerivedOrderRecord[]) => {
 type BuildGroupedSpecOptions = {
   /** Підписант замовника у родовому відмінку (Кого?). */
   customerSignatoryNameGenitive?: string;
+  /** Посада підписанта у родовому відмінку (Кого?). */
+  customerSignatoryRoleGenitive?: string;
 };
 
 const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: BuildGroupedSpecOptions = {}) => {
@@ -214,10 +216,11 @@ const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: B
   const numberLabel = records.map((record) => record.quoteNumber).join(", ");
   const customerTitle = first.legalEntityLabel || first.customerName;
   const customerSignatoryRole = first.customerSignatoryPosition || "уповноваженої особи";
-  // Для тіла документа ("в особі ...") — позиція з малої літери.
-  const customerSignatoryRoleBody = customerSignatoryRole
-    ? customerSignatoryRole.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRole.slice(1)
-    : customerSignatoryRole;
+  // Для тіла документа ("в особі ...") — посада у родовому відмінку, з малої літери.
+  const customerSignatoryRoleGenitive = options.customerSignatoryRoleGenitive?.trim() || customerSignatoryRole;
+  const customerSignatoryRoleBody = customerSignatoryRoleGenitive
+    ? customerSignatoryRoleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRoleGenitive.slice(1)
+    : customerSignatoryRoleGenitive;
   const customerSignatoryName = first.customerSignatoryName || "Не вказано";
   // Genitive form for body text; fallback to nominative if not supplied.
   const customerSignatoryNameBody = options.customerSignatoryNameGenitive?.trim() || customerSignatoryName;
@@ -307,7 +310,7 @@ const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: B
         <div class="party">
           <strong>ВИКОНАВЕЦЬ</strong>
           <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
-          <p>Місцезнаходження: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
+          <p>Юридична адреса: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
           <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
           <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
           <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
@@ -416,11 +419,16 @@ export default function OrdersProductionPage() {
       return;
     }
 
-    // Відмінюємо ПІБ підписанта замовника у родовий відмінок (з кешем + fallback).
-    const customerSignatoryNameGenitive = selectedRecords[0]?.customerSignatoryName
-      ? await declineToGenitive(selectedRecords[0].customerSignatoryName)
-      : "";
-    const html = buildGroupedSpecificationHtml(selectedRecords, { customerSignatoryNameGenitive });
+    // Відмінюємо ПІБ і посаду підписанта замовника у родовий відмінок (паралельно, з кешем + fallback).
+    const first = selectedRecords[0];
+    const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
+      first?.customerSignatoryName ? declineToGenitive(first.customerSignatoryName) : Promise.resolve(""),
+      first?.customerSignatoryPosition ? declineToGenitive(first.customerSignatoryPosition) : Promise.resolve(""),
+    ]);
+    const html = buildGroupedSpecificationHtml(selectedRecords, {
+      customerSignatoryNameGenitive,
+      customerSignatoryRoleGenitive,
+    });
     const popup = window.open("", "_blank");
     if (!popup) {
       setError("Браузер заблокував відкриття документа. Дозволь popup для цього сайту.");

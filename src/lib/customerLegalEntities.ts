@@ -3,6 +3,8 @@ export type CustomerLegalEntity = {
   ownershipType: string;
   legalName: string;
   taxId: string;
+  /** ІПН платника ПДВ (12-значний). Окреме поле, бо ЄДРПОУ і ІПН — різні номери. */
+  vatId: string;
   legalAddress: string;
   vatRate: string;
   cardNumber: string;
@@ -37,6 +39,7 @@ type CustomerLegalEntityRow = {
   ownership_type?: unknown;
   legal_name?: unknown;
   tax_id?: unknown;
+  vat_id?: unknown;
   legal_address?: unknown;
   vat_rate?: unknown;
   card_number?: unknown;
@@ -62,6 +65,7 @@ export const createEmptyCustomerLegalEntity = (): CustomerLegalEntity => ({
   ownershipType: "",
   legalName: "",
   taxId: "",
+  vatId: "",
   legalAddress: "",
   vatRate: "none",
   cardNumber: "",
@@ -82,6 +86,7 @@ const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntit
   ownershipType: typeof value.ownership_type === "string" ? value.ownership_type : "",
   legalName: typeof value.legal_name === "string" ? value.legal_name : "",
   taxId: typeof value.tax_id === "string" ? value.tax_id : "",
+  vatId: typeof value.vat_id === "string" ? value.vat_id : "",
   legalAddress: typeof value.legal_address === "string" ? value.legal_address : "",
   vatRate: normalizeVatRate(value.vat_rate),
   cardNumber: typeof value.card_number === "string" ? value.card_number : "",
@@ -142,6 +147,7 @@ export const serializeCustomerLegalEntities = (value: CustomerLegalEntity[]) =>
       ownership_type: entity.ownershipType.trim() || null,
       legal_name: entity.legalName.trim() || null,
       tax_id: entity.taxId.trim() || null,
+      vat_id: entity.vatId.trim() || null,
       legal_address: entity.legalAddress.trim() || null,
       vat_rate: entity.vatRate === "none" ? null : Number(entity.vatRate),
       card_number: entity.cardNumber.trim() || null,

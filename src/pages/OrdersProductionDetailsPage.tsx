@@ -7,6 +7,8 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -450,6 +452,12 @@ const normalizeDocumentDocs = (record: DerivedOrderRecord) => ({
 type BuildOrderDocumentOptions = {
   /** Підписант замовника у родовому відмінку (Кого?) — використовується у тілі документа після "в особі ...". */
   customerSignatoryNameGenitive?: string;
+  /** Посада підписанта замовника у родовому відмінку (Кого?) — також для тіла "в особі ...". */
+  customerSignatoryRoleGenitive?: string;
+  /** Кількість робочих днів на виконання замовлення (для п. 2.2 договору). */
+  productionWorkingDays?: number;
+  /** Автоматична пролонгація договору на рік (додає п. 8.5). */
+  contractAutoProlongation?: boolean;
 };
 
 const buildOrderDocumentHtml = (
@@ -466,10 +474,12 @@ const buildOrderDocumentHtml = (
   // Genitive form for body text ("в особі директора ..."), fallback to nominative if not provided.
   const customerSignatoryNameBody = options.customerSignatoryNameGenitive?.trim() || customerSignatoryName;
   const customerSignatoryRole = record.customerSignatoryPosition?.trim() || "уповноваженої особи";
-  // Для тіла документа ("в особі ...") — позиція з малої літери.
-  const customerSignatoryRoleBody = customerSignatoryRole
-    ? customerSignatoryRole.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRole.slice(1)
-    : customerSignatoryRole;
+  // Для тіла документа ("в особі ...") — посада у родовому відмінку з малої літери.
+  // Якщо OpenAI повернув genitive — беремо його; інакше fallback на оригінал.
+  const customerSignatoryRoleGenitive = options.customerSignatoryRoleGenitive?.trim() || customerSignatoryRole;
+  const customerSignatoryRoleBody = customerSignatoryRoleGenitive
+    ? customerSignatoryRoleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRoleGenitive.slice(1)
+    : customerSignatoryRoleGenitive;
   const customerSignatoryAuthority = record.customerSignatoryAuthority?.trim() || "Не вказано";
   const rows = record.items
     .map(
@@ -486,6 +496,24 @@ const buildOrderDocumentHtml = (
     .join("");
   const customerBankDetails = record.customerBankDetails?.trim() || record.customerIban?.trim() || "Не вказано";
   const customerTaxId = record.customerTaxId?.trim() || "Не вказано";
+  const customerVatId = record.customerVatId?.trim() || "Не вказано";
+  // Формуємо фразу про статус ПДВ зі ставки в карті клієнта.
+  const buildVatStatusLabel = (rate?: string | null) => {
+    const normalized = (rate ?? "").trim();
+    if (!normalized || normalized === "none") return "Не є платником ПДВ.";
+    const numeric = Number(normalized);
+    if (!Number.isFinite(numeric) || numeric < 0) return "Не є платником ПДВ.";
+    if (numeric === 20) return "Є платником ПДВ на загальних підставах.";
+    if (numeric === 0) return "Є платником ПДВ за нульовою ставкою.";
+    return `Є платником ПДВ за ставкою ${numeric}%.`;
+  };
+  const customerVatStatus = buildVatStatusLabel(record.customerVatRate);
+  // Параметри з модала створення Договору. Дефолти збігаються зі старим хардкодом.
+  const productionWorkingDays =
+    typeof options.productionWorkingDays === "number" && Number.isFinite(options.productionWorkingDays) && options.productionWorkingDays > 0
+      ? Math.round(options.productionWorkingDays)
+      : 50;
+  const contractAutoProlongation = options.contractAutoProlongation === true;
   const specificationNumber = record.quoteNumber;
   const specificationDate = formatSlashDate(record.specificationCreatedAt ?? null);
   const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
@@ -578,7 +606,7 @@ const buildOrderDocumentHtml = (
 
         <h3>2. Порядок виконання, здачі та приймання виконаних робіт</h3>
         <p>2.1. Виготовлення Продукції здійснюється партіями відповідно до наданих Замовником і затверджених ним макетів Продукції, підписаних уповноваженою особою Замовника.</p>
-        <p>2.2. Поставка здійснюється на склад Замовника. Термін поставки Продукції становить не більше 50 (п’ятдесяти) робочих днів з моменту погодження Сторонами та затвердження Замовником оригінал-макету і здійснення передоплати, залежно від події, що наступить пізніше. Якщо на конкретну партію Продукції встановлені інші умови поставки, то вони зазначаються у Специфікації на відповідну партію замовлення.</p>
+        <p>2.2. Поставка здійснюється на склад Замовника. Термін поставки Продукції становить не більше ${productionWorkingDays} робочих днів з моменту погодження Сторонами та затвердження Замовником оригінал-макету і здійснення передоплати, залежно від події, що наступить пізніше. Якщо на конкретну партію Продукції встановлені інші умови поставки, то вони зазначаються у Специфікації на відповідну партію замовлення.</p>
         <p>2.3. Датою поставки вважається дата фактичної передачі Продукції Замовнику, що зазначається в накладних на виготовлену Продукцію.</p>
         <p>2.4. Приймання Продукції за кількістю та якістю здійснюється сторонами в порядку, що визначається чинним законодавством України.</p>
 
@@ -609,12 +637,13 @@ const buildOrderDocumentHtml = (
         <p>8.2. Цей Договір вважається укладеним і набирає чинності з моменту його підписання Сторонами.</p>
         <p>8.3. Додатки до цього Договору є його невід'ємними частинами і мають юридичну силу у разі, якщо вони викладені у письмовій формі та підписані Сторонами.</p>
         <p>8.4. Термін дії Договору до ${escapeHtml(contractEndDate)} року та/або до повного виконання Сторонами своїх зобов’язань.</p>
+        ${contractAutoProlongation ? `<p>8.5. Якщо за 30 (тридцять) календарних днів до закінчення терміну дії цього Договору жодна із Сторін письмово не повідомить іншу про намір припинити його дію, Договір вважається автоматично продовженим на наступний 1 (один) рік на тих самих умовах. Кількість можливих автоматичних пролонгацій не обмежена.</p>` : ""}
 
         <h3>9. Адреси і реквізити сторін</h3>
         <div class="party-grid">
           <div class="party-card">
             <div class="party-title">ВИКОНАВЕЦЬ</div>
-            <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)}</p>
+            <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
             <p>${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
             <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
             <p>ІПН: ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</p>
@@ -626,15 +655,11 @@ const buildOrderDocumentHtml = (
           <div class="party-card">
             <div class="party-title">ЗАМОВНИК</div>
             <p>${escapeHtml(customerTitle)}</p>
-            <p>${escapeHtml(record.legalEntityLabel || "Юридична назва не вказана")}</p>
-            <p>Код / ІПН: ${escapeHtml(customerTaxId)}</p>
-            <p>IBAN / банк: ${escapeHtml(customerBankDetails)}</p>
-            <p>Адреса: ${escapeHtml(record.customerLegalAddress || "Не вказано")}</p>
-            <p>Email: ${escapeHtml(record.contactEmail || "Не вказано")}</p>
-            <p>Телефон: ${escapeHtml(record.contactPhone || "Не вказано")}</p>
-            <p>Підписант: ${escapeHtml(record.signatoryLabel || "Не вказано")}</p>
-            <p>Підстава: ${escapeHtml(customerSignatoryAuthority)}</p>
-            <p>Умови оплати: ${escapeHtml([record.paymentRail, record.paymentTerms].filter(Boolean).join(" · ") || "Не вказано")}</p>
+            <p>${escapeHtml(record.customerLegalAddress || "Не вказано")}</p>
+            <p>Код ЄДРПОУ: ${escapeHtml(customerTaxId)}</p>
+            <p>ІПН: ${escapeHtml(customerVatId)}</p>
+            <p>IBAN: ${escapeHtml(customerBankDetails)}</p>
+            <p>${escapeHtml(customerVatStatus)}</p>
             <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatoryName)}</p>
           </div>
         </div>
@@ -740,7 +765,7 @@ const buildOrderDocumentHtml = (
             <div>
               <div class="party-title">ВИКОНАВЕЦЬ:</div>
               <p>${escapeHtml(CONTRACT_EXECUTOR.shortName)}</p>
-              <p>Місцезнаходження: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
+              <p>Юридична адреса: ${escapeHtml(CONTRACT_EXECUTOR.address)}</p>
               <p>IBAN: ${escapeHtml(CONTRACT_EXECUTOR.iban)}</p>
               <p>${escapeHtml(CONTRACT_EXECUTOR.bank)}</p>
               <p>Код ЄДРПОУ: ${escapeHtml(CONTRACT_EXECUTOR.taxId)}</p>
@@ -849,6 +874,11 @@ export default function OrdersProductionDetailsPage() {
   const [statusSaving, setStatusSaving] = useState(false);
   const [documentSettingsSaving, setDocumentSettingsSaving] = useState(false);
   const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
+  // Параметри модала створення Договору (відкривається на кнопці "PDF" біля рядка "Договір").
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractProductionDaysInput, setContractProductionDaysInput] = useState("50");
+  const [contractAutoProlongation, setContractAutoProlongation] = useState(false);
+  const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
 
   useEffect(() => {
     if (!teamId || !id) return;
@@ -974,7 +1004,10 @@ export default function OrdersProductionDetailsPage() {
     }
   };
 
-  const openDocumentPrint = async (kind: OrderDocumentKind) => {
+  const openDocumentPrint = async (
+    kind: OrderDocumentKind,
+    extraOptions: Pick<BuildOrderDocumentOptions, "productionWorkingDays" | "contractAutoProlongation"> = {}
+  ) => {
     if (!record) return;
     if (kind === "specification") {
       const blocker = getSpecificationBlocker(record);
@@ -987,12 +1020,17 @@ export default function OrdersProductionDetailsPage() {
       setError("Для договору не вистачає реквізитів замовника.");
       return;
     }
-    // Відмінюємо ПІБ замовника у родовий відмінок через OpenAI (з кешем у Supabase).
-    // Якщо API недоступний або повертає помилку — fallback на називний (документ не зламається).
-    const customerSignatoryNameGenitive = record.customerSignatoryName
-      ? await declineToGenitive(record.customerSignatoryName)
-      : "";
-    const html = buildOrderDocumentHtml(record, kind, { customerSignatoryNameGenitive });
+    // Відмінюємо ПІБ та посаду замовника у родовий відмінок через OpenAI (з кешем у Supabase).
+    // Якщо API недоступний — fallback на оригінал, документ не зламається.
+    const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
+      record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
+      record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
+    ]);
+    const html = buildOrderDocumentHtml(record, kind, {
+      customerSignatoryNameGenitive,
+      customerSignatoryRoleGenitive,
+      ...extraOptions,
+    });
     const popup = window.open("", "_blank");
     if (!popup) {
       setError("Браузер заблокував нове вікно для документа.");
@@ -1542,7 +1580,16 @@ export default function OrdersProductionDetailsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => void openDocumentPrint(document.kind)}
+                      onClick={() => {
+                        if (document.kind === "contract") {
+                          // Для договору — спочатку модал з параметрами (строки, пролонгація).
+                          setContractAutoProlongation(false);
+                          setContractProductionDaysInput("50");
+                          setContractDialogOpen(true);
+                          return;
+                        }
+                        void openDocumentPrint(document.kind);
+                      }}
                       disabled={!document.ready}
                       title={document.blockedLabel ?? undefined}
                     >
@@ -1637,6 +1684,84 @@ export default function OrdersProductionDetailsPage() {
       </div>
         </div>
       </PageCanvasBody>
+
+      <Dialog
+        open={contractDialogOpen}
+        onOpenChange={(open) => {
+          if (contractDialogSubmitting) return;
+          setContractDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Параметри договору</DialogTitle>
+            <DialogDescription>
+              Уточни перед генерацією PDF. Значення підставляться у текст договору.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="contract-production-days">Строки виробництва (робочих днів)</Label>
+              <Input
+                id="contract-production-days"
+                inputMode="numeric"
+                value={contractProductionDaysInput}
+                onChange={(e) => setContractProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+                placeholder="Напр. 50"
+                className="h-9"
+              />
+              <p className="text-xs text-muted-foreground">
+                Підставляється у п. 2.2 договору. За замовчуванням — 50.
+              </p>
+            </div>
+            <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+              <Checkbox
+                id="contract-auto-prolongation"
+                checked={contractAutoProlongation}
+                onCheckedChange={(checked) => setContractAutoProlongation(checked === true)}
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="contract-auto-prolongation" className="text-sm font-medium">
+                  Автоматична пролонгація на 1 рік
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Додасть п. 8.5: якщо за 30 днів до кінця жодна сторона не повідомить — договір продовжується.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setContractDialogOpen(false)}
+              disabled={contractDialogSubmitting}
+            >
+              Скасувати
+            </Button>
+            <Button
+              onClick={async () => {
+                const parsed = Number(contractProductionDaysInput);
+                const productionWorkingDays =
+                  Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 50;
+                setContractDialogSubmitting(true);
+                try {
+                  await openDocumentPrint("contract", {
+                    productionWorkingDays,
+                    contractAutoProlongation,
+                  });
+                  setContractDialogOpen(false);
+                } finally {
+                  setContractDialogSubmitting(false);
+                }
+              }}
+              disabled={contractDialogSubmitting}
+            >
+              {contractDialogSubmitting ? "Створення..." : "Створити PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageCanvas>
   );
 }

@@ -217,6 +217,8 @@ export type DerivedOrderRecord = {
   contactPhone: string | null;
   legalEntityLabel: string | null;
   customerTaxId: string | null;
+  customerVatId: string | null;
+  customerVatRate: string | null;
   customerIban: string | null;
   customerBankDetails: string | null;
   customerLegalAddress: string | null;
@@ -785,6 +787,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
         ? formatCustomerLegalEntityTitle(primaryLegalEntity)
         : customer?.legal_name?.trim?.() ?? null;
     const taxId = primaryLegalEntity?.taxId?.trim() || customer?.tax_id?.trim?.() || "";
+    const vatId = primaryLegalEntity?.vatId?.trim() || "";
+    const vatRate = primaryLegalEntity?.vatRate || "none";
     const customerIban = primaryLegalEntity?.iban?.trim() || customer?.iban?.trim?.() || "";
     const customerLegalAddress = primaryLegalEntity?.legalAddress?.trim() || "";
     const signatoryName =
@@ -900,6 +904,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       contactPhone,
       legalEntityLabel: legalEntityLabel ?? null,
       customerTaxId: taxId || null,
+      customerVatId: vatId || null,
+      customerVatRate: vatRate || null,
       customerIban: customerIban || null,
       customerBankDetails: null,
       customerLegalAddress: customerLegalAddress || null,
@@ -1176,6 +1182,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         primaryLegalEntity?.taxId?.trim() ||
         customer?.tax_id?.trim?.() ||
         null;
+      const customerVatId = primaryLegalEntity?.vatId?.trim() || null;
+      const customerVatRate = primaryLegalEntity?.vatRate || null;
       const customerIban =
         order.customer_iban?.trim?.() ||
         primaryLegalEntity?.iban?.trim() ||
@@ -1250,6 +1258,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           (primaryLegalEntity ? formatCustomerLegalEntityTitle(primaryLegalEntity) : customer?.legal_name?.trim?.()) ||
           null,
         customerTaxId,
+        customerVatId,
+        customerVatRate,
         customerIban,
         customerBankDetails: order.customer_bank_details?.trim?.() || null,
         customerLegalAddress,
