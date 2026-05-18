@@ -1221,12 +1221,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
                     <div className="mt-4 grid gap-2">
                       <Label>Підстава підпису / діяльності</Label>
-                      <Input
-                        value={activeLegalEntity.signatoryAuthority}
-                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: e.target.value })}
-                        placeholder={activeLegalEntityIsPerson ? "Напр. Виписки з ЄДР" : "Напр. Статуту або довіреності"}
-                        className="h-9"
-                      />
+                      {activeLegalEntityIsPerson ? (
+                        <Input
+                          value={activeLegalEntity.signatoryAuthority}
+                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: e.target.value })}
+                          placeholder="Напр. Виписки з ЄДР"
+                          className="h-9"
+                        />
+                      ) : (
+                        <Select
+                          value={activeLegalEntity.signatoryAuthority}
+                          onValueChange={(value) => updateLegalEntity(activeLegalEntityIndex, { signatoryAuthority: value })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Оберіть підставу" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Статут">Статут</SelectItem>
+                            <SelectItem value="Довіреність">Довіреність</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </div>
                 ) : null}
