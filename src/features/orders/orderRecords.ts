@@ -208,6 +208,14 @@ export type DerivedOrderRecord = {
   paymentMethodId: string;
   paymentRail: string;
   paymentTerms: string;
+  /** % передоплати перед запуском. null = старі замовлення без явного breakdown. */
+  prepaymentPct: number | null;
+  /** % доплати. null = breakdown ще не задано. */
+  balancePct: number | null;
+  /** Коли відбувається доплата: 'before_shipment' (до відвантаження) / 'after_shipment' (після). */
+  balanceTiming: "before_shipment" | "after_shipment" | null;
+  /** Через скільки робочих днів після відвантаження має бути доплата. Релевантно лише для balanceTiming='after_shipment'. */
+  balanceDaysAfterShipment: number | null;
   incotermsCode: string;
   incotermsPlace: string | null;
   orderStatus: string;
@@ -262,6 +270,10 @@ type StoredOrderRow = {
   payment_method_id?: string | null;
   payment_method_label?: string | null;
   payment_terms?: string | null;
+  prepayment_pct?: number | string | null;
+  balance_pct?: number | string | null;
+  balance_timing?: string | null;
+  balance_days_after_shipment?: number | string | null;
   incoterms_code?: string | null;
   incoterms_place?: string | null;
   order_status?: string | null;
@@ -502,7 +514,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -895,6 +907,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       paymentMethodId: paymentMethod.id,
       paymentRail: paymentMethod.label,
       paymentTerms: DEFAULT_PAYMENT_TERMS,
+      prepaymentPct: null,
+      balancePct: null,
+      balanceTiming: null,
+      balanceDaysAfterShipment: null,
       incotermsCode: DEFAULT_INCOTERMS_CODE,
       incotermsPlace: resolveDeliveryPlace(quote),
       orderStatus: "new",
@@ -1246,6 +1262,24 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         paymentMethodId,
         paymentRail: paymentMethodLabel,
         paymentTerms: order.payment_terms?.trim() || DEFAULT_PAYMENT_TERMS,
+        prepaymentPct:
+          order.prepayment_pct === null || order.prepayment_pct === undefined || order.prepayment_pct === ""
+            ? null
+            : Number(order.prepayment_pct),
+        balancePct:
+          order.balance_pct === null || order.balance_pct === undefined || order.balance_pct === ""
+            ? null
+            : Number(order.balance_pct),
+        balanceTiming:
+          order.balance_timing === "before_shipment" || order.balance_timing === "after_shipment"
+            ? order.balance_timing
+            : null,
+        balanceDaysAfterShipment:
+          order.balance_days_after_shipment === null ||
+          order.balance_days_after_shipment === undefined ||
+          order.balance_days_after_shipment === ""
+            ? null
+            : Number(order.balance_days_after_shipment) || null,
         incotermsCode: order.incoterms_code?.trim() || DEFAULT_INCOTERMS_CODE,
         incotermsPlace: order.incoterms_place?.trim?.() || (linkedQuote ? resolveDeliveryPlace(linkedQuote) : null),
         orderStatus: order.order_status?.trim() || "new",
@@ -1477,6 +1511,10 @@ export async function updateOrderDocumentSettings(params: {
   paymentMethodId?: string;
   paymentMethodLabel?: string;
   paymentTerms?: string;
+  prepaymentPct?: number | null;
+  balancePct?: number | null;
+  balanceTiming?: "before_shipment" | "after_shipment" | null;
+  balanceDaysAfterShipment?: number | null;
   incotermsCode?: string;
   incotermsPlace?: string | null;
 }) {
@@ -1486,6 +1524,10 @@ export async function updateOrderDocumentSettings(params: {
   if (params.paymentMethodId !== undefined) payload.payment_method_id = params.paymentMethodId;
   if (params.paymentMethodLabel !== undefined) payload.payment_method_label = params.paymentMethodLabel;
   if (params.paymentTerms !== undefined) payload.payment_terms = params.paymentTerms;
+  if (params.prepaymentPct !== undefined) payload.prepayment_pct = params.prepaymentPct;
+  if (params.balancePct !== undefined) payload.balance_pct = params.balancePct;
+  if (params.balanceTiming !== undefined) payload.balance_timing = params.balanceTiming;
+  if (params.balanceDaysAfterShipment !== undefined) payload.balance_days_after_shipment = params.balanceDaysAfterShipment;
   if (params.incotermsCode !== undefined) payload.incoterms_code = params.incotermsCode;
   if (params.incotermsPlace !== undefined) payload.incoterms_place = params.incotermsPlace;
 

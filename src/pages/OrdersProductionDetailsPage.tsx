@@ -244,13 +244,27 @@ const getDocumentActionState = (
     const checks = getSpecificationRequirementChecks(record);
     const missing = getMissingRequirementLabels(checks);
     const ready = missing.length === 0;
+    // Правило: СП не можна створити без Договору. Якщо саме його не вистачає —
+    // показуємо явну й коротку підказку замість списку всіх missing.
+    const contractMissing = !record.contractCreatedAt;
+    const blockedLabel = contractMissing
+      ? "Спочатку створіть Договір — без нього СП недоступна."
+      : missing.length > 0
+        ? `Не виконано: ${missing.join(", ")}`
+        : null;
     return {
       title: "СП",
       ready,
       created: Boolean(record.specificationCreatedAt),
-      statusLabel: record.specificationCreatedAt ? "Створено" : ready ? "Можна створити" : "Потрібні умови",
+      statusLabel: record.specificationCreatedAt
+        ? "Створено"
+        : ready
+          ? "Можна створити"
+          : contractMissing
+            ? "Очікує Договір"
+            : "Потрібні умови",
       statusReady: ready,
-      blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
+      blockedLabel,
       checks,
       hint:
         "СП має окремі правила: тільки безготівка, тільки після створення договору, і з умовами оплати та Incoterms із замовлення.",
@@ -458,6 +472,14 @@ type BuildOrderDocumentOptions = {
   productionWorkingDays?: number;
   /** Автоматична пролонгація договору на рік (додає п. 8.5). */
   contractAutoProlongation?: boolean;
+  /** % передоплати (перед запуском). Override щодо значення на record. */
+  prepaymentPct?: number | null;
+  /** % доплати. */
+  balancePct?: number | null;
+  /** Коли відбувається доплата. */
+  balanceTiming?: "before_shipment" | "after_shipment" | null;
+  /** Кількість робочих днів на доплату (тільки при balanceTiming='after_shipment'). */
+  balanceDaysAfterShipment?: number | null;
 };
 
 const buildOrderDocumentHtml = (
@@ -519,7 +541,49 @@ const buildOrderDocumentHtml = (
   const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
   const totalWithVat = Number(record.total || 0);
   const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
-  const paymentTerms = getPaymentTermsParts(record.paymentTerms, totalWithVat);
+  // Структура оплати: пріоритет — options з модала, потім збережені на record поля,
+  // у фоллбеку — legacy `paymentTerms` (50/50, 70/30, ...).
+  const effectivePrepaymentPct =
+    options.prepaymentPct !== undefined && options.prepaymentPct !== null
+      ? options.prepaymentPct
+      : record.prepaymentPct;
+  const effectiveBalancePct =
+    options.balancePct !== undefined && options.balancePct !== null
+      ? options.balancePct
+      : record.balancePct;
+  const effectiveBalanceTiming =
+    options.balanceTiming !== undefined && options.balanceTiming !== null
+      ? options.balanceTiming
+      : record.balanceTiming ?? "before_shipment";
+  const hasExplicitPaymentBreakdown =
+    typeof effectivePrepaymentPct === "number" &&
+    typeof effectiveBalancePct === "number";
+  const paymentTerms = hasExplicitPaymentBreakdown
+    ? (() => {
+        const adv = effectivePrepaymentPct ?? 0;
+        const bal = effectiveBalancePct ?? 0;
+        return {
+          id: `${adv}/${bal}`,
+          label: `${adv}/${bal}`,
+          advance: adv,
+          balance: bal,
+          advanceAmount: totalWithVat * (adv / 100),
+          balanceAmount: totalWithVat * (bal / 100),
+        };
+      })()
+    : getPaymentTermsParts(record.paymentTerms, totalWithVat);
+  // Кількість робочих днів на доплату — пріоритет: options → record → дефолт 3.
+  const effectiveBalanceDays =
+    options.balanceDaysAfterShipment ?? record.balanceDaysAfterShipment ?? 3;
+  const balanceTimingPhrase =
+    effectiveBalanceTiming === "after_shipment"
+      ? "після відвантаження продукції (отримання Замовником)"
+      : "після готовності продукції, до відвантаження";
+  // Фраза про строк доплати у пункті СП. До відвантаження — без термінів; після відвантаження — N робочих днів.
+  const balanceTermPhrase =
+    effectiveBalanceTiming === "after_shipment"
+      ? `протягом ${effectiveBalanceDays} робочих днів з дати відвантаження`
+      : "протягом 3-х робочих днів з дати готовності продукції";
   const deliveryTerms = formatIncotermsLabel(record);
   const specificationRows = record.items
     .map((item, index) => {
@@ -614,6 +678,7 @@ const buildOrderDocumentHtml = (
         <p>3.1. Перелік робіт та цін визначаються у Специфікаціях до цього Договору.</p>
         <p>3.2. Оплата за цим Договором здійснюється шляхом перерахування на розрахунковий рахунок Виконавця грошових коштів в національній валюті України, відповідно до умов кожної Специфікації.</p>
         <p>3.3. Зміна вартості робіт по виготовленню Продукції та умов оплати можлива лише за згодою Сторін, що оформляється шляхом підписання Сторонами Додаткової угоди до Специфікації.</p>
+        ${hasExplicitPaymentBreakdown ? `<p>3.4. Орієнтовний порядок оплати: ${paymentTerms.advance}% — передоплата перед запуском у виробництво; ${paymentTerms.balance}% — ${escapeHtml(balanceTimingPhrase)}${effectiveBalanceTiming === "after_shipment" ? `, протягом ${effectiveBalanceDays} робочих днів з дати відвантаження` : ""}. Конкретні суми та строки оплати по кожній партії визначаються у відповідній Специфікації.</p>` : ""}
 
         <h3>4. Права та обов’язки сторін</h3>
         <p>4.1. Замовник зобов’язується своєчасно здійснювати розрахунки з Виконавцем за Договором.</p>
@@ -755,7 +820,7 @@ const buildOrderDocumentHtml = (
 
           <div class="section-title">ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
           <ul>
-            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн з урахуванням ПДВ) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн з урахуванням ПДВ) після готовності продукції, протягом 3-х робочих днів.</li>
+            <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн з урахуванням ПДВ) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн з урахуванням ПДВ) — ${escapeHtml(balanceTimingPhrase)}, ${escapeHtml(balanceTermPhrase)}.</li>
             <li>Спосіб оплати: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
             <li>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</li>
           </ul>
@@ -878,6 +943,10 @@ export default function OrdersProductionDetailsPage() {
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [contractProductionDaysInput, setContractProductionDaysInput] = useState("50");
   const [contractAutoProlongation, setContractAutoProlongation] = useState(false);
+  const [contractPrepaymentPctInput, setContractPrepaymentPctInput] = useState("70");
+  const [contractBalancePctInput, setContractBalancePctInput] = useState("30");
+  const [contractBalanceTiming, setContractBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
+  const [contractBalanceDaysInput, setContractBalanceDaysInput] = useState("3");
   const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
 
   useEffect(() => {
@@ -1006,7 +1075,15 @@ export default function OrdersProductionDetailsPage() {
 
   const openDocumentPrint = async (
     kind: OrderDocumentKind,
-    extraOptions: Pick<BuildOrderDocumentOptions, "productionWorkingDays" | "contractAutoProlongation"> = {}
+    extraOptions: Pick<
+      BuildOrderDocumentOptions,
+      | "productionWorkingDays"
+      | "contractAutoProlongation"
+      | "prepaymentPct"
+      | "balancePct"
+      | "balanceTiming"
+      | "balanceDaysAfterShipment"
+    > = {}
   ) => {
     if (!record) return;
     if (kind === "specification") {
@@ -1582,9 +1659,20 @@ export default function OrdersProductionDetailsPage() {
                       variant="outline"
                       onClick={() => {
                         if (document.kind === "contract") {
-                          // Для договору — спочатку модал з параметрами (строки, пролонгація).
+                          // Для договору — спочатку модал з параметрами (строки, пролонгація, оплата).
                           setContractAutoProlongation(false);
                           setContractProductionDaysInput("50");
+                          // Дефолти з record — якщо менеджер уже задавав, підвантажимо.
+                          setContractPrepaymentPctInput(
+                            record.prepaymentPct !== null ? String(record.prepaymentPct) : "70"
+                          );
+                          setContractBalancePctInput(
+                            record.balancePct !== null ? String(record.balancePct) : "30"
+                          );
+                          setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
+                          setContractBalanceDaysInput(
+                            record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
+                          );
                           setContractDialogOpen(true);
                           return;
                         }
@@ -1730,6 +1818,64 @@ export default function OrdersProductionDetailsPage() {
                 </p>
               </div>
             </div>
+
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="text-sm font-medium">Умови оплати</div>
+              <div className="grid gap-2">
+                <Label htmlFor="contract-prepayment-pct">Передоплата, %</Label>
+                <Input
+                  id="contract-prepayment-pct"
+                  inputMode="numeric"
+                  value={contractPrepaymentPctInput}
+                  onChange={(e) => setContractPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                  placeholder="Напр. 70"
+                  className="h-9"
+                />
+                <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
+              </div>
+              <div className="grid gap-2">
+                <Label>Доплата — коли</Label>
+                <Select
+                  value={contractBalanceTiming}
+                  onValueChange={(value) => setContractBalanceTiming(value as "before_shipment" | "after_shipment")}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="before_shipment">По факту готовності, до відвантаження</SelectItem>
+                    <SelectItem value="after_shipment">По факту готовності, після відвантаження</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="contract-balance-pct">Доплата, %</Label>
+                <Input
+                  id="contract-balance-pct"
+                  inputMode="numeric"
+                  value={contractBalancePctInput}
+                  onChange={(e) => setContractBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                  placeholder="Напр. 30"
+                  className="h-9"
+                />
+              </div>
+              {contractBalanceTiming === "after_shipment" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="contract-balance-days">Протягом скількох робочих днів</Label>
+                  <Input
+                    id="contract-balance-days"
+                    inputMode="numeric"
+                    value={contractBalanceDaysInput}
+                    onChange={(e) => setContractBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 5"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Доплата здійснюється протягом N робочих/банківських днів після відвантаження Продукції.
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -1741,14 +1887,62 @@ export default function OrdersProductionDetailsPage() {
             </Button>
             <Button
               onClick={async () => {
-                const parsed = Number(contractProductionDaysInput);
+                const parsedDays = Number(contractProductionDaysInput);
                 const productionWorkingDays =
-                  Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 50;
+                  Number.isFinite(parsedDays) && parsedDays > 0 ? Math.round(parsedDays) : 50;
+                const parsedPrepayment = Number(contractPrepaymentPctInput);
+                const prepaymentPct =
+                  Number.isFinite(parsedPrepayment) && parsedPrepayment >= 0 && parsedPrepayment <= 100
+                    ? parsedPrepayment
+                    : null;
+                const parsedBalance = Number(contractBalancePctInput);
+                const balancePct =
+                  Number.isFinite(parsedBalance) && parsedBalance >= 0 && parsedBalance <= 100
+                    ? parsedBalance
+                    : null;
+                // balance_days релевантне тільки для after_shipment; для before_shipment — null.
+                const parsedBalanceDays = Number(contractBalanceDaysInput);
+                const balanceDaysAfterShipment =
+                  contractBalanceTiming === "after_shipment" &&
+                  Number.isFinite(parsedBalanceDays) &&
+                  parsedBalanceDays > 0
+                    ? Math.round(parsedBalanceDays)
+                    : null;
                 setContractDialogSubmitting(true);
                 try {
+                  // Зберігаємо нові payment-поля на замовленні (якщо це stored-запис).
+                  if (record && record.source === "stored" && teamId) {
+                    try {
+                      await updateOrderDocumentSettings({
+                        teamId,
+                        orderId: record.id,
+                        prepaymentPct,
+                        balancePct,
+                        balanceTiming: contractBalanceTiming,
+                        balanceDaysAfterShipment,
+                      });
+                      setRecord((current) =>
+                        current && current.id === record.id
+                          ? {
+                              ...current,
+                              prepaymentPct,
+                              balancePct,
+                              balanceTiming: contractBalanceTiming,
+                              balanceDaysAfterShipment,
+                            }
+                          : current
+                      );
+                    } catch (saveError) {
+                      console.error("Failed to save contract payment breakdown", saveError);
+                    }
+                  }
                   await openDocumentPrint("contract", {
                     productionWorkingDays,
                     contractAutoProlongation,
+                    prepaymentPct,
+                    balancePct,
+                    balanceTiming: contractBalanceTiming,
+                    balanceDaysAfterShipment,
                   });
                   setContractDialogOpen(false);
                 } finally {
