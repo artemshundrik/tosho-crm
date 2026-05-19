@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -72,6 +72,10 @@ import {
   MessageSquare,
   Layers,
   CircleHelp,
+  History,
+  ChevronRight,
+  Plus,
+  SmilePlus,
   type LucideIcon,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -137,7 +141,6 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
-  BRIEF_DIALOG_PREVIEW_CLASS,
   BRIEF_SURFACE_FRAME_CLASS,
   BRIEF_SURFACE_TEXT_CLASS,
   BRIEF_TEXTAREA_CLASS,
@@ -413,6 +416,8 @@ const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
 const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
 const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
 
+const CHANGE_REQUEST_REACTION_EMOJIS = ["👍", "❤️", "👀", "✅", "🤔", "🎉"] as const;
+
 const DESIGN_TASK_DRAFT_PREFIX = "tosho:design-task-draft";
 
 const buildDesignTaskDraftKey = (
@@ -573,12 +578,18 @@ function normalizeDropboxFolderNameDraft(value?: string | null, fallback = "За
   return sanitizeDropboxNameSegment((value ?? "").trim(), fallback);
 }
 
-function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
+function resizeTextareaToContent(
+  textarea: HTMLTextAreaElement | null,
+  maxHeight: number,
+  minHeight = 0
+) {
   if (!textarea) return;
   textarea.style.height = "0px";
-  const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
-  textarea.style.height = `${Math.max(nextHeight, 140)}px`;
-  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  const naturalHeight = textarea.scrollHeight;
+  const clamped = Math.min(naturalHeight, maxHeight);
+  const final = minHeight > 0 ? Math.max(clamped, minHeight) : clamped;
+  textarea.style.height = `${final}px`;
+  textarea.style.overflowY = naturalHeight > maxHeight ? "auto" : "hidden";
 }
 
 function formatBriefSelection(
@@ -690,6 +701,24 @@ type DesignBriefVersion = {
 
 type DesignBriefChangeRequestStatus = "pending" | "approved" | "rejected";
 
+type DesignBriefChangeRequestAttachment = {
+  id: string;
+  file_name: string;
+  file_size: number | null;
+  mime_type: string | null;
+  storage_bucket: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+type DesignBriefChangeRequestReaction = {
+  user_id: string;
+  user_label: string | null;
+  emoji: string;
+  created_at: string;
+};
+
 type DesignBriefChangeRequest = {
   id: string;
   status: DesignBriefChangeRequestStatus;
@@ -708,6 +737,8 @@ type DesignBriefChangeRequest = {
   edited_at?: string | null;
   edited_by?: string | null;
   edited_by_label?: string | null;
+  attachments?: DesignBriefChangeRequestAttachment[];
+  reactions?: DesignBriefChangeRequestReaction[];
 };
 
 type DesignTaskPageCachePayload = {
@@ -1136,6 +1167,52 @@ function syncDesignPageCacheTask(
   }
 }
 
+const parseBriefChangeRequestReactions = (value: unknown): DesignBriefChangeRequestReaction[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const userId = toNonEmptyString(row.user_id);
+      const emoji = toNonEmptyString(row.emoji);
+      const createdAt = toNonEmptyString(row.created_at);
+      if (!userId || !emoji) return null;
+      return {
+        user_id: userId,
+        user_label: toNonEmptyString(row.user_label),
+        emoji,
+        created_at: createdAt ?? new Date().toISOString(),
+      } satisfies DesignBriefChangeRequestReaction;
+    })
+    .filter(Boolean) as DesignBriefChangeRequestReaction[];
+};
+
+const parseBriefChangeRequestAttachments = (value: unknown): DesignBriefChangeRequestAttachment[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const id = toNonEmptyString(row.id);
+      const fileName = toNonEmptyString(row.file_name);
+      const storageBucket = toNonEmptyString(row.storage_bucket);
+      const storagePath = toNonEmptyString(row.storage_path);
+      const createdAt = toNonEmptyString(row.created_at);
+      if (!id || !fileName || !storageBucket || !storagePath) return null;
+      return {
+        id,
+        file_name: fileName,
+        file_size: typeof row.file_size === "number" ? row.file_size : Number(row.file_size) || null,
+        mime_type: toNonEmptyString(row.mime_type),
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
+        uploaded_by: toNonEmptyString(row.uploaded_by),
+        created_at: createdAt ?? new Date().toISOString(),
+      } satisfies DesignBriefChangeRequestAttachment;
+    })
+    .filter(Boolean) as DesignBriefChangeRequestAttachment[];
+};
+
 const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] => {
   if (!Array.isArray(value)) return [];
   const rows = value
@@ -1167,6 +1244,8 @@ const parseBriefChangeRequests = (value: unknown): DesignBriefChangeRequest[] =>
         edited_at: toNonEmptyString(row.edited_at),
         edited_by: toNonEmptyString(row.edited_by),
         edited_by_label: toNonEmptyString(row.edited_by_label),
+        attachments: parseBriefChangeRequestAttachments(row.attachments),
+        reactions: parseBriefChangeRequestReactions(row.reactions),
       } satisfies DesignBriefChangeRequest;
     })
     .filter(Boolean) as DesignBriefChangeRequest[];
@@ -1371,6 +1450,7 @@ export default function DesignTaskPage() {
   const [briefDirty, setBriefDirty] = useState(false);
   const [briefSaving, setBriefSaving] = useState(false);
   const [briefEditorOpen, setBriefEditorOpen] = useState(false);
+  const [briefEditorMode, setBriefEditorMode] = useState<"write" | "preview">("write");
   const [briefInlineEditing, setBriefInlineEditing] = useState(false);
   const [briefSelection, setBriefSelection] = useState({ start: 0, end: 0 });
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
@@ -1379,6 +1459,14 @@ export default function DesignTaskPage() {
   const [changeRequestEditingId, setChangeRequestEditingId] = useState<string | null>(null);
   const [changeRequestEditDraft, setChangeRequestEditDraft] = useState("");
   const [changeRequestEditSavingId, setChangeRequestEditSavingId] = useState<string | null>(null);
+  const [changeRequestDraftAttachments, setChangeRequestDraftAttachments] = useState<DesignBriefChangeRequestAttachment[]>([]);
+  const [changeRequestUploading, setChangeRequestUploading] = useState(false);
+  const [changeRequestDragActive, setChangeRequestDragActive] = useState(false);
+  const [changeRequestDeletingId, setChangeRequestDeletingId] = useState<string | null>(null);
+  const [changeRequestReactionTogglingKey, setChangeRequestReactionTogglingKey] = useState<string | null>(null);
+  const [changeRequestReactionPickerId, setChangeRequestReactionPickerId] = useState<string | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const changeRequestFileInputRef = useRef<HTMLInputElement | null>(null);
   const briefDraftKey = useMemo(() => buildDesignTaskDraftKey(id, "brief"), [id]);
   const changeRequestDraftKey = useMemo(() => buildDesignTaskDraftKey(id, "change-request"), [id]);
   const changeRequestEditDraftKey = useMemo(
@@ -5147,6 +5235,7 @@ export default function DesignTaskPage() {
       decided_by_label: null,
       decision_note: null,
       applied_version_id: null,
+      attachments: changeRequestDraftAttachments.length > 0 ? [...changeRequestDraftAttachments] : undefined,
     };
     const nextRequests = [nextChangeRequest, ...briefChangeRequests];
     const previousStatus = task.status;
@@ -5200,6 +5289,7 @@ export default function DesignTaskPage() {
       );
 
       setChangeRequestDraft("");
+      setChangeRequestDraftAttachments([]);
       setChangeRequestOpen(false);
 
       try {
@@ -5215,6 +5305,7 @@ export default function DesignTaskPage() {
             source: "design_task_brief_change_request",
             change_request_id: nextChangeRequest.id,
             status: "pending",
+            attachments_count: nextChangeRequest.attachments?.length ?? 0,
           },
         });
         if (shouldAutoMoveToChanges) {
@@ -5273,6 +5364,177 @@ export default function DesignTaskPage() {
   const cancelBriefChangeRequestEdit = () => {
     setChangeRequestEditingId(null);
     setChangeRequestEditDraft("");
+  };
+
+  const uploadChangeRequestDraftAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !task || !effectiveTeamId || !userId) return;
+    if (!ensureCanEdit()) return;
+    setChangeRequestUploading(true);
+    try {
+      const uploaded: DesignBriefChangeRequestAttachment[] = [];
+      for (const file of Array.from(files)) {
+        const safeName = file.name.replace(/[^\w.-]+/g, "_");
+        const baseName = `${Date.now()}-${safeName}`;
+        const storagePath = `teams/${effectiveTeamId}/design-brief-changes/${task.id}/draft/${baseName}`;
+        try {
+          const uploadResult = await uploadAttachmentWithVariants({
+            bucket: DESIGN_OUTPUT_BUCKET,
+            storagePath,
+            file,
+            cacheControl: STORAGE_CACHE_CONTROL,
+          });
+          uploaded.push({
+            id: crypto.randomUUID(),
+            file_name: file.name,
+            file_size: uploadResult.size || file.size,
+            mime_type: uploadResult.contentType || file.type || null,
+            storage_bucket: DESIGN_OUTPUT_BUCKET,
+            storage_path: uploadResult.storagePath,
+            uploaded_by: userId,
+            created_at: new Date().toISOString(),
+          });
+        } catch (uploadError) {
+          console.warn("Failed to upload change request attachment", uploadError);
+          toast.error(`Не вдалося завантажити файл «${file.name}»`);
+        }
+      }
+      if (uploaded.length > 0) {
+        setChangeRequestDraftAttachments((prev) => [...prev, ...uploaded]);
+      }
+    } finally {
+      setChangeRequestUploading(false);
+      if (changeRequestFileInputRef.current) changeRequestFileInputRef.current.value = "";
+    }
+  };
+
+  const removeChangeRequestDraftAttachment = async (attachment: DesignBriefChangeRequestAttachment) => {
+    setChangeRequestDraftAttachments((prev) => prev.filter((entry) => entry.id !== attachment.id));
+    try {
+      await removeAttachmentWithVariants(attachment.storage_bucket, attachment.storage_path);
+    } catch (error) {
+      console.warn("Failed to remove change request draft attachment from storage", error);
+    }
+  };
+
+  const handleChangeRequestDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setChangeRequestDragActive(false);
+    if (changeRequestUploading) return;
+    void uploadChangeRequestDraftAttachments(event.dataTransfer.files);
+  };
+
+  const handleChangeRequestDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (!changeRequestDragActive) setChangeRequestDragActive(true);
+  };
+
+  const handleChangeRequestDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setChangeRequestDragActive(false);
+  };
+
+  const persistChangeRequests = async (
+    nextRequests: DesignBriefChangeRequest[],
+    options?: { extraMetadata?: Record<string, unknown> }
+  ) => {
+    if (!task || !effectiveTeamId) throw new Error("task is not loaded");
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_brief_change_requests: nextRequests,
+      ...(options?.extraMetadata ?? {}),
+    };
+    const { error: updateError } = await supabase
+      .from("activity_log")
+      .update({ metadata: nextMetadata })
+      .eq("id", task.id)
+      .eq("team_id", effectiveTeamId);
+    if (updateError) throw updateError;
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+    return nextMetadata;
+  };
+
+  const toggleChangeRequestReaction = async (requestId: string, emoji: string) => {
+    if (!task || !effectiveTeamId || !userId) return;
+    if (!ensureCanEdit()) return;
+    const target = briefChangeRequests.find((entry) => entry.id === requestId);
+    if (!target) return;
+    const reactionKey = `${requestId}:${emoji}`;
+    if (changeRequestReactionTogglingKey === reactionKey) return;
+
+    const actorLabel = getMemberLabel(userId);
+    const currentReactions = target.reactions ?? [];
+    const existingIndex = currentReactions.findIndex(
+      (entry) => entry.user_id === userId && entry.emoji === emoji
+    );
+    const nextReactions =
+      existingIndex >= 0
+        ? currentReactions.filter((_, idx) => idx !== existingIndex)
+        : [
+            ...currentReactions,
+            {
+              user_id: userId,
+              user_label: actorLabel,
+              emoji,
+              created_at: new Date().toISOString(),
+            },
+          ];
+    const nextRequests = briefChangeRequests.map((entry) =>
+      entry.id === requestId ? { ...entry, reactions: nextReactions } : entry
+    );
+
+    setChangeRequestReactionTogglingKey(reactionKey);
+    try {
+      await persistChangeRequests(nextRequests);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Не вдалося оновити реакцію"));
+    } finally {
+      setChangeRequestReactionTogglingKey(null);
+    }
+  };
+
+  const deleteBriefChangeRequest = async (request: DesignBriefChangeRequest) => {
+    if (!task || !effectiveTeamId || changeRequestDeletingId) return;
+    if (!ensureCanEdit()) return;
+    const isOwn = request.requested_by && userId === request.requested_by;
+    if (!isOwn && !canEditBriefChangeRequests) {
+      toast.error("Недостатньо прав для видалення правки");
+      return;
+    }
+    const nextRequests = briefChangeRequests.filter((entry) => entry.id !== request.id);
+    setChangeRequestDeletingId(request.id);
+    try {
+      await persistChangeRequests(nextRequests);
+      const attachments = request.attachments ?? [];
+      await Promise.allSettled(
+        attachments.map((attachment) =>
+          removeAttachmentWithVariants(attachment.storage_bucket, attachment.storage_path)
+        )
+      );
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: task.id,
+          quoteId: task.quoteId,
+          userId,
+          actorName: actorLabel,
+          action: "design_task_brief_change_request",
+          title: "Правку видалено",
+          metadata: {
+            source: "design_task_brief_change_request_delete",
+            change_request_id: request.id,
+          },
+        });
+        await loadHistory(task.id);
+      } catch (logError) {
+        console.warn("Failed to log change request delete", logError);
+      }
+      toast.success("Правку видалено");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Не вдалося видалити правку"));
+    } finally {
+      setChangeRequestDeletingId(null);
+    }
   };
 
   const closeDiscardDialog = () => setDiscardDialog((prev) => ({ ...prev, open: false }));
@@ -8050,7 +8312,7 @@ export default function DesignTaskPage() {
       </div>
 
       <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
-          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "brief" && "hidden")}>
+          <details open className={cn("group pb-4", activeDesignTab !== "brief" && "hidden")}>
             <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -8073,155 +8335,406 @@ export default function DesignTaskPage() {
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
-            {isLinkedQuote && quantityLabel !== "Не вказано" ? (
-              <div className="flex justify-end pb-3">
-                <Badge variant="outline" className="text-xs font-normal">{quantityLabel}</Badge>
-              </div>
-            ) : null}
-            {/* ТЗ section */}
-            <div className="border-t border-border/25 pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">ТЗ для дизайнера</span>
-                  <Badge variant="outline" className="h-5 text-[10px] px-1.5 font-normal">v{activeBriefVersion?.version ?? 1}</Badge>
-                </div>
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setBriefEditorOpen(true)}>
-                  Відкрити редактор
-                </Button>
-              </div>
-
-              <div className="mt-3 space-y-3">
-                {briefInlineEditing || briefDirty ? (
-                  <Textarea
-                    ref={briefTextareaRef}
-                    value={briefDraft}
-                    onChange={(event) => {
-                      setBriefDraft(event.target.value);
-                      setBriefDirty(true);
-                      resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
-                    }}
-                    onBlur={handleBriefInlineBlur}
-                    placeholder="Опишіть задачу для дизайнера…"
-                    rows={5}
-                    disabled={briefSaving || designTaskLockedByOther}
-                    className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[140px]")}
-                  />
-                ) : (
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    className={cn(BRIEF_SURFACE_FRAME_CLASS, "px-4 py-4")}
-                    aria-readonly="true"
-                    onClick={() => setBriefInlineEditing(true)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setBriefInlineEditing(true);
-                      }
-                    }}
-                  >
-                    <div className={cn("min-h-[140px]", BRIEF_SURFACE_TEXT_CLASS)}>{renderBriefRichText(briefDraft)}</div>
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => void saveDesignBrief()}
-                    disabled={briefSaving || designTaskLockedByOther || !briefDirty}
-                  >
-                    {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    Зберегти нову версію
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={changeRequestSaving || designTaskLockedByOther}
-                    onClick={() => setChangeRequestOpen((prev) => !prev)}
-                  >
-                    Додати правку
-                  </Button>
-                  {briefDirty ? (
+            <div className="space-y-4">
+              {/* CARD 1: Brief */}
+              <Card className="border-border/50 bg-card/40 shadow-none">
+                <CardContent className="space-y-4 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">ТЗ для дизайнера</span>
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                        v{activeBriefVersion?.version ?? 1}
+                      </Badge>
+                      {isLinkedQuote && quantityLabel !== "Не вказано" ? (
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                          {quantityLabel}
+                        </Badge>
+                      ) : null}
+                    </div>
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="h-7 gap-1.5 text-xs text-muted-foreground"
+                      onClick={() => setBriefEditorOpen(true)}
+                    >
+                      <PencilLine className="h-3.5 w-3.5" />
+                      Відкрити редактор
+                    </Button>
+                  </div>
+
+                  {briefInlineEditing || briefDirty ? (
+                    <Textarea
+                      ref={briefTextareaRef}
+                      value={briefDraft}
+                      onChange={(event) => {
+                        setBriefDraft(event.target.value);
+                        setBriefDirty(true);
+                        resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+                      }}
+                      onBlur={handleBriefInlineBlur}
+                      placeholder="Опишіть задачу для дизайнера…"
+                      rows={1}
                       disabled={briefSaving || designTaskLockedByOther}
-                      onClick={() => {
-                        const reset = () => {
-                          setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
-                          setBriefDirty(false);
-                          setBriefInlineEditing(false);
-                        };
-                        confirmDiscardOr(
-                          briefDirty && briefDraft.trim().length > 0,
-                          "Скасувати зміни ТЗ?",
-                          "Усі незбережені зміни в ТЗ буде втрачено.",
-                          reset
-                        );
+                      className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[44px] overflow-hidden")}
+                    />
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={cn(BRIEF_SURFACE_FRAME_CLASS, "cursor-text px-4 py-4")}
+                      aria-readonly="true"
+                      onClick={() => setBriefInlineEditing(true)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setBriefInlineEditing(true);
+                        }
                       }}
                     >
-                      Скасувати
-                    </Button>
-                  ) : null}
-                </div>
+                      {briefDraft.trim() ? (
+                        <div className={cn(BRIEF_SURFACE_TEXT_CLASS, "whitespace-pre-wrap break-words")}>
+                          {renderInlineRichText(briefDraft)}
+                        </div>
+                      ) : (
+                        <div className="text-sm italic leading-7 text-muted-foreground">
+                          ТЗ ще не заповнено. Клікніть, щоб написати.
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                {briefChangeRequests.length > 0 ? (
-                  <div className="space-y-2 border-t border-border/25 pt-3">
-                    <div className="text-xs text-muted-foreground">Правки ({briefChangeRequests.length})</div>
-                    <div className="space-y-1.5">
-                      {briefChangeRequests.map((request) => {
-                        const isEditingChangeRequest = changeRequestEditingId === request.id;
-                        const isSavingChangeRequest = changeRequestEditSavingId === request.id;
-                        return (
-                          <div key={request.id} className="space-y-2">
-                            <div className="flex items-start gap-2">
-                              <div className="min-w-0 flex-1 text-sm whitespace-pre-wrap break-words">
-                                <span className="text-muted-foreground">
-                                  {formatDate(request.requested_at, true)} · {request.requested_by_label ?? "Користувач"}:
-                                </span>{" "}
-                                {isEditingChangeRequest ? (
-                                  <Textarea
-                                    value={changeRequestEditDraft}
-                                    onChange={(event) => setChangeRequestEditDraft(event.target.value)}
-                                    disabled={isSavingChangeRequest || designTaskLockedByOther}
-                                    className="mt-2 min-h-[96px] resize-y whitespace-normal"
-                                  />
-                                ) : (
-                                  <>
-                                    <span>{renderInlineRichText(request.request_text)}</span>
-                                    {request.edited_at ? (
-                                      <span className="ml-1 text-xs text-muted-foreground">
-                                        ред. {formatDate(request.edited_at, true)}
-                                      </span>
-                                    ) : null}
-                                  </>
-                                )}
-                              </div>
-                              {canEditBriefChangeRequests && !isEditingChangeRequest ? (
+                  {(briefInlineEditing || briefDirty) && (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {briefDirty ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={briefSaving || designTaskLockedByOther}
+                          onClick={() => {
+                            const reset = () => {
+                              setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+                              setBriefDirty(false);
+                              setBriefInlineEditing(false);
+                            };
+                            confirmDiscardOr(
+                              briefDirty && briefDraft.trim().length > 0,
+                              "Скасувати зміни ТЗ?",
+                              "Усі незбережені зміни в ТЗ буде втрачено.",
+                              reset
+                            );
+                          }}
+                        >
+                          Скасувати
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        onClick={() => void saveDesignBrief()}
+                        disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+                        className="gap-1.5"
+                      >
+                        {briefSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Зберегти нову версію
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* CARD 2: Change requests */}
+              <Card className="border-border/50 bg-card/40 shadow-none">
+                <CardContent className="space-y-3 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">Правки та обговорення</span>
+                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                        {briefChangeRequests.length}
+                      </Badge>
+                    </div>
+                    {!changeRequestOpen ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5"
+                        disabled={changeRequestSaving || designTaskLockedByOther}
+                        onClick={() => setChangeRequestOpen(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Додати правку
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  {changeRequestOpen ? (
+                    <div
+                      className={cn(
+                        "space-y-3 rounded-lg border border-border/50 bg-muted/5 p-3 transition-colors",
+                        changeRequestDragActive && "border-primary/60 bg-primary/5"
+                      )}
+                      onDrop={handleChangeRequestDrop}
+                      onDragOver={handleChangeRequestDragOver}
+                      onDragLeave={handleChangeRequestDragLeave}
+                    >
+                      <Textarea
+                        value={changeRequestDraft}
+                        onChange={(event) => setChangeRequestDraft(event.target.value)}
+                        placeholder="Опишіть правку. Що змінити, як саме, з посиланнями. Можна прикріпити приклади або скріни."
+                        disabled={changeRequestSaving || designTaskLockedByOther}
+                        className="min-h-[110px] resize-y border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+
+                      {changeRequestDraftAttachments.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                          {changeRequestDraftAttachments.map((attachment) => {
+                            const extension = getFileExtension(attachment.file_name);
+                            const previewable =
+                              canRenderStoragePreview(extension) && Boolean(attachment.storage_bucket && attachment.storage_path);
+                            return (
+                              <div
+                                key={attachment.id}
+                                className="group relative h-24 overflow-hidden rounded-md border border-border/50 bg-muted/20"
+                              >
+                                <button
+                                  type="button"
+                                  className="block h-full w-full text-left"
+                                  onClick={() =>
+                                    void openStorageFilePreview({
+                                      storage_bucket: attachment.storage_bucket,
+                                      storage_path: attachment.storage_path,
+                                      file_name: attachment.file_name,
+                                      mime_type: attachment.mime_type,
+                                    })
+                                  }
+                                  aria-label={`Переглянути ${attachment.file_name}`}
+                                >
+                                  {previewable ? (
+                                    <StorageObjectImage
+                                      bucket={attachment.storage_bucket}
+                                      path={attachment.storage_path}
+                                      alt={attachment.file_name}
+                                      variant="thumb"
+                                      className="h-full w-full"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
+                                      <FileText className="h-6 w-6" />
+                                      <span className="text-[10px] uppercase">{extension}</span>
+                                    </div>
+                                  )}
+                                </button>
+                                <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-[10px] text-foreground">
+                                  {attachment.file_name}
+                                </div>
                                 <Button
                                   type="button"
                                   size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 shrink-0"
-                                  disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
-                                  onClick={() => startBriefChangeRequestEdit(request)}
-                                  aria-label="Редагувати правку"
-                                  title="Редагувати правку"
+                                  variant="destructive"
+                                  className="absolute right-1 top-1 h-5 w-5 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                                  onClick={() => void removeChangeRequestDraftAttachment(attachment)}
+                                  aria-label={`Прибрати ${attachment.file_name}`}
                                 >
-                                  <PencilLine className="h-3.5 w-3.5" />
+                                  <X className="h-3 w-3" />
                                 </Button>
-                              ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
+                      <input
+                        ref={changeRequestFileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => void uploadChangeRequestDraftAttachments(event.target.files)}
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/30 pt-3">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1.5"
+                          disabled={changeRequestUploading || changeRequestSaving || designTaskLockedByOther}
+                          onClick={() => changeRequestFileInputRef.current?.click()}
+                        >
+                          {changeRequestUploading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Paperclip className="h-3.5 w-3.5" />
+                          )}
+                          {changeRequestDraftAttachments.length > 0
+                            ? `Прикріпити ще (${changeRequestDraftAttachments.length})`
+                            : "Прикріпити файл"}
+                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={changeRequestSaving || designTaskLockedByOther}
+                            onClick={() => {
+                              const hasContent =
+                                changeRequestDraft.trim().length > 0 || changeRequestDraftAttachments.length > 0;
+                              const reset = async () => {
+                                const attachmentsCopy = [...changeRequestDraftAttachments];
+                                setChangeRequestDraft("");
+                                setChangeRequestDraftAttachments([]);
+                                setChangeRequestOpen(false);
+                                await Promise.allSettled(
+                                  attachmentsCopy.map((entry) =>
+                                    removeAttachmentWithVariants(entry.storage_bucket, entry.storage_path)
+                                  )
+                                );
+                              };
+                              confirmDiscardOr(
+                                hasContent,
+                                "Скасувати правку?",
+                                "Текст правки і прикріплені файли буде втрачено.",
+                                () => void reset()
+                              );
+                            }}
+                          >
+                            Скасувати
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => void createBriefChangeRequest()}
+                            disabled={
+                              changeRequestSaving ||
+                              designTaskLockedByOther ||
+                              !changeRequestDraft.trim() ||
+                              changeRequestUploading
+                            }
+                          >
+                            {changeRequestSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            Надіслати правку
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {briefChangeRequests.length === 0 && !changeRequestOpen ? (
+                    <div className="rounded-lg border border-dashed border-border/40 bg-muted/5 px-4 py-8 text-center">
+                      <MessageSquare className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">Правок ще немає</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Натисніть «Додати правку», щоб запропонувати зміну до ТЗ.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {briefChangeRequests.length > 0 ? (
+                    <div className="space-y-2">
+                      {briefChangeRequests.map((request) => {
+                        const isEditingChangeRequest = changeRequestEditingId === request.id;
+                        const isSavingChangeRequest = changeRequestEditSavingId === request.id;
+                        const isDeleting = changeRequestDeletingId === request.id;
+                        const isOwn = Boolean(request.requested_by && userId && request.requested_by === userId);
+                        const canDelete = isOwn || canEditBriefChangeRequests;
+                        const canEditOwn = isOwn || canEditBriefChangeRequests;
+                        const attachments = request.attachments ?? [];
+                        const reactions = request.reactions ?? [];
+                        const reactionGroups = reactions.reduce<Map<string, DesignBriefChangeRequestReaction[]>>(
+                          (acc, reaction) => {
+                            const list = acc.get(reaction.emoji) ?? [];
+                            list.push(reaction);
+                            acc.set(reaction.emoji, list);
+                            return acc;
+                          },
+                          new Map()
+                        );
+                        const isPickerOpen = changeRequestReactionPickerId === request.id;
+                        return (
+                          <div
+                            key={request.id}
+                            className="rounded-lg border border-border/50 bg-card/30 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <AvatarBase
+                                  src={getMemberAvatar(request.requested_by)}
+                                  name={request.requested_by_label ?? "Користувач"}
+                                  fallback={getInitials(request.requested_by_label ?? "Користувач")}
+                                  size={28}
+                                  className="text-[10px] font-semibold"
+                                />
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium">
+                                    {request.requested_by_label ?? "Користувач"}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatDate(request.requested_at, true)}
+                                    {request.edited_at ? (
+                                      <span className="ml-1 italic">· ред. {formatDate(request.edited_at, true)}</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
+
+                            <div className="mt-3">
+                              {isEditingChangeRequest ? (
+                                <Textarea
+                                  value={changeRequestEditDraft}
+                                  onChange={(event) => setChangeRequestEditDraft(event.target.value)}
+                                  disabled={isSavingChangeRequest || designTaskLockedByOther}
+                                  className="min-h-[96px] resize-y"
+                                />
+                              ) : (
+                                <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+                                  {renderInlineRichText(request.request_text)}
+                                </div>
+                              )}
+                            </div>
+
+                            {!isEditingChangeRequest && attachments.length > 0 ? (
+                              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                {attachments.map((attachment) => {
+                                  const extension = getFileExtension(attachment.file_name);
+                                  const previewable =
+                                    canRenderStoragePreview(extension) &&
+                                    Boolean(attachment.storage_bucket && attachment.storage_path);
+                                  return (
+                                    <button
+                                      key={attachment.id}
+                                      type="button"
+                                      className="group relative h-24 overflow-hidden rounded-md border border-border/50 bg-muted/20 transition-colors hover:border-primary/40"
+                                      onClick={() =>
+                                        void openStorageFilePreview({
+                                          storage_bucket: attachment.storage_bucket,
+                                          storage_path: attachment.storage_path,
+                                          file_name: attachment.file_name,
+                                          mime_type: attachment.mime_type,
+                                        })
+                                      }
+                                      aria-label={`Переглянути ${attachment.file_name}`}
+                                    >
+                                      {previewable ? (
+                                        <StorageObjectImage
+                                          bucket={attachment.storage_bucket}
+                                          path={attachment.storage_path}
+                                          alt={attachment.file_name}
+                                          variant="thumb"
+                                          className="h-full w-full"
+                                        />
+                                      ) : (
+                                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
+                                          <FileText className="h-6 w-6" />
+                                          <span className="text-[10px] uppercase">{extension}</span>
+                                        </div>
+                                      )}
+                                      <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-[10px] text-foreground">
+                                        {attachment.file_name}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+
                             {isEditingChangeRequest ? (
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={isSavingChangeRequest || designTaskLockedByOther || !changeRequestEditDraft.trim()}
-                                  onClick={() => void saveBriefChangeRequestEdit(request.id)}
-                                >
-                                  {isSavingChangeRequest ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                                  Зберегти
-                                </Button>
+                              <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/30 pt-3">
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -8237,93 +8750,239 @@ export default function DesignTaskPage() {
                                 >
                                   Скасувати
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  className="gap-1.5"
+                                  disabled={isSavingChangeRequest || designTaskLockedByOther || !changeRequestEditDraft.trim()}
+                                  onClick={() => void saveBriefChangeRequestEdit(request.id)}
+                                >
+                                  {isSavingChangeRequest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                                  Зберегти
+                                </Button>
                               </div>
-                            ) : null}
+                            ) : (
+                              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/30 pt-3">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {Array.from(reactionGroups.entries()).map(([emoji, entries]) => {
+                                    const reactedByMe = entries.some((entry) => entry.user_id === userId);
+                                    const reactionKey = `${request.id}:${emoji}`;
+                                    const isToggling = changeRequestReactionTogglingKey === reactionKey;
+                                    return (
+                                      <div key={emoji} className="relative">
+                                        <button
+                                          type="button"
+                                          disabled={isToggling || designTaskLockedByOther}
+                                          onClick={() => void toggleChangeRequestReaction(request.id, emoji)}
+                                          className={cn(
+                                            "peer inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs transition-colors",
+                                            reactedByMe
+                                              ? "border-primary/40 bg-primary/10 text-primary"
+                                              : "border-border/50 bg-muted/30 text-foreground hover:border-border hover:bg-muted/50"
+                                          )}
+                                        >
+                                          <span className="text-sm leading-none">{emoji}</span>
+                                          <span className="font-medium">{entries.length}</span>
+                                        </button>
+                                        <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[220px] -translate-x-1/2 rounded-md border border-border/60 bg-popover px-2.5 py-2 opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                                          <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                            <span className="text-sm leading-none">{emoji}</span>
+                                            <span>
+                                              {entries.length}{" "}
+                                              {entries.length === 1
+                                                ? "реакція"
+                                                : entries.length < 5
+                                                  ? "реакції"
+                                                  : "реакцій"}
+                                            </span>
+                                          </div>
+                                          <ul className="space-y-1">
+                                            {entries.map((reaction) => {
+                                              const label = reaction.user_label ?? "Користувач";
+                                              return (
+                                                <li
+                                                  key={`${reaction.user_id}-${reaction.created_at}`}
+                                                  className="flex items-center gap-1.5 text-xs text-foreground"
+                                                >
+                                                  <AvatarBase
+                                                    src={getMemberAvatar(reaction.user_id)}
+                                                    name={label}
+                                                    fallback={getInitials(label)}
+                                                    size={16}
+                                                    className="border-border/60 text-[8px] font-semibold"
+                                                  />
+                                                  <span className="truncate">{label}</span>
+                                                </li>
+                                              );
+                                            })}
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  <Popover
+                                    open={isPickerOpen}
+                                    onOpenChange={(open) =>
+                                      setChangeRequestReactionPickerId(open ? request.id : null)
+                                    }
+                                  >
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7 text-muted-foreground"
+                                        disabled={designTaskLockedByOther || !userId}
+                                        aria-label="Додати реакцію"
+                                        title="Додати реакцію"
+                                      >
+                                        <SmilePlus className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-2" align="start">
+                                      <div className="flex items-center gap-1">
+                                        {CHANGE_REQUEST_REACTION_EMOJIS.map((emoji) => (
+                                          <button
+                                            key={emoji}
+                                            type="button"
+                                            className="flex h-8 w-8 items-center justify-center rounded-md text-lg transition-colors hover:bg-muted"
+                                            onClick={() => {
+                                              setChangeRequestReactionPickerId(null);
+                                              void toggleChangeRequestReaction(request.id, emoji);
+                                            }}
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {canEditOwn ? (
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      disabled={designTaskLockedByOther || !!changeRequestEditSavingId}
+                                      onClick={() => startBriefChangeRequestEdit(request)}
+                                      aria-label="Редагувати правку"
+                                      title="Редагувати"
+                                    >
+                                      <PencilLine className="h-3.5 w-3.5" />
+                                    </Button>
+                                  ) : null}
+                                  {canDelete ? (
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      disabled={isDeleting || designTaskLockedByOther}
+                                      onClick={() =>
+                                        confirmDiscardOr(
+                                          true,
+                                          "Видалити правку?",
+                                          "Правку і прикріплені файли буде остаточно видалено.",
+                                          () => void deleteBriefChangeRequest(request)
+                                        )
+                                      }
+                                      aria-label="Видалити правку"
+                                      title="Видалити"
+                                    >
+                                      {isDeleting ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      )}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </CardContent>
+              </Card>
 
-                {changeRequestOpen ? (
-                  <div className="space-y-2 border-t border-border/25 pt-3">
-                    <Textarea
-                      value={changeRequestDraft}
-                      onChange={(event) => setChangeRequestDraft(event.target.value)}
-                      placeholder="Опишіть правку…"
-                      disabled={changeRequestSaving || designTaskLockedByOther}
-                      className="resize-y min-h-[140px]"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void createBriefChangeRequest()}
-                        disabled={changeRequestSaving || designTaskLockedByOther || !changeRequestDraft.trim()}
-                      >
-                        {changeRequestSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Ок
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={changeRequestSaving || designTaskLockedByOther}
-                        onClick={() => {
-                          const reset = () => {
-                            setChangeRequestDraft("");
-                            setChangeRequestOpen(false);
-                          };
-                          confirmDiscardOr(
-                            changeRequestDraft.trim().length > 0,
-                            "Скасувати правку?",
-                            "Текст правки буде втрачено.",
-                            reset
-                          );
-                        }}
-                      >
-                        Скасувати
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {hasBriefHistory ? (
-                <div className="pt-1 space-y-2">
-                  <div className="text-xs text-muted-foreground">Історія версій ({briefVersions.length})</div>
-                  {briefVersions.length > 1 ? (
-                    <div className="space-y-2 max-h-64 overflow-auto pr-1">
-                      {[...briefVersions].reverse().map((version) => (
-                        <div key={version.id} className="border-l border-border/50 pl-3 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-medium">v{version.version}</div>
-                            <div className="text-xs text-muted-foreground">{formatDate(version.created_at, true)}</div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {version.created_by_label ?? "System"}
-                            {version.change_request_id ? " • з правки" : ""}
-                          </div>
-                          {version.change_request_id && briefChangeRequestById.get(version.change_request_id)?.request_text ? (
-                            <div className="text-sm whitespace-pre-wrap break-words">
-                              Правка: {renderInlineRichText(briefChangeRequestById.get(version.change_request_id)?.request_text ?? "")}
+              {/* CARD 3: Version history (collapsible) */}
+              {hasBriefHistory ? (
+                <Card className="border-border/50 bg-card/40 shadow-none">
+                  <CardContent className="p-5">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                      onClick={() => setHistoryExpanded((prev) => !prev)}
+                      aria-expanded={historyExpanded}
+                    >
+                      <div className="flex items-center gap-2">
+                        <History className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-semibold text-foreground">Історія версій</span>
+                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                          {briefVersions.length}
+                        </Badge>
+                      </div>
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 text-muted-foreground transition-transform",
+                          historyExpanded && "rotate-90"
+                        )}
+                      />
+                    </button>
+                    {historyExpanded ? (
+                      <div className="mt-4 space-y-3">
+                        {[...briefVersions].reverse().map((version) => {
+                          const linkedRequest = version.change_request_id
+                            ? briefChangeRequestById.get(version.change_request_id)
+                            : null;
+                          return (
+                            <div
+                              key={version.id}
+                              className="border-l-2 border-border/50 pl-3"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
+                                    v{version.version}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    {version.created_by_label ?? "System"}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(version.created_at, true)}
+                                </span>
+                              </div>
+                              {linkedRequest ? (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  ↳ з правки:{" "}
+                                  <span className="text-foreground">
+                                    {linkedRequest.request_text.length > 80
+                                      ? `${linkedRequest.request_text.slice(0, 80)}…`
+                                      : linkedRequest.request_text}
+                                  </span>
+                                </div>
+                              ) : null}
+                              {version.brief ? (
+                                <div className="mt-2 line-clamp-3 break-words text-xs text-muted-foreground">
+                                  {version.brief}
+                                </div>
+                              ) : null}
                             </div>
-                          ) : null}
-                          <div className="text-sm break-words">{renderBriefRichText(version.brief)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="border-l border-dashed border-border/60 pl-3 py-1 text-xs text-muted-foreground">
-                      Історія версій зʼявиться після першого збереження.
-                    </div>
-                  )}
-                </div>
-                ) : null}
-              </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
             </div>
           </details>
 
-          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "discussion" && "hidden")}>
+          <details open className={cn("group pb-4", activeDesignTab !== "discussion" && "hidden")}>
             <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -8507,7 +9166,7 @@ export default function DesignTaskPage() {
             </div>
           </details>
 
-          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "files" && "hidden")}>
+          <details open className={cn("group pb-4", activeDesignTab !== "files" && "hidden")}>
             <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -8696,7 +9355,7 @@ export default function DesignTaskPage() {
           </details>
 
           {isLinkedQuote ? (
-            <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "methods" && "hidden")}>
+            <details open className={cn("group pb-4", activeDesignTab !== "methods" && "hidden")}>
               <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -8742,7 +9401,7 @@ export default function DesignTaskPage() {
             </details>
           ) : null}
 
-          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "result" && "hidden")}>
+          <details open className={cn("group pb-4", activeDesignTab !== "result" && "hidden")}>
             <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -9563,133 +10222,187 @@ export default function DesignTaskPage() {
       </div>
 
       <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
-        <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
-          <DialogHeader>
-            <DialogTitle>ТЗ для дизайнера</DialogTitle>
-          </DialogHeader>
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/10 p-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn("h-8 px-2", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() =>
-                  applyBriefFormatting(({ selectedText }) =>
-                    toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
-                  )
-                }
-              >
-                <Heading2 className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn("h-8 px-2", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() =>
-                  applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                    toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
-                  )
-                }
-              >
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn("h-8 px-2", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() =>
-                  applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
-                    toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
-                  )
-                }
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn("h-8 px-2", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() =>
-                  applyBriefFormatting(({ selectedText }) =>
-                    toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
-                  )
-                }
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className={cn("h-8 px-2", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() =>
-                  applyBriefFormatting(({ selectedText }) =>
-                    toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
-                  )
-                }
-              >
-                <ListOrdered className="h-4 w-4" />
-              </Button>
+        <DialogContent className="flex h-[min(92dvh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(920px,92vw)]">
+          <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border/40 px-5 py-3 space-y-0">
+            <div className="flex items-center gap-2">
+              <DialogTitle className="text-base">Редактор ТЗ</DialogTitle>
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                v{activeBriefVersion?.version ?? 1}
+              </Badge>
             </div>
-            <Textarea
-              ref={briefDialogTextareaRef}
-              value={briefDraft}
-              onChange={(event) => {
-                setBriefDraft(event.target.value);
-                setBriefDirty(true);
-                resizeTextareaToContent(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
-              }}
-              onSelect={syncBriefSelection}
-              onKeyUp={syncBriefSelection}
-              onClick={syncBriefSelection}
-              onWheelCapture={(event) => event.stopPropagation()}
-              placeholder="Опишіть задачу для дизайнера…"
-              rows={10}
-              disabled={briefSaving || designTaskLockedByOther}
-              className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[240px] flex-1 overflow-y-auto overscroll-contain")}
-            />
-            <div className="text-xs text-muted-foreground">
-              Якщо текст довший за видиму область, редактор залишиться стабільним по висоті і ввімкне внутрішній скрол.
-            </div>
-            <div className={BRIEF_DIALOG_PREVIEW_CLASS}>
-              <div className="mb-2 text-xs text-muted-foreground">Попередній перегляд</div>
-              <div className={cn("max-h-48 overflow-auto", BRIEF_SURFACE_TEXT_CLASS)}>
-                {renderBriefRichText(briefDraft)}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            {briefDirty ? (
-              <Button
-                variant="ghost"
-                disabled={briefSaving || designTaskLockedByOther}
-                onClick={() => {
-                  setBriefDraft(activeBriefVersion?.brief ?? task?.designBrief ?? "");
-                  setBriefDirty(false);
-                }}
-              >
-                Скасувати зміни
-              </Button>
-            ) : null}
-            <Button variant="outline" onClick={() => setBriefEditorOpen(false)}>
-              Закрити
-            </Button>
-            <Button
-              onClick={() => void saveDesignBrief()}
-              disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+            <Tabs
+              value={briefEditorMode}
+              onValueChange={(value) => setBriefEditorMode(value as "write" | "preview")}
             >
-              {briefSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Зберегти нову версію
-            </Button>
+              <TabsList className="h-8">
+                <TabsTrigger value="write" className="h-7 px-3 text-xs">
+                  <PencilLine className="mr-1.5 h-3.5 w-3.5" />
+                  Писати
+                </TabsTrigger>
+                <TabsTrigger value="preview" className="h-7 px-3 text-xs">
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  Перегляд
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </DialogHeader>
+
+          {briefEditorMode === "write" ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex flex-wrap items-center gap-1 border-b border-border/40 px-3 py-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn("h-8 w-8 p-0", headingActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() =>
+                    applyBriefFormatting(({ selectedText }) =>
+                      toggleLinePrefix(selectedText, () => "## ", /^##\s+/, "Заголовок")
+                    )
+                  }
+                  title="Заголовок"
+                >
+                  <Heading2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn("h-8 w-8 p-0", boldActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() =>
+                    applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                      toggleWrappedFormatting(value, selectionStart, selectionEnd, "**", "жирний текст")
+                    )
+                  }
+                  title="Жирний (Ctrl+B)"
+                >
+                  <Bold className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn("h-8 w-8 p-0", italicActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() =>
+                    applyBriefFormatting(({ value, selectionStart, selectionEnd }) =>
+                      toggleWrappedFormatting(value, selectionStart, selectionEnd, "*", "курсив")
+                    )
+                  }
+                  title="Курсив (Ctrl+I)"
+                >
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-5 w-px bg-border/60" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn("h-8 w-8 p-0", bulletActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() =>
+                    applyBriefFormatting(({ selectedText }) =>
+                      toggleLinePrefix(selectedText, () => "- ", /^-\s+/, "Пункт списку")
+                    )
+                  }
+                  title="Маркований список"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn("h-8 w-8 p-0", orderedActive && "bg-primary/12 text-primary ring-1 ring-primary/20")}
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() =>
+                    applyBriefFormatting(({ selectedText }) =>
+                      toggleLinePrefix(selectedText, (index) => `${index + 1}. `, /^\d+\.\s+/, "Пункт списку")
+                    )
+                  }
+                  title="Нумерований список"
+                >
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+              </div>
+              <Textarea
+                ref={briefDialogTextareaRef}
+                value={briefDraft}
+                onChange={(event) => {
+                  setBriefDraft(event.target.value);
+                  setBriefDirty(true);
+                }}
+                onSelect={syncBriefSelection}
+                onKeyUp={syncBriefSelection}
+                onClick={syncBriefSelection}
+                onWheelCapture={(event) => event.stopPropagation()}
+                placeholder="Опишіть задачу для дизайнера. Використовуйте ## для заголовків, - для списків, **жирний** і *курсив*."
+                disabled={briefSaving || designTaskLockedByOther}
+                className={cn(
+                  "min-h-0 flex-1 resize-none border-0 bg-transparent px-5 py-4 text-sm leading-7 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                )}
+              />
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {briefDraft.trim() ? (
+                <div className={BRIEF_SURFACE_TEXT_CLASS}>{renderBriefRichText(briefDraft)}</div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm italic text-muted-foreground">
+                  Поки нічого не написано.
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-row items-center justify-between gap-3 border-t border-border/40 bg-muted/[0.02] px-5 py-3 space-y-0">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>{briefDraft.length} символів</span>
+              <span>·</span>
+              <span>{briefDraft.split(/\s+/).filter(Boolean).length} слів</span>
+              {briefDirty ? (
+                <Badge variant="outline" className="h-5 border-warning-soft-border bg-warning-soft px-1.5 text-[10px] text-warning-foreground">
+                  Незбережено
+                </Badge>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              {briefDirty ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={briefSaving || designTaskLockedByOther}
+                  onClick={() => {
+                    const reset = () => {
+                      setBriefDraft(activeBriefVersion?.brief ?? task?.designBrief ?? "");
+                      setBriefDirty(false);
+                    };
+                    confirmDiscardOr(
+                      briefDirty,
+                      "Скасувати зміни ТЗ?",
+                      "Усі незбережені зміни буде втрачено.",
+                      reset
+                    );
+                  }}
+                >
+                  Скасувати зміни
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => setBriefEditorOpen(false)}>
+                Закрити
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void saveDesignBrief()}
+                disabled={briefSaving || designTaskLockedByOther || !briefDirty}
+                className="gap-1.5"
+              >
+                {briefSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Зберегти нову версію
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
