@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -82,21 +83,65 @@ const renderDocBadge = (label: string, ready: boolean) => (
   </Badge>
 );
 
-const InfoHint = ({ title, children }: { title: string; children: ReactNode }) => (
-  <span className="group relative inline-flex">
-    <button
-      type="button"
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-      aria-label={title}
-    >
-      <Info className="h-3.5 w-3.5" />
-    </button>
-    <span className="pointer-events-none absolute right-0 top-8 z-50 hidden w-[320px] rounded-lg border border-border/60 bg-popover/95 p-3 text-left text-xs leading-5 text-popover-foreground shadow-[var(--shadow-overlay)] backdrop-blur-xl group-hover:block group-focus-within:block">
-      <span className="mb-1 block font-semibold text-foreground">{title}</span>
-      {children}
-    </span>
-  </span>
-);
+const InfoHint = ({
+  title,
+  children,
+  widthClass = "w-[320px]",
+}: {
+  title: string;
+  children: ReactNode;
+  widthClass?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<number | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const openNow = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const closeSoon = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 150);
+  };
+
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={title}
+          onPointerEnter={openNow}
+          onPointerLeave={closeSoon}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus:outline-none focus-visible:text-foreground"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={6}
+        collisionPadding={16}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onPointerEnter={openNow}
+        onPointerLeave={closeSoon}
+        className={`${widthClass} max-w-[min(440px,calc(100vw-2rem))] p-3 text-xs leading-5`}
+      >
+        <div className="mb-1 font-semibold text-foreground">{title}</div>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 type RequirementCheck = {
   label: string;
@@ -1490,7 +1535,50 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-2">
-            <Label>Incoterms 2020</Label>
+            <div className="flex items-center gap-1.5">
+              <Label>Incoterms 2020</Label>
+              <InfoHint title="Як обрати Incoterms" widthClass="w-[440px]">
+                <div className="space-y-3">
+                  <div>
+                    <div className="font-semibold text-foreground">CPT — підходить, якщо:</div>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      <li>ми самостійно оформлюємо відправку (Нова Пошта / Meest / Укрпошта);</li>
+                      <li>ми сплачуємо за доставку;</li>
+                      <li>
+                        Замовник погоджується, що після передачі товару Перевізнику відповідальність за
+                        транспортування переходить до нього;
+                      </li>
+                      <li>у договорі або СП це чітко зазначено — претензії по транспортуванню вирішуються через Перевізника.</li>
+                    </ul>
+                    <div className="mt-2 font-medium text-foreground">У Специфікації, пункт 3.2:</div>
+                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-[11px] leading-4 text-foreground">
+                      3.2 Умови доставки: CPT, адресна доставка Нова Пошта: &lt;адреса Замовника з картки клієнта&gt;, Incoterms® 2020
+                    </div>
+                  </div>
+                  <div className="border-t border-border/60 pt-3">
+                    <div className="font-semibold text-foreground">CIP — підходить, якщо:</div>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      <li>товар дорогий;</li>
+                      <li>велика партія подарункових наборів;</li>
+                      <li>техніка (павери, bluetooth-колонки, EcoFlow), дорогий мерч, преміальна продукція;</li>
+                      <li>оформлюємо відправку з великою оголошеною вартістю (страхуванням);</li>
+                      <li>
+                        ми несемо всі витрати по доставці та страхуванню (компенсаційний захист доставки),
+                        поки товар не отримав Замовник.
+                      </li>
+                    </ul>
+                    <div className="mt-2 font-medium text-foreground">У Специфікації:</div>
+                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-[11px] leading-4 text-foreground">
+                      Умови поставки: CIP, &lt;місце доставки&gt;, згідно Incoterms® 2020. Доставка товару
+                      здійснюється за рахунок Постачальника через службу доставки Нова Пошта (або Укрпошта /
+                      Meest Express) із оформленням страхування (оголошеної вартості відправлення) за наш
+                      рахунок. Ризик випадкової втрати або пошкодження товару переходить до Замовника
+                      відповідно до погоджених умов поставки.
+                    </div>
+                  </div>
+                </div>
+              </InfoHint>
+            </div>
             {record.source === "stored" ? (
               <Select
                 value={record.incotermsCode}
@@ -1502,7 +1590,7 @@ export default function OrdersProductionDetailsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {ORDER_INCOTERMS_OPTIONS.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
+                    <SelectItem key={item.id} value={item.id} description={item.description}>
                       {item.label}
                     </SelectItem>
                   ))}

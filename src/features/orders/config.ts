@@ -29,12 +29,12 @@ export const ORDER_PAYMENT_TERMS_OPTIONS = [
 ] as const;
 
 export const ORDER_INCOTERMS_OPTIONS = [
-  { id: "EXW", label: "EXW" },
-  { id: "FCA", label: "FCA" },
-  { id: "CPT", label: "CPT" },
-  { id: "CIP", label: "CIP" },
-  { id: "DPU", label: "DPU" },
-  { id: "DDP", label: "DDP" },
+  { id: "EXW", label: "EXW", description: "Самовивіз Замовником" },
+  { id: "FCA", label: "FCA", description: "Передача перевізнику Замовника" },
+  { id: "CPT", label: "CPT", description: "Доставка за наш рахунок, ризики доставки на Перевізнику" },
+  { id: "CIP", label: "CIP", description: "Доставка та страхування оплачено нами" },
+  { id: "DPU", label: "DPU", description: "Наша доставка з розвантаженням" },
+  { id: "DDP", label: "DDP", description: "Доставка Замовнику «під ключ»" },
 ] as const;
 
 export const ORDER_DOCUMENT_EXECUTOR = {
