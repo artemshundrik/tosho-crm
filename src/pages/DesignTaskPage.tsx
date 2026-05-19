@@ -385,6 +385,26 @@ type DropboxExportMetadataFile = {
   exported_at?: string | null;
 };
 
+const DESIGN_OUTPUT_ALLOWED_EXTENSIONS: Record<DesignOutputKind, string[]> = {
+  visualization: ["webp", "png", "jpg", "jpeg"],
+  layout: ["pdf", "ai", "cdr"],
+};
+
+const DESIGN_OUTPUT_ACCEPT_BY_KIND: Record<DesignOutputKind, string> = {
+  visualization: ".webp,.png,.jpg,.jpeg,image/webp,image/png,image/jpeg",
+  layout: ".pdf,.ai,.cdr,application/pdf,application/postscript,application/illustrator,application/x-coreldraw",
+};
+
+const formatExtensionList = (extensions: string[]) =>
+  extensions.map((entry) => `.${entry}`).join(", ");
+
+const getDesignOutputKindForExtension = (ext: string): DesignOutputKind | null => {
+  const lower = ext.toLowerCase();
+  if (DESIGN_OUTPUT_ALLOWED_EXTENSIONS.visualization.includes(lower)) return "visualization";
+  if (DESIGN_OUTPUT_ALLOWED_EXTENSIONS.layout.includes(lower)) return "layout";
+  return null;
+};
+
 const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
   visualization: "Візуал",
   layout: "Макет",
@@ -1344,6 +1364,7 @@ export default function DesignTaskPage() {
   const objectUrlRegistryRef = useRef<Set<string>>(new Set());
   const ghostOutputReconciledTaskIdRef = useRef<string | null>(null);
   const restoredDesignOutputsTaskIdRef = useRef<string | null>(null);
+  const migratedDesignOutputsTaskIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
@@ -3695,16 +3716,68 @@ export default function DesignTaskPage() {
     if (restoredDesignOutputsTaskIdRef.current && restoredDesignOutputsTaskIdRef.current !== task?.id) {
       restoredDesignOutputsTaskIdRef.current = null;
     }
+    if (migratedDesignOutputsTaskIdRef.current && migratedDesignOutputsTaskIdRef.current !== task?.id) {
+      migratedDesignOutputsTaskIdRef.current = null;
+    }
   }, [task?.id]);
+
+  useEffect(() => {
+    if (!task?.id || designTaskLockedByOther) return;
+    if (migratedDesignOutputsTaskIdRef.current === task.id) return;
+    if (designOutputFiles.length === 0) return;
+
+    let changed = false;
+    const corrected = designOutputFiles.map((file) => {
+      const dot = file.file_name?.lastIndexOf(".") ?? -1;
+      const ext = dot >= 0 && file.file_name ? file.file_name.slice(dot + 1) : "";
+      const correctKind = getDesignOutputKindForExtension(ext);
+      if (correctKind && file.output_kind !== correctKind) {
+        changed = true;
+        return { ...file, output_kind: correctKind };
+      }
+      return file;
+    });
+
+    migratedDesignOutputsTaskIdRef.current = task.id;
+    if (changed) {
+      setDesignOutputFiles(corrected);
+      void persistDesignOutputs(corrected, designOutputLinks);
+    }
+  }, [task?.id, designOutputFiles, designOutputLinks, designTaskLockedByOther]);
 
   const handleUploadDesignOutputs = async (files: FileList | null) => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || outputUploading) return;
     if (!ensureCanEdit()) return;
+
+    const allowedExts = DESIGN_OUTPUT_ALLOWED_EXTENSIONS[uploadTargetKind];
+    const kindLabel = DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind];
+    const filesArray = Array.from(files);
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of filesArray) {
+      const dot = file.name.lastIndexOf(".");
+      const ext = dot >= 0 ? file.name.slice(dot + 1).toLowerCase() : "";
+      if (allowedExts.includes(ext)) accepted.push(file);
+      else rejected.push(file.name);
+    }
+    if (rejected.length > 0) {
+      const allowedLabel = formatExtensionList(allowedExts);
+      toast.error(
+        rejected.length === 1
+          ? `Файл «${rejected[0]}» не підходить для вкладки «${kindLabel}». Дозволено: ${allowedLabel}.`
+          : `${rejected.length} файлів не підходять для вкладки «${kindLabel}» (${rejected.slice(0, 3).join(", ")}${rejected.length > 3 ? "…" : ""}). Дозволено: ${allowedLabel}.`
+      );
+    }
+    if (accepted.length === 0) {
+      if (outputInputRef.current) outputInputRef.current.value = "";
+      return;
+    }
+
     const targetGroupLabel = normalizeOutputGroupLabel(uploadTargetGroup);
     setOutputUploading(true);
     try {
       const uploaded: DesignOutputFile[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of accepted) {
         const safeName = file.name.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
         const candidatePaths = [`teams/${effectiveTeamId}/design-outputs/${task.quoteId}/${baseName}`];
@@ -8718,7 +8791,7 @@ export default function DesignTaskPage() {
                 type="file"
                 className="hidden"
                 multiple
-                accept="*/*"
+                accept={DESIGN_OUTPUT_ACCEPT_BY_KIND[uploadTargetKind]}
                 onChange={(event) => void handleUploadDesignOutputs(event.target.files)}
               />
               <Button
@@ -8763,7 +8836,12 @@ export default function DesignTaskPage() {
             </div>
             <Tabs
               value={activeDesignOutputTab}
-              onValueChange={(value) => setActiveDesignOutputTab(value as DesignOutputKind)}
+              onValueChange={(value) => {
+                const nextKind = value as DesignOutputKind;
+                setActiveDesignOutputTab(nextKind);
+                setUploadTargetKind(nextKind);
+                setAddLinkKind(nextKind);
+              }}
               className="w-full"
             >
               <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-lg border border-border/40 bg-transparent p-1">
