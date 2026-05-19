@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CustomerDialog, useCustomerEditor } from "@/components/customers";
 import {
   ORDER_DOCUMENT_EXECUTOR,
   ORDER_INCOTERMS_OPTIONS,
@@ -998,6 +999,20 @@ export default function OrdersProductionDetailsPage() {
   const [contractBalanceDaysInput, setContractBalanceDaysInput] = useState("3");
   const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
 
+  const refreshRecord = useCallback(async () => {
+    if (!teamId || !id) return;
+    try {
+      const orders = await loadDerivedOrders(teamId, userId);
+      const current = orders.find((entry) => entry.id === id) ?? null;
+      setRecord(current);
+      if (!current) {
+        setError("Замовлення не знайдено.");
+      }
+    } catch (loadError: unknown) {
+      setError(loadError instanceof Error ? loadError.message : "Не вдалося відкрити замовлення.");
+    }
+  }, [id, teamId, userId]);
+
   useEffect(() => {
     if (!teamId || !id) return;
     let active = true;
@@ -1026,6 +1041,12 @@ export default function OrdersProductionDetailsPage() {
       active = false;
     };
   }, [id, teamId, userId]);
+
+  const { openForCustomer: openCustomerEditor, editorProps: customerEditorProps } = useCustomerEditor({
+    onSaved: () => {
+      void refreshRecord();
+    },
+  });
 
   const doneSteps = useMemo(
     () => record?.readinessSteps.filter((step) => step.done).length ?? 0,
@@ -1283,12 +1304,29 @@ export default function OrdersProductionDetailsPage() {
             До списку замовлень
           </Button>
           <div className="flex min-w-0 items-start gap-4">
-            <EntityAvatar
-              src={record.customerLogoUrl}
-              name={record.customerName}
-              fallback={getInitials(record.customerName)}
-              size={52}
-            />
+            {record.partyType === "customer" && record.customerId ? (
+              <button
+                type="button"
+                onClick={() => void openCustomerEditor(record.customerId!)}
+                className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-80"
+                aria-label="Редагувати замовника"
+                title="Редагувати замовника"
+              >
+                <EntityAvatar
+                  src={record.customerLogoUrl}
+                  name={record.customerName}
+                  fallback={getInitials(record.customerName)}
+                  size={52}
+                />
+              </button>
+            ) : (
+              <EntityAvatar
+                src={record.customerLogoUrl}
+                name={record.customerName}
+                fallback={getInitials(record.customerName)}
+                size={52}
+              />
+            )}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <HoverCopyText
@@ -1316,7 +1354,20 @@ export default function OrdersProductionDetailsPage() {
                   {record.readinessColumn === "ready" ? "Готово до замовлення" : "Є блокери"}
                 </Badge>
               </div>
-              <div className="mt-1 text-sm text-muted-foreground">{record.customerName}</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {record.partyType === "customer" && record.customerId ? (
+                  <button
+                    type="button"
+                    onClick={() => void openCustomerEditor(record.customerId!)}
+                    className="inline-flex items-center gap-1 text-left text-muted-foreground underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:text-foreground focus-visible:decoration-foreground"
+                    title="Редагувати замовника"
+                  >
+                    {record.customerName}
+                  </button>
+                ) : (
+                  record.customerName
+                )}
+              </div>
               <div className="mt-2 text-sm text-muted-foreground">
                 Оновлено {formatOrderDate(record.updatedAt)} • сума {formatOrderMoney(record.total, record.currency)}
               </div>
@@ -1483,7 +1534,9 @@ export default function OrdersProductionDetailsPage() {
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="space-y-2">
-            <Label>Тип оплати</Label>
+            <div className="flex h-5 items-center gap-1.5">
+              <Label>Тип оплати</Label>
+            </div>
             {record.source === "stored" ? (
               <Select
                 value={record.paymentMethodId}
@@ -1512,7 +1565,9 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-2">
-            <Label>Умови оплати</Label>
+            <div className="flex h-5 items-center gap-1.5">
+              <Label>Умови оплати</Label>
+            </div>
             {record.source === "stored" ? (
               <Select
                 value={record.paymentTerms}
@@ -1535,7 +1590,7 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5">
+            <div className="flex h-5 items-center gap-1.5">
               <Label>Incoterms 2020</Label>
               <InfoHint title="Як обрати Incoterms" widthClass="w-[440px]">
                 <div className="space-y-3">
@@ -1601,7 +1656,9 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-2">
-            <Label>Місце поставки</Label>
+            <div className="flex h-5 items-center gap-1.5">
+              <Label>Місце поставки</Label>
+            </div>
             {record.source === "stored" ? (
               <Input
                 value={record.incotermsPlace ?? ""}
@@ -2048,6 +2105,7 @@ export default function OrdersProductionDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CustomerDialog {...customerEditorProps} />
     </PageCanvas>
   );
 }

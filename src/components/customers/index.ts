@@ -3,6 +3,8 @@ export { LeadDialog } from "./LeadDialog";
 export { CustomerLeadQuickViewDialog } from "./CustomerLeadQuickViewDialog";
 export { CustomerLeadPicker } from "./CustomerLeadPicker";
 export { useCustomerLeadCreate } from "./useCustomerLeadCreate";
+export { useCustomerEditor } from "./useCustomerEditor";
+export type { CustomerEditorDialogProps, CustomerEditorSavedResult } from "./useCustomerEditor";
 export {
   getCreatedCustomerLeadLabel,
   toCustomerLeadOption,
