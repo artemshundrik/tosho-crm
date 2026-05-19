@@ -5482,9 +5482,31 @@ export default function DesignTaskPage() {
       entry.id === requestId ? { ...entry, reactions: nextReactions } : entry
     );
 
+    const isAdding = existingIndex < 0;
+    const reactorAlreadyHasReaction = currentReactions.some((entry) => entry.user_id === userId);
+    const recipientUserId = target.requested_by ?? null;
+    const shouldNotify =
+      isAdding && !reactorAlreadyHasReaction && recipientUserId && recipientUserId !== userId;
+
     setChangeRequestReactionTogglingKey(reactionKey);
     try {
       await persistChangeRequests(nextRequests);
+      if (shouldNotify && recipientUserId) {
+        try {
+          const previewText = target.request_text.length > 80
+            ? `${target.request_text.slice(0, 80)}…`
+            : target.request_text;
+          await notifyUsers({
+            userIds: [recipientUserId],
+            title: `${actorLabel} відреагував ${emoji} на вашу правку`,
+            body: previewText,
+            href: `/design/${task.id}`,
+            type: "info",
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify change request author about reaction", notifyError);
+        }
+      }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, "Не вдалося оновити реакцію"));
     } finally {
