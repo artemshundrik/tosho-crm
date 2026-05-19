@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
-import { EntityAvatar } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   ExternalLink,
   FileText,
   Info,
@@ -50,7 +51,6 @@ import {
   Palette,
   Phone,
   Send,
-  Wallet,
 } from "lucide-react";
 
 const getInitials = (value?: string | null) => {
@@ -1290,6 +1290,9 @@ export default function OrdersProductionDetailsPage() {
     kind,
     ...getDocumentActionState(record, kind),
   }));
+  const documentsReadyCount = documentActions.filter((item) => item.ready).length;
+  const documentsTotalCount = documentActions.length;
+  const checklistTotalCount = record.readinessSteps.length;
   const specificationBlocker = getSpecificationBlocker(record);
 
   return (
@@ -1353,6 +1356,28 @@ export default function OrdersProductionDetailsPage() {
                 >
                   {record.readinessColumn === "ready" ? "Готово до замовлення" : "Є блокери"}
                 </Badge>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "gap-1 rounded-full px-2.5 py-0.5 text-[11px]",
+                    documentsReadyCount === documentsTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
+                  )}
+                  title="Готовність документів"
+                >
+                  <FileText className="h-3 w-3" />
+                  {documentsReadyCount} / {documentsTotalCount}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "gap-1 rounded-full px-2.5 py-0.5 text-[11px]",
+                    doneSteps === checklistTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
+                  )}
+                  title="Чекліст переходу в замовлення"
+                >
+                  <ClipboardCheck className="h-3 w-3" />
+                  {doneSteps} / {checklistTotalCount}
+                </Badge>
               </div>
               <div className="mt-1 text-sm text-muted-foreground">
                 {record.partyType === "customer" && record.customerId ? (
@@ -1375,16 +1400,16 @@ export default function OrdersProductionDetailsPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:min-w-[440px]">
-          <Card className="border-border/60 p-4">
-            <div className="text-xs text-muted-foreground">Статус замовлення</div>
+        <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-[520px]">
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус замовлення</div>
             {record.source === "stored" ? (
               <Select
                 value={record.orderStatus}
                 onValueChange={(value) => void handleStatusChange("orderStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="mt-2 h-9">
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1396,20 +1421,20 @@ export default function OrdersProductionDetailsPage() {
                 </SelectContent>
               </Select>
             ) : (
-              <div className="mt-1 text-sm font-semibold text-foreground">
+              <div className="text-sm font-semibold text-foreground">
                 {record.readinessColumn === "ready" ? "Нове" : "Підготовка до створення"}
               </div>
             )}
-          </Card>
-          <Card className="border-border/60 p-4">
-            <div className="text-xs text-muted-foreground">Статус оплати</div>
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус оплати</div>
             {record.source === "stored" ? (
               <Select
                 value={record.paymentStatus}
                 onValueChange={(value) => void handleStatusChange("paymentStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="mt-2 h-9">
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1421,18 +1446,18 @@ export default function OrdersProductionDetailsPage() {
                 </SelectContent>
               </Select>
             ) : (
-              <div className="mt-1 text-sm font-semibold text-foreground">Очікує оплату</div>
+              <div className="text-sm font-semibold text-foreground">Очікує оплату</div>
             )}
-          </Card>
-          <Card className="border-border/60 p-4">
-            <div className="text-xs text-muted-foreground">Статус доставки</div>
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус доставки</div>
             {record.source === "stored" ? (
               <Select
                 value={record.deliveryStatus}
                 onValueChange={(value) => void handleStatusChange("deliveryStatus", value)}
                 disabled={statusSaving}
               >
-                <SelectTrigger className="mt-2 h-9">
+                <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1444,24 +1469,16 @@ export default function OrdersProductionDetailsPage() {
                 </SelectContent>
               </Select>
             ) : (
-              <div className="mt-1 text-sm font-semibold text-foreground">Не відвантажено</div>
+              <div className="text-sm font-semibold text-foreground">Не відвантажено</div>
             )}
-          </Card>
-          <Card className="border-border/60 p-4">
-            <div className="text-xs text-muted-foreground">Документи</div>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {renderDocBadge("Договір", record.docs.contract)}
-              {renderDocBadge("Рахунок", record.docs.invoice)}
-              {renderDocBadge("СП", record.docs.specification)}
-            </div>
-          </Card>
+          </div>
         </div>
       </div>
       </Card>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
         <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card className="border-border/60 p-4">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
             <Building2 className="h-3.5 w-3.5" />
@@ -1470,25 +1487,19 @@ export default function OrdersProductionDetailsPage() {
           <div className="mt-2 text-sm font-semibold text-foreground">
             {record.legalEntityLabel || "Потрібно заповнити реквізити"}
           </div>
-          <div className="mt-2 space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Mail className="h-3.5 w-3.5" />
-              <span>{record.contactEmail || "Email не заповнений"}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-3.5 w-3.5" />
-              <span>{record.contactPhone || "Телефон не заповнений"}</span>
-            </div>
+          <div className="mt-3 border-t border-border/60 pt-3">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Підписант</div>
+            {record.customerSignatoryName ? (
+              <div className="mt-1 text-sm text-foreground">
+                <span className="font-medium">{toSignatureInitials(record.customerSignatoryName)}</span>
+                {record.customerSignatoryPosition ? (
+                  <span className="text-muted-foreground">, {record.customerSignatoryPosition}</span>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-1 text-sm text-muted-foreground">Не вказаний</div>
+            )}
           </div>
-        </Card>
-
-        <Card className="border-border/60 p-4">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-            <Wallet className="h-3.5 w-3.5" />
-            Оплата
-          </div>
-          <div className="mt-2 text-sm font-semibold text-foreground">{record.paymentRail}</div>
-          <div className="mt-1 text-sm text-muted-foreground">{record.paymentTerms}</div>
         </Card>
 
         <Card className="border-border/60 p-4">
@@ -1507,9 +1518,23 @@ export default function OrdersProductionDetailsPage() {
         </Card>
 
         <Card className="border-border/60 p-4">
-          <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Менеджер</div>
-          <div className="mt-2 text-sm font-semibold text-foreground">{record.managerLabel}</div>
-          <div className="mt-2 text-sm text-muted-foreground">{record.signatoryLabel || "Підписанта не вказано"}</div>
+          <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Менеджер замовлення</div>
+          <div className="mt-2 flex items-center gap-3">
+            <AvatarBase
+              src={record.managerAvatarUrl ?? null}
+              name={record.managerLabel}
+              fallback={getInitials(record.managerLabel)}
+              size={36}
+              className="border-border/60"
+              fallbackClassName="text-[11px] font-semibold"
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-foreground">
+                {record.managerLabel || "Менеджер не призначений"}
+              </div>
+              <div className="text-xs text-muted-foreground">Відповідальний за замовлення</div>
+            </div>
+          </div>
         </Card>
       </div>
 
@@ -1781,62 +1806,57 @@ export default function OrdersProductionDetailsPage() {
               </div>
             </div>
             <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
-              {documentActions.filter((item) => item.ready).length} / {documentActions.length}
+              {documentsReadyCount} / {documentsTotalCount}
             </Badge>
           </div>
-          <div className="mt-4 space-y-2.5">
+          <div className="mt-4 space-y-1.5">
             {documentActions.map((document) => (
               <div
                 key={document.kind}
                 className={cn(
-                  "rounded-lg border px-3 py-3",
+                  "rounded-lg border px-3 py-2.5",
                   document.ready ? "border-border/60 bg-muted/[0.04]" : "tone-warning-subtle"
                 )}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span>{document.title}</span>
-                    <InfoHint title={`${document.title}: що перевіряється`}>
-                      <p className="mb-2 text-muted-foreground">{document.hint}</p>
-                      <RequirementList checks={document.checks} />
-                    </InfoHint>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (document.kind === "contract") {
-                          // Для договору — спочатку модал з параметрами (строки, пролонгація, оплата).
-                          setContractAutoProlongation(false);
-                          setContractProductionDaysInput("50");
-                          // Дефолти з record — якщо менеджер уже задавав, підвантажимо.
-                          setContractPrepaymentPctInput(
-                            record.prepaymentPct !== null ? String(record.prepaymentPct) : "70"
-                          );
-                          setContractBalancePctInput(
-                            record.balancePct !== null ? String(record.balancePct) : "30"
-                          );
-                          setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
-                          setContractBalanceDaysInput(
-                            record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
-                          );
-                          setContractDialogOpen(true);
-                          return;
-                        }
-                        void openDocumentPrint(document.kind);
-                      }}
-                      disabled={!document.ready}
-                      title={document.blockedLabel ?? undefined}
-                    >
-                      PDF
-                    </Button>
-                    {renderDocBadge(document.statusLabel, document.statusReady)}
-                  </div>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <InfoHint title={`${document.title}: що перевіряється`}>
+                    <p className="mb-2 text-muted-foreground">{document.hint}</p>
+                    <RequirementList checks={document.checks} />
+                  </InfoHint>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{document.title}</span>
+                  {renderDocBadge(document.statusLabel, document.statusReady)}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      if (document.kind === "contract") {
+                        setContractAutoProlongation(false);
+                        setContractProductionDaysInput("50");
+                        setContractPrepaymentPctInput(
+                          record.prepaymentPct !== null ? String(record.prepaymentPct) : "70"
+                        );
+                        setContractBalancePctInput(
+                          record.balancePct !== null ? String(record.balancePct) : "30"
+                        );
+                        setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
+                        setContractBalanceDaysInput(
+                          record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
+                        );
+                        setContractDialogOpen(true);
+                        return;
+                      }
+                      void openDocumentPrint(document.kind);
+                    }}
+                    disabled={!document.ready}
+                    title={document.blockedLabel ?? undefined}
+                  >
+                    PDF
+                  </Button>
                 </div>
                 {document.blockedLabel ? (
-                  <div className="mt-2 text-xs leading-5 text-muted-foreground">{document.blockedLabel}</div>
+                  <div className="mt-1.5 text-[11px] leading-4 text-muted-foreground">{document.blockedLabel}</div>
                 ) : null}
               </div>
             ))}
@@ -1882,18 +1902,18 @@ export default function OrdersProductionDetailsPage() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                Чекліст створення замовлення
                 <InfoHint title="Чому тут 6/6, але документи можуть бути заблоковані">
                   <p className="text-muted-foreground">
                     Цей чекліст відповідає тільки за перехід із прорахунку в замовлення: контрагент, контакти, позиції і дизайн.
                     Договір і СП мають додаткові юридичні умови, тому винесені в окремий блок “Документи”.
                   </p>
                 </InfoHint>
+                Чекліст створення замовлення
               </div>
               <div className="mt-1 text-xs text-muted-foreground">Не плутати з готовністю Договору та СП.</div>
             </div>
             <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
-              {doneSteps} / {record.readinessSteps.length}
+              {doneSteps} / {checklistTotalCount}
             </Badge>
           </div>
           <div className="space-y-2">
@@ -1902,9 +1922,7 @@ export default function OrdersProductionDetailsPage() {
                 key={step.label}
                 className={cn(
                   "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
-                  step.done
-                    ? "tone-success-subtle"
-                    : "tone-warning-subtle"
+                  step.done ? "tone-success-subtle" : "tone-warning-subtle"
                 )}
               >
                 {step.done ? (
