@@ -67,6 +67,12 @@ import {
   Send,
   RotateCcw,
   Users,
+  FileText,
+  Paperclip,
+  MessageSquare,
+  Layers,
+  CircleHelp,
+  type LucideIcon,
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -358,6 +364,7 @@ type GroupedDesignOutputs = {
 };
 
 type DesignOutputKind = "visualization" | "layout";
+type DesignTaskPageTab = "brief" | "result" | "methods" | "files" | "discussion";
 type DropboxExportRole = "final" | "archive";
 
 type DropboxExportPlanFile = {
@@ -385,6 +392,75 @@ const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
 
 const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
 const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
+
+const DESIGN_TASK_DRAFT_PREFIX = "tosho:design-task-draft";
+
+const buildDesignTaskDraftKey = (
+  taskId: string | undefined,
+  kind: "brief" | "change-request" | "change-request-edit"
+): string | null => {
+  if (!taskId) return null;
+  return `${DESIGN_TASK_DRAFT_PREFIX}:${taskId}:${kind}`;
+};
+
+const readDesignTaskDraft = (key: string | null): string => {
+  if (!key || typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+};
+
+const writeDesignTaskDraft = (key: string | null, value: string): void => {
+  if (!key || typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {
+    // ignore quota/private-mode errors
+  }
+};
+
+const clearDesignTaskDraft = (key: string | null): void => {
+  if (!key || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+};
+
+type DesignTaskEditDraftPayload = { requestId: string; text: string };
+
+const readDesignTaskEditDraft = (key: string | null): DesignTaskEditDraftPayload | null => {
+  if (!key || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<DesignTaskEditDraftPayload>;
+    if (typeof parsed.requestId === "string" && typeof parsed.text === "string") {
+      return { requestId: parsed.requestId, text: parsed.text };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDesignTaskEditDraft = (
+  key: string | null,
+  payload: DesignTaskEditDraftPayload | null
+): void => {
+  if (!key || typeof window === "undefined") return;
+  try {
+    if (payload && payload.requestId && payload.text)
+      window.localStorage.setItem(key, JSON.stringify(payload));
+    else window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+};
 
 const normalizePartyLabel = (value?: string | null) => {
   const raw = (value ?? "").trim().toLowerCase();
@@ -1239,6 +1315,7 @@ export default function DesignTaskPage() {
   const [uploadTargetGroup, setUploadTargetGroup] = useState("__none__");
   const [uploadTargetKind, setUploadTargetKind] = useState<DesignOutputKind>("layout");
   const [activeDesignOutputTab, setActiveDesignOutputTab] = useState<DesignOutputKind>("visualization");
+  const [activeDesignTab, setActiveDesignTab] = useState<DesignTaskPageTab>("brief");
   const [attachQuoteDialogOpen, setAttachQuoteDialogOpen] = useState(false);
   const [quoteCandidates, setQuoteCandidates] = useState<QuoteCandidate[]>([]);
   const [quoteCandidatesLoading, setQuoteCandidatesLoading] = useState(false);
@@ -1281,6 +1358,19 @@ export default function DesignTaskPage() {
   const [changeRequestEditingId, setChangeRequestEditingId] = useState<string | null>(null);
   const [changeRequestEditDraft, setChangeRequestEditDraft] = useState("");
   const [changeRequestEditSavingId, setChangeRequestEditSavingId] = useState<string | null>(null);
+  const briefDraftKey = useMemo(() => buildDesignTaskDraftKey(id, "brief"), [id]);
+  const changeRequestDraftKey = useMemo(() => buildDesignTaskDraftKey(id, "change-request"), [id]);
+  const changeRequestEditDraftKey = useMemo(
+    () => buildDesignTaskDraftKey(id, "change-request-edit"),
+    [id]
+  );
+  const draftRestoredKeyRef = useRef<string | null>(null);
+  const [discardDialog, setDiscardDialog] = useState<{
+    open: boolean;
+    label: string;
+    description: string;
+    confirm: (() => void) | null;
+  }>({ open: false, label: "", description: "", confirm: null });
   const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
     totalSeconds: 0,
     activeSessionId: null,
@@ -2307,6 +2397,54 @@ export default function DesignTaskPage() {
     if (briefDirty) return;
     setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
   }, [task, briefDirty, activeBriefVersion]);
+
+  useEffect(() => {
+    if (!briefDraftKey) return;
+    if (draftRestoredKeyRef.current === briefDraftKey) return;
+    draftRestoredKeyRef.current = briefDraftKey;
+
+    const savedBrief = readDesignTaskDraft(briefDraftKey);
+    if (savedBrief) {
+      setBriefDraft(savedBrief);
+      setBriefDirty(true);
+      setBriefInlineEditing(true);
+    }
+
+    const savedChangeRequest = readDesignTaskDraft(changeRequestDraftKey);
+    if (savedChangeRequest) {
+      setChangeRequestDraft(savedChangeRequest);
+      setChangeRequestOpen(true);
+    }
+
+    const savedEdit = readDesignTaskEditDraft(changeRequestEditDraftKey);
+    if (savedEdit && savedEdit.text) {
+      setChangeRequestEditingId(savedEdit.requestId);
+      setChangeRequestEditDraft(savedEdit.text);
+    }
+  }, [briefDraftKey, changeRequestDraftKey, changeRequestEditDraftKey]);
+
+  useEffect(() => {
+    if (!briefDraftKey) return;
+    if (briefDirty) writeDesignTaskDraft(briefDraftKey, briefDraft);
+    else clearDesignTaskDraft(briefDraftKey);
+  }, [briefDraft, briefDirty, briefDraftKey]);
+
+  useEffect(() => {
+    if (!changeRequestDraftKey) return;
+    writeDesignTaskDraft(changeRequestDraftKey, changeRequestDraft);
+  }, [changeRequestDraft, changeRequestDraftKey]);
+
+  useEffect(() => {
+    if (!changeRequestEditDraftKey) return;
+    if (changeRequestEditingId && changeRequestEditDraft) {
+      writeDesignTaskEditDraft(changeRequestEditDraftKey, {
+        requestId: changeRequestEditingId,
+        text: changeRequestEditDraft,
+      });
+    } else {
+      writeDesignTaskEditDraft(changeRequestEditDraftKey, null);
+    }
+  }, [changeRequestEditDraft, changeRequestEditingId, changeRequestEditDraftKey]);
 
   useEffect(() => {
     resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
@@ -5064,6 +5202,29 @@ export default function DesignTaskPage() {
     setChangeRequestEditDraft("");
   };
 
+  const closeDiscardDialog = () => setDiscardDialog((prev) => ({ ...prev, open: false }));
+
+  const confirmDiscardOr = (
+    hasContent: boolean,
+    label: string,
+    description: string,
+    action: () => void
+  ) => {
+    if (!hasContent) {
+      action();
+      return;
+    }
+    setDiscardDialog({
+      open: true,
+      label,
+      description,
+      confirm: () => {
+        action();
+        closeDiscardDialog();
+      },
+    });
+  };
+
   const startBriefChangeRequestEdit = (request: DesignBriefChangeRequest) => {
     if (!canEditBriefChangeRequests || designTaskLockedByOther) return;
     setChangeRequestOpen(false);
@@ -7418,6 +7579,60 @@ export default function DesignTaskPage() {
     filePreviewDownloadKey && downloadPreparingKey === filePreviewDownloadKey
   );
 
+  const designResultCount = designOutputFiles.length + designOutputLinks.length;
+  const discussionCount = isLinkedQuote ? quoteMentionComments.length : standaloneComments.length;
+  const designTaskTabs: Array<{
+    value: DesignTaskPageTab;
+    label: string;
+    icon: LucideIcon;
+    badge?: string | number | null;
+    attention?: boolean;
+  }> = [
+    {
+      value: "brief",
+      label: "ТЗ",
+      icon: FileText,
+      badge: briefChangeRequests.length > 0 ? `v${activeBriefVersion?.version ?? 1} · ${briefChangeRequests.length}` : `v${activeBriefVersion?.version ?? 1}`,
+      attention: Boolean(renameError),
+    },
+    {
+      value: "result",
+      label: "Результат",
+      icon: ImageIcon,
+      badge: designResultCount || null,
+    },
+    ...(isLinkedQuote
+      ? ([
+          {
+            value: "methods" as const,
+            label: "Нанесення",
+            icon: Layers,
+            badge: task.methodsCount || null,
+          },
+        ] satisfies Array<{
+          value: DesignTaskPageTab;
+          label: string;
+          icon: LucideIcon;
+          badge?: string | number | null;
+          attention?: boolean;
+        }>)
+      : []),
+    {
+      value: "files",
+      label: "Файли",
+      icon: Paperclip,
+      badge: attachments.length || null,
+      attention: Boolean(customerAttachmentsError),
+    },
+    {
+      value: "discussion",
+      label: "Обговорення",
+      icon: MessageSquare,
+      badge: discussionCount || null,
+      attention: Boolean(quoteMentionsError),
+    },
+  ];
+
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
       <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
@@ -7722,19 +7937,74 @@ export default function DesignTaskPage() {
         </div>
       ) : null}
 
+      <div className="sticky top-0 z-30 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur sm:px-5 md:px-6 xl:px-8 xl:pr-10">
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {designTaskTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeDesignTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActiveDesignTab(tab.value)}
+                className={cn(
+                  "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  isActive
+                    ? "border-primary/35 bg-primary/10 text-primary"
+                    : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground"
+                )}
+                aria-pressed={isActive}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+                {tab.badge ? (
+                  <span
+                    className={cn(
+                      "max-w-[120px] truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none",
+                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {tab.badge}
+                  </span>
+                ) : null}
+                {tab.attention ? (
+                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
-          <section className="border-b border-border/40 pb-8">
+          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "brief" && "hidden")}>
+            <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="text-base font-semibold tracking-tight text-foreground">ТЗ для дизайнера</div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Інформація про ТЗ"
+                    onClick={(event) => event.preventDefault()}
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    Опис задачі для дизайнера, версії ТЗ і правки від менеджера.
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
             {isLinkedQuote && quantityLabel !== "Не вказано" ? (
               <div className="flex justify-end pb-3">
                 <Badge variant="outline" className="text-xs font-normal">{quantityLabel}</Badge>
               </div>
             ) : null}
-            {task.status === "changes" ? (
-              <div className="my-4 rounded-lg border border-warning-soft-border bg-warning-soft px-3 py-2.5 text-sm text-warning-foreground">
-                {task.title ?? "Замовник надіслав правки, перевірте деталі та оновіть макет."}
-              </div>
-            ) : null}
-
             {/* ТЗ section */}
             <div className="border-t border-border/25 pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -7803,9 +8073,17 @@ export default function DesignTaskPage() {
                       variant="ghost"
                       disabled={briefSaving || designTaskLockedByOther}
                       onClick={() => {
-                        setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
-                        setBriefDirty(false);
-                        setBriefInlineEditing(false);
+                        const reset = () => {
+                          setBriefDraft(activeBriefVersion?.brief ?? task.designBrief ?? "");
+                          setBriefDirty(false);
+                          setBriefInlineEditing(false);
+                        };
+                        confirmDiscardOr(
+                          briefDirty && briefDraft.trim().length > 0,
+                          "Скасувати зміни ТЗ?",
+                          "Усі незбережені зміни в ТЗ буде втрачено.",
+                          reset
+                        );
                       }}
                     >
                       Скасувати
@@ -7875,7 +8153,14 @@ export default function DesignTaskPage() {
                                   size="sm"
                                   variant="ghost"
                                   disabled={isSavingChangeRequest}
-                                  onClick={cancelBriefChangeRequestEdit}
+                                  onClick={() =>
+                                    confirmDiscardOr(
+                                      changeRequestEditDraft.trim() !== (request.request_text ?? "").trim(),
+                                      "Скасувати редагування правки?",
+                                      "Зміни в правці буде втрачено.",
+                                      cancelBriefChangeRequestEdit
+                                    )
+                                  }
                                 >
                                   Скасувати
                                 </Button>
@@ -7912,8 +8197,16 @@ export default function DesignTaskPage() {
                         variant="ghost"
                         disabled={changeRequestSaving || designTaskLockedByOther}
                         onClick={() => {
-                          setChangeRequestDraft("");
-                          setChangeRequestOpen(false);
+                          const reset = () => {
+                            setChangeRequestDraft("");
+                            setChangeRequestOpen(false);
+                          };
+                          confirmDiscardOr(
+                            changeRequestDraft.trim().length > 0,
+                            "Скасувати правку?",
+                            "Текст правки буде втрачено.",
+                            reset
+                          );
                         }}
                       >
                         Скасувати
@@ -7955,9 +8248,31 @@ export default function DesignTaskPage() {
                 ) : null}
               </div>
             </div>
-          </section>
+          </details>
 
-          <section className="border-b border-border/40 pb-8">
+          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "discussion" && "hidden")}>
+            <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                  <MessageSquare className="h-4 w-4" />
+                </div>
+                <div className="text-base font-semibold tracking-tight text-foreground">Обговорення</div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Інформація про обговорення"
+                    onClick={(event) => event.preventDefault()}
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    Коментарі дизайн-задачі та згадки з відповідного прорахунку.
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
             <div className="pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
             </div>
@@ -8117,9 +8432,31 @@ export default function DesignTaskPage() {
                 </div>
               )}
             </div>
-          </section>
+          </details>
 
-          <section className="border-b border-border/40 pb-8">
+          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "files" && "hidden")}>
+            <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                  <Paperclip className="h-4 w-4" />
+                </div>
+                <div className="text-base font-semibold tracking-tight text-foreground">Файли</div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Інформація про файли"
+                    onClick={(event) => event.preventDefault()}
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    Вкладення замовника або файли до ТЗ для роботи дизайнера.
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
             <div className="flex items-center justify-between gap-3 pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
@@ -8283,10 +8620,32 @@ export default function DesignTaskPage() {
                 </div>
               )}
             </div>
-          </section>
+          </details>
 
           {isLinkedQuote ? (
-            <section className="border-b border-border/40 pb-8">
+            <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "methods" && "hidden")}>
+              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Layers className="h-4 w-4" />
+                  </div>
+                  <div className="text-base font-semibold tracking-tight text-foreground">Нанесення</div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Інформація про нанесення"
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <CircleHelp className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                      Методи нанесення, позиції та розміри з привʼязаного прорахунку.
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
               <div className="flex items-center justify-between pb-3">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Нанесення</span>
                 {task.methodsCount ? <Badge variant="outline" className="text-xs font-normal">{task.methodsCount} нанес.</Badge> : null}
@@ -8307,10 +8666,32 @@ export default function DesignTaskPage() {
                   </div>
                 )}
               </div>
-            </section>
+            </details>
           ) : null}
 
-          <section className="border-b border-border/40 pb-8">
+          <details open className={cn("group border-b border-border/40 pb-8", activeDesignTab !== "result" && "hidden")}>
+            <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                  <ImageIcon className="h-4 w-4" />
+                </div>
+                <div className="text-base font-semibold tracking-tight text-foreground">Результат дизайнера</div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Інформація про результат"
+                    onClick={(event) => event.preventDefault()}
+                  >
+                    <CircleHelp className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    Готові візуалізації, макети та посилання від дизайнера.
+                  </div>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Результат дизайнера</span>
               <Badge variant="outline" className="text-xs">
@@ -8607,7 +8988,7 @@ export default function DesignTaskPage() {
               </CardContent>
             </Card>
             </div>
-          </section>
+          </details>
         </div>
 
         </div>
@@ -9741,6 +10122,22 @@ export default function DesignTaskPage() {
           />
         </Suspense>
       ) : null}
+
+      <ConfirmDialog
+        open={discardDialog.open}
+        onOpenChange={(open) => {
+          if (!open) closeDiscardDialog();
+          else setDiscardDialog((prev) => ({ ...prev, open: true }));
+        }}
+        title={discardDialog.label || "Скасувати зміни?"}
+        description={discardDialog.description}
+        confirmLabel="Скасувати зміни"
+        cancelLabel="Продовжити редагування"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          discardDialog.confirm?.();
+        }}
+      />
 
       <ConfirmDialog
         open={deleteDialogOpen}
