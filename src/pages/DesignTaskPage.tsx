@@ -422,7 +422,7 @@ const DESIGN_TASK_DRAFT_PREFIX = "tosho:design-task-draft";
 
 const buildDesignTaskDraftKey = (
   taskId: string | undefined,
-  kind: "brief" | "change-request" | "change-request-edit"
+  kind: "brief" | "change-request" | "change-request-edit" | "change-request-attachments"
 ): string | null => {
   if (!taskId) return null;
   return `${DESIGN_TASK_DRAFT_PREFIX}:${taskId}:${kind}`;
@@ -481,6 +481,31 @@ const writeDesignTaskEditDraft = (
   try {
     if (payload && payload.requestId && payload.text)
       window.localStorage.setItem(key, JSON.stringify(payload));
+    else window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+};
+
+const readDesignTaskAttachmentsDraft = (key: string | null): DesignBriefChangeRequestAttachment[] => {
+  if (!key || typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return parseBriefChangeRequestAttachments(parsed);
+  } catch {
+    return [];
+  }
+};
+
+const writeDesignTaskAttachmentsDraft = (
+  key: string | null,
+  attachments: DesignBriefChangeRequestAttachment[]
+): void => {
+  if (!key || typeof window === "undefined") return;
+  try {
+    if (attachments.length > 0) window.localStorage.setItem(key, JSON.stringify(attachments));
     else window.localStorage.removeItem(key);
   } catch {
     // ignore
@@ -1471,6 +1496,10 @@ export default function DesignTaskPage() {
   const changeRequestDraftKey = useMemo(() => buildDesignTaskDraftKey(id, "change-request"), [id]);
   const changeRequestEditDraftKey = useMemo(
     () => buildDesignTaskDraftKey(id, "change-request-edit"),
+    [id]
+  );
+  const changeRequestAttachmentsDraftKey = useMemo(
+    () => buildDesignTaskDraftKey(id, "change-request-attachments"),
     [id]
   );
   const draftRestoredKeyRef = useRef<string | null>(null);
@@ -2520,8 +2549,10 @@ export default function DesignTaskPage() {
     }
 
     const savedChangeRequest = readDesignTaskDraft(changeRequestDraftKey);
-    if (savedChangeRequest) {
-      setChangeRequestDraft(savedChangeRequest);
+    const savedAttachments = readDesignTaskAttachmentsDraft(changeRequestAttachmentsDraftKey);
+    if (savedChangeRequest || savedAttachments.length > 0) {
+      if (savedChangeRequest) setChangeRequestDraft(savedChangeRequest);
+      if (savedAttachments.length > 0) setChangeRequestDraftAttachments(savedAttachments);
       setChangeRequestOpen(true);
     }
 
@@ -2530,7 +2561,7 @@ export default function DesignTaskPage() {
       setChangeRequestEditingId(savedEdit.requestId);
       setChangeRequestEditDraft(savedEdit.text);
     }
-  }, [briefDraftKey, changeRequestDraftKey, changeRequestEditDraftKey]);
+  }, [briefDraftKey, changeRequestDraftKey, changeRequestEditDraftKey, changeRequestAttachmentsDraftKey]);
 
   useEffect(() => {
     if (!briefDraftKey) return;
@@ -2542,6 +2573,11 @@ export default function DesignTaskPage() {
     if (!changeRequestDraftKey) return;
     writeDesignTaskDraft(changeRequestDraftKey, changeRequestDraft);
   }, [changeRequestDraft, changeRequestDraftKey]);
+
+  useEffect(() => {
+    if (!changeRequestAttachmentsDraftKey) return;
+    writeDesignTaskAttachmentsDraft(changeRequestAttachmentsDraftKey, changeRequestDraftAttachments);
+  }, [changeRequestDraftAttachments, changeRequestAttachmentsDraftKey]);
 
   useEffect(() => {
     if (!changeRequestEditDraftKey) return;
