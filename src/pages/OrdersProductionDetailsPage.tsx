@@ -1820,11 +1820,13 @@ export default function OrdersProductionDetailsPage() {
               >
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <InfoHint title={`${document.title}: що перевіряється`}>
-                    <p className="mb-2 text-muted-foreground">{document.hint}</p>
-                    <RequirementList checks={document.checks} />
-                  </InfoHint>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{document.title}</span>
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="truncate text-sm font-medium text-foreground">{document.title}</span>
+                    <InfoHint title={`${document.title}: що перевіряється`}>
+                      <p className="mb-2 text-muted-foreground">{document.hint}</p>
+                      <RequirementList checks={document.checks} />
+                    </InfoHint>
+                  </div>
                   {renderDocBadge(document.statusLabel, document.statusReady)}
                   <Button
                     size="sm"
