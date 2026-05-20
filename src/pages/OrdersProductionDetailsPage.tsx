@@ -855,7 +855,8 @@ const buildOrderDocumentHtml = (
           .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 24px; }
           .party-title { font-weight: 700; margin-bottom: 10px; }
           .signature-line { margin-top: 20px; }
-          ul { margin: 6px 0 10px 18px; padding: 0; }
+          .subsection-title { margin: 10px 0 4px; font-size: 14px; font-weight: 700; }
+          ul { margin: 4px 0 10px 18px; padding: 0; }
           li { margin: 0 0 6px; font-size: 14px; }
           .visualization { margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
           .visualization img { max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; }
@@ -888,7 +889,7 @@ const buildOrderDocumentHtml = (
 
           <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, що діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони, разом - Сторони, підписали цей Додаток до Договору про наступне:</p>
 
-          <div class="section-title center">СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
+          <div class="section-title center">1. СПЕЦИФІКАЦІЯ НА ВИГОТОВЛЕННЯ</div>
 
           <table>
             <thead>
@@ -924,21 +925,29 @@ const buildOrderDocumentHtml = (
               : ""
           }
 
-          <div class="section-title">ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
+          <div class="section-title">2. ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
+          <div class="subsection-title">2.1. Загальна вартість виготовлення Продукції</div>
           <ul>
             <li>Загальна вартість робіт з виготовлення продукції складає ${escapeHtml(formatPlainMoney(totalWithVat))} грн, враховуючи ПДВ ${SPEC_VAT_RATE}%.</li>
             <li>Вартість робіт без ПДВ складає ${escapeHtml(formatPlainMoney(totalWithoutVat))} грн.</li>
+          </ul>
+          <div class="subsection-title">2.2. Терміни поставки Продукції</div>
+          <ul>
             <li>Термін виготовлення продукції складає ${SPEC_DEFAULT_WORK_DAYS} робочих днів з дати затвердження оригінал-макету до друку.</li>
           </ul>
 
-          <div class="section-title">ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
+          <div class="section-title">3. ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
+          <div class="subsection-title">3.1. Умови оплати</div>
           <ul>
             <li>Оплата продукції здійснюється Замовником на умовах ${escapeHtml(paymentTerms.label)}: ${paymentTerms.advance}% (${escapeHtml(formatPlainMoney(paymentTerms.advanceAmount))} грн з урахуванням ПДВ) перед запуском та ${paymentTerms.balance}% (${escapeHtml(formatPlainMoney(paymentTerms.balanceAmount))} грн з урахуванням ПДВ) — ${escapeHtml(balanceTimingPhrase)}, ${escapeHtml(balanceTermPhrase)}.</li>
             <li>Спосіб оплати: ${escapeHtml(record.paymentRail || "Не вказано")}.</li>
+          </ul>
+          <div class="subsection-title">3.2. Умови доставки Продукції</div>
+          <ul>
             <li>Доставка продукції здійснюється на умовах ${escapeHtml(deliveryTerms)}.</li>
           </ul>
 
-          <div class="section-title">АДРЕСИ І РЕКВІЗИТИ СТОРІН</div>
+          <div class="section-title">4. АДРЕСИ І РЕКВІЗИТИ СТОРІН</div>
           <div class="signature-grid">
             <div>
               <div class="party-title">ВИКОНАВЕЦЬ:</div>
@@ -1305,7 +1314,7 @@ export default function OrdersProductionDetailsPage() {
         `Замовник: ${record.customerName}`,
         `Сума: ${formatOrderMoney(record.total, record.currency)}`,
         ``,
-        `Документи можна сформувати зі сторінки замовлення: Договір, Рахунок, СП, Техкарта.`,
+        `Документи можна сформувати зі сторінки замовлення: Договір, СП, Рахунок, Техкарта.`,
       ].join("\n")
     );
     window.location.href = `mailto:${encodeURIComponent(record.contactEmail || "")}?subject=${subject}&body=${body}`;
@@ -1357,7 +1366,7 @@ export default function OrdersProductionDetailsPage() {
     );
   }
 
-  const documentActions = (["contract", "invoice", "specification", "techCard"] as OrderDocumentKind[]).map((kind) => ({
+  const documentActions = (["contract", "specification", "invoice", "techCard"] as OrderDocumentKind[]).map((kind) => ({
     kind,
     ...getDocumentActionState(record, kind),
   }));
