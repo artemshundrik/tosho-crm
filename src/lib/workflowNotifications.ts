@@ -404,6 +404,67 @@ export async function notifyDesignTaskCollaboratorsOnStatusChange(params: {
   });
 }
 
+type ContractRevisionDecisionAlert = {
+  title: string;
+  body: string;
+  type: "info" | "success" | "warning";
+};
+
+const CONTRACT_DECISION_ALERTS: Record<"approved" | "rejected", (revisionNumber: number, quoteRef: string, comment: string | null) => ContractRevisionDecisionAlert> = {
+  approved: (revisionNumber, quoteRef, comment) => ({
+    title: `CEO схвалив договір v${revisionNumber}`,
+    body: `Договір ${quoteRef} (v${revisionNumber}) погоджено. Можна відправляти замовнику.${comment ? ` Коментар CEO: ${comment}` : ""}`,
+    type: "success",
+  }),
+  rejected: (revisionNumber, quoteRef, comment) => ({
+    title: `CEO повернув договір v${revisionNumber} на правки`,
+    body: `Договір ${quoteRef} (v${revisionNumber}) повернено на правки.${comment ? ` Коментар CEO: ${comment}` : " Перевірте коментар у замовленні."}`,
+    type: "warning",
+  }),
+};
+
+export async function notifyContractRevisionSubmitted(params: {
+  teamId: string;
+  orderId: string;
+  revisionNumber: number;
+  quoteNumber?: string | null;
+  actorUserId?: string | null;
+}) {
+  const members = await resolveTeamMembers(params.teamId);
+  const recipients = new Set(pickCeoUserIds(members));
+  if (params.actorUserId) recipients.delete(params.actorUserId);
+  if (recipients.size === 0) return;
+  const quoteRef = params.quoteNumber ? `#${params.quoteNumber}` : "цього замовлення";
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `Договір v${params.revisionNumber} на схваленні`,
+    body: `Менеджер передав на схвалення нову версію договору ${quoteRef}.`,
+    href: `/orders/production/${params.orderId}`,
+    type: "info",
+  });
+}
+
+export async function notifyContractRevisionDecided(params: {
+  orderId: string;
+  revisionNumber: number;
+  decision: "approved" | "rejected";
+  ceoComment?: string | null;
+  authorUserId: string;
+  quoteNumber?: string | null;
+  actorUserId?: string | null;
+}) {
+  if (!params.authorUserId || params.authorUserId === params.actorUserId) return;
+  const quoteRef = params.quoteNumber ? `#${params.quoteNumber}` : "замовлення";
+  const alert = CONTRACT_DECISION_ALERTS[params.decision](params.revisionNumber, quoteRef, params.ceoComment?.trim() || null);
+  await notifyUsers({
+    userIds: [params.authorUserId],
+    title: alert.title,
+    body: alert.body,
+    href: `/orders/production/${params.orderId}`,
+    type: alert.type,
+  });
+}
+
 export async function notifyCustomerLeadManagerAssigned(params: {
   entityType: "customer" | "lead";
   entityId: string;

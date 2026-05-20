@@ -34,9 +34,18 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
+import { ContractRevisionsPanel } from "@/components/contracts/ContractRevisionsPanel";
+import {
+  buildDefaultContractSections,
+  renderContractSectionsHtml,
+  partiesSectionNumber,
+  type ContractSection,
+  type ContractRenderContext,
+} from "@/features/contractRevisions/contractSections";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { toSignatureInitials } from "@/lib/signatureFormat";
+import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -70,6 +79,34 @@ const getFileExtension = (name?: string | null) => {
 const isPreviewableAsset = (name?: string | null) => {
   const extension = getFileExtension(name);
   return ["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP", "PDF", "TIF", "TIFF"].includes(extension);
+};
+
+const IMAGE_EXTENSIONS = new Set(["PNG", "JPG", "JPEG", "WEBP", "GIF", "BMP"]);
+
+const isImageAsset = (asset: OrderDesignAsset) => {
+  if (asset.mimeType && asset.mimeType.startsWith("image/")) return true;
+  return IMAGE_EXTENSIONS.has(getFileExtension(asset.label));
+};
+
+const resolveVisualizationImageUrls = async (assets: OrderDesignAsset[]): Promise<string[]> => {
+  const urls: string[] = [];
+  for (const asset of assets) {
+    if (!isImageAsset(asset)) continue;
+    if (asset.kind === "link") {
+      if (asset.url) urls.push(asset.url);
+      continue;
+    }
+    if (!asset.storageBucket || !asset.storagePath) continue;
+    try {
+      const signedUrl =
+        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "preview", 60 * 60)) ??
+        (await getSignedAttachmentUrl(asset.storageBucket, asset.storagePath, "original", 60 * 60));
+      if (signedUrl) urls.push(signedUrl);
+    } catch (resolveError) {
+      console.error("Failed to resolve visualization signed URL", resolveError);
+    }
+  }
+  return urls;
 };
 
 const renderDocBadge = (label: string, ready: boolean) => (
@@ -492,7 +529,36 @@ const formatIncotermsLabel = (record: Pick<DerivedOrderRecord, "incotermsCode" |
 const canCreateSpecification = (record: DerivedOrderRecord) =>
   record.items.length > 0 &&
   isCashlessPaymentMethod(record.paymentMethodId, record.paymentRail) &&
-  Boolean(record.contractCreatedAt);
+  Boolean(record.contractCreatedAt) &&
+  record.hasApprovedVisualization;
+
+// Build initial render context for the contract sections from current record fields.
+// Used to seed defaults when manager creates the very first revision (v1).
+const buildContractRenderContextFromRecord = (record: DerivedOrderRecord): ContractRenderContext => {
+  const totalWithVat = Number(record.total || 0);
+  const advance = record.prepaymentPct ?? null;
+  const balance = record.balancePct ?? null;
+  const hasBreakdown = typeof advance === "number" && typeof balance === "number";
+  const timing = record.balanceTiming ?? "before_shipment";
+  const balanceDays = record.balanceDaysAfterShipment ?? 3;
+  const balanceTimingPhrase =
+    timing === "after_shipment"
+      ? "після відвантаження продукції (отримання Замовником)"
+      : "після готовності продукції, до відвантаження";
+  return {
+    productionWorkingDays: 50,
+    contractEndDate: formatContractEndDate(record.contractCreatedAt ?? null),
+    hasPaymentBreakdown: hasBreakdown,
+    paymentAdvancePct: advance ?? 0,
+    paymentBalancePct: balance ?? 0,
+    balanceTimingPhrase,
+    balanceAfterShipmentTermSuffix:
+      timing === "after_shipment" ? `, протягом ${balanceDays} робочих днів з дати відвантаження` : "",
+    contractAutoProlongation: false,
+    // totalWithVat is intentionally unused in the default template body, but kept here for future tokens.
+    ...{ totalWithVat },
+  } as ContractRenderContext;
+};
 
 const getSpecificationBlocker = (record: DerivedOrderRecord) => {
   if (record.items.length === 0) return "Немає позицій для СП.";
@@ -501,6 +567,9 @@ const getSpecificationBlocker = (record: DerivedOrderRecord) => {
   }
   if (!record.contractCreatedAt) {
     return "Перед СП потрібно створити Договір.";
+  }
+  if (!record.hasApprovedVisualization) {
+    return "Для СП потрібна погоджена візуалізація.";
   }
   return null;
 };
@@ -527,6 +596,10 @@ type BuildOrderDocumentOptions = {
   balanceTiming?: "before_shipment" | "after_shipment" | null;
   /** Кількість робочих днів на доплату (тільки при balanceTiming='after_shipment'). */
   balanceDaysAfterShipment?: number | null;
+  /** URL-и зображень погодженої візуалізації, готові до вставки в <img src>. */
+  visualizationImageUrls?: string[];
+  /** Якщо передано — рендеримо договір з цих секцій (з ревізії), інакше — з дефолтів. */
+  contractSections?: ContractSection[];
 };
 
 const buildOrderDocumentHtml = (
@@ -655,6 +728,25 @@ const buildOrderDocumentHtml = (
     })
     .join("");
 
+  // Контекст для генерації дефолтних секцій договору з поточних опцій/полів.
+  const contractRenderContext = {
+    productionWorkingDays,
+    contractEndDate,
+    hasPaymentBreakdown: hasExplicitPaymentBreakdown,
+    paymentAdvancePct: paymentTerms.advance,
+    paymentBalancePct: paymentTerms.balance,
+    balanceTimingPhrase,
+    balanceAfterShipmentTermSuffix:
+      effectiveBalanceTiming === "after_shipment"
+        ? `, протягом ${effectiveBalanceDays} робочих днів з дати відвантаження`
+        : "",
+    contractAutoProlongation,
+  };
+  const contractSectionsToRender =
+    options.contractSections ?? buildDefaultContractSections(contractRenderContext);
+  const contractBodyHtml = renderContractSectionsHtml(contractSectionsToRender);
+  const partiesSectionIndex = partiesSectionNumber(contractSectionsToRender);
+
   if (kind === "contract") {
     return `<!doctype html>
     <html lang="uk">
@@ -706,54 +798,9 @@ const buildOrderDocumentHtml = (
 
         <p>${escapeHtml(CONTRACT_EXECUTOR.companyName)} (надалі – Виконавець), в особі ${escapeHtml(CONTRACT_EXECUTOR.signatoryPosition)} ${escapeHtml(CONTRACT_EXECUTOR.signatory)}, яка діє на підставі ${escapeHtml(CONTRACT_EXECUTOR.authority)}, з однієї сторони, та ${escapeHtml(customerTitle)} (надалі – Замовник), в особі ${escapeHtml(customerSignatoryRoleBody)} ${escapeHtml(customerSignatoryNameBody)}, яка діє на підставі ${escapeHtml(customerSignatoryAuthority)}, з іншої сторони (надалі – Сторони), уклали цей Договір про наступне:</p>
 
-        <h3>1. Предмет договору</h3>
-        <p>Виконавець зобов’язується виготовити та поставити Замовнику рекламно-сувенірну продукцію (надалі – Продукція) в асортименті, кількості та по ціні згідно Специфікаціям, що є невід’ємними частинами цього Договору, а Замовник зобов’язується прийняти Продукцію та оплатити її в порядку та на умовах, визначених Договором.</p>
-        <p>На кожне окреме замовлення (партію) Продукції оформлюється Специфікація, в якій зазначається:</p>
-        <ul>
-          <li>кількість Продукції;</li>
-          <li>назва Продукції;</li>
-          <li>технічні параметри продукції згідно затверджених макетів та візуалів;</li>
-          <li>умови та терміни оплати конкретної партії Продукції;</li>
-          <li>строк виготовлення та поставки Продукції Замовнику.</li>
-        </ul>
+        ${contractBodyHtml}
 
-        <h3>2. Порядок виконання, здачі та приймання виконаних робіт</h3>
-        <p>2.1. Виготовлення Продукції здійснюється партіями відповідно до наданих Замовником і затверджених ним макетів Продукції, підписаних уповноваженою особою Замовника.</p>
-        <p>2.2. Поставка здійснюється на склад Замовника. Термін поставки Продукції становить не більше ${productionWorkingDays} робочих днів з моменту погодження Сторонами та затвердження Замовником оригінал-макету і здійснення передоплати, залежно від події, що наступить пізніше. Якщо на конкретну партію Продукції встановлені інші умови поставки, то вони зазначаються у Специфікації на відповідну партію замовлення.</p>
-        <p>2.3. Датою поставки вважається дата фактичної передачі Продукції Замовнику, що зазначається в накладних на виготовлену Продукцію.</p>
-        <p>2.4. Приймання Продукції за кількістю та якістю здійснюється сторонами в порядку, що визначається чинним законодавством України.</p>
-
-        <h3>3. Вартість робіт по договору та порядок розрахунків</h3>
-        <p>3.1. Перелік робіт та цін визначаються у Специфікаціях до цього Договору.</p>
-        <p>3.2. Оплата за цим Договором здійснюється шляхом перерахування на розрахунковий рахунок Виконавця грошових коштів в національній валюті України, відповідно до умов кожної Специфікації.</p>
-        <p>3.3. Зміна вартості робіт по виготовленню Продукції та умов оплати можлива лише за згодою Сторін, що оформляється шляхом підписання Сторонами Додаткової угоди до Специфікації.</p>
-        ${hasExplicitPaymentBreakdown ? `<p>3.4. Орієнтовний порядок оплати: ${paymentTerms.advance}% — передоплата перед запуском у виробництво; ${paymentTerms.balance}% — ${escapeHtml(balanceTimingPhrase)}${effectiveBalanceTiming === "after_shipment" ? `, протягом ${effectiveBalanceDays} робочих днів з дати відвантаження` : ""}. Конкретні суми та строки оплати по кожній партії визначаються у відповідній Специфікації.</p>` : ""}
-
-        <h3>4. Права та обов’язки сторін</h3>
-        <p>4.1. Замовник зобов’язується своєчасно здійснювати розрахунки з Виконавцем за Договором.</p>
-        <p>4.2. Замовник має право контролювати якість виконуваних робіт на їх відповідність погодженим Сторонами Специфікаціям.</p>
-        <p>4.3. Виконавець зобов’язується виконувати роботи по виготовленню Продукції згідно Специфікаціям та з додержанням вимог діючих державних стандартів і технічних умов.</p>
-        <p>4.4. Виконавець має право вимагати оплати Замовником вартості робіт в порядку та строки, визначені цим Договором.</p>
-
-        <h3>5. Відповідальність сторін</h3>
-        <p>5.1. У випадку порушення умов даного Договору Сторони несуть відповідальність відповідно до чинного законодавства України та даного Договору.</p>
-        <p>5.2. За несвоєчасну поставку виготовленої Продукції Виконавець сплачує Замовнику пеню в розмірі подвійної облікової ставки НБУ від вартості несвоєчасно поставленої Продукції за кожен день прострочення.</p>
-        <p>5.3. У випадку порушення Замовником строків оплати, передбачених у відповідних Специфікаціях, Замовник сплачує Виконавцю штраф в розмірі 5% від суми заборгованості.</p>
-
-        <h3>6. Форс-мажор</h3>
-        <p>6.1. Сторони звільняються від відповідальності за повне або часткове невиконання своїх зобов’язань по даному Договору, якщо воно викликано обставинами непереборної сили відповідно до чинного законодавства України.</p>
-
-        <h3>7. Врегулювання суперечок</h3>
-        <p>7.1. Всі суперечки між сторонами з приводу виконання даного договору вирішуються шляхом переговорів. У випадку недосягнення згоди спірне питання підлягає вирішенню в Господарському суді згідно чинного законодавства України.</p>
-
-        <h3>8. Інші умови</h3>
-        <p>8.1. Цей Договір складений українською мовою у двох автентичних примірниках, які мають однакову юридичну силу, по одному для кожної із Сторін.</p>
-        <p>8.2. Цей Договір вважається укладеним і набирає чинності з моменту його підписання Сторонами.</p>
-        <p>8.3. Додатки до цього Договору є його невід'ємними частинами і мають юридичну силу у разі, якщо вони викладені у письмовій формі та підписані Сторонами.</p>
-        <p>8.4. Термін дії Договору до ${escapeHtml(contractEndDate)} року та/або до повного виконання Сторонами своїх зобов’язань.</p>
-        ${contractAutoProlongation ? `<p>8.5. Якщо за 30 (тридцять) календарних днів до закінчення терміну дії цього Договору жодна із Сторін письмово не повідомить іншу про намір припинити його дію, Договір вважається автоматично продовженим на наступний 1 (один) рік на тих самих умовах. Кількість можливих автоматичних пролонгацій не обмежена.</p>` : ""}
-
-        <h3>9. Адреси і реквізити сторін</h3>
+        <h3>${partiesSectionIndex}. Адреси і реквізити сторін</h3>
         <div class="party-grid">
           <div class="party-card">
             <div class="party-title">ВИКОНАВЕЦЬ</div>
@@ -810,10 +857,14 @@ const buildOrderDocumentHtml = (
           .signature-line { margin-top: 20px; }
           ul { margin: 6px 0 10px 18px; padding: 0; }
           li { margin: 0 0 6px; font-size: 14px; }
+          .visualization { margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+          .visualization img { max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; }
           @media print {
             body { background: #ffffff; }
             .toolbar { display: none; }
             .page { max-width: none; margin: 0; box-shadow: none; padding: 0; }
+            .visualization { page-break-inside: avoid; }
+            .visualization img { max-height: 260px; }
           }
         </style>
       </head>
@@ -859,6 +910,19 @@ const buildOrderDocumentHtml = (
               </tr>
             </tbody>
           </table>
+
+          ${
+            (options.visualizationImageUrls ?? []).length > 0
+              ? `<div class="visualization">
+            ${(options.visualizationImageUrls ?? [])
+              .map(
+                (src) =>
+                  `<img src="${escapeHtml(src)}" alt="Візуалізація" />`
+              )
+              .join("")}
+          </div>`
+              : ""
+          }
 
           <div class="section-title">ВАРТІСТЬ РОБІТ ТА СТРОКИ ВИГОТОВЛЕННЯ ПРОДУКЦІЇ</div>
           <ul>
@@ -982,7 +1046,8 @@ const buildOrderDocumentHtml = (
 export default function OrdersProductionDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { teamId, loading: authLoading, session, userId } = useAuth();
+  const { teamId, loading: authLoading, session, userId, accessRole } = useAuth();
+  const isCeo = accessRole === "owner";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
@@ -1153,6 +1218,7 @@ export default function OrdersProductionDetailsPage() {
       | "balancePct"
       | "balanceTiming"
       | "balanceDaysAfterShipment"
+      | "contractSections"
     > = {}
   ) => {
     if (!record) return;
@@ -1173,9 +1239,13 @@ export default function OrdersProductionDetailsPage() {
       record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
       record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
     ]);
+    // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
+    const visualizationImageUrls =
+      kind === "specification" ? await resolveVisualizationImageUrls(record.approvedVisualizationAssets) : [];
     const html = buildOrderDocumentHtml(record, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
+      visualizationImageUrls,
       ...extraOptions,
     });
     const popup = window.open("", "_blank");
@@ -1794,6 +1864,48 @@ export default function OrdersProductionDetailsPage() {
           })}
         </div>
       </Card>
+
+      {teamId && userId ? (
+        <ContractRevisionsPanel
+          teamId={teamId}
+          orderId={record.id}
+          currentUserId={userId}
+          isCeo={isCeo}
+          quoteNumber={record.quoteNumber}
+          initialDefaultSections={buildDefaultContractSections(buildContractRenderContextFromRecord(record))}
+          onOpenPreview={(sections) =>
+            openDocumentPrint("contract", { contractSections: sections })
+          }
+          onSnapshotRevision={async (revision) => {
+            try {
+              const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
+                record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
+                record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
+              ]);
+              const html = buildOrderDocumentHtml(record, "contract", {
+                customerSignatoryNameGenitive,
+                customerSignatoryRoleGenitive,
+                contractSections: revision.sections,
+              });
+              const path = `${record.id}/v${revision.revisionNumber}.html`;
+              const { error: uploadError } = await supabase.storage
+                .from("contract-snapshots")
+                .upload(path, new Blob([html], { type: "text/html;charset=utf-8" }), {
+                  upsert: true,
+                  contentType: "text/html;charset=utf-8",
+                });
+              if (uploadError) {
+                console.error("Failed to upload contract snapshot", uploadError);
+                return null;
+              }
+              return { storageBucket: "contract-snapshots", storagePath: path };
+            } catch (snapshotError) {
+              console.error("Snapshot generation failed", snapshotError);
+              return null;
+            }
+          }}
+        />
+      ) : null}
         </div>
 
       <aside className="space-y-5 xl:sticky xl:top-4 xl:self-start">
