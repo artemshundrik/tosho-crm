@@ -21,6 +21,7 @@ import {
   getLocalReminderDateInputValue,
   getLocalReminderTimeInputValue,
 } from "@/lib/reminderDateTime";
+import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 
@@ -90,6 +91,7 @@ const EMPTY_CONTACT: CustomerContact = {
   phone: "",
   email: "",
   birthday: "",
+  telegram: "",
 };
 
 const buildEmptyForm = (): CustomerFormState => ({
@@ -122,6 +124,7 @@ const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => {
         phone: contact?.phone?.trim() ?? "",
         email: contact?.email?.trim() ?? "",
         birthday: contact?.birthday?.trim() ?? "",
+        telegram: contact?.telegram?.trim() ?? "",
       };
     })
     .filter((contact) => Object.values(contact).some(Boolean));
@@ -132,6 +135,7 @@ const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => {
     phone: row.contact_phone?.trim() ?? "",
     email: row.contact_email?.trim() ?? "",
     birthday: row.contact_birthday?.trim() ?? "",
+    telegram: "",
   };
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CONTACT }];
 };
@@ -311,6 +315,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
         phone: contact.phone.trim(),
         email: contact.email.trim(),
         birthday: normalizeBirthday(contact.birthday),
+        telegram: normalizeTelegramUsername(contact.telegram),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
     const primaryContact = contacts[0] ?? null;

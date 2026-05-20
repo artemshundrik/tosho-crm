@@ -97,6 +97,7 @@ export type CustomerContact = {
   phone: string;
   email: string;
   birthday: string;
+  telegram: string;
 };
 
 export type { CustomerLegalEntity } from "@/lib/customerLegalEntities";
@@ -470,7 +471,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const addContact = () => {
     setForm((prev) => ({
       ...prev,
-      contacts: [...prev.contacts, { name: "", position: "", phone: "", email: "", birthday: "" }],
+      contacts: [...prev.contacts, { name: "", position: "", phone: "", email: "", birthday: "", telegram: "" }],
     }));
   };
 
@@ -811,6 +812,17 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     </div>
                   ) : null}
                 </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Telegram</Label>
+                    <Input
+                      value={form.contacts[0]?.telegram ?? ""}
+                      onChange={(e) => updateContact(0, { telegram: e.target.value })}
+                      placeholder="@username"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
               </div>
               <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
@@ -939,16 +951,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         />
                       </div>
                     </div>
-                    <div className="grid gap-2">
-                      <Label>День народження</Label>
-                      <Input
-                        value={formatBirthdayForInput(contact.birthday)}
-                        onChange={(e) => updateContact(index, { birthday: normalizeBirthdayInput(e.target.value) })}
-                        inputMode="numeric"
-                        maxLength={10}
-                        placeholder="дд.мм або дд.мм.рррр"
-                        className="h-9"
-                      />
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>День народження</Label>
+                        <Input
+                          value={formatBirthdayForInput(contact.birthday)}
+                          onChange={(e) => updateContact(index, { birthday: normalizeBirthdayInput(e.target.value) })}
+                          inputMode="numeric"
+                          maxLength={10}
+                          placeholder="дд.мм або дд.мм.рррр"
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Telegram</Label>
+                        <Input
+                          value={contact.telegram}
+                          onChange={(e) => updateContact(index, { telegram: e.target.value })}
+                          placeholder="@username"
+                          className="h-9"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1098,12 +1121,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                               {activeOwnershipOption?.label}
                             </SelectValue>
                           </SelectTrigger>
-                          <SelectContent
-                            side="bottom"
-                            sideOffset={6}
-                            align="start"
-                            avoidCollisions={false}
-                          >
+                          <SelectContent sideOffset={6} align="start">
                             {groupedOwnershipOptions.map(([groupName, options], groupIndex) => (
                               <React.Fragment key={groupName}>
                                 {groupIndex > 0 ? <SelectSeparator /> : null}

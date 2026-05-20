@@ -26,6 +26,7 @@ type CustomerContact = {
   phone?: string;
   email?: string;
   birthday?: string;
+  telegram?: string;
 };
 
 type CustomerRecord = {
@@ -223,6 +224,7 @@ export type DerivedOrderRecord = {
   deliveryStatus: string;
   contactEmail: string | null;
   contactPhone: string | null;
+  contactTelegram: string | null;
   legalEntityLabel: string | null;
   customerTaxId: string | null;
   customerVatId: string | null;
@@ -407,6 +409,7 @@ const parseCustomerContacts = (row?: CustomerRecord | null): CustomerContact[] =
       phone: entry?.phone?.trim() ?? "",
       email: entry?.email?.trim() ?? "",
       birthday: entry?.birthday?.trim() ?? "",
+      telegram: entry?.telegram?.trim() ?? "",
     }))
     .filter((entry) => Object.values(entry).some(Boolean));
 
@@ -794,6 +797,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       customer?.contact_phone?.trim?.() ??
       lead?.phone_numbers?.find((entry) => (entry ?? "").trim())?.trim() ??
       null;
+    const contactTelegram =
+      customerContacts.find((entry) => (entry.telegram ?? "").trim())?.telegram?.trim() ?? null;
     const legalEntityLabel =
       primaryLegalEntity && primaryLegalEntity.legalName.trim()
         ? formatCustomerLegalEntityTitle(primaryLegalEntity)
@@ -918,6 +923,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       deliveryStatus: "not_shipped",
       contactEmail,
       contactPhone,
+      contactTelegram,
       legalEntityLabel: legalEntityLabel ?? null,
       customerTaxId: taxId || null,
       customerVatId: vatId || null,
@@ -1287,6 +1293,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         deliveryStatus: order.delivery_status?.trim() || "not_shipped",
         contactEmail: order.contact_email?.trim?.() || null,
         contactPhone: order.contact_phone?.trim?.() || null,
+        contactTelegram:
+          parseCustomerContacts(customer).find((entry) => (entry.telegram ?? "").trim())?.telegram?.trim() || null,
         legalEntityLabel:
           order.legal_entity_label?.trim?.() ||
           (primaryLegalEntity ? formatCustomerLegalEntityTitle(primaryLegalEntity) : customer?.legal_name?.trim?.()) ||

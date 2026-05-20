@@ -33,9 +33,11 @@ import {
   PackageCheck,
   Phone,
   ReceiptText,
+  Send,
   User,
   ExternalLink,
 } from "lucide-react";
+import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";
 
 type CustomerRow = {
   id: string;
@@ -51,6 +53,7 @@ type CustomerRow = {
     position?: string | null;
     phone?: string | null;
     email?: string | null;
+    telegram?: string | null;
   }> | null;
   contact_name?: string | null;
   contact_position?: string | null;
@@ -242,6 +245,7 @@ function buildPrimaryContact(customer: CustomerRow | null) {
     position: firstContact?.position?.trim() || customer.contact_position?.trim() || null,
     phone: firstContact?.phone?.trim() || customer.contact_phone?.trim() || null,
     email: firstContact?.email?.trim() || customer.contact_email?.trim() || null,
+    telegram: firstContact?.telegram?.trim() || null,
   };
 }
 
@@ -802,6 +806,19 @@ export function CustomerLeadQuickViewDialog({
                         {primaryContact?.position ? <div className="text-muted-foreground">{primaryContact.position}</div> : null}
                         {primaryContact?.phone ? <div className="inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{primaryContact.phone}</div> : null}
                         {primaryContact?.email ? <div className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{primaryContact.email}</div> : null}
+                        {primaryContact?.telegram ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <Send className="h-3.5 w-3.5" />
+                            <a
+                              href={buildTelegramHref(primaryContact.telegram) ?? "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:underline"
+                            >
+                              {formatTelegramHandle(primaryContact.telegram)}
+                            </a>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </>

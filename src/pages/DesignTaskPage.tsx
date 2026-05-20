@@ -153,6 +153,7 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
+import { formatTelegramHandle } from "@/lib/telegramContact";
 import {
   getDesignTaskCollaboratorIds,
   resolveDesignTaskCollaborators,
@@ -197,6 +198,7 @@ type DesignTaskClientContact = {
   entityKind: "customer" | "lead" | null;
   email: string | null;
   phone: string | null;
+  telegram: string | null;
 };
 
 type SidebarActionTone = "neutral" | "info" | "warning" | "success";
@@ -1376,6 +1378,7 @@ export default function DesignTaskPage() {
     entityKind: null,
     email: null,
     phone: null,
+    telegram: null,
   });
   const [sendingToClientKind, setSendingToClientKind] = useState<`${DesignOutputKind}:${"email" | "telegram" | "viber"}` | null>(null);
   const [designOutputFiles, setDesignOutputFiles] = useState<DesignOutputFile[]>(() => initialCache?.designOutputFiles ?? []);
@@ -6443,7 +6446,7 @@ export default function DesignTaskPage() {
     const loadClientContact = async () => {
       if (!effectiveTeamId || !task?.customerId) {
         if (active) {
-          setClientContact({ entityKind: null, email: null, phone: null });
+          setClientContact({ entityKind: null, email: null, phone: null, telegram: null });
         }
         return;
       }
@@ -6471,6 +6474,7 @@ export default function DesignTaskPage() {
             entityKind,
             email: row?.email?.trim() || null,
             phone: row?.phone_numbers?.find((value) => typeof value === "string" && value.trim())?.trim() || null,
+            telegram: null,
           });
           return;
         }
@@ -6478,21 +6482,29 @@ export default function DesignTaskPage() {
         const { data, error } = await supabase
           .schema("tosho")
           .from("customers")
-          .select("contact_email, contact_phone")
+          .select("contact_email, contact_phone, contacts")
           .eq("id", task.customerId)
           .maybeSingle();
         if (error) throw error;
-        const row = (data ?? null) as { contact_email?: string | null; contact_phone?: string | null } | null;
+        const row = (data ?? null) as {
+          contact_email?: string | null;
+          contact_phone?: string | null;
+          contacts?: Array<{ telegram?: string | null }> | null;
+        } | null;
         if (!active) return;
+        const primaryTelegram = Array.isArray(row?.contacts)
+          ? row?.contacts.find((entry) => entry && typeof entry.telegram === "string" && entry.telegram.trim())?.telegram?.trim() ?? null
+          : null;
         setClientContact({
           entityKind,
           email: row?.contact_email?.trim() || null,
           phone: row?.contact_phone?.trim() || null,
+          telegram: primaryTelegram,
         });
       } catch (contactError) {
         console.warn("Failed to load design task client contact", contactError);
         if (active) {
-          setClientContact({ entityKind, email: null, phone: null });
+          setClientContact({ entityKind, email: null, phone: null, telegram: null });
         }
       }
     };
@@ -7646,6 +7658,9 @@ export default function DesignTaskPage() {
               </span>
               <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
                 Телефон: {clientContact.phone ?? "не вказано"}
+              </span>
+              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
+                Telegram: {clientContact.telegram ? formatTelegramHandle(clientContact.telegram) : "не вказано"}
               </span>
               {selectedShareIds.length > 0 ? (
                 <Button

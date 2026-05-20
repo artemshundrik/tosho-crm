@@ -17,6 +17,7 @@ import {
   normalizeCustomerLogoUrl,
 } from "@/lib/customerLogo";
 import { buildReminderAtIso } from "@/lib/reminderDateTime";
+import { normalizeTelegramUsername } from "@/lib/telegramContact";
 
 type MemberOption = {
   id: string;
@@ -64,7 +65,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   logoFile: null,
   logoUploadMode: "url",
   legalEntities: [createEmptyCustomerLegalEntity()],
-  contacts: [{ name: "", position: "", phone: "", email: "", birthday: "" }],
+  contacts: [{ name: "", position: "", phone: "", email: "", birthday: "", telegram: "" }],
   reminderDate: "",
   reminderTime: "",
   reminderComment: "",
@@ -286,6 +287,7 @@ export const useCustomerLeadCreate = ({
         phone: contact.phone.trim(),
         email: contact.email.trim(),
         birthday: normalizeOptionalDate(contact.birthday),
+        telegram: normalizeTelegramUsername(contact.telegram),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
     if (!contacts.some((contact) => contact.phone)) {

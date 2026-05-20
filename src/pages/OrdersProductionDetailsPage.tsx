@@ -43,6 +43,7 @@ import {
   type ContractRenderContext,
 } from "@/features/contractRevisions/contractSections";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
+import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
@@ -1322,6 +1323,11 @@ export default function OrdersProductionDetailsPage() {
 
   const openTelegramDraft = () => {
     if (!record) return;
+    const directHref = buildTelegramHref(record.contactTelegram);
+    if (directHref) {
+      window.open(directHref, "_blank", "noopener,noreferrer");
+      return;
+    }
     const text = encodeURIComponent(
       `Документи по замовленню ${record.quoteNumber}\n${record.customerName}\nСума: ${formatOrderMoney(record.total, record.currency)}`
     );
@@ -2004,7 +2010,14 @@ export default function OrdersProductionDetailsPage() {
           ) : null}
 
           <div className="mt-4 border-t border-border/60 pt-4">
-            <div className="mb-2 text-sm font-semibold text-foreground">Відправити замовнику</div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
+              {record.contactTelegram ? (
+                <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
+                  Telegram: {formatTelegramHandle(record.contactTelegram)}
+                </span>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={openEmailDraft} disabled={!record.contactEmail}>
                 <Mail className="mr-2 h-4 w-4" />

@@ -80,6 +80,7 @@ import {
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Unlink, Users, X } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
+import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { toast } from "sonner";
 
 type CustomerRow = {
@@ -254,6 +255,7 @@ const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
   phone: "",
   email: "",
   birthday: "",
+  telegram: "",
 };
 
 const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerFormState => ({
@@ -286,6 +288,7 @@ const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerConta
         phone: contact?.phone?.trim() ?? "",
         email: contact?.email?.trim() ?? "",
         birthday: contact?.birthday?.trim() ?? "",
+        telegram: contact?.telegram?.trim() ?? "",
       };
     })
     .filter((contact) => Object.values(contact).some(Boolean));
@@ -298,6 +301,7 @@ const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerConta
     phone: row?.contact_phone?.trim?.() ?? "",
     email: row?.contact_email?.trim?.() ?? "",
     birthday: row?.contact_birthday?.trim?.() ?? "",
+    telegram: "",
   };
 
   return Object.values(legacy).some(Boolean) ? [legacy] : [{ ...EMPTY_CUSTOMER_CONTACT }];
@@ -2364,6 +2368,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         phone: contact.phone.trim(),
         email: contact.email.trim(),
         birthday: normalizeCustomerBirthday(contact.birthday),
+        telegram: normalizeTelegramUsername(contact.telegram),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
 
@@ -2799,6 +2804,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             phone: phones[0] ?? "",
             email: leadForm.email.trim(),
             birthday: "",
+            telegram: "",
           },
         ];
         const customerPayload: Record<string, unknown> = {
