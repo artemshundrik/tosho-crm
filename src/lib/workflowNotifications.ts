@@ -23,10 +23,27 @@ const normalizeRole = (value?: string | null) => (value ?? "").trim().toLowerCas
 
 async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRoleRow[]> {
   if (!isUuid(teamId ?? null)) return [];
+
+  // team_members lives in public, but tosho.team_members is checked as a fallback for older deploys.
+  // Roles (access_role / job_role) are stored separately in tosho.memberships_view keyed by user_id.
+  const idResults = await Promise.all([
+    supabase.from("team_members").select("user_id").eq("team_id", teamId as string),
+    supabase.schema("tosho").from("team_members").select("user_id").eq("team_id", teamId as string),
+  ]);
+  const userIds = new Set<string>();
+  for (const result of idResults) {
+    if (result.error) continue;
+    for (const row of (result.data as Array<{ user_id?: string | null }> | null) ?? []) {
+      if (row?.user_id) userIds.add(row.user_id);
+    }
+  }
+  if (userIds.size === 0) return [];
+
   const { data, error } = await supabase
-    .from("team_members_view")
+    .schema("tosho")
+    .from("memberships_view")
     .select("user_id,access_role,job_role")
-    .eq("team_id", teamId as string);
+    .in("user_id", Array.from(userIds));
   if (error) {
     console.warn("Failed to resolve team members for workflow notifications", error);
     return [];
@@ -37,6 +54,15 @@ async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRol
 function pickCeoUserIds(rows: TeamMemberRoleRow[]) {
   return rows
     .filter((row) => normalizeRole(row.access_role) === "owner")
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
+// Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
+// SEO users act as alternate contract approvers per project rule.
+function pickContractApproverUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => normalizeRole(row.access_role) === "owner" || normalizeRole(row.job_role) === "seo")
     .map((row) => row.user_id)
     .filter((value): value is string => !!value);
 }
@@ -431,7 +457,7 @@ export async function notifyContractRevisionSubmitted(params: {
   actorUserId?: string | null;
 }) {
   const members = await resolveTeamMembers(params.teamId);
-  const recipients = new Set(pickCeoUserIds(members));
+  const recipients = new Set(pickContractApproverUserIds(members));
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;
   const quoteRef = params.quoteNumber ? `#${params.quoteNumber}` : "цього замовлення";

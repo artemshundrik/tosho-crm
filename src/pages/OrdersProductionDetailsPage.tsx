@@ -1046,8 +1046,9 @@ const buildOrderDocumentHtml = (
 export default function OrdersProductionDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { teamId, loading: authLoading, session, userId, accessRole } = useAuth();
-  const isCeo = accessRole === "owner";
+  const { teamId, loading: authLoading, session, userId, accessRole, jobRole } = useAuth();
+  // Approver pool for contract revisions: owner OR job_role=seo (per project policy).
+  const isCeo = accessRole === "owner" || (jobRole ?? "").toLowerCase() === "seo";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
