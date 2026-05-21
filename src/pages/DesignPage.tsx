@@ -88,6 +88,8 @@ import {
   normalizeCustomerLogoUrl as normalizeLogoUrl,
   type CustomerLeadLogoDirectoryEntry,
 } from "@/lib/customerLogo";
+import { buildDraftKey, clearDraft, readDraft } from "@/lib/draftStorage";
+import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
@@ -911,6 +913,97 @@ export default function DesignPage() {
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [estimateReason, setEstimateReason] = useState("");
   const [estimateError, setEstimateError] = useState<string | null>(null);
+
+  // Draft persistence for the "Створити дизайн-задачу" dialog. Long brief
+  // text would otherwise be lost on accidental close, refresh, or version
+  // update. Drafts are scoped per workspace and auto-restored on next open.
+  const createDraftKey = useMemo(
+    () => buildDraftKey("new-design-task", effectiveTeamId),
+    [effectiveTeamId]
+  );
+  type NewDesignTaskDraft = {
+    title?: string;
+    brief?: string;
+    customer?: string;
+    customerId?: string | null;
+    customerLogoUrl?: string | null;
+    customerType?: "customer" | "lead";
+    designTaskType?: DesignTaskType | null;
+    deadlineISO?: string | null;
+    managerUserId?: string;
+    assigneeUserId?: string;
+    collaboratorIds?: string[];
+  };
+  const createDraftRestoredKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!createDialogOpen || !createDraftKey) return;
+    if (createDraftRestoredKeyRef.current === createDraftKey) return;
+    createDraftRestoredKeyRef.current = createDraftKey;
+    const draft = readDraft<NewDesignTaskDraft>(createDraftKey)?.value;
+    if (!draft) return;
+    if (typeof draft.title === "string") setCreateTitle(draft.title);
+    if (typeof draft.brief === "string") setCreateBrief(draft.brief);
+    if (typeof draft.customer === "string") setCreateCustomer(draft.customer);
+    if (typeof draft.customerId === "string" || draft.customerId === null)
+      setCreateCustomerId(draft.customerId ?? null);
+    if (typeof draft.customerLogoUrl === "string" || draft.customerLogoUrl === null)
+      setCreateCustomerLogoUrl(draft.customerLogoUrl ?? null);
+    if (draft.customerType === "customer" || draft.customerType === "lead")
+      setCreateCustomerType(draft.customerType);
+    if (draft.designTaskType === "visualization" || draft.designTaskType === "layout" || draft.designTaskType === null)
+      setCreateDesignTaskType(draft.designTaskType ?? null);
+    if (typeof draft.deadlineISO === "string") {
+      const parsed = new Date(draft.deadlineISO);
+      if (!Number.isNaN(parsed.getTime())) setCreateDeadline(parsed);
+    }
+    if (typeof draft.managerUserId === "string") setCreateManagerUserId(draft.managerUserId);
+    if (typeof draft.assigneeUserId === "string") setCreateAssigneeUserId(draft.assigneeUserId);
+    if (Array.isArray(draft.collaboratorIds))
+      setCreateCollaboratorIds(draft.collaboratorIds.filter((id): id is string => typeof id === "string"));
+  }, [createDialogOpen, createDraftKey]);
+  useEffect(() => {
+    if (!createDialogOpen) {
+      createDraftRestoredKeyRef.current = null;
+    }
+  }, [createDialogOpen]);
+  const newDesignTaskDraft = useMemo<NewDesignTaskDraft>(
+    () => ({
+      title: createTitle,
+      brief: createBrief,
+      customer: createCustomer,
+      customerId: createCustomerId,
+      customerLogoUrl: createCustomerLogoUrl,
+      customerType: createCustomerType,
+      designTaskType: createDesignTaskType,
+      deadlineISO: createDeadline ? createDeadline.toISOString() : null,
+      managerUserId: createManagerUserId,
+      assigneeUserId: createAssigneeUserId,
+      collaboratorIds: createCollaboratorIds,
+    }),
+    [
+      createTitle,
+      createBrief,
+      createCustomer,
+      createCustomerId,
+      createCustomerLogoUrl,
+      createCustomerType,
+      createDesignTaskType,
+      createDeadline,
+      createManagerUserId,
+      createAssigneeUserId,
+      createCollaboratorIds,
+    ]
+  );
+  useDraftPersist(createDraftKey, newDesignTaskDraft, {
+    enabled: createDialogOpen,
+    isEmpty: (d) =>
+      !d.title?.trim() &&
+      !d.brief?.trim() &&
+      !d.customerId &&
+      !d.customer?.trim() &&
+      !d.designTaskType &&
+      (!d.collaboratorIds || d.collaboratorIds.length === 0),
+  });
   const [estimatePendingAction, setEstimatePendingAction] = useState<{
     mode: "assign" | "status" | "reestimate";
     task: DesignTask;
@@ -3839,6 +3932,7 @@ export default function DesignPage() {
       const createdTaskHref = `/design/${createdTask.id}`;
       const createdTaskLabel = createdTask.designTaskNumber ?? "Без номера";
 
+      clearDraft(createDraftKey);
       setCreateDialogOpen(false);
       setCreateTitle("");
       setCreateBrief("");

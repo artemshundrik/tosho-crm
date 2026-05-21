@@ -212,6 +212,8 @@ import {
   getTypeLabel,
   type CatalogType,
 } from "@/features/quotes/quote-details/catalog-utils";
+import { buildDraftKey, readDraft } from "@/lib/draftStorage";
+import { useDraftPersist } from "@/hooks/useDraftPersist";
 
 type QuoteDetailsPageProps = {
   teamId: string;
@@ -776,8 +778,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
   const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
-  const [commentText, setCommentText] = useState("");
+  const commentDraftKey = useMemo(() => buildDraftKey("quote-comment", quoteId), [quoteId]);
+  const [commentText, setCommentText] = useState(() => readDraft<string>(commentDraftKey)?.value ?? "");
   const [commentSaving, setCommentSaving] = useState(false);
+  useDraftPersist(commentDraftKey, commentText);
+  // Re-hydrate when navigating between quotes (same component instance, new quoteId).
+  const commentDraftQuoteIdRef = useRef(quoteId);
+  useEffect(() => {
+    if (commentDraftQuoteIdRef.current === quoteId) return;
+    commentDraftQuoteIdRef.current = quoteId;
+    setCommentText(readDraft<string>(commentDraftKey)?.value ?? "");
+  }, [quoteId, commentDraftKey]);
   const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [mentionDropdown, setMentionDropdown] = useState<MentionDropdownState>({
@@ -9548,6 +9559,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         customerLabel={quote?.customer_name ?? null}
         initialValues={editQuoteInitialValues ?? undefined}
         teamId={teamId}
+        quoteId={quoteId}
         customers={editQuoteCustomers}
         customersLoading={editQuoteCustomersLoading}
         onCustomerSearch={setEditQuoteCustomerSearch}

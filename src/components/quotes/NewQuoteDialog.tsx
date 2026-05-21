@@ -77,6 +77,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
+import { buildDraftKey, clearDraft, readDraft } from "@/lib/draftStorage";
+import { useDraftPersist } from "@/hooks/useDraftPersist";
 import type { CatalogType } from "@/types/catalog";
 
 /**
@@ -475,6 +477,7 @@ export interface NewQuoteDialogProps {
   onOpenChange: (open: boolean) => void;
   onSubmit?: (data: NewQuoteFormData) => void | Promise<void>;
   teamId: string;
+  quoteId?: string;
   mode?: "create" | "edit";
   initialValues?: Partial<NewQuoteFormData>;
   submitting?: boolean;
@@ -548,7 +551,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   open,
   onOpenChange,
   onSubmit,
-  teamId: _teamId,
+  teamId,
+  quoteId,
   mode = "create",
   initialValues,
   submitting = false,
@@ -567,7 +571,6 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   restrictPartySelectionToOwn = false,
   currentManagerLabel,
 }) => {
-  void _teamId;
   const isEditMode = mode === "edit";
   // Form state
   const [status, setStatus] = React.useState("new");
@@ -897,6 +900,187 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
   }, [availableStatuses, currentUserId, initialValues, isEditMode, open]);
+
+  // Draft persistence. On dialog open we apply any stored draft *after* the
+  // initialValues-based reset above so the draft wins. We persist the full
+  // form payload while the dialog is open and clear it once a submit finishes
+  // without error.
+  const draftKey = React.useMemo(() => {
+    if (!teamId) return null;
+    if (isEditMode) return quoteId ? buildDraftKey("edit-quote", teamId, quoteId) : null;
+    return buildDraftKey("new-quote", teamId);
+  }, [isEditMode, teamId, quoteId]);
+  type QuoteDraftPayload = {
+    status?: string;
+    comment?: string;
+    customerId?: string;
+    customerType?: "customer" | "lead";
+    managerId?: string;
+    deadlineISO?: string | null;
+    deadlineNote?: string;
+    deadlineReminderOffset?: string;
+    deadlineReminderComment?: string;
+    currency?: string;
+    quoteType?: string;
+    deliveryType?: string;
+    deliveryDetails?: DeliveryDetails;
+    designAssigneeId?: string | null;
+    designCollaboratorIds?: string[];
+    designTaskType?: DesignTaskType | null;
+    categoryId?: string;
+    kindId?: string;
+    modelId?: string;
+    quantity?: number;
+    runs?: QuoteRunDraft[];
+    quantityUnit?: string;
+    printApplications?: PrintApplication[];
+    printMode?: "with_print" | "no_print";
+    createDesignTask?: boolean;
+    quickModelName?: string;
+    quickModelSku?: string;
+    quickModelPrice?: string;
+    quickModelImageUrl?: string;
+  };
+  const draftRestoredForRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!open) {
+      draftRestoredForRef.current = null;
+      return;
+    }
+    if (!draftKey) return;
+    if (draftRestoredForRef.current === draftKey) return;
+    draftRestoredForRef.current = draftKey;
+    const draft = readDraft<QuoteDraftPayload>(draftKey)?.value;
+    if (!draft) return;
+    if (typeof draft.status === "string") setStatus(draft.status);
+    if (typeof draft.comment === "string") setComment(draft.comment);
+    if (typeof draft.customerId === "string") setCustomerId(draft.customerId);
+    if (draft.customerType === "customer" || draft.customerType === "lead") setCustomerType(draft.customerType);
+    if (typeof draft.managerId === "string") setManagerId(draft.managerId);
+    if (typeof draft.deadlineISO === "string") {
+      const parsed = new Date(draft.deadlineISO);
+      if (!Number.isNaN(parsed.getTime())) setDeadline(parsed);
+    }
+    if (typeof draft.deadlineNote === "string") setDeadlineNote(draft.deadlineNote);
+    if (typeof draft.deadlineReminderOffset === "string") setDeadlineReminderOffset(draft.deadlineReminderOffset);
+    if (typeof draft.deadlineReminderComment === "string") setDeadlineReminderComment(draft.deadlineReminderComment);
+    if (typeof draft.currency === "string") setCurrency(draft.currency);
+    if (typeof draft.quoteType === "string") setQuoteType(draft.quoteType);
+    if (typeof draft.deliveryType === "string") setDeliveryType(draft.deliveryType);
+    if (draft.deliveryDetails && typeof draft.deliveryDetails === "object") setDeliveryDetails(draft.deliveryDetails);
+    if (typeof draft.designAssigneeId === "string" || draft.designAssigneeId === null)
+      setDesignAssigneeId(draft.designAssigneeId ?? null);
+    if (Array.isArray(draft.designCollaboratorIds))
+      setDesignCollaboratorIds(draft.designCollaboratorIds.filter((id): id is string => typeof id === "string"));
+    if (
+      draft.designTaskType === "visualization" ||
+      draft.designTaskType === "layout" ||
+      draft.designTaskType === null
+    )
+      setDesignTaskType(draft.designTaskType ?? null);
+    if (typeof draft.categoryId === "string") setCategoryId(draft.categoryId);
+    if (typeof draft.kindId === "string") setKindId(draft.kindId);
+    if (typeof draft.modelId === "string") setModelId(draft.modelId);
+    if (typeof draft.quantity === "number") setQuantity(draft.quantity);
+    if (Array.isArray(draft.runs) && draft.runs.length > 0) setRuns(draft.runs);
+    if (typeof draft.quantityUnit === "string") setQuantityUnit(draft.quantityUnit);
+    if (Array.isArray(draft.printApplications)) setPrintApplications(draft.printApplications);
+    if (draft.printMode === "with_print" || draft.printMode === "no_print") setPrintMode(draft.printMode);
+    if (typeof draft.createDesignTask === "boolean") setCreateDesignTask(draft.createDesignTask);
+    if (typeof draft.quickModelName === "string") setQuickModelName(draft.quickModelName);
+    if (typeof draft.quickModelSku === "string") setQuickModelSku(draft.quickModelSku);
+    if (typeof draft.quickModelPrice === "string") setQuickModelPrice(draft.quickModelPrice);
+    if (typeof draft.quickModelImageUrl === "string") setQuickModelImageUrl(draft.quickModelImageUrl);
+  }, [open, draftKey]);
+  const quoteDraftPayload = React.useMemo<QuoteDraftPayload>(
+    () => ({
+      status,
+      comment,
+      customerId,
+      customerType,
+      managerId,
+      deadlineISO: deadline ? deadline.toISOString() : null,
+      deadlineNote,
+      deadlineReminderOffset,
+      deadlineReminderComment,
+      currency,
+      quoteType,
+      deliveryType,
+      deliveryDetails,
+      designAssigneeId,
+      designCollaboratorIds,
+      designTaskType,
+      categoryId,
+      kindId,
+      modelId,
+      quantity,
+      runs,
+      quantityUnit,
+      printApplications,
+      printMode,
+      createDesignTask,
+      quickModelName,
+      quickModelSku,
+      quickModelPrice,
+      quickModelImageUrl,
+    }),
+    [
+      status,
+      comment,
+      customerId,
+      customerType,
+      managerId,
+      deadline,
+      deadlineNote,
+      deadlineReminderOffset,
+      deadlineReminderComment,
+      currency,
+      quoteType,
+      deliveryType,
+      deliveryDetails,
+      designAssigneeId,
+      designCollaboratorIds,
+      designTaskType,
+      categoryId,
+      kindId,
+      modelId,
+      quantity,
+      runs,
+      quantityUnit,
+      printApplications,
+      printMode,
+      createDesignTask,
+      quickModelName,
+      quickModelSku,
+      quickModelPrice,
+      quickModelImageUrl,
+    ]
+  );
+  useDraftPersist(draftKey, quoteDraftPayload, {
+    enabled: open,
+    isEmpty: (d) =>
+      !d.comment?.trim() &&
+      !d.customerId &&
+      !d.deadlineNote?.trim() &&
+      !d.deadlineReminderComment?.trim() &&
+      !d.modelId &&
+      !d.kindId &&
+      !d.categoryId &&
+      (!d.runs || d.runs.every((run) => !run.quantity || run.quantity === "0")) &&
+      !d.quickModelName?.trim() &&
+      !d.quickModelSku?.trim() &&
+      !d.quickModelPrice?.trim() &&
+      !d.quickModelImageUrl?.trim(),
+  });
+  // Clear draft on a successful submit. We detect "success" as the submitting
+  // flag flipping back to false while submitError stays null.
+  const wasSubmittingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (wasSubmittingRef.current && !submitting && !submitError) {
+      clearDraft(draftKey);
+    }
+    wasSubmittingRef.current = submitting;
+  }, [submitting, submitError, draftKey]);
 
   React.useEffect(() => {
     if (quoteType !== "print") return;
