@@ -177,7 +177,16 @@ export async function recoverDesignOutputFilesFromHistory(designTaskId: string) 
   const verifiedFiles = await Promise.all(
     uniqueCandidates.map(async (file) => {
       const signedUrl = await getSignedAttachmentUrl(file.storage_bucket, file.storage_path, "original", 120);
-      return signedUrl ? file : null;
+      if (!signedUrl) return null;
+      // createSignedUrl can return a URL for paths that are mid-delete or have
+      // stale cache entries. Confirm the object truly exists by HEAD-fetching
+      // the signed URL before treating it as a recoverable file.
+      try {
+        const response = await fetch(signedUrl, { method: "HEAD" });
+        return response.ok ? file : null;
+      } catch {
+        return null;
+      }
     })
   );
 

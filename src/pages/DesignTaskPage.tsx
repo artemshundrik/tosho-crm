@@ -1386,6 +1386,7 @@ export default function DesignTaskPage() {
   const [designOutputGroups, setDesignOutputGroups] = useState<string[]>(() => initialCache?.designOutputGroups ?? []);
   const [fileAccessUrlByKey, setFileAccessUrlByKey] = useState<Record<string, string>>({});
   const [downloadPreparingKey, setDownloadPreparingKey] = useState<string | null>(null);
+  const [previewPreparingKey, setPreviewPreparingKey] = useState<string | null>(null);
   const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
   const [clientShareSelectionIds, setClientShareSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
@@ -3582,7 +3583,10 @@ export default function DesignTaskPage() {
     triggerBrowserDownload,
   ]);
 
-  const openStorageFilePreview = useCallback(async (file: StorageBackedFile & { file_name?: string | null }) => {
+  const openStorageFilePreview = useCallback(async (
+    file: StorageBackedFile & { file_name?: string | null },
+    options?: { onMissingCleanup?: () => void }
+  ) => {
     const extension = getFileExtension(file.file_name);
     const kind =
       canPreviewImage(extension) || canPreviewTiff(extension)
@@ -3594,20 +3598,44 @@ export default function DesignTaskPage() {
       await openStorageFileInNewTab(file);
       return;
     }
-    const url = await ensureFileAccessUrl(file, { variant: "preview" });
-    if (!url) {
+    if (!file.storage_bucket || !file.storage_path) {
       toast.error("Не вдалося відкрити превʼю файлу");
       return;
     }
-    setFilePreview({
-      name: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
-      url,
-      kind,
-      mimeType: file.mime_type ?? null,
-      storageBucket: file.storage_bucket ?? null,
-      storagePath: file.storage_path ?? null,
-    });
-  }, [ensureFileAccessUrl, openStorageFileInNewTab]);
+    const previewKey = getStorageFileKey(file, "preview");
+    if (previewKey) setPreviewPreparingKey(previewKey);
+    try {
+      const probe = await supabase.storage
+        .from(file.storage_bucket)
+        .createSignedUrl(file.storage_path, 60);
+      if (probe.error || !probe.data?.signedUrl) {
+        toast.error("Файл відсутній у сховищі", {
+          description: "Ймовірно, його видалили. Прибрати запис зі списку?",
+          action: options?.onMissingCleanup
+            ? { label: "Прибрати запис", onClick: () => options.onMissingCleanup?.() }
+            : undefined,
+        });
+        return;
+      }
+      const url = await ensureFileAccessUrl(file, { variant: "preview" });
+      if (!url) {
+        toast.error("Не вдалося відкрити превʼю файлу");
+        return;
+      }
+      setFilePreview({
+        name: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
+        url,
+        kind,
+        mimeType: file.mime_type ?? null,
+        storageBucket: file.storage_bucket ?? null,
+        storagePath: file.storage_path ?? null,
+      });
+    } finally {
+      if (previewKey) {
+        setPreviewPreparingKey((current) => (current === previewKey ? null : current));
+      }
+    }
+  }, [ensureFileAccessUrl, openStorageFileInNewTab, getStorageFileKey]);
 
   useEffect(() => {
     const objectUrls = objectUrlRegistryRef.current;
@@ -4239,6 +4267,23 @@ export default function DesignTaskPage() {
     if (!target) return;
     const taskQuoteId = task?.quoteId ?? null;
     try {
+      // Storage delete FIRST so any concurrent recovery (history scan) sees the
+      // object as missing and skips restoration. Only then update metadata and
+      // local state.
+      if (target.storage_bucket && target.storage_path) {
+        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
+      }
+      if (taskQuoteId && isUuid(taskQuoteId) && target.storage_bucket && target.storage_path) {
+        const { error: quoteAttachmentDeleteError } = await supabase
+          .schema("tosho")
+          .from("quote_attachments")
+          .delete()
+          .eq("quote_id", taskQuoteId)
+          .eq("storage_bucket", target.storage_bucket)
+          .eq("storage_path", target.storage_path);
+        if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
+      }
+
       const nextFiles = designOutputFiles.filter((file) => {
         if (file.id === fileId) return false;
         if (
@@ -4321,19 +4366,6 @@ export default function DesignTaskPage() {
         delete next[key];
         return next;
       });
-      if (taskQuoteId && isUuid(taskQuoteId) && target.storage_bucket && target.storage_path) {
-        const { error: quoteAttachmentDeleteError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .delete()
-          .eq("quote_id", taskQuoteId)
-          .eq("storage_bucket", target.storage_bucket)
-          .eq("storage_path", target.storage_path);
-        if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
-      }
-      if (target.storage_bucket && target.storage_path) {
-        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
-      }
       toast.success("Файл видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
@@ -7765,6 +7797,8 @@ export default function DesignTaskPage() {
                       const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path);
                       const downloadKey = getStorageFileKey(file);
                       const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
+                      const previewKey = getStorageFileKey(file, "preview");
+                      const isPreviewPreparing = Boolean(previewKey && previewPreparingKey === previewKey);
                       return (
                         <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                           <div className="flex items-start justify-between gap-2">
@@ -7850,8 +7884,17 @@ export default function DesignTaskPage() {
                               </label>
                               {file.storage_bucket && file.storage_path ? (
                                 <>
-                                  <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
-                                    <Eye className="h-4 w-4" />
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
+                                    title={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}
+                                    disabled={isPreviewPreparing}
+                                    onClick={() => void openStorageFilePreview(file, {
+                                      onMissingCleanup: () => void handleRemoveDesignFile(file.id),
+                                    })}
+                                  >
+                                    {isPreviewPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                                   </Button>
                                   <Button
                                     size="icon"
