@@ -105,6 +105,7 @@ import {
   serializeStoredDesignOutputFiles,
   syncDesignOutputFilesToQuoteAttachments,
 } from "@/lib/designTaskOutputSync";
+import { fetchDesignTaskMetadata } from "@/lib/designTaskMetadata";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -783,51 +784,14 @@ type DesignTaskPageCachePayload = {
 
 function sanitizeDesignTaskMetadataForCache(metadata?: Record<string, unknown> | null) {
   if (!metadata) return undefined;
-  const next: Record<string, unknown> = {};
-  const keys = [
-    "source",
-    "status",
-    "design_task_number",
-    "quote_id",
-    "quote_number",
-    "assignee_user_id",
-    "assigned_at",
-    "manager_user_id",
-    "customer_id",
-    "customer_name",
-    "customer_logo_url",
-    "customer_type",
-    "design_task_type",
-    "methods_count",
-    "has_files",
-    "design_deadline",
-    "deadline",
-    "product_name",
-    "quote_item_name",
-    "item_name",
-  ] as const;
-  keys.forEach((key) => {
-    if (metadata[key] !== undefined) next[key] = metadata[key];
-  });
-  const collaboratorUserIds = getDesignTaskCollaboratorIds(metadata);
-  if (collaboratorUserIds.length > 0) {
-    next.collaborator_user_ids = collaboratorUserIds;
-  }
-  if (
-    metadata.collaborator_labels &&
-    typeof metadata.collaborator_labels === "object" &&
-    !Array.isArray(metadata.collaborator_labels)
-  ) {
-    next.collaborator_labels = metadata.collaborator_labels;
-  }
-  if (
-    metadata.collaborator_avatar_urls &&
-    typeof metadata.collaborator_avatar_urls === "object" &&
-    !Array.isArray(metadata.collaborator_avatar_urls)
-  ) {
-    next.collaborator_avatar_urls = metadata.collaborator_avatar_urls;
-  }
-  return next;
+  // Cache the full metadata. Previous stripping caused write handlers that did
+  // `metadata: { ...task.metadata, ...patch }` to wipe missing keys
+  // (design_brief, design_output_files, design_brief_versions, etc.) whenever
+  // a write fired in the brief window between cache hydration and DB load.
+  // Per-row metadata is small (~2 KB p50, ~18 KB max), so caching everything
+  // is safe. The cache key version (-v2) below invalidates older stripped
+  // entries so existing tabs don't continue to poison writes.
+  return { ...metadata };
 }
 
 function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
@@ -4811,48 +4775,47 @@ export default function DesignTaskPage() {
     const previousStatus = task.status;
     const previousTask = task;
     const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
-    const estimateSetAt =
-      options?.estimateMinutes != null
-        ? new Date().toISOString()
-        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
-    const estimatedByUserId =
-      options?.estimateMinutes != null
-        ? (userId ?? null)
-        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
-    const nextMetadata: Record<string, unknown> = {
-      ...(task.metadata ?? {}),
-      status: nextStatus,
-      status_changed_at: new Date().toISOString(),
-      methods_count: task.methodsCount ?? 0,
-      has_files: task.hasFiles ?? false,
-      quote_id: task.quoteId,
-      design_deadline: task.designDeadline ?? null,
-      deadline: task.designDeadline ?? null,
-      assignee_user_id: task.assigneeUserId ?? null,
-      assigned_at: task.assignedAt ?? null,
-      estimate_minutes: estimateMinutes,
-      estimate_set_at: estimateSetAt,
-      estimated_by_user_id: estimatedByUserId,
-    };
 
-    setTask((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: nextStatus,
-            metadata: nextMetadata,
-          }
-        : prev
-    );
+    // Optimistic status flip only — defer metadata replacement until after we
+    // re-read the live metadata from DB. The local task.metadata may be the
+    // stripped sessionStorage cache, and spreading it would wipe DB fields.
+    setTask((prev) => (prev ? { ...prev, status: nextStatus } : prev));
     setStatusSaving(nextStatus);
 
     try {
+      const liveMetadata = await fetchDesignTaskMetadata(task.id, effectiveTeamId, task.metadata);
+      const estimateSetAt =
+        options?.estimateMinutes != null
+          ? new Date().toISOString()
+          : (liveMetadata.estimate_set_at as string | null | undefined) ?? null;
+      const estimatedByUserId =
+        options?.estimateMinutes != null
+          ? (userId ?? null)
+          : (liveMetadata.estimated_by_user_id as string | null | undefined) ?? null;
+      const nextMetadata: Record<string, unknown> = {
+        ...liveMetadata,
+        status: nextStatus,
+        status_changed_at: new Date().toISOString(),
+        methods_count: task.methodsCount ?? 0,
+        has_files: task.hasFiles ?? false,
+        quote_id: task.quoteId,
+        design_deadline: task.designDeadline ?? null,
+        deadline: task.designDeadline ?? null,
+        assignee_user_id: task.assigneeUserId ?? null,
+        assigned_at: task.assignedAt ?? null,
+        estimate_minutes: estimateMinutes,
+        estimate_set_at: estimateSetAt,
+        estimated_by_user_id: estimatedByUserId,
+      };
+
       const { error: updateError } = await supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
+
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
 
       if (previousStatus === "in_progress" && nextStatus !== "in_progress") {
         await handlePauseTimer({ silent: true });

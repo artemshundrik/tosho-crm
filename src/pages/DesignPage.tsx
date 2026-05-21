@@ -658,60 +658,14 @@ function writeDesignSessionCache(key: string, value: unknown) {
 
 function sanitizeDesignTaskMetadataForCache(metadata: DesignTask["metadata"]): DesignTask["metadata"] {
   if (!metadata || typeof metadata !== "object") return undefined;
-  const next: Record<string, unknown> = {};
-  const stringKeys = [
-    "source",
-    "status",
-    "design_task_number",
-    "quote_id",
-    "quote_number",
-    "assignee_user_id",
-    "assigned_at",
-    "manager_user_id",
-    "customer_id",
-    "customer_name",
-    "customer_logo_url",
-    "design_task_type",
-    "design_deadline",
-    "deadline",
-    "product_name",
-    "quote_item_name",
-    "item_name",
-  ] as const;
-  stringKeys.forEach((key) => {
-    const value = metadata[key];
-    if (typeof value === "string" && value.trim()) {
-      next[key] = value.trim();
-    }
-  });
-  if (metadata.customer_type === "customer" || metadata.customer_type === "lead") {
-    next.customer_type = metadata.customer_type;
-  }
-  if (typeof metadata.methods_count === "number") {
-    next.methods_count = metadata.methods_count;
-  }
-  if (typeof metadata.has_files === "boolean") {
-    next.has_files = metadata.has_files;
-  }
-  const collaboratorUserIds = getDesignTaskCollaboratorIds(metadata);
-  if (collaboratorUserIds.length > 0) {
-    next.collaborator_user_ids = collaboratorUserIds;
-  }
-  if (
-    metadata.collaborator_labels &&
-    typeof metadata.collaborator_labels === "object" &&
-    !Array.isArray(metadata.collaborator_labels)
-  ) {
-    next.collaborator_labels = metadata.collaborator_labels;
-  }
-  if (
-    metadata.collaborator_avatar_urls &&
-    typeof metadata.collaborator_avatar_urls === "object" &&
-    !Array.isArray(metadata.collaborator_avatar_urls)
-  ) {
-    next.collaborator_avatar_urls = metadata.collaborator_avatar_urls;
-  }
-  return next;
+  // Cache the full metadata. Previous stripping caused write handlers that did
+  // `metadata: { ...task.metadata, ...patch }` to wipe missing keys
+  // (design_brief, design_output_files, design_brief_versions, etc.) whenever
+  // a write fired in the brief window between cache hydration and DB load.
+  // Per-row metadata is small (~2 KB p50, ~18 KB max). ~120 cached tasks
+  // means ~250 KB-2 MB worst case, still within sessionStorage budget. The
+  // cache key version (-v2) below invalidates older stripped entries.
+  return { ...metadata };
 }
 
 function sanitizeDesignTaskForCache(task: DesignTask): DesignTask {
