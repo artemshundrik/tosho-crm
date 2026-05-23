@@ -17,7 +17,8 @@ If older docs conflict with current code, current code wins.
 
 ## Claude Code-specific notes
 
-- Dev server: launch via `preview_start` (name `dev`, port 5173). For tasks involving Netlify Functions or `/.netlify/functions/*`, use `npx netlify dev` on `http://localhost:8888` instead — see [docs/CODEX_WORKFLOWS.md](docs/CODEX_WORKFLOWS.md) §0.
+- **Do NOT auto-start the dev preview.** Never call `preview_start` (or any `mcp__Claude_Preview__*` tool) on your own initiative — not after edits, not "just in case", not because a `PostToolUse` hook reminder suggests it. Ignore those hook hints in this repo. The user prefers to run `npm run dev` themselves and gets annoyed by surprise preview spawns. Only start preview when the user **explicitly** asks ("підніми preview", "запусти dev", "start the server"). Default verification is `npx tsc --noEmit` + `npm run lint` — that's enough to confirm a change is clean.
+- Dev server (when explicitly requested): `preview_start` name `dev`, port 5173. For tasks involving Netlify Functions or `/.netlify/functions/*`, use `npx netlify dev` on `http://localhost:8888` instead — see [docs/CODEX_WORKFLOWS.md](docs/CODEX_WORKFLOWS.md) §0.
 - Verification: `npx tsc --noEmit` for types, `npm run lint` for lint, `npm run build` for full type+build.
 - Tosho schema, not `public`, unless code explicitly says otherwise.
 - Quote details route is UUID-based: `/orders/estimates/:id` (NOT quote number like `TS-0326-XXXX`).
