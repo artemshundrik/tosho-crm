@@ -81,6 +81,7 @@ import {
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
+import { StorageObjectVideo } from "@/components/app/StorageObjectVideo";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
 import {
@@ -356,7 +357,7 @@ type MentionDropdownState = {
 type FilePreviewState = {
   name: string;
   url: string;
-  kind: "image" | "pdf";
+  kind: "image" | "pdf" | "video";
   mimeType?: string | null;
   storageBucket?: string | null;
   storagePath?: string | null;
@@ -393,12 +394,13 @@ type DropboxExportMetadataFile = {
 
 const DESIGN_OUTPUT_ALLOWED_EXTENSIONS: Record<DesignOutputKind, string[]> = {
   visualization: ["webp", "png", "jpg", "jpeg"],
-  layout: ["pdf", "ai", "cdr"],
+  layout: ["pdf", "ai", "cdr", "mp4", "mov"],
 };
 
 const DESIGN_OUTPUT_ACCEPT_BY_KIND: Record<DesignOutputKind, string> = {
   visualization: ".webp,.png,.jpg,.jpeg,image/webp,image/png,image/jpeg",
-  layout: ".pdf,.ai,.cdr,application/pdf,application/postscript,application/illustrator,application/x-coreldraw",
+  layout:
+    ".pdf,.ai,.cdr,.mp4,.mov,application/pdf,application/postscript,application/illustrator,application/x-coreldraw,video/mp4,video/quicktime",
 };
 
 const formatExtensionList = (extensions: string[]) =>
@@ -999,8 +1001,21 @@ const canPreviewPdf = (extension?: string | null) => extension === "PDF";
 
 const canPreviewTiff = (extension?: string | null) => extension === "TIF" || extension === "TIFF";
 
+const canPreviewVideo = (extension?: string | null) =>
+  !!extension && ["MP4", "MOV"].includes(extension);
+
+const getVideoMimeType = (extension?: string | null) => {
+  const normalized = extension?.toUpperCase();
+  if (normalized === "MP4") return "video/mp4";
+  if (normalized === "MOV") return "video/quicktime";
+  return undefined;
+};
+
 const canRenderStoragePreview = (extension?: string | null) =>
-  canPreviewImage(extension) || canPreviewPdf(extension) || canPreviewTiff(extension);
+  canPreviewImage(extension) ||
+  canPreviewPdf(extension) ||
+  canPreviewTiff(extension) ||
+  canPreviewVideo(extension);
 
 const isUsableStorageUrl = (value?: string | null) => {
   if (!value) return false;
@@ -3552,12 +3567,14 @@ export default function DesignTaskPage() {
     options?: { onMissingCleanup?: () => void }
   ) => {
     const extension = getFileExtension(file.file_name);
-    const kind =
+    const kind: FilePreviewState["kind"] | null =
       canPreviewImage(extension) || canPreviewTiff(extension)
         ? "image"
         : canPreviewPdf(extension)
           ? "pdf"
-          : null;
+          : canPreviewVideo(extension)
+            ? "video"
+            : null;
     if (!kind) {
       await openStorageFileInNewTab(file);
       return;
@@ -3581,7 +3598,9 @@ export default function DesignTaskPage() {
         });
         return;
       }
-      const url = await ensureFileAccessUrl(file, { variant: "preview" });
+      const url = await ensureFileAccessUrl(file, {
+        variant: kind === "video" ? "original" : "preview",
+      });
       if (!url) {
         toast.error("Не вдалося відкрити превʼю файлу");
         return;
@@ -7757,7 +7776,8 @@ export default function DesignTaskPage() {
                     {group.files.map((file) => {
                       const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
                       const ext = getFileExtension(displayName);
-                      const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path);
+                      const isVideoFile = canPreviewVideo(ext) && Boolean(file.storage_bucket && file.storage_path);
+                      const previewableFile = canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path) && !isVideoFile;
                       const downloadKey = getStorageFileKey(file);
                       const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
                       const previewKey = getStorageFileKey(file, "preview");
@@ -7766,7 +7786,17 @@ export default function DesignTaskPage() {
                         <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex items-start gap-2.5">
-                              {previewableFile ? (
+                              {isVideoFile ? (
+                                <StorageObjectVideo
+                                  bucket={file.storage_bucket}
+                                  path={file.storage_path}
+                                  label={displayName}
+                                  onClick={() => void openStorageFilePreview(file, {
+                                    onMissingCleanup: () => void handleRemoveDesignFile(file.id),
+                                  })}
+                                  className="h-11 w-11 shrink-0 rounded-md border border-border/60"
+                                />
+                              ) : previewableFile ? (
                                 <StorageObjectImage
                                   bucket={file.storage_bucket}
                                   path={file.storage_path}
@@ -8566,8 +8596,10 @@ export default function DesignTaskPage() {
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                           {changeRequestDraftAttachments.map((attachment) => {
                             const extension = getFileExtension(attachment.file_name);
+                            const isVideo =
+                              canPreviewVideo(extension) && Boolean(attachment.storage_bucket && attachment.storage_path);
                             const previewable =
-                              canRenderStoragePreview(extension) && Boolean(attachment.storage_bucket && attachment.storage_path);
+                              canRenderStoragePreview(extension) && Boolean(attachment.storage_bucket && attachment.storage_path) && !isVideo;
                             return (
                               <div
                                 key={attachment.id}
@@ -8586,7 +8618,14 @@ export default function DesignTaskPage() {
                                   }
                                   aria-label={`Переглянути ${attachment.file_name}`}
                                 >
-                                  {previewable ? (
+                                  {isVideo ? (
+                                    <StorageObjectVideo
+                                      bucket={attachment.storage_bucket}
+                                      path={attachment.storage_path}
+                                      label={attachment.file_name}
+                                      className="h-full w-full"
+                                    />
+                                  ) : previewable ? (
                                     <StorageObjectImage
                                       bucket={attachment.storage_bucket}
                                       path={attachment.storage_path}
@@ -8771,9 +8810,13 @@ export default function DesignTaskPage() {
                               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                                 {attachments.map((attachment) => {
                                   const extension = getFileExtension(attachment.file_name);
+                                  const isVideo =
+                                    canPreviewVideo(extension) &&
+                                    Boolean(attachment.storage_bucket && attachment.storage_path);
                                   const previewable =
                                     canRenderStoragePreview(extension) &&
-                                    Boolean(attachment.storage_bucket && attachment.storage_path);
+                                    Boolean(attachment.storage_bucket && attachment.storage_path) &&
+                                    !isVideo;
                                   return (
                                     <button
                                       key={attachment.id}
@@ -8789,7 +8832,14 @@ export default function DesignTaskPage() {
                                       }
                                       aria-label={`Переглянути ${attachment.file_name}`}
                                     >
-                                      {previewable ? (
+                                      {isVideo ? (
+                                        <StorageObjectVideo
+                                          bucket={attachment.storage_bucket}
+                                          path={attachment.storage_path}
+                                          label={attachment.file_name}
+                                          className="h-full w-full"
+                                        />
+                                      ) : previewable ? (
                                         <StorageObjectImage
                                           bucket={attachment.storage_bucket}
                                           path={attachment.storage_path}
@@ -9337,14 +9387,23 @@ export default function DesignTaskPage() {
                   {attachments.map((file) => {
                     const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
                     const extension = getFileExtension(displayName);
-                    const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path);
+                    const isVideoFile = canPreviewVideo(extension) && Boolean(file.storage_bucket && file.storage_path);
+                    const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path) && !isVideoFile;
                     const downloadKey = getStorageFileKey(file);
                     const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
                     return (
                       <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex items-start gap-2.5">
-                            {previewableImage ? (
+                            {isVideoFile ? (
+                              <StorageObjectVideo
+                                bucket={file.storage_bucket}
+                                path={file.storage_path}
+                                label={displayName}
+                                onClick={() => void openStorageFilePreview(file)}
+                                className="h-11 w-11 shrink-0 rounded-md border border-border/60"
+                              />
+                            ) : previewableImage ? (
                               <StorageObjectImage
                                 bucket={file.storage_bucket}
                                 path={file.storage_path}
@@ -10811,6 +10870,18 @@ export default function DesignTaskPage() {
                 alt={filePreview.name}
                 className="block max-h-[80vh] w-auto max-w-[calc(100vw-3rem)] rounded-lg object-contain sm:max-w-[calc(100vw-6rem)]"
               />
+            ) : filePreview?.kind === "video" ? (
+              <video
+                src={filePreview.url}
+                controls
+                playsInline
+                preload="metadata"
+                className="block max-h-[80vh] w-auto max-w-[calc(100vw-3rem)] rounded-lg bg-black sm:max-w-[calc(100vw-6rem)]"
+              >
+                {getVideoMimeType(getFileExtension(filePreview.name)) ? (
+                  <source src={filePreview.url} type={getVideoMimeType(getFileExtension(filePreview.name))} />
+                ) : null}
+              </video>
             ) : null}
           </div>
           <DialogFooter>
