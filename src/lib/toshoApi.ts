@@ -563,14 +563,20 @@ export async function listCustomersBySearch(teamId: string, search: string) {
       .limit(20);
   };
 
-  type IlikeMode = "substring" | "prefix";
+  type IlikeMode = "substring" | "prefix-name-only";
   const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
     const applySearch = async (variant: "full" | "no_logo" | "base") => {
       let query = buildQuery(variant);
       if (term?.trim()) {
         const escapedTerm = escapePostgrestIlikeTerm(term);
-        const pattern = mode === "prefix" ? `${escapedTerm}%` : `%${escapedTerm}%`;
-        query = query.or(`name.ilike.${pattern},legal_name.ilike.${pattern}`);
+        if (mode === "prefix-name-only") {
+          // Short-query path: match only the trade name. legal_name is excluded
+          // because in UA most rows start with "ФОП"/"ТОВ"/"ПП" — those prefixes
+          // would dominate the result on any single-letter query.
+          query = query.ilike("name", `${escapedTerm}%`);
+        } else {
+          query = query.or(`name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%`);
+        }
       }
       return await query;
     };
@@ -595,11 +601,13 @@ export async function listCustomersBySearch(teamId: string, search: string) {
 
   // Short query (1-2 chars) — simple prefix search with a transliterated Latin↔Cyrillic
   // pair (e.g. "f" also queries "ф"). The fuzzy variants engine is skipped because
-  // its `length >= 2` filter discards single-char variants entirely.
+  // its `length >= 2` filter discards single-char variants entirely. Searches only
+  // the trade name — legal_name is full of ФОП/ТОВ/ПП prefixes that would pollute
+  // single-letter results.
   if (q.length < 3) {
     const prefixes = buildShortQueryPrefixVariants(q);
     const responses = await Promise.all(
-      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix")) }))
+      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix-name-only")) }))
     );
     const firstError = responses.find((response) => response.error)?.error ?? null;
     if (responses.length > 0 && !responses.some((response) => !response.error)) {
@@ -659,16 +667,22 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       .limit(20);
   };
 
-  type IlikeMode = "substring" | "prefix";
+  type IlikeMode = "substring" | "prefix-name-only";
   const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
     const applySearch = async (variant: "full" | "base") => {
       let query = buildQuery(variant);
       if (term?.trim()) {
         const escapedTerm = escapePostgrestIlikeTerm(term);
-        const pattern = mode === "prefix" ? `${escapedTerm}%` : `%${escapedTerm}%`;
-        query = query.or(
-          `company_name.ilike.${pattern},legal_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern}`
-        );
+        if (mode === "prefix-name-only") {
+          // Short-query path: match only the company name. legal_name (often
+          // "ФОП/ТОВ/ПП ...") and personal first/last names would otherwise
+          // dominate single-letter queries with irrelevant rows.
+          query = query.ilike("company_name", `${escapedTerm}%`);
+        } else {
+          query = query.or(
+            `company_name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%,first_name.ilike.%${escapedTerm}%,last_name.ilike.%${escapedTerm}%`
+          );
+        }
       }
       return await query;
     };
@@ -687,10 +701,11 @@ export async function listLeadsBySearch(teamId: string, search: string) {
   }
 
   // Short query (1-2 chars): prefix search with Latin↔Cyrillic transliteration pair.
+  // Matches company_name only — see comment in listCustomersBySearch.
   if (q.length < 3) {
     const prefixes = buildShortQueryPrefixVariants(q);
     const responses = await Promise.all(
-      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix")) }))
+      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix-name-only")) }))
     );
     const firstError = responses.find((response) => response.error)?.error ?? null;
     if (responses.length > 0 && !responses.some((response) => !response.error)) {
