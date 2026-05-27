@@ -59,6 +59,7 @@ import {
 import {
   areCompanyNamesEquivalent,
   buildCompanySearchVariants,
+  buildShortQueryPrefixVariants,
   normalizeCompanyNameLooseKey,
   scoreCompanyNameMatch,
 } from "@/lib/companyNameSearch";
@@ -1779,7 +1780,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setCustomersError(null);
     try {
-      const buildCustomersQuery = (columns: string, searchTerm?: string | null) => {
+      type CustomerQueryMode = "rich-substring" | "prefix-name-only";
+      const buildCustomersQuery = (
+        columns: string,
+        searchTerm?: string | null,
+        mode: CustomerQueryMode = "rich-substring"
+      ) => {
         let query = supabase
           .schema("tosho")
           .from("customers")
@@ -1805,9 +1811,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const normalizedSearch = searchTerm?.trim() ?? "";
         if (normalizedSearch) {
           const escaped = escapePostgrestTerm(normalizedSearch);
-          query = query.or(
-            `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
-          );
+          if (mode === "prefix-name-only") {
+            // Short-query path: match only the trade name. legal_name/manager/contact_*
+            // would dominate single-letter queries with rows where someone's email or
+            // legal-form prefix (ФОП/ТОВ/ПП) starts with that letter.
+            query = query.ilike("name", `${escaped}%`);
+          } else {
+            query = query.or(
+              `name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,manager.ilike.%${escaped}%,contact_name.ilike.%${escaped}%,contact_phone.ilike.%${escaped}%,contact_email.ilike.%${escaped}%,website.ilike.%${escaped}%,tax_id.ilike.%${escaped}%`
+            );
+          }
         }
 
         return query;
@@ -1820,6 +1833,38 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       if (normalizedSearch) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+
+        // Short query (1-2 chars): prefix-name-only with Latin↔Cyrillic transliteration.
+        // The fuzzy variants engine drops length-1 items entirely; substring on a single
+        // letter would return ~every ФОП/ТОВ/manager whose initial matches. See the
+        // matching short-query path in `src/lib/toshoApi.ts` (listCustomersBySearch).
+        if (normalizedSearch.length < 3) {
+          const prefixes = buildShortQueryPrefixVariants(normalizedSearch);
+          const responses = await Promise.all(
+            prefixes.map(async (term) => {
+              const { data, error: loadError } = await runCustomerSelect(async (columns) =>
+                await buildCustomersQuery(columns, term, "prefix-name-only").range(0, pageSize - 1)
+              );
+              if (loadError) throw loadError;
+              return ((data as unknown) as CustomerRow[]) ?? [];
+            })
+          );
+          const deduped = new Map<string, CustomerRow>();
+          responses.flat().forEach((row) => {
+            if (!deduped.has(row.id)) deduped.set(row.id, row);
+          });
+          const rankedRows = Array.from(deduped.values()).sort((left, right) =>
+            (left.name ?? "").localeCompare(right.name ?? "", "uk")
+          );
+          setCustomersTotal(rankedRows.length);
+          setCustomersHasMore(false);
+          if (!append) {
+            customersFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+          }
+          setRows(rankedRows);
+          return;
+        }
+
         const variants = buildCompanySearchVariants(normalizedSearch);
         const responses = await Promise.all(
           variants.map(async (term) => {
@@ -1910,11 +1955,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
     }
     setLeadsError(null);
     try {
+      type LeadQueryMode = "rich-substring" | "prefix-name-only";
       const runLoadLeads = async (
         variant: LeadColumnsVariant,
         rangeOffset: number,
         pageSize: number,
-        searchTerm?: string | null
+        searchTerm?: string | null,
+        mode: LeadQueryMode = "rich-substring"
       ) => {
         let query = supabase
           .schema("tosho")
@@ -1941,9 +1988,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const normalizedSearch = searchTerm?.trim() ?? "";
         if (normalizedSearch) {
           const escaped = escapePostgrestTerm(normalizedSearch);
-          query = query.or(
-            `company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,source.ilike.%${escaped}%,manager.ilike.%${escaped}%,website.ilike.%${escaped}%`
-          );
+          if (mode === "prefix-name-only") {
+            query = query.ilike("company_name", `${escaped}%`);
+          } else {
+            query = query.or(
+              `company_name.ilike.%${escaped}%,legal_name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,source.ilike.%${escaped}%,manager.ilike.%${escaped}%,website.ilike.%${escaped}%`
+            );
+          }
         }
 
         return await query.range(rangeOffset, rangeOffset + pageSize - 1);
@@ -1957,6 +2008,43 @@ function CustomersPage({ teamId }: { teamId: string }) {
 
       if (normalizedSearch) {
         const pageSize = fetchAll ? CUSTOMERS_SEARCH_FETCH_PAGE_SIZE : CUSTOMERS_PAGE_SIZE;
+
+        // Short query (1-2 chars): prefix-name-only with Latin↔Cyrillic transliteration.
+        // Mirrors the customer-table and picker fix.
+        if (normalizedSearch.length < 3) {
+          const prefixes = buildShortQueryPrefixVariants(normalizedSearch);
+          const responses = await Promise.all(
+            prefixes.map(async (term) => {
+              let activeVariant: LeadColumnsVariant = "full";
+              let { data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term, "prefix-name-only");
+              let fallbackVariant: LeadColumnsVariant | null = loadError
+                ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "")
+                : null;
+              while (loadError && fallbackVariant) {
+                activeVariant = fallbackVariant;
+                ({ data, error: loadError } = await runLoadLeads(activeVariant, 0, pageSize, term, "prefix-name-only"));
+                fallbackVariant = loadError ? getFallbackLeadColumnsVariant(activeVariant, loadError.message ?? "") : null;
+              }
+              if (loadError) throw loadError;
+              return ((data as unknown) as LeadRow[]) ?? [];
+            })
+          );
+          const deduped = new Map<string, LeadRow>();
+          responses.flat().forEach((row) => {
+            if (!deduped.has(row.id)) deduped.set(row.id, row);
+          });
+          const rankedLeads = Array.from(deduped.values()).sort((left, right) =>
+            (left.company_name ?? "").localeCompare(right.company_name ?? "", "uk")
+          );
+          setLeadsTotal(rankedLeads.length);
+          setLeadsHasMore(false);
+          if (!append) {
+            leadsFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
+          }
+          setLeads(rankedLeads);
+          return;
+        }
+
         const variants = buildCompanySearchVariants(normalizedSearch);
         const responses = await Promise.all(
           variants.map(async (term) => {
