@@ -73,6 +73,10 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
   const chipLabelText = selectedLabel.trim();
   const visibleOptions = React.useMemo(() => {
     if (!search) return options.slice(0, maxVisible);
+    // For 1-2 char queries the server already runs a prefix match (with
+    // Latin↔Cyrillic transliteration). Trust it and skip the fuzzy client
+    // filter — otherwise a single letter like "f" returns nothing.
+    if (search.length < 3) return options.slice(0, maxVisible);
     return options
       .filter((option) =>
         matchesCompanyNameSearch(search, [option.label, option.legalName ?? null, option.searchText ?? null])

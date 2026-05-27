@@ -1,6 +1,10 @@
 import { supabase } from "@/lib/supabaseClient";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
-import { buildCompanySearchVariants, scoreCompanyNameMatch } from "@/lib/companyNameSearch";
+import {
+  buildCompanySearchVariants,
+  buildShortQueryPrefixVariants,
+  scoreCompanyNameMatch,
+} from "@/lib/companyNameSearch";
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -559,12 +563,14 @@ export async function listCustomersBySearch(teamId: string, search: string) {
       .limit(20);
   };
 
-  const executeWithFallback = async (term?: string | null) => {
+  type IlikeMode = "substring" | "prefix";
+  const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
     const applySearch = async (variant: "full" | "no_logo" | "base") => {
       let query = buildQuery(variant);
       if (term?.trim()) {
         const escapedTerm = escapePostgrestIlikeTerm(term);
-        query = query.or(`name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%`);
+        const pattern = mode === "prefix" ? `${escapedTerm}%` : `%${escapedTerm}%`;
+        query = query.or(`name.ilike.${pattern},legal_name.ilike.${pattern}`);
       }
       return await query;
     };
@@ -585,6 +591,30 @@ export async function listCustomersBySearch(teamId: string, search: string) {
     const { data, error } = await executeWithFallback();
     handleError(error);
     return (data as unknown as CustomerRow[]) ?? [];
+  }
+
+  // Short query (1-2 chars) — simple prefix search with a transliterated Latin↔Cyrillic
+  // pair (e.g. "f" also queries "ф"). The fuzzy variants engine is skipped because
+  // its `length >= 2` filter discards single-char variants entirely.
+  if (q.length < 3) {
+    const prefixes = buildShortQueryPrefixVariants(q);
+    const responses = await Promise.all(
+      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix")) }))
+    );
+    const firstError = responses.find((response) => response.error)?.error ?? null;
+    if (responses.length > 0 && !responses.some((response) => !response.error)) {
+      handleError(firstError);
+    }
+    const deduped = new Map<string, CustomerRow>();
+    for (const response of responses) {
+      const rows = (response.data as unknown as CustomerRow[]) ?? [];
+      for (const row of rows) {
+        if (!deduped.has(row.id)) deduped.set(row.id, row);
+      }
+    }
+    return Array.from(deduped.values())
+      .sort((left, right) => (left.name ?? "").localeCompare(right.name ?? "", "uk"))
+      .slice(0, 20);
   }
 
   const variants = buildCompanySearchVariants(q);
@@ -629,13 +659,15 @@ export async function listLeadsBySearch(teamId: string, search: string) {
       .limit(20);
   };
 
-  const executeWithFallback = async (term?: string | null) => {
+  type IlikeMode = "substring" | "prefix";
+  const executeWithFallback = async (term?: string | null, mode: IlikeMode = "substring") => {
     const applySearch = async (variant: "full" | "base") => {
       let query = buildQuery(variant);
       if (term?.trim()) {
         const escapedTerm = escapePostgrestIlikeTerm(term);
+        const pattern = mode === "prefix" ? `${escapedTerm}%` : `%${escapedTerm}%`;
         query = query.or(
-          `company_name.ilike.%${escapedTerm}%,legal_name.ilike.%${escapedTerm}%,first_name.ilike.%${escapedTerm}%,last_name.ilike.%${escapedTerm}%`
+          `company_name.ilike.${pattern},legal_name.ilike.${pattern},first_name.ilike.${pattern},last_name.ilike.${pattern}`
         );
       }
       return await query;
@@ -652,6 +684,28 @@ export async function listLeadsBySearch(teamId: string, search: string) {
     const { data, error } = await executeWithFallback();
     handleError(error);
     return (data as unknown as LeadSearchRow[]) ?? [];
+  }
+
+  // Short query (1-2 chars): prefix search with Latin↔Cyrillic transliteration pair.
+  if (q.length < 3) {
+    const prefixes = buildShortQueryPrefixVariants(q);
+    const responses = await Promise.all(
+      prefixes.map(async (term) => ({ term, ...(await executeWithFallback(term, "prefix")) }))
+    );
+    const firstError = responses.find((response) => response.error)?.error ?? null;
+    if (responses.length > 0 && !responses.some((response) => !response.error)) {
+      handleError(firstError);
+    }
+    const deduped = new Map<string, LeadSearchRow>();
+    for (const response of responses) {
+      const rows = (response.data as unknown as LeadSearchRow[]) ?? [];
+      for (const row of rows) {
+        if (!deduped.has(row.id)) deduped.set(row.id, row);
+      }
+    }
+    return Array.from(deduped.values())
+      .sort((left, right) => (left.company_name ?? "").localeCompare(right.company_name ?? "", "uk"))
+      .slice(0, 20);
   }
 
   const variants = buildCompanySearchVariants(q);

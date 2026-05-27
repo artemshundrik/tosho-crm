@@ -96,12 +96,12 @@ const stripToWords = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const transliterateCyrillicToLatin = (value: string) =>
+export const transliterateCyrillicToLatin = (value: string) =>
   Array.from(value)
     .map((char) => CYRILLIC_TO_LATIN_MAP[char] ?? char)
     .join("");
 
-const transliterateLatinToCyrillic = (value: string) => {
+export const transliterateLatinToCyrillic = (value: string) => {
   let next = value;
   for (const [from, to] of LATIN_TO_CYRILLIC_SEQUENCES) {
     next = next.replaceAll(from, to);
@@ -109,6 +109,22 @@ const transliterateLatinToCyrillic = (value: string) => {
   return Array.from(next)
     .map((char) => LATIN_TO_CYRILLIC_CHAR_MAP[char] ?? char)
     .join("");
+};
+
+/**
+ * Build prefix variants for very short queries (1-2 chars). Returns the original
+ * query, its Latin transliteration, and its Cyrillic transliteration — deduped
+ * and lowercased. Used to power "starts with this letter" search in pickers.
+ */
+export const buildShortQueryPrefixVariants = (value: string): string[] => {
+  const lower = value.trim().toLowerCase();
+  if (!lower) return [];
+  const variants = new Set<string>([lower]);
+  const cyrillic = transliterateLatinToCyrillic(lower);
+  if (cyrillic) variants.add(cyrillic);
+  const latin = transliterateCyrillicToLatin(lower);
+  if (latin) variants.add(latin);
+  return Array.from(variants).filter(Boolean);
 };
 
 const toPhoneticLatin = (value: string) => {
