@@ -156,7 +156,12 @@ import {
 } from "@/lib/designTaskType";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
-import { convertImageBlobToPng, isWebpBlob, isWebpStoragePath } from "@/lib/imageConversion";
+import {
+  convertWebpBlobForSharing,
+  isWebpBlob,
+  isWebpStoragePath,
+  swapFilenameExtension,
+} from "@/lib/imageConversion";
 import {
   getDesignTaskCollaboratorIds,
   resolveDesignTaskCollaborators,
@@ -3495,18 +3500,22 @@ export default function DesignTaskPage() {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       let blob = await response.blob();
-      // WebP → PNG: Telegram (Windows desktop especially) sniffs bytes and
-      // treats WebP as a sticker. Convert on download so the manager gets a
-      // real PNG that ends up in chats as a photo. See src/lib/imageConversion.ts.
+      let outputFilename = (filename && filename.trim()) || "file";
+      // WebP → JPEG (or PNG when alpha is present). Telegram on Windows treats
+      // WebP bytes as a sticker no matter what the filename says, so we must
+      // actually re-encode. JPEG keeps the file ~1.5–2× source size; PNG is
+      // only used when the source has transparency. See src/lib/imageConversion.ts.
       if (isWebpBlob(blob)) {
         try {
-          blob = await convertImageBlobToPng(blob);
+          const converted = await convertWebpBlobForSharing(blob);
+          blob = converted.blob;
+          outputFilename = swapFilenameExtension(outputFilename, converted.extension);
         } catch (conversionError) {
-          console.warn("Failed to convert WebP attachment to PNG, falling back to raw bytes", conversionError);
+          console.warn("Failed to convert WebP attachment for sharing, falling back to raw bytes", conversionError);
         }
       }
       const blobUrl = URL.createObjectURL(blob);
-      triggerBrowserDownload(blobUrl, (filename && filename.trim()) || "file");
+      triggerBrowserDownload(blobUrl, outputFilename);
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
       toast.error("Не вдалося завантажити файл", {
