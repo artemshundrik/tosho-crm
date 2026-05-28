@@ -156,6 +156,7 @@ import {
 } from "@/lib/designTaskType";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
+import { convertImageBlobToPng, isWebpBlob, isWebpStoragePath } from "@/lib/imageConversion";
 import {
   getDesignTaskCollaboratorIds,
   resolveDesignTaskCollaborators,
@@ -3493,7 +3494,17 @@ export default function DesignTaskPage() {
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
+      let blob = await response.blob();
+      // WebP → PNG: Telegram (Windows desktop especially) sniffs bytes and
+      // treats WebP as a sticker. Convert on download so the manager gets a
+      // real PNG that ends up in chats as a photo. See src/lib/imageConversion.ts.
+      if (isWebpBlob(blob)) {
+        try {
+          blob = await convertImageBlobToPng(blob);
+        } catch (conversionError) {
+          console.warn("Failed to convert WebP attachment to PNG, falling back to raw bytes", conversionError);
+        }
+      }
       const blobUrl = URL.createObjectURL(blob);
       triggerBrowserDownload(blobUrl, (filename && filename.trim()) || "file");
       URL.revokeObjectURL(blobUrl);
@@ -3529,17 +3540,24 @@ export default function DesignTaskPage() {
     if (downloadKey && downloadPreparingKey === downloadKey) return;
 
     const filename = getAttachmentDownloadFileName(file.file_name, file.storage_path, file.mime_type);
+    // WebP files always go through the fetch+convert path (downloadFileToDevice)
+    // so we can re-encode as real PNG bytes. The direct signed-URL path would
+    // hand the user untouched WebP bytes, which Telegram on Windows treats as
+    // a sticker.
+    const requiresPngConversion = isWebpStoragePath(file.storage_path);
     if (downloadKey) setDownloadPreparingKey(downloadKey);
     try {
-      const downloadUrl = await getSignedAttachmentDownloadUrl(
-        file.storage_bucket,
-        file.storage_path,
-        filename,
-        60 * 60 * 24 * 7
-      );
-      if (downloadUrl) {
-        triggerBrowserDownload(downloadUrl, filename);
-        return;
+      if (!requiresPngConversion) {
+        const downloadUrl = await getSignedAttachmentDownloadUrl(
+          file.storage_bucket,
+          file.storage_path,
+          filename,
+          60 * 60 * 24 * 7
+        );
+        if (downloadUrl) {
+          triggerBrowserDownload(downloadUrl, filename);
+          return;
+        }
       }
 
       const url = await ensureFileAccessUrl(file);

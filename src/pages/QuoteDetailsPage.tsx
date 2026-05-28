@@ -45,6 +45,7 @@ import {
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
 import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
+import { convertImageBlobToPng, isWebpBlob } from "@/lib/imageConversion";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
@@ -973,7 +974,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      const blob = await response.blob();
+      let blob = await response.blob();
+      // WebP → PNG: Telegram on Windows sniffs bytes and treats WebP as a
+      // sticker even when the filename is `.png`. Re-encode to real PNG so
+      // the manager can send it as a normal photo. See src/lib/imageConversion.ts.
+      if (isWebpBlob(blob)) {
+        try {
+          blob = await convertImageBlobToPng(blob);
+        } catch (conversionError) {
+          console.warn("Failed to convert WebP attachment to PNG, falling back to raw bytes", conversionError);
+        }
+      }
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
