@@ -76,7 +76,7 @@ export function getFileExtensionFromStoragePath(storagePath: string) {
   return storagePath.split(".").pop()?.toLowerCase() ?? "";
 }
 
-export function getAttachmentDownloadFileName(
+function resolveAttachmentFileNameByStorage(
   fileName?: string | null,
   storagePath?: string | null,
   mimeType?: string | null
@@ -105,12 +105,38 @@ export function getAttachmentDownloadFileName(
   return `${baseName.slice(0, dot)}.${targetExtension}`;
 }
 
+/**
+ * Filename used when the user clicks "Download". For WebP attachments we lie
+ * about the extension and return ".png" — the bytes stay WebP, but Telegram
+ * (and a few other clients) refuse to render `.webp` as a photo and instead
+ * treat it as a sticker. Modern image viewers happily decode WebP bytes inside
+ * a `.png` file, so the practical UX is: download → drop into Telegram → shows
+ * as a normal photo.
+ */
+export function getAttachmentDownloadFileName(
+  fileName?: string | null,
+  storagePath?: string | null,
+  mimeType?: string | null
+) {
+  const truthful = resolveAttachmentFileNameByStorage(fileName, storagePath, mimeType);
+  const dot = truthful.lastIndexOf(".");
+  if (dot < 0) return truthful;
+  const currentExtension = truthful.slice(dot + 1).toLowerCase();
+  if (currentExtension !== "webp") return truthful;
+  return `${truthful.slice(0, dot)}.png`;
+}
+
+/**
+ * Filename shown in the CRM UI. Stays truthful (returns `.webp` for WebP) so
+ * the team can audit what's actually in storage. Diverges from the download
+ * filename above.
+ */
 export function getAttachmentDisplayFileName(
   fileName?: string | null,
   storagePath?: string | null,
   mimeType?: string | null
 ) {
-  return getAttachmentDownloadFileName(fileName, storagePath, mimeType);
+  return resolveAttachmentFileNameByStorage(fileName, storagePath, mimeType);
 }
 
 export function isServerPreviewableStoragePath(storagePath: string) {
