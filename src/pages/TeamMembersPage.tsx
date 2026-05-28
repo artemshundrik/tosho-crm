@@ -137,6 +137,7 @@ type MemberProfileMeta = {
     catalog: boolean;
     contractors: boolean;
     stock: boolean;
+    finance: boolean;
     team: boolean;
   };
 };
@@ -259,6 +260,7 @@ const DEFAULT_MODULE_ACCESS = {
   catalog: false,
   contractors: false,
   stock: false,
+  finance: false,
   team: false,
 };
 
@@ -270,6 +272,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   catalog: "Каталог",
   contractors: "Підрядники та постачальники",
   stock: "Склад",
+  finance: "Фінанси",
   team: "Управління командою",
 };
 
@@ -281,6 +284,7 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "catalog",
   "contractors",
   "stock",
+  "finance",
   "team",
 ];
 
@@ -355,9 +359,14 @@ function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | nu
   return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
 }
 
+function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | null) {
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+}
+
 function isForcedModuleAccess(key: keyof MemberProfileMeta["moduleAccess"], accessRole?: string | null, jobRole?: string | null) {
   if (key === "contractors" && (accessRole ?? "").trim().toLowerCase() === "owner") return true;
   if (key === "stock" && hasDefaultStockAccess(accessRole, jobRole)) return true;
+  if (key === "finance" && hasDefaultFinanceAccess(accessRole, jobRole)) return true;
   return false;
 }
 
@@ -375,6 +384,7 @@ function normalizeModuleAccess(
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
     stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
+    finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
@@ -389,6 +399,7 @@ function normalizeMemberModuleAccessForRole(
     ...moduleAccess,
     contractors: normalizedAccessRole === "owner" ? true : moduleAccess.contractors,
     stock: hasDefaultStockAccess(accessRole, jobRole) ? true : moduleAccess.stock,
+    finance: hasDefaultFinanceAccess(accessRole, jobRole) ? true : moduleAccess.finance,
   };
 }
 

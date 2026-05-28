@@ -146,6 +146,7 @@ const DEFAULT_MODULE_ACCESS = {
   catalog: false,
   contractors: false,
   stock: false,
+  finance: false,
   team: false,
 };
 
@@ -175,6 +176,10 @@ function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | nu
   return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
 }
 
+function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | null) {
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+}
+
 function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
@@ -185,6 +190,7 @@ function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRo
     catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
     stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
+    finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }

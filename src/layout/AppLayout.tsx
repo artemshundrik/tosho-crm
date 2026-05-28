@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   BarChart3,
+  Banknote,
   BriefcaseBusiness,
   Building2,
   Calculator,
@@ -96,7 +97,7 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "stock" | "team";
+  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "stock" | "finance" | "team";
 };
 
 type HeaderConfig = {
@@ -411,6 +412,7 @@ const ROUTES = {
   design: "/design",
   contractors: "/contractors",
   sampleStock: "/stock/samples",
+  finances: "/finances",
   team: "/team",
 
   workspaceSettings: "/workspace-settings",
@@ -448,6 +450,13 @@ const baseSidebarLinks: SidebarLink[] = [
     group: "operations",
     icon: Package,
     moduleKey: "stock",
+  },
+  {
+    label: "Фінанси",
+    to: ROUTES.finances,
+    group: "operations",
+    icon: Banknote,
+    moduleKey: "finance",
   },
 
   // Акаунт
@@ -537,6 +546,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Залишки товарів, резерви та складські рухи.",
       breadcrumbLabel: "Склад",
       breadcrumbTo: ROUTES.sampleStock,
+      showPageHeader: false,
+    };
+  if (pathname.startsWith(ROUTES.finances))
+    return {
+      title: "Фінанси",
+      subtitle: "Рахунки, видаткові накладні, акти, звірки та витрати компанії.",
+      breadcrumbLabel: "Фінанси",
+      breadcrumbTo: ROUTES.finances,
       showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.team))
@@ -725,10 +742,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           return false;
         }
         if (link.moduleKey) {
-          if ((link.moduleKey === "contractors" || link.moduleKey === "stock") && permissions.isSuperAdmin) {
+          if ((link.moduleKey === "contractors" || link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSuperAdmin) {
             return true;
           }
-          if (link.moduleKey === "stock" && permissions.isSeo) {
+          if ((link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSeo) {
             return true;
           }
           if (currentModuleAccess === undefined) {

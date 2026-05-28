@@ -12,6 +12,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import {
+  Banknote,
   Bell,
   Building2,
   Calculator,
@@ -158,6 +159,7 @@ function getPathSummary(path: string) {
   if (path.startsWith("/orders/production")) return "Черга замовлень";
   if (path.startsWith("/catalog/products")) return "Каталог продукції";
   if (path.startsWith("/stock/samples")) return "Склад і резерви";
+  if (path.startsWith("/finances")) return "Фінанси та документообіг";
   if (path.startsWith("/team")) return "Сторінка команди";
   if (path.startsWith("/notifications")) return "Центр сповіщень";
   if (path.startsWith("/profile")) return "Профіль користувача";
@@ -225,6 +227,13 @@ function getRoutePresentation(path: string) {
     return {
       label: "Склад",
       description: "Залишки товарів, резерви і складські рухи",
+      kindLabel: "Сторінка",
+    };
+  }
+  if (path.startsWith("/finances")) {
+    return {
+      label: "Фінанси",
+      description: "Рахунки, видаткові накладні, акти, звірки, витрати",
       kindLabel: "Сторінка",
     };
   }
@@ -371,6 +380,28 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         keywords: ["склад", "взірці", "samples", "stock", "залишки", "товари", "резерв"],
         to: "/stock/samples",
         icon: Package,
+      },
+      {
+        key: "route-finances",
+        label: "Фінанси",
+        description: "Рахунки, видаткові накладні, акти, звірки, витрати",
+        kindLabel: "Сторінка",
+        keywords: [
+          "фінанси",
+          "finance",
+          "рахунки",
+          "invoice",
+          "видаткова",
+          "видаткові",
+          "накладна",
+          "акт",
+          "акти",
+          "звірка",
+          "витрати",
+          "expenses",
+        ],
+        to: "/finances",
+        icon: Banknote,
       },
       {
         key: "route-design",
