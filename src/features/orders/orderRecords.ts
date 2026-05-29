@@ -238,6 +238,14 @@ export type DerivedOrderRecord = {
   signatoryLabel: string | null;
   contractCreatedAt: string | null;
   specificationCreatedAt: string | null;
+  /** Manual override of the contract number (owner/seo only). Falls back to quoteNumber when null. */
+  contractNumber: string | null;
+  /** Manual override of the contract date (owner/seo only). Falls back to contractCreatedAt when null. */
+  contractDate: string | null;
+  /** Persisted contract generation param: working days for p.2.2. Null → default 50. */
+  contractProductionDays: number | null;
+  /** Persisted contract generation param: auto-prolongation clause (p.8.5). */
+  contractAutoProlongation: boolean;
   designStatuses: string[];
   docs: {
     contract: boolean;
@@ -292,6 +300,10 @@ type StoredOrderRow = {
   customer_signatory_authority?: string | null;
   contract_created_at?: string | null;
   specification_created_at?: string | null;
+  contract_number?: string | null;
+  contract_date?: string | null;
+  contract_production_days?: number | string | null;
+  contract_auto_prolongation?: boolean | null;
   design_statuses?: string[] | null;
   documents?: {
     contract?: boolean;
@@ -517,7 +529,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -937,6 +949,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       signatoryLabel: buildSignatoryLabel(signatoryName, signatoryPosition),
       contractCreatedAt: null,
       specificationCreatedAt: null,
+      contractNumber: null,
+      contractDate: null,
+      contractProductionDays: null,
+      contractAutoProlongation: false,
       designStatuses: Array.from(new Set(tasks.map((task) => DESIGN_STATUS_LABELS[task.status] ?? task.status))),
       docs: {
         contract: partyType === "customer" && hasLegalEntityIdentity && Boolean(contactEmail && contactPhone),
@@ -1311,6 +1327,15 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         signatoryLabel: buildSignatoryLabel(customerSignatoryName, customerSignatoryPosition),
         contractCreatedAt,
         specificationCreatedAt: order.specification_created_at ?? null,
+        contractNumber: order.contract_number?.trim?.() || null,
+        contractDate: order.contract_date?.trim?.() || null,
+        contractProductionDays:
+          order.contract_production_days === null ||
+          order.contract_production_days === undefined ||
+          order.contract_production_days === ""
+            ? null
+            : Number(order.contract_production_days) || null,
+        contractAutoProlongation: order.contract_auto_prolongation === true,
         designStatuses: Array.isArray(order.design_statuses) ? order.design_statuses : [],
         docs: {
           contract: contractReady,
@@ -1525,6 +1550,10 @@ export async function updateOrderDocumentSettings(params: {
   balanceDaysAfterShipment?: number | null;
   incotermsCode?: string;
   incotermsPlace?: string | null;
+  contractNumber?: string | null;
+  contractDate?: string | null;
+  contractProductionDays?: number | null;
+  contractAutoProlongation?: boolean;
 }) {
   const payload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -1538,6 +1567,10 @@ export async function updateOrderDocumentSettings(params: {
   if (params.balanceDaysAfterShipment !== undefined) payload.balance_days_after_shipment = params.balanceDaysAfterShipment;
   if (params.incotermsCode !== undefined) payload.incoterms_code = params.incotermsCode;
   if (params.incotermsPlace !== undefined) payload.incoterms_place = params.incotermsPlace;
+  if (params.contractNumber !== undefined) payload.contract_number = params.contractNumber;
+  if (params.contractDate !== undefined) payload.contract_date = params.contractDate;
+  if (params.contractProductionDays !== undefined) payload.contract_production_days = params.contractProductionDays;
+  if (params.contractAutoProlongation !== undefined) payload.contract_auto_prolongation = params.contractAutoProlongation;
 
   const { error } = await supabase
     .schema("tosho")

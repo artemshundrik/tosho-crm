@@ -15,6 +15,12 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CustomerDialog, useCustomerEditor } from "@/components/customers";
 import {
   ORDER_DOCUMENT_EXECUTOR,
@@ -53,12 +59,16 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Circle,
   ClipboardCheck,
   ExternalLink,
+  FilePlus2,
   FileText,
   Info,
   Mail,
+  MoreHorizontal,
   Palette,
+  Pencil,
   Phone,
   Send,
 } from "lucide-react";
@@ -109,18 +119,6 @@ const resolveVisualizationImageUrls = async (assets: OrderDesignAsset[]): Promis
   }
   return urls;
 };
-
-const renderDocBadge = (label: string, ready: boolean) => (
-  <Badge
-    variant="outline"
-    className={cn(
-      "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-      ready ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
-    )}
-  >
-    {label}
-  </Badge>
-);
 
 const InfoHint = ({
   title,
@@ -295,6 +293,20 @@ const getTechCardRequirementChecks = (record: DerivedOrderRecord): RequirementCh
   },
 ];
 
+// Коротка дата для бейджа «Створено · 12.05».
+const formatShortCreatedDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+// actionMode керує кнопкою рядка:
+//  'blocked' — даних/умов не вистачає, дії нема (лише причина);
+//  'create'  — все готово, документ ще не створено → кнопка «Створити»;
+//  'open'    — документ створено / готовий до генерації → кнопка «Відкрити PDF».
+type DocumentActionMode = "blocked" | "create" | "open";
+
 const getDocumentActionState = (
   record: DerivedOrderRecord,
   kind: OrderDocumentKind
@@ -307,21 +319,29 @@ const getDocumentActionState = (
   blockedLabel: string | null;
   checks: RequirementCheck[];
   hint: string;
+  actionMode: DocumentActionMode;
+  createdDateLabel: string | null;
+  isRequisitesBlocker: boolean;
 } => {
   if (kind === "contract") {
     const checks = getContractRequirementChecks(record);
     const missing = getMissingRequirementLabels(checks);
     const ready = missing.length === 0;
+    const created = Boolean(record.contractCreatedAt);
+    const actionMode: DocumentActionMode = !ready ? "blocked" : created ? "open" : "create";
     return {
       title: "Договір",
       ready,
-      created: Boolean(record.contractCreatedAt),
-      statusLabel: record.contractCreatedAt ? "Створено" : ready ? "Можна створити" : "Немає даних",
+      created,
+      statusLabel: created ? "Створено" : ready ? "Можна створити" : "Немає даних",
       statusReady: ready,
       blockedLabel: missing.length > 0 ? `Не вистачає: ${missing.join(", ")}` : null,
       checks,
       hint:
         "Договір використовує реквізити з картки Замовника і контактні дані з замовлення. Якщо тут є жовті пункти, їх треба виправити в картці Замовника або в замовленні.",
+      actionMode,
+      createdDateLabel: formatShortCreatedDate(record.contractCreatedAt),
+      isRequisitesBlocker: !ready,
     };
   }
 
@@ -332,16 +352,19 @@ const getDocumentActionState = (
     // Правило: СП не можна створити без Договору. Якщо саме його не вистачає —
     // показуємо явну й коротку підказку замість списку всіх missing.
     const contractMissing = !record.contractCreatedAt;
+    const created = Boolean(record.specificationCreatedAt);
     const blockedLabel = contractMissing
       ? "Спочатку створіть Договір — без нього СП недоступна."
       : missing.length > 0
         ? `Не виконано: ${missing.join(", ")}`
         : null;
+    const actionMode: DocumentActionMode =
+      contractMissing || !ready ? "blocked" : created ? "open" : "create";
     return {
       title: "СП",
       ready,
-      created: Boolean(record.specificationCreatedAt),
-      statusLabel: record.specificationCreatedAt
+      created,
+      statusLabel: created
         ? "Створено"
         : ready
           ? "Можна створити"
@@ -353,6 +376,9 @@ const getDocumentActionState = (
       checks,
       hint:
         "СП має окремі правила: тільки безготівка, тільки після створення договору, і з умовами оплати та Incoterms із замовлення.",
+      actionMode,
+      createdDateLabel: formatShortCreatedDate(record.specificationCreatedAt),
+      isRequisitesBlocker: false,
     };
   }
 
@@ -368,6 +394,9 @@ const getDocumentActionState = (
       blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
       checks,
       hint: "Рахунок формується з товарних позицій замовлення і не потребує створеного договору.",
+      actionMode: ready ? "open" : "blocked",
+      createdDateLabel: null,
+      isRequisitesBlocker: false,
     };
   }
 
@@ -382,6 +411,9 @@ const getDocumentActionState = (
     blockedLabel: missing.length > 0 ? `Не виконано: ${missing.join(", ")}` : null,
     checks,
     hint: "Техкарта доступна, коли є позиції і затверджені виробничі матеріали: візуал та макет.",
+    actionMode: ready ? "open" : "blocked",
+    createdDateLabel: null,
+    isRequisitesBlocker: false,
   };
 };
 
@@ -601,6 +633,10 @@ type BuildOrderDocumentOptions = {
   visualizationImageUrls?: string[];
   /** Якщо передано — рендеримо договір з цих секцій (з ревізії), інакше — з дефолтів. */
   contractSections?: ContractSection[];
+  /** Ручний № договору (owner/seo). Override щодо record.contractNumber. */
+  contractNumberOverride?: string;
+  /** Ручна дата договору (owner/seo), формат YYYY-MM-DD. Override щодо record.contractDate. */
+  contractDateOverride?: string | null;
 };
 
 const buildOrderDocumentHtml = (
@@ -609,9 +645,15 @@ const buildOrderDocumentHtml = (
   options: BuildOrderDocumentOptions = {}
 ) => {
   const title = documentTitleByKind[kind];
-  // Дата документа = коли менеджер натиснув "Створити". Якщо ще не створено — сьогодні (fallback всередині форматера).
-  const contractDate = formatContractDateParts(record.contractCreatedAt ?? null);
-  const contractEndDate = formatContractEndDate(record.contractCreatedAt ?? null);
+  // Ручні перевизначення (редагує лише owner/seo): реальний паперовий договір може мати власний № і дату.
+  // Якщо їх не задано — fallback на номер замовлення CRM та дату створення.
+  const effectiveContractNumber =
+    options.contractNumberOverride?.trim() || record.contractNumber?.trim() || record.quoteNumber;
+  const effectiveContractDateSource =
+    options.contractDateOverride || record.contractDate || record.contractCreatedAt || null;
+  // Дата документа = ручна дата договору, інакше момент створення. Якщо ще не створено — сьогодні (fallback у форматері).
+  const contractDate = formatContractDateParts(effectiveContractDateSource);
+  const contractEndDate = formatContractEndDate(effectiveContractDateSource);
   const customerTitle = record.legalEntityLabel || record.customerName;
   const customerSignatoryName = record.customerSignatoryName?.trim() || "Не вказано";
   // Підпис унизу документа — короткий формат "І.П. Прізвище" (як у Виконавця "О.В. Борщ").
@@ -660,7 +702,6 @@ const buildOrderDocumentHtml = (
       : 50;
   const contractAutoProlongation = options.contractAutoProlongation === true;
   const specificationNumber = record.quoteNumber;
-  const specificationDate = formatSlashDate(record.specificationCreatedAt ?? null);
   const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
   const totalWithVat = Number(record.total || 0);
   const totalWithoutVat = totalWithVat / (1 + SPEC_VAT_RATE / 100);
@@ -783,14 +824,14 @@ const buildOrderDocumentHtml = (
       </head>
       <body>
         <div class="toolbar">
-          <div class="toolbar-title">Договір ${escapeHtml(record.quoteNumber)}</div>
+          <div class="toolbar-title">Договір ${escapeHtml(effectiveContractNumber)}</div>
           <div class="toolbar-actions">
             <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
             <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
           </div>
         </div>
         <div class="page">
-        <h1>ДОГОВІР № ${escapeHtml(record.quoteNumber)}</h1>
+        <h1>ДОГОВІР № ${escapeHtml(effectiveContractNumber)}</h1>
         <h2>на виготовлення та поставку рекламно-сувенірної продукції</h2>
         <div class="topline">
           <div>${escapeHtml(contractDate.city)}</div>
@@ -881,7 +922,7 @@ const buildOrderDocumentHtml = (
         <div class="page">
           <div class="center small">Додаток № ${escapeHtml(specificationNumber)}</div>
           <div class="center small">До Договору на виготовлення та поставку рекламно-сувенірної продукції</div>
-          <div class="center small">№${escapeHtml(record.quoteNumber)} від ${escapeHtml(specificationDate)}</div>
+          <div class="center small">№${escapeHtml(effectiveContractNumber)} від ${escapeHtml(formatSlashDate(effectiveContractDateSource))}</div>
 
           <div class="topline">
             <div>м. Київ</div>
@@ -1073,6 +1114,9 @@ export default function OrdersProductionDetailsPage() {
   const [contractBalancePctInput, setContractBalancePctInput] = useState("30");
   const [contractBalanceTiming, setContractBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
   const [contractBalanceDaysInput, setContractBalanceDaysInput] = useState("3");
+  // Ручні № і дата договору (редагує лише owner/seo) — реальний паперовий договір може мати власні значення.
+  const [contractNumberInput, setContractNumberInput] = useState("");
+  const [contractDateInput, setContractDateInput] = useState("");
   const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
 
   const refreshRecord = useCallback(async () => {
@@ -1230,6 +1274,8 @@ export default function OrdersProductionDetailsPage() {
       | "balanceTiming"
       | "balanceDaysAfterShipment"
       | "contractSections"
+      | "contractNumberOverride"
+      | "contractDateOverride"
     > = {}
   ) => {
     if (!record) return;
@@ -1283,7 +1329,15 @@ export default function OrdersProductionDetailsPage() {
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     }
 
-    if (record.source === "stored" && teamId && (kind === "contract" || kind === "specification")) {
+    // Позначку «створено» ставимо лише при ПЕРШІЙ генерації. Повторне «Відкрити PDF»
+    // не має зсувати дату створення (раніше contract_created_at перезаписувався на сьогодні).
+    const alreadyCreated =
+      kind === "contract"
+        ? Boolean(record.contractCreatedAt)
+        : kind === "specification"
+          ? Boolean(record.specificationCreatedAt)
+          : true;
+    if (record.source === "stored" && teamId && (kind === "contract" || kind === "specification") && !alreadyCreated) {
       try {
         const createdAt = await markOrderDocumentCreated({
           teamId,
@@ -1302,6 +1356,51 @@ export default function OrdersProductionDetailsPage() {
         setError(markError instanceof Error ? markError.message : "Документ відкрито, але не вдалося зберегти позначку створення.");
       }
     }
+  };
+
+  // Договір спершу відкриває модал параметрів (строки, пролонгація, оплата), а вже звідти — генерацію PDF.
+  // Поля сидяться з раніше збережених значень (persisted), щоб модалка показувала реальний стан.
+  const openContractParamsDialog = () => {
+    if (!record) return;
+    setContractAutoProlongation(record.contractAutoProlongation);
+    setContractProductionDaysInput(record.contractProductionDays !== null ? String(record.contractProductionDays) : "50");
+    setContractPrepaymentPctInput(record.prepaymentPct !== null ? String(record.prepaymentPct) : "70");
+    setContractBalancePctInput(record.balancePct !== null ? String(record.balancePct) : "30");
+    setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
+    setContractBalanceDaysInput(
+      record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
+    );
+    // Дефолти: ручний № / дата, інакше номер замовлення CRM і дата створення (або сьогодні).
+    setContractNumberInput(record.contractNumber?.trim() || record.quoteNumber);
+    setContractDateInput(
+      (record.contractDate || record.contractCreatedAt || new Date().toISOString()).slice(0, 10)
+    );
+    setContractDialogOpen(true);
+  };
+
+  // Перегенерувати вже створений договір одним кліком — без модалки, з раніше збережених параметрів.
+  const regenerateContract = () => {
+    if (!record) return;
+    void openDocumentPrint("contract", {
+      productionWorkingDays: record.contractProductionDays ?? undefined,
+      contractAutoProlongation: record.contractAutoProlongation,
+    });
+  };
+
+  // Запуск дії рядка документа:
+  //  - Договір не створено → модал параметрів (перше створення);
+  //  - Договір уже створено → одразу відкриваємо PDF з persisted-параметрів;
+  //  - решта документів → одразу генерація.
+  const handleDocumentAction = (kind: OrderDocumentKind) => {
+    if (kind === "contract") {
+      if (record?.contractCreatedAt) {
+        regenerateContract();
+      } else {
+        openContractParamsDialog();
+      }
+      return;
+    }
+    void openDocumentPrint(kind);
   };
 
   const openEmailDraft = () => {
@@ -1937,77 +2036,110 @@ export default function OrdersProductionDetailsPage() {
               {documentsReadyCount} / {documentsTotalCount}
             </Badge>
           </div>
-          <div className="mt-4 space-y-1.5">
-            {documentActions.map((document) => (
-              <div
-                key={document.kind}
-                className={cn(
-                  "rounded-lg border px-3 py-2.5",
-                  document.ready ? "border-border/60 bg-muted/[0.04]" : "tone-warning-subtle"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <span className="truncate text-sm font-medium text-foreground">{document.title}</span>
-                    <InfoHint title={`${document.title}: що перевіряється`}>
-                      <p className="mb-2 text-muted-foreground">{document.hint}</p>
-                      <RequirementList checks={document.checks} />
-                    </InfoHint>
-                  </div>
-                  {renderDocBadge(document.statusLabel, document.statusReady)}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => {
-                      if (document.kind === "contract") {
-                        setContractAutoProlongation(false);
-                        setContractProductionDaysInput("50");
-                        setContractPrepaymentPctInput(
-                          record.prepaymentPct !== null ? String(record.prepaymentPct) : "70"
-                        );
-                        setContractBalancePctInput(
-                          record.balancePct !== null ? String(record.balancePct) : "30"
-                        );
-                        setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
-                        setContractBalanceDaysInput(
-                          record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3"
-                        );
-                        setContractDialogOpen(true);
-                        return;
-                      }
-                      void openDocumentPrint(document.kind);
-                    }}
-                    disabled={!document.ready}
-                    title={document.blockedLabel ?? undefined}
-                  >
-                    PDF
-                  </Button>
-                </div>
-                {document.blockedLabel ? (
-                  <div className="mt-1.5 text-[11px] leading-4 text-muted-foreground">{document.blockedLabel}</div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <div className="mt-3 divide-y divide-border/60">
+            {documentActions.map((document) => {
+              const isCreated = document.actionMode === "open" && Boolean(document.createdDateLabel);
+              const isContractParams = document.kind === "contract" && Boolean(record.contractCreatedAt);
+              // Лівий індикатор стану: зелена галка (створено/готово), бурштин (блокер), нейтральне коло (можна створити).
+              const StatusIcon =
+                document.actionMode === "blocked" ? AlertTriangle : document.actionMode === "open" ? CheckCircle2 : Circle;
+              const statusIconTone =
+                document.actionMode === "blocked"
+                  ? "tone-text-warning"
+                  : document.actionMode === "open"
+                    ? "tone-text-success"
+                    : "text-muted-foreground/70";
+              // Тихий вторинний рядок під назвою (для blocked — окремо нижче, з лінком виправлення).
+              const secondaryText =
+                document.actionMode === "open"
+                  ? isCreated
+                    ? `Створено · ${document.createdDateLabel}`
+                    : document.statusLabel
+                  : document.actionMode === "create"
+                    ? "Можна створити"
+                    : null;
+              return (
+                <div
+                  key={document.kind}
+                  className="group flex items-start gap-3 rounded-md px-2 py-3 transition-colors hover:bg-muted/20"
+                >
+                  <StatusIcon className={cn("mt-0.5 h-4 w-4 shrink-0", statusIconTone)} />
 
-          {documentActions.some((item) => item.kind === "contract" && item.blockedLabel) && record.customerId ? (
-            <div className="tone-warning-subtle mt-4 rounded-lg border p-3 text-sm">
-              <div className="tone-text-warning font-medium">Договір блокується реквізитами Замовника.</div>
-              <div className="mt-1 text-muted-foreground">
-                Найчастіше треба додати підставу підпису, IBAN або юридичну адресу в картці Замовника.
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                onClick={() => navigate(`/orders/customers?customerId=${record.customerId}`)}
-              >
-                Відкрити картку Замовника
-              </Button>
-            </div>
-          ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium text-foreground">{document.title}</span>
+                      <InfoHint title={`${document.title}: що перевіряється`}>
+                        <p className="mb-2 text-muted-foreground">{document.hint}</p>
+                        <RequirementList checks={document.checks} />
+                      </InfoHint>
+                    </div>
+                    {document.actionMode === "blocked" ? (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+                        <span>{document.blockedLabel}</span>
+                        {document.isRequisitesBlocker && document.kind === "contract" && record.customerId ? (
+                          <button
+                            type="button"
+                            onClick={() => void openCustomerEditor(record.customerId!)}
+                            className="inline-flex items-center gap-1 font-medium text-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-primary"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Виправити реквізити
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : secondaryText ? (
+                      <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{secondaryText}</div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {document.actionMode === "create" ? (
+                      <Button
+                        size="sm"
+                        className="h-7 gap-1 px-2.5 text-xs"
+                        onClick={() => handleDocumentAction(document.kind)}
+                      >
+                        <FilePlus2 className="h-3.5 w-3.5" />
+                        Створити
+                      </Button>
+                    ) : document.actionMode === "open" ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
+                          onClick={() => handleDocumentAction(document.kind)}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Відкрити
+                        </Button>
+                        {isContractParams ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
+                                aria-label="Більше дій з договором"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={openContractParamsDialog}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Параметри й перестворити
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           <div className="mt-4 border-t border-border/60 pt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -2084,7 +2216,7 @@ export default function OrdersProductionDetailsPage() {
           setContractDialogOpen(open);
         }}
       >
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>Параметри договору</DialogTitle>
             <DialogDescription>
@@ -2092,50 +2224,103 @@ export default function OrdersProductionDetailsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="contract-production-days">Строки виробництва (робочих днів)</Label>
-              <Input
-                id="contract-production-days"
-                inputMode="numeric"
-                value={contractProductionDaysInput}
-                onChange={(e) => setContractProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
-                placeholder="Напр. 50"
-                className="h-9"
-              />
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Номер і дата договору</div>
+                {!isCeo ? (
+                  <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Тільки СЕО / власник
+                  </span>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="contract-number">№ договору</Label>
+                  <Input
+                    id="contract-number"
+                    value={contractNumberInput}
+                    onChange={(e) => setContractNumberInput(e.target.value)}
+                    placeholder={record.quoteNumber}
+                    className="h-9"
+                    disabled={!isCeo}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="contract-date">Дата договору</Label>
+                  <Input
+                    id="contract-date"
+                    type="date"
+                    value={contractDateInput}
+                    onChange={(e) => setContractDateInput(e.target.value)}
+                    className="h-9"
+                    disabled={!isCeo}
+                  />
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Підставляється у п. 2.2 договору. За замовчуванням — 50.
+                {isCeo
+                  ? "Якщо паперовий договір вже існує — встав його реальні № і дату. Інакше залишиться номер замовлення CRM і дата створення."
+                  : "Змінювати № і дату договору може лише СЕО або власник. Зараз підставляться номер замовлення CRM і дата створення."}
               </p>
             </div>
-            <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-              <Checkbox
-                id="contract-auto-prolongation"
-                checked={contractAutoProlongation}
-                onCheckedChange={(checked) => setContractAutoProlongation(checked === true)}
-                className="mt-0.5"
-              />
-              <div className="space-y-1">
-                <Label htmlFor="contract-auto-prolongation" className="text-sm font-medium">
-                  Автоматична пролонгація на 1 рік
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Додасть п. 8.5: якщо за 30 днів до кінця жодна сторона не повідомить — договір продовжується.
-                </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start">
+              <div className="grid gap-2">
+                <Label htmlFor="contract-production-days">Строки виробництва (робочих днів)</Label>
+                <Input
+                  id="contract-production-days"
+                  inputMode="numeric"
+                  value={contractProductionDaysInput}
+                  onChange={(e) => setContractProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+                  placeholder="Напр. 50"
+                  className="h-9"
+                />
+                <p className="text-xs text-muted-foreground">Підставляється у п. 2.2 договору. За замовчуванням — 50.</p>
               </div>
+              <label
+                htmlFor="contract-auto-prolongation"
+                className="flex h-full cursor-pointer items-start gap-3 rounded-md border border-border/60 p-3"
+              >
+                <Checkbox
+                  id="contract-auto-prolongation"
+                  checked={contractAutoProlongation}
+                  onCheckedChange={(checked) => setContractAutoProlongation(checked === true)}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Автоматична пролонгація на 1 рік</div>
+                  <p className="text-xs text-muted-foreground">
+                    Додасть п. 8.5: якщо за 30 днів до кінця жодна сторона не повідомить — договір продовжується.
+                  </p>
+                </div>
+              </label>
             </div>
 
             <div className="space-y-3 rounded-md border border-border/60 p-3">
               <div className="text-sm font-medium">Умови оплати</div>
-              <div className="grid gap-2">
-                <Label htmlFor="contract-prepayment-pct">Передоплата, %</Label>
-                <Input
-                  id="contract-prepayment-pct"
-                  inputMode="numeric"
-                  value={contractPrepaymentPctInput}
-                  onChange={(e) => setContractPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
-                  placeholder="Напр. 70"
-                  className="h-9"
-                />
-                <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="contract-prepayment-pct">Передоплата, %</Label>
+                  <Input
+                    id="contract-prepayment-pct"
+                    inputMode="numeric"
+                    value={contractPrepaymentPctInput}
+                    onChange={(e) => setContractPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 70"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="contract-balance-pct">Доплата, %</Label>
+                  <Input
+                    id="contract-balance-pct"
+                    inputMode="numeric"
+                    value={contractBalancePctInput}
+                    onChange={(e) => setContractBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 30"
+                    className="h-9"
+                  />
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label>Доплата — коли</Label>
@@ -2151,17 +2336,6 @@ export default function OrdersProductionDetailsPage() {
                     <SelectItem value="after_shipment">По факту готовності, після відвантаження</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="contract-balance-pct">Доплата, %</Label>
-                <Input
-                  id="contract-balance-pct"
-                  inputMode="numeric"
-                  value={contractBalancePctInput}
-                  onChange={(e) => setContractBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
-                  placeholder="Напр. 30"
-                  className="h-9"
-                />
               </div>
               {contractBalanceTiming === "after_shipment" ? (
                 <div className="grid gap-2">
@@ -2214,7 +2388,15 @@ export default function OrdersProductionDetailsPage() {
                     : null;
                 setContractDialogSubmitting(true);
                 try {
-                  // Зберігаємо нові payment-поля на замовленні (якщо це stored-запис).
+                  // № і дату договору може змінювати лише СЕО/власник. Для решти — лишаємо як є (override не застосовуємо).
+                  const contractNumberOverride = isCeo
+                    ? (contractNumberInput.trim() || null)
+                    : (record.contractNumber ?? null);
+                  const contractDateOverride = isCeo
+                    ? (contractDateInput.trim() || null)
+                    : (record.contractDate ?? null);
+                  // Зберігаємо параметри генерації (строки, пролонгація, оплата) + (для СЕО) № і дату.
+                  // Завдяки цьому вже створений договір потім відкривається одним кліком без модалки.
                   if (record && record.source === "stored" && teamId) {
                     try {
                       await updateOrderDocumentSettings({
@@ -2224,6 +2406,9 @@ export default function OrdersProductionDetailsPage() {
                         balancePct,
                         balanceTiming: contractBalanceTiming,
                         balanceDaysAfterShipment,
+                        contractProductionDays: productionWorkingDays ?? null,
+                        contractAutoProlongation,
+                        ...(isCeo ? { contractNumber: contractNumberOverride, contractDate: contractDateOverride } : {}),
                       });
                       setRecord((current) =>
                         current && current.id === record.id
@@ -2233,11 +2418,16 @@ export default function OrdersProductionDetailsPage() {
                               balancePct,
                               balanceTiming: contractBalanceTiming,
                               balanceDaysAfterShipment,
+                              contractProductionDays: productionWorkingDays ?? null,
+                              contractAutoProlongation,
+                              ...(isCeo
+                                ? { contractNumber: contractNumberOverride, contractDate: contractDateOverride }
+                                : {}),
                             }
                           : current
                       );
                     } catch (saveError) {
-                      console.error("Failed to save contract payment breakdown", saveError);
+                      console.error("Failed to save contract params", saveError);
                     }
                   }
                   await openDocumentPrint("contract", {
@@ -2247,6 +2437,8 @@ export default function OrdersProductionDetailsPage() {
                     balancePct,
                     balanceTiming: contractBalanceTiming,
                     balanceDaysAfterShipment,
+                    contractNumberOverride: contractNumberOverride ?? undefined,
+                    contractDateOverride,
                   });
                   setContractDialogOpen(false);
                 } finally {

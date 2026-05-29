@@ -35,6 +35,14 @@ create table if not exists tosho.orders (
   documents jsonb not null default '{}'::jsonb,
   contract_created_at timestamptz,
   specification_created_at timestamptz,
+  -- Manual contract identity overrides (editable only by owner/seo): real paper
+  -- contract may pre-exist with its own number and date, differing from the CRM order.
+  contract_number text,
+  contract_date date,
+  -- Persisted contract generation params so an already-created contract can be
+  -- re-opened in one click (no modal) and regenerated deterministically.
+  contract_production_days integer,
+  contract_auto_prolongation boolean not null default false,
   readiness_steps jsonb not null default '[]'::jsonb,
   blockers jsonb not null default '[]'::jsonb,
   readiness_column text not null default 'ready',
@@ -55,7 +63,11 @@ alter table if exists tosho.orders
   add column if not exists customer_legal_address text,
   add column if not exists customer_signatory_authority text,
   add column if not exists contract_created_at timestamptz,
-  add column if not exists specification_created_at timestamptz;
+  add column if not exists specification_created_at timestamptz,
+  add column if not exists contract_number text,
+  add column if not exists contract_date date,
+  add column if not exists contract_production_days integer,
+  add column if not exists contract_auto_prolongation boolean not null default false;
 
 create index if not exists orders_team_created_idx
   on tosho.orders (team_id, created_at desc);
