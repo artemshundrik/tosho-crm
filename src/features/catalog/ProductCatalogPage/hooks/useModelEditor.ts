@@ -5,7 +5,7 @@
  * including price tiers, methods, and image handling
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import {
@@ -104,6 +104,19 @@ export function useModelEditor({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [savingModel, setSavingModel] = useState(false);
+
+  /**
+   * Tracks the category context the user opened the "new product" modal from.
+   * Set in `openCreateDrawer` only when both `selectedTypeId` and `selectedKindId`
+   * are present (i.e. the user navigated into a specific category before clicking
+   * "Новий товар"). Cleared on edit-mode and form submission.
+   *
+   * The Avanprint importer reads this ref to skip overwriting Тип/Вид when the
+   * user already had them locked in by the catalog context — otherwise the
+   * scraper guesses (e.g. classifies a backpack as "Одяг / Вітровка") and
+   * silently overrides the manager's choice.
+   */
+  const lockedCategoryRef = useRef<{ typeId: string; kindId: string } | null>(null);
 
   // Delete confirmation
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -505,6 +518,10 @@ export function useModelEditor({
    */
   const openCreateDrawer = () => {
     setEditingModelId(null);
+    lockedCategoryRef.current =
+      selectedTypeId && selectedKindId
+        ? { typeId: selectedTypeId, kindId: selectedKindId }
+        : null;
     setDraftTypeId(selectedTypeId || catalog[0]?.id || "");
     setDraftKindId(selectedKindId || catalog[0]?.kinds[0]?.id || "");
     setDraftName("");
@@ -528,6 +545,7 @@ export function useModelEditor({
    * Opens drawer for editing an existing model
    */
   const openEditDrawer = async (modelId: string) => {
+    lockedCategoryRef.current = null;
     const item = allModelsWithContext.find((i) => i.model.id === modelId);
     if (!item) return;
 
@@ -1039,10 +1057,17 @@ export function useModelEditor({
       }
 
       const product = payload.product;
-      const matchedType = findTypeByHints(product.typeHints);
-      const matchedKind = findKindByHints(matchedType, product.kindHints);
-      const nextTypeId = matchedType?.id ?? draftTypeId;
+      // If the modal was opened from a specific catalog category, the user has
+      // already locked in Тип/Вид — keep their selection. Otherwise let the
+      // Avanprint scraper's hints decide (it sometimes misclassifies, e.g.
+      // tagging a backpack as "Одяг / Вітровка" — but that's only acceptable
+      // when the user opened the modal with no category context to begin with).
+      const lockedCategory = lockedCategoryRef.current;
+      const matchedType = lockedCategory ? null : findTypeByHints(product.typeHints);
+      const matchedKind = lockedCategory ? null : findKindByHints(matchedType, product.kindHints);
+      const nextTypeId = lockedCategory?.typeId ?? matchedType?.id ?? draftTypeId;
       const nextKindId =
+        lockedCategory?.kindId ??
         matchedKind?.id ??
         (matchedType && matchedType.kinds.some((kind) => kind.id === draftKindId)
           ? draftKindId
