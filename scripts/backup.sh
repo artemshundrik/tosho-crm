@@ -31,6 +31,14 @@ mkdir -p "${WORK_DIR}/db" "${WORK_DIR}/storage"
 
 if [[ "${BACKUP_SKIP_DB}" != "1" ]]; then
   echo "Backing up database..."
+  # Self-protect against leaked sessions: if this pg_dump is interrupted (network drop,
+  # laptop sleep, Ctrl-C) mid-COPY, the server backend can otherwise sit "idle in transaction"
+  # indefinitely (Supabase default idle_in_transaction_session_timeout=0), blocking DDL/VACUUM.
+  # We force the dump session to auto-abort a stuck transaction after 5 min. statement_timeout=0
+  # keeps long but healthy COPY streams alive.
+  # NOTE: this guard reliably applies on a direct/session connection (port 5432). For pg_dump,
+  # prefer the session pooler / direct host over the transaction pooler (port 6543).
+  PGOPTIONS="-c idle_in_transaction_session_timeout=300000 -c statement_timeout=0 ${PGOPTIONS:-}" \
   pg_dump \
     --format=custom \
     --no-owner \

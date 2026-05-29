@@ -121,12 +121,20 @@ This runs on login and then checks every hour.
 ```bash
 cat > /Users/artem/Projects/tosho-crm/.env.backup <<'EOF'
 export BACKUP_ROOT='/Users/artem/Projects/tosho-crm/backups'
-export BACKUP_DB_URL='postgresql://postgres.nqqabedngnndtltzvqyi:REPLACE_WITH_URLENCODED_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require'
+# Use the SESSION pooler (port 5432), NOT the transaction pooler (6543):
+# pg_dump needs a real session, and the script's idle_in_transaction guard
+# (PGOPTIONS) only applies over a session/direct connection. The transaction
+# pooler ignores those startup options and is unreliable for pg_dump.
+export BACKUP_DB_URL='postgresql://postgres.nqqabedngnndtltzvqyi:REPLACE_WITH_URLENCODED_PASSWORD@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require'
 export SUPABASE_URL='https://<project-ref>.supabase.co'
 export SUPABASE_SERVICE_ROLE_KEY='REPLACE_WITH_SERVICE_ROLE_KEY'
 EOF
 chmod 600 /Users/artem/Projects/tosho-crm/.env.backup
 ```
+
+> Server-side safety net: the `postgres` role has
+> `idle_in_transaction_session_timeout=10min` set, so a future interrupted
+> `pg_dump` can no longer leave a transaction open for days and block DDL/VACUUM.
 
 2) Create LaunchAgent:
 
