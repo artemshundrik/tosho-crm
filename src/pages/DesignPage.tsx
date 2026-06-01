@@ -5410,7 +5410,7 @@ export default function DesignPage() {
         </DialogContent>
       </Dialog>
 
-      {viewMode !== "kanban" && (((loading && tasks.length === 0) || membersLoading || refreshing)) && (
+      {viewMode === "timeline" && (((loading && tasks.length === 0) || membersLoading || refreshing)) && (
         <InlineLoading
           label={
             membersLoading
@@ -5422,7 +5422,7 @@ export default function DesignPage() {
         />
       )}
 
-      {viewMode !== "kanban" && hasMoreTasks && !loading && !membersLoading ? (
+      {viewMode === "timeline" && hasMoreTasks && !loading && !membersLoading ? (
         <div className="flex items-center justify-center px-4 pb-6 pt-2 md:px-6">
           <Button variant="outline" onClick={handleLoadMoreTasks} disabled={refreshing}>
             {refreshing ? "Оновлення..." : `Показати ще ${DESIGN_LIST_PAGE_INCREMENT}`}
