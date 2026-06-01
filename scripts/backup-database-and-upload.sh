@@ -2,6 +2,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load shared env so manual invocations get the same config as launchd.
+# launchd already sources this file before calling backup-offsite.sh; sourcing
+# it again here is harmless and prevents silent-success runs when BACKUP_*
+# vars are missing from the interactive shell.
+ENV_FILE="${SCRIPT_DIR}/../.env.backup"
+if [[ -f "${ENV_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+fi
+
 NODE_BIN="${NODE_BIN:-}"
 FORCE_BACKUP="${DROPBOX_BACKUP_FORCE_DATABASE:-0}"
 FORCE_WEEKLY="${DROPBOX_BACKUP_FORCE_WEEKLY:-0}"

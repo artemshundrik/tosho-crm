@@ -64,15 +64,28 @@ if [[ "${BACKUP_SKIP_DB}" != "1" && -f "${WORK_DIR}/db/postgres.dump" ]]; then
 fi
 
 # Optional storage backup (S3-compatible).
-# Enable only when explicitly requested:
-# BACKUP_INCLUDE_STORAGE=1
-# and all STORAGE_* vars are set.
-if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" && -n "${STORAGE_S3_ENDPOINT:-}" && -n "${STORAGE_S3_ACCESS_KEY_ID:-}" && -n "${STORAGE_S3_SECRET_ACCESS_KEY:-}" && -n "${STORAGE_BUCKETS:-}" ]]; then
+# Enable by setting BACKUP_INCLUDE_STORAGE=1. When enabled, all STORAGE_* vars
+# must be present — otherwise we fail loud instead of writing an empty archive
+# that downstream reporting would treat as a successful backup.
+if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" ]]; then
+  missing_storage_vars=()
+  for var in STORAGE_S3_ENDPOINT STORAGE_S3_ACCESS_KEY_ID STORAGE_S3_SECRET_ACCESS_KEY STORAGE_BUCKETS; do
+    [[ -z "${!var:-}" ]] && missing_storage_vars+=("$var")
+  done
+  if (( ${#missing_storage_vars[@]} > 0 )); then
+    echo "BACKUP_INCLUDE_STORAGE=1 but required vars are missing: ${missing_storage_vars[*]}." >&2
+    echo "Did you forget to 'source .env.backup' before running the script?" >&2
+    exit 1
+  fi
   require_cmd aws
   echo "Backing up storage buckets..."
   export AWS_ACCESS_KEY_ID="${STORAGE_S3_ACCESS_KEY_ID}"
   export AWS_SECRET_ACCESS_KEY="${STORAGE_S3_SECRET_ACCESS_KEY}"
   export AWS_EC2_METADATA_DISABLED=true
+  # Survive transient S3 hiccups (Supabase Storage occasionally resets the
+  # connection mid-sync; without retries that takes down the whole backup).
+  export AWS_MAX_ATTEMPTS="${AWS_MAX_ATTEMPTS:-5}"
+  export AWS_RETRY_MODE="${AWS_RETRY_MODE:-adaptive}"
 
   OLDIFS="$IFS"
   IFS=','
@@ -89,8 +102,6 @@ if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" && -n "${STORAGE_S3_ENDPOINT:-}" && 
     fi
     aws --endpoint-url "${STORAGE_S3_ENDPOINT}" s3 sync "s3://${bucket}" "${WORK_DIR}/storage/${bucket}" --only-show-errors
   done
-else
-  echo "Skipping storage backup (set BACKUP_INCLUDE_STORAGE=1 with valid STORAGE_* vars to enable)."
 fi
 
 echo "Compressing backup..."
