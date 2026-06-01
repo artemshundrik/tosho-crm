@@ -619,7 +619,7 @@ type BuildOrderDocumentOptions = {
   customerSignatoryRoleGenitive?: string;
   /** Кількість робочих днів на виконання замовлення (для п. 2.2 договору). */
   productionWorkingDays?: number;
-  /** Автоматична пролонгація договору на рік (додає п. 8.5). */
+  /** Автоматична пролонгація договору на рік (додає умову в п. 8.13). */
   contractAutoProlongation?: boolean;
   /** % передоплати (перед запуском). Override щодо значення на record. */
   prepaymentPct?: number | null;
@@ -2289,7 +2289,7 @@ export default function OrdersProductionDetailsPage() {
                 <div className="space-y-1">
                   <div className="text-sm font-medium">Автоматична пролонгація на 1 рік</div>
                   <p className="text-xs text-muted-foreground">
-                    Додасть п. 8.5: якщо за 30 днів до кінця жодна сторона не повідомить — договір продовжується.
+                    Додає в п. 8.13 умову: якщо за 30 днів до кінця жодна сторона не повідомить — договір продовжується.
                   </p>
                 </div>
               </label>
