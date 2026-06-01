@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
@@ -500,7 +501,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         {isDropboxLinked && onOpenClientFiles ? (
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onOpenClientFiles} disabled={dropboxAction !== null}>
-              {dropboxAction === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {dropboxAction === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
               Відкрити папку Dropbox
             </Button>
             {onDetachDropboxFolder ? (
@@ -522,13 +523,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           <div className="flex flex-wrap gap-2">
             {onCreateDropboxFolder ? (
               <Button type="button" variant="outline" size="sm" onClick={onCreateDropboxFolder} disabled={dropboxAction !== null}>
-                {dropboxAction === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {dropboxAction === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
                 Створити папку Dropbox
               </Button>
             ) : null}
             {onAttachDropboxFolder ? (
               <Button type="button" variant="outline" size="sm" onClick={onAttachDropboxFolder} disabled={dropboxAction !== null}>
-                {dropboxAction === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {dropboxAction === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
                 Прив'язати папку Dropbox
               </Button>
             ) : null}

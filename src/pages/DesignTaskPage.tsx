@@ -17,6 +17,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -532,17 +533,6 @@ const normalizePartyLabel = (value?: string | null) => {
 const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
 
 const DROPBOX_ORDERS_ROOT_SUFFIX = "/Замовлення";
-
-function DropboxGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
-      <path
-        fill="currentColor"
-        d="M6.15 3 1.5 6.05l4.65 3.05 4.7-3.05L6.15 3Zm11.7 0-4.7 3.05 4.7 3.05 4.65-3.05L17.85 3ZM1.5 12.2l4.65 3.05 4.7-3.05-4.7-3.05L1.5 12.2Zm11.65-3.05-4.7 3.05 4.7 3.05 4.65-3.05-4.65-3.05ZM6.2 16.2l4.65 3.05 4.7-3.05-2.4-1.55-2.3 1.5-2.3-1.5-2.35 1.55Z"
-      />
-    </svg>
-  );
-}
 
 function sanitizeDropboxNameSegment(value: string, fallback: string) {
   const normalized = value
@@ -7626,10 +7616,10 @@ export default function DesignTaskPage() {
           : "Контакт ще не визначений";
 
     return (
-      <div className="rounded-xl border border-border/60 bg-card/60 p-4 space-y-3">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {kindIcon}
               <div className="text-sm font-semibold text-foreground">{kindLabel}</div>
               <Badge variant={requiresThisKind ? "default" : "outline"} className="text-[10px]">
@@ -7647,41 +7637,13 @@ export default function DesignTaskPage() {
                 : "Тут має бути фінальний друкарський / виробничий макет."}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-2"
-              disabled={outputUploading || outputSaving}
-              onClick={() => {
-                setUploadTargetKind(kind);
-                outputInputRef.current?.click();
-              }}
-            >
-              {outputUploading && uploadTargetKind === kind ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
-              Завантажити {kindLabel.toLowerCase()}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-2"
-              disabled={outputSaving}
-              onClick={() => openAddDesignLinkModal(kind)}
-            >
-              <Link2 className="h-4 w-4" />
-              Додати посилання
-            </Button>
-          </div>
         </div>
 
-        <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+        <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
+                <Send className="h-4 w-4 text-muted-foreground" />
                 <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
                 <Badge variant="outline" className="text-[10px]">
                   Вибрано: {selectedShareIds.length}
@@ -7689,19 +7651,22 @@ export default function DesignTaskPage() {
               </div>
               <div className="max-w-2xl text-xs text-muted-foreground">
                 {canSendSelectedOutputs
-                  ? `${sendHint}. Відправка працює окремо від погодження: обери будь-які ${kind === "visualization" ? "візуали" : "макети"} або посилання, які хочеш показати клієнту.`
-                  : `Познач матеріали чекбоксом "Клієнту". Це окремий список для відправки і він не впливає на "Погоджено".`}
+                  ? `${sendHint}. Працює окремо від погодження — обери будь-які ${kind === "visualization" ? "візуали" : "макети"} чи посилання чекбоксом «Клієнту».`
+                  : `Познач матеріали чекбоксом «Клієнту». Це окремий список для відправки і він не впливає на «Погоджено».`}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
-                Email: {clientContact.email ?? "не вказано"}
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2 py-1">
+                <Mail className="h-3 w-3 shrink-0" />
+                {clientContact.email ?? "—"}
               </span>
-              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
-                Телефон: {clientContact.phone ?? "не вказано"}
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2 py-1">
+                <PhoneCall className="h-3 w-3 shrink-0" />
+                {clientContact.phone ?? "—"}
               </span>
-              <span className="rounded-full border border-border/60 bg-muted/25 px-2 py-1">
-                Telegram: {clientContact.telegram ? formatTelegramHandle(clientContact.telegram) : "не вказано"}
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2 py-1">
+                <Send className="h-3 w-3 shrink-0" />
+                {clientContact.telegram ? formatTelegramHandle(clientContact.telegram) : "—"}
               </span>
               {selectedShareIds.length > 0 ? (
                 <Button
@@ -7722,11 +7687,11 @@ export default function DesignTaskPage() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <Button
               type="button"
               variant="outline"
-              className="h-12 justify-start gap-3 rounded-xl"
+              className="h-10 justify-center gap-2 rounded-lg"
               disabled={!canSendEmail || sendingToClientKind !== null}
               onClick={() => void openClientDraft("email", kind)}
             >
@@ -7736,7 +7701,7 @@ export default function DesignTaskPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-12 justify-start gap-3 rounded-xl"
+              className="h-10 justify-center gap-2 rounded-lg"
               disabled={!canSendSelectedOutputs || sendingToClientKind !== null}
               onClick={() => void openClientDraft("telegram", kind)}
             >
@@ -7746,7 +7711,7 @@ export default function DesignTaskPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-12 justify-start gap-3 rounded-xl"
+              className="h-10 justify-center gap-2 rounded-lg"
               disabled={!canSendViber || sendingToClientKind !== null}
               onClick={() => void openClientDraft("viber", kind)}
             >
@@ -7757,10 +7722,48 @@ export default function DesignTaskPage() {
         </div>
 
         {groupedOutputs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/60 bg-muted/5 px-3 py-3 text-sm text-muted-foreground">
-            {kind === "visualization"
-              ? "Поки що не додано жодного візуалу. Для друку в замовлення має бути окремо погоджений візуал."
-              : "Поки що не додано жодного макета. Для запуску в замовлення має бути окремо погоджений макет."}
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 bg-muted/20 text-muted-foreground">
+              {kind === "visualization" ? <ImageIcon className="h-5 w-5" /> : <PencilLine className="h-5 w-5" />}
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-foreground">
+                {kind === "visualization" ? "Ще немає візуалів" : "Ще немає макетів"}
+              </div>
+              <p className="mx-auto max-w-sm text-xs text-muted-foreground">
+                {kind === "visualization"
+                  ? "Для друку в замовлення має бути окремо погоджений візуал. Завантаж перший файл або додай посилання."
+                  : "Для запуску в замовлення має бути окремо погоджений макет. Завантаж перший файл або додай посилання."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                size="sm"
+                className="gap-1.5"
+                disabled={outputUploading || outputSaving}
+                onClick={() => {
+                  setUploadTargetKind(kind);
+                  outputInputRef.current?.click();
+                }}
+              >
+                {outputUploading && uploadTargetKind === kind ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                Завантажити {kindLabel.toLowerCase()}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={outputSaving}
+                onClick={() => openAddDesignLinkModal(kind)}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                Додати посилання
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -7810,38 +7813,113 @@ export default function DesignTaskPage() {
                       const previewKey = getStorageFileKey(file, "preview");
                       const isPreviewPreparing = Boolean(previewKey && previewPreparingKey === previewKey);
                       return (
-                        <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex items-start gap-2.5">
-                              {isVideoFile ? (
-                                <StorageObjectVideo
-                                  bucket={file.storage_bucket}
-                                  path={file.storage_path}
-                                  label={displayName}
-                                  onClick={() => void openStorageFilePreview(file, {
-                                    onMissingCleanup: () => void handleRemoveDesignFile(file.id),
-                                  })}
-                                  className="h-11 w-11 shrink-0 rounded-md border border-border/60"
-                                />
-                              ) : previewableFile ? (
-                                <StorageObjectImage
-                                  bucket={file.storage_bucket}
-                                  path={file.storage_path}
-                                  alt={displayName}
-                                  variant="thumb"
-                                  hoverPreview
-                                  className="h-11 w-11 shrink-0 rounded-md border border-border/60 bg-muted/30"
-                                />
-                              ) : (
-                                <div className="h-11 w-11 rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground flex items-center justify-center shrink-0">
-                                  {ext}
+                        <div
+                          key={file.id}
+                          className="group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70"
+                        >
+                          <div className="flex items-start gap-3">
+                            {isVideoFile ? (
+                              <StorageObjectVideo
+                                bucket={file.storage_bucket}
+                                path={file.storage_path}
+                                label={displayName}
+                                onClick={() => void openStorageFilePreview(file, {
+                                  onMissingCleanup: () => void handleRemoveDesignFile(file.id),
+                                })}
+                                className="h-16 w-16 shrink-0 cursor-pointer rounded-lg border border-border/60"
+                              />
+                            ) : previewableFile ? (
+                              <StorageObjectImage
+                                bucket={file.storage_bucket}
+                                path={file.storage_path}
+                                alt={displayName}
+                                variant="thumb"
+                                hoverPreview
+                                className="h-16 w-16 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                              />
+                            ) : (
+                              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-[11px] font-semibold uppercase text-muted-foreground">
+                                {ext}
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-foreground" title={displayName}>
+                                    {displayName}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                                    <span>{formatFileSize(file.file_size)}</span>
+                                    <span aria-hidden>·</span>
+                                    <span>{formatDate(file.created_at, true)}</span>
+                                    <span aria-hidden>·</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <AvatarBase
+                                        src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
+                                        name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
+                                        fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
+                                        size={14}
+                                        className="shrink-0 border-border/70"
+                                      />
+                                      <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
+                                    </span>
+                                  </div>
                                 </div>
-                              )}
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-medium" title={displayName}>
-                                  {displayName}
+
+                                <div className="flex shrink-0 items-center gap-0.5">
+                                  {file.storage_bucket && file.storage_path ? (
+                                    <>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8"
+                                        aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
+                                        title={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}
+                                        disabled={isPreviewPreparing}
+                                        onClick={() => void openStorageFilePreview(file, {
+                                          onMissingCleanup: () => void handleRemoveDesignFile(file.id),
+                                        })}
+                                      >
+                                        {isPreviewPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8"
+                                        aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
+                                        title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
+                                        disabled={isDownloadPreparing}
+                                        onClick={() => void downloadStorageBackedFile(file)}
+                                      >
+                                        {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Перегляд недоступний">
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Завантаження недоступне">
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                    aria-label="Видалити файл"
+                                    disabled={outputSaving}
+                                    onClick={() => void handleRemoveDesignFile(file.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              </div>
+
+                              {selectedShareIdSet.has(`file:${file.id}`) || selectedIdSet.has(file.id) ? (
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {selectedShareIdSet.has(`file:${file.id}`) ? (
                                     <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[10px] text-primary">
                                       У добірці для клієнта
@@ -7856,176 +7934,139 @@ export default function DesignTaskPage() {
                                     </Badge>
                                   ) : null}
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5">
-                                  <span>{formatFileSize(file.file_size)}</span>
-                                  <span>·</span>
-                                  <span>{formatDate(file.created_at, true)}</span>
-                                  <span>·</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <AvatarBase
-                                      src={file.uploaded_by ? getMemberAvatar(file.uploaded_by) : null}
-                                      name={file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}
-                                      fallback={getInitials(file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий")}
-                                      size={14}
-                                      className="shrink-0 border-border/70"
-                                    />
-                                    <span>{file.uploaded_by ? getMemberLabel(file.uploaded_by) : "Невідомий"}</span>
+                              ) : null}
+
+                              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <Checkbox
+                                    checked={groupingSelectionIds.includes(`file:${file.id}`)}
+                                    disabled={outputSaving}
+                                    onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
+                                    aria-label={`Вибрати для групи: ${file.file_name}`}
+                                  />
+                                  <span>До групи</span>
+                                </label>
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <Checkbox
+                                    checked={selectedShareIdSet.has(`file:${file.id}`)}
+                                    disabled={outputSaving}
+                                    onCheckedChange={() => toggleClientShareSelection(`file:${file.id}`)}
+                                    aria-label={`Вибрати для відправки клієнту: ${file.file_name}`}
+                                  />
+                                  <span>Клієнту</span>
+                                </label>
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <Checkbox
+                                    checked={selectedIdSet.has(file.id)}
+                                    disabled={outputSaving || !canManageAssignments}
+                                    onCheckedChange={() => void handleSelectDesignOutputFile(file.id, kind)}
+                                    aria-label={`Погодити ${kindLabel.toLowerCase()}: ${file.file_name}`}
+                                  />
+                                  <span className={cn(selectedIdSet.has(file.id) && "font-medium text-success-foreground")}>
+                                    Погоджено
                                   </span>
-                                </div>
+                                </label>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                <Checkbox
-                                  checked={groupingSelectionIds.includes(`file:${file.id}`)}
-                                  disabled={outputSaving}
-                                  onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
-                                  aria-label={`Вибрати для групи: ${file.file_name}`}
-                                />
-                                <span>До групи</span>
-                              </label>
-                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                <Checkbox
-                                  checked={selectedShareIdSet.has(`file:${file.id}`)}
-                                  disabled={outputSaving}
-                                  onCheckedChange={() => toggleClientShareSelection(`file:${file.id}`)}
-                                  aria-label={`Вибрати для відправки клієнту: ${file.file_name}`}
-                                />
-                                <span>Клієнту</span>
-                              </label>
-                              <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                                <Checkbox
-                                  checked={selectedIdSet.has(file.id)}
-                                  disabled={outputSaving || !canManageAssignments}
-                                  onCheckedChange={() => void handleSelectDesignOutputFile(file.id, kind)}
-                                  aria-label={`Погодити ${kindLabel.toLowerCase()}: ${file.file_name}`}
-                                />
-                                <span>Погоджено</span>
-                              </label>
-                              {file.storage_bucket && file.storage_path ? (
-                                <>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    aria-label={isPreviewPreparing ? "Готуємо превʼю файлу" : "Переглянути файл"}
-                                    title={isPreviewPreparing ? "Готуємо превʼю" : "Переглянути файл"}
-                                    disabled={isPreviewPreparing}
-                                    onClick={() => void openStorageFilePreview(file, {
-                                      onMissingCleanup: () => void handleRemoveDesignFile(file.id),
-                                    })}
-                                  >
-                                    {isPreviewPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
-                                    title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
-                                    disabled={isDownloadPreparing}
-                                    onClick={() => void downloadStorageBackedFile(file)}
-                                  >
-                                    {isDownloadPreparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  <Button size="icon" variant="ghost" disabled>
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" disabled>
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </>
-                              )}
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-destructive hover:text-destructive"
-                                disabled={outputSaving}
-                                onClick={() => void handleRemoveDesignFile(file.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
                             </div>
                           </div>
                         </div>
                       );
                     })}
                     {group.links.map((link) => (
-                      <div key={link.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex flex-1 items-center gap-2">
-                            <a
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="min-w-0 truncate text-sm font-medium text-primary hover:underline"
-                              title={link.url}
-                            >
-                              {link.label}
-                            </a>
+                      <div
+                        key={link.id}
+                        className="group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
+                            <Link2 className="h-5 w-5" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block min-w-0 truncate text-sm font-medium text-primary hover:underline"
+                                  title={link.url}
+                                >
+                                  {link.label}
+                                </a>
+                                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+                                  <span>{formatDate(link.created_at, true)}</span>
+                                  <span aria-hidden>·</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <AvatarBase
+                                      src={link.created_by ? getMemberAvatar(link.created_by) : null}
+                                      name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
+                                      fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
+                                      size={14}
+                                      className="shrink-0 border-border/70"
+                                    />
+                                    <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <Button size="icon" variant="ghost" className="h-8 w-8" asChild>
+                                  <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
+                                    <ExternalLink className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8"
+                                  aria-label="Скопіювати посилання"
+                                  onClick={() => void copyText(link.url).catch(() => toast.error("Не вдалося скопіювати посилання"))}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  aria-label="Видалити посилання"
+                                  disabled={outputSaving}
+                                  onClick={() => void handleRemoveDesignLink(link.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+
                             {selectedShareIdSet.has(`link:${link.id}`) ? (
-                              <Badge variant="outline" className="h-5 shrink-0 border-primary/30 bg-primary/10 text-[10px] text-primary">
-                                У добірці для клієнта
-                              </Badge>
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[10px] text-primary">
+                                  У добірці для клієнта
+                                </Badge>
+                              </div>
                             ) : null}
+
+                            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
+                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Checkbox
+                                  checked={groupingSelectionIds.includes(`link:${link.id}`)}
+                                  disabled={outputSaving}
+                                  onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
+                                  aria-label={`Вибрати для групи: ${link.label}`}
+                                />
+                                <span>До групи</span>
+                              </label>
+                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <Checkbox
+                                  checked={selectedShareIdSet.has(`link:${link.id}`)}
+                                  disabled={outputSaving}
+                                  onCheckedChange={() => toggleClientShareSelection(`link:${link.id}`)}
+                                  aria-label={`Вибрати для відправки клієнту: ${link.label}`}
+                                />
+                                <span>Клієнту</span>
+                              </label>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                              <Checkbox
-                                checked={groupingSelectionIds.includes(`link:${link.id}`)}
-                                disabled={outputSaving}
-                                onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
-                                aria-label={`Вибрати для групи: ${link.label}`}
-                              />
-                              <span>До групи</span>
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground mr-1">
-                              <Checkbox
-                                checked={selectedShareIdSet.has(`link:${link.id}`)}
-                                disabled={outputSaving}
-                                onCheckedChange={() => toggleClientShareSelection(`link:${link.id}`)}
-                                aria-label={`Вибрати для відправки клієнту: ${link.label}`}
-                              />
-                              <span>Клієнту</span>
-                            </label>
-                            <Button size="icon" variant="ghost" asChild>
-                              <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label="Скопіювати посилання"
-                              onClick={() => void copyText(link.url).catch(() => toast.error("Не вдалося скопіювати посилання"))}
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              disabled={outputSaving}
-                              onClick={() => void handleRemoveDesignLink(link.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1.5">
-                          <span>{formatDate(link.created_at, true)}</span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1">
-                            <AvatarBase
-                              src={link.created_by ? getMemberAvatar(link.created_by) : null}
-                              name={link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}
-                              fallback={getInitials(link.created_by ? getMemberLabel(link.created_by) : "Невідомий")}
-                              size={14}
-                              className="shrink-0 border-border/70"
-                            />
-                            <span>{link.created_by ? getMemberLabel(link.created_by) : "Невідомий"}</span>
-                          </span>
                         </div>
                       </div>
                     ))}
@@ -9587,77 +9628,22 @@ export default function DesignTaskPage() {
                   </div>
                 </div>
               </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              <div className="flex items-center gap-2.5">
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                  {designOutputFiles.length + designOutputLinks.length} матеріалів
+                </Badge>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </div>
             </summary>
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Результат дизайнера</span>
-              <Badge variant="outline" className="text-xs">
-                {designOutputFiles.length + designOutputLinks.length} матеріалів
-              </Badge>
-            </div>
-            <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
-                <SelectTrigger className="h-8 w-full text-xs sm:w-auto sm:min-w-[180px]">
-                  <SelectValue placeholder="Без групи" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Без групи</SelectItem>
-                  {designOutputGroups.map((group) => (
-                    <SelectItem key={group} value={group}>
-                      {group}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <input
-                ref={outputInputRef}
-                type="file"
-                className="hidden"
-                multiple
-                accept={DESIGN_OUTPUT_ACCEPT_BY_KIND[uploadTargetKind]}
-                onChange={(event) => void handleUploadDesignOutputs(event.target.files)}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5"
-                disabled={outputUploading || outputSaving}
-                onClick={() => outputInputRef.current?.click()}
-              >
-                {outputUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                Завантажити {DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind].toLowerCase()}
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="ghost" className="gap-1.5" disabled={outputSaving}>
-                    <MoreVertical className="h-3.5 w-3.5" />
-                    Ще
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    disabled={groupingSelectionIds.length === 0}
-                    onClick={() => void handleMoveSelectedOutputsToGroup()}
-                  >
-                    Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setCreateGroupDraft("");
-                      setCreateGroupError(null);
-                      setCreateGroupOpen(true);
-                    }}
-                  >
-                    Створити групу
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openAddDesignLinkModal(uploadTargetKind)}>
-                    <Link2 className="h-3.5 w-3.5" />
-                    Додати посилання
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <div className="space-y-4">
+            <input
+              ref={outputInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept={DESIGN_OUTPUT_ACCEPT_BY_KIND[uploadTargetKind]}
+              onChange={(event) => void handleUploadDesignOutputs(event.target.files)}
+            />
             <Tabs
               value={activeDesignOutputTab}
               onValueChange={(value) => {
@@ -9668,26 +9654,88 @@ export default function DesignTaskPage() {
               }}
               className="w-full"
             >
-              <TabsList className="mb-4 h-auto w-full justify-start gap-1 rounded-lg border border-border/40 bg-transparent p-1">
-                <TabsTrigger value="visualization" className="gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  <span>Візуал</span>
-                  {selectedVisualizationOutputFileIds.length > 0 ? (
-                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
-                      {selectedVisualizationOutputFileIds.length}
-                    </span>
-                  ) : null}
-                </TabsTrigger>
-                <TabsTrigger value="layout" className="gap-2">
-                  <PencilLine className="h-4 w-4" />
-                  <span>Макет</span>
-                  {selectedLayoutOutputFileIds.length > 0 ? (
-                    <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
-                      {selectedLayoutOutputFileIds.length}
-                    </span>
-                  ) : null}
-                </TabsTrigger>
-              </TabsList>
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <TabsList className="h-auto justify-start gap-1 rounded-lg border border-border/40 bg-transparent p-1">
+                  <TabsTrigger value="visualization" className="gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    <span>Візуал</span>
+                    {selectedVisualizationOutputFileIds.length > 0 ? (
+                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                        {selectedVisualizationOutputFileIds.length}
+                      </span>
+                    ) : null}
+                  </TabsTrigger>
+                  <TabsTrigger value="layout" className="gap-2">
+                    <PencilLine className="h-4 w-4" />
+                    <span>Макет</span>
+                    {selectedLayoutOutputFileIds.length > 0 ? (
+                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                        {selectedLayoutOutputFileIds.length}
+                      </span>
+                    ) : null}
+                  </TabsTrigger>
+                </TabsList>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
+                    <SelectTrigger className="h-9 w-full text-xs sm:w-auto sm:min-w-[150px]">
+                      <SelectValue placeholder="Без групи" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Без групи</SelectItem>
+                      {designOutputGroups.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {group}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="h-9 gap-1.5"
+                    disabled={outputUploading || outputSaving}
+                    onClick={() => outputInputRef.current?.click()}
+                  >
+                    {outputUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    Завантажити {DESIGN_OUTPUT_KIND_LABELS[uploadTargetKind].toLowerCase()}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 gap-1.5"
+                    disabled={outputSaving}
+                    onClick={() => openAddDesignLinkModal(uploadTargetKind)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Посилання
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-9 w-9" disabled={outputSaving} aria-label="Більше дій">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={groupingSelectionIds.length === 0}
+                        onClick={() => void handleMoveSelectedOutputsToGroup()}
+                      >
+                        Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCreateGroupDraft("");
+                          setCreateGroupError(null);
+                          setCreateGroupOpen(true);
+                        }}
+                      >
+                        Створити групу
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
               <TabsContent value="visualization" className="mt-0">
                 {renderDesignOutputSection("visualization")}
               </TabsContent>
@@ -9701,9 +9749,7 @@ export default function DesignTaskPage() {
                 <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
                   <div className="space-y-5 p-5">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/20 text-foreground">
-                        <DropboxGlyph className="h-5 w-5" />
-                      </div>
+                      <DropboxIcon className="h-10 w-10 shrink-0" />
                       <div className="space-y-1">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                           Dropbox Export
@@ -10633,9 +10679,7 @@ export default function DesignTaskPage() {
         <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary text-primary-foreground shadow-[0_12px_28px_-18px_hsl(var(--primary)/0.7)]">
-                <DropboxGlyph className="h-5 w-5" />
-              </span>
+              <DropboxIcon className="h-10 w-10 shrink-0 rounded-[22%] shadow-[0_12px_28px_-18px_rgba(0,97,255,0.7)]" />
               Підготовка експорту в Dropbox
             </DialogTitle>
             <DialogDescription>
