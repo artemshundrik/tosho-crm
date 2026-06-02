@@ -1518,10 +1518,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!search.trim()) return;
     if (loading || refreshing) return;
     if (!hasMoreQuotes && rows.length < QUOTES_KANBAN_INITIAL_PAGE_SIZE) return;
-    void loadQuotes({
-      fetchAll: true,
-      fullFetchKey: `search:${teamId}:${status}:${search.trim().toLowerCase()}`,
-    });
+    // Debounce the full multi-page fetch so it runs once after typing settles,
+    // not on every keystroke. Search is applied server-side, so each run would
+    // otherwise paginate the entire matching result set on every letter.
+    const id = window.setTimeout(() => {
+      void loadQuotes({
+        fetchAll: true,
+        fullFetchKey: `search:${teamId}:${status}:${search.trim().toLowerCase()}`,
+      });
+    }, 350);
+    return () => window.clearTimeout(id);
   }, [hasMoreQuotes, loadQuotes, loading, refreshing, rows.length, search, status, teamId]);
 
   useEffect(() => {

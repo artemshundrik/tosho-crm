@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
@@ -985,6 +985,9 @@ export default function DesignPage() {
   const [contentView, setContentView] = useState<DesignContentView>(() => restoredFilters?.contentView ?? "all");
   const [viewMode, setViewMode] = useState<DesignViewMode>(() => restoredFilters?.viewMode ?? "kanban");
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
+  // Keep the input itself instant; let filtering + the full-dataset fetch run at
+  // lower priority off the deferred value so fast typing never drops letters.
+  const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState<DesignStatus | "all">(
     () => restoredFilters?.statusFilter ?? "all"
   );
@@ -2062,13 +2065,17 @@ export default function DesignPage() {
   }, [designerFilter, initialCacheIsFresh, isManagerUser, loadTasks, managerFilter, search, statusFilter, tasks.length]);
 
   useEffect(() => {
-    const searchKey = `search:${effectiveTeamId ?? ""}:${search.trim().toLowerCase()}`;
-    if (!search.trim()) return;
+    // Key by team + server filters only (NOT the search text): searching is
+    // client-side over `tasks`, so the full dataset only needs to be fetched
+    // once per filter set. Including the query here made every keystroke a fresh
+    // full-table fetch. loadTasks() dedups on this key, so repeats are no-ops.
+    const fullFetchKey = `search-full:${effectiveTeamId ?? ""}:${statusFilter}:${managerFilter}:${isManagerUser ? userId ?? "" : ""}`;
+    if (!deferredSearch.trim()) return;
     if (!effectiveTeamId) return;
     if (loading || refreshing) return;
     if (!hasMoreTasks && tasks.length < DESIGN_PAGE_CACHE_LIMIT) return;
-    void loadTasks({ force: true, fetchAll: true, fullFetchKey: searchKey });
-  }, [effectiveTeamId, hasMoreTasks, loadTasks, loading, refreshing, search, tasks.length]);
+    void loadTasks({ force: true, fetchAll: true, fullFetchKey });
+  }, [deferredSearch, effectiveTeamId, hasMoreTasks, isManagerUser, loadTasks, loading, managerFilter, refreshing, statusFilter, tasks.length, userId]);
 
   useEffect(() => {
     if (!effectiveTeamId) return;
@@ -2310,7 +2317,7 @@ export default function DesignPage() {
   ]);
 
   const filteredTasks = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = deferredSearch.trim().toLowerCase();
     return visibleTasks.filter((task) => {
       const collaboratorIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId);
       const isLinkedTask = isUuid(task.quoteId);
@@ -2351,7 +2358,7 @@ export default function DesignPage() {
 
       return haystack.includes(query);
     });
-  }, [contentView, effectiveDesignerFilter, getTaskCollaborators, isManagerUser, managerFilter, search, statusFilter, visibleTasks]);
+  }, [contentView, deferredSearch, effectiveDesignerFilter, getTaskCollaborators, isManagerUser, managerFilter, statusFilter, visibleTasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
