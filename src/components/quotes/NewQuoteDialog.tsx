@@ -516,6 +516,7 @@ export interface NewQuoteDialogProps {
 export type NewQuoteFormData = {
   status: string;
   comment?: string;
+  notes?: string;
   customerId?: string;
   customerType?: "customer" | "lead";
   managerId?: string;
@@ -575,6 +576,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   // Form state
   const [status, setStatus] = React.useState("new");
   const [comment, setComment] = React.useState("");
+  const [notes, setNotes] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
   const [customerType, setCustomerType] = React.useState<"customer" | "lead">("customer");
   const [customerSearch, setCustomerSearch] = React.useState("");
@@ -815,6 +817,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       : availableStatuses[0]?.value ?? "new";
     setStatus(nextStatus);
     setComment(initialValues?.comment ?? "");
+    setNotes(initialValues?.notes ?? "");
     setCustomerId(initialValues?.customerId ?? "");
     setCustomerType(initialValues?.customerType ?? "customer");
     setCustomerSearch("");
@@ -913,6 +916,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   type QuoteDraftPayload = {
     status?: string;
     comment?: string;
+    notes?: string;
     customerId?: string;
     customerType?: "customer" | "lead";
     managerId?: string;
@@ -954,6 +958,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     if (!draft) return;
     if (typeof draft.status === "string") setStatus(draft.status);
     if (typeof draft.comment === "string") setComment(draft.comment);
+    if (typeof draft.notes === "string") setNotes(draft.notes);
     if (typeof draft.customerId === "string") setCustomerId(draft.customerId);
     if (draft.customerType === "customer" || draft.customerType === "lead") setCustomerType(draft.customerType);
     if (typeof draft.managerId === "string") setManagerId(draft.managerId);
@@ -996,6 +1001,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     () => ({
       status,
       comment,
+      notes,
       customerId,
       customerType,
       managerId,
@@ -1027,6 +1033,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     [
       status,
       comment,
+      notes,
       customerId,
       customerType,
       managerId,
@@ -1435,6 +1442,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     const formData: NewQuoteFormData = {
       status,
       comment,
+      notes,
       customerId,
       customerType,
       managerId,
@@ -2450,6 +2458,22 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           </div>
         </div>
         ) : null}
+
+        {/* Addendum / notes section */}
+        <div className="mt-8 space-y-4">
+          <SectionHeader>Доповнення</SectionHeader>
+          <div className="space-y-2 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+            <div className="text-sm text-muted-foreground">
+              Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
+            </div>
+            <Textarea
+              className="min-h-[120px] resize-y text-foreground placeholder:text-muted-foreground"
+              placeholder="Напр.: домовились про знижку 5%, оплата частинами, особливі вимоги до пакування…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+        </div>
 
         {/* Design section */}
         {(isPrintPackageMode || printMode !== "no_print") ? (

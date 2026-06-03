@@ -9,10 +9,28 @@ export type CustomerLegalEntity = {
   vatRate: string;
   cardNumber: string;
   iban: string;
+  /** Combined "Прізвище Імʼя По-батькові" — похідна від трьох полів нижче; тягнеться у договір/СП. */
   signatoryName: string;
+  signatoryLastName: string;
+  signatoryFirstName: string;
+  signatoryMiddleName: string;
   signatoryPosition: string;
   signatoryAuthority: string;
 };
+
+// "Прізвище Імʼя По-батькові" → {last, first, middle}. Прізвище — перший токен,
+// імʼя — другий, по-батькові — решта. Для legacy-даних, де ПІБ збережено одним рядком.
+export const splitSignatoryFullName = (value: string) => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return {
+    last: parts[0] ?? "",
+    first: parts[1] ?? "",
+    middle: parts.slice(2).join(" "),
+  };
+};
+
+export const joinSignatoryFullName = (last: string, first: string, middle: string) =>
+  [last.trim(), first.trim(), middle.trim()].filter(Boolean).join(" ");
 
 const OWNERSHIP_LABELS: Record<string, string> = {
   tov: "ТОВ",
@@ -46,6 +64,9 @@ type CustomerLegalEntityRow = {
   card_number?: unknown;
   iban?: unknown;
   signatory_name?: unknown;
+  signatory_last_name?: unknown;
+  signatory_first_name?: unknown;
+  signatory_middle_name?: unknown;
   signatory_position?: unknown;
   signatory_authority?: unknown;
 };
@@ -72,6 +93,9 @@ export const createEmptyCustomerLegalEntity = (): CustomerLegalEntity => ({
   cardNumber: "",
   iban: "",
   signatoryName: "",
+  signatoryLastName: "",
+  signatoryFirstName: "",
+  signatoryMiddleName: "",
   signatoryPosition: "",
   signatoryAuthority: "",
 });
@@ -82,20 +106,33 @@ const normalizeVatRate = (value: unknown) => {
   return Number.isFinite(parsed) ? String(parsed) : "none";
 };
 
-const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntity => ({
-  id: generateLegalEntityId(),
-  ownershipType: typeof value.ownership_type === "string" ? value.ownership_type : "",
-  legalName: typeof value.legal_name === "string" ? value.legal_name : "",
-  taxId: typeof value.tax_id === "string" ? value.tax_id : "",
-  vatId: typeof value.vat_id === "string" ? value.vat_id : "",
-  legalAddress: typeof value.legal_address === "string" ? value.legal_address : "",
-  vatRate: normalizeVatRate(value.vat_rate),
-  cardNumber: typeof value.card_number === "string" ? value.card_number : "",
-  iban: typeof value.iban === "string" ? value.iban : "",
-  signatoryName: typeof value.signatory_name === "string" ? value.signatory_name : "",
-  signatoryPosition: typeof value.signatory_position === "string" ? value.signatory_position : "",
-  signatoryAuthority: typeof value.signatory_authority === "string" ? value.signatory_authority : "",
-});
+const normalizeLegalEntity = (value: CustomerLegalEntityRow): CustomerLegalEntity => {
+  const rawLast = typeof value.signatory_last_name === "string" ? value.signatory_last_name : "";
+  const rawFirst = typeof value.signatory_first_name === "string" ? value.signatory_first_name : "";
+  const rawMiddle = typeof value.signatory_middle_name === "string" ? value.signatory_middle_name : "";
+  const rawCombined = typeof value.signatory_name === "string" ? value.signatory_name : "";
+  // Якщо окремих полів ще немає (legacy-запис) — розкладаємо combined-ПІБ на три частини.
+  const hasParts = Boolean(rawLast.trim() || rawFirst.trim() || rawMiddle.trim());
+  const nameParts = hasParts ? { last: rawLast, first: rawFirst, middle: rawMiddle } : splitSignatoryFullName(rawCombined);
+  const signatoryName = joinSignatoryFullName(nameParts.last, nameParts.first, nameParts.middle) || rawCombined.trim();
+  return {
+    id: generateLegalEntityId(),
+    ownershipType: typeof value.ownership_type === "string" ? value.ownership_type : "",
+    legalName: typeof value.legal_name === "string" ? value.legal_name : "",
+    taxId: typeof value.tax_id === "string" ? value.tax_id : "",
+    vatId: typeof value.vat_id === "string" ? value.vat_id : "",
+    legalAddress: typeof value.legal_address === "string" ? value.legal_address : "",
+    vatRate: normalizeVatRate(value.vat_rate),
+    cardNumber: typeof value.card_number === "string" ? value.card_number : "",
+    iban: typeof value.iban === "string" ? value.iban : "",
+    signatoryName,
+    signatoryLastName: nameParts.last,
+    signatoryFirstName: nameParts.first,
+    signatoryMiddleName: nameParts.middle,
+    signatoryPosition: typeof value.signatory_position === "string" ? value.signatory_position : "",
+    signatoryAuthority: typeof value.signatory_authority === "string" ? value.signatory_authority : "",
+  };
+};
 
 const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
   Boolean(
@@ -106,6 +143,9 @@ const hasMeaningfulLegalEntity = (value: CustomerLegalEntity) =>
       value.cardNumber.trim() ||
       value.iban.trim() ||
       value.signatoryName.trim() ||
+      value.signatoryLastName.trim() ||
+      value.signatoryFirstName.trim() ||
+      value.signatoryMiddleName.trim() ||
       value.signatoryPosition.trim() ||
       value.signatoryAuthority.trim() ||
       value.vatRate !== "none"
@@ -144,19 +184,28 @@ export const parseCustomerLegalEntities = (row?: CustomerLegalEntitySource | nul
 
 export const serializeCustomerLegalEntities = (value: CustomerLegalEntity[]) =>
   value
-    .map((entity) => ({
-      ownership_type: entity.ownershipType.trim() || null,
-      legal_name: entity.legalName.trim() || null,
-      tax_id: entity.taxId.trim() || null,
-      vat_id: entity.vatId.trim() || null,
-      legal_address: entity.legalAddress.trim() || null,
-      vat_rate: entity.vatRate === "none" ? null : Number(entity.vatRate),
-      card_number: entity.cardNumber.trim() || null,
-      iban: entity.iban.trim() || null,
-      signatory_name: entity.signatoryName.trim() || null,
-      signatory_position: entity.signatoryPosition.trim() || null,
-      signatory_authority: entity.signatoryAuthority.trim() || null,
-    }))
+    .map((entity) => {
+      // signatory_name завжди похідне від трьох полів ПІБ (а якщо їх немає — від наявного combined).
+      const combinedName =
+        joinSignatoryFullName(entity.signatoryLastName, entity.signatoryFirstName, entity.signatoryMiddleName) ||
+        entity.signatoryName.trim();
+      return {
+        ownership_type: entity.ownershipType.trim() || null,
+        legal_name: entity.legalName.trim() || null,
+        tax_id: entity.taxId.trim() || null,
+        vat_id: entity.vatId.trim() || null,
+        legal_address: entity.legalAddress.trim() || null,
+        vat_rate: entity.vatRate === "none" ? null : Number(entity.vatRate),
+        card_number: entity.cardNumber.trim() || null,
+        iban: entity.iban.trim() || null,
+        signatory_name: combinedName || null,
+        signatory_last_name: entity.signatoryLastName.trim() || null,
+        signatory_first_name: entity.signatoryFirstName.trim() || null,
+        signatory_middle_name: entity.signatoryMiddleName.trim() || null,
+        signatory_position: entity.signatoryPosition.trim() || null,
+        signatory_authority: entity.signatoryAuthority.trim() || null,
+      };
+    })
     .filter((entity) =>
       Object.values(entity).some((entry) => entry !== null && entry !== "")
     );

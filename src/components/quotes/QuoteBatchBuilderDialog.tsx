@@ -165,6 +165,7 @@ export type QuoteBatchBuilderFormData = {
   deadlineNote: string;
   currency: string;
   comment: string;
+  notes: string;
   products: QuoteBatchProductSubmitData[];
 };
 
@@ -1118,6 +1119,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
   const [deadlineTimeDraft, setDeadlineTimeDraft] = React.useState(DEFAULT_DEADLINE_TIME);
   const [currency, setCurrency] = React.useState("UAH");
+  const [notes, setNotes] = React.useState("");
   const [products, setProducts] = React.useState<ProductDraft[]>(() => [createProductDraft()]);
   const [activeProductId, setActiveProductId] = React.useState(products[0]?.id ?? "");
   const [localError, setLocalError] = React.useState<string | null>(null);
@@ -1157,6 +1159,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setDeadlinePopoverOpen(false);
     setDeadlineTimeDraft(DEFAULT_DEADLINE_TIME);
     setCurrency("UAH");
+    setNotes("");
     setProducts([firstProduct]);
     setActiveProductId(firstProduct.id);
     setLocalError(null);
@@ -1786,7 +1789,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       const invalidProduct = products[invalidProductIndex];
       const message = `${getProductLabel(catalogTypes, invalidProduct)}: ${getProductIssues(invalidProduct).join(", ")}.`;
       setActiveProductId(invalidProduct.id);
-      showValidationError(message);
+      // Per-product issues are already enumerated in the "Потрібно перевірити"
+      // list below, so don't duplicate them as localError — just nudge via toast.
+      setLocalError(null);
+      toast.error("Перевірте білдер", { description: message });
       return;
     }
 
@@ -1799,6 +1805,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       deadlineNote: "",
       currency,
       comment: "",
+      notes: notes.trim(),
       products: normalizedProducts,
     });
   };
@@ -2225,6 +2232,19 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     </button>
                   );
                 })}
+              </div>
+
+              <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
+                <div className="text-sm font-semibold text-foreground">Доповнення</div>
+                <div className="text-xs text-muted-foreground">
+                  Тези / нотатки до прорахунку. Відобразяться в його деталях.
+                </div>
+                <Textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Напр.: домовились про знижку 5%, оплата частинами, особливі вимоги до пакування…"
+                  className="min-h-[110px] resize-y text-sm"
+                />
               </div>
             </aside>
 

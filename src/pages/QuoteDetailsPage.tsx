@@ -807,6 +807,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const briefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // "Доповнення" — free-text addendum shown in quote details.
+  const [notesText, setNotesText] = useState("");
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [notesEditing, setNotesEditing] = useState(false);
+
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
@@ -1450,6 +1457,48 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
+  const saveNotes = async () => {
+    if (!quote || !teamId || notesSaving) return;
+    setNotesSaving(true);
+    setNotesError(null);
+    try {
+      const nextNotes = notesText.trim();
+      const data = await updateQuote({
+        quoteId,
+        teamId,
+        notes: nextNotes ? nextNotes : null,
+      });
+      setQuote((prev) =>
+        prev
+          ? {
+              ...prev,
+              notes: nextNotes ? nextNotes : null,
+              updated_at: (data as Partial<QuoteSummaryRow> | null)?.updated_at ?? prev.updated_at,
+            }
+          : prev
+      );
+      setNotesDirty(false);
+      setNotesEditing(false);
+      await logActivity({
+        teamId,
+        action: "оновив доповнення",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `Оновив доповнення${quote?.number ? ` (#${quote.number})` : ""}`,
+        href: `/orders/estimates/${quoteId}`,
+        metadata: { source: "quote_notes" },
+      });
+      await loadActivityLog();
+      toast.success("Доповнення збережено");
+    } catch (e: unknown) {
+      const message = getErrorMessage(e, "Не вдалося зберегти доповнення.");
+      setNotesError(message);
+      toast.error(message);
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
 
   const itemsSubtotal = useMemo(() => {
@@ -1899,6 +1948,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setBriefError(null);
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
+
+  useEffect(() => {
+    if (!quote) return;
+    if (notesDirty) return;
+    setNotesText(quote.notes ?? "");
+    setNotesError(null);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.notes, quote?.id, notesDirty]);
 
   useEffect(() => {
     resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
@@ -6048,6 +6105,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
 
                           <div className="min-w-0 flex-1">
+                            {/* Reserve at least the image height so the full-width runs
+                                section below never rides up under the product image when
+                                there are no spec chips (e.g. merch without нанесення). */}
+                            <div className="sm:min-h-20">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -6191,6 +6252,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 </div>
                               </div>
                             ) : null}
+                            </div>
 
                             <div className="mt-5 -mx-5 border-t border-border/50 px-5 pt-4 pb-0 sm:mr-0 sm:-ml-[6.5rem] sm:w-[calc(100%+6.5rem)] sm:px-0">
                               {(() => {
@@ -8337,6 +8399,89 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     {quote?.design_deadline_at ? formatDeadlineLabel(quote.design_deadline_at) : "Не вказано"}
                   </span>
                 </div>
+              </div>
+            </section>
+
+            <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
+              <div className="flex items-center justify-between gap-2">
+                <div className="design-task-side-heading">Доповнення</div>
+                {!notesEditing && !notesDirty && notesText.trim() ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setNotesEditing(true)}
+                  >
+                    Редагувати
+                  </Button>
+                ) : null}
+              </div>
+              <div className="mt-3 space-y-2">
+                {notesEditing || notesDirty ? (
+                  <>
+                    <Textarea
+                      value={notesText}
+                      onChange={(event) => {
+                        setNotesText(event.target.value);
+                        setNotesDirty(true);
+                      }}
+                      placeholder="Додаткова інформація до прорахунку: тези, нюанси, домовленості…"
+                      className="min-h-[120px] resize-y text-sm"
+                    />
+                    {notesError ? <div className="text-xs text-destructive">{notesError}</div> : null}
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setNotesText(quote?.notes ?? "");
+                          setNotesDirty(false);
+                          setNotesEditing(false);
+                          setNotesError(null);
+                        }}
+                        disabled={notesSaving}
+                      >
+                        Скасувати
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => void saveNotes()}
+                        disabled={!notesDirty || notesSaving}
+                      >
+                        {notesSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                        {notesSaving ? "Збереження..." : "Зберегти"}
+                      </Button>
+                    </div>
+                  </>
+                ) : notesText.trim() ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setNotesEditing(true)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setNotesEditing(true);
+                      }
+                    }}
+                    className="cursor-text whitespace-pre-wrap break-words rounded-xl border border-border/50 bg-background/40 px-3.5 py-3 text-sm leading-relaxed text-foreground transition-colors hover:border-border"
+                  >
+                    {notesText}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNotesEditing(true)}
+                    className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/5 px-3.5 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" />
+                    Додати доповнення
+                  </button>
+                )}
               </div>
             </section>
 

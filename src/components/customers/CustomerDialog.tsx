@@ -427,6 +427,26 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     }));
   };
 
+  // Оновлення частини ПІБ підписанта: одразу перераховуємо combined signatoryName,
+  // який тягнеться у договір/СП (відмінювання + ініціали).
+  const updateSignatoryName = (
+    index: number,
+    patch: Partial<Pick<CustomerLegalEntity, "signatoryLastName" | "signatoryFirstName" | "signatoryMiddleName">>
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      legalEntities: prev.legalEntities.map((entity, entityIndex) => {
+        if (entityIndex !== index) return entity;
+        const next = { ...entity, ...patch };
+        const signatoryName = [next.signatoryLastName, next.signatoryFirstName, next.signatoryMiddleName]
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .join(" ");
+        return { ...next, signatoryName };
+      }),
+    }));
+  };
+
   const addLegalEntity = () => {
     const next = createEmptyCustomerLegalEntity();
     setForm((prev) => ({
@@ -1163,60 +1183,67 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       ) : null}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label>{activeLegalEntityIsPerson ? "Назва бренду" : "Юридична назва"}</Label>
-                        <Input
-                          value={activeLegalEntity.legalName}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalName: e.target.value })}
-                          placeholder={activeLegalEntityIsPerson ? "Напр. EDLIGHT" : "Напр. ТОВ «Кока-Кола-Україна Лімітед»"}
-                          className="h-9"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>{activeLegalEntityIsPerson ? "ІПН" : "Код ЄДРПОУ"}</Label>
-                        <Input
-                          value={activeLegalEntity.taxId}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { taxId: e.target.value })}
-                          placeholder={activeLegalEntityIsPerson ? "ІПН" : "8-значний код"}
-                          className="h-9"
-                        />
-                      </div>
+                    <div className="mt-4 grid gap-2">
+                      <Label>{activeLegalEntityIsPerson ? "Назва бренду" : "Юридична назва"}</Label>
+                      <Input
+                        value={activeLegalEntity.legalName}
+                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalName: e.target.value })}
+                        placeholder={activeLegalEntityIsPerson ? "Напр. EDLIGHT" : "Напр. ТОВ «Кока-Кола-Україна Лімітед»"}
+                        className="h-9"
+                      />
                     </div>
 
-                    {!activeLegalEntityIsPerson ? (
-                      <div className="mt-4 grid gap-2">
-                        <Label>
-                          ІПН платника ПДВ
-                          {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
-                            <span className="text-destructive"> *</span>
-                          ) : null}
-                        </Label>
+                    {/* ЄДРПОУ та ІПН платника ПДВ — два окремі поля. Для платника ПДВ ІПН обовʼязковий (12 цифр). */}
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label>{activeLegalEntityIsPerson ? "ІПН (10 цифр)" : "Код ЄДРПОУ"}</Label>
                         <Input
-                          value={activeLegalEntity.vatId}
+                          value={activeLegalEntity.taxId}
                           onChange={(e) =>
                             updateLegalEntity(activeLegalEntityIndex, {
-                              vatId: e.target.value.replace(/\D/g, "").slice(0, 12),
+                              taxId: e.target.value.replace(/\D/g, "").slice(0, activeLegalEntityIsPerson ? 10 : 8),
                             })
                           }
-                          placeholder="12-значний ІПН"
+                          placeholder={activeLegalEntityIsPerson ? "10-значний ІПН" : "8-значний код"}
                           inputMode="numeric"
-                          maxLength={12}
+                          maxLength={activeLegalEntityIsPerson ? 10 : 8}
                           className="h-9"
                         />
-                        {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
-                          activeLegalEntity.vatId.trim() === "" ? (
-                            <p className="text-xs text-muted-foreground">
-                              Обовʼязково для платника ПДВ — рівно 12 цифр. Без нього не можна створити замовлення.
-                            </p>
-                          ) : activeLegalEntity.vatId.trim().length !== 12 ? (
-                            <p className="text-xs text-destructive">
-                              ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
-                            </p>
-                          ) : null
-                        ) : null}
                       </div>
-                    ) : null}
+                      {!activeLegalEntityIsPerson ? (
+                        <div className="grid gap-2">
+                          <Label>
+                            ІПН платника ПДВ
+                            {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
+                              <span className="text-destructive"> *</span>
+                            ) : null}
+                          </Label>
+                          <Input
+                            value={activeLegalEntity.vatId}
+                            onChange={(e) =>
+                              updateLegalEntity(activeLegalEntityIndex, {
+                                vatId: e.target.value.replace(/\D/g, "").slice(0, 12),
+                              })
+                            }
+                            placeholder="12-значний ІПН"
+                            inputMode="numeric"
+                            maxLength={12}
+                            className="h-9"
+                          />
+                          {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
+                            activeLegalEntity.vatId.trim() === "" ? (
+                              <p className="text-xs text-muted-foreground">
+                                Обовʼязково для платника ПДВ — рівно 12 цифр. Без нього не можна створити замовлення.
+                              </p>
+                            ) : activeLegalEntity.vatId.trim().length !== 12 ? (
+                              <p className="text-xs text-destructive">
+                                ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
+                              </p>
+                            ) : null
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
 
                     <div className="mt-4 grid gap-2">
                       <Label>{activeLegalEntityIsPerson ? "Прописка" : "Юридична адреса"}</Label>
@@ -1251,25 +1278,51 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label>{activeLegalEntityIsPerson ? "ПІБ ФОП / підписанта" : "Підписант"}</Label>
-                        <Input
-                          value={activeLegalEntity.signatoryName}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryName: e.target.value })}
-                          placeholder="ПІБ підписанта"
-                          className="h-9"
-                        />
+                    {/* ПІБ підписанта — трьома окремими полями: повне ПІБ тягнеться у договір/СП
+                        (правильне відмінювання у родовий + ініціали "І.П. Прізвище"). */}
+                    <div className="mt-4 space-y-1.5">
+                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                        {activeLegalEntityIsPerson ? "ПІБ ФОП / підписанта" : "ПІБ підписанта"}
+                      </Label>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-normal text-muted-foreground">Прізвище</Label>
+                          <Input
+                            value={activeLegalEntity.signatoryLastName}
+                            onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryLastName: e.target.value })}
+                            placeholder="Напр. Іваненко"
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-normal text-muted-foreground">Імʼя</Label>
+                          <Input
+                            value={activeLegalEntity.signatoryFirstName}
+                            onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryFirstName: e.target.value })}
+                            placeholder="Напр. Іван"
+                            className="h-9"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-normal text-muted-foreground">По-батькові</Label>
+                          <Input
+                            value={activeLegalEntity.signatoryMiddleName}
+                            onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryMiddleName: e.target.value })}
+                            placeholder="Напр. Іванович"
+                            className="h-9"
+                          />
+                        </div>
                       </div>
-                      <div className="grid gap-2">
-                        <Label>{activeLegalEntityIsPerson ? "Статус підписанта" : "Посада підписанта"}</Label>
-                        <Input
-                          value={activeLegalEntity.signatoryPosition}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
-                          placeholder={activeLegalEntityIsPerson ? "Напр. ФОП" : "Напр. Директор"}
-                          className="h-9"
-                        />
-                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 md:max-w-[calc(50%-0.5rem)]">
+                      <Label>{activeLegalEntityIsPerson ? "Статус підписанта" : "Посада підписанта"}</Label>
+                      <Input
+                        value={activeLegalEntity.signatoryPosition}
+                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { signatoryPosition: e.target.value })}
+                        placeholder={activeLegalEntityIsPerson ? "Напр. ФОП" : "Напр. Директор"}
+                        className="h-9"
+                      />
                     </div>
 
                     <div className="mt-4 grid gap-2">

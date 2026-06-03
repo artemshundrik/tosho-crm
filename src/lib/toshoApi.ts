@@ -46,6 +46,7 @@ export type QuoteListRow = {
   deadline_note?: string | null;
   deadline_reminder_offset_minutes?: number | null;
   deadline_reminder_comment?: string | null;
+  notes?: string | null;
 };
 
 export type QuoteSummaryRow = QuoteListRow;
@@ -791,6 +792,7 @@ export async function createQuote(params: {
   deadlineNote?: string | null;
   deadlineReminderOffsetMinutes?: number | null;
   deadlineReminderComment?: string | null;
+  notes?: string | null;
 }) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   handleError(userError);
@@ -814,6 +816,7 @@ export async function createQuote(params: {
     deadline_note: params.deadlineNote ?? null,
     deadline_reminder_offset_minutes: params.deadlineReminderOffsetMinutes ?? null,
     deadline_reminder_comment: params.deadlineReminderComment ?? null,
+    notes: params.notes ?? null,
   };
   const monthCode = getQuoteMonthCode();
   let quoteSequence = await getNextQuoteSequence(params.teamId, monthCode);
@@ -899,6 +902,9 @@ export async function createQuote(params: {
       if (isMissingColumnMessage && message.includes("design_brief")) {
         dropField("design_brief");
       }
+      if (isMissingColumnMessage && message.includes("notes")) {
+        dropField("notes");
+      }
       if (isMissingColumnMessage && message.includes("number")) {
         dropField("number");
       }
@@ -931,12 +937,13 @@ export async function getQuoteSummary(quoteId: string) {
     };
 
     let { data: briefRow, error: briefError } = await readExtras(
-      "design_brief,created_by,delivery_details,customer_name,customer_logo_url,customer_deadline_at,design_deadline_at,deadline_reminder_offset_minutes,deadline_reminder_comment"
+      "design_brief,created_by,delivery_details,customer_name,customer_logo_url,customer_deadline_at,design_deadline_at,deadline_reminder_offset_minutes,deadline_reminder_comment,notes"
     );
     if (
       briefError &&
       /column/i.test(briefError.message ?? "") &&
       (/design_brief/i.test(briefError.message ?? "") ||
+        /notes/i.test(briefError.message ?? "") ||
         /delivery_details/i.test(briefError.message ?? "") ||
         /customer_name/i.test(briefError.message ?? "") ||
         /customer_logo_url/i.test(briefError.message ?? "") ||
@@ -1042,6 +1049,7 @@ export async function getQuoteSummary(quoteId: string) {
     return {
       ...summary,
       design_brief: (briefRow as { design_brief?: string | null } | null)?.design_brief ?? null,
+      notes: (briefRow as { notes?: string | null } | null)?.notes ?? null,
       delivery_details:
         (briefRow as { delivery_details?: Record<string, unknown> | null } | null)?.delivery_details ?? null,
       customer_deadline_at:
@@ -1428,6 +1436,7 @@ export async function updateQuote(params: {
   quoteType?: string | null;
   deliveryType?: string | null;
   deliveryDetails?: Record<string, unknown> | null;
+  notes?: string | null;
 }) {
   const payload: Record<string, unknown> = {};
   if (params.customerId !== undefined) payload.customer_id = params.customerId;
@@ -1451,6 +1460,7 @@ export async function updateQuote(params: {
   if (params.quoteType !== undefined) payload.quote_type = params.quoteType;
   if (params.deliveryType !== undefined) payload.delivery_type = params.deliveryType;
   if (params.deliveryDetails !== undefined) payload.delivery_details = params.deliveryDetails;
+  if (params.notes !== undefined) payload.notes = params.notes;
 
   const executeUpdate = async (nextPayload: Record<string, unknown>) => {
     const { data, error } = await supabase
@@ -1486,6 +1496,10 @@ export async function updateQuote(params: {
     }
     if (message.includes("column") && message.includes("design_brief")) {
       delete fallbackPayload.design_brief;
+      changed = true;
+    }
+    if (message.includes("column") && message.includes("notes")) {
+      delete fallbackPayload.notes;
       changed = true;
     }
     if (message.includes("column") && message.includes("customer_name")) {

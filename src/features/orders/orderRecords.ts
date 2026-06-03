@@ -880,6 +880,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     // Платник ПДВ (ставка ПДВ задана, не "none") зобовʼязаний мати ІПН платника ПДВ — рівно 12 цифр.
     const isVatPayer = Boolean(vatRate && vatRate !== "none");
     const hasValidVatId = /^\d{12}$/.test(vatId.trim());
+    // Підписант має бути вказаний повним ПІБ (прізвище + імʼя + по-батькові) — тягнеться у договір/СП.
+    const hasFullSignatoryName = signatoryName.trim().split(/\s+/).filter(Boolean).length >= 3;
     const partyType = quote.customer_id ? "customer" : "lead";
     const paymentMethod = resolvePaymentMethod(quote, partyType, hasLegalEntityIdentity);
     const canCreateSpecification = false;
@@ -888,6 +890,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       { label: "Ліда переведено у Замовника", done: partyType === "customer", blocking: true },
       { label: "Заповнені email та мобільний номер", done: Boolean(contactEmail && contactPhone), blocking: true },
       { label: "Заповнені реквізити, юр. назва та підписант", done: hasLegalEntityIdentity, blocking: true },
+      { label: "Вказано повне ПІБ підписанта (прізвище, імʼя, по-батькові)", done: hasFullSignatoryName, blocking: true },
       ...(isVatPayer ? [{ label: "Вказано ІПН платника ПДВ (12 цифр)", done: hasValidVatId, blocking: true }] : []),
       { label: "Підготовлені позиції для рахунку та СП", done: items.length > 0, blocking: true },
       ...(requiresVisualization ? [{ label: "Візуал погоджено", done: hasApprovedVisualization, blocking: true }] : []),
@@ -895,7 +898,14 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     ];
     const blockers = readinessSteps.filter((step) => !step.done && step.blocking).map((step) => step.label);
     const readinessColumn =
-      blockers.some((label) => label.includes("Ліда") || label.includes("email") || label.includes("реквізити") || label.includes("ІПН"))
+      blockers.some(
+        (label) =>
+          label.includes("Ліда") ||
+          label.includes("email") ||
+          label.includes("реквізити") ||
+          label.includes("ІПН") ||
+          label.includes("ПІБ")
+      )
         ? "counterparty"
         : blockers.length > 0
           ? "design"

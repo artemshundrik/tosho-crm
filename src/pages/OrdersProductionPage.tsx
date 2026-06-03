@@ -939,7 +939,18 @@ export default function OrdersProductionPage() {
                             </div>
                           </TableCell>
                           <TableCell className="align-top">
-                            <div className="flex items-center gap-3">
+                            <div
+                              className="flex items-center gap-3"
+                              title={[
+                                `Контрагент: ${record.customerName}`,
+                                record.legalEntityLabel ? `Юр. особа: ${record.legalEntityLabel}` : null,
+                                `Менеджер: ${record.managerLabel.trim() || "не призначено"}`,
+                                record.contactEmail ? `Email: ${record.contactEmail}` : null,
+                                record.contactPhone ? `Тел.: ${record.contactPhone}` : null,
+                              ]
+                                .filter(Boolean)
+                                .join("\n")}
+                            >
                               <EntityAvatar
                                 src={record.customerLogoUrl}
                                 name={record.customerName}
@@ -950,6 +961,17 @@ export default function OrdersProductionPage() {
                                 <div className="truncate font-medium">{record.customerName}</div>
                                 <div className="truncate text-xs text-muted-foreground">
                                   {record.partyType === "customer" ? "Замовник" : "Лід"}
+                                </div>
+                                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                  <AvatarBase
+                                    src={record.managerAvatarUrl ?? null}
+                                    name={record.managerLabel || "?"}
+                                    fallback={getInitials(record.managerLabel || "?")}
+                                    size={16}
+                                    className="border-border/60 shrink-0"
+                                    fallbackClassName="text-[8px] font-semibold"
+                                  />
+                                  <span className="truncate">{record.managerLabel.trim() || "Менеджер не призначений"}</span>
                                 </div>
                               </div>
                             </div>
@@ -1141,6 +1163,17 @@ export default function OrdersProductionPage() {
                               </div>
 
                               <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <AvatarBase
+                                    src={record.managerAvatarUrl ?? null}
+                                    name={record.managerLabel}
+                                    fallback={getInitials(record.managerLabel)}
+                                    size={20}
+                                    className="border-border/60 shrink-0"
+                                    fallbackClassName="text-[9px] font-semibold"
+                                  />
+                                  <span className="truncate">{record.managerLabel.trim() || "Менеджер не призначений"}</span>
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <Wallet className="h-3.5 w-3.5" />
                                   <span className="truncate">{record.paymentRail}</span>
