@@ -495,6 +495,18 @@ const escapeHtml = (value?: string | number | null) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+// Підстава підпису у тексті йде після «діє на підставі ...» → потрібен родовий відмінок.
+// Закритий набір значень із Select (Статут/Довіреність) відмінюємо детерміновано;
+// довільні значення (напр. для ФОП) лишаємо як є — їх вводять уже в потрібній формі.
+const toAuthorityGenitive = (value?: string | null) => {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  const normalized = trimmed.toLowerCase();
+  if (normalized === "статут" || normalized === "статуту") return "Статуту";
+  if (normalized === "довіреність" || normalized === "довіреності") return "Довіреності";
+  return trimmed;
+};
+
 const documentTitleByKind: Record<OrderDocumentKind, string> = {
   contract: "Договір",
   invoice: "Рахунок",
@@ -667,7 +679,9 @@ const buildOrderDocumentHtml = (
   const customerSignatoryRoleBody = customerSignatoryRoleGenitive
     ? customerSignatoryRoleGenitive.charAt(0).toLocaleLowerCase("uk-UA") + customerSignatoryRoleGenitive.slice(1)
     : customerSignatoryRoleGenitive;
-  const customerSignatoryAuthority = record.customerSignatoryAuthority?.trim() || "Не вказано";
+  const customerSignatoryAuthority = record.customerSignatoryAuthority?.trim()
+    ? toAuthorityGenitive(record.customerSignatoryAuthority)
+    : "Не вказано";
   const rows = record.items
     .map(
       (item, index) => `
@@ -753,10 +767,11 @@ const buildOrderDocumentHtml = (
     .map((item, index) => {
       const unitPriceWithVat = Number(item.unitPrice || 0);
       const unitPriceWithoutVat = unitPriceWithVat / (1 + SPEC_VAT_RATE / 100);
+      // Свідомо НЕ виводимо посилання на каталог постачальника (catalogSourceUrl) —
+      // це внутрішнє джерело, його не місце в документі для замовника.
       const itemDetails = [
         item.description?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#374151;">${escapeHtml(item.description)}</div>` : "",
         item.methodsSummary?.trim() ? `<div style="margin-top:4px;font-size:12px;color:#4b5563;">Нанесення: ${escapeHtml(item.methodsSummary)}</div>` : "",
-        item.catalogSourceUrl?.trim() ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;">${escapeHtml(item.catalogSourceUrl)}</div>` : "",
       ].join("");
       return `
         <tr>

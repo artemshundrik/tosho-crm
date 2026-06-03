@@ -877,6 +877,9 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const hasLegalEntityIdentity = Boolean(
       legalEntityLabel && taxId && customerIban && customerLegalAddress && signatoryName && signatoryPosition && signatoryAuthority
     );
+    // Платник ПДВ (ставка ПДВ задана, не "none") зобовʼязаний мати ІПН платника ПДВ — рівно 12 цифр.
+    const isVatPayer = Boolean(vatRate && vatRate !== "none");
+    const hasValidVatId = /^\d{12}$/.test(vatId.trim());
     const partyType = quote.customer_id ? "customer" : "lead";
     const paymentMethod = resolvePaymentMethod(quote, partyType, hasLegalEntityIdentity);
     const canCreateSpecification = false;
@@ -885,13 +888,14 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       { label: "Ліда переведено у Замовника", done: partyType === "customer", blocking: true },
       { label: "Заповнені email та мобільний номер", done: Boolean(contactEmail && contactPhone), blocking: true },
       { label: "Заповнені реквізити, юр. назва та підписант", done: hasLegalEntityIdentity, blocking: true },
+      ...(isVatPayer ? [{ label: "Вказано ІПН платника ПДВ (12 цифр)", done: hasValidVatId, blocking: true }] : []),
       { label: "Підготовлені позиції для рахунку та СП", done: items.length > 0, blocking: true },
       ...(requiresVisualization ? [{ label: "Візуал погоджено", done: hasApprovedVisualization, blocking: true }] : []),
       ...(requiresLayout ? [{ label: "Макет погоджено", done: hasApprovedLayout, blocking: true }] : []),
     ];
     const blockers = readinessSteps.filter((step) => !step.done && step.blocking).map((step) => step.label);
     const readinessColumn =
-      blockers.some((label) => label.includes("Ліда") || label.includes("email") || label.includes("реквізити"))
+      blockers.some((label) => label.includes("Ліда") || label.includes("email") || label.includes("реквізити") || label.includes("ІПН"))
         ? "counterparty"
         : blockers.length > 0
           ? "design"

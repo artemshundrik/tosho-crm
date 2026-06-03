@@ -1186,13 +1186,35 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
                     {!activeLegalEntityIsPerson ? (
                       <div className="mt-4 grid gap-2">
-                        <Label>ІПН платника ПДВ</Label>
+                        <Label>
+                          ІПН платника ПДВ
+                          {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
+                            <span className="text-destructive"> *</span>
+                          ) : null}
+                        </Label>
                         <Input
                           value={activeLegalEntity.vatId}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { vatId: e.target.value })}
+                          onChange={(e) =>
+                            updateLegalEntity(activeLegalEntityIndex, {
+                              vatId: e.target.value.replace(/\D/g, "").slice(0, 12),
+                            })
+                          }
                           placeholder="12-значний ІПН"
+                          inputMode="numeric"
+                          maxLength={12}
                           className="h-9"
                         />
+                        {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
+                          activeLegalEntity.vatId.trim() === "" ? (
+                            <p className="text-xs text-muted-foreground">
+                              Обовʼязково для платника ПДВ — рівно 12 цифр. Без нього не можна створити замовлення.
+                            </p>
+                          ) : activeLegalEntity.vatId.trim().length !== 12 ? (
+                            <p className="text-xs text-destructive">
+                              ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
+                            </p>
+                          ) : null
+                        ) : null}
                       </div>
                     ) : null}
 

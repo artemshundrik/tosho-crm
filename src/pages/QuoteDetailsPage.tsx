@@ -9479,7 +9479,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-foreground">Gate-перевірки</div>
+                <div className="text-sm font-semibold text-foreground">Що має бути готово</div>
                 <div className="space-y-2">
                   {createOrderDraft.readiness.readinessSteps.map((step) => (
                     <div key={step.label} className="flex items-start gap-3 rounded-lg border border-border/50 px-3 py-2">
@@ -9520,7 +9520,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
               {createOrderDraft.readiness.blockers.length > 0 ? (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  Перед створенням замовлення треба закрити блокери: {createOrderDraft.readiness.blockers.join(", ")}.
+                  Замовлення можна створити лише коли всі пункти вище мають галочку. Ще треба зробити: {createOrderDraft.readiness.blockers.join(", ")}.
                 </div>
               ) : null}
 

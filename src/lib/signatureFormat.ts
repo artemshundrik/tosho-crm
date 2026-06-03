@@ -4,6 +4,8 @@
 //   "Борщ Олена Вікторівна"   → "О.В. Борщ"
 //   "Іваненко Іван"            → "І. Іваненко"
 //   "Іваненко"                 → "Іваненко"
+//   "Баранов Є.О."            → "Є.О. Баранов"   (вже-готові ініціали зберігаємо повністю)
+//   "Баранов Є. О."          → "Є.О. Баранов"
 // Used in document signature lines (Договір, СП).
 
 export const toSignatureInitials = (fullName?: string | null): string => {
@@ -12,7 +14,15 @@ export const toSignatureInitials = (fullName?: string | null): string => {
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0];
-  const [last, first, middle] = parts;
+  const [last, ...rest] = parts;
+  // Якщо після прізвища вже стоять ініціали (містять крапку, напр. "Є.О." чи "Є. О."),
+  // не обрізаємо їх до однієї літери — зберігаємо повністю, лише ставимо перед прізвищем.
+  if (rest.some((token) => token.includes("."))) {
+    const initials = rest.join("").replace(/\s+/g, "");
+    return `${initials} ${last}`;
+  }
+  // Повні слова імені/по-батькові → абревіатура "І.П.".
+  const [first, middle] = rest;
   const firstInitial = first ? `${first.charAt(0).toLocaleUpperCase("uk-UA")}.` : "";
   const middleInitial = middle ? `${middle.charAt(0).toLocaleUpperCase("uk-UA")}.` : "";
   const initials = `${firstInitial}${middleInitial}`;
