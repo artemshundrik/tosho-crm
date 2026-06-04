@@ -93,7 +93,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, Clock3, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarRange, Clock3, FileText, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -150,6 +150,22 @@ const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
 const ALL_ASSIGNEE_SPOTLIGHT = "__all_assignees__";
+
+// "Файли дизайнерів за період" report: append-only upload events in activity_log.
+// Both actions carry metadata.uploaded_files[].file_name + the uploader user_id,
+// so counts include files that were later deleted (we count the upload event).
+const DESIGNER_FILE_UPLOAD_ACTIONS = ["design_output_upload", "design_task_attachment"];
+const MONTHS_UK = [
+  "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
+  "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
+];
+type DesignerFilesRow = {
+  userId: string | null;
+  actorName: string | null;
+  total: number;
+  byExt: Record<string, number>;
+};
+
 const DESIGN_LIST_PAGE_SIZE = 50;
 const DESIGN_LIST_PAGE_INCREMENT = 50;
 const DESIGN_KANBAN_INITIAL_PAGE_SIZE = 120;
@@ -984,6 +1000,12 @@ export default function DesignPage() {
   } | null>(null);
   const [contentView, setContentView] = useState<DesignContentView>(() => restoredFilters?.contentView ?? "all");
   const [viewMode, setViewMode] = useState<DesignViewMode>(() => restoredFilters?.viewMode ?? "kanban");
+  const [filesMonth, setFilesMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [filesReport, setFilesReport] = useState<{ rows: DesignerFilesRow[]; exts: string[] } | null>(null);
+  const [filesReportLoading, setFilesReportLoading] = useState(false);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   // Keep the input itself instant; let filtering + the full-dataset fetch run at
   // lower priority off the deferred value so fast typing never drops letters.
@@ -1529,6 +1551,92 @@ export default function DesignPage() {
   useEffect(() => {
     void loadTeamWorkloadTasks();
   }, [loadTeamWorkloadTasks]);
+
+  const monthOptions = useMemo(() => {
+    const now = new Date();
+    const options: Array<{ value: string; label: string }> = [];
+    for (let i = 0; i < 12; i += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      options.push({
+        value: `${year}-${String(month).padStart(2, "0")}`,
+        label: `${MONTHS_UK[month - 1]} ${year}`,
+      });
+    }
+    return options;
+  }, []);
+
+  const designerIdSet = useMemo(() => new Set(designerMembers.map((member) => member.id)), [designerMembers]);
+
+  const loadDesignerFilesReport = useCallback(
+    async (monthValue: string) => {
+      if (!effectiveTeamId) {
+        setFilesReport(null);
+        return;
+      }
+      const [yearStr, monthStr] = monthValue.split("-");
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+      const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+      const to = new Date(Date.UTC(year, month, 1)).toISOString();
+
+      setFilesReportLoading(true);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("user_id,actor_name,metadata")
+          .eq("team_id", effectiveTeamId)
+          .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
+          .gte("created_at", from)
+          .lt("created_at", to)
+          .limit(5000);
+        if (fetchError) throw fetchError;
+
+        const byUser = new Map<string, DesignerFilesRow>();
+        const extSet = new Set<string>();
+        for (const row of (data ?? []) as Array<{
+          user_id?: string | null;
+          actor_name?: string | null;
+          metadata?: { uploaded_files?: Array<{ file_name?: string | null }> } | null;
+        }>) {
+          // Report covers designers only — skip uploads by anyone else.
+          if (!row.user_id || !designerIdSet.has(row.user_id)) continue;
+          const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
+          for (const file of uploaded) {
+            const name = typeof file?.file_name === "string" ? file.file_name : "";
+            const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+            const ext = match ? match[1] : "інше";
+            extSet.add(ext);
+            const key = row.user_id ?? "__unknown__";
+            let entry = byUser.get(key);
+            if (!entry) {
+              entry = { userId: row.user_id ?? null, actorName: row.actor_name ?? null, total: 0, byExt: {} };
+              byUser.set(key, entry);
+            }
+            entry.total += 1;
+            entry.byExt[ext] = (entry.byExt[ext] ?? 0) + 1;
+          }
+        }
+
+        const exts = Array.from(extSet).sort((a, b) => a.localeCompare(b));
+        const rows = Array.from(byUser.values()).sort((a, b) => b.total - a.total);
+        setFilesReport({ rows, exts });
+      } catch (reportError) {
+        console.warn("Failed to load designer files report", reportError);
+        setFilesReport({ rows: [], exts: [] });
+      } finally {
+        setFilesReportLoading(false);
+      }
+    },
+    [effectiveTeamId, designerIdSet]
+  );
+
+  useEffect(() => {
+    if (viewMode !== "assignee") return;
+    void loadDesignerFilesReport(filesMonth);
+  }, [viewMode, filesMonth, loadDesignerFilesReport]);
 
   const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!effectiveTeamId) return;
@@ -5345,6 +5453,87 @@ export default function DesignPage() {
                   <div className="mt-2 text-[15px] text-danger-foreground/80">Задач, які ще треба комусь розподілити</div>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-[18px] border border-border/60 bg-background/70 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  <FileText className="h-3.5 w-3.5" />
+                  Файли за період
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-foreground">Скільки файлів залив кожен дизайнер</h3>
+                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                    Усі завантаження за місяць (візуали, макети, файли задач) із розбивкою за типами — включно з файлами, які згодом видалили.
+                  </p>
+                </div>
+              </div>
+              <Select value={filesMonth} onValueChange={setFilesMonth}>
+                <SelectTrigger className="h-9 w-full sm:w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="mt-5">
+              {filesReportLoading ? (
+                <InlineLoading label="Рахуємо файли..." />
+              ) : !filesReport || filesReport.rows.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+                  За цей місяць ще немає завантажених файлів.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
+                  <div className="divide-y divide-border/50">
+                    {filesReport.rows.map((row) => {
+                      const label = row.userId ? getMemberLabel(row.userId) : (row.actorName ?? "Невідомий");
+                      return (
+                        <div
+                          key={row.userId ?? `unknown:${label}`}
+                          className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <AvatarBase
+                              src={row.userId ? getMemberAvatar(row.userId) : null}
+                              name={label}
+                              fallback={getInitials(label)}
+                              size={36}
+                              className="shrink-0 border-border/70"
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-[15px] font-semibold text-foreground">{label}</div>
+                              <div className="text-xs text-muted-foreground">Усього файлів: {row.total}</div>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                            {filesReport.exts.map((ext) =>
+                              row.byExt[ext] ? (
+                                <span
+                                  key={`${row.userId ?? label}:${ext}`}
+                                  className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs"
+                                  title={`${ext.toUpperCase()}: ${row.byExt[ext]}`}
+                                >
+                                  <span className="font-medium uppercase text-muted-foreground">{ext}</span>
+                                  <span className="font-semibold tabular-nums text-foreground">{row.byExt[ext]}</span>
+                                </span>
+                              ) : null
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         </div>
