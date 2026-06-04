@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,21 +116,6 @@ const getInitials = (value?: string) => {
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();
 };
-
-const POSITION_OPTIONS = [
-  "Директор",
-  "Власник",
-  "Адміністратор",
-  "Маркетолог",
-  "Дизайнер",
-  "Керівник відділу маркетингу",
-  "Директор з маркетингу",
-  "Заступник генерального секретаря",
-  "Генеральний директор",
-  "Менеджер відділу закупівель",
-  "Офіс-менеджер",
-  "Секретар",
-];
 
 const normalizeTime = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 4);

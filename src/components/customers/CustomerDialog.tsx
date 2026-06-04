@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { DropboxIcon } from "@/components/icons/DropboxIcon";
+import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Chip } from "@/components/ui/chip";
@@ -162,21 +163,6 @@ const getInitials = (value?: string) => {
   const last = parts.length > 1 ? parts[parts.length - 1][0] ?? "" : "";
   return (first + last).toUpperCase();
 };
-
-const POSITION_OPTIONS = [
-  "Директор",
-  "Власник",
-  "Адміністратор",
-  "Маркетолог",
-  "Дизайнер",
-  "Керівник відділу маркетингу",
-  "Директор з маркетингу",
-  "Заступник генерального секретаря",
-  "Генеральний директор",
-  "Менеджер відділу закупівель",
-  "Офіс-менеджер",
-  "Секретар",
-];
 
 const normalizeTime = (value: string) => {
   const digits = value.replace(/\D/g, "").slice(0, 4);
