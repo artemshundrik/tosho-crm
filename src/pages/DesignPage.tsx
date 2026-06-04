@@ -1568,6 +1568,10 @@ export default function DesignPage() {
   }, []);
 
   const designerIdSet = useMemo(() => new Set(designerMembers.map((member) => member.id)), [designerMembers]);
+  // Visibility of the designer-files report:
+  //  · SEO / Superadmin — every designer;
+  //  · everyone else (incl. a designer) — only their own row.
+  const canSeeAllDesignerFiles = permissions.isSuperAdmin || permissions.isSeo;
 
   const loadDesignerFilesReport = useCallback(
     async (monthValue: string) => {
@@ -1603,6 +1607,8 @@ export default function DesignPage() {
         }>) {
           // Report covers designers only — skip uploads by anyone else.
           if (!row.user_id || !designerIdSet.has(row.user_id)) continue;
+          // Non-admin viewers (incl. designers) only see their own row.
+          if (!canSeeAllDesignerFiles && row.user_id !== userId) continue;
           const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
           for (const file of uploaded) {
             const name = typeof file?.file_name === "string" ? file.file_name : "";
@@ -1630,7 +1636,7 @@ export default function DesignPage() {
         setFilesReportLoading(false);
       }
     },
-    [effectiveTeamId, designerIdSet]
+    [effectiveTeamId, designerIdSet, canSeeAllDesignerFiles, userId]
   );
 
   useEffect(() => {
@@ -3067,32 +3073,6 @@ export default function DesignPage() {
       noDeadline: timelineData.noDeadlineTasks.length,
     };
   }, [timelineData.noDeadlineTasks.length, timelineData.rows]);
-
-  const assigneeOverview = useMemo(() => {
-    const activeGroups = assigneeGrouped.filter((group) => group.id);
-    const totalEstimateMinutes = assigneeGrouped.reduce((sum, group) => sum + group.estimateMinutesTotal, 0);
-    const totalTrackedSeconds = assigneeGrouped.reduce(
-      (sum, group) => sum + group.tasks.reduce((taskSum, task) => taskSum + getTaskTrackedSeconds(task.id), 0),
-      0
-    );
-    const busyCount = activeGroups.filter((group) => {
-      if (!group.workload) return false;
-      return group.workload.level === "high" || group.workload.level === "critical";
-    }).length;
-    const unassignedCount = assigneeGrouped.find((group) => !group.id)?.tasks.length ?? 0;
-    const availableNowCount = activeGroups.filter((group) => group.workload?.level === "low").length;
-    const criticalCount = activeGroups.filter((group) => group.workload?.level === "critical").length;
-
-    return {
-      activeDesigners: activeGroups.length,
-      totalEstimateMinutes,
-      totalTrackedSeconds,
-      busyCount,
-      unassignedCount,
-      availableNowCount,
-      criticalCount,
-    };
-  }, [assigneeGrouped, getTaskTrackedSeconds]);
 
   const sortedDesignerCapacityOptions = useMemo(
     () =>
@@ -5344,7 +5324,7 @@ export default function DesignPage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+            <div className="mt-5">
               <div className="space-y-4">
                 <div className="border-b border-border/60 pb-5">
                   <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Рекомендуємо зараз</div>
@@ -5428,29 +5408,6 @@ export default function DesignPage() {
                         );
                       })}
                   </div>
-                </div>
-              </div>
-
-              <div className="grid gap-0 overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
-                <div className="border-b border-border/60 px-5 py-5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Активні дизайнери</div>
-                  <div className="mt-2 text-4xl font-semibold tabular-nums text-foreground">{assigneeOverview.activeDesigners}</div>
-                  <div className="mt-2 text-[15px] text-muted-foreground">Дизайнери, які зараз у команді</div>
-                </div>
-                <div className="border-b border-border/60 px-5 py-5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Можна ставити нову задачу</div>
-                  <div className="mt-2 text-4xl font-semibold tabular-nums text-info-foreground">{assigneeOverview.availableNowCount}</div>
-                  <div className="mt-2 text-[15px] text-info-foreground/80">Людей з низьким поточним навантаженням</div>
-                </div>
-                <div className="border-b border-border/60 px-5 py-5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Уже завантажені</div>
-                  <div className="mt-2 text-4xl font-semibold tabular-nums text-warning-foreground">{assigneeOverview.busyCount}</div>
-                  <div className="mt-2 text-[15px] text-warning-foreground/80">Кому краще не давати звичайні нові задачі</div>
-                </div>
-                <div className="px-5 py-5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-danger-foreground/85">Без виконавця</div>
-                  <div className="mt-2 text-4xl font-semibold tabular-nums text-danger-foreground">{assigneeOverview.unassignedCount}</div>
-                  <div className="mt-2 text-[15px] text-danger-foreground/80">Задач, які ще треба комусь розподілити</div>
                 </div>
               </div>
             </div>
