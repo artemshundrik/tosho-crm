@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import {
   Banknote,
+  Coins,
   Bell,
   Building2,
   Calculator,
@@ -237,6 +238,13 @@ function getRoutePresentation(path: string) {
       kindLabel: "Сторінка",
     };
   }
+  if (path.startsWith("/payroll")) {
+    return {
+      label: "Зарплати",
+      description: "Зарплатна відомість: ставка, премія, утримання по місяцях",
+      kindLabel: "Сторінка",
+    };
+  }
   if (path.startsWith("/notifications")) {
     return {
       label: "Сповіщення",
@@ -430,6 +438,28 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         to: "/team",
         icon: Users,
       },
+      ...(permissions.isSuperAdmin || permissions.isSeo
+        ? [
+            {
+              key: "route-payroll",
+              label: "Зарплати",
+              description: "Зарплатна відомість: ставка, премія, утримання по місяцях",
+              kindLabel: "Сторінка",
+              keywords: [
+                "зарплата",
+                "зарплати",
+                "відомість",
+                "оплата праці",
+                "ставка",
+                "премія",
+                "payroll",
+                "salary",
+              ],
+              to: "/payroll",
+              icon: Coins,
+            },
+          ]
+        : []),
       ...(permissions.isSuperAdmin || permissions.isAdmin
         ? [
             {
@@ -444,7 +474,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           ]
         : []),
     ],
-    [permissions.isAdmin, permissions.isSuperAdmin]
+    [permissions.isAdmin, permissions.isSeo, permissions.isSuperAdmin]
   );
 
   const actions: ActionItem[] = useMemo(

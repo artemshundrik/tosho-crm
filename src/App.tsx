@@ -77,6 +77,7 @@ const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
 const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const FinancesPage = lazyWithRetry(() => import("./pages/FinancesPage"));
+const PayrollPage = lazyWithRetry(() => import("./pages/PayrollPage"));
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
@@ -1021,6 +1022,14 @@ function AppRoutes() {
                 <FinancesPage />
               </RouteSuspense>
             </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="payroll"
+          element={
+            <RouteSuspense shell>
+              <PayrollPage />
+            </RouteSuspense>
           }
         />
         <Route
