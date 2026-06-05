@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Loader2, Lock, Users, Wallet } from "lucide-react";
+import { AlertCircle, Check, Loader2, Lock, Wallet } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -20,7 +20,6 @@ import {
   type TeamAvailabilityStatus,
 } from "@/lib/teamAvailability";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -119,7 +118,6 @@ export default function PayrollPage() {
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(() => now.getFullYear());
   const [month, setMonth] = useState(() => now.getMonth() + 1);
-  const [includeInactive, setIncludeInactive] = useState(false);
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
@@ -184,8 +182,8 @@ export default function PayrollPage() {
       .filter(
         (m) =>
           m.employmentStatus !== "rejected" &&
-          !EXCLUDED_USER_IDS.has(m.userId) &&
-          (includeInactive || m.employmentStatus !== "inactive")
+          m.employmentStatus !== "inactive" &&
+          !EXCLUDED_USER_IDS.has(m.userId)
       )
       .map((m) => ({
         userId: m.userId,
@@ -206,7 +204,7 @@ export default function PayrollPage() {
       manual: true,
     }));
     return [...real, ...manual].sort((a, b) => a.name.localeCompare(b.name, "uk"));
-  }, [members, includeInactive]);
+  }, [members]);
 
   // Load saved entries for the selected month and seed the editable drafts.
   useEffect(() => {
@@ -409,15 +407,6 @@ export default function PayrollPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button
-          type="button"
-          variant={includeInactive ? "secondary" : "outline"}
-          size="sm"
-          onClick={() => setIncludeInactive((v) => !v)}
-        >
-          <Users className="mr-1.5 h-3.5 w-3.5" />
-          {includeInactive ? "Показано всіх" : "Лише активні"}
-        </Button>
         {entriesLoading ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -464,7 +453,8 @@ export default function PayrollPage() {
         </div>
       ) : null}
 
-      <Table variant="list" size="md">
+      <div className="-mx-4 md:-mx-5 lg:-mx-6">
+        <Table variant="list" size="md">
           <TableHeader>
             <TableRow>
               <TableHead className="min-w-[220px] pl-6">Співробітник</TableHead>
@@ -633,6 +623,7 @@ export default function PayrollPage() {
             </TableFooter>
           ) : null}
         </Table>
+      </div>
     </div>
   );
 }
