@@ -430,7 +430,7 @@ export default function PayrollPage() {
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: "Ставки", value: totals.base, accent: false },
-          { label: "Премії", value: totals.bonus, accent: false },
+          { label: "Бонуси", value: totals.bonus, accent: false },
           { label: "Утримання", value: totals.deduction, accent: false },
           { label: "До виплати", value: totals.total, accent: true },
         ].map((stat) => (
@@ -464,13 +464,12 @@ export default function PayrollPage() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-        <Table variant="analytics" size="sm">
+      <Table variant="list" size="md">
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-[220px]">Співробітник</TableHead>
+              <TableHead className="min-w-[220px] pl-6">Співробітник</TableHead>
               <TableHead className="text-right">Ставка</TableHead>
-              <TableHead className="text-right">Премія</TableHead>
+              <TableHead className="text-right">Бонус</TableHead>
               <TableHead className="text-right">Утримання</TableHead>
               <TableHead className="text-right">Разом</TableHead>
               <TableHead className="min-w-[180px]">Нотатка</TableHead>
@@ -560,7 +559,7 @@ export default function PayrollPage() {
                         inputMode="decimal"
                         value={draft.bonus}
                         placeholder="0"
-                        aria-label={`Премія, ${name}`}
+                        aria-label={`Бонус, ${name}`}
                         className={numberInputClass}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) =>
@@ -634,7 +633,6 @@ export default function PayrollPage() {
             </TableFooter>
           ) : null}
         </Table>
-      </div>
     </div>
   );
 }
