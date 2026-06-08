@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { InlineLoading } from "@/components/app/loading-primitives";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -49,6 +50,7 @@ import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import {
   SEGMENTED_GROUP,
@@ -93,7 +95,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, Clock3, FileText, FilterX, Gauge, LayoutGrid, Layers3, Search, Target, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChevronRight, Clock3, ExternalLink, FileText, FilterX, Gauge, Image as ImageIcon, LayoutGrid, Layers3, PencilLine, Search, Star, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -165,6 +167,36 @@ type DesignerFilesRow = {
   total: number;
   byExt: Record<string, number>;
 };
+type DesignerWorkEvent = {
+  id: string;
+  createdAt: string;
+  taskId: string | null;
+  outputKind: string | null;
+  designTaskType: DesignTaskType | null;
+  customerName: string | null;
+  customerLogoUrl: string | null;
+  taskNumber: string | null;
+  files: Array<{ id: string; fileName: string; ext: string; storageBucket: string | null; storagePath: string | null; deleted: boolean }>;
+};
+
+type DesignerWorkFile = DesignerWorkEvent["files"][number];
+// One task = one card in the drawer; files split into Візуал / Макет / Файли задачі.
+type DesignerTaskGroup = {
+  key: string;
+  taskId: string | null;
+  taskNumber: string | null;
+  customerName: string | null;
+  customerLogoUrl: string | null;
+  designTaskType: DesignTaskType | null;
+  latestAt: string;
+  byKind: { visualization: DesignerWorkFile[]; layout: DesignerWorkFile[]; attachment: DesignerWorkFile[] };
+};
+
+// Work-kind filter buckets for the drawer (derived from upload output_kind).
+type DesignWorkKind = "all" | "visualization" | "layout" | "attachment";
+const DESIGN_WORK_KIND_PREVIEWABLE_EXTS = new Set([
+  "png", "jpg", "jpeg", "webp", "gif", "avif", "bmp", "pdf", "tif", "tiff",
+]);
 
 const DESIGN_LIST_PAGE_SIZE = 50;
 const DESIGN_LIST_PAGE_INCREMENT = 50;
@@ -1006,6 +1038,10 @@ export default function DesignPage() {
   });
   const [filesReport, setFilesReport] = useState<{ rows: DesignerFilesRow[]; exts: string[] } | null>(null);
   const [filesReportLoading, setFilesReportLoading] = useState(false);
+  const [worksDrawerDesigner, setWorksDrawerDesigner] = useState<{ userId: string; label: string } | null>(null);
+  const [worksDrawerEvents, setWorksDrawerEvents] = useState<DesignerWorkEvent[] | null>(null);
+  const [worksDrawerLoading, setWorksDrawerLoading] = useState(false);
+  const [worksDrawerFilter, setWorksDrawerFilter] = useState<DesignWorkKind>("all");
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   // Keep the input itself instant; let filtering + the full-dataset fetch run at
   // lower priority off the deferred value so fast typing never drops letters.
@@ -1643,6 +1679,149 @@ export default function DesignPage() {
     if (viewMode !== "assignee") return;
     void loadDesignerFilesReport(filesMonth);
   }, [viewMode, filesMonth, loadDesignerFilesReport]);
+
+  const loadDesignerWorks = useCallback(
+    async (uid: string, monthValue: string) => {
+      if (!effectiveTeamId) return;
+      const [yearStr, monthStr] = monthValue.split("-");
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      if (!Number.isFinite(year) || !Number.isFinite(month)) return;
+      const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+      const to = new Date(Date.UTC(year, month, 1)).toISOString();
+
+      setWorksDrawerLoading(true);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from("activity_log")
+          .select("id,created_at,entity_id,metadata")
+          .eq("team_id", effectiveTeamId)
+          .eq("user_id", uid)
+          .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
+          .gte("created_at", from)
+          .lt("created_at", to)
+          .order("created_at", { ascending: false })
+          .limit(2000);
+        if (fetchError) throw fetchError;
+
+        const rows = (data ?? []) as Array<{
+          id: string;
+          created_at: string;
+          entity_id?: string | null;
+          metadata?: {
+            quote_id?: string | null;
+            output_kind?: string | null;
+            design_task_id?: string | null;
+            uploaded_files?: Array<{ id?: string | null; file_name?: string | null; storage_bucket?: string | null; storage_path?: string | null }>;
+          } | null;
+        }>;
+
+        const taskIds = Array.from(
+          new Set(
+            rows
+              .map((row) => row.entity_id ?? row.metadata?.design_task_id ?? null)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+        const taskMeta = new Map<
+          string,
+          {
+            customerName: string | null;
+            customerLogoUrl: string | null;
+            taskNumber: string | null;
+            designTaskType: DesignTaskType | null;
+            liveFileIds: Set<string> | null;
+          }
+        >();
+        if (taskIds.length > 0) {
+          const { data: taskData } = await supabase
+            .from("activity_log")
+            .select("id,metadata")
+            .eq("team_id", effectiveTeamId)
+            .eq("action", "design_task")
+            .in("id", taskIds);
+          for (const task of (taskData ?? []) as Array<{
+            id: string;
+            metadata?: {
+              customer_name?: string | null;
+              customer_logo_url?: string | null;
+              design_task_number?: string | null;
+              design_task_type?: unknown;
+              design_output_files?: Array<{ id?: string | null }>;
+            } | null;
+          }>) {
+            const liveOutputs = Array.isArray(task.metadata?.design_output_files)
+              ? task.metadata.design_output_files
+              : null;
+            taskMeta.set(task.id, {
+              customerName: task.metadata?.customer_name ?? null,
+              customerLogoUrl: task.metadata?.customer_logo_url ?? null,
+              taskNumber: task.metadata?.design_task_number ?? null,
+              designTaskType: parseDesignTaskType(task.metadata?.design_task_type),
+              liveFileIds: liveOutputs
+                ? new Set(liveOutputs.map((file) => String(file?.id ?? "")).filter(Boolean))
+                : null,
+            });
+          }
+        }
+
+        const events: DesignerWorkEvent[] = rows
+          .map((row) => {
+            const taskId = row.entity_id ?? row.metadata?.design_task_id ?? null;
+            const meta = taskId ? taskMeta.get(taskId) : undefined;
+            const isOutputUpload = Boolean(row.metadata?.output_kind);
+            const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
+            const files = uploaded.map((file) => {
+              const name = typeof file?.file_name === "string" ? file.file_name : "";
+              const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+              const fileId = String(file?.id ?? `${row.id}:${name}`);
+              // Deleted = present in the upload event but no longer in the task's
+              // live design_output_files. Only decidable for design outputs whose
+              // task metadata we resolved; otherwise leave it unknown (no badge).
+              const deleted = isOutputUpload && meta?.liveFileIds ? !meta.liveFileIds.has(fileId) : false;
+              return {
+                id: fileId,
+                fileName: name || "—",
+                ext: match ? match[1] : "інше",
+                storageBucket: typeof file?.storage_bucket === "string" ? file.storage_bucket : null,
+                storagePath: typeof file?.storage_path === "string" ? file.storage_path : null,
+                deleted,
+              };
+            });
+            return {
+              id: row.id,
+              createdAt: row.created_at,
+              taskId,
+              outputKind: row.metadata?.output_kind ?? null,
+              designTaskType: meta?.designTaskType ?? null,
+              customerName: meta?.customerName ?? null,
+              customerLogoUrl: meta?.customerLogoUrl ?? null,
+              taskNumber: meta?.taskNumber ?? null,
+              files,
+            };
+          })
+          .filter((event) => event.files.length > 0);
+
+        setWorksDrawerEvents(events);
+      } catch (worksError) {
+        console.warn("Failed to load designer works", worksError);
+        setWorksDrawerEvents([]);
+      } finally {
+        setWorksDrawerLoading(false);
+      }
+    },
+    [effectiveTeamId]
+  );
+
+  const openDesignerWorks = (row: DesignerFilesRow) => {
+    if (!row.userId) return;
+    if (!canSeeAllDesignerFiles && row.userId !== userId) return;
+    const label = (getMemberLabel(row.userId) || row.actorName || "Дизайнер") as string;
+    setWorksDrawerDesigner({ userId: row.userId, label });
+    setWorksDrawerEvents(null);
+    setWorksDrawerFilter("all");
+    void loadDesignerWorks(row.userId, filesMonth);
+  };
 
   const loadTasks = useCallback(async (options?: { force?: boolean; append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     if (!effectiveTeamId) return;
@@ -5310,105 +5489,59 @@ export default function DesignPage() {
 
       {viewMode === "assignee" ? (
         <div className="space-y-4 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
-          <section className="rounded-[18px] border border-border/60 bg-background/70 p-5">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                <Users className="h-3.5 w-3.5" />
-                Balance Team
+          <section className="rounded-[18px] border border-border/60 bg-background/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">Баланс команди</h3>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight text-foreground">Баланс команди дизайнерів</h3>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  Тут менеджер бачить тільки головне: кому можна ставити нову задачу зараз, хто вже завантажений, і чи є задачі без виконавця.
-                </p>
-              </div>
+              <span className="text-xs text-muted-foreground">Кому можна ставити нову задачу зараз</span>
             </div>
 
-            <div className="mt-5">
-              <div className="space-y-4">
-                <div className="border-b border-border/60 pb-5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Рекомендуємо зараз</div>
-                  {recommendedAssigneeGroup?.id && recommendedAssigneeGroup.workload ? (
-                    <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <AvatarBase
-                          src={getMemberAvatar(recommendedAssigneeGroup.id)}
-                          name={recommendedAssigneeGroup.label}
-                          fallback={getInitials(recommendedAssigneeGroup.label)}
-                          size={48}
-                          className="border-border/70"
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-xl font-semibold text-foreground">{recommendedAssigneeGroup.label}</div>
-                          <div className="mt-1 text-[15px] text-muted-foreground">{recommendedAssigneeGroup.workload.recommendation}</div>
+            <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-background/85">
+              <div className="divide-y divide-border/50">
+                {assigneeGrouped
+                  .filter((group) => group.id && group.workload)
+                  .map((group, index) => {
+                    const workload = group.workload;
+                    if (!group.id || !workload) return null;
+                    return (
+                      <div key={`team-balance-${group.id}`} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <AvatarBase
+                            src={getMemberAvatar(group.id)}
+                            name={group.label}
+                            fallback={getInitials(group.label)}
+                            size={34}
+                            className="shrink-0 border-border/70"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-semibold text-foreground">{group.label}</span>
+                              {index === 0 ? (
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                  <Star className="h-3 w-3" />
+                                  Рекомендуємо
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground">{workload.recommendation}</div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span
+                            className="inline-flex min-w-[40px] items-center justify-center rounded-full border border-border/60 bg-background px-2 py-0.5 text-sm font-semibold tabular-nums text-foreground"
+                            title="Активних задач зараз"
+                          >
+                            {workload.activeTaskCount}
+                          </span>
+                          <Badge variant="outline" className={cn("px-2.5 py-1 text-[11px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                            {CAPACITY_LABEL_BY_LEVEL[workload.level]}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2.5">
-                        <Badge variant="outline" className={cn("px-3 py-1.5 text-[12px]", CAPACITY_BADGE_CLASS_BY_LEVEL[recommendedAssigneeGroup.workload.level])}>
-                          {CAPACITY_LABEL_BY_LEVEL[recommendedAssigneeGroup.workload.level]}
-                        </Badge>
-                        <Badge variant="outline" className="border-border/60 px-3 py-1.5 text-[12px]">
-                          {recommendedAssigneeGroup.workload.activeTaskCount} задач
-                        </Badge>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 text-sm text-muted-foreground">Немає доступних дизайнерів для рекомендації.</div>
-                  )}
-                </div>
-
-                <div className="overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
-                  <div className="grid grid-cols-[minmax(260px,1.8fr)_150px_190px] gap-4 border-b border-border/60 px-5 py-4 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    <div>Дизайнер</div>
-                    <div>Задачі зараз</div>
-                    <div>Навантаження</div>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    {assigneeGrouped
-                      .filter((group) => group.id && group.workload)
-                      .map((group, index) => {
-                        const workload = group.workload;
-                        if (!group.id || !workload) return null;
-                        return (
-                          <div
-                            key={`team-balance-${group.id}`}
-                            className={cn(
-                              "grid grid-cols-[minmax(260px,1.8fr)_150px_190px] gap-4 px-5 py-5 transition-colors",
-                              index === 0 ? "bg-primary/5" : "bg-transparent hover:bg-muted/10"
-                            )}
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-4">
-                                <AvatarBase
-                                  src={getMemberAvatar(group.id)}
-                                  name={group.label}
-                                  fallback={getInitials(group.label)}
-                                  size={40}
-                                  className="border-border/70"
-                                />
-                                <div className="min-w-0">
-                                  <div className="truncate text-[18px] font-semibold leading-tight text-foreground">{group.label}</div>
-                                  <div className="mt-1 truncate text-sm text-muted-foreground">
-                                    {workload.recommendation}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="inline-flex min-w-[56px] items-center justify-center rounded-full border border-border/60 bg-background px-3 py-2 text-base font-semibold tabular-nums text-foreground">
-                                {workload.activeTaskCount}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <Badge variant="outline" className={cn("px-3 py-1.5 text-[12px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
-                                {CAPACITY_LABEL_BY_LEVEL[workload.level]}
-                              </Badge>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
+                    );
+                  })}
               </div>
             </div>
           </section>
@@ -5454,9 +5587,12 @@ export default function DesignPage() {
                     {filesReport.rows.map((row) => {
                       const label = row.userId ? getMemberLabel(row.userId) : (row.actorName ?? "Невідомий");
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={row.userId ?? `unknown:${label}`}
-                          className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                          onClick={() => openDesignerWorks(row)}
+                          disabled={!row.userId}
+                          className="flex w-full flex-col gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/10 focus-visible:bg-muted/10 focus-visible:outline-none disabled:cursor-default disabled:hover:bg-transparent sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <AvatarBase
@@ -5468,7 +5604,9 @@ export default function DesignPage() {
                             />
                             <div className="min-w-0">
                               <div className="truncate text-[15px] font-semibold text-foreground">{label}</div>
-                              <div className="text-xs text-muted-foreground">Усього файлів: {row.total}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Усього файлів: {row.total} · <span className="text-primary">відкрити список</span>
+                              </div>
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
@@ -5484,8 +5622,9 @@ export default function DesignPage() {
                                 </span>
                               ) : null
                             )}
+                            <ChevronRight className="ml-1 h-4 w-4 shrink-0 text-muted-foreground" />
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -5495,6 +5634,261 @@ export default function DesignPage() {
           </section>
         </div>
       ) : null}
+
+      <Sheet
+        open={!!worksDrawerDesigner}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWorksDrawerDesigner(null);
+            setWorksDrawerEvents(null);
+          }
+        }}
+      >
+        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <SheetHeader className="space-y-1 border-b border-border/60 p-5">
+            <SheetTitle className="flex items-center gap-2.5">
+              {worksDrawerDesigner ? (
+                <AvatarBase
+                  src={getMemberAvatar(worksDrawerDesigner.userId)}
+                  name={worksDrawerDesigner.label}
+                  fallback={getInitials(worksDrawerDesigner.label)}
+                  size={32}
+                  className="shrink-0 border-border/70"
+                />
+              ) : null}
+              <span className="truncate">{worksDrawerDesigner?.label ?? "Дизайнер"}</span>
+            </SheetTitle>
+            <SheetDescription className="pl-[42px]">
+              Роботи за {monthOptions.find((option) => option.value === filesMonth)?.label ?? filesMonth}
+            </SheetDescription>
+          </SheetHeader>
+
+          {(() => {
+            const events = worksDrawerEvents ?? [];
+            const kindOf = (value: string | null): "visualization" | "layout" | "attachment" =>
+              value === "visualization" ? "visualization" : value === "layout" ? "layout" : "attachment";
+
+            // One card per task; files split into Візуал / Макет / Файли задачі.
+            const groupMap = new Map<string, DesignerTaskGroup>();
+            for (const event of events) {
+              const key = event.taskId ?? `evt:${event.id}`;
+              let group = groupMap.get(key);
+              if (!group) {
+                group = {
+                  key,
+                  taskId: event.taskId,
+                  taskNumber: event.taskNumber,
+                  customerName: event.customerName,
+                  customerLogoUrl: event.customerLogoUrl,
+                  designTaskType: event.designTaskType,
+                  latestAt: event.createdAt,
+                  byKind: { visualization: [], layout: [], attachment: [] },
+                };
+                groupMap.set(key, group);
+              }
+              if (event.createdAt > group.latestAt) group.latestAt = event.createdAt;
+              if (!group.customerName && event.customerName) group.customerName = event.customerName;
+              if (!group.customerLogoUrl && event.customerLogoUrl) group.customerLogoUrl = event.customerLogoUrl;
+              if (!group.taskNumber && event.taskNumber) group.taskNumber = event.taskNumber;
+              if (!group.designTaskType && event.designTaskType) group.designTaskType = event.designTaskType;
+              group.byKind[kindOf(event.outputKind)].push(...event.files);
+            }
+            const groups = Array.from(groupMap.values()).sort((a, b) => (a.latestAt < b.latestAt ? 1 : -1));
+
+            const counts: Record<DesignWorkKind, number> = {
+              all: groups.reduce(
+                (sum, group) => sum + group.byKind.visualization.length + group.byKind.layout.length + group.byKind.attachment.length,
+                0
+              ),
+              visualization: groups.reduce((sum, group) => sum + group.byKind.visualization.length, 0),
+              layout: groups.reduce((sum, group) => sum + group.byKind.layout.length, 0),
+              attachment: groups.reduce((sum, group) => sum + group.byKind.attachment.length, 0),
+            };
+            const filterChips = [
+              { value: "all" as const, label: "Усі", Icon: Layers3, iconCls: "text-muted-foreground" },
+              { value: "visualization" as const, label: "Візуал", Icon: ImageIcon, iconCls: "tone-text-info" },
+              { value: "layout" as const, label: "Макет", Icon: PencilLine, iconCls: "tone-text-success" },
+              { value: "attachment" as const, label: "Файли задачі", Icon: Paperclip, iconCls: "text-muted-foreground" },
+            ].filter((chip) => chip.value === "all" || counts[chip.value] > 0);
+
+            const sectionDefs = [
+              { kind: "visualization" as const, label: "Візуал", Icon: ImageIcon, iconCls: "tone-text-info" },
+              { kind: "layout" as const, label: "Макет", Icon: PencilLine, iconCls: "tone-text-success" },
+              { kind: "attachment" as const, label: "Файли задачі", Icon: Paperclip, iconCls: "text-muted-foreground" },
+            ];
+
+            const renderFile = (file: DesignerWorkFile) => {
+              const isImage =
+                DESIGN_WORK_KIND_PREVIEWABLE_EXTS.has(file.ext) &&
+                !!file.storageBucket &&
+                !!file.storagePath &&
+                !file.deleted;
+              return (
+                <div
+                  key={file.id}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border border-border/40 bg-muted/10 p-2",
+                    file.deleted && "opacity-70"
+                  )}
+                >
+                  {isImage ? (
+                    <StorageObjectImage
+                      bucket={file.storageBucket}
+                      path={file.storagePath}
+                      alt={file.fileName}
+                      variant="thumb"
+                      hoverPreview
+                      className="h-11 w-11 shrink-0 rounded-md border border-border/60 bg-muted/30"
+                    />
+                  ) : (
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-[10px] font-semibold uppercase text-muted-foreground">
+                      {file.ext}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div
+                      className={cn("truncate text-xs font-medium text-foreground", file.deleted && "line-through")}
+                      title={file.fileName}
+                    >
+                      {file.fileName}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase text-muted-foreground">{file.ext}</span>
+                      {file.deleted ? (
+                        <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-destructive">
+                          Видалено
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            const visibleGroups = groups.filter((group) =>
+              worksDrawerFilter === "all"
+                ? group.byKind.visualization.length + group.byKind.layout.length + group.byKind.attachment.length > 0
+                : group.byKind[worksDrawerFilter].length > 0
+            );
+
+            return (
+              <>
+                {!worksDrawerLoading && counts.all > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 border-b border-border/60 px-5 py-3">
+                    {filterChips.map((chip) => {
+                      const active = worksDrawerFilter === chip.value;
+                      return (
+                        <button
+                          key={chip.value}
+                          type="button"
+                          onClick={() => setWorksDrawerFilter(chip.value)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                            active
+                              ? "border-primary/40 bg-primary/10 text-foreground"
+                              : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/20"
+                          )}
+                        >
+                          <chip.Icon className={cn("h-3.5 w-3.5", active ? "" : chip.iconCls)} />
+                          <span>{chip.label}</span>
+                          <span className="tabular-nums opacity-70">{counts[chip.value]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  {worksDrawerLoading ? (
+                    <InlineLoading label="Завантажуємо роботи..." />
+                  ) : visibleGroups.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+                      {counts.all === 0 ? "За цей місяць немає завантажених робіт." : "Немає робіт цього типу."}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {visibleGroups.map((group) => {
+                        const TypeIcon = group.designTaskType ? DESIGN_TASK_TYPE_ICONS[group.designTaskType] : null;
+                        let dateLabel = group.latestAt;
+                        try {
+                          dateLabel = new Date(group.latestAt).toLocaleString("uk-UA", {
+                            day: "numeric",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
+                        } catch {
+                          dateLabel = group.latestAt;
+                        }
+                        const sectionsToShow = sectionDefs.filter(
+                          (section) =>
+                            (worksDrawerFilter === "all" || worksDrawerFilter === section.kind) &&
+                            group.byKind[section.kind].length > 0
+                        );
+                        return (
+                          <div key={group.key} className="rounded-xl border border-border/60 bg-background/60 p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                {group.customerName ? (
+                                  <EntityAvatar
+                                    src={group.customerLogoUrl}
+                                    name={group.customerName}
+                                    fallback={getInitials(group.customerName)}
+                                    size={20}
+                                    className="shrink-0 border-border/60"
+                                  />
+                                ) : null}
+                                <span className="truncate text-sm font-semibold text-foreground">
+                                  {group.customerName ?? "Без замовника"}
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-xs text-muted-foreground">{dateLabel}</span>
+                            </div>
+
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                              {TypeIcon && group.designTaskType ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                  <TypeIcon className="h-3 w-3" />
+                                  {DESIGN_TASK_TYPE_LABELS[group.designTaskType]}
+                                </span>
+                              ) : null}
+                              {group.taskId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/design/${group.taskId}`)}
+                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                >
+                                  {group.taskNumber ?? "Відкрити задачу"}
+                                  <ExternalLink className="h-3 w-3" />
+                                </button>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-3 space-y-3">
+                              {sectionsToShow.map((section) => (
+                                <div key={section.kind}>
+                                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <section.Icon className={cn("h-3.5 w-3.5", section.iconCls)} />
+                                    <span>{section.label}</span>
+                                    <span className="tabular-nums opacity-70">{group.byKind[section.kind].length}</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 gap-1.5">
+                                    {group.byKind[section.kind].map(renderFile)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
 
       <Dialog
         open={estimateDialogOpen}
