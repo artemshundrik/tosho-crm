@@ -95,7 +95,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, ChevronRight, Clock3, ExternalLink, FileText, FilterX, Gauge, Image as ImageIcon, LayoutGrid, Layers3, PencilLine, Search, Star, Target, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChevronRight, Clock3, ExternalLink, FileText, FilterX, Gauge, Image as ImageIcon, Info, LayoutGrid, Layers3, PencilLine, Search, Star, Target, Users, X } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -192,8 +192,11 @@ type DesignerTaskGroup = {
   byKind: { visualization: DesignerWorkFile[]; layout: DesignerWorkFile[]; attachment: DesignerWorkFile[] };
 };
 
-// Work-kind filter buckets for the drawer (derived from upload output_kind).
+// File-kind filter buckets for the drawer (derived from upload output_kind).
 type DesignWorkKind = "all" | "visualization" | "layout" | "attachment";
+// One uploaded file (raw) for the monthly report, carrying its task type so the
+// report + drawer can be filtered by design task type with no refetch.
+type DesignerFileRecord = { userId: string; ext: string; designTaskType: DesignTaskType | null };
 const DESIGN_WORK_KIND_PREVIEWABLE_EXTS = new Set([
   "png", "jpg", "jpeg", "webp", "gif", "avif", "bmp", "pdf", "tif", "tiff",
 ]);
@@ -1036,8 +1039,9 @@ export default function DesignPage() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [filesReport, setFilesReport] = useState<{ rows: DesignerFilesRow[]; exts: string[] } | null>(null);
+  const [filesRaw, setFilesRaw] = useState<DesignerFileRecord[] | null>(null);
   const [filesReportLoading, setFilesReportLoading] = useState(false);
+  const [worksTaskTypeFilter, setWorksTaskTypeFilter] = useState<DesignTaskType | "all">("all");
   const [worksDrawerDesigner, setWorksDrawerDesigner] = useState<{ userId: string; label: string } | null>(null);
   const [worksDrawerEvents, setWorksDrawerEvents] = useState<DesignerWorkEvent[] | null>(null);
   const [worksDrawerLoading, setWorksDrawerLoading] = useState(false);
@@ -1612,7 +1616,7 @@ export default function DesignPage() {
   const loadDesignerFilesReport = useCallback(
     async (monthValue: string) => {
       if (!effectiveTeamId) {
-        setFilesReport(null);
+        setFilesRaw(null);
         return;
       }
       const [yearStr, monthStr] = monthValue.split("-");
@@ -1626,7 +1630,7 @@ export default function DesignPage() {
       try {
         const { data, error: fetchError } = await supabase
           .from("activity_log")
-          .select("user_id,actor_name,metadata")
+          .select("user_id,entity_id,metadata")
           .eq("team_id", effectiveTeamId)
           .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
           .gte("created_at", from)
@@ -1634,46 +1638,95 @@ export default function DesignPage() {
           .limit(5000);
         if (fetchError) throw fetchError;
 
-        const byUser = new Map<string, DesignerFilesRow>();
-        const extSet = new Set<string>();
-        for (const row of (data ?? []) as Array<{
+        const rows = (data ?? []) as Array<{
           user_id?: string | null;
-          actor_name?: string | null;
-          metadata?: { uploaded_files?: Array<{ file_name?: string | null }> } | null;
-        }>) {
-          // Report covers designers only — skip uploads by anyone else.
+          entity_id?: string | null;
+          metadata?: {
+            design_task_id?: string | null;
+            uploaded_files?: Array<{ file_name?: string | null }>;
+          } | null;
+        }>;
+
+        // Resolve each upload's task type (for the by-task-type filter).
+        const taskIds = Array.from(
+          new Set(
+            rows
+              .map((row) => row.entity_id ?? row.metadata?.design_task_id ?? null)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+        const taskTypeById = new Map<string, DesignTaskType | null>();
+        if (taskIds.length > 0) {
+          const { data: taskData } = await supabase
+            .from("activity_log")
+            .select("id,metadata")
+            .eq("team_id", effectiveTeamId)
+            .eq("action", "design_task")
+            .in("id", taskIds);
+          for (const task of (taskData ?? []) as Array<{ id: string; metadata?: { design_task_type?: unknown } | null }>) {
+            taskTypeById.set(task.id, parseDesignTaskType(task.metadata?.design_task_type));
+          }
+        }
+
+        const records: DesignerFileRecord[] = [];
+        for (const row of rows) {
+          // Designers only; non-admin viewers see only their own uploads.
           if (!row.user_id || !designerIdSet.has(row.user_id)) continue;
-          // Non-admin viewers (incl. designers) only see their own row.
           if (!canSeeAllDesignerFiles && row.user_id !== userId) continue;
+          const taskId = row.entity_id ?? row.metadata?.design_task_id ?? null;
+          const designTaskType = taskId ? taskTypeById.get(taskId) ?? null : null;
           const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
           for (const file of uploaded) {
             const name = typeof file?.file_name === "string" ? file.file_name : "";
             const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
-            const ext = match ? match[1] : "інше";
-            extSet.add(ext);
-            const key = row.user_id ?? "__unknown__";
-            let entry = byUser.get(key);
-            if (!entry) {
-              entry = { userId: row.user_id ?? null, actorName: row.actor_name ?? null, total: 0, byExt: {} };
-              byUser.set(key, entry);
-            }
-            entry.total += 1;
-            entry.byExt[ext] = (entry.byExt[ext] ?? 0) + 1;
+            records.push({ userId: row.user_id, ext: match ? match[1] : "інше", designTaskType });
           }
         }
-
-        const exts = Array.from(extSet).sort((a, b) => a.localeCompare(b));
-        const rows = Array.from(byUser.values()).sort((a, b) => b.total - a.total);
-        setFilesReport({ rows, exts });
+        setFilesRaw(records);
       } catch (reportError) {
         console.warn("Failed to load designer files report", reportError);
-        setFilesReport({ rows: [], exts: [] });
+        setFilesRaw([]);
       } finally {
         setFilesReportLoading(false);
       }
     },
     [effectiveTeamId, designerIdSet, canSeeAllDesignerFiles, userId]
   );
+
+  // Derived report (aggregated by designer + ext), honouring the task-type filter.
+  const filesReport = useMemo(() => {
+    if (!filesRaw) return null;
+    const byUser = new Map<string, DesignerFilesRow>();
+    const extSet = new Set<string>();
+    for (const record of filesRaw) {
+      if (worksTaskTypeFilter !== "all" && record.designTaskType !== worksTaskTypeFilter) continue;
+      extSet.add(record.ext);
+      let entry = byUser.get(record.userId);
+      if (!entry) {
+        entry = { userId: record.userId, actorName: null, total: 0, byExt: {} };
+        byUser.set(record.userId, entry);
+      }
+      entry.total += 1;
+      entry.byExt[record.ext] = (entry.byExt[record.ext] ?? 0) + 1;
+    }
+    return {
+      rows: Array.from(byUser.values()).sort((a, b) => b.total - a.total),
+      exts: Array.from(extSet).sort((a, b) => a.localeCompare(b)),
+    };
+  }, [filesRaw, worksTaskTypeFilter]);
+
+  // Task types present this month (for the filter dropdown + counts).
+  const availableTaskTypes = useMemo(() => {
+    const counts = new Map<DesignTaskType, number>();
+    for (const record of filesRaw ?? []) {
+      if (record.designTaskType) counts.set(record.designTaskType, (counts.get(record.designTaskType) ?? 0) + 1);
+    }
+    return DESIGN_TASK_TYPE_OPTIONS.filter((option) => counts.has(option.value)).map((option) => ({
+      value: option.value,
+      label: option.label,
+      count: counts.get(option.value) ?? 0,
+    }));
+  }, [filesRaw]);
 
   useEffect(() => {
     if (viewMode !== "assignee") return;
@@ -5548,16 +5601,19 @@ export default function DesignPage() {
 
           <section className="rounded-[18px] border border-border/60 bg-background/70 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
                   <FileText className="h-3.5 w-3.5" />
                   Файли за період
                 </div>
-                <div>
+                <div className="flex items-center gap-1.5">
                   <h3 className="text-lg font-semibold tracking-tight text-foreground">Скільки файлів залив кожен дизайнер</h3>
-                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                    Усі завантаження за місяць (візуали, макети, файли задач) із розбивкою за типами — включно з файлами, які згодом видалили.
-                  </p>
+                  <span className="group/info relative inline-flex">
+                    <Info className="h-4 w-4 cursor-help text-muted-foreground/70" />
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] leading-relaxed text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/info:opacity-100">
+                      Усі завантаження за місяць (візуали, макети, файли задач) із розбивкою за типами — включно з файлами, які згодом видалили.
+                    </span>
+                  </span>
                 </div>
               </div>
               <Select value={filesMonth} onValueChange={setFilesMonth}>
@@ -5573,6 +5629,35 @@ export default function DesignPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {availableTaskTypes.length > 0 ? (
+              <div className="mt-4 overflow-x-auto">
+                <div className={cn(SEGMENTED_GROUP, "w-max")}>
+                  {[
+                    { value: "all" as DesignTaskType | "all", label: "Усі", Icon: Layers3, count: filesRaw?.length ?? 0 },
+                    ...availableTaskTypes.map((type) => ({
+                      value: type.value as DesignTaskType | "all",
+                      label: type.label,
+                      Icon: DESIGN_TASK_TYPE_ICONS[type.value],
+                      count: type.count,
+                    })),
+                  ].map((tab) => (
+                    <Button
+                      key={tab.value}
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={worksTaskTypeFilter === tab.value}
+                      onClick={() => setWorksTaskTypeFilter(tab.value)}
+                      className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
+                    >
+                      <tab.Icon className="h-3.5 w-3.5" />
+                      <span>{tab.label}</span>
+                      <span className="ml-0.5 rounded-md bg-card px-1.5 py-0.5 text-[10px] tabular-nums">{tab.count}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-5">
               {filesReportLoading ? (
@@ -5644,7 +5729,7 @@ export default function DesignPage() {
           }
         }}
       >
-        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[540px]">
           <SheetHeader className="space-y-1 border-b border-border/60 p-5">
             <SheetTitle className="flex items-center gap-2.5">
               {worksDrawerDesigner ? (
@@ -5695,14 +5780,27 @@ export default function DesignPage() {
             }
             const groups = Array.from(groupMap.values()).sort((a, b) => (a.latestAt < b.latestAt ? 1 : -1));
 
+            const groupFileCount = (group: DesignerTaskGroup) =>
+              group.byKind.visualization.length + group.byKind.layout.length + group.byKind.attachment.length;
+
+            // Task types present for this designer (dropdown options + file counts).
+            const drawerTypeCounts = new Map<DesignTaskType, number>();
+            for (const group of groups) {
+              if (group.designTaskType) {
+                drawerTypeCounts.set(group.designTaskType, (drawerTypeCounts.get(group.designTaskType) ?? 0) + groupFileCount(group));
+              }
+            }
+            const drawerTaskTypes = DESIGN_TASK_TYPE_OPTIONS.filter((option) => drawerTypeCounts.has(option.value));
+
+            // Scope by the shared task-type filter first so the kind chips/counts match.
+            const scopedGroups =
+              worksTaskTypeFilter === "all" ? groups : groups.filter((group) => group.designTaskType === worksTaskTypeFilter);
+
             const counts: Record<DesignWorkKind, number> = {
-              all: groups.reduce(
-                (sum, group) => sum + group.byKind.visualization.length + group.byKind.layout.length + group.byKind.attachment.length,
-                0
-              ),
-              visualization: groups.reduce((sum, group) => sum + group.byKind.visualization.length, 0),
-              layout: groups.reduce((sum, group) => sum + group.byKind.layout.length, 0),
-              attachment: groups.reduce((sum, group) => sum + group.byKind.attachment.length, 0),
+              all: scopedGroups.reduce((sum, group) => sum + groupFileCount(group), 0),
+              visualization: scopedGroups.reduce((sum, group) => sum + group.byKind.visualization.length, 0),
+              layout: scopedGroups.reduce((sum, group) => sum + group.byKind.layout.length, 0),
+              attachment: scopedGroups.reduce((sum, group) => sum + group.byKind.attachment.length, 0),
             };
             const filterChips = [
               { value: "all" as const, label: "Усі", Icon: Layers3, iconCls: "text-muted-foreground" },
@@ -5716,6 +5814,10 @@ export default function DesignPage() {
               { kind: "layout" as const, label: "Макет", Icon: PencilLine, iconCls: "tone-text-success" },
               { kind: "attachment" as const, label: "Файли задачі", Icon: Paperclip, iconCls: "text-muted-foreground" },
             ];
+
+            const visibleGroups = scopedGroups.filter((group) =>
+              worksDrawerFilter === "all" ? groupFileCount(group) > 0 : group.byKind[worksDrawerFilter].length > 0
+            );
 
             const renderFile = (file: DesignerWorkFile) => {
               const isImage =
@@ -5765,36 +5867,61 @@ export default function DesignPage() {
               );
             };
 
-            const visibleGroups = groups.filter((group) =>
-              worksDrawerFilter === "all"
-                ? group.byKind.visualization.length + group.byKind.layout.length + group.byKind.attachment.length > 0
-                : group.byKind[worksDrawerFilter].length > 0
-            );
-
             return (
               <>
-                {!worksDrawerLoading && counts.all > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 border-b border-border/60 px-5 py-3">
-                    {filterChips.map((chip) => {
-                      const active = worksDrawerFilter === chip.value;
-                      return (
-                        <button
-                          key={chip.value}
-                          type="button"
-                          onClick={() => setWorksDrawerFilter(chip.value)}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                            active
-                              ? "border-primary/40 bg-primary/10 text-foreground"
-                              : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/20"
-                          )}
-                        >
-                          <chip.Icon className={cn("h-3.5 w-3.5", active ? "" : chip.iconCls)} />
-                          <span>{chip.label}</span>
-                          <span className="tabular-nums opacity-70">{counts[chip.value]}</span>
-                        </button>
-                      );
-                    })}
+                {!worksDrawerLoading && groups.length > 0 ? (
+                  <div className="space-y-2 border-b border-border/60 px-5 py-3">
+                    {drawerTaskTypes.length > 0 ? (
+                      <Select
+                        value={worksTaskTypeFilter}
+                        onValueChange={(value) => setWorksTaskTypeFilter(value as DesignTaskType | "all")}
+                      >
+                        <SelectTrigger className="h-8 w-full text-xs">
+                          <SelectValue placeholder="Усі типи задач" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            <span className="inline-flex items-center gap-2">
+                              <Layers3 className="h-3.5 w-3.5 text-muted-foreground" />
+                              Усі типи задач
+                            </span>
+                          </SelectItem>
+                          {drawerTaskTypes.map((type) => {
+                            const TypeOptionIcon = DESIGN_TASK_TYPE_ICONS[type.value];
+                            return (
+                              <SelectItem key={type.value} value={type.value}>
+                                <span className="inline-flex items-center gap-2">
+                                  <TypeOptionIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                  {type.label} ({drawerTypeCounts.get(type.value) ?? 0})
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1.5">
+                      {filterChips.map((chip) => {
+                        const active = worksDrawerFilter === chip.value;
+                        return (
+                          <button
+                            key={chip.value}
+                            type="button"
+                            onClick={() => setWorksDrawerFilter(chip.value)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                              active
+                                ? "border-primary/40 bg-primary/10 text-foreground"
+                                : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/20"
+                            )}
+                          >
+                            <chip.Icon className={cn("h-3.5 w-3.5", active ? "" : chip.iconCls)} />
+                            <span>{chip.label}</span>
+                            <span className="tabular-nums opacity-70">{counts[chip.value]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null}
 
@@ -5803,7 +5930,7 @@ export default function DesignPage() {
                     <InlineLoading label="Завантажуємо роботи..." />
                   ) : visibleGroups.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
-                      {counts.all === 0 ? "За цей місяць немає завантажених робіт." : "Немає робіт цього типу."}
+                      {groups.length === 0 ? "За цей місяць немає завантажених робіт." : "Немає робіт за обраним фільтром."}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -5820,11 +5947,6 @@ export default function DesignPage() {
                         } catch {
                           dateLabel = group.latestAt;
                         }
-                        const sectionsToShow = sectionDefs.filter(
-                          (section) =>
-                            (worksDrawerFilter === "all" || worksDrawerFilter === section.kind) &&
-                            group.byKind[section.kind].length > 0
-                        );
                         return (
                           <div key={group.key} className="rounded-xl border border-border/60 bg-background/60 p-3">
                             <div className="flex items-start justify-between gap-2">
@@ -5865,18 +5987,24 @@ export default function DesignPage() {
                             </div>
 
                             <div className="mt-3 space-y-3">
-                              {sectionsToShow.map((section) => (
-                                <div key={section.kind}>
-                                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    <section.Icon className={cn("h-3.5 w-3.5", section.iconCls)} />
-                                    <span>{section.label}</span>
-                                    <span className="tabular-nums opacity-70">{group.byKind[section.kind].length}</span>
+                              {sectionDefs
+                                .filter(
+                                  (section) =>
+                                    (worksDrawerFilter === "all" || worksDrawerFilter === section.kind) &&
+                                    group.byKind[section.kind].length > 0
+                                )
+                                .map((section) => (
+                                  <div key={section.kind}>
+                                    <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                      <section.Icon className={cn("h-3.5 w-3.5", section.iconCls)} />
+                                      <span>{section.label}</span>
+                                      <span className="tabular-nums opacity-70">{group.byKind[section.kind].length}</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-1.5">
+                                      {group.byKind[section.kind].map(renderFile)}
+                                    </div>
                                   </div>
-                                  <div className="grid grid-cols-1 gap-1.5">
-                                    {group.byKind[section.kind].map(renderFile)}
-                                  </div>
-                                </div>
-                              ))}
+                                ))}
                             </div>
                           </div>
                         );
