@@ -420,7 +420,7 @@ export default function PayrollPage() {
         {[
           { label: "Ставки", value: totals.base, accent: false },
           { label: "Бонуси", value: totals.bonus, accent: false },
-          { label: "Утримання", value: totals.deduction, accent: false },
+          { label: "Офіційна ЗП", value: totals.deduction, accent: false },
           { label: "До виплати", value: totals.total, accent: true },
         ].map((stat) => (
           <div
@@ -460,7 +460,7 @@ export default function PayrollPage() {
               <TableHead className="min-w-[220px] pl-6">Співробітник</TableHead>
               <TableHead className="text-right">Ставка</TableHead>
               <TableHead className="text-right">Бонус</TableHead>
-              <TableHead className="text-right">Утримання</TableHead>
+              <TableHead className="text-right">Офіційна ЗП</TableHead>
               <TableHead className="text-right">Разом</TableHead>
               <TableHead className="min-w-[180px]">Нотатка</TableHead>
               <TableHead className="w-10" aria-label="Статус збереження" />
@@ -562,7 +562,7 @@ export default function PayrollPage() {
                         inputMode="decimal"
                         value={draft.deduction}
                         placeholder="0"
-                        aria-label={`Утримання, ${name}`}
+                        aria-label={`Офіційна ЗП, ${name}`}
                         className={numberInputClass}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) =>
