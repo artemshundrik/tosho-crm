@@ -3819,7 +3819,16 @@ export default function DesignTaskPage() {
   }, [task?.id]);
 
   const restoreDesignOutputsFromHistoryIfNeeded = useCallback(async () => {
-    if (!task || !effectiveTeamId || !isUuid(task.quoteId) || designOutputFiles.length > 0) return;
+    if (!task || !effectiveTeamId || !isUuid(task.quoteId)) return;
+    // Gate on the PERSISTED metadata, not the transient `designOutputFiles`
+    // state. On load that state is briefly empty while the task fetch resolves;
+    // gating on it let this recovery fire in that window and re-add files from
+    // the append-only upload history — resurrecting files the user had deleted.
+    // Only recover when the saved task genuinely has zero output files.
+    const persistedOutputFiles = Array.isArray(task.metadata?.design_output_files)
+      ? (task.metadata.design_output_files as unknown[])
+      : [];
+    if (persistedOutputFiles.length > 0) return;
     if (restoredDesignOutputsTaskIdRef.current === task.id) return;
 
     const metadata = task.metadata ?? {};
@@ -3865,7 +3874,7 @@ export default function DesignTaskPage() {
     toast.success("Матеріали дизайн-задачі відновлено", {
       description: `Повернуто ${recoveredFiles.length} файл(и) з історії завантажень.`,
     });
-  }, [designOutputFiles.length, effectiveTeamId, task, userId]);
+  }, [effectiveTeamId, task, userId]);
 
   useEffect(() => {
     if (restoredDesignOutputsTaskIdRef.current && restoredDesignOutputsTaskIdRef.current !== task?.id) {
