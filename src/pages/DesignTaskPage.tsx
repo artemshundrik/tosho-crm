@@ -1448,6 +1448,12 @@ export default function DesignTaskPage() {
   const ghostOutputReconciledTaskIdRef = useRef<string | null>(null);
   const restoredDesignOutputsTaskIdRef = useRef<string | null>(null);
   const migratedDesignOutputsTaskIdRef = useRef<string | null>(null);
+  // Serializes design-output file removals. Each removal is read-latest-metadata
+  // → drop one → write-back; running them concurrently let the last writer
+  // clobber the others, re-adding files whose storage was already deleted
+  // (ghosts). Chaining forces strictly sequential removals so each one sees the
+  // previous write.
+  const designOutputRemovalChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const [loading, setLoading] = useState(() => !initialCache?.task);
   const [error, setError] = useState<string | null>(null);
   const [briefDraft, setBriefDraft] = useState("");
@@ -4270,11 +4276,12 @@ export default function DesignTaskPage() {
     }
   };
 
-  const handleRemoveDesignFile = async (fileId: string) => {
+  const removeDesignFileInner = async (fileId: string) => {
     if (!ensureCanEdit()) return;
     const target = designOutputFiles.find((file) => file.id === fileId);
     if (!target) return;
     const taskQuoteId = task?.quoteId ?? null;
+    setOutputSaving(true);
     try {
       // Storage delete FIRST so any concurrent recovery (history scan) sees the
       // object as missing and skips restoration. Only then update metadata and
@@ -4293,18 +4300,6 @@ export default function DesignTaskPage() {
         if (quoteAttachmentDeleteError) throw quoteAttachmentDeleteError;
       }
 
-      const nextFiles = designOutputFiles.filter((file) => {
-        if (file.id === fileId) return false;
-        if (
-          target.storage_bucket &&
-          target.storage_path &&
-          file.storage_bucket === target.storage_bucket &&
-          file.storage_path === target.storage_path
-        ) {
-          return false;
-        }
-        return true;
-      });
       const { data: latestRow, error: latestRowError } = await supabase
         .from("activity_log")
         .select("metadata")
@@ -4366,7 +4361,23 @@ export default function DesignTaskPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
-      setDesignOutputFiles(nextFiles);
+      // Functional update: under serialized removals the closure's
+      // `designOutputFiles` may be stale, so filter from the latest state to
+      // avoid an already-removed file flashing back into the list.
+      setDesignOutputFiles((prev) =>
+        prev.filter((file) => {
+          if (file.id === fileId) return false;
+          if (
+            target.storage_bucket &&
+            target.storage_path &&
+            file.storage_bucket === target.storage_bucket &&
+            file.storage_path === target.storage_path
+          ) {
+            return false;
+          }
+          return true;
+        })
+      );
       setFileAccessUrlByKey((prev) => {
         if (!target.storage_bucket || !target.storage_path) return prev;
         const key = `${target.storage_bucket}:${target.storage_path}`;
@@ -4378,7 +4389,22 @@ export default function DesignTaskPage() {
       toast.success("Файл видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
+    } finally {
+      setOutputSaving(false);
     }
+  };
+
+  // Public entry point: enqueue removals on a single chain so concurrent deletes
+  // run strictly sequentially. Each removal re-reads the latest metadata before
+  // writing it back; without serialization a second delete reads the same
+  // pre-delete snapshot and the last write clobbers the first, re-adding files
+  // whose storage was already removed (ghosts).
+  const handleRemoveDesignFile = (fileId: string) => {
+    const next = designOutputRemovalChainRef.current
+      .catch(() => {})
+      .then(() => removeDesignFileInner(fileId));
+    designOutputRemovalChainRef.current = next;
+    return next;
   };
 
   const handleRemoveDesignLink = async (linkId: string) => {
