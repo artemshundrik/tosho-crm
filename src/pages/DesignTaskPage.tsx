@@ -6481,6 +6481,14 @@ export default function DesignTaskPage() {
     () => getSelectedDesignOutputLabelsFromMetadata(task?.metadata, "layout"),
     [task?.metadata]
   );
+  // Total files per kind for the tab counters (shows 0 when empty).
+  const designOutputCountByKind = useMemo(
+    () => ({
+      visualization: designOutputFiles.filter((file) => file.output_kind === "visualization").length,
+      layout: designOutputFiles.filter((file) => file.output_kind === "layout").length,
+    }),
+    [designOutputFiles]
+  );
   const requiresVisualizationOutput =
     task?.designTaskType === "visualization" || task?.designTaskType === "visualization_layout_adaptation";
   const requiresLayoutOutput =
@@ -9694,6 +9702,9 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="visualization" className="gap-2">
                     <ImageIcon className="h-4 w-4" />
                     <span>Візуал</span>
+                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      {designOutputCountByKind.visualization}
+                    </span>
                     {selectedVisualizationOutputFileIds.length > 0 ? (
                       <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
                         {selectedVisualizationOutputFileIds.length}
@@ -9703,6 +9714,9 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="layout" className="gap-2">
                     <PencilLine className="h-4 w-4" />
                     <span>Макет</span>
+                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      {designOutputCountByKind.layout}
+                    </span>
                     {selectedLayoutOutputFileIds.length > 0 ? (
                       <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
                         {selectedLayoutOutputFileIds.length}
