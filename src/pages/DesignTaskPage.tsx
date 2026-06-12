@@ -4335,6 +4335,12 @@ export default function DesignTaskPage() {
       const nextMetadataPatch = buildOutputSelectionMetadata(latestMetadata, nextSelectedByKind, actorLabel);
       const nextMetadata: Record<string, unknown> = {
         ...latestMetadata,
+        // Selection metadata FIRST: buildOutputSelectionMetadata returns a full
+        // copy of latestMetadata (including the OLD design_output_files), so the
+        // authoritative lists below MUST come after it. Spreading it last re-added
+        // the just-removed file (confirmed via [del-debug]: writtenLen 3 vs
+        // expectedLen 2) — that was the delete-doesn't-stick bug.
+        ...nextMetadataPatch,
         design_output_files: nextFilesForMeta,
         design_output_links: designOutputLinks.map((link) => ({
           id: link.id,
@@ -4352,14 +4358,19 @@ export default function DesignTaskPage() {
               .filter((entry): entry is string => !!entry)
           )
         ),
-        ...nextMetadataPatch,
       };
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("activity_log")
         .update({ metadata: nextMetadata })
         .eq("id", task?.id)
-        .eq("team_id", effectiveTeamId);
+        .eq("team_id", effectiveTeamId)
+        .select("id");
       if (updateError) throw updateError;
+      // Guard against a silent no-op write (e.g. RLS/lock filtering the row):
+      // without it the toast would falsely report success while the file stays.
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error("Видалення не збережено (0 рядків оновлено).");
+      }
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
       // Functional update: under serialized removals the closure's
       // `designOutputFiles` may be stale, so filter from the latest state to
