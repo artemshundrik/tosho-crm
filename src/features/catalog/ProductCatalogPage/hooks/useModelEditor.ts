@@ -517,13 +517,31 @@ export function useModelEditor({
    * Opens drawer for creating a new model
    */
   const openCreateDrawer = () => {
+    // A model lives under a KIND, and that kind must belong to the selected TYPE.
+    // Resolve the target kind strictly from the selected type — never inherit a
+    // kind from a different type. (A newly created, still-empty type used to
+    // keep the previously selected kind, e.g. a fresh "Браслети" inheriting
+    // "Аналізатор грунту", which silently filed the model under that category.)
+    const targetType =
+      catalog.find((type) => type.id === selectedTypeId) ?? catalog[0] ?? null;
+    const targetKindId =
+      targetType?.kinds.find((kind) => kind.id === selectedKindId)?.id ??
+      targetType?.kinds[0]?.id ??
+      "";
+
+    if (!targetType) {
+      toast.error("Спочатку оберіть категорію.");
+      return;
+    }
+    if (!targetKindId) {
+      toast.error("У цій категорії ще немає жодного виду. Спочатку додайте вид, потім — модель.");
+      return;
+    }
+
     setEditingModelId(null);
-    lockedCategoryRef.current =
-      selectedTypeId && selectedKindId
-        ? { typeId: selectedTypeId, kindId: selectedKindId }
-        : null;
-    setDraftTypeId(selectedTypeId || catalog[0]?.id || "");
-    setDraftKindId(selectedKindId || catalog[0]?.kinds[0]?.id || "");
+    lockedCategoryRef.current = { typeId: targetType.id, kindId: targetKindId };
+    setDraftTypeId(targetType.id);
+    setDraftKindId(targetKindId);
     setDraftName("");
     setDraftFixedPrice(String(DEFAULT_PRICE));
     setDraftPriceMode("fixed");
@@ -1173,7 +1191,15 @@ export function useModelEditor({
       toast.error("Оберіть вид товару.");
       return;
     }
-    
+    // Guard against an inconsistent Тип/Вид pair: the model must be saved under a
+    // kind that belongs to the chosen type. (Defense in depth — prevents a stale
+    // cross-type kind from filing the model under the wrong category.)
+    const draftTypeForSave = catalog.find((type) => type.id === draftTypeId);
+    if (draftTypeForSave && !draftTypeForSave.kinds.some((kind) => kind.id === draftKindId)) {
+      toast.error("Вид не належить обраній категорії. Оберіть вид ще раз.");
+      return;
+    }
+
     setSavingModel(true);
 
     const modelId = editingModelId ?? createLocalId();

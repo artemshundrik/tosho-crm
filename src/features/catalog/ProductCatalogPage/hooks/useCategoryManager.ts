@@ -169,6 +169,9 @@ export function useCategoryManager({
           
           setCatalog((prev) => [...prev, newType]);
           setSelectedTypeId(data.id);
+          // A brand-new type has no kinds yet; drop any previously selected kind
+          // so it can't be inherited as the target when adding a model.
+          setSelectedKindId("");
         }
       } else {
         // KIND mode
