@@ -9493,11 +9493,27 @@ export default function DesignTaskPage() {
                             key={request.id}
                             data-anchor-id={`change_request:${request.id}`}
                             className={cn(
-                              "rounded-lg border border-border/50 bg-card/30 p-4 transition-shadow",
+                              "rounded-lg border p-4 transition",
+                              isNewestChangeRequest && briefChangeRequests.length > 1
+                                ? "border-primary/40 bg-primary/[0.05]"
+                                : "border-border/50 bg-card/30",
+                              // Older правки recede (museum) but stay fully interactive — opacity restores on hover.
+                              !isNewestChangeRequest &&
+                                briefChangeRequests.length > 1 &&
+                                highlightedAnchorId !== `change_request:${request.id}` &&
+                                "opacity-70 hover:opacity-100",
                               highlightedAnchorId === `change_request:${request.id}` &&
                                 "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
                             )}
                           >
+                            {isNewestChangeRequest && briefChangeRequests.length > 1 ? (
+                              <div className="mb-2.5 flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                  Активна правка
+                                </span>
+                              </div>
+                            ) : null}
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex min-w-0 items-center gap-2.5">
                                 <AvatarBase
