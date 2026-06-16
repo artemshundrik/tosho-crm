@@ -4961,13 +4961,17 @@ export default function DesignTaskPage() {
     }
     setTimerBusy("start");
     try {
+      // The newest правка is the "active round": attribute time to it automatically.
+      // Before any правка (or before the migration loads the breakdown) it stays general/ТЗ.
+      const changeRequestId = designTimerBreakdown ? newestChangeRequestId : null;
       await startDesignTaskTimer({
         teamId: effectiveTeamId,
         taskId: task.id,
         userId,
+        changeRequestId,
       });
       await loadTimerSummary(task.id);
-      toast.success("Таймер запущено");
+      toast.success(changeRequestId ? "Таймер запущено для останньої правки" : "Таймер запущено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося запустити таймер"));
     } finally {
@@ -8009,7 +8013,10 @@ export default function DesignTaskPage() {
       designTimerBreakdown.hasActive;
     const busy = changeRequestTimerBusyId === request.id;
     const hasTime = seconds > 0;
-    if (!hasTime && !canUseChangeRequestTimer && !isActive) return null;
+    const isNewest = request.id === newestChangeRequestId;
+    // Only the newest правка (the active round) gets play/pause; older ones show read-only time.
+    const canControl = canUseChangeRequestTimer && isNewest;
+    if (!hasTime && !canControl && !isActive) return null;
 
     return (
       <div
@@ -8023,7 +8030,7 @@ export default function DesignTaskPage() {
       >
         <Timer className={cn("h-3.5 w-3.5", isActive && "animate-pulse")} />
         <span>{formatElapsedSeconds(seconds)}</span>
-        {canUseChangeRequestTimer ? (
+        {canControl ? (
           isActive ? (
             <button
               type="button"
