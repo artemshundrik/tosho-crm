@@ -9495,7 +9495,7 @@ export default function DesignTaskPage() {
                             className={cn(
                               "rounded-lg border p-4 transition",
                               isNewestChangeRequest && briefChangeRequests.length > 1
-                                ? "border-primary/40 bg-primary/[0.05]"
+                                ? "border-primary/60 bg-card/30"
                                 : "border-border/50 bg-card/30",
                               // Older правки recede (museum) but stay fully interactive — opacity restores on hover.
                               !isNewestChangeRequest &&
