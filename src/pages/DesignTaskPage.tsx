@@ -4094,6 +4094,8 @@ export default function DesignTaskPage() {
     setOutputUploading(true);
     try {
       const uploaded: DesignOutputFile[] = [];
+      // If a per-правка timer is currently running, auto-link the uploaded visuals to it.
+      const autoLinkChangeRequestId = designTimerBreakdown?.activeChangeRequestId ?? null;
       for (const file of accepted) {
         const safeName = file.name.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
@@ -4132,6 +4134,7 @@ export default function DesignTaskPage() {
           created_at: new Date().toISOString(),
           group_label: targetGroupLabel,
           output_kind: uploadTargetKind,
+          change_request_id: autoLinkChangeRequestId,
           signed_url: null,
         });
       }
@@ -4175,7 +4178,37 @@ export default function DesignTaskPage() {
       } catch (logError) {
         console.warn("Failed to log design output upload", logError);
       }
-      toast.success(`Додано файлів: ${uploaded.length}`);
+      if (autoLinkChangeRequestId && uploaded.length > 0) {
+        const linkedRequest = briefChangeRequestById.get(autoLinkChangeRequestId);
+        const linkedSnippet = linkedRequest
+          ? linkedRequest.request_text.replace(/\s+/g, " ").trim().slice(0, 30)
+          : "";
+        const autoLinkedIds = new Set(uploaded.map((entry) => entry.id));
+        toast.success(
+          `Додано файлів: ${uploaded.length} · привʼязано до активної правки${linkedSnippet ? `: ${linkedSnippet}` : ""}`,
+          {
+            action: {
+              label: "Відвʼязати",
+              onClick: () => {
+                const reverted = nextFiles.map((entry) =>
+                  autoLinkedIds.has(entry.id) ? { ...entry, change_request_id: null } : entry
+                );
+                void (async () => {
+                  try {
+                    await persistDesignOutputs(reverted, designOutputLinks);
+                    setDesignOutputFiles(reverted);
+                    toast.success("Привʼязку скасовано");
+                  } catch (undoError: unknown) {
+                    toast.error(getErrorMessage(undoError, "Не вдалося скасувати привʼязку"));
+                  }
+                })();
+              },
+            },
+          }
+        );
+      } else {
+        toast.success(`Додано файлів: ${uploaded.length}`);
+      }
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити файли");
       toast.error(message);
