@@ -14,6 +14,7 @@ export type StoredDesignOutputFile = {
   created_at: string;
   group_label?: string | null;
   output_kind?: StoredDesignOutputKind | null;
+  change_request_id?: string | null;
 };
 
 const isStoredDesignOutputKind = (value: unknown): value is StoredDesignOutputKind =>
@@ -62,6 +63,10 @@ export function parseStoredDesignOutputFiles(
         created_at: typeof entry.created_at === "string" && entry.created_at ? entry.created_at : new Date().toISOString(),
         group_label: typeof entry.group_label === "string" && entry.group_label.trim() ? entry.group_label.trim() : null,
         output_kind: isStoredDesignOutputKind(entry.output_kind) ? entry.output_kind : fallbackKind ?? null,
+        change_request_id:
+          typeof entry.change_request_id === "string" && entry.change_request_id.trim()
+            ? entry.change_request_id.trim()
+            : null,
       };
 
       const key = getFileKey(nextFile);
@@ -84,6 +89,7 @@ export function serializeStoredDesignOutputFiles(files: StoredDesignOutputFile[]
     created_at: file.created_at,
     group_label: file.group_label ?? null,
     output_kind: file.output_kind ?? null,
+    change_request_id: file.change_request_id ?? null,
   }));
 }
 

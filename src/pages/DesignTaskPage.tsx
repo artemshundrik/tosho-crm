@@ -48,6 +48,8 @@ import {
   MoreVertical,
   ExternalLink,
   Link2,
+  Link2Off,
+  CornerUpLeft,
   Trash2,
   Check,
   Copy,
@@ -132,10 +134,12 @@ import {
   DESIGN_TASK_TIMER_UPDATED_EVENT,
   formatElapsedSeconds,
   getDesignTaskTimerSummary,
+  getDesignTaskTimerBreakdown,
   getTimerElapsedSeconds,
   pauseDesignTaskTimer,
   startDesignTaskTimer,
   type DesignTaskTimerSummary,
+  type DesignTaskTimerBreakdown,
 } from "@/lib/designTaskTimer";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -261,6 +265,8 @@ type DesignOutputFile = {
   created_at: string;
   group_label?: string | null;
   output_kind?: DesignOutputKind | null;
+  // Optional backlink to the change request (правка) this output answers.
+  change_request_id?: string | null;
   signed_url?: string | null;
 };
 
@@ -272,6 +278,8 @@ type DesignOutputLink = {
   created_by: string | null;
   group_label?: string | null;
   output_kind?: DesignOutputKind | null;
+  // Optional backlink to the change request (правка) this output answers.
+  change_request_id?: string | null;
 };
 
 type StorageBackedFile = {
@@ -1419,6 +1427,16 @@ export default function DesignTaskPage() {
   const [uploadTargetKind, setUploadTargetKind] = useState<DesignOutputKind>("layout");
   const [activeDesignOutputTab, setActiveDesignOutputTab] = useState<DesignOutputKind>("visualization");
   const [activeDesignTab, setActiveDesignTab] = useState<DesignTaskPageTab>("brief");
+  // Cross-tab navigation between правки (ТЗ) and their visuals (Результат).
+  const [pendingAnchorTarget, setPendingAnchorTarget] = useState<{
+    kind: "output" | "change_request";
+    id: string;
+  } | null>(null);
+  const [highlightedAnchorId, setHighlightedAnchorId] = useState<string | null>(null);
+  // Which output's "link to правка" popover is open (keyed by output id).
+  const [outputLinkPickerId, setOutputLinkPickerId] = useState<string | null>(null);
+  // Which правка's "attach result" popover is open (keyed by change request id).
+  const [changeRequestAttachPickerId, setChangeRequestAttachPickerId] = useState<string | null>(null);
   const [attachQuoteDialogOpen, setAttachQuoteDialogOpen] = useState(false);
   const [quoteCandidates, setQuoteCandidates] = useState<QuoteCandidate[]>([]);
   const [quoteCandidatesLoading, setQuoteCandidatesLoading] = useState(false);
@@ -1502,6 +1520,9 @@ export default function DesignTaskPage() {
   });
   const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
+  // Per-change-request timer breakdown (null until loaded / if migration pending).
+  const [designTimerBreakdown, setDesignTimerBreakdown] = useState<DesignTaskTimerBreakdown | null>(null);
+  const [changeRequestTimerBusyId, setChangeRequestTimerBusyId] = useState<string | null>(null);
   const outputInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const quoteCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1626,7 +1647,85 @@ export default function DesignTaskPage() {
     () => new Map(briefChangeRequests.map((row) => [row.id, row] as const)),
     [briefChangeRequests]
   );
+  // Newest change request by requested_at (tie-break by id) — independent of array order.
+  // Non-privileged authors may only edit/delete the newest правка.
+  const newestChangeRequestId = useMemo(() => {
+    let newest: DesignBriefChangeRequest | null = null;
+    for (const row of briefChangeRequests) {
+      if (!newest) {
+        newest = row;
+        continue;
+      }
+      const candidateMs = new Date(row.requested_at).getTime();
+      const currentMs = new Date(newest.requested_at).getTime();
+      const isNewer =
+        Number.isFinite(candidateMs) &&
+        (!Number.isFinite(currentMs) ||
+          candidateMs > currentMs ||
+          (candidateMs === currentMs && row.id > newest.id));
+      if (isNewer) newest = row;
+    }
+    return newest?.id ?? null;
+  }, [briefChangeRequests]);
   const hasBriefHistory = briefVersions.length > 1;
+
+  // Outputs grouped by the change request (правка) they answer.
+  const designOutputsByChangeRequestId = useMemo(() => {
+    const map = new Map<string, { files: DesignOutputFile[]; links: DesignOutputLink[] }>();
+    const ensure = (id: string) => {
+      const existing = map.get(id);
+      if (existing) return existing;
+      const created = { files: [] as DesignOutputFile[], links: [] as DesignOutputLink[] };
+      map.set(id, created);
+      return created;
+    };
+    designOutputFiles.forEach((file) => {
+      if (file.change_request_id) ensure(file.change_request_id).files.push(file);
+    });
+    designOutputLinks.forEach((link) => {
+      if (link.change_request_id) ensure(link.change_request_id).links.push(link);
+    });
+    return map;
+  }, [designOutputFiles, designOutputLinks]);
+
+  // Jump from a правка to its visual in the Результат tab (and the right sub-tab).
+  const jumpToDesignOutput = (outputId: string) => {
+    const file = designOutputFiles.find((entry) => entry.id === outputId);
+    const link = designOutputLinks.find((entry) => entry.id === outputId);
+    const kind = (file?.output_kind ?? link?.output_kind ?? "visualization") as DesignOutputKind;
+    setActiveDesignTab("result");
+    setActiveDesignOutputTab(kind);
+    setPendingAnchorTarget({ kind: "output", id: outputId });
+  };
+
+  // Jump from a visual back to the originating правка in the ТЗ tab.
+  const jumpToChangeRequest = (changeRequestId: string) => {
+    setActiveDesignTab("brief");
+    setPendingAnchorTarget({ kind: "change_request", id: changeRequestId });
+  };
+
+  // After the tab switches, scroll the anchored element into view and flash a highlight ring.
+  useEffect(() => {
+    if (!pendingAnchorTarget) return;
+    const anchorId = `${pendingAnchorTarget.kind}:${pendingAnchorTarget.id}`;
+    const timer = window.setTimeout(() => {
+      const el = document.querySelector(`[data-anchor-id="${anchorId}"]`);
+      if (el) {
+        const prefersReduced =
+          typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        el.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "center" });
+        setHighlightedAnchorId(anchorId);
+      }
+      setPendingAnchorTarget(null);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [pendingAnchorTarget]);
+
+  useEffect(() => {
+    if (!highlightedAnchorId) return;
+    const timer = window.setTimeout(() => setHighlightedAnchorId(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [highlightedAnchorId]);
 
   const loadTimerSummary = async (taskId: string) => {
     if (!effectiveTeamId) return;
@@ -1643,6 +1742,14 @@ export default function DesignTaskPage() {
         activeStartedAt: null,
         activeUserId: null,
       });
+    }
+    // Per-change-request breakdown — requires the migration; degrade silently if absent.
+    try {
+      const breakdown = await getDesignTaskTimerBreakdown(effectiveTeamId, taskId);
+      setDesignTimerBreakdown(breakdown);
+    } catch (e) {
+      console.warn("Failed to load timer breakdown (migration may be pending)", e);
+      setDesignTimerBreakdown(null);
     }
   };
 
@@ -2099,6 +2206,10 @@ export default function DesignTaskPage() {
               created_by: typeof entry.created_by === "string" ? entry.created_by : null,
               group_label: normalizeOutputGroupLabel(typeof entry.group_label === "string" ? entry.group_label : null),
               output_kind: parseDesignOutputKind(entry.output_kind, designOutputFallbackType),
+              change_request_id:
+                typeof entry.change_request_id === "string" && entry.change_request_id.trim()
+                  ? entry.change_request_id.trim()
+                  : null,
             } satisfies DesignOutputLink;
           })
           .filter(Boolean) as DesignOutputLink[];
@@ -2942,6 +3053,14 @@ export default function DesignTaskPage() {
     !isTimerRunning &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
+  // Per-change-request timer: same gate as the general timer, minus the !isTimerRunning
+  // condition — starting a правка timer pauses any active session first.
+  const canUseChangeRequestTimer =
+    !!task &&
+    !!userId &&
+    task.status === "in_progress" &&
+    !!task.assigneeUserId &&
+    (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
   const canPauseTimer =
     !!task &&
     isTimerRunning &&
@@ -3696,6 +3815,7 @@ export default function DesignTaskPage() {
       created_by: link.created_by,
       group_label: normalizeOutputGroupLabel(link.group_label),
       output_kind: link.output_kind ?? null,
+      change_request_id: link.change_request_id ?? null,
     }));
     const nextGroups = Array.from(
       new Set(
@@ -3725,6 +3845,33 @@ export default function DesignTaskPage() {
       setDesignOutputGroups(nextGroups);
     } finally {
       setOutputSaving(false);
+    }
+  };
+
+  // Set/clear the change-request backlink on an output (file or link).
+  const linkDesignOutputToChangeRequest = async (
+    target: { id: string; kind: "file" | "link" },
+    changeRequestId: string | null
+  ) => {
+    if (!task || !effectiveTeamId) return;
+    if (!ensureCanEdit()) return;
+    try {
+      if (target.kind === "file") {
+        const nextFiles = designOutputFiles.map((entry) =>
+          entry.id === target.id ? { ...entry, change_request_id: changeRequestId } : entry
+        );
+        await persistDesignOutputs(nextFiles, designOutputLinks);
+        setDesignOutputFiles(nextFiles);
+      } else {
+        const nextLinks = designOutputLinks.map((entry) =>
+          entry.id === target.id ? { ...entry, change_request_id: changeRequestId } : entry
+        );
+        await persistDesignOutputs(designOutputFiles, nextLinks);
+        setDesignOutputLinks(nextLinks);
+      }
+      toast.success(changeRequestId ? "Привʼязано до правки" : "Привʼязку прибрано");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Не вдалося оновити привʼязку"));
     }
   };
 
@@ -4817,6 +4964,43 @@ export default function DesignTaskPage() {
     }
   };
 
+  const handleStartChangeRequestTimer = async (changeRequestId: string) => {
+    if (!task || !effectiveTeamId || !userId) return;
+    if (changeRequestTimerBusyId || timerBusy) return;
+    if (!ensureCanEdit()) return;
+    if (task.status !== "in_progress") {
+      toast.error("Таймер можна запустити тільки у статусі «В роботі».");
+      return;
+    }
+    if (!task.assigneeUserId) {
+      toast.error("Спочатку призначте виконавця.");
+      return;
+    }
+    if (task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments) {
+      toast.error("Таймер може запускати виконавець або співвиконавець задачі.");
+      return;
+    }
+    setChangeRequestTimerBusyId(changeRequestId);
+    try {
+      // One active session per task — pause whatever is running before switching правку.
+      if (timerSummary.activeSessionId) {
+        await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
+      }
+      await startDesignTaskTimer({
+        teamId: effectiveTeamId,
+        taskId: task.id,
+        userId,
+        changeRequestId,
+      });
+      await loadTimerSummary(task.id);
+      toast.success("Таймер правки запущено");
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося запустити таймер правки"));
+    } finally {
+      setChangeRequestTimerBusyId(null);
+    }
+  };
+
   const updateTaskStatus = async (nextStatus: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
     if (!ensureCanEdit()) return;
@@ -5633,9 +5817,14 @@ export default function DesignTaskPage() {
   const deleteBriefChangeRequest = async (request: DesignBriefChangeRequest) => {
     if (!task || !effectiveTeamId || changeRequestDeletingId) return;
     if (!ensureCanEdit()) return;
-    const isOwn = request.requested_by && userId === request.requested_by;
-    if (!isOwn && !canEditBriefChangeRequests) {
-      toast.error("Недостатньо прав для видалення правки");
+    const isOwn = Boolean(request.requested_by && userId === request.requested_by);
+    const isNewest = request.id === newestChangeRequestId;
+    if (!(isOwn && isNewest) && !canEditBriefChangeRequests) {
+      toast.error(
+        isOwn
+          ? "Видалити можна лише найновішу правку."
+          : "Недостатньо прав для видалення правки"
+      );
       return;
     }
     const nextRequests = briefChangeRequests.filter((entry) => entry.id !== request.id);
@@ -5699,7 +5888,9 @@ export default function DesignTaskPage() {
   };
 
   const startBriefChangeRequestEdit = (request: DesignBriefChangeRequest) => {
-    if (!canEditBriefChangeRequests || designTaskLockedByOther) return;
+    const isOwn = Boolean(request.requested_by && userId && request.requested_by === userId);
+    const isNewest = request.id === newestChangeRequestId;
+    if ((!(isOwn && isNewest) && !canEditBriefChangeRequests) || designTaskLockedByOther) return;
     setChangeRequestOpen(false);
     setChangeRequestEditingId(request.id);
     setChangeRequestEditDraft(request.request_text);
@@ -5707,16 +5898,25 @@ export default function DesignTaskPage() {
 
   const saveBriefChangeRequestEdit = async (requestId: string) => {
     if (!task || !effectiveTeamId || changeRequestEditSavingId) return;
-    if (!canEditBriefChangeRequests) {
-      toast.error("Редагувати правки можуть тільки SEO або адміністратор.");
-      return;
-    }
     if (!ensureCanEdit()) return;
 
     const previousRequest = briefChangeRequests.find((request) => request.id === requestId);
     if (!previousRequest) {
       toast.error("Правку не знайдено");
       cancelBriefChangeRequestEdit();
+      return;
+    }
+
+    const isOwn = Boolean(
+      previousRequest.requested_by && userId && previousRequest.requested_by === userId
+    );
+    const isNewest = previousRequest.id === newestChangeRequestId;
+    if (!(isOwn && isNewest) && !canEditBriefChangeRequests) {
+      toast.error(
+        isOwn
+          ? "Редагувати можна лише найновішу правку."
+          : "Недостатньо прав для редагування правки"
+      );
       return;
     }
 
@@ -7648,6 +7848,343 @@ export default function DesignTaskPage() {
     }
   };
 
+  const changeRequestSnippet = (text: string, max = 60) => {
+    const normalized = (text ?? "").replace(/\s+/g, " ").trim();
+    if (!normalized) return "правка без опису";
+    return normalized.length > max ? `${normalized.slice(0, max)}…` : normalized;
+  };
+
+  // Output card → backlink to the правка it answers, plus link/change/unlink popover.
+  const renderOutputChangeRequestControl = (target: {
+    id: string;
+    kind: "file" | "link";
+    changeRequestId: string | null;
+  }) => {
+    const linkedRequest = target.changeRequestId
+      ? briefChangeRequestById.get(target.changeRequestId) ?? null
+      : null;
+    const canManageLink = !designTaskLockedByOther;
+    const pickerOpen = outputLinkPickerId === target.id;
+    const hasChangeRequests = briefChangeRequests.length > 0;
+    if (!linkedRequest && !(canManageLink && hasChangeRequests)) return null;
+
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {linkedRequest ? (
+          <button
+            type="button"
+            onClick={() => jumpToChangeRequest(linkedRequest.id)}
+            className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+            title="Перейти до правки"
+          >
+            <CornerUpLeft className="h-3 w-3 shrink-0" />
+            <span className="truncate">У відповідь на: {changeRequestSnippet(linkedRequest.request_text, 40)}</span>
+          </button>
+        ) : null}
+        {canManageLink && hasChangeRequests ? (
+          <Popover open={pickerOpen} onOpenChange={(open) => setOutputLinkPickerId(open ? target.id : null)}>
+            <PopoverTrigger asChild>
+              <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 rounded-full px-2 text-[11px] text-muted-foreground">
+                <Link2 className="h-3 w-3" />
+                {linkedRequest ? "Змінити" : "Привʼязати до правки"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-2">
+              <div className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Привʼязати до правки
+              </div>
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {briefChangeRequests.map((request) => {
+                  const isCurrent = request.id === target.changeRequestId;
+                  return (
+                    <button
+                      key={request.id}
+                      type="button"
+                      onClick={() => {
+                        setOutputLinkPickerId(null);
+                        if (!isCurrent) void linkDesignOutputToChangeRequest(target, request.id);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted",
+                        isCurrent && "bg-primary/10"
+                      )}
+                    >
+                      <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-foreground">
+                          {changeRequestSnippet(request.request_text, 44)}
+                        </span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {request.requested_by_label ?? "Користувач"} · {formatDate(request.requested_at, true)}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {linkedRequest ? (
+                <>
+                  <div className="my-1 border-t border-border/50" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOutputLinkPickerId(null);
+                      void linkDesignOutputToChangeRequest(target, null);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <Link2Off className="h-3.5 w-3.5 shrink-0" />
+                    Прибрати привʼязку
+                  </button>
+                </>
+              ) : null}
+            </PopoverContent>
+          </Popover>
+        ) : null}
+      </div>
+    );
+  };
+
+  // Live per-change-request elapsed time (accumulated + active session tick).
+  const getChangeRequestTimerSeconds = (changeRequestId: string) => {
+    const breakdown = designTimerBreakdown;
+    const base = breakdown?.byChangeRequestSeconds?.[changeRequestId] ?? 0;
+    if (!breakdown || breakdown.activeChangeRequestId !== changeRequestId || !breakdown.activeStartedAt) {
+      return base;
+    }
+    const activeSeconds = Math.max(
+      0,
+      Math.floor((timerNowMs - new Date(breakdown.activeStartedAt).getTime()) / 1000)
+    );
+    return base + activeSeconds;
+  };
+
+  // Live time on initial/general work (sessions not attributed to a правка).
+  const getGeneralTimerSeconds = () => {
+    const breakdown = designTimerBreakdown;
+    const base = breakdown?.generalSeconds ?? 0;
+    if (!breakdown || !breakdown.activeIsGeneral || !breakdown.activeStartedAt) return base;
+    return base + Math.max(0, Math.floor((timerNowMs - new Date(breakdown.activeStartedAt).getTime()) / 1000));
+  };
+
+  // Правка card → time chip (accumulated time + play/pause for the designer).
+  const renderChangeRequestTimerChip = (request: DesignBriefChangeRequest) => {
+    const seconds = getChangeRequestTimerSeconds(request.id);
+    const isActive =
+      !!designTimerBreakdown &&
+      designTimerBreakdown.activeChangeRequestId === request.id &&
+      designTimerBreakdown.hasActive;
+    const busy = changeRequestTimerBusyId === request.id;
+    const hasTime = seconds > 0;
+    if (!hasTime && !canUseChangeRequestTimer && !isActive) return null;
+
+    return (
+      <div
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium tabular-nums transition-colors",
+          isActive
+            ? "border-success/40 bg-success/10 text-success-foreground"
+            : "border-border/60 bg-muted/30 text-muted-foreground"
+        )}
+        title={isActive ? "Таймер цієї правки активний" : "Час, витрачений на цю правку"}
+      >
+        <Timer className={cn("h-3.5 w-3.5", isActive && "animate-pulse")} />
+        <span>{formatElapsedSeconds(seconds)}</span>
+        {canUseChangeRequestTimer ? (
+          isActive ? (
+            <button
+              type="button"
+              disabled={busy || !!timerBusy}
+              onClick={() => void handlePauseTimer()}
+              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-success-foreground transition-colors hover:bg-success/20 disabled:opacity-50"
+              aria-label="Поставити таймер правки на паузу"
+              title="Пауза"
+            >
+              {busy || timerBusy === "pause" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pause className="h-3 w-3" />}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy || !!timerBusy || !!changeRequestTimerBusyId}
+              onClick={() => void handleStartChangeRequestTimer(request.id)}
+              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/15 disabled:opacity-50"
+              aria-label="Запустити таймер цієї правки"
+              title="Запустити таймер цієї правки"
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            </button>
+          )
+        ) : null}
+      </div>
+    );
+  };
+
+  // Правка card → strip of visuals linked to it (preview + jump), plus an attach popover.
+  const renderChangeRequestResultsStrip = (request: DesignBriefChangeRequest) => {
+    const linked = designOutputsByChangeRequestId.get(request.id);
+    const linkedFiles = linked?.files ?? [];
+    const linkedLinks = linked?.links ?? [];
+    const linkedCount = linkedFiles.length + linkedLinks.length;
+    const canManageLink = !designTaskLockedByOther;
+    const attachableFiles = designOutputFiles.filter((file) => file.change_request_id !== request.id);
+    const attachableLinks = designOutputLinks.filter((link) => link.change_request_id !== request.id);
+    const hasAttachable = attachableFiles.length + attachableLinks.length > 0;
+    const pickerOpen = changeRequestAttachPickerId === request.id;
+    if (linkedCount === 0 && !(canManageLink && hasAttachable)) return null;
+
+    return (
+      <div className="mt-3 rounded-lg border border-border/40 bg-muted/10 p-2.5">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <ImageIcon className="h-3.5 w-3.5" />
+            Результати по цій правці
+            {linkedCount > 0 ? (
+              <span className="rounded-full bg-muted px-1.5 text-[10px] text-foreground">{linkedCount}</span>
+            ) : null}
+          </div>
+          {canManageLink && hasAttachable ? (
+            <Popover
+              open={pickerOpen}
+              onOpenChange={(open) => setChangeRequestAttachPickerId(open ? request.id : null)}
+            >
+              <PopoverTrigger asChild>
+                <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 px-2 text-[11px] text-muted-foreground">
+                  <Link2 className="h-3 w-3" />
+                  Привʼязати результат
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 p-2">
+                <div className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Привʼязати результат до правки
+                </div>
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {attachableFiles.map((file) => {
+                    const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
+                    return (
+                      <button
+                        key={file.id}
+                        type="button"
+                        onClick={() => {
+                          setChangeRequestAttachPickerId(null);
+                          void linkDesignOutputToChangeRequest({ id: file.id, kind: "file" }, request.id);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate text-foreground">{displayName}</span>
+                        {file.change_request_id ? (
+                          <span className="shrink-0 text-[10px] text-warning-foreground">перепривʼязати</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {attachableLinks.map((link) => (
+                    <button
+                      key={link.id}
+                      type="button"
+                      onClick={() => {
+                        setChangeRequestAttachPickerId(null);
+                        void linkDesignOutputToChangeRequest({ id: link.id, kind: "link" }, request.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-foreground">{link.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+        </div>
+
+        {linkedCount > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {linkedFiles.map((file) => {
+              const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
+              const ext = getFileExtension(displayName);
+              const isVideoFile = canPreviewVideo(ext) && Boolean(file.storage_bucket && file.storage_path);
+              const previewable =
+                canRenderStoragePreview(ext) && Boolean(file.storage_bucket && file.storage_path) && !isVideoFile;
+              return (
+                <div
+                  key={file.id}
+                  className="group/thumb relative h-16 w-16 overflow-hidden rounded-lg border border-border/60 bg-muted/30"
+                >
+                  <button
+                    type="button"
+                    className="block h-full w-full cursor-pointer"
+                    onClick={() => void openStorageFilePreview(file)}
+                    title={`Переглянути: ${displayName}`}
+                    aria-label={`Переглянути ${displayName}`}
+                  >
+                    {previewable ? (
+                      <StorageObjectImage bucket={file.storage_bucket} path={file.storage_path} alt={displayName} variant="thumb" className="h-full w-full" />
+                    ) : isVideoFile ? (
+                      <StorageObjectVideo bucket={file.storage_bucket} path={file.storage_path} label={displayName} className="h-full w-full" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase text-muted-foreground">
+                        {ext}
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => jumpToDesignOutput(file.id)}
+                    className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/85 py-0.5 text-[9px] text-foreground opacity-0 transition-opacity group-hover/thumb:opacity-100"
+                    title="Перейти до результату"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" /> до результату
+                  </button>
+                  {canManageLink ? (
+                    <button
+                      type="button"
+                      onClick={() => void linkDesignOutputToChangeRequest({ id: file.id, kind: "file" }, null)}
+                      className="absolute right-0.5 top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-background/85 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/thumb:opacity-100"
+                      title="Відвʼязати"
+                      aria-label="Відвʼязати результат"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+            {linkedLinks.map((link) => (
+              <div
+                key={link.id}
+                className="group/thumb relative inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => jumpToDesignOutput(link.id)}
+                  className="inline-flex cursor-pointer items-center gap-1.5"
+                  title="Перейти до результату"
+                >
+                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                  <span className="max-w-[160px] truncate text-foreground">{link.label}</span>
+                </button>
+                {canManageLink ? (
+                  <button
+                    type="button"
+                    onClick={() => void linkDesignOutputToChangeRequest({ id: link.id, kind: "link" }, null)}
+                    className="text-muted-foreground hover:text-destructive"
+                    title="Відвʼязати"
+                    aria-label="Відвʼязати результат"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[11px] text-muted-foreground">Ще немає привʼязаних результатів.</div>
+        )}
+      </div>
+    );
+  };
+
   const renderDesignOutputSection = (kind: DesignOutputKind) => {
     const groupedOutputs = groupedDesignOutputsByKind[kind];
     const selectedIdSet = kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
@@ -7869,7 +8406,12 @@ export default function DesignTaskPage() {
                       return (
                         <div
                           key={file.id}
-                          className="group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70"
+                          data-anchor-id={`output:${file.id}`}
+                          className={cn(
+                            "group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70",
+                            highlightedAnchorId === `output:${file.id}` &&
+                              "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
+                          )}
                         >
                           <div className="flex items-start gap-3">
                             {isVideoFile ? (
@@ -7990,6 +8532,12 @@ export default function DesignTaskPage() {
                                 </div>
                               ) : null}
 
+                              {renderOutputChangeRequestControl({
+                                id: file.id,
+                                kind: "file",
+                                changeRequestId: file.change_request_id ?? null,
+                              })}
+
                               <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
                                 <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
                                   <Checkbox
@@ -8029,7 +8577,12 @@ export default function DesignTaskPage() {
                     {group.links.map((link) => (
                       <div
                         key={link.id}
-                        className="group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70"
+                        data-anchor-id={`output:${link.id}`}
+                        className={cn(
+                          "group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70",
+                          highlightedAnchorId === `output:${link.id}` &&
+                            "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
+                        )}
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
@@ -8099,6 +8652,12 @@ export default function DesignTaskPage() {
                                 </Badge>
                               </div>
                             ) : null}
+
+                            {renderOutputChangeRequestControl({
+                              id: link.id,
+                              kind: "link",
+                              changeRequestId: link.change_request_id ?? null,
+                            })}
 
                             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
                               <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -8871,8 +9430,12 @@ export default function DesignTaskPage() {
                         const isSavingChangeRequest = changeRequestEditSavingId === request.id;
                         const isDeleting = changeRequestDeletingId === request.id;
                         const isOwn = Boolean(request.requested_by && userId && request.requested_by === userId);
-                        const canDelete = isOwn || canEditBriefChangeRequests;
-                        const canEditOwn = isOwn || canEditBriefChangeRequests;
+                        const isNewestChangeRequest = request.id === newestChangeRequestId;
+                        // Author may manage only the newest правка; SEO/admin manage any.
+                        const canManageOwnChangeRequest =
+                          (isOwn && isNewestChangeRequest) || canEditBriefChangeRequests;
+                        const canDelete = canManageOwnChangeRequest;
+                        const canEditOwn = canManageOwnChangeRequest;
                         const attachments = request.attachments ?? [];
                         const reactions = request.reactions ?? [];
                         const reactionGroups = reactions.reduce<Map<string, DesignBriefChangeRequestReaction[]>>(
@@ -8888,7 +9451,12 @@ export default function DesignTaskPage() {
                         return (
                           <div
                             key={request.id}
-                            className="rounded-lg border border-border/50 bg-card/30 p-4"
+                            data-anchor-id={`change_request:${request.id}`}
+                            className={cn(
+                              "rounded-lg border border-border/50 bg-card/30 p-4 transition-shadow",
+                              highlightedAnchorId === `change_request:${request.id}` &&
+                                "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
+                            )}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex min-w-0 items-center gap-2.5">
@@ -8911,6 +9479,7 @@ export default function DesignTaskPage() {
                                   </div>
                                 </div>
                               </div>
+                              {renderChangeRequestTimerChip(request)}
                             </div>
 
                             <div className="mt-3">
@@ -8983,6 +9552,8 @@ export default function DesignTaskPage() {
                                 })}
                               </div>
                             ) : null}
+
+                            {!isEditingChangeRequest ? renderChangeRequestResultsStrip(request) : null}
 
                             {isEditingChangeRequest ? (
                               <div className="mt-3 flex items-center justify-end gap-2 border-t border-border/30 pt-3">
@@ -10313,6 +10884,46 @@ export default function DesignTaskPage() {
                     >
                       {timerElapsedLabel}
                     </div>
+                    {designTimerBreakdown &&
+                    (getGeneralTimerSeconds() > 0 ||
+                      Object.keys(designTimerBreakdown.byChangeRequestSeconds).length > 0) ? (
+                      <div className="mt-3 space-y-1 border-t border-border/40 pt-3 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground">По ТЗ</span>
+                          <span className="tabular-nums text-foreground/80">
+                            {formatElapsedSeconds(getGeneralTimerSeconds())}
+                          </span>
+                        </div>
+                        {briefChangeRequests.map((request) => {
+                          const seconds = getChangeRequestTimerSeconds(request.id);
+                          if (seconds <= 0) return null;
+                          const active =
+                            designTimerBreakdown?.activeChangeRequestId === request.id &&
+                            designTimerBreakdown?.hasActive;
+                          return (
+                            <button
+                              key={request.id}
+                              type="button"
+                              onClick={() => jumpToChangeRequest(request.id)}
+                              className="flex w-full items-center justify-between gap-2 text-left transition-colors hover:text-foreground"
+                              title="Перейти до правки"
+                            >
+                              <span className="truncate text-muted-foreground">
+                                {changeRequestSnippet(request.request_text, 20)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "tabular-nums",
+                                  active ? "text-success-foreground" : "text-foreground/80"
+                                )}
+                              >
+                                {formatElapsedSeconds(seconds)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                   {!isTimerRunning ? (
                     <Button

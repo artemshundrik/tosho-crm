@@ -9,6 +9,20 @@ export type DesignTaskTimerSessionRow = {
   started_at: string;
   paused_at: string | null;
   created_at?: string | null;
+  // Optional attribution to a specific change request (правка). NULL = general/ТЗ work.
+  change_request_id?: string | null;
+};
+
+export type DesignTaskTimerBreakdown = {
+  // Time on initial / general work (sessions with no change_request_id).
+  generalSeconds: number;
+  // Accumulated (paused) seconds per change request id.
+  byChangeRequestSeconds: Record<string, number>;
+  activeChangeRequestId: string | null;
+  activeStartedAt: string | null;
+  activeUserId: string | null;
+  activeIsGeneral: boolean;
+  hasActive: boolean;
 };
 
 export type DesignTaskTimerSummary = {
@@ -134,6 +148,60 @@ export async function getDesignTaskTimerSummary(
     .order("started_at", { ascending: true });
   if (error) throw error;
   return summarizeSessions((data as DesignTaskTimerSessionRow[] | null) ?? []);
+}
+
+// Per-change-request breakdown of a task's timer. Selects change_request_id, so it
+// requires the migration (scripts/design-task-timer-change-request.sql). Callers should
+// guard with try/catch and degrade gracefully if the column does not yet exist.
+export async function getDesignTaskTimerBreakdown(
+  teamId: string,
+  taskId: string
+): Promise<DesignTaskTimerBreakdown> {
+  const { data, error } = await supabase
+    .from("design_task_timer_sessions")
+    .select("id,design_task_id,user_id,started_at,paused_at,change_request_id")
+    .eq("team_id", teamId)
+    .eq("design_task_id", taskId)
+    .order("started_at", { ascending: true });
+  if (error) throw error;
+  const rows = (data as DesignTaskTimerSessionRow[] | null) ?? [];
+
+  let generalSeconds = 0;
+  const byChangeRequestSeconds: Record<string, number> = {};
+  let active: DesignTaskTimerSessionRow | null = null;
+
+  rows.forEach((row) => {
+    if (row.paused_at) {
+      const seconds = secondsBetween(row.started_at, toUnixMs(row.paused_at));
+      if (row.change_request_id) {
+        byChangeRequestSeconds[row.change_request_id] =
+          (byChangeRequestSeconds[row.change_request_id] ?? 0) + seconds;
+      } else {
+        generalSeconds += seconds;
+      }
+      return;
+    }
+    if (!active) {
+      active = row;
+    } else {
+      const currentMs = toUnixMs(active.started_at);
+      const nextMs = toUnixMs(row.started_at);
+      if (Number.isFinite(nextMs) && (!Number.isFinite(currentMs) || nextMs > currentMs)) {
+        active = row;
+      }
+    }
+  });
+
+  const activeSession = active as DesignTaskTimerSessionRow | null;
+  return {
+    generalSeconds,
+    byChangeRequestSeconds,
+    activeChangeRequestId: activeSession?.change_request_id ?? null,
+    activeStartedAt: activeSession?.started_at ?? null,
+    activeUserId: activeSession?.user_id ?? null,
+    activeIsGeneral: !!activeSession && !activeSession.change_request_id,
+    hasActive: !!activeSession,
+  };
 }
 
 export async function getDesignTasksTimerSummaryMap(teamId: string, taskIds: string[]) {
@@ -277,6 +345,7 @@ export async function startDesignTaskTimer(params: {
   teamId: string;
   taskId: string;
   userId: string;
+  changeRequestId?: string | null;
 }) {
   const { data: activeRows, error: activeError } = await supabase
     .from("design_task_timer_sessions")
@@ -291,13 +360,20 @@ export async function startDesignTaskTimer(params: {
     throw new Error("Таймер вже запущено.");
   }
 
-  const { error } = await supabase.from("design_task_timer_sessions").insert({
+  const insertPayload: Record<string, unknown> = {
     team_id: params.teamId,
     design_task_id: params.taskId,
     user_id: params.userId,
     started_at: new Date().toISOString(),
     paused_at: null,
-  });
+  };
+  // Only attach change_request_id when timing a specific правка. Omitting it keeps
+  // the general/ТЗ timer working even before the migration that adds the column.
+  if (params.changeRequestId) {
+    insertPayload.change_request_id = params.changeRequestId;
+  }
+
+  const { error } = await supabase.from("design_task_timer_sessions").insert(insertPayload);
   if (error) throw error;
   dispatchTimerUpdated({ teamId: params.teamId, taskId: params.taskId, userId: params.userId });
 }
