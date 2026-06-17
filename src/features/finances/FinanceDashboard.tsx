@@ -6,7 +6,7 @@ import { formatOrderMoney, loadDerivedOrders } from "@/features/orders/orderReco
 import { listAccounts, listInvoices, listLegalEntities, listPayments } from "./api";
 import {
   invoiceIsReceivable,
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   paymentUahValue,
   type FinanceAccount,
   type FinanceInvoice,
@@ -132,7 +132,7 @@ export function FinanceDashboard({ teamId, userId, canSeeSensitive }: FinanceDas
     (id: string | null) => {
       if (!id) return "Без юрособи";
       const entity = entities.find((e) => e.id === id);
-      return entity ? `${LEGAL_ENTITY_KIND_LABELS[entity.kind]} · ${entity.name}` : "Невідома юрособа";
+      return entity ? formatLegalEntityLabel(entity) : "Невідома юрособа";
     },
     [entities]
   );

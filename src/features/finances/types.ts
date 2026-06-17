@@ -43,6 +43,25 @@ export const LEGAL_ENTITY_KIND_LABELS: Record<LegalEntityKind, string> = {
   individual: "Фізособа",
 };
 
+/**
+ * Display name for a legal entity. If the saved name already starts with
+ * the kind label (e.g. user named the entity «ТОВ «АВАНПРІНТ»»), don't
+ * prepend the label a second time. Otherwise show "{kind} {name}".
+ */
+export const formatLegalEntityLabel = (
+  entity: { kind: LegalEntityKind; name: string } | null | undefined
+): string => {
+  if (!entity) return "";
+  const kindLabel = LEGAL_ENTITY_KIND_LABELS[entity.kind] ?? "";
+  const name = (entity.name ?? "").trim();
+  if (!name) return kindLabel;
+  if (!kindLabel) return name;
+  const lowered = name.toLowerCase();
+  const kindLower = kindLabel.toLowerCase();
+  if (lowered === kindLower || lowered.startsWith(`${kindLower} `)) return name;
+  return `${kindLabel} ${name}`;
+};
+
 export const ACCOUNT_KIND_LABELS: Record<FinanceAccountKind, string> = {
   bank: "Банк",
   cash: "Готівка (каса)",

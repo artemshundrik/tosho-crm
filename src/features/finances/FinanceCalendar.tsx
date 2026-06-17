@@ -7,7 +7,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { loadPayrollEntries, periodKey } from "@/lib/payroll";
 import { listLegalEntities, listPayoutMeta, listTaxes } from "./api";
 import {
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   TAX_TYPE_LABELS,
   type FinanceLegalEntity,
   type FinanceTax,
@@ -95,7 +95,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
         id: `tax-${tax.id}`,
         kind: "tax",
         title: TAX_TYPE_LABELS[tax.taxType],
-        subtitle: entity ? `${LEGAL_ENTITY_KIND_LABELS[entity.kind]} ${entity.name}` : "Юрособа не вказана",
+        subtitle: entity ? formatLegalEntityLabel(entity) : "Юрособа не вказана",
         amount: tax.amount,
         dueDate: tax.dueDate,
         icon: Landmark,

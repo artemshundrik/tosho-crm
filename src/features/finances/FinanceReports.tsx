@@ -15,7 +15,7 @@ import {
 } from "./api";
 import {
   invoiceIsReceivable,
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   paymentUahValue,
   TAX_TYPE_LABELS,
   type FinanceAccount,
@@ -153,7 +153,7 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
   const entityName = (id: string | null) => {
     if (!id) return "Без юрособи";
     const e = entities.find((x) => x.id === id);
-    return e ? `${LEGAL_ENTITY_KIND_LABELS[e.kind]} ${e.name}` : "Невідома";
+    return e ? formatLegalEntityLabel(e) : "Невідома";
   };
 
   if (loading) {

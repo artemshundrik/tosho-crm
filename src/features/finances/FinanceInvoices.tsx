@@ -32,7 +32,7 @@ import {
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_TONE,
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   ORDER_TYPE_LABELS,
   type FinanceInvoice,
   type FinanceInvoiceStatus,
@@ -132,7 +132,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
     const html = buildInvoiceHtml({
       number: invoice.number ?? "",
       issueDate: invoice.issueDate,
-      sellerName: entity ? `${LEGAL_ENTITY_KIND_LABELS[entity.kind]} ${entity.name}` : "Постачальник",
+      sellerName: entity ? formatLegalEntityLabel(entity) : "Постачальник",
       sellerEdrpou: entity?.edrpou,
       sellerIpn: entity?.ipn,
       sellerIban: entity?.iban,
@@ -216,7 +216,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                     {order ? <span>{order.number} · {order.customerName}</span> : <span>Замовлення не вказано</span>}
-                    {entity ? <span>{LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}</span> : null}
+                    {entity ? <span>{formatLegalEntityLabel(entity)}</span> : null}
                     <span>Виставлено: {formatDate(invoice.issueDate)}</span>
                     {invoice.dueDate ? <span>Оплата до: {formatDate(invoice.dueDate)}</span> : null}
                   </div>
@@ -409,7 +409,7 @@ function InvoiceDialog({
                 <SelectContent>
                   {entities.map((entity) => (
                     <SelectItem key={entity.id} value={entity.id}>
-                      {LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}
+                      {formatLegalEntityLabel(entity)}
                     </SelectItem>
                   ))}
                 </SelectContent>

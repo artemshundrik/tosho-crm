@@ -8,7 +8,7 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { listInvoices, listLegalEntities, listOrdersForFinance, listPayments } from "./api";
 import {
   invoiceIsReceivable,
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   paymentUahValue,
   type FinanceInvoice,
   type FinanceLegalEntity,
@@ -107,7 +107,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
   const totalPaid = operations.reduce((s, o) => s + o.paid, 0);
   const closingBalance = totalCharged - totalPaid;
 
-  const sellerName = seller ? `${LEGAL_ENTITY_KIND_LABELS[seller.kind]} ${seller.name}` : "Постачальник";
+  const sellerName = seller ? formatLegalEntityLabel(seller) : "Постачальник";
   const periodLabel = "весь період";
 
   const generatePdf = () => {
@@ -188,7 +188,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
             <SelectContent>
               {entities.map((e) => (
                 <SelectItem key={e.id} value={e.id}>
-                  {LEGAL_ENTITY_KIND_LABELS[e.kind]} {e.name}
+                  {formatLegalEntityLabel(e)}
                 </SelectItem>
               ))}
             </SelectContent>

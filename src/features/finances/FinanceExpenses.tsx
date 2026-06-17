@@ -33,7 +33,7 @@ import {
 } from "./api";
 import {
   EXPENSE_CATEGORY_KIND_LABELS,
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   type FinanceAccount,
   type FinanceExpense,
   type FinanceExpenseCategory,
@@ -468,7 +468,7 @@ function ExpenseDialog({
                   <SelectItem value="none">Не вказано</SelectItem>
                   {entities.map((entity) => (
                     <SelectItem key={entity.id} value={entity.id}>
-                      {LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}
+                      {formatLegalEntityLabel(entity)}
                     </SelectItem>
                   ))}
                 </SelectContent>

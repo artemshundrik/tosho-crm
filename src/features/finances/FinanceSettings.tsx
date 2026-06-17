@@ -50,6 +50,7 @@ import {
   BANK_PROVIDER_LABELS,
   EXPENSE_CATEGORY_KIND_LABELS,
   LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   SENSITIVE_ACCOUNT_KINDS,
   type ExpenseCategoryKind,
   type FinanceAccount,
@@ -815,7 +816,7 @@ function CategoriesPanel({
 
 const buildRequisitesText = (entity: FinanceLegalEntity): string => {
   const lines: string[] = [];
-  const title = `${LEGAL_ENTITY_KIND_LABELS[entity.kind]} ${entity.name}`.trim();
+  const title = formatLegalEntityLabel(entity);
   if (title) lines.push(title);
   if (entity.edrpou) lines.push(`ЄДРПОУ: ${entity.edrpou}`);
   if (entity.ipn) lines.push(`ІПН: ${entity.ipn}`);

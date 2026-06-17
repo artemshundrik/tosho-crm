@@ -20,7 +20,7 @@ import {
   type PayrollEntry,
 } from "@/lib/payroll";
 import { listLegalEntities, listPayoutMeta, upsertPayoutMeta } from "./api";
-import { LEGAL_ENTITY_KIND_LABELS, type FinanceLegalEntity, type FinancePayoutMeta } from "./types";
+import { formatLegalEntityLabel, type FinanceLegalEntity, type FinancePayoutMeta } from "./types";
 
 type FinancePayrollProps = {
   teamId: string | null;
@@ -319,7 +319,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                           <SelectItem value="none">—</SelectItem>
                           {entities.map((entity) => (
                             <SelectItem key={entity.id} value={entity.id}>
-                              {LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}
+                              {formatLegalEntityLabel(entity)}
                             </SelectItem>
                           ))}
                         </SelectContent>

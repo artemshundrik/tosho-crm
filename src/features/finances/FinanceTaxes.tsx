@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { createTax, deleteTax, listLegalEntities, listTaxes, updateTax, type TaxInput } from "./api";
 import {
-  LEGAL_ENTITY_KIND_LABELS,
+  formatLegalEntityLabel,
   TAX_STATUS_LABELS,
   TAX_TYPE_DEFAULT_RATE,
   TAX_TYPE_LABELS,
@@ -180,7 +180,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                     <span>{formatPeriod(tax.period)}</span>
-                    {entity ? <span>{LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}</span> : null}
+                    {entity ? <span>{formatLegalEntityLabel(entity)}</span> : null}
                     {tax.dueDate ? <span>Сплатити до: {formatDate(tax.dueDate)}</span> : null}
                     {tax.rate ? <span>Ставка {tax.rate}%</span> : null}
                   </div>
@@ -353,7 +353,7 @@ function TaxDialog({
                 <SelectItem value="none">—</SelectItem>
                 {entities.map((entity) => (
                   <SelectItem key={entity.id} value={entity.id}>
-                    {LEGAL_ENTITY_KIND_LABELS[entity.kind]} {entity.name}
+                    {formatLegalEntityLabel(entity)}
                   </SelectItem>
                 ))}
               </SelectContent>
