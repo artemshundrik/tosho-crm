@@ -723,7 +723,7 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
 });
 
 export async function listExpenses(teamId: string): Promise<FinanceExpense[]> {
-  const [{ data: expenseData, error: expenseError }, { data: allocData, error: allocError }] = await Promise.all([
+  const [{ data: expenseData, error: expenseError }, allocResult] = await Promise.all([
     supabase
       .schema("tosho")
       .from("finance_expenses")
@@ -738,7 +738,10 @@ export async function listExpenses(teamId: string): Promise<FinanceExpense[]> {
       .eq("team_id", teamId),
   ]);
   if (expenseError) throw expenseError;
-  if (allocError) throw allocError;
+  if (allocResult.error) {
+    console.error("[finance] expense_allocations load failed", allocResult.error);
+  }
+  const allocData = allocResult.error ? [] : allocResult.data;
 
   const allocByExpense = new Map<string, FinanceExpenseAllocation[]>();
   for (const row of (allocData as unknown as AllocationRow[]) ?? []) {

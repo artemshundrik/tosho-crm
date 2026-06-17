@@ -81,14 +81,24 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
     setLoading(true);
     try {
       const [nextEntities, nextAccounts, nextCategories] = await Promise.all([
-        listLegalEntities(teamId),
-        listAccounts(teamId),
-        listExpenseCategories(teamId),
+        listLegalEntities(teamId).catch((e) => {
+          console.error("[finance] listLegalEntities failed", e);
+          return [] as FinanceLegalEntity[];
+        }),
+        listAccounts(teamId).catch((e) => {
+          console.error("[finance] listAccounts failed", e);
+          return [] as FinanceAccount[];
+        }),
+        listExpenseCategories(teamId).catch((e) => {
+          console.error("[finance] listExpenseCategories failed", e);
+          return [] as FinanceExpenseCategory[];
+        }),
       ]);
       setEntities(nextEntities);
       setAccounts(nextAccounts);
       setCategories(nextCategories);
     } catch (error) {
+      console.error("[finance] settings reload failed", error);
       toast.error("Не вдалося завантажити фінансові налаштування", {
         description: getErrorMessage(error, "Спробуйте ще раз."),
       });
@@ -215,7 +225,10 @@ function LegalEntitiesPanel({
   };
 
   const submit = async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      toast.error("Команду не визначено — перезавантажте сторінку та спробуйте ще раз.");
+      return;
+    }
     if (!form.name.trim()) {
       toast.error("Вкажіть назву юрособи.");
       return;
@@ -228,6 +241,7 @@ function LegalEntitiesPanel({
       await onChanged();
       toast.success(editingId ? "Юрособу оновлено" : "Юрособу додано");
     } catch (error) {
+      console.error("[finance] createLegalEntity failed", error);
       toast.error("Не вдалося зберегти юрособу", { description: getErrorMessage(error, "Спробуйте ще раз.") });
     } finally {
       setSaving(false);
@@ -465,7 +479,10 @@ function AccountsPanel({
     setForm((p) => ({ ...p, kind, isSensitive: SENSITIVE_ACCOUNT_KINDS.has(kind) ? true : p.isSensitive }));
 
   const submit = async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      toast.error("Команду не визначено — перезавантажте сторінку та спробуйте ще раз.");
+      return;
+    }
     if (!form.name.trim()) {
       toast.error("Вкажіть назву каси/рахунку.");
       return;
@@ -478,6 +495,7 @@ function AccountsPanel({
       await onChanged();
       toast.success(editingId ? "Рахунок оновлено" : "Рахунок додано");
     } catch (error) {
+      console.error("[finance] createAccount failed", error);
       toast.error("Не вдалося зберегти рахунок", { description: getErrorMessage(error, "Спробуйте ще раз.") });
     } finally {
       setSaving(false);

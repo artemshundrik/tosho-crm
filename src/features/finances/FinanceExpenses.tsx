@@ -73,17 +73,29 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     if (!teamId) return;
     setLoading(true);
     try {
-      const [nextExpenses, nextCategories, nextAccounts, nextEntities] = await Promise.all([
-        listExpenses(teamId),
-        listExpenseCategories(teamId),
-        listAccounts(teamId),
-        listLegalEntities(teamId),
-      ]);
+      // Critical path: if expenses fail, show error and bail.
+      const nextExpenses = await listExpenses(teamId);
       setExpenses(nextExpenses);
+      // Supporting data: failures here are logged but don't wipe the expense list.
+      const [nextCategories, nextAccounts, nextEntities] = await Promise.all([
+        listExpenseCategories(teamId).catch((e) => {
+          console.error("[finance] listExpenseCategories failed", e);
+          return [] as FinanceExpenseCategory[];
+        }),
+        listAccounts(teamId).catch((e) => {
+          console.error("[finance] listAccounts failed", e);
+          return [] as FinanceAccount[];
+        }),
+        listLegalEntities(teamId).catch((e) => {
+          console.error("[finance] listLegalEntities failed", e);
+          return [] as FinanceLegalEntity[];
+        }),
+      ]);
       setCategories(nextCategories);
       setAccounts(nextAccounts);
       setEntities(nextEntities);
     } catch (error) {
+      console.error("[finance] listExpenses failed", error);
       toast.error("Не вдалося завантажити витрати", { description: getErrorMessage(error, "Спробуйте ще раз.") });
     } finally {
       setLoading(false);
