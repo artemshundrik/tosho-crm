@@ -1222,6 +1222,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     };
   }, [loadActivityUnread]);
 
+  useEffect(() => {
+    const handler = () => {
+      void loadNotifications();
+    };
+    window.addEventListener("notifications_read", handler);
+    return () => {
+      window.removeEventListener("notifications_read", handler);
+    };
+  }, [loadNotifications]);
+
   const handleToShoAiOpenChange = React.useCallback((open: boolean) => {
     setToshoAiOpen(open);
     if (!open) {
@@ -1507,6 +1517,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           const item = mapNotificationRow(row);
           setNotifications((prev) => [item, ...prev].slice(0, 20));
           showInAppNotificationToast(item);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as NotificationRow;
+          const item = mapNotificationRow(row);
+          setNotifications((prev) => prev.map((existing) => (existing.id === item.id ? item : existing)));
         }
       )
       .subscribe((status) => {

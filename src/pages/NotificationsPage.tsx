@@ -738,6 +738,7 @@ export default function NotificationsPage() {
       return;
     }
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    window.dispatchEvent(new Event("notifications_read"));
     toast.success("Усі сповіщення прочитані");
   }, [unreadCount, userId]);
 
@@ -747,6 +748,7 @@ export default function NotificationsPage() {
     setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
     if (!n.read) {
       await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
+      window.dispatchEvent(new Event("notifications_read"));
     }
     if (n.href) navigate(n.href);
   };
