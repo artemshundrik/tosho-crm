@@ -14,7 +14,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
+import { SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";
@@ -128,8 +128,9 @@ export default function FinancesPage() {
       <Tabs value={activeSection} onValueChange={handleSectionChange}>
         <TabsList
           className={cn(
-            SEGMENTED_GROUP,
-            "mb-5 flex w-full flex-wrap items-center justify-start gap-1 shadow-inner"
+            "mb-5 flex h-auto w-full items-center justify-start gap-1 overflow-x-auto rounded-xl",
+            "border border-border/50 bg-muted/40 p-1 shadow-inner",
+            "[scrollbar-width:thin]"
           )}
         >
           {visibleSections.map((section) => {
@@ -140,7 +141,7 @@ export default function FinancesPage() {
                 value={section.id}
                 className={cn(
                   SEGMENTED_TRIGGER,
-                  "gap-2",
+                  "h-9 flex-none shrink-0 gap-2 whitespace-nowrap px-3",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                   "data-[state=active]:shadow-md",
                   "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
