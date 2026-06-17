@@ -13,7 +13,7 @@ import {
   type FinanceTax,
 } from "./types";
 
-type FinanceCalendarProps = { teamId: string | null; userId: string | null; canSeeSensitive: boolean };
+type FinanceCalendarProps = { teamId: string | null; userId: string | null };
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
@@ -45,7 +45,7 @@ type DueItem = {
 
 type Bucket = { key: string; label: string; tone?: "danger" | "warning"; items: DueItem[] };
 
-export function FinanceCalendar({ teamId, userId, canSeeSensitive }: FinanceCalendarProps) {
+export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
   const [taxes, setTaxes] = React.useState<FinanceTax[]>([]);
   const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
   const [pendingPayout, setPendingPayout] = React.useState<{ total: number; count: number }>({ total: 0, count: 0 });
@@ -59,7 +59,7 @@ export function FinanceCalendar({ teamId, userId, canSeeSensitive }: FinanceCale
     void (async () => {
       try {
         const [nextTaxes, nextEntities] = await Promise.all([listTaxes(teamId), listLegalEntities(teamId)]);
-        const wsId = canSeeSensitive ? await resolveWorkspaceId(userId) : null;
+        const wsId = await resolveWorkspaceId(userId);
         let payout = { total: 0, count: 0 };
         if (wsId) {
           const [entries, meta] = await Promise.all([loadPayrollEntries(wsId, period), listPayoutMeta(teamId, period)]);
@@ -82,7 +82,7 @@ export function FinanceCalendar({ teamId, userId, canSeeSensitive }: FinanceCale
     return () => {
       active = false;
     };
-  }, [teamId, userId, canSeeSensitive]);
+  }, [teamId, userId]);
 
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
 

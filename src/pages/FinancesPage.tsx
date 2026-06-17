@@ -80,12 +80,13 @@ export default function FinancesPage() {
     [permissions.isSuperAdmin, jobRole]
   );
 
-  // Маржа/собівартість і зарплати — лише топ-ролі (CEO + головбух).
+  // Маржа/собівартість — лише топ-ролі (CEO + головбух).
+  // Виплати команди — доступні всім фін-ролям (SEO/бухгалтери теж бачать).
   const visibleSections = useMemo(
     () =>
       canSeeSensitive
         ? FINANCE_SECTIONS
-        : FINANCE_SECTIONS.filter((s) => s.id !== "margin" && s.id !== "payroll"),
+        : FINANCE_SECTIONS.filter((s) => s.id !== "margin"),
     [canSeeSensitive]
   );
 
@@ -169,7 +170,7 @@ export default function FinancesPage() {
             ) : section.id === "taxes" ? (
               <FinanceTaxes teamId={teamId} />
             ) : section.id === "calendar" ? (
-              <FinanceCalendar teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+              <FinanceCalendar teamId={teamId} userId={userId} />
             ) : section.id === "reports" ? (
               <FinanceReports teamId={teamId} canSeeSensitive={canSeeSensitive} />
             ) : section.id === "accounts" ? (
