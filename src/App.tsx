@@ -541,8 +541,15 @@ function ModuleRouteGate({
   moduleLabel: string;
   children: React.ReactNode;
 }) {
+  // Finance is role-restricted (owner / SEO / бухгалтери) — match the DB RLS
+  // so authorized roles always pass regardless of the module_access flag.
+  const financeRoleAllowed =
+    moduleKey === "finance" &&
+    ((accessRole ?? "").trim().toLowerCase() === "owner" ||
+      ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase()));
+
   const [hasModuleAccess, setHasModuleAccess] = useState<boolean>(() => {
-    if (isSuperAdmin) return true;
+    if (isSuperAdmin || financeRoleAllowed) return true;
     return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess?.[moduleKey] === true;
   });
 
@@ -550,7 +557,7 @@ function ModuleRouteGate({
     let cancelled = false;
 
     const syncAccess = async () => {
-      if (isSuperAdmin) {
+      if (isSuperAdmin || financeRoleAllowed) {
         if (!cancelled) setHasModuleAccess(true);
         return;
       }
@@ -572,11 +579,11 @@ function ModuleRouteGate({
       cancelled = true;
       window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
     };
-  }, [isSuperAdmin, moduleKey]);
+  }, [isSuperAdmin, financeRoleAllowed, moduleKey]);
 
   return (
     <PermissionGate
-      allowed={isSuperAdmin || hasModuleAccess}
+      allowed={isSuperAdmin || financeRoleAllowed || hasModuleAccess}
       requirement={`картка доступів: ${moduleLabel} або access_role: owner (Super Admin)`}
       accessRole={accessRole}
       jobRole={jobRole}

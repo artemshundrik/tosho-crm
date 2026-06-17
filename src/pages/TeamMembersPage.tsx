@@ -360,7 +360,13 @@ function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | nu
 }
 
 function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | null) {
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (
+    (accessRole ?? "").trim().toLowerCase() === "owner" ||
+    role === "seo" ||
+    role === "accountant" ||
+    role === "chief_accountant"
+  );
 }
 
 function isForcedModuleAccess(key: keyof MemberProfileMeta["moduleAccess"], accessRole?: string | null, jobRole?: string | null) {

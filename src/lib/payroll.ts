@@ -46,6 +46,49 @@ export function periodKey(year: number, month: number): string {
   return `${year}-${mm}-01`;
 }
 
+export const PAYROLL_MONTHS = [
+  "Січень",
+  "Лютий",
+  "Березень",
+  "Квітень",
+  "Травень",
+  "Червень",
+  "Липень",
+  "Серпень",
+  "Вересень",
+  "Жовтень",
+  "Листопад",
+  "Грудень",
+] as const;
+
+/**
+ * Accounts intentionally kept off the payroll sheet (owner / management / a
+ * duplicate account). Excluded by user id since display names change.
+ * Shared between the legacy /payroll page and the finance "Виплати команді".
+ */
+export const PAYROLL_EXCLUDED_USER_IDS = new Set<string>([
+  "438b2643-e6fb-4366-bb92-83a88475c1f4", // Артем Шундрик (owner)
+  "a411928a-27d8-495c-90e6-c7125d2ee1f5", // Артем Шундрик (другий акаунт)
+  "9753ba06-3911-40fe-a9d4-bea1a92f1667", // В'ячеслав Хом'яков
+  "ceade688-2792-4814-b0f4-c4e4b6d058e1", // Олена Борщ
+  "e73aee8c-ebc8-449f-af12-6420a363498a", // Євгенія Безручко
+]);
+
+/** People paid through the sheet without a CRM account (fixed placeholder ids). */
+export type ManualPayrollPerson = { userId: string; name: string; jobRole: string };
+export const MANUAL_PAYROLL_PEOPLE: ManualPayrollPerson[] = [
+  { userId: "30e3147f-3c00-45f9-ac04-91a160799efd", name: "Тетяна Карандюк", jobRole: "Бухгалтер" },
+  { userId: "d604c8de-9976-42db-b9ec-f2f756818295", name: "Юлія Кубенко", jobRole: "Бухгалтер" },
+];
+
+export const parsePayrollAmount = (raw: string): number => {
+  const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+  if (!cleaned) return 0;
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed * 100) / 100);
+};
+
 /** Load all payroll entries for a workspace + period, keyed by user id. */
 export async function loadPayrollEntries(
   workspaceId: string,

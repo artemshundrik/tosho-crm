@@ -720,7 +720,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session, permissions } = useAuth();
+  const { userId, teamId, session, permissions, jobRole } = useAuth();
+  const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
     teamId,
@@ -767,6 +768,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           if ((link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSeo) {
             return true;
           }
+          // Finance is role-restricted: owner / SEO / бухгалтери (matches DB RLS).
+          if (link.moduleKey === "finance") {
+            return permissions.isSuperAdmin || isFinanceJobRole;
+          }
           if (currentModuleAccess === undefined) {
             return false;
           }
@@ -774,7 +779,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         }
         return true;
       }),
-    [currentModuleAccess, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSeo, permissions.isSuperAdmin]
+    [currentModuleAccess, isFinanceJobRole, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSeo, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
