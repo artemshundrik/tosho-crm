@@ -75,7 +75,7 @@ import {
   useCustomerLeadCreate,
   type CreatedCustomerLead,
 } from "@/components/customers";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -7268,34 +7268,77 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
         }}
       >
-        <DialogContent className="w-[min(980px,calc(100vw-32px))] max-h-[88vh] overflow-hidden p-0">
-          <DialogHeader className="px-5 py-4 border-b border-border/60 bg-muted/10">
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 space-y-2 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
+            <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} /> : null}
             </DialogTitle>
-            <DialogDescription>
-              {quoteSetDetailsTarget?.customer_name ?? "Замовник не вказаний"} ·{" "}
-              {quoteSetDetailsTarget?.created_at
-                ? new Date(quoteSetDetailsTarget.created_at).toLocaleString("uk-UA", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "Дата не вказана"}
+            <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-medium text-foreground">
+                {quoteSetDetailsTarget?.customer_name ?? "Замовник не вказаний"}
+              </span>
+              <Badge
+                variant="outline"
+                className="border-border/60 text-[11px] font-normal text-muted-foreground"
+              >
+                {quoteSetDetailsTarget?.customer_id ? "Замовник" : "Лід"}
+              </Badge>
+              <span aria-hidden className="text-border">•</span>
+              <span className="text-muted-foreground">
+                {quoteSetDetailsTarget?.created_at
+                  ? new Date(quoteSetDetailsTarget.created_at).toLocaleString("uk-UA", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Дата не вказана"}
+              </span>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="p-5 space-y-4 overflow-y-auto">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <div className="rounded-xl border border-border/60 bg-muted/10 p-4 space-y-3">
-                <div className="text-sm font-semibold">Керування</div>
+          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Позиції
+                </div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">{quoteSetDetailsItems.length}</div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Середня сума
+                </div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
+                  {formatMoney(quoteSetAverageAmount)}
+                </div>
+              </div>
+              <div className="col-span-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 sm:col-span-1">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Разом
+                </div>
+                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(quoteSetTotalAmount)}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Керування</h3>
+                </div>
                 <div className="space-y-1.5">
-                  <div className="text-xs text-muted-foreground">Назва</div>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <label
+                    htmlFor="quote-set-name"
+                    className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    Назва
+                  </label>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
                     <Input
+                      id="quote-set-name"
                       value={quoteSetEditName}
                       onChange={(event) => setQuoteSetEditName(event.target.value)}
                       placeholder="Назва набору"
@@ -7311,14 +7354,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <div className="text-xs text-muted-foreground">Додати один прорахунок</div>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Додати один прорахунок
+                  </label>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
                     <Select
                       value={quoteSetCandidateId}
                       onValueChange={setQuoteSetCandidateId}
                       disabled={quoteSetCandidatesLoading || quoteSetActionBusy || quoteSetCandidateQuotes.length === 0}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Прорахунок для додавання">
                         <SelectValue
                           placeholder={
                             quoteSetCandidatesLoading
@@ -7347,11 +7392,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       onClick={handleAddQuoteToOpenSet}
                       disabled={quoteSetActionBusy || !quoteSetCandidateId}
                     >
+                      <PlusIcon className="mr-1.5 h-4 w-4" />
                       Додати
                     </Button>
                   </div>
                   {selectedQuoteCandidate ? (
-                    <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                    <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
                       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                         Попередній перегляд
                       </div>
@@ -7383,75 +7429,67 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </div>
                   ) : null}
                 </div>
-              </div>
+              </section>
 
-              <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
-                <div className="text-sm font-semibold">Комерційний підсумок</div>
+              <section className="space-y-4 rounded-xl border border-border/60 bg-card p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Документи та дії</h3>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Позиції</div>
-                    <div className="text-sm font-semibold">{quoteSetDetailsItems.length}</div>
-                  </div>
-                  <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Середня сума</div>
-                    <div className="text-sm font-semibold">{formatMoney(quoteSetAverageAmount)}</div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Разом</div>
-                  <div className="text-base font-semibold">{formatMoney(quoteSetTotalAmount)}</div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
                   <Button
-                    size="sm"
                     variant="outline"
+                    className="justify-start"
                     onClick={() => {
                       void handlePreviewQuoteSet();
                     }}
                     disabled={quoteSetCommercialLoading}
                   >
-                    <Eye className="mr-1.5 h-4 w-4" />
+                    <Eye className="mr-2 h-4 w-4" />
                     Прев'ю
                   </Button>
                   <Button
-                    size="sm"
                     variant="outline"
+                    className="justify-start"
                     onClick={() => {
                       void handlePrintQuoteSet();
                     }}
                     disabled={quoteSetCommercialLoading}
                   >
-                    <Printer className="mr-1.5 h-4 w-4" />
+                    <Printer className="mr-2 h-4 w-4" />
                     Друк
                   </Button>
                   <Button
-                    size="sm"
                     variant="outline"
+                    className="justify-start"
                     onClick={() => {
                       void handleExportQuoteSet("pdf");
                     }}
                     disabled={quoteSetCommercialLoading}
                   >
-                    <FileDown className="mr-1.5 h-4 w-4" />
+                    <FileDown className="mr-2 h-4 w-4" />
                     PDF
                   </Button>
                   <Button
-                    size="sm"
                     variant="outline"
+                    className="justify-start"
                     onClick={() => {
                       void handleExportQuoteSet("xls");
                     }}
                     disabled={quoteSetCommercialLoading}
                   >
-                    <Download className="mr-1.5 h-4 w-4" />
+                    <Download className="mr-2 h-4 w-4" />
                     XLS
                   </Button>
                 </div>
                 {quoteSetCommercialLoading ? (
-                  <div className="text-xs text-muted-foreground">Генерація комерційного документа...</div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Генерація комерційного документа...
+                  </div>
                 ) : null}
                 {selectedRows.length > 0 ? (
-                  <>
+                  <div className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-3">
                     <div className="text-xs text-muted-foreground">
                       Вибрано в таблиці:{" "}
                       <span className="font-medium text-foreground">{selectedRows.length}</span>
@@ -7462,33 +7500,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <Button
                       size="sm"
                       variant="secondary"
+                      className="w-full"
                       onClick={handleAddSelectedToQuoteSet}
                       disabled={quoteSetActionBusy || addableSelectedCountForOpenSet <= 0}
                     >
                       Додати вибрані ({addableSelectedCountForOpenSet})
                     </Button>
-                  </>
+                  </div>
                 ) : (
-                  <div className="text-xs text-muted-foreground rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                  <div className="rounded-lg border border-dashed border-border/50 bg-muted/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
                     Щоб додати кілька прорахунків, закрийте модалку і виділіть їх у списку.
                   </div>
                 )}
-                <div className="pt-2 border-t border-border/50">
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => void handleDeleteQuoteSet()}
-                    disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
-                  >
-                    Видалити {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набір"}
-                  </Button>
-                </div>
-              </div>
+              </section>
             </div>
 
-            <div className="rounded-xl border border-border/60 overflow-hidden">
-              <div className="px-4 py-3 border-b border-border/60 bg-muted/20 text-sm font-semibold">
-                Склад {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набору"}
+            <div className="overflow-hidden rounded-xl border border-border/60">
+              <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Layers className="h-4 w-4 text-muted-foreground" />
+                  Склад {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набору"}
+                </div>
+                <Badge
+                  variant="outline"
+                  className="border-border/60 text-xs font-normal text-muted-foreground tabular-nums"
+                >
+                  {quoteSetDetailsItems.length}
+                </Badge>
               </div>
               {quoteSetDetailsLoading ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">Завантаження складу...</div>
@@ -7566,12 +7604,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               )}
             </div>
           </div>
+
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border/60 bg-muted/10 px-6 py-4">
+            <Button
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => void handleDeleteQuoteSet()}
+              disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Видалити {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набір"}
+            </Button>
+            <DialogClose asChild>
+              <Button variant="outline">Закрити</Button>
+            </DialogClose>
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={quoteSetPreviewOpen} onOpenChange={setQuoteSetPreviewOpen}>
-        <DialogContent className="w-[min(980px,calc(100vw-32px))] max-h-[88vh] overflow-hidden p-0">
-          <DialogHeader className="px-5 py-4 border-b border-border/60 bg-muted/10">
+        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
             <DialogTitle className="flex items-center gap-2">
               Комерційний прев'ю
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} label={quoteSetDetailsTarget.name} /> : null}
@@ -7581,7 +7634,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length}
             </DialogDescription>
           </DialogHeader>
-          <div className="p-5 space-y-4 overflow-y-auto">
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
             {quoteSetCommercialLoading ? (
               <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
                 Генерація прев'ю...
