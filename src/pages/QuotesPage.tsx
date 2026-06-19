@@ -7268,7 +7268,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
         }}
       >
-        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0">
+        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0">
           <DialogHeader className="shrink-0 space-y-2 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
             <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
@@ -7346,6 +7346,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     />
                     <Button
                       variant="outline"
+                      className="h-10"
                       onClick={handleRenameQuoteSet}
                       disabled={quoteSetActionBusy || !quoteSetDetailsTarget}
                     >
@@ -7389,6 +7390,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Select>
                     <Button
                       variant="outline"
+                      className="h-10"
                       onClick={handleAddQuoteToOpenSet}
                       disabled={quoteSetActionBusy || !quoteSetCandidateId}
                     >
@@ -7623,7 +7625,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       </Dialog>
 
       <Dialog open={quoteSetPreviewOpen} onOpenChange={setQuoteSetPreviewOpen}>
-        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0">
+        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0">
           <DialogHeader className="shrink-0 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
             <DialogTitle className="flex items-center gap-2">
               Комерційний прев'ю
