@@ -22,6 +22,7 @@ import {
   BookOpen,
   StickyNote,
   Printer,
+  Award,
 } from "lucide-react";
 
 export type ConfiguratorProductOption = {
@@ -228,6 +229,66 @@ const NOTE_BLOCK_GLUE_SIDES: SimpleOption[] = [
   { value: "left", label: "Ліворуч" },
 ];
 
+const CERTIFICATE_FORMAT_TYPES: SimpleOption[] = [
+  { value: "standard", label: "Стандартний" },
+  { value: "custom", label: "Нестандартний" },
+];
+
+const CERTIFICATE_STANDARD_FORMATS: SimpleOption[] = [
+  { value: "a4", label: "A4" },
+  { value: "a5", label: "A5" },
+  { value: "a6", label: "A6" },
+];
+
+const CERTIFICATE_MATERIALS: SimpleOption[] = [
+  { value: "coated_paper", label: "Крейдований папір" },
+  { value: "cardboard", label: "Картон" },
+  { value: "designer_cardboard", label: "Дизайнерський картон" },
+];
+
+const CERTIFICATE_COATED_DENSITIES: SimpleOption[] = [
+  { value: "300", label: "300 г/м2" },
+  { value: "350", label: "350 г/м2" },
+];
+
+const CERTIFICATE_PRINT_METHODS: SimpleOption[] = [
+  { value: "digital", label: "Цифровий (CMYK)" },
+  { value: "uv", label: "УФ друк" },
+  { value: "screen", label: "Шовкодрук" },
+];
+
+const CERTIFICATE_DIGITAL_SCHEMES: SimpleOption[] = [
+  { value: "4_0", label: "4+0" },
+  { value: "4_4", label: "4+4" },
+];
+
+const CERTIFICATE_SPECIAL_SCHEMES: SimpleOption[] = [
+  { value: "1_0", label: "1+0" },
+  { value: "1_1", label: "1+1" },
+  { value: "2_0", label: "2+0" },
+  { value: "2_2", label: "2+2" },
+  { value: "3_0", label: "3+0" },
+  { value: "3_3", label: "3+3" },
+  { value: "4_0", label: "4+0" },
+  { value: "4_4", label: "4+4" },
+];
+
+const CERTIFICATE_EMBOSSING_OPTIONS: SimpleOption[] = [
+  { value: "none", label: "Немає" },
+  { value: "blind", label: "Сліпе тиснення" },
+  { value: "foil", label: "Тиснення фольгою" },
+];
+
+const CERTIFICATE_COVERAGE_SIDES: SimpleOption[] = [
+  { value: "1_0", label: "1+0" },
+  { value: "1_1", label: "1+1" },
+];
+
+const CERTIFICATE_COVERAGE_PERCENTS: SimpleOption[] = [
+  { value: "20", label: "До 20%" },
+  { value: "40", label: "До 40%" },
+];
+
 const ConfigField: React.FC<{
   label: string;
   children: React.ReactNode;
@@ -329,6 +390,7 @@ type PrintPackageConfiguratorProps = {
 const resolveProductIcon = (productKind: string) => {
   if (productKind === "notebook") return <BookOpen />;
   if (productKind === "note_blocks") return <StickyNote />;
+  if (productKind === "certificates") return <Award />;
   return <Package />;
 };
 
@@ -407,6 +469,38 @@ export function PrintProductConfigurator({
     return true;
   }, [config]);
 
+  const certificateSchemeOptions =
+    config.certificatePrintMethod === "digital" ? CERTIFICATE_DIGITAL_SCHEMES : CERTIFICATE_SPECIAL_SCHEMES;
+
+  const isCertificateBaseComplete = React.useMemo(() => {
+    if (!config.certificateFormatType) return false;
+    if (config.certificateFormatType === "standard" && !config.certificateStandardFormat) return false;
+    if (
+      config.certificateFormatType === "custom" &&
+      (!config.certificateWidthMm.trim() || !config.certificateHeightMm.trim())
+    )
+      return false;
+    if (!config.certificateMaterial) return false;
+    if (config.certificateMaterial === "coated_paper" && !config.certificateCoatedDensity) return false;
+    if (config.certificateMaterial === "cardboard" && !config.certificateCardboardDensity.trim()) return false;
+    return true;
+  }, [config]);
+
+  const isCertificatePrintComplete = React.useMemo(() => {
+    if (!config.certificatePrintMethod) return false;
+    if (!config.certificatePrintScheme) return false;
+    return true;
+  }, [config]);
+
+  const isCertificateFinishingComplete = React.useMemo(() => {
+    if (config.certificateEmbossing === "foil" && !config.certificateEmbossingFoilColor.trim()) return false;
+    if (config.certificateSpotUv === "yes" || config.certificateFoiling === "yes") {
+      if (!config.certificateCoverageSides || !config.certificateCoveragePercent) return false;
+    }
+    if (config.certificateFoiling === "yes" && !config.certificateFoilingColor.trim()) return false;
+    return true;
+  }, [config]);
+
   const steps =
     productKind === "notebook"
       ? [
@@ -415,11 +509,17 @@ export function PrintProductConfigurator({
         ]
       : productKind === "note_blocks"
         ? [{ label: "Специфікація", done: isNoteBlocksSpecComplete }]
-        : [
-            { label: "Конструкція", done: isPackageStructureComplete },
-            { label: "Матеріал", done: isPackageMaterialComplete },
-            { label: "Друк", done: isPackagePrintComplete },
-          ];
+        : productKind === "certificates"
+          ? [
+              { label: "Формат і матеріал", done: isCertificateBaseComplete },
+              { label: "Друк", done: isCertificatePrintComplete },
+              { label: "Оздоблення", done: isCertificateFinishingComplete },
+            ]
+          : [
+              { label: "Конструкція", done: isPackageStructureComplete },
+              { label: "Матеріал", done: isPackageMaterialComplete },
+              { label: "Друк", done: isPackagePrintComplete },
+            ];
 
   const completedSteps = steps.filter((step) => step.done).length;
   const hasSelectedProduct = Boolean(selectedConfiguratorProduct && productKind);
@@ -886,6 +986,320 @@ export function PrintProductConfigurator({
             </div>
           )}
         </ProductSection>
+      ) : null}
+
+      {productKind === "certificates" ? (
+        <>
+          <ProductSection title="Формат і матеріал" done={isCertificateBaseComplete}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Формат">
+                <ChipPicker
+                  value={config.certificateFormatType}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificateFormatType: value,
+                      certificateStandardFormat: value === "standard" ? prev.certificateStandardFormat : "",
+                      certificateWidthMm: value === "custom" ? prev.certificateWidthMm : "",
+                      certificateHeightMm: value === "custom" ? prev.certificateHeightMm : "",
+                    }))
+                  }
+                  options={CERTIFICATE_FORMAT_TYPES}
+                  placeholder="Оберіть формат"
+                  icon={<Ruler />}
+                />
+              </ConfigField>
+              {config.certificateFormatType === "standard" ? (
+                <ConfigField label="Розмір">
+                  <ChipPicker
+                    value={config.certificateStandardFormat}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateStandardFormat: value }))}
+                    options={CERTIFICATE_STANDARD_FORMATS}
+                    placeholder="Оберіть розмір"
+                    icon={<Scan />}
+                  />
+                </ConfigField>
+              ) : null}
+              {config.certificateFormatType === "custom" ? (
+                <>
+                  <ConfigField label="Ширина, мм">
+                    <Input
+                      type="number"
+                      value={config.certificateWidthMm}
+                      onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateWidthMm: e.target.value }))}
+                      placeholder="0"
+                      className="h-9 rounded-full bg-background/70 px-3.5"
+                    />
+                  </ConfigField>
+                  <ConfigField label="Висота, мм">
+                    <Input
+                      type="number"
+                      value={config.certificateHeightMm}
+                      onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateHeightMm: e.target.value }))}
+                      placeholder="0"
+                      className="h-9 rounded-full bg-background/70 px-3.5"
+                    />
+                  </ConfigField>
+                </>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Матеріал">
+                <ChipPicker
+                  value={config.certificateMaterial}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificateMaterial: value,
+                      certificateCoatedDensity: value === "coated_paper" ? prev.certificateCoatedDensity : "",
+                      certificateCardboardDensity: value === "cardboard" ? prev.certificateCardboardDensity : "",
+                      certificateDesignerName: value === "designer_cardboard" ? prev.certificateDesignerName : "",
+                      certificateDesignerDensity: value === "designer_cardboard" ? prev.certificateDesignerDensity : "",
+                    }))
+                  }
+                  options={CERTIFICATE_MATERIALS}
+                  placeholder="Оберіть матеріал"
+                  icon={<Layers3 />}
+                  contentWidthClassName="w-[320px]"
+                />
+              </ConfigField>
+              {config.certificateMaterial === "coated_paper" ? (
+                <ConfigField label="Щільність">
+                  <ChipPicker
+                    value={config.certificateCoatedDensity}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateCoatedDensity: value }))}
+                    options={CERTIFICATE_COATED_DENSITIES}
+                    placeholder="Оберіть щільність"
+                    icon={<Ruler />}
+                  />
+                </ConfigField>
+              ) : null}
+              {config.certificateMaterial === "cardboard" ? (
+                <ConfigField label="Щільність, г/м2">
+                  <Input
+                    type="number"
+                    value={config.certificateCardboardDensity}
+                    onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateCardboardDensity: e.target.value }))}
+                    placeholder="270–360"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
+                </ConfigField>
+              ) : null}
+              {config.certificateMaterial === "designer_cardboard" ? (
+                <>
+                  <ConfigField label="Назва картону">
+                    <Input
+                      value={config.certificateDesignerName}
+                      onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateDesignerName: e.target.value }))}
+                      placeholder="Необов'язково"
+                      className="h-9 rounded-full bg-background/70 px-3.5"
+                    />
+                  </ConfigField>
+                  <ConfigField label="Щільність, г/м2">
+                    <Input
+                      type="number"
+                      value={config.certificateDesignerDensity}
+                      onChange={(e) =>
+                        onConfigChange((prev) => ({ ...prev, certificateDesignerDensity: e.target.value }))
+                      }
+                      placeholder="270–400"
+                      className="h-9 rounded-full bg-background/70 px-3.5"
+                    />
+                  </ConfigField>
+                </>
+              ) : null}
+            </div>
+          </ProductSection>
+
+          <ProductSection title="Друк" done={isCertificatePrintComplete}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Тип друку">
+                <ChipPicker
+                  value={config.certificatePrintMethod}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificatePrintMethod: value,
+                      certificatePrintScheme: "",
+                    }))
+                  }
+                  options={CERTIFICATE_PRINT_METHODS}
+                  placeholder="Оберіть тип друку"
+                  icon={<Palette />}
+                  contentWidthClassName="w-[320px]"
+                />
+              </ConfigField>
+              {config.certificatePrintMethod ? (
+                <ConfigField label="Кольоровість">
+                  <ChipPicker
+                    value={config.certificatePrintScheme}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, certificatePrintScheme: value }))}
+                    options={certificateSchemeOptions}
+                    placeholder="Оберіть кольоровість"
+                    icon={<Copy />}
+                  />
+                </ConfigField>
+              ) : null}
+            </div>
+          </ProductSection>
+
+          <ProductSection title="Оздоблення" done={isCertificateFinishingComplete}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Тиснення">
+                <ChipPicker
+                  value={config.certificateEmbossing}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificateEmbossing: value,
+                      certificateEmbossingFoilColor: value === "foil" ? prev.certificateEmbossingFoilColor : "",
+                      certificateEmbossingWidthMm: value === "none" ? "" : prev.certificateEmbossingWidthMm,
+                      certificateEmbossingHeightMm: value === "none" ? "" : prev.certificateEmbossingHeightMm,
+                    }))
+                  }
+                  options={CERTIFICATE_EMBOSSING_OPTIONS}
+                  placeholder="Оберіть тиснення"
+                  icon={<CircleDot />}
+                  contentWidthClassName="w-[320px]"
+                />
+              </ConfigField>
+              {config.certificateEmbossing === "foil" ? (
+                <ConfigField label="Колір фольги">
+                  <Input
+                    value={config.certificateEmbossingFoilColor}
+                    onChange={(e) =>
+                      onConfigChange((prev) => ({ ...prev, certificateEmbossingFoilColor: e.target.value }))
+                    }
+                    placeholder="Напр. золото"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
+                </ConfigField>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Вибірковий лак">
+                <ChipPicker
+                  value={config.certificateSpotUv}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificateSpotUv: value,
+                      certificateCoverageSides:
+                        value === "yes" || prev.certificateFoiling === "yes" ? prev.certificateCoverageSides : "",
+                      certificateCoveragePercent:
+                        value === "yes" || prev.certificateFoiling === "yes" ? prev.certificateCoveragePercent : "",
+                    }))
+                  }
+                  options={YES_NO_OPTIONS}
+                  placeholder="Так / Ні"
+                  icon={<BadgeCheck />}
+                />
+              </ConfigField>
+              <ConfigField label="Фольгування">
+                <ChipPicker
+                  value={config.certificateFoiling}
+                  onChange={(value) =>
+                    onConfigChange((prev) => ({
+                      ...prev,
+                      certificateFoiling: value,
+                      certificateFoilingColor: value === "yes" ? prev.certificateFoilingColor : "",
+                      certificateCoverageSides:
+                        value === "yes" || prev.certificateSpotUv === "yes" ? prev.certificateCoverageSides : "",
+                      certificateCoveragePercent:
+                        value === "yes" || prev.certificateSpotUv === "yes" ? prev.certificateCoveragePercent : "",
+                    }))
+                  }
+                  options={YES_NO_OPTIONS}
+                  placeholder="Так / Ні"
+                  icon={<Palette />}
+                />
+              </ConfigField>
+              {config.certificateFoiling === "yes" ? (
+                <ConfigField label="Колір фольги (фольгування)">
+                  <Input
+                    value={config.certificateFoilingColor}
+                    onChange={(e) => onConfigChange((prev) => ({ ...prev, certificateFoilingColor: e.target.value }))}
+                    placeholder="Напр. срібло"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
+                </ConfigField>
+              ) : null}
+            </div>
+
+            {config.certificateSpotUv === "yes" || config.certificateFoiling === "yes" ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ConfigField label="Покриття (сторони)">
+                  <ChipPicker
+                    value={config.certificateCoverageSides}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateCoverageSides: value }))}
+                    options={CERTIFICATE_COVERAGE_SIDES}
+                    placeholder="1+0 / 1+1"
+                    icon={<Copy />}
+                  />
+                </ConfigField>
+                <ConfigField label="Площа покриття">
+                  <ChipPicker
+                    value={config.certificateCoveragePercent}
+                    onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateCoveragePercent: value }))}
+                    options={CERTIFICATE_COVERAGE_PERCENTS}
+                    placeholder="Оберіть площу"
+                    icon={<CircleDot />}
+                  />
+                </ConfigField>
+              </div>
+            ) : null}
+
+            {config.certificateEmbossing !== "none" || config.certificateFoiling === "yes" ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <ConfigField label="Ширина тиснення, мм">
+                  <Input
+                    type="number"
+                    value={config.certificateEmbossingWidthMm}
+                    onChange={(e) =>
+                      onConfigChange((prev) => ({ ...prev, certificateEmbossingWidthMm: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
+                </ConfigField>
+                <ConfigField label="Висота тиснення, мм">
+                  <Input
+                    type="number"
+                    value={config.certificateEmbossingHeightMm}
+                    onChange={(e) =>
+                      onConfigChange((prev) => ({ ...prev, certificateEmbossingHeightMm: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="h-9 rounded-full bg-background/70 px-3.5"
+                  />
+                </ConfigField>
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <ConfigField label="Висічка">
+                <ChipPicker
+                  value={config.certificateDieCutting}
+                  onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateDieCutting: value }))}
+                  options={YES_NO_OPTIONS}
+                  placeholder="Так / Ні"
+                  icon={<Scan />}
+                />
+              </ConfigField>
+              <ConfigField label="Біговка">
+                <ChipPicker
+                  value={config.certificateCreasing}
+                  onChange={(value) => onConfigChange((prev) => ({ ...prev, certificateCreasing: value }))}
+                  options={YES_NO_OPTIONS}
+                  placeholder="Так / Ні"
+                  icon={<Ruler />}
+                />
+              </ConfigField>
+            </div>
+          </ProductSection>
+        </>
       ) : null}
 
       {(!productKind || productKind === "package") ? (

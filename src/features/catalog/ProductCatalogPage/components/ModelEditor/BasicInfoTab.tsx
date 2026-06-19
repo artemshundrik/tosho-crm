@@ -436,7 +436,11 @@ export function BasicInfoTab({
                     configuratorPreset:
                       value === "none"
                         ? null
-                        : (value as "print_package" | "print_notebook" | "print_note_blocks"),
+                        : (value as
+                            | "print_package"
+                            | "print_notebook"
+                            | "print_note_blocks"
+                            | "print_certificates"),
                   })
                 }
               >
@@ -448,6 +452,7 @@ export function BasicInfoTab({
                   <SelectItem value="print_package">Паперовий пакет</SelectItem>
                   <SelectItem value="print_notebook">Блокнот</SelectItem>
                   <SelectItem value="print_note_blocks">Блоки для записів</SelectItem>
+                  <SelectItem value="print_certificates">Сертифікат</SelectItem>
                 </SelectContent>
               </Select>
             </div>

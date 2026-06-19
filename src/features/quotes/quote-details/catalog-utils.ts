@@ -8,7 +8,9 @@ export type CatalogModel = {
   priceTiers?: CatalogPriceTier[];
   methodIds?: string[];
   imageUrl?: string;
-  metadata?: { configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null };
+  metadata?: {
+    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+  };
 };
 export type CatalogKind = {
   id: string;

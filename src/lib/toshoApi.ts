@@ -98,7 +98,7 @@ export type CatalogModelLookupRow = {
 
 export type CatalogModelMetadataLookup = {
   sku?: string | null;
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
 };
 
 const QUOTE_RUN_SELECT =

@@ -1,6 +1,10 @@
-export type PrintConfiguratorPreset = "print_package" | "print_notebook" | "print_note_blocks";
+export type PrintConfiguratorPreset =
+  | "print_package"
+  | "print_notebook"
+  | "print_note_blocks"
+  | "print_certificates";
 
-export type PrintProductKind = "package" | "notebook" | "note_blocks";
+export type PrintProductKind = "package" | "notebook" | "note_blocks" | "certificates";
 
 export type PrintProductConfig = {
   productKind: PrintProductKind | "";
@@ -56,6 +60,28 @@ export type PrintProductConfig = {
   noteBlockPantoneCount: string;
   noteBlockGlue: string;
   noteBlockGlueSide: string;
+  certificateFormatType: string;
+  certificateStandardFormat: string;
+  certificateWidthMm: string;
+  certificateHeightMm: string;
+  certificateMaterial: string;
+  certificateCoatedDensity: string;
+  certificateCardboardDensity: string;
+  certificateDesignerName: string;
+  certificateDesignerDensity: string;
+  certificatePrintMethod: string;
+  certificatePrintScheme: string;
+  certificateEmbossing: string;
+  certificateEmbossingFoilColor: string;
+  certificateEmbossingWidthMm: string;
+  certificateEmbossingHeightMm: string;
+  certificateSpotUv: string;
+  certificateFoiling: string;
+  certificateFoilingColor: string;
+  certificateCoverageSides: string;
+  certificateCoveragePercent: string;
+  certificateDieCutting: string;
+  certificateCreasing: string;
 };
 
 export type PrintPackageConfig = PrintProductConfig;
@@ -234,10 +260,56 @@ const NOTE_BLOCK_GLUE_SIDE_LABELS: Record<string, string> = {
   left: "ліворуч",
 };
 
+const CERTIFICATE_STANDARD_FORMAT_LABELS: Record<string, string> = {
+  a4: "A4",
+  a5: "A5",
+  a6: "A6",
+};
+
+const CERTIFICATE_MATERIAL_LABELS: Record<string, string> = {
+  coated_paper: "крейдований папір",
+  cardboard: "картон",
+  designer_cardboard: "дизайнерський картон",
+};
+
+const CERTIFICATE_PRINT_METHOD_LABELS: Record<string, string> = {
+  digital: "цифровий (CMYK)",
+  uv: "УФ друк",
+  screen: "шовкодрук",
+};
+
+const CERTIFICATE_PRINT_SCHEME_LABELS: Record<string, string> = {
+  "1_0": "1+0",
+  "1_1": "1+1",
+  "2_0": "2+0",
+  "2_2": "2+2",
+  "3_0": "3+0",
+  "3_3": "3+3",
+  "4_0": "4+0",
+  "4_4": "4+4",
+};
+
+const CERTIFICATE_EMBOSSING_LABELS: Record<string, string> = {
+  none: "немає",
+  blind: "сліпе",
+  foil: "фольгою",
+};
+
+const CERTIFICATE_COVERAGE_SIDES_LABELS: Record<string, string> = {
+  "1_0": "1+0",
+  "1_1": "1+1",
+};
+
+const CERTIFICATE_COVERAGE_PERCENT_LABELS: Record<string, string> = {
+  "20": "до 20%",
+  "40": "до 40%",
+};
+
 const PRODUCT_LABELS: Record<PrintProductKind, string> = {
   package: "Пакет",
   notebook: "Блокнот",
   note_blocks: "Блоки для записів",
+  certificates: "Сертифікат",
 };
 
 const getLabel = (map: Record<string, string>, value: string, custom?: string) => {
@@ -310,6 +382,28 @@ export const createEmptyPrintPackageConfig = (): PrintProductConfig => ({
   noteBlockPantoneCount: "",
   noteBlockGlue: "",
   noteBlockGlueSide: "",
+  certificateFormatType: "",
+  certificateStandardFormat: "",
+  certificateWidthMm: "",
+  certificateHeightMm: "",
+  certificateMaterial: "",
+  certificateCoatedDensity: "",
+  certificateCardboardDensity: "",
+  certificateDesignerName: "",
+  certificateDesignerDensity: "",
+  certificatePrintMethod: "",
+  certificatePrintScheme: "",
+  certificateEmbossing: "none",
+  certificateEmbossingFoilColor: "",
+  certificateEmbossingWidthMm: "",
+  certificateEmbossingHeightMm: "",
+  certificateSpotUv: "no",
+  certificateFoiling: "no",
+  certificateFoilingColor: "",
+  certificateCoverageSides: "",
+  certificateCoveragePercent: "",
+  certificateDieCutting: "no",
+  certificateCreasing: "no",
 });
 
 export const getConfiguratorProductLabel = (preset: PrintConfiguratorPreset): string => {
@@ -320,6 +414,8 @@ export const getConfiguratorProductLabel = (preset: PrintConfiguratorPreset): st
       return PRODUCT_LABELS.notebook;
     case "print_note_blocks":
       return PRODUCT_LABELS.note_blocks;
+    case "print_certificates":
+      return PRODUCT_LABELS.certificates;
   }
 };
 
@@ -331,6 +427,8 @@ export const getProductKindFromPreset = (preset: PrintConfiguratorPreset): Print
       return "notebook";
     case "print_note_blocks":
       return "note_blocks";
+    case "print_certificates":
+      return "certificates";
   }
 };
 
@@ -342,6 +440,8 @@ export const getPresetFromProductKind = (productKind: PrintProductKind): PrintCo
       return "print_notebook";
     case "note_blocks":
       return "print_note_blocks";
+    case "certificates":
+      return "print_certificates";
   }
 };
 
@@ -428,6 +528,76 @@ export function formatPrintProductSummary(config: PrintProductConfig): string[] 
           : null,
       YES_NO_LABEL(config.noteBlockGlue) ? `Клей: ${YES_NO_LABEL(config.noteBlockGlue)}` : null,
       config.noteBlockGlue === "yes" && glueSideLabel ? `Сторона проклейки: ${glueSideLabel}` : null,
+    ].filter(Boolean) as string[];
+  }
+
+  if (config.productKind === "certificates") {
+    const formatLabel =
+      config.certificateFormatType === "standard"
+        ? getLabel(CERTIFICATE_STANDARD_FORMAT_LABELS, config.certificateStandardFormat)
+        : config.certificateFormatType === "custom"
+          ? "нестандартний"
+          : null;
+    const sizeLabel =
+      config.certificateFormatType === "custom" && config.certificateWidthMm && config.certificateHeightMm
+        ? `${config.certificateWidthMm} × ${config.certificateHeightMm} мм`
+        : null;
+    const materialLabel = getLabel(CERTIFICATE_MATERIAL_LABELS, config.certificateMaterial);
+    const densityValue =
+      config.certificateMaterial === "coated_paper"
+        ? config.certificateCoatedDensity
+        : config.certificateMaterial === "cardboard"
+          ? config.certificateCardboardDensity.trim()
+          : config.certificateMaterial === "designer_cardboard"
+            ? config.certificateDesignerDensity.trim()
+            : "";
+    const densityLabel = densityValue ? `${densityValue} г/м2` : null;
+    const designerNameLabel =
+      config.certificateMaterial === "designer_cardboard" && config.certificateDesignerName.trim()
+        ? config.certificateDesignerName.trim()
+        : null;
+    const printMethodLabel = getLabel(CERTIFICATE_PRINT_METHOD_LABELS, config.certificatePrintMethod);
+    const schemeLabel = getLabel(CERTIFICATE_PRINT_SCHEME_LABELS, config.certificatePrintScheme);
+    const embossingLabel =
+      config.certificateEmbossing && config.certificateEmbossing !== "none"
+        ? getLabel(CERTIFICATE_EMBOSSING_LABELS, config.certificateEmbossing)
+        : null;
+    const embossingSizeLabel =
+      config.certificateEmbossingWidthMm && config.certificateEmbossingHeightMm
+        ? `${config.certificateEmbossingWidthMm} × ${config.certificateEmbossingHeightMm} мм`
+        : null;
+    const coverageLabel =
+      config.certificateSpotUv === "yes" || config.certificateFoiling === "yes"
+        ? [
+            getLabel(CERTIFICATE_COVERAGE_SIDES_LABELS, config.certificateCoverageSides),
+            getLabel(CERTIFICATE_COVERAGE_PERCENT_LABELS, config.certificateCoveragePercent),
+          ]
+            .filter(Boolean)
+            .join(", ") || null
+        : null;
+
+    return [
+      "Виріб: сертифікат",
+      formatLabel ? `Формат: ${formatLabel}` : null,
+      sizeLabel ? `Розмір: ${sizeLabel}` : null,
+      materialLabel ? `Матеріал: ${materialLabel}` : null,
+      densityLabel ? `Щільність: ${densityLabel}` : null,
+      designerNameLabel ? `Назва картону: ${designerNameLabel}` : null,
+      printMethodLabel ? `Друк: ${printMethodLabel}` : null,
+      schemeLabel ? `Кольоровість: ${schemeLabel}` : null,
+      embossingLabel ? `Тиснення: ${embossingLabel}` : null,
+      config.certificateEmbossing === "foil" && config.certificateEmbossingFoilColor.trim()
+        ? `Колір фольги: ${config.certificateEmbossingFoilColor.trim()}`
+        : null,
+      embossingSizeLabel ? `Розмір тиснення: ${embossingSizeLabel}` : null,
+      config.certificateSpotUv === "yes" ? "Вибірковий лак: так" : null,
+      config.certificateFoiling === "yes" ? "Фольгування: так" : null,
+      config.certificateFoiling === "yes" && config.certificateFoilingColor.trim()
+        ? `Колір фольгування: ${config.certificateFoilingColor.trim()}`
+        : null,
+      coverageLabel ? `Покриття: ${coverageLabel}` : null,
+      config.certificateDieCutting === "yes" ? "Висічка: так" : null,
+      config.certificateCreasing === "yes" ? "Біговка: так" : null,
     ].filter(Boolean) as string[];
   }
 
@@ -518,6 +688,36 @@ export function getPrintProductDetailSections(config: PrintProductConfig): Print
       },
     ].filter((section) => section.fields.length > 0);
   }
+  if (config.productKind === "certificates") {
+    return [
+      {
+        title: "Формат і матеріал",
+        fields: fields.filter((field) =>
+          ["Формат", "Розмір", "Матеріал", "Щільність", "Назва картону"].includes(field.label)
+        ),
+      },
+      {
+        title: "Друк",
+        fields: fields.filter((field) => ["Друк", "Кольоровість"].includes(field.label)),
+      },
+      {
+        title: "Оздоблення",
+        fields: fields.filter((field) =>
+          [
+            "Тиснення",
+            "Колір фольги",
+            "Розмір тиснення",
+            "Вибірковий лак",
+            "Фольгування",
+            "Колір фольгування",
+            "Покриття",
+            "Висічка",
+            "Біговка",
+          ].includes(field.label)
+        ),
+      },
+    ].filter((section) => section.fields.length > 0);
+  }
   return [
     {
         title: "Конструкція",
@@ -591,6 +791,38 @@ export function validatePrintProductConfig(config: PrintProductConfig): string |
     return null;
   }
 
+  if (config.productKind === "certificates") {
+    if (!config.certificateFormatType) return "Оберіть формат сертифіката";
+    if (config.certificateFormatType === "standard" && !config.certificateStandardFormat) {
+      return "Оберіть стандартний формат сертифіката";
+    }
+    if (config.certificateFormatType === "custom") {
+      if (!positiveNumber(config.certificateWidthMm) || !positiveNumber(config.certificateHeightMm)) {
+        return "Вкажіть коректні ширину та висоту сертифіката";
+      }
+    }
+    if (!config.certificateMaterial) return "Оберіть матеріал сертифіката";
+    if (config.certificateMaterial === "coated_paper" && !config.certificateCoatedDensity) {
+      return "Оберіть щільність крейдованого паперу";
+    }
+    if (config.certificateMaterial === "cardboard" && !positiveNumber(config.certificateCardboardDensity)) {
+      return "Вкажіть щільність картону";
+    }
+    if (!config.certificatePrintMethod) return "Оберіть тип друку сертифіката";
+    if (!config.certificatePrintScheme) return "Оберіть кольоровість друку";
+    if (config.certificateEmbossing === "foil" && !config.certificateEmbossingFoilColor.trim()) {
+      return "Вкажіть колір фольги для тиснення";
+    }
+    if (config.certificateSpotUv === "yes" || config.certificateFoiling === "yes") {
+      if (!config.certificateCoverageSides) return "Оберіть схему покриття (1+0 чи 1+1)";
+      if (!config.certificateCoveragePercent) return "Оберіть площу покриття лаком/фольгою";
+    }
+    if (config.certificateFoiling === "yes" && !config.certificateFoilingColor.trim()) {
+      return "Вкажіть колір фольги для фольгування";
+    }
+    return null;
+  }
+
   if (!config.packageType) return "Оберіть тип пакету";
   if (config.packageType === "custom") {
     if (!positiveNumber(config.widthMm) || !positiveNumber(config.heightMm) || !positiveNumber(config.lengthMm)) {
@@ -620,6 +852,7 @@ export function isPrintPackageMetadata(value: unknown): value is QuoteItemMetada
   return (
     record.configuratorPreset === "print_package" ||
     record.configuratorPreset === "print_notebook" ||
-    record.configuratorPreset === "print_note_blocks"
+    record.configuratorPreset === "print_note_blocks" ||
+    record.configuratorPreset === "print_certificates"
   );
 }

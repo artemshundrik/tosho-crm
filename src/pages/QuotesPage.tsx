@@ -210,7 +210,7 @@ type CatalogModel = {
       } | null;
       active?: boolean;
     }>;
-    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+    configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
     imageAsset?: {
       bucket: string;
       path: string;
@@ -237,7 +237,7 @@ type CatalogModelRow = {
   image_url?: string | null;
   thumb_url?: string | null;
   sku?: string | null;
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
   metadata?: CatalogModel["metadata"] | null;
 };
 type CatalogPrintPosition = { id: string; label: string; sort_order?: number | null };
@@ -2259,13 +2259,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     ? ` ${packageConfig.noteBlockFormat}`
                     : ""
                 }`
-              : `Пакет${
-                  packageConfig.packageType === "ready"
-                    ? " готовий"
-                    : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
-                      ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
-                      : ""
-                }`
+              : packageConfig.productKind === "certificates"
+                ? `Сертифікат${
+                    packageConfig.certificateFormatType === "standard" && packageConfig.certificateStandardFormat
+                      ? ` ${packageConfig.certificateStandardFormat.toUpperCase()}`
+                      : packageConfig.certificateFormatType === "custom" &&
+                          packageConfig.certificateWidthMm &&
+                          packageConfig.certificateHeightMm
+                        ? ` ${packageConfig.certificateWidthMm}×${packageConfig.certificateHeightMm} мм`
+                        : ""
+                  }`
+                : `Пакет${
+                    packageConfig.packageType === "ready"
+                      ? " готовий"
+                      : packageConfig.widthMm && packageConfig.heightMm && packageConfig.lengthMm
+                        ? ` ${packageConfig.widthMm}×${packageConfig.heightMm}×${packageConfig.lengthMm} мм`
+                        : ""
+                  }`
           : null;
 
       // 2. Create quote item
@@ -2661,6 +2671,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             packageConfig.noteBlockFormat && packageConfig.noteBlockFormat !== "other"
               ? ` ${packageConfig.noteBlockFormat}`
               : ""
+          }`;
+        }
+        if (packageConfig.productKind === "certificates") {
+          return `Сертифікат${
+            packageConfig.certificateFormatType === "standard" && packageConfig.certificateStandardFormat
+              ? ` ${packageConfig.certificateStandardFormat.toUpperCase()}`
+              : packageConfig.certificateFormatType === "custom" &&
+                  packageConfig.certificateWidthMm &&
+                  packageConfig.certificateHeightMm
+                ? ` ${packageConfig.certificateWidthMm}×${packageConfig.certificateHeightMm} мм`
+                : ""
           }`;
         }
         return `Пакет${

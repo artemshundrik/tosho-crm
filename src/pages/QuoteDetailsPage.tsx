@@ -2541,7 +2541,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             name: string;
             price?: number | null;
             image_url?: string | null;
-            configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+            configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
           }>).forEach((row) => {
             const list = modelsByKind.get(row.kind_id) ?? [];
             list.push({

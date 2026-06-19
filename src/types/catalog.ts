@@ -49,7 +49,7 @@ export type CatalogModelMetadata = {
   sku?: string | null;
   baseVariantName?: string | null;
   variants?: CatalogModelVariant[];
-  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
   imageAsset?: CatalogImageAsset | null;
   source?: {
     vendor?: string | null;
