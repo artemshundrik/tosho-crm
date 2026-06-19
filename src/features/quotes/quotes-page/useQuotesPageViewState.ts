@@ -5,6 +5,7 @@ import type {
   QuoteSetListRow,
   QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
+import { quoteCustomerMatchKey } from "@/lib/toshoApi";
 import { normalizeStatus } from "@/features/quotes/quotes-page/config";
 
 type SortBy = "date" | "number" | null;
@@ -133,11 +134,16 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
   );
 
   const quickAddAvailableSets = useMemo(() => {
-    if (!quickAddTargetQuote?.customer_id) return [] as QuoteSetListRow[];
+    if (!quickAddTargetQuote) return [] as QuoteSetListRow[];
+    const targetKey = quoteCustomerMatchKey(
+      quickAddTargetQuote.customer_id,
+      quickAddTargetQuote.customer_name
+    );
+    if (!targetKey) return [] as QuoteSetListRow[];
     const membership = quoteMembershipByQuoteId.get(quickAddTargetQuote.id);
     const existingSetIds = new Set((membership?.refs ?? []).map((ref) => ref.id));
     return quoteSets.filter((set) => {
-      const matchesCustomer = set.customer_id === quickAddTargetQuote.customer_id;
+      const matchesCustomer = quoteCustomerMatchKey(set.customer_id, set.customer_name) === targetKey;
       const matchesKind = quickAddKindFilter === "all" || (set.kind ?? "set") === quickAddKindFilter;
       const notMemberYet = !existingSetIds.has(set.id);
       return matchesCustomer && matchesKind && notMemberYet;
@@ -202,7 +208,7 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
   const selectedCustomers = useMemo(() => {
     const unique = new Set<string>();
     selectedRows.forEach((row) => {
-      const key = (row.customer_id ?? row.customer_name ?? "").trim().toLowerCase();
+      const key = quoteCustomerMatchKey(row.customer_id, row.customer_name);
       if (key) unique.add(key);
     });
     return unique;
@@ -218,9 +224,15 @@ export function useQuotesPageViewState(params: UseQuotesPageViewStateParams) {
 
   const addableSelectedCountForOpenSet = useMemo(() => {
     if (!quoteSetDetailsTarget) return 0;
+    const targetKey = quoteCustomerMatchKey(
+      quoteSetDetailsTarget.customer_id,
+      quoteSetDetailsTarget.customer_name
+    );
     const existingQuoteIds = new Set(quoteSetDetailsItems.map((item) => item.quote_id));
     return selectedRows.filter(
-      (row) => row.customer_id === quoteSetDetailsTarget.customer_id && !existingQuoteIds.has(row.id)
+      (row) =>
+        quoteCustomerMatchKey(row.customer_id, row.customer_name) === targetKey &&
+        !existingQuoteIds.has(row.id)
     ).length;
   }, [quoteSetDetailsItems, quoteSetDetailsTarget, selectedRows]);
 

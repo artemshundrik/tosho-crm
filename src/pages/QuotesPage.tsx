@@ -51,6 +51,7 @@ import {
   setStatus as setQuoteStatus,
   upsertQuoteRuns,
   updateQuote,
+  quoteCustomerMatchKey,
   type QuoteListRow,
   type QuoteSetListRow,
   type QuoteSetItemRow,
@@ -1458,6 +1459,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         const customerQuotes = await listCustomerQuotes({
           teamId,
           customerId: target.customer_id,
+          customerName: target.customer_name,
           limit: 300,
         });
         const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
@@ -3928,11 +3930,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const bulkAddAvailableSets = useMemo(() => {
     if (!canRunGroupedActions || selectedRows.length === 0) return [] as QuoteSetListRow[];
-    const customerId = selectedRows[0]?.customer_id ?? null;
-    if (!customerId) return [] as QuoteSetListRow[];
+    const targetKey = quoteCustomerMatchKey(
+      selectedRows[0]?.customer_id,
+      selectedRows[0]?.customer_name
+    );
+    if (!targetKey) return [] as QuoteSetListRow[];
     const selectedIdsSet = new Set(selectedRows.map((row) => row.id));
     return quoteSets.filter((set) => {
-      if (set.customer_id !== customerId) return false;
+      if (quoteCustomerMatchKey(set.customer_id, set.customer_name) !== targetKey) return false;
       if (bulkAddKindFilter !== "all" && (set.kind ?? "set") !== bulkAddKindFilter) return false;
       return Array.from(selectedIdsSet).some((quoteId) => {
         const refs = quoteMembershipByQuoteId.get(quoteId)?.refs ?? [];
@@ -5261,8 +5266,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       return;
     }
 
+    const selectedSetKey = quoteCustomerMatchKey(selectedSet.customer_id, selectedSet.customer_name);
     const candidateQuoteIds = selectedRows
-      .filter((row) => row.customer_id === selectedSet.customer_id)
+      .filter((row) => quoteCustomerMatchKey(row.customer_id, row.customer_name) === selectedSetKey)
       .map((row) => row.id)
       .filter((quoteId) => {
         const refs = quoteMembershipByQuoteId.get(quoteId)?.refs ?? [];
@@ -5422,6 +5428,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const customerQuotes = await listCustomerQuotes({
         teamId,
         customerId: quoteSetDetailsTarget.customer_id,
+        customerName: quoteSetDetailsTarget.customer_name,
         limit: 300,
       });
       const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
@@ -5443,8 +5450,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const handleAddSelectedToQuoteSet = async () => {
     if (!quoteSetDetailsTarget) return;
     const existingQuoteIds = new Set(quoteSetDetailsItems.map((item) => item.quote_id));
+    const targetKey = quoteCustomerMatchKey(
+      quoteSetDetailsTarget.customer_id,
+      quoteSetDetailsTarget.customer_name
+    );
     const candidateRows = selectedRows.filter(
-      (row) => row.customer_id === quoteSetDetailsTarget.customer_id && !existingQuoteIds.has(row.id)
+      (row) =>
+        quoteCustomerMatchKey(row.customer_id, row.customer_name) === targetKey &&
+        !existingQuoteIds.has(row.id)
     );
     if (candidateRows.length === 0) {
       toast.error("Немає сумісних вибраних прорахунків для додавання");
@@ -5469,6 +5482,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const customerQuotes = await listCustomerQuotes({
         teamId,
         customerId: quoteSetDetailsTarget.customer_id,
+        customerName: quoteSetDetailsTarget.customer_name,
         limit: 300,
       });
       const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
@@ -5505,6 +5519,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const customerQuotes = await listCustomerQuotes({
         teamId,
         customerId: quoteSetDetailsTarget.customer_id,
+        customerName: quoteSetDetailsTarget.customer_name,
         limit: 300,
       });
       const available = customerQuotes.filter((quote) => !excludedIds.has(quote.id));
@@ -5521,8 +5536,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   const handleOpenQuickAddToSet = async (row: QuoteListRow) => {
-    if (!row.customer_id) {
-      toast.error("У прорахунку не заданий замовник");
+    if (!quoteCustomerMatchKey(row.customer_id, row.customer_name)) {
+      toast.error("У прорахунку не заданий замовник або лід");
       return;
     }
     setQuickAddTargetQuote(row);

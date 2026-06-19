@@ -1532,12 +1532,29 @@ export async function updateQuote(params: {
 export type QuoteSetRow = {
   id: string;
   team_id: string;
-  customer_id: string;
+  /** Null for lead-based sets (the quotes are linked to a lead, not a registered customer). */
+  customer_id: string | null;
+  /** Snapshot of the customer/lead display name, used when there is no customer_id. */
+  customer_name?: string | null;
   name: string;
   kind?: "set" | "kp";
   created_by?: string | null;
   created_at?: string | null;
 };
+
+/**
+ * Identity key for grouping quotes/sets by their party. A quote belongs either to a
+ * registered customer (`customer_id`) or to a lead (no `customer_id`; the name lives in
+ * `customer_name`). The list UI and the set-creation backend must use the same key so they
+ * agree on what "a single customer" means — otherwise lead quotes pass the UI check but get
+ * rejected server-side.
+ */
+export function quoteCustomerMatchKey(
+  customerId: string | null | undefined,
+  customerName: string | null | undefined
+): string {
+  return (customerId ?? customerName ?? "").trim().toLowerCase();
+}
 
 export type QuoteSetListRow = QuoteSetRow & {
   item_count: number;
@@ -1609,10 +1626,19 @@ export type QuoteItemExportRow = {
 };
 
 export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSetListRow[]> {
-  const readSets = async (withKind: boolean) => {
-    const columns = withKind
-      ? "id,team_id,customer_id,name,kind,created_by,created_at"
-      : "id,team_id,customer_id,name,created_by,created_at";
+  const readSets = async (withKind: boolean, withCustomerName: boolean) => {
+    const columns = [
+      "id",
+      "team_id",
+      "customer_id",
+      withCustomerName ? "customer_name" : null,
+      "name",
+      withKind ? "kind" : null,
+      "created_by",
+      "created_at",
+    ]
+      .filter((column): column is string => Boolean(column))
+      .join(",");
     return await supabase
       .schema("tosho")
       .from("quote_sets")
@@ -1622,13 +1648,16 @@ export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSe
       .limit(limit);
   };
 
-  let { data: setsData, error: setsError } = await readSets(true);
-  if (
-    setsError &&
-    /column/i.test(setsError.message ?? "") &&
-    /kind/i.test(setsError.message ?? "")
-  ) {
-    ({ data: setsData, error: setsError } = await readSets(false));
+  let { data: setsData, error: setsError } = await readSets(true, true);
+  if (setsError && /column/i.test(setsError.message ?? "")) {
+    // Older databases may lack the kind and/or customer_name columns; retry without
+    // the ones the error names, then fall back to the minimal column set.
+    const kindMissing = /\bkind\b/i.test(setsError.message ?? "");
+    const customerNameMissing = /customer_name/i.test(setsError.message ?? "");
+    ({ data: setsData, error: setsError } = await readSets(!kindMissing, !customerNameMissing));
+    if (setsError && /column/i.test(setsError.message ?? "")) {
+      ({ data: setsData, error: setsError } = await readSets(false, false));
+    }
   }
   handleError(setsError);
 
@@ -1680,7 +1709,9 @@ export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSe
     });
   }
 
-  const customerIds = Array.from(new Set(sets.map((set) => set.customer_id).filter(Boolean)));
+  const customerIds = Array.from(
+    new Set(sets.map((set) => set.customer_id).filter((id): id is string => Boolean(id)))
+  );
   const loadCustomers = async (withLogo: boolean) => {
     const columns = withLogo ? "id,name,legal_name,logo_url" : "id,name,legal_name";
     return await supabase.schema("tosho").from("customers").select(columns).in("id", customerIds);
@@ -1730,11 +1761,12 @@ export async function listQuoteSets(teamId: string, limit = 30): Promise<QuoteSe
     const signature = [...quoteIds].sort().join("|");
     const kinds = signature ? signatureGroups.get(signature) ?? [] : [];
     const preview = quoteIds.slice(0, 3).map((id) => quoteNumberById.get(id) ?? id.slice(0, 8));
+    const liveCustomer = set.customer_id ? customerById.get(set.customer_id) : undefined;
     return {
       ...set,
       item_count: itemCountBySetId.get(set.id) ?? 0,
-      customer_name: customerById.get(set.customer_id)?.name ?? null,
-      customer_logo_url: customerById.get(set.customer_id)?.logoUrl ?? null,
+      customer_name: liveCustomer?.name ?? set.customer_name ?? null,
+      customer_logo_url: liveCustomer?.logoUrl ?? null,
       preview_quote_numbers: preview,
       duplicate_count: kinds.length > 1 ? kinds.length - 1 : 0,
       has_same_composition_kp: kinds.includes("kp") && set.kind !== "kp",
@@ -1899,15 +1931,26 @@ export async function findQuoteSetsByExactComposition(
 
 export async function listCustomerQuotes(params: {
   teamId: string;
-  customerId: string;
+  customerId: string | null;
+  customerName?: string | null;
   limit?: number;
 }): Promise<CustomerQuoteRow[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .schema("tosho")
     .from("quotes")
     .select("id,number,status,total,created_at")
-    .eq("team_id", params.teamId)
-    .eq("customer_id", params.customerId)
+    .eq("team_id", params.teamId);
+
+  if (params.customerId) {
+    query = query.eq("customer_id", params.customerId);
+  } else if ((params.customerName ?? "").trim()) {
+    // Lead-based set: no registered customer, match the other quotes of the same lead by name.
+    query = query.is("customer_id", null).eq("customer_name", (params.customerName ?? "").trim());
+  } else {
+    return [];
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(params.limit ?? 200);
   handleError(error);
@@ -2212,7 +2255,7 @@ export async function createQuoteSet(params: {
   const { data: quoteRows, error: quotesError } = await supabase
     .schema("tosho")
     .from("quotes")
-    .select("id,customer_id")
+    .select("id,customer_id,customer_name")
     .eq("team_id", params.teamId)
     .in("id", quoteIds);
   handleError(quotesError);
@@ -2221,32 +2264,58 @@ export async function createQuoteSet(params: {
     throw new Error("Не вдалося знайти всі вибрані прорахунки.");
   }
 
-  const customerIds = Array.from(
-    new Set(
-      quoteRows
-        .map((row) => row.customer_id as string | null)
-        .filter((value): value is string => Boolean(value))
-    )
+  const typedQuoteRows = (quoteRows as unknown) as Array<{
+    customer_id: string | null;
+    customer_name: string | null;
+  }>;
+
+  // A quote belongs either to a registered customer (customer_id) or to a lead
+  // (customer_id is null, the name lives in customer_name). Group by the same key the
+  // quotes list uses so the backend and UI agree on what "a single customer" means.
+  const matchKeys = new Set(
+    typedQuoteRows
+      .map((row) => quoteCustomerMatchKey(row.customer_id, row.customer_name))
+      .filter(Boolean)
   );
-  if (customerIds.length !== 1) {
+  if (matchKeys.size !== 1) {
     throw new Error("У набір можна додавати лише прорахунки одного замовника.");
   }
+
+  const customerId =
+    typedQuoteRows.find((row) => (row.customer_id ?? "").trim())?.customer_id ?? null;
+  const customerName =
+    typedQuoteRows.find((row) => (row.customer_name ?? "").trim())?.customer_name?.trim() ?? null;
 
   const { data: authData, error: authError } = await supabase.auth.getUser();
   handleError(authError);
   const createdBy = authData.user?.id ?? null;
 
-  const insertSetWithOptions = async (withKind: boolean, withCreatedBy: boolean) => {
+  const optionalColumns = ["customer_name", "kind", "created_by"] as const;
+  type OptionalColumn = (typeof optionalColumns)[number];
+
+  const insertSetWithColumns = async (omit: Set<OptionalColumn>): Promise<QuoteSetRow> => {
     const payload: Record<string, unknown> = {
       team_id: params.teamId,
-      customer_id: customerIds[0],
+      customer_id: customerId,
       name: params.name.trim(),
     };
-    if (withKind) payload.kind = params.kind ?? "set";
-    if (withCreatedBy && createdBy) payload.created_by = createdBy;
-    const selectColumns = withKind
-      ? "id,team_id,customer_id,name,kind,created_by,created_at"
-      : "id,team_id,customer_id,name,created_by,created_at";
+    if (!omit.has("customer_name")) payload.customer_name = customerName;
+    if (!omit.has("kind")) payload.kind = params.kind ?? "set";
+    if (!omit.has("created_by") && createdBy) payload.created_by = createdBy;
+
+    const selectColumns = [
+      "id",
+      "team_id",
+      "customer_id",
+      omit.has("customer_name") ? null : "customer_name",
+      "name",
+      omit.has("kind") ? null : "kind",
+      "created_by",
+      "created_at",
+    ]
+      .filter((column): column is string => Boolean(column))
+      .join(",");
+
     const { data, error } = await supabase
       .schema("tosho")
       .from("quote_sets")
@@ -2255,36 +2324,47 @@ export async function createQuoteSet(params: {
       .single();
     handleError(error);
     const created = (data as unknown) as QuoteSetRow;
-    if (!withKind) created.kind = "set";
+    if (omit.has("kind")) created.kind = "set";
+    if (omit.has("customer_name")) created.customer_name = customerName;
     return created;
   };
 
-  let createdSet: QuoteSetRow;
-  try {
-    createdSet = await insertSetWithOptions(true, true);
-  } catch (error: unknown) {
-    const message = getErrorMessage(error).toLowerCase();
-    if (message.includes("relation") && message.includes("quote_sets")) {
-      throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.");
-    }
-
-    const kindMissing = message.includes("column") && message.includes("kind");
-    const createdByMissing = message.includes("column") && message.includes("created_by");
-
-    if (kindMissing && createdByMissing) {
-      createdSet = await insertSetWithOptions(false, false);
-    } else if (kindMissing) {
-      createdSet = await insertSetWithOptions(false, true);
-    } else if (createdByMissing) {
-      createdSet = await insertSetWithOptions(true, false);
-    } else {
-      throw error;
+  const omit = new Set<OptionalColumn>();
+  let createdSet: QuoteSetRow | null = null;
+  for (let attempt = 0; attempt <= optionalColumns.length; attempt++) {
+    try {
+      createdSet = await insertSetWithColumns(omit);
+      break;
+    } catch (error: unknown) {
+      const message = getErrorMessage(error).toLowerCase();
+      if (message.includes("relation") && message.includes("quote_sets")) {
+        throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.");
+      }
+      if (customerId === null && message.includes("customer_id") && message.includes("null")) {
+        throw new Error(
+          "Щоб формувати КП для ліда, застосуйте міграцію scripts/quote-sets.sql (customer_id має стати nullable)."
+        );
+      }
+      let dropped = false;
+      if (message.includes("column")) {
+        for (const column of optionalColumns) {
+          if (!omit.has(column) && message.includes(column)) {
+            omit.add(column);
+            dropped = true;
+          }
+        }
+      }
+      if (!dropped) throw error;
     }
   }
+  if (!createdSet) {
+    throw new Error("Не вдалося сформувати набір.");
+  }
+  const createdSetRow = createdSet;
 
   const itemsPayload = quoteIds.map((quoteId, index) => ({
     team_id: params.teamId,
-    quote_set_id: createdSet.id,
+    quote_set_id: createdSetRow.id,
     quote_id: quoteId,
     sort_order: index,
   }));
@@ -2295,5 +2375,5 @@ export async function createQuoteSet(params: {
     .insert(itemsPayload);
   handleError(itemsError);
 
-  return createdSet;
+  return createdSetRow;
 }

@@ -4,15 +4,24 @@
 create table if not exists tosho.quote_sets (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null,
-  customer_id uuid not null,
+  customer_id uuid null,
   name text not null,
   kind text not null default 'set',
+  customer_name text null,
   created_by uuid null,
   created_at timestamptz not null default now()
 );
 
 alter table if exists tosho.quote_sets
   add column if not exists kind text not null default 'set';
+
+-- Sets can group quotes that belong to a lead (no registered customer yet), so the
+-- customer_id is optional and the display name is snapshotted alongside it.
+alter table if exists tosho.quote_sets
+  alter column customer_id drop not null;
+
+alter table if exists tosho.quote_sets
+  add column if not exists customer_name text null;
 
 do $$
 begin
