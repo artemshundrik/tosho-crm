@@ -77,6 +77,7 @@ import {
 } from "@/components/customers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -7268,7 +7269,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
         }}
       >
-        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0">
+        <DialogContent
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0"
+        >
           <DialogHeader className="shrink-0 space-y-2 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
             <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
@@ -7305,21 +7309,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Позиції
                 </div>
-                <div className="mt-1 text-xl font-semibold tabular-nums">{quoteSetDetailsItems.length}</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
+                  {quoteSetDetailsLoading
+                    ? quoteSetDetailsTarget?.item_count ?? 0
+                    : quoteSetDetailsItems.length}
+                </div>
               </div>
               <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Середня сума
                 </div>
-                <div className="mt-1 text-xl font-semibold tabular-nums">
-                  {formatMoney(quoteSetAverageAmount)}
+                <div className="mt-1 flex h-7 items-center text-xl font-semibold tabular-nums">
+                  {quoteSetDetailsLoading ? (
+                    <Skeleton className="h-5 w-24" />
+                  ) : (
+                    formatMoney(quoteSetAverageAmount)
+                  )}
                 </div>
               </div>
               <div className="col-span-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 sm:col-span-1">
                 <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Разом
                 </div>
-                <div className="mt-1 text-xl font-bold tabular-nums">{formatMoney(quoteSetTotalAmount)}</div>
+                <div className="mt-1 flex h-7 items-center text-xl font-bold tabular-nums">
+                  {quoteSetDetailsLoading ? (
+                    <Skeleton className="h-5 w-28" />
+                  ) : (
+                    formatMoney(quoteSetTotalAmount)
+                  )}
+                </div>
               </div>
             </div>
 
@@ -7527,11 +7545,51 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   variant="outline"
                   className="border-border/60 text-xs font-normal text-muted-foreground tabular-nums"
                 >
-                  {quoteSetDetailsItems.length}
+                  {quoteSetDetailsLoading
+                    ? quoteSetDetailsTarget?.item_count ?? 0
+                    : quoteSetDetailsItems.length}
                 </Badge>
               </div>
               {quoteSetDetailsLoading ? (
-                <div className="py-10 text-center text-sm text-muted-foreground">Завантаження складу...</div>
+                <div className="max-h-[48vh] overflow-hidden">
+                  <Table variant="list" size="md">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[64px]">#</TableHead>
+                        <TableHead>Прорахунок</TableHead>
+                        <TableHead>Статус</TableHead>
+                        <TableHead>Створено</TableHead>
+                        <TableHead className="w-[190px] text-right">Дії</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Array.from({ length: Math.min(quoteSetDetailsTarget?.item_count || 3, 8) }).map(
+                        (_, idx) => (
+                          <TableRow key={`quote-set-skeleton-${idx}`}>
+                            <TableCell>
+                              <Skeleton className="h-4 w-5" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-28" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-5 w-24 rounded-full" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="inline-flex items-center justify-end gap-2">
+                                <Skeleton className="h-8 w-20 rounded-md" />
+                                <Skeleton className="h-8 w-16 rounded-md" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : quoteSetDetailsItems.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">
                   У цьому {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "наборі"} поки немає прорахунків.
