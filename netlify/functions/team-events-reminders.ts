@@ -240,7 +240,7 @@ export const handler = async (event: HttpEvent) => {
         .from("notifications")
         .select("user_id,href")
         .not("href", "is", null)
-        .like("href", "/team?reminder=team-event:%")
+        .like("href", "/team?reminder=team-event%")
         .gte("created_at", new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString())
         .limit(10000),
     ]);
@@ -315,7 +315,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (pendingRows.length > 0) {
-      await deliverNotifications(adminClient, pendingRows);
+      await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true });
     }
 
     return jsonResponse(200, {
