@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DuplicateDesignTaskDialog } from "@/components/design/DuplicateDesignTaskDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -896,6 +897,9 @@ export default function DesignPage() {
   const [suppressCardClick, setSuppressCardClick] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<DesignTask | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<DesignTask | null>(null);
+  const [duplicateSaving, setDuplicateSaving] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [taskToRename, setTaskToRename] = useState<DesignTask | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
@@ -4253,6 +4257,262 @@ export default function DesignPage() {
     }
   };
 
+  const requestDuplicateTask = (task: DesignTask) => {
+    if (!canManageAssignments && !permissions.isDesigner) {
+      toast.error("Немає прав для дублювання задачі");
+      return;
+    }
+    setDuplicateError(null);
+    setDuplicateSource(task);
+  };
+
+  const duplicateStandaloneTask = async (
+    source: DesignTask,
+    options: { briefFileIds: string[]; briefMode: "edit" | "new"; carryAssignee: boolean; carryDeadline: boolean }
+  ) => {
+    if (!effectiveTeamId || duplicateSaving) return;
+    setDuplicateSaving(true);
+    setDuplicateError(null);
+    try {
+      const sourceMeta = (source.metadata ?? {}) as Record<string, unknown>;
+      const createdAtIso = new Date().toISOString();
+      const designTaskNumber = await getNextDesignTaskNumber(effectiveTeamId, createdAtIso);
+      const entityId = `standalone-${crypto.randomUUID()}`;
+      const actorName = userId ? getMemberLabel(userId) : "System";
+
+      const customerId =
+        typeof sourceMeta.customer_id === "string" && sourceMeta.customer_id.trim()
+          ? sourceMeta.customer_id.trim()
+          : source.customerId;
+      const customerName =
+        source.customerName ?? (typeof sourceMeta.customer_name === "string" ? (sourceMeta.customer_name as string) : null);
+      const customerType =
+        typeof sourceMeta.customer_type === "string" && sourceMeta.customer_type.trim()
+          ? sourceMeta.customer_type.trim()
+          : source.customerType;
+      const customerLogoUrl = normalizeLogoUrl(
+        (typeof sourceMeta.customer_logo_url === "string" ? (sourceMeta.customer_logo_url as string) : null) ??
+          source.customerLogoUrl ??
+          null
+      );
+      const managerUserId =
+        typeof sourceMeta.manager_user_id === "string" && sourceMeta.manager_user_id.trim()
+          ? sourceMeta.manager_user_id.trim()
+          : source.quoteManagerUserId ?? userId ?? null;
+      const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
+      const designTaskType = source.designTaskType ?? parseDesignTaskType(sourceMeta.design_task_type);
+
+      const carriedBrief =
+        options.briefMode === "edit" &&
+        typeof sourceMeta.design_brief === "string" &&
+        (sourceMeta.design_brief as string).trim()
+          ? (sourceMeta.design_brief as string)
+          : null;
+
+      const assigneeUserId = options.carryAssignee ? source.assigneeUserId ?? null : null;
+      const assignedAt = assigneeUserId ? createdAtIso : null;
+      const assigneeLabel = assigneeUserId ? getMemberLabel(assigneeUserId) : null;
+      const assigneeAvatarUrl = assigneeUserId ? getMemberAvatar(assigneeUserId) : null;
+      const deadline = options.carryDeadline ? source.designDeadline ?? null : null;
+
+      const title = source.title?.trim() ? source.title.trim() : `Дубль ${source.designTaskNumber ?? ""}`.trim();
+
+      const baseMetadata = withDesignTaskCollaboratorMetadata(
+        {
+          source: "design_task_created_manual",
+          task_kind: "standalone",
+          task_owner_role: permissions.isDesigner ? "designer" : "manager",
+          created_by_user_id: userId ?? null,
+          duplicated_from_task_id: source.id,
+          duplicated_from_number: source.designTaskNumber ?? null,
+          status: "new",
+          design_task_number: designTaskNumber,
+          quote_id: null,
+          assignee_user_id: assigneeUserId,
+          assignee_label: assigneeLabel,
+          assignee_avatar_url: assigneeAvatarUrl,
+          assigned_at: assignedAt,
+          manager_user_id: managerUserId,
+          manager_label: managerLabel,
+          customer_id: customerId,
+          customer_name: customerName,
+          customer_type: customerName ? customerType : null,
+          customer_logo_url: customerLogoUrl,
+          design_task_type: designTaskType,
+          design_brief: carriedBrief,
+          standalone_brief_files: [],
+          design_deadline: deadline,
+          deadline,
+          methods_count: typeof sourceMeta.methods_count === "number" ? sourceMeta.methods_count : 0,
+          has_files: false,
+        },
+        [],
+        { assigneeUserId, resolveLabel: getMemberLabel, resolveAvatar: getMemberAvatar }
+      );
+
+      const { data, error: insertError } = await supabase
+        .from("activity_log")
+        .insert({
+          team_id: effectiveTeamId,
+          user_id: userId ?? null,
+          actor_name: actorName,
+          action: "design_task",
+          entity_type: "design_task",
+          entity_id: entityId,
+          title,
+          metadata: baseMetadata,
+        })
+        .select("id,entity_id,metadata,title,created_at")
+        .single();
+      if (insertError) throw insertError;
+      const createdRow = (data as unknown as DesignTaskActivityRow | null) ?? null;
+      if (!createdRow) throw new Error("Не вдалося створити дубль задачі");
+      const metadata = (createdRow.metadata ?? {}) as Record<string, unknown>;
+
+      const sourceFiles = Array.isArray(sourceMeta.standalone_brief_files)
+        ? (sourceMeta.standalone_brief_files as Array<Record<string, unknown>>)
+        : [];
+      const selectedFiles = sourceFiles.filter((file) => options.briefFileIds.includes(String(file.id ?? "")));
+      let briefFiles: Array<Record<string, unknown>> = [];
+      if (selectedFiles.length > 0) {
+        const filesToUpload: File[] = [];
+        for (const file of selectedFiles) {
+          const bucket = typeof file.storage_bucket === "string" ? file.storage_bucket : DESIGN_FILES_BUCKET;
+          const path = typeof file.storage_path === "string" ? file.storage_path : "";
+          if (!path) continue;
+          const { data: blob, error: downloadError } = await supabase.storage.from(bucket).download(path);
+          if (downloadError || !blob) {
+            console.warn("Failed to copy design brief file during duplicate", path, downloadError);
+            continue;
+          }
+          const fileName = typeof file.file_name === "string" && file.file_name ? file.file_name : "file";
+          const mimeType = typeof file.mime_type === "string" && file.mime_type ? file.mime_type : blob.type || undefined;
+          filesToUpload.push(new File([blob], fileName, mimeType ? { type: mimeType } : undefined));
+        }
+        if (filesToUpload.length > 0) {
+          briefFiles = await uploadStandaloneBriefFiles({
+            teamId: effectiveTeamId,
+            taskId: createdRow.id,
+            userId: userId ?? null,
+            files: filesToUpload,
+          });
+          const patchedMetadata = { ...metadata, standalone_brief_files: briefFiles, has_files: true };
+          const { error: patchError } = await supabase
+            .from("activity_log")
+            .update({ metadata: patchedMetadata })
+            .eq("team_id", effectiveTeamId)
+            .eq("id", createdRow.id);
+          if (patchError) throw patchError;
+          Object.assign(metadata, patchedMetadata);
+        }
+      }
+
+      const createdTask: DesignTask = {
+        id: createdRow.id,
+        quoteId: createdRow.entity_id || entityId,
+        title: createdRow.title ?? title,
+        status: ((metadata.status as DesignStatus) ?? "new") as DesignStatus,
+        designTaskType: parseDesignTaskType(metadata.design_task_type),
+        assigneeUserId:
+          typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id
+            ? (metadata.assignee_user_id as string)
+            : null,
+        quoteManagerUserId:
+          typeof metadata.manager_user_id === "string" && metadata.manager_user_id.trim()
+            ? metadata.manager_user_id.trim()
+            : managerUserId,
+        assignedAt: typeof metadata.assigned_at === "string" ? (metadata.assigned_at as string) : null,
+        assigneeLabel:
+          typeof metadata.assignee_label === "string" && metadata.assignee_label.trim()
+            ? metadata.assignee_label.trim()
+            : null,
+        assigneeAvatarUrl:
+          typeof metadata.assignee_avatar_url === "string" && metadata.assignee_avatar_url.trim()
+            ? sanitizeImageReference(metadata.assignee_avatar_url)
+            : null,
+        metadata,
+        designTaskNumber:
+          typeof metadata.design_task_number === "string" && metadata.design_task_number.trim()
+            ? metadata.design_task_number.trim()
+            : designTaskNumber,
+        quoteNumber: null,
+        customerName: typeof metadata.customer_name === "string" ? (metadata.customer_name as string) : null,
+        customerLogoUrl:
+          typeof metadata.customer_logo_url === "string" && metadata.customer_logo_url.trim()
+            ? sanitizeImageReference(normalizeLogoUrl(metadata.customer_logo_url as string))
+            : null,
+        customerId:
+          typeof metadata.customer_id === "string" && metadata.customer_id.trim() ? metadata.customer_id.trim() : null,
+        customerType:
+          typeof metadata.customer_type === "string"
+            ? metadata.customer_type.trim().toLowerCase() === "lead"
+              ? "lead"
+              : metadata.customer_type.trim().toLowerCase() === "customer"
+                ? "customer"
+                : null
+            : null,
+        methodsCount: 0,
+        hasFiles: briefFiles.length > 0,
+        designDeadline: (metadata.design_deadline as string | null) ?? (metadata.deadline as string | null) ?? null,
+        createdAt: createdRow.created_at,
+      };
+
+      setTasks((prev) => {
+        const nextTasks = [createdTask, ...prev];
+        if (typeof window !== "undefined") {
+          writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
+        }
+        return nextTasks;
+      });
+
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId,
+          designTaskId: createdRow.id,
+          quoteId: null,
+          userId,
+          actorName,
+          action: "design_task_duplicated",
+          title: `Створено на основі #${source.designTaskNumber ?? "—"}`,
+          href: `/design/${createdRow.id}`,
+          metadata: {
+            source: "design_task_duplicated",
+            from_task_id: source.id,
+            from_task_number: source.designTaskNumber ?? null,
+            copied_file_count: briefFiles.length,
+          },
+        });
+      } catch (logError) {
+        console.warn("Failed to log design task duplicate event", logError);
+      }
+
+      if (assigneeUserId && assigneeUserId !== userId) {
+        try {
+          await notifyUsers({
+            userIds: [assigneeUserId],
+            title: "Вас призначено на дизайн-задачу",
+            body: `${actorName} призначив(ла) вас на нову дизайн-задачу.`,
+            href: `/design/${createdTask.id}`,
+            type: "info",
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify assignee about duplicated task", notifyError);
+        }
+      }
+
+      const createdTaskHref = `/design/${createdTask.id}`;
+      setDuplicateSource(null);
+      toast.success("Задачу продубльовано", {
+        description: `Нова задача ${createdTask.designTaskNumber ?? ""}`.trim(),
+        action: { label: "Відкрити", onClick: () => navigate(createdTaskHref) },
+      });
+    } catch (e: unknown) {
+      setDuplicateError(getErrorMessage(e, "Не вдалося продублювати задачу"));
+    } finally {
+      setDuplicateSaving(false);
+    }
+  };
+
   const handleDeleteTask = async () => {
     if (!effectiveTeamId || !taskToDelete || !canManageAssignments) return;
     const targetTask = taskToDelete;
@@ -4538,6 +4798,9 @@ export default function DesignPage() {
                 <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
                 {userId && (task.assigneeUserId === userId || canManageAssignments) ? (
                   <DropdownMenuItem onClick={() => openRenameDialog(task)}>Редагувати назву</DropdownMenuItem>
+                ) : null}
+                {canManageAssignments || permissions.isDesigner ? (
+                  <DropdownMenuItem onClick={() => requestDuplicateTask(task)}>Дублювати задачу</DropdownMenuItem>
                 ) : null}
                 <DropdownMenuSeparator />
               {canSelfAssign &&
@@ -6664,6 +6927,64 @@ export default function DesignPage() {
         confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
         loading={!!deletingTaskId}
         onConfirm={() => void handleDeleteTask()}
+      />
+
+      <DuplicateDesignTaskDialog
+        open={!!duplicateSource}
+        saving={duplicateSaving}
+        error={duplicateError}
+        onCancel={() => {
+          if (duplicateSaving) return;
+          setDuplicateSource(null);
+          setDuplicateError(null);
+        }}
+        onConfirm={(options) => {
+          if (duplicateSource) void duplicateStandaloneTask(duplicateSource, options);
+        }}
+        source={
+          duplicateSource
+            ? {
+                id: duplicateSource.id,
+                taskNumber: duplicateSource.designTaskNumber ?? null,
+                title: duplicateSource.title ?? null,
+                customerName: duplicateSource.customerName ?? null,
+                customerType: duplicateSource.customerType ?? null,
+                customerLogoUrl: duplicateSource.customerLogoUrl ?? null,
+                managerLabel: duplicateSource.quoteManagerUserId
+                  ? getMemberLabel(duplicateSource.quoteManagerUserId)
+                  : null,
+                managerAvatarUrl: duplicateSource.quoteManagerUserId
+                  ? getMemberAvatar(duplicateSource.quoteManagerUserId)
+                  : null,
+                assigneeUserId: duplicateSource.assigneeUserId ?? null,
+                assigneeLabel: duplicateSource.assigneeUserId ? getMemberLabel(duplicateSource.assigneeUserId) : null,
+                assigneeAvatarUrl: duplicateSource.assigneeUserId
+                  ? getMemberAvatar(duplicateSource.assigneeUserId)
+                  : null,
+                deadline: duplicateSource.designDeadline ?? null,
+                taskTypeLabel: duplicateSource.designTaskType
+                  ? DESIGN_TASK_TYPE_LABELS[duplicateSource.designTaskType]
+                  : null,
+                TaskTypeIcon: duplicateSource.designTaskType
+                  ? DESIGN_TASK_TYPE_ICONS[duplicateSource.designTaskType]
+                  : null,
+                hasBrief:
+                  typeof duplicateSource.metadata?.design_brief === "string" &&
+                  (duplicateSource.metadata.design_brief as string).trim().length > 0,
+                files: Array.isArray(duplicateSource.metadata?.standalone_brief_files)
+                  ? (duplicateSource.metadata.standalone_brief_files as Array<Record<string, unknown>>)
+                      .map((file) => ({
+                        id: String(file.id ?? ""),
+                        name: typeof file.file_name === "string" ? file.file_name : "файл",
+                        bucket: typeof file.storage_bucket === "string" ? file.storage_bucket : "",
+                        path: typeof file.storage_path === "string" ? file.storage_path : "",
+                        mime: typeof file.mime_type === "string" ? file.mime_type : null,
+                      }))
+                      .filter((file) => file.id)
+                  : [],
+              }
+            : null
+        }
       />
     </section>
   );
