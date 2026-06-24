@@ -33,3 +33,6 @@ tmp/
 # Claude Code local-only settings (per-machine permissions, env)
 .claude/settings.local.json
 CLAUDE.local.md
+
+# one-off backfill backups (contain prod data)
+scripts/.backfill-quote-totals.backup.*.json
