@@ -42,7 +42,6 @@ import {
   type OrderType,
 } from "./types";
 import { buildInvoiceHtml, openPrintableDocument } from "./documentHtml";
-import { renderInvoicePdfBase64 } from "./pdf/renderInvoicePdf";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { getCachedCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
@@ -189,6 +188,8 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
       orderType === "services" ? "Послуги" : orderType === "goods" ? "Товари" : "Товари / послуги";
     setVchasnoBusyId(invoice.id);
     try {
+      // Lazy-load @react-pdf лише при кліку, щоб не роздувати сторінку Фінансів.
+      const { renderInvoicePdfBase64 } = await import("./pdf/renderInvoicePdf");
       const fileBase64 = await renderInvoicePdfBase64({
         number: invoice.number ?? "",
         issueDate: invoice.issueDate,
