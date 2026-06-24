@@ -7712,7 +7712,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       </Dialog>
 
       <Dialog open={quoteSetPreviewOpen} onOpenChange={setQuoteSetPreviewOpen}>
-        <DialogContent className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0">
+        <DialogContent
+          // Без автофокусу: інакше Radix фокусує першу мініатюру, а її onFocus
+          // одразу розкриває zoom-прев'ю (велике фото) ще до наведення курсора.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0"
+        >
           <DialogHeader className="shrink-0 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
             <DialogTitle className="flex items-center gap-2">
               Комерційний прев'ю
@@ -7766,6 +7771,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               imageUrl={visual.thumbUrl ?? visual.url}
                               zoomImageUrl={visual.url}
                               alt={visual.name || `${section.quoteNumber} visual ${idx + 1}`}
+                              // У модалці немає kanban-скрол-контейнера, тож "visible"-ліниве
+                              // завантаження не спрацьовує — вантажимо одразу.
+                              loadStrategy="eager"
                               className="h-24 w-40 rounded-md border border-border/60 bg-muted/20"
                             />
                           ))}
@@ -7801,6 +7809,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <KanbanImageZoomPreview
                                     imageUrl={item.imageUrl}
                                     alt={item.name}
+                                    loadStrategy="eager"
                                     className="h-12 w-12 rounded-md border border-border/60 bg-muted/20"
                                   />
                                 ) : (
