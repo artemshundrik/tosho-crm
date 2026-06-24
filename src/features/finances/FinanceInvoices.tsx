@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, FileText, Loader2, Pencil, Plus, Search, Trash2, UploadCloud } from "lucide-react";
+import { Check, FileText, Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { getCachedCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
 import { listVchasnoStatusesByCrmIds, vchasnoStatusBadge, type VchasnoDocStatus } from "./vchasnoStatus";
+import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
+import vchasnoLogo from "@/assets/vchasno-logo.png";
 
 type FinanceInvoicesProps = {
   teamId: string | null;
@@ -324,59 +326,28 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {canUploadVchasno ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 gap-1.5 px-3"
-                      title="Завантажити у Вчасно як чернетку"
-                      disabled={vchasnoBusyId === invoice.id || !invoice.legalEntityId}
+                    <ActionButton
                       onClick={() => void uploadToVchasno(invoice)}
-                    >
-                      {vchasnoBusyId === invoice.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <UploadCloud className="h-4 w-4" />
-                      )}
-                      Вчасно
-                    </Button>
+                      title="Завантажити у Вчасно як чернетку"
+                      disabled={!invoice.legalEntityId}
+                      loading={vchasnoBusyId === invoice.id}
+                      icon={<img src={vchasnoLogo} alt="" className="h-[18px] w-[18px] rounded-full" />}
+                      label="Вчасно"
+                    />
                   ) : null}
-                  {/* Сегментована група: кнопки впритул (без щілин) → курсор не мігає, area більша */}
-                  <div className="inline-flex items-center divide-x divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
-                    <Button
-                      type="button"
-                      variant="control"
-                      size="iconMd"
-                      className="rounded-none"
-                      title="Згенерувати рахунок (PDF)"
-                      onClick={() => generateDocument(invoice)}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="control"
-                      size="iconMd"
-                      className="rounded-none"
-                      title="Редагувати рахунок"
-                      onClick={() => {
-                        setEditing(invoice);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="controlDestructive"
-                      size="iconMd"
-                      className="rounded-none"
-                      title="Видалити рахунок"
-                      onClick={() => void remove(invoice)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <ActionButton
+                    onClick={() => generateDocument(invoice)}
+                    title="Згенерувати рахунок (PDF)"
+                    icon={<FileText />}
+                    label="ПДФ"
+                  />
+                  <EditIconButton
+                    onClick={() => {
+                      setEditing(invoice);
+                      setDialogOpen(true);
+                    }}
+                  />
+                  <DeleteIconButton onClick={() => void remove(invoice)} />
                 </div>
               </div>
             );

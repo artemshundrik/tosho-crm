@@ -7,7 +7,6 @@ import {
   Copy,
   FileText,
   Loader2,
-  Pencil,
   Plus,
   ShieldAlert,
   Tags,
@@ -15,6 +14,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -309,19 +309,9 @@ function LegalEntitiesPanel({
                   {entity.iban ? <span className="truncate">IBAN: {entity.iban}</span> : null}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entity)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => void remove(entity)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <EditIconButton onClick={() => openEdit(entity)} />
+                <DeleteIconButton onClick={() => void remove(entity)} />
               </div>
             </div>
           ))}
@@ -555,19 +545,9 @@ function AccountsPanel({
                   {account.bankProvider ? <span>{BANK_PROVIDER_LABELS[account.bankProvider]}</span> : null}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(account)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => void remove(account)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <EditIconButton onClick={() => openEdit(account)} />
+                <DeleteIconButton onClick={() => void remove(account)} />
               </div>
             </div>
           ))}

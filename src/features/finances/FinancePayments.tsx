@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Loader2, Pencil, Plus, Search, Trash2, Wallet } from "lucide-react";
+import { Check, Loader2, Plus, Search, Wallet } from "lucide-react";
+import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -209,19 +210,9 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
                     {payment.notes ? <span className="truncate">{payment.notes}</span> : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(payment)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => void remove(payment)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <EditIconButton onClick={() => openEdit(payment)} />
+                  <DeleteIconButton onClick={() => void remove(payment)} />
                 </div>
               </div>
             );

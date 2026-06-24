@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Landmark, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Landmark, Loader2, Plus } from "lucide-react";
+import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -185,38 +186,24 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                     {tax.rate ? <span>Ставка {tax.rate}%</span> : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1.5">
                   <Button
                     type="button"
                     variant={isPaid ? "secondary" : "outline"}
                     size="sm"
-                    className="h-8 gap-1.5"
+                    className="h-9 gap-1.5"
                     onClick={() => void toggleStatus(tax)}
                   >
                     {isPaid ? <Check className="h-3.5 w-3.5" /> : null}
                     {isPaid ? "Сплачено" : "Позначити"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
+                  <EditIconButton
                     onClick={() => {
                       setEditing(tax);
                       setDialogOpen(true);
                     }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => void remove(tax)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  />
+                  <DeleteIconButton onClick={() => void remove(tax)} />
                 </div>
               </div>
             );
