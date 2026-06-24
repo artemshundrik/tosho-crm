@@ -52,13 +52,19 @@ export async function listVchasnoStatusesByCrmIds(
 }
 
 // Мапа статус-коду «Вчасно» → бейдж. 7000 завантажено · 7001 готовий · 7006/7008 підписано · 7011 анульовано.
-export function vchasnoStatusBadge(status?: VchasnoDocStatus | null): { text: string; className: string } | null {
+export function vchasnoStatusBadge(
+  status?: VchasnoDocStatus | null
+): { text: string; className: string; dot: string } | null {
   if (!status) return null;
   const code = status.statusCode;
   if (code != null && code >= 7006 && code !== 7011) {
-    return { text: "Вчасно: підписано", className: "text-emerald-600 border-emerald-200" };
+    return { text: "Вчасно · підписано", className: "border-emerald-200 text-emerald-700", dot: "bg-emerald-500" };
   }
-  if (code === 7011) return { text: "Вчасно: анульовано", className: "text-destructive border-destructive/30" };
-  if (code === 7001 || status.sentAt) return { text: "Вчасно: надіслано", className: "text-blue-600 border-blue-200" };
-  return { text: "Вчасно: чернетка", className: "text-muted-foreground" };
+  if (code === 7011) {
+    return { text: "Вчасно · анульовано", className: "border-destructive/30 text-destructive", dot: "bg-destructive" };
+  }
+  if (code === 7001 || status.sentAt) {
+    return { text: "Вчасно · надіслано", className: "border-blue-200 text-blue-700", dot: "bg-blue-500" };
+  }
+  return { text: "Вчасно · чернетка", className: "border-border/60 text-muted-foreground", dot: "bg-muted-foreground/50" };
 }

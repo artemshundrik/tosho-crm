@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, FileDown, FileText, Loader2, Pencil, Plus, Search, Trash2, UploadCloud } from "lucide-react";
+import { Check, FileText, Loader2, Pencil, Plus, Search, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -304,9 +304,15 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                       </Badge>
                     ) : null}
                     {vBadge ? (
-                      <Badge variant="outline" className={cn("text-[10px]", vBadge.className)}>
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          vBadge.className
+                        )}
+                      >
+                        <span className={cn("h-1.5 w-1.5 rounded-full", vBadge.dot)} />
                         {vBadge.text}
-                      </Badge>
+                      </span>
                     ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -316,24 +322,14 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                     {invoice.dueDate ? <span>Оплата до: {formatDate(invoice.dueDate)}</span> : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="Згенерувати рахунок (PDF)"
-                    onClick={() => generateDocument(invoice)}
-                  >
-                    <FileDown className="h-4 w-4" />
-                  </Button>
+                <div className="flex shrink-0 items-center gap-2">
                   {canUploadVchasno ? (
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      title="Завантажити у Вчасно (чернетка)"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1.5 px-3"
+                      title="Завантажити у Вчасно як чернетку"
                       disabled={vchasnoBusyId === invoice.id || !invoice.legalEntityId}
                       onClick={() => void uploadToVchasno(invoice)}
                     >
@@ -342,29 +338,45 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                       ) : (
                         <UploadCloud className="h-4 w-4" />
                       )}
+                      Вчасно
                     </Button>
                   ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                      setEditing(invoice);
-                      setDialogOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => void remove(invoice)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {/* Сегментована група: кнопки впритул (без щілин) → курсор не мігає, area більша */}
+                  <div className="inline-flex items-center divide-x divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
+                    <Button
+                      type="button"
+                      variant="control"
+                      size="iconMd"
+                      className="rounded-none"
+                      title="Згенерувати рахунок (PDF)"
+                      onClick={() => generateDocument(invoice)}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="control"
+                      size="iconMd"
+                      className="rounded-none"
+                      title="Редагувати рахунок"
+                      onClick={() => {
+                        setEditing(invoice);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="controlDestructive"
+                      size="iconMd"
+                      className="rounded-none"
+                      title="Видалити рахунок"
+                      onClick={() => void remove(invoice)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
