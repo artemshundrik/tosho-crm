@@ -102,7 +102,7 @@ import {
   type QuoteRun,
   type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
-import { mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import { computeRunSalePricing, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
@@ -1178,33 +1178,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     const quantity = Math.max(0, Number(run.quantity) || 0);
     const costTotal = getRunTotal(run);
-    const costPerUnit = quantity > 0 ? costTotal / quantity : null;
     const desiredManagerIncome = Math.max(0, Number(run.desired_manager_income) || 0);
     const managerRate = effectiveManagerId
       ? currentManagerRate || DEFAULT_MANAGER_RATE
       : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
     const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE);
     const vatRate = resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE);
-    const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
-    const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
-    const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
-    const markupTotal = requiredGrossProfit + fixedCosts + vatAmount;
-    const saleTotal = costTotal + markupTotal;
-    const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
-
-    return {
+    const pricing = computeRunSalePricing({
+      quantity,
       costTotal,
-      costPerUnit,
       desiredManagerIncome,
       managerRate,
       fixedCostRate,
       vatRate,
-      requiredGrossProfit,
-      fixedCosts,
-      vatAmount,
-      markupTotal,
-      saleTotal,
-      saleUnitPrice,
+    });
+
+    return {
+      ...pricing,
+      desiredManagerIncome,
+      managerRate,
+      fixedCostRate,
+      vatRate,
     };
   }, [currentManagerRate, effectiveManagerId]);
 

@@ -21,6 +21,76 @@ function resolveNumericRate(value: unknown, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export type RunSalePricing = {
+  costTotal: number;
+  costPerUnit: number | null;
+  requiredGrossProfit: number;
+  fixedCosts: number;
+  vatAmount: number;
+  markupTotal: number;
+  saleTotal: number;
+  saleUnitPrice: number | null;
+};
+
+/**
+ * Канонічна формула продажної ціни прорахунку (з націнкою): собівартість +
+ * валовий прибуток (під бажаний дохід менеджера) + постійні витрати + ПДВ.
+ * Єдине джерело правди для розрахунку — використовується і в калькуляторі прорахунку
+ * (QuoteDetailsPage `getRunPricing`), і в КП (QuotesPage `buildCommercialDocument`).
+ */
+export function computeRunSalePricing(params: {
+  quantity: number;
+  costTotal: number;
+  desiredManagerIncome: number;
+  managerRate: number;
+  fixedCostRate: number;
+  vatRate: number;
+}): RunSalePricing {
+  const quantity = Math.max(0, Number(params.quantity) || 0);
+  const costTotal = Number(params.costTotal) || 0;
+  const costPerUnit = quantity > 0 ? costTotal / quantity : null;
+  const desiredManagerIncome = Math.max(0, Number(params.desiredManagerIncome) || 0);
+  const managerRate = Number(params.managerRate) || 0;
+  const fixedCostRate = Number(params.fixedCostRate) || 0;
+  const vatRate = Number(params.vatRate) || 0;
+  const requiredGrossProfit = managerRate > 0 ? desiredManagerIncome / (managerRate / 100) : 0;
+  const fixedCosts = requiredGrossProfit * (fixedCostRate / 100);
+  const vatAmount = (requiredGrossProfit + fixedCosts) * (vatRate / 100);
+  const markupTotal = requiredGrossProfit + fixedCosts + vatAmount;
+  const saleTotal = costTotal + markupTotal;
+  const saleUnitPrice = quantity > 0 ? saleTotal / quantity : null;
+  return {
+    costTotal,
+    costPerUnit,
+    requiredGrossProfit,
+    fixedCosts,
+    vatAmount,
+    markupTotal,
+    saleTotal,
+    saleUnitPrice,
+  };
+}
+
+/**
+ * Продажна ціна для збереженого run-у — бере собівартість (model+print+логістика)
+ * і ставки безпосередньо з самого run-у (вони вже дефолтяться у getQuoteRuns).
+ */
+export function getRunSalePricingFromRun(run: QuoteRun): RunSalePricing {
+  const quantity = Math.max(0, Number(run.quantity) || 0);
+  const model = Number(run.unit_price_model) || 0;
+  const print = Number(run.unit_price_print) || 0;
+  const logistics = Number(run.logistics_cost) || 0;
+  const costTotal = (model + print) * quantity + logistics;
+  return computeRunSalePricing({
+    quantity,
+    costTotal,
+    desiredManagerIncome: Number(run.desired_manager_income) || 0,
+    managerRate: Number(run.manager_rate) || 0,
+    fixedCostRate: Number(run.fixed_cost_rate) || 0,
+    vatRate: Number(run.vat_rate) || 0,
+  });
+}
+
 export function mergeQuoteRunsWithExisting({
   existingRuns,
   nextRuns,

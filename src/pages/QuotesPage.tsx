@@ -65,7 +65,7 @@ import {
   type CustomerRow,
   type LeadSearchRow,
 } from "@/lib/toshoApi";
-import { mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import { getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
 import {
@@ -4064,6 +4064,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (quoteIds.length === 0) return null;
 
     const itemRows = await listQuoteItemsForQuotes({ teamId, quoteIds });
+    // Продажні ціни (з націнкою) зберігаються в quote_item_runs, а не в quote_items.unit_price
+    // (там лежить собівартість). Підтягуємо runs, щоб КП показувало ту саму ціну, що й замовлення.
+    const runsByQuoteId = new Map<string, QuoteRun[]>();
+    await Promise.all(
+      quoteIds.map(async (quoteId) => {
+        runsByQuoteId.set(quoteId, await getQuoteRuns(quoteId, teamId));
+      })
+    );
     const { data: visualizationRows, error: visualizationsError } = await supabase
       .schema("tosho")
       .from("quote_attachments")
@@ -4207,14 +4215,33 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         return aPosition - bPosition;
       });
 
+      const quoteRuns = runsByQuoteId.get(quoteRef.quote_id) ?? [];
+
       const mappedItems: CommercialItemRow[] = rows.map((row, index) => {
-        const qty = Number(row.qty ?? 0) || 0;
-        const unitPrice = Number(row.unit_price ?? 0) || 0;
-        const computedLineTotal = qty * unitPrice;
-        const lineTotal =
+        const fallbackQty = Number(row.qty ?? 0) || 0;
+        const fallbackUnitPrice = Number(row.unit_price ?? 0) || 0;
+        const fallbackLineTotal =
           Number.isFinite(Number(row.line_total)) && row.line_total !== null
             ? Number(row.line_total)
-            : computedLineTotal;
+            : fallbackQty * fallbackUnitPrice;
+        // Продажні ціни (з націнкою) живуть у quote_item_runs, а не в quote_items.unit_price
+        // (там — застаріла/собівартісна копія, через що КП губив націнку або показував 0).
+        // Рахуємо ту саму суму, що й калькулятор прорахунку (QuoteDetailsPage): сума saleTotal
+        // по run-ах позиції. Один товар у прорахунку ⇒ беремо всі run-и (quote_item_id інколи null).
+        const itemRuns =
+          rows.length === 1
+            ? quoteRuns
+            : quoteRuns.filter((run) => run.quote_item_id === row.id);
+        let runQty = 0;
+        let runSaleTotal = 0;
+        for (const run of itemRuns) {
+          runQty += Math.max(0, Number(run.quantity) || 0);
+          runSaleTotal += getRunSalePricingFromRun(run).saleTotal;
+        }
+        const qty = runQty > 0 ? runQty : fallbackQty;
+        const lineTotal = runSaleTotal > 0 ? runSaleTotal : fallbackLineTotal;
+        const unitPrice =
+          runSaleTotal > 0 && runQty > 0 ? runSaleTotal / runQty : fallbackUnitPrice;
         const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
         const imageUrl = modelMeta?.imageUrl || "";
         const catalogPath = [
@@ -4260,7 +4287,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         createdAt: formatDateTime(quoteRef.quote_created_at),
         visualizations: visualizationsByQuoteId.get(quoteRef.quote_id) ?? [],
         items: mappedItems,
-        total: quoteTotalFromSummary ?? itemsTotal,
+        // Підсумок секції рахуємо із виправлених (run-based) рядків, щоб «Разом» збігалося
+        // з колонкою «Сума». На збережений quote_total відкочуємось лише коли цін немає зовсім.
+        total: itemsTotal > 0 ? itemsTotal : quoteTotalFromSummary ?? itemsTotal,
       };
     });
 
