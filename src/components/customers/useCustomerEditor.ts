@@ -47,6 +47,9 @@ type CustomerRecord = {
   contacts?: CustomerContact[] | null;
   signatory_name?: string | null;
   signatory_position?: string | null;
+  accountant_name?: string | null;
+  accountant_email?: string | null;
+  accountant_edrpou?: string | null;
   reminder_at?: string | null;
   reminder_comment?: string | null;
   event_name?: string | null;
@@ -77,6 +80,9 @@ const CUSTOMER_COLUMNS = [
   "contacts",
   "signatory_name",
   "signatory_position",
+  "accountant_name",
+  "accountant_email",
+  "accountant_edrpou",
   "reminder_at",
   "reminder_comment",
   "event_name",
@@ -111,6 +117,9 @@ const buildEmptyForm = (): CustomerFormState => ({
   eventDate: "",
   eventComment: "",
   notes: "",
+  accountantName: "",
+  accountantEmail: "",
+  accountantEdrpou: "",
 });
 
 const parseContactsFromRow = (row: CustomerRecord): CustomerContact[] => {
@@ -269,6 +278,9 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           eventDate: data.event_at ? data.event_at.slice(0, 10) : "",
           eventComment: data.event_comment ?? "",
           notes: data.notes ?? "",
+          accountantName: data.accountant_name ?? "",
+          accountantEmail: data.accountant_email ?? "",
+          accountantEdrpou: data.accountant_edrpou ?? "",
         });
       } catch (err: unknown) {
         const message =
@@ -371,6 +383,9 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
       contact_birthday: primaryContact?.birthday || null,
       signatory_name: primaryLegalEntity?.signatory_name ?? null,
       signatory_position: primaryLegalEntity?.signatory_position ?? null,
+      accountant_name: form.accountantName.trim() || null,
+      accountant_email: form.accountantEmail.trim() || null,
+      accountant_edrpou: form.accountantEdrpou.trim() || null,
       reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
       reminder_comment: form.reminderComment.trim() || null,
       event_name: form.eventName.trim() || null,

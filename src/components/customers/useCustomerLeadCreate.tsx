@@ -73,6 +73,9 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   eventDate: "",
   eventComment: "",
   notes: "",
+  accountantName: "",
+  accountantEmail: "",
+  accountantEdrpou: "",
 });
 
 const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string): LeadFormState => ({
@@ -324,6 +327,9 @@ export const useCustomerLeadCreate = ({
       legal_entities: legalEntities.length > 0 ? legalEntities : null,
       signatory_name: primaryLegalEntity?.signatory_name ?? null,
       signatory_position: primaryLegalEntity?.signatory_position ?? null,
+      accountant_name: customerForm.accountantName.trim() || null,
+      accountant_email: customerForm.accountantEmail.trim() || null,
+      accountant_edrpou: customerForm.accountantEdrpou.trim() || null,
       reminder_at: buildReminderAtIso(customerForm.reminderDate, customerForm.reminderTime),
       reminder_comment: customerForm.reminderComment.trim() || null,
       event_name: customerForm.eventName.trim() || null,

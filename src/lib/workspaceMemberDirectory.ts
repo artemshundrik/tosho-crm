@@ -147,6 +147,8 @@ const DEFAULT_MODULE_ACCESS = {
   contractors: false,
   stock: false,
   finance: false,
+  vchasno: false,
+  vchasno_send: false,
   team: false,
 };
 
@@ -186,6 +188,23 @@ function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | 
   );
 }
 
+// Вчасно: завантажувати/готувати документи — ширше коло (як finance).
+function hasDefaultVchasnoAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (
+    (accessRole ?? "").trim().toLowerCase() === "owner" ||
+    role === "seo" ||
+    role === "accountant" ||
+    role === "chief_accountant"
+  );
+}
+
+// Вчасно: надсилати контрагенту — лише уповноважена особа (директор/головбух).
+function hasDefaultVchasnoSendAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "chief_accountant";
+}
+
 function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
@@ -197,6 +216,8 @@ function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRo
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
     stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
     finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
+    vchasno: typeof input.vchasno === "boolean" ? input.vchasno : hasDefaultVchasnoAccess(accessRole, jobRole),
+    vchasno_send: typeof input.vchasno_send === "boolean" ? input.vchasno_send : hasDefaultVchasnoSendAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }

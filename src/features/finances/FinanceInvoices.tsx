@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, FileDown, FileText, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Check, FileDown, FileText, Loader2, Pencil, Plus, Search, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,11 @@ import {
   type OrderType,
 } from "./types";
 import { buildInvoiceHtml, openPrintableDocument } from "./documentHtml";
+import { renderInvoicePdfBase64 } from "./pdf/renderInvoicePdf";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/auth/AuthProvider";
+import { getCachedCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
+import { listVchasnoStatusesByCrmIds, vchasnoStatusBadge, type VchasnoDocStatus } from "./vchasnoStatus";
 
 type FinanceInvoicesProps = {
   teamId: string | null;
@@ -68,6 +73,17 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
   const [orderMeta, setOrderMeta] = React.useState<Map<string, FinanceOrderMeta>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [ordersLoading, setOrdersLoading] = React.useState(true);
+  const [vchasnoBusyId, setVchasnoBusyId] = React.useState<string | null>(null);
+  const [vchasnoStatuses, setVchasnoStatuses] = React.useState<Map<string, VchasnoDocStatus>>(new Map());
+
+  const auth = useAuth();
+  // Показ кнопки (сервер усе одно перевіряє право). Дефолт по ролі + override з module_access.
+  const canUploadVchasno = React.useMemo(() => {
+    const ma = getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess;
+    if (ma && typeof ma.vchasno === "boolean") return ma.vchasno;
+    const role = (auth.jobRole ?? "").toLowerCase();
+    return auth.permissions.isSuperAdmin || ["seo", "accountant", "chief_accountant"].includes(role);
+  }, [auth.jobRole, auth.permissions.isSuperAdmin]);
 
   const reload = React.useCallback(async () => {
     if (!teamId) return;
@@ -108,6 +124,19 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
   const orderByQuote = React.useMemo(() => new Map(orders.map((o) => [o.quoteId, o])), [orders]);
 
+  const reloadVchasnoStatuses = React.useCallback(async () => {
+    if (!teamId || invoices.length === 0) {
+      setVchasnoStatuses(new Map());
+      return;
+    }
+    const map = await listVchasnoStatusesByCrmIds(teamId, invoices.map((invoice) => invoice.id));
+    setVchasnoStatuses(map);
+  }, [teamId, invoices]);
+
+  React.useEffect(() => {
+    void reloadVchasnoStatuses();
+  }, [reloadVchasnoStatuses]);
+
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceInvoice | null>(null);
 
@@ -145,6 +174,65 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
     });
     if (!openPrintableDocument(html)) {
       toast.error("Браузер заблокував нове вікно. Дозвольте спливаючі вікна.");
+    }
+  };
+
+  const uploadToVchasno = async (invoice: FinanceInvoice) => {
+    if (!invoice.legalEntityId) {
+      toast.error("Вкажіть юрособу-виставника, щоб завантажити у Вчасно.");
+      return;
+    }
+    const entity = entityById.get(invoice.legalEntityId);
+    const order = invoice.quoteId ? orderByQuote.get(invoice.quoteId) : null;
+    const orderType = invoice.quoteId ? orderMeta.get(invoice.quoteId)?.orderType : null;
+    const description =
+      orderType === "services" ? "Послуги" : orderType === "goods" ? "Товари" : "Товари / послуги";
+    setVchasnoBusyId(invoice.id);
+    try {
+      const fileBase64 = await renderInvoicePdfBase64({
+        number: invoice.number ?? "",
+        issueDate: invoice.issueDate,
+        sellerName: entity ? formatLegalEntityLabel(entity) : "Постачальник",
+        sellerEdrpou: entity?.edrpou,
+        sellerIpn: entity?.ipn,
+        sellerIban: entity?.iban,
+        buyerName: order?.customerName ?? "Замовник",
+        orderNumber: order?.number ?? null,
+        description,
+        amount: invoice.amount,
+        vatRate: invoice.vatRate,
+        vatAmount: invoice.vatAmount,
+      });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Немає активної сесії.");
+      const response = await fetch("/.netlify/functions/vchasno-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          legalEntityId: invoice.legalEntityId,
+          customerId: invoice.customerId,
+          docType: "invoice",
+          crmDocId: invoice.id,
+          quoteId: invoice.quoteId,
+          number: invoice.number,
+          title: `Рахунок ${invoice.number ?? ""}`.trim(),
+          issueDate: invoice.issueDate,
+          amountKopecks: Math.round((invoice.amount || 0) * 100),
+          fileBase64,
+          send: false,
+        }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`);
+      toast.success("Завантажено у Вчасно як чернетку", {
+        description: "Перевірте документ у кабінеті Вчасно перед підписанням і надсиланням.",
+      });
+      void reloadVchasnoStatuses();
+    } catch (error) {
+      toast.error("Вчасно: не вдалося завантажити", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+    } finally {
+      setVchasnoBusyId(null);
     }
   };
 
@@ -190,6 +278,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
           {invoices.map((invoice) => {
             const order = invoice.quoteId ? orderByQuote.get(invoice.quoteId) : null;
             const entity = invoice.legalEntityId ? entityById.get(invoice.legalEntityId) : null;
+            const vBadge = vchasnoStatusBadge(vchasnoStatuses.get(invoice.id));
             return (
               <div
                 key={invoice.id}
@@ -213,6 +302,11 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                         ПДВ {invoice.vatRate}%
                       </Badge>
                     ) : null}
+                    {vBadge ? (
+                      <Badge variant="outline" className={cn("text-[10px]", vBadge.className)}>
+                        {vBadge.text}
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                     {order ? <span>{order.number} · {order.customerName}</span> : <span>Замовлення не вказано</span>}
@@ -232,6 +326,23 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                   >
                     <FileDown className="h-4 w-4" />
                   </Button>
+                  {canUploadVchasno ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Завантажити у Вчасно (чернетка)"
+                      disabled={vchasnoBusyId === invoice.id || !invoice.legalEntityId}
+                      onClick={() => void uploadToVchasno(invoice)}
+                    >
+                      {vchasnoBusyId === invoice.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"

@@ -91,6 +91,9 @@ export type CustomerFormState = {
   eventDate: string;
   eventComment: string;
   notes: string;
+  accountantName: string;
+  accountantEmail: string;
+  accountantEdrpou: string;
 };
 
 export type CustomerContact = {
@@ -258,7 +261,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [activeLegalEntityId, setActiveLegalEntityId] = React.useState<string | null>(null);
-  const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "related">(
+  const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "accountant" | "related">(
     "basic"
   );
   const [quickMode, setQuickMode] = React.useState(true);
@@ -841,6 +844,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
               <TabsTrigger value="legalEntities" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Юр. Особи</TabsTrigger>
               <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
+              <TabsTrigger value="accountant" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Бухгалтер</TabsTrigger>
               <TabsTrigger value="related" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                 Пов'язане
                 <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
@@ -1487,6 +1491,43 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                   placeholder="Що замовляє, коли, важливі деталі комунікації..."
                   className="min-h-16"
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="accountant" className="space-y-3 mt-3">
+              <SectionHeader>Бухгалтер контрагента</SectionHeader>
+              <div className="text-xs text-muted-foreground">
+                Дані для відправки документів через «Вчасно»: на який email слати та ЄДРПОУ/ІПН отримувача. Якщо порожньо — підставляється основний email і податковий номер контрагента.
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Email для документів</Label>
+                  <Input
+                    type="email"
+                    value={form.accountantEmail}
+                    onChange={(e) => setForm((prev) => ({ ...prev, accountantEmail: e.target.value }))}
+                    placeholder="buh@example.com"
+                    className="h-9"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>ЄДРПОУ / ІПН отримувача</Label>
+                  <Input
+                    value={form.accountantEdrpou}
+                    onChange={(e) => setForm((prev) => ({ ...prev, accountantEdrpou: e.target.value }))}
+                    placeholder="напр. 3247719674"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label>Бухгалтер / підписант (ПІБ)</Label>
+                <Input
+                  value={form.accountantName}
+                  onChange={(e) => setForm((prev) => ({ ...prev, accountantName: e.target.value }))}
+                  placeholder="Імʼя бухгалтера або керівника"
+                  className="h-9"
                 />
               </div>
             </TabsContent>

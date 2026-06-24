@@ -138,6 +138,8 @@ type MemberProfileMeta = {
     contractors: boolean;
     stock: boolean;
     finance: boolean;
+    vchasno: boolean;
+    vchasno_send: boolean;
     team: boolean;
   };
 };
@@ -261,6 +263,8 @@ const DEFAULT_MODULE_ACCESS = {
   contractors: false,
   stock: false,
   finance: false,
+  vchasno: false,
+  vchasno_send: false,
   team: false,
 };
 
@@ -273,6 +277,8 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   contractors: "Підрядники та постачальники",
   stock: "Склад",
   finance: "Фінанси",
+  vchasno: "Вчасно — завантаження",
+  vchasno_send: "Вчасно — надсилання",
   team: "Управління командою",
 };
 
@@ -285,6 +291,8 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "contractors",
   "stock",
   "finance",
+  "vchasno",
+  "vchasno_send",
   "team",
 ];
 
@@ -391,6 +399,12 @@ function normalizeModuleAccess(
     contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
     stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
     finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
+    vchasno: typeof input.vchasno === "boolean" ? input.vchasno : hasDefaultFinanceAccess(accessRole, jobRole),
+    vchasno_send:
+      typeof input.vchasno_send === "boolean"
+        ? input.vchasno_send
+        : (accessRole ?? "").trim().toLowerCase() === "owner" ||
+          (jobRole ?? "").trim().toLowerCase() === "chief_accountant",
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }

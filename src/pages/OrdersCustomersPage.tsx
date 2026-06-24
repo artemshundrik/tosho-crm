@@ -106,6 +106,9 @@ type CustomerRow = {
   contacts?: CustomerContact[] | null;
   signatory_name?: string | null;
   signatory_position?: string | null;
+  accountant_name?: string | null;
+  accountant_email?: string | null;
+  accountant_edrpou?: string | null;
   reminder_at?: string | null;
   reminder_comment?: string | null;
   event_name?: string | null;
@@ -276,6 +279,9 @@ const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerF
   eventDate: "",
   eventComment: "",
   notes: "",
+  accountantName: "",
+  accountantEmail: "",
+  accountantEdrpou: "",
 });
 
 const parseCustomerContacts = (row?: Partial<CustomerRow> | null): CustomerContact[] => {
@@ -372,6 +378,9 @@ const CUSTOMER_BASE_COLUMNS = [
   "contacts",
   "signatory_name",
   "signatory_position",
+  "accountant_name",
+  "accountant_email",
+  "accountant_edrpou",
   "reminder_at",
   "reminder_comment",
   "event_name",
@@ -1641,6 +1650,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       eventDate: row.event_at ? row.event_at.slice(0, 10) : "",
       eventComment: row.event_comment ?? "",
       notes: row.notes ?? "",
+      accountantName: row.accountant_name ?? "",
+      accountantEmail: row.accountant_email ?? "",
+      accountantEdrpou: row.accountant_edrpou ?? "",
     });
     setFormError(null);
     setDialogOpen(true);
@@ -2539,6 +2551,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       contact_birthday: primaryContact?.birthday || null,
       signatory_name: primaryLegalEntity?.signatory_name ?? null,
       signatory_position: primaryLegalEntity?.signatory_position ?? null,
+      accountant_name: form.accountantName.trim() || null,
+      accountant_email: form.accountantEmail.trim() || null,
+      accountant_edrpou: form.accountantEdrpou.trim() || null,
       reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
       reminder_comment: form.reminderComment.trim() || null,
       event_name: form.eventName.trim() || null,
@@ -2571,6 +2586,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.contact_birthday;
       delete clone.signatory_name;
       delete clone.signatory_position;
+      delete clone.accountant_name;
+      delete clone.accountant_email;
+      delete clone.accountant_edrpou;
       delete clone.reminder_at;
       delete clone.reminder_comment;
       delete clone.event_name;
