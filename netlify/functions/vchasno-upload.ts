@@ -210,7 +210,10 @@ export const handler = async (event: HttpEvent) => {
   }
 
   // --- Юрособа-відправник → токен + ЄДРПОУ власника ---
-  const { data: entity, error: entityError } = await adminClient
+  // Вантажимо через userClient → RLS (is_team_member по public.team_members) сама
+  // перевіряє, що користувач — член команди цієї юрособи. team_id беремо з юрособи
+  // (саме ним ключовані фінанси/vchasno, це НЕ workspace_id з memberships_view).
+  const { data: entity, error: entityError } = await userClient
     .schema("tosho")
     .from("finance_legal_entities")
     .select("id,team_id,name,edrpou,ipn,vchasno_company_key")
@@ -224,9 +227,10 @@ export const handler = async (event: HttpEvent) => {
       vchasno_company_key: string | null;
     }>();
   if (entityError) return jsonResponse(500, { error: entityError.message });
-  if (!entity || entity.team_id !== workspaceId) {
-    return jsonResponse(404, { error: "Юрособу не знайдено в цьому просторі" });
+  if (!entity) {
+    return jsonResponse(404, { error: "Юрособу не знайдено або немає доступу" });
   }
+  const teamId = entity.team_id;
   const companyKey = (entity.vchasno_company_key ?? "").trim();
   const tokenEnvName = TOKEN_ENV_BY_COMPANY_KEY[companyKey];
   const vchasnoToken = tokenEnvName ? process.env[tokenEnvName] : undefined;
@@ -241,20 +245,19 @@ export const handler = async (event: HttpEvent) => {
   let recipientEdrpou = (payload.recipientEdrpou ?? "").trim();
   let recipientEmail = (payload.recipientEmail ?? "").trim();
   if (payload.customerId && (!recipientEdrpou || !recipientEmail)) {
-    const { data: customer } = await adminClient
+    const { data: customer } = await userClient
       .schema("tosho")
       .from("customers")
-      .select("id,team_id,tax_id,accountant_edrpou,accountant_email,contact_email")
+      .select("id,tax_id,accountant_edrpou,accountant_email,contact_email")
       .eq("id", payload.customerId)
       .maybeSingle<{
         id: string;
-        team_id: string;
         tax_id: string | null;
         accountant_edrpou: string | null;
         accountant_email: string | null;
         contact_email: string | null;
       }>();
-    if (customer && customer.team_id === workspaceId) {
+    if (customer) {
       if (!recipientEdrpou) recipientEdrpou = (customer.accountant_edrpou ?? customer.tax_id ?? "").trim();
       if (!recipientEmail) recipientEmail = (customer.accountant_email ?? customer.contact_email ?? "").trim();
     }
@@ -345,7 +348,7 @@ export const handler = async (event: HttpEvent) => {
     .schema("tosho")
     .from("vchasno_documents")
     .insert({
-      team_id: workspaceId,
+      team_id: teamId,
       legal_entity_id: legalEntityId,
       customer_id: payload.customerId ?? null,
       recipient_edrpou: recipientEdrpou || null,
