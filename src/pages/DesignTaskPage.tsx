@@ -4969,7 +4969,8 @@ export default function DesignTaskPage() {
           currentStatus: task.status,
           nextStatus: "in_progress",
           canManageAssignments: canManageDesignStatuses,
-          isAssignedToCurrentUser: isAssignedToMe,
+          // Старт роботи з таймера доступний і співвиконавцю, не лише основному виконавцю.
+          isAssignedToCurrentUser: isAssignedToMe || isCollaboratorOnTask,
         })
       ) {
         toast.error("Спочатку переведіть задачу у статус «В роботі».");
@@ -5068,7 +5069,10 @@ export default function DesignTaskPage() {
         currentStatus: task.status,
         nextStatus,
         canManageAssignments: canManageDesignStatuses,
-        isAssignedToCurrentUser: isAssignedToMe,
+        // Співвиконавець теж «робітник» над задачею (потрібно для старту роботи з таймера).
+        // Меню статусів окремо обмежене isAssignedToMe (allowedStatusTransitions), тож зайвих
+        // переходів у UI це помічнику не відкриває.
+        isAssignedToCurrentUser: isAssignedToMe || isCollaboratorOnTask,
       })
     ) {
       toast.error("Ви не можете перевести задачу в цей статус");
