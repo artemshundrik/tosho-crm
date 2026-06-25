@@ -3050,7 +3050,8 @@ export default function DesignTaskPage() {
   const canStartTimer =
     !!task &&
     !!userId &&
-    task.status === "in_progress" &&
+    // Старт таймера дозволений і з «стартових» статусів — він сам переведе у «В роботі».
+    (task.status === "in_progress" || task.status === "new" || task.status === "changes") &&
     !isTimerRunning &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
@@ -3072,8 +3073,8 @@ export default function DesignTaskPage() {
     ? "Задача не завантажена"
     : !userId
       ? "Потрібна авторизація"
-      : task.status !== "in_progress"
-        ? "Спочатку переведіть задачу у статус «В роботі»"
+      : task.status !== "in_progress" && task.status !== "new" && task.status !== "changes"
+        ? "Таймер доступний у статусах «Новий», «Правки» та «В роботі»"
         : !task.assigneeUserId
           ? "Спочатку призначте виконавця"
           : task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments
@@ -4948,10 +4949,6 @@ export default function DesignTaskPage() {
   const handleStartTimer = async () => {
     if (!task || !effectiveTeamId || !userId || timerBusy) return;
     if (!ensureCanEdit()) return;
-    if (task.status !== "in_progress") {
-      toast.error("Таймер можна запустити тільки у статусі «В роботі».");
-      return;
-    }
     if (!task.assigneeUserId) {
       toast.error("Спочатку призначте виконавця.");
       return;
@@ -4959,6 +4956,30 @@ export default function DesignTaskPage() {
     if (task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments) {
       toast.error("Таймер може запускати виконавець або співвиконавець задачі.");
       return;
+    }
+    // Старт таймера = старт роботи: якщо задача ще не «В роботі», автоматично переводимо туди
+    // (інакше колонка «В роботі» лишається порожньою — дизайнери стрибають одразу в «Дизайн готовий»).
+    if (task.status !== "in_progress") {
+      if (task.status !== "new" && task.status !== "changes") {
+        toast.error("Таймер можна запустити лише у статусах «Новий», «Правки» або «В роботі».");
+        return;
+      }
+      if (
+        !canChangeDesignStatus({
+          currentStatus: task.status,
+          nextStatus: "in_progress",
+          canManageAssignments: canManageDesignStatuses,
+          isAssignedToCurrentUser: isAssignedToMe,
+        })
+      ) {
+        toast.error("Спочатку переведіть задачу у статус «В роботі».");
+        return;
+      }
+      const hasEstimate = !!getTaskEstimateMinutes(task);
+      await updateTaskStatus("in_progress");
+      // Без естімейту updateTaskStatus відкриє діалог естімейту замість переходу;
+      // статус стане «В роботі» після підтвердження, а таймер запустять повторним кліком.
+      if (!hasEstimate) return;
     }
     setTimerBusy("start");
     try {
@@ -7226,7 +7247,13 @@ export default function DesignTaskPage() {
     : isTimerPaused
       ? "На паузі. Запусти таймер, коли продовжуєш роботу."
       : startTimerBlockedReason ?? "Запускай таймер на старті роботи і став на паузу одразу після завершення.";
-  const timerActionLabel = isTimerRunning ? "Поставити на паузу" : isTimerPaused ? "Продовжити таймер" : "Запустити таймер";
+  const timerActionLabel = isTimerRunning
+    ? "Поставити на паузу"
+    : isTimerPaused
+      ? "Продовжити таймер"
+      : task && (task.status === "new" || task.status === "changes")
+        ? "Почати роботу"
+        : "Запустити таймер";
 
   const dropboxFolderNameDefault = useMemo(
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
