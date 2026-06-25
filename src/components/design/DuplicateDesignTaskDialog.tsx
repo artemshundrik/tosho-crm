@@ -140,7 +140,7 @@ export function DuplicateDesignTaskDialog({
     <Dialog open={open} onOpenChange={(next) => (!next ? onCancel() : undefined)}>
       <DialogContent className="sm:max-w-[540px]">
         <DialogHeader>
-          <DialogTitle>Дублювати дизайн-задачу</DialogTitle>
+          <DialogTitle>Скопіювати дизайн-задачу</DialogTitle>
           <DialogDescription>{sourceLabel ? `З ${sourceLabel}` : "Створити нову задачу на основі цієї"}</DialogDescription>
         </DialogHeader>
 
@@ -329,7 +329,7 @@ export function DuplicateDesignTaskDialog({
               disabled={saving || !source}
             >
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Створити дубль
+              Створити копію
             </Button>
           </div>
         </DialogFooter>

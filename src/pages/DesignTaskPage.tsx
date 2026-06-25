@@ -125,6 +125,7 @@ import {
   getDesignStatusActionLabel,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
+import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import {
   notifyDesignTaskCollaboratorsChanged,
   notifyDesignTaskCollaboratorsOnStatusChange,
@@ -9069,13 +9070,18 @@ export default function DesignTaskPage() {
                     Редагувати назву
                   </DropdownMenuItem>
                 ) : null}
-                {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => (
-                  <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
-                    {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
-                  </DropdownMenuItem>
-                ))}
+                {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => {
+                  const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[status];
+                  return (
+                    <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
+                      <StatusIcon className={`mr-2 h-4 w-4 ${DESIGN_STATUS_ICON_COLOR_BY_STATUS[status]}`} />
+                      {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
+                    </DropdownMenuItem>
+                  );
+                })}
                 {canSeeMarkReadyAction ? (
                   <DropdownMenuItem disabled={!!statusSaving || !canMarkReadyNow} onClick={() => void updateTaskStatus("pm_review")}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
                     Позначити як дизайн готовий
                   </DropdownMenuItem>
                 ) : null}

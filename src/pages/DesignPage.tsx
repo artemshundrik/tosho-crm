@@ -20,8 +20,8 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, PlayCircle, ShieldCheck, Hourglass, XCircle, Package, Link2 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -32,6 +32,7 @@ import {
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
+import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   DESIGN_TASK_TIMER_UPDATED_EVENT,
@@ -337,24 +338,6 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
   { id: "approved", label: DESIGN_STATUS_LABELS.approved },
   { id: "cancelled", label: DESIGN_STATUS_LABELS.cancelled },
 ];
-const DESIGN_STATUS_ICON_BY_STATUS = {
-  new: Plus,
-  changes: RefreshCw,
-  in_progress: PlayCircle,
-  pm_review: ShieldCheck,
-  client_review: Hourglass,
-  approved: CheckCircle2,
-  cancelled: XCircle,
-} satisfies Record<DesignStatus, typeof CheckCircle2>;
-const DESIGN_STATUS_ICON_COLOR_BY_STATUS: Record<DesignStatus, string> = {
-  new: "text-muted-foreground",
-  changes: "text-warning-foreground",
-  in_progress: "text-info-foreground",
-  pm_review: "text-info-foreground",
-  client_review: "text-warning-foreground",
-  approved: "text-success-foreground",
-  cancelled: "text-danger-foreground",
-};
 const STATUS_BADGE_CLASS_BY_STATUS: Record<DesignStatus, string> = {
   new: "design-status-badge-new",
   changes: "design-status-badge-changes",
@@ -4259,7 +4242,7 @@ export default function DesignPage() {
 
   const requestDuplicateTask = (task: DesignTask) => {
     if (!canManageAssignments && !permissions.isDesigner) {
-      toast.error("Немає прав для дублювання задачі");
+      toast.error("Немає прав для копіювання задачі");
       return;
     }
     setDuplicateError(null);
@@ -4315,7 +4298,7 @@ export default function DesignPage() {
       const assigneeAvatarUrl = assigneeUserId ? getMemberAvatar(assigneeUserId) : null;
       const deadline = options.carryDeadline ? source.designDeadline ?? null : null;
 
-      const title = source.title?.trim() ? source.title.trim() : `Дубль ${source.designTaskNumber ?? ""}`.trim();
+      const title = source.title?.trim() ? source.title.trim() : `Копія ${source.designTaskNumber ?? ""}`.trim();
 
       const baseMetadata = withDesignTaskCollaboratorMetadata(
         {
@@ -4366,7 +4349,7 @@ export default function DesignPage() {
         .single();
       if (insertError) throw insertError;
       const createdRow = (data as unknown as DesignTaskActivityRow | null) ?? null;
-      if (!createdRow) throw new Error("Не вдалося створити дубль задачі");
+      if (!createdRow) throw new Error("Не вдалося створити копію задачі");
       const metadata = (createdRow.metadata ?? {}) as Record<string, unknown>;
 
       const sourceFiles = Array.isArray(sourceMeta.standalone_brief_files)
@@ -4502,12 +4485,12 @@ export default function DesignPage() {
 
       const createdTaskHref = `/design/${createdTask.id}`;
       setDuplicateSource(null);
-      toast.success("Задачу продубльовано", {
+      toast.success("Задачу скопійовано", {
         description: `Нова задача ${createdTask.designTaskNumber ?? ""}`.trim(),
         action: { label: "Відкрити", onClick: () => navigate(createdTaskHref) },
       });
     } catch (e: unknown) {
-      setDuplicateError(getErrorMessage(e, "Не вдалося продублювати задачу"));
+      setDuplicateError(getErrorMessage(e, "Не вдалося скопіювати задачу"));
     } finally {
       setDuplicateSaving(false);
     }
@@ -4723,6 +4706,12 @@ export default function DesignPage() {
     const assigneeLabel = getTaskAssigneeLabel(task);
     const collaboratorEntries = getTaskCollaborators(task);
     const deadlineBadge = getDeadlineBadge(task.designDeadline);
+    const statusTargets = getAllowedStatusTransitions(task).filter((target) => target.id !== "pm_review");
+    const showSelfAssign = Boolean(
+      canSelfAssign && userId && task.assigneeUserId && (canManageAssignments || task.assigneeUserId === userId)
+    );
+    const showTakeInWork = Boolean(!task.assigneeUserId && canSelfAssign && userId);
+    const hasAssignmentGroup = showSelfAssign || showTakeInWork || canManageAssignments;
     return (
       <KanbanCard
         draggable={options?.draggable}
@@ -4794,76 +4783,119 @@ export default function DesignPage() {
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-                <DropdownMenuItem onClick={() => openTask(task.id, true)}>Відкрити в новій вкладці</DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-60" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem onClick={() => openTask(task.id, true)}>
+                  <ExternalLink />
+                  Відкрити в новій вкладці
+                </DropdownMenuItem>
                 {userId && (task.assigneeUserId === userId || canManageAssignments) ? (
-                  <DropdownMenuItem onClick={() => openRenameDialog(task)}>Редагувати назву</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openRenameDialog(task)}>
+                    <PencilLine />
+                    Редагувати назву
+                  </DropdownMenuItem>
                 ) : null}
                 {canManageAssignments || permissions.isDesigner ? (
-                  <DropdownMenuItem onClick={() => requestDuplicateTask(task)}>Дублювати задачу</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => requestDuplicateTask(task)}>
+                    <Copy />
+                    Скопіювати задачу
+                  </DropdownMenuItem>
                 ) : null}
+
                 <DropdownMenuSeparator />
-              {canSelfAssign &&
-              userId &&
-              task.assigneeUserId &&
-              (canManageAssignments || task.assigneeUserId === userId) ? (
-                <DropdownMenuItem onClick={() => applyAssignee(task, userId)} disabled={task.assigneeUserId === userId}>
-                  {task.assigneeUserId === userId ? "Призначено на мене" : "Призначити на мене"}
-                </DropdownMenuItem>
-              ) : null}
-              {!task.assigneeUserId && canSelfAssign && userId ? (
-                <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>Взяти в роботу</DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onClick={() => requestReestimate(task)}>Оновити естімейт</DropdownMenuItem>
-              {canMarkTaskReady(task) ? (
-                <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
-                  Позначити як дизайн готовий
-                </DropdownMenuItem>
-              ) : null}
-              {canManageAssignments ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel>Призначити дизайнеру</DropdownMenuLabel>
-                  {designerMembers.length === 0 ? (
-                    <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
-                  ) : (
-                    designerMembers.map((member) => (
-                      <DropdownMenuItem
-                        key={member.id}
-                        onClick={() => applyAssignee(task, member.id)}
-                        disabled={task.assigneeUserId === member.id}
-                      >
-                        {member.label}
+
+                {showSelfAssign ? (
+                  <DropdownMenuItem onClick={() => applyAssignee(task, userId)} disabled={task.assigneeUserId === userId}>
+                    <UserPlus />
+                    {task.assigneeUserId === userId ? "Призначено на мене" : "Призначити на мене"}
+                  </DropdownMenuItem>
+                ) : null}
+                {showTakeInWork ? (
+                  <DropdownMenuItem onClick={() => applyAssignee(task, userId)}>
+                    <UserPlus />
+                    Взяти в роботу
+                  </DropdownMenuItem>
+                ) : null}
+                {canManageAssignments ? (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Users />
+                      Призначити дизайнеру
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                      {designerMembers.length === 0 ? (
+                        <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
+                      ) : (
+                        designerMembers.map((member) => (
+                          <DropdownMenuItem
+                            key={member.id}
+                            onClick={() => applyAssignee(task, member.id)}
+                            disabled={task.assigneeUserId === member.id}
+                          >
+                            <AvatarBase
+                              src={member.avatarUrl ?? null}
+                              name={member.label}
+                              size={20}
+                              showStatusIndicator={false}
+                            />
+                            {member.label}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => applyAssignee(task, null)} disabled={!task.assigneeUserId}>
+                        <UserMinus />
+                        Зняти виконавця
                       </DropdownMenuItem>
-                    ))
-                  )}
-                  <DropdownMenuItem onClick={() => applyAssignee(task, null)} disabled={!task.assigneeUserId}>
-                    Зняти виконавця
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-              <DropdownMenuSeparator />
-              {getAllowedStatusTransitions(task)
-                .filter((target) => target.id !== "pm_review")
-                .map((target) => (
-                <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
-                  {getDesignStatusActionLabel(task.status, target.id)}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
+
+                {hasAssignmentGroup ? <DropdownMenuSeparator /> : null}
+
+                <DropdownMenuItem onClick={() => requestReestimate(task)}>
+                  <Clock3 />
+                  Оновити естімейт
                 </DropdownMenuItem>
-                ))}
-              {canManageAssignments ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={deletingTaskId === task.id}
-                    onClick={() => requestDeleteTask(task)}
-                  >
-                    {deletingTaskId === task.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    Видалити задачу
+                {canMarkTaskReady(task) ? (
+                  <DropdownMenuItem onClick={() => handleStatusChange(task, "pm_review")}>
+                    <CheckCircle2 />
+                    Позначити як дизайн готовий
                   </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
+                ) : null}
+                {statusTargets.length > 0 ? (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <RefreshCw />
+                      Змінити статус
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                      {statusTargets.map((target) => {
+                        const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[target.id];
+                        return (
+                          <DropdownMenuItem key={target.id} onClick={() => handleStatusChange(task, target.id)}>
+                            <StatusIcon className={DESIGN_STATUS_ICON_COLOR_BY_STATUS[target.id]} />
+                            {getDesignStatusActionLabel(task.status, target.id)}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
+
+                {canManageAssignments ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={deletingTaskId === task.id}
+                      onClick={() => requestDeleteTask(task)}
+                    >
+                      {deletingTaskId === task.id ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                      Видалити задачу
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
           </DropdownMenu>
         </div>
         {isLinkedQuote && task.title ? (
