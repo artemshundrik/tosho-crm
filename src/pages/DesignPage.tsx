@@ -5378,14 +5378,14 @@ export default function DesignPage() {
                     : undefined
                 }
               >
-                <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="min-w-[1100px] h-full items-stretch">
+                <KanbanBoard className="h-full pb-2 md:pb-3 [container-type:inline-size]" rowClassName="h-full items-stretch">
               {DESIGN_COLUMNS.map((col) => {
                 const items = grouped[col.id] ?? [];
                 return (
                   <KanbanColumn
                     key={col.id}
                     className={cn(
-                      "kanban-column-surface basis-[320px] h-full transition-colors",
+                      "kanban-column-surface basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] h-full transition-colors",
                       `kanban-column-status-${col.id}`,
                       draggingId && "border-primary/35",
                       dropTargetStatus === col.id && "border-primary bg-primary/5"

@@ -1620,7 +1620,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         className={cn(
           "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
           "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
-          sidebarCollapsed ? "w-[84px]" : "w-[290px]"
+          sidebarCollapsed ? "w-[72px]" : "w-[232px]"
         )}
       >
         <div className={cn("h-14 border-b border-border/40", sidebarCollapsed ? "px-3" : "px-4")}>
@@ -1732,7 +1732,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <div
         className={cn(
           "transition-[padding] duration-[220ms] ease-linear",
-          sidebarCollapsed ? "md:pl-[84px]" : "md:pl-[290px]"
+          sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[232px]"
         )}
       >
         <div>
@@ -1742,7 +1742,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           className={cn(
             "fixed top-0 right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
-            sidebarCollapsed ? "md:left-[84px]" : "md:left-[290px]",
+            sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
             "left-0"
           )}
         >
@@ -2379,7 +2379,7 @@ function SidebarGroup({
 
               <Icon
                 className={cn(
-                  "h-[18px] w-[18px] shrink-0 transition-colors",
+                  "h-[18px] w-[18px] shrink-0 transition-colors pointer-events-none",
                   active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
@@ -2391,7 +2391,7 @@ function SidebarGroup({
               ) : null}
               {showNotificationsBadge ? (
                 collapsed ? (
-                  <span className="absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                  <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                 ) : (
                   <span
                     className={cn(

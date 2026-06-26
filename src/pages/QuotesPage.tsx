@@ -6898,7 +6898,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   : undefined
               }
             >
-            <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="h-full items-stretch">
+            <KanbanBoard className="h-full pb-2 md:pb-3 [container-type:inline-size]" rowClassName="h-full items-stretch">
                 {KANBAN_COLUMNS.map((column) => {
                   const items = groupedByStatus[column.id] ?? [];
                   return (
@@ -6909,7 +6909,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "kanban-column-surface",
                         `kanban-column-status-${column.id}`,
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
-                        "basis-[300px] shrink-0 flex flex-col lg:basis-[320px] h-full"
+                        "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
                       )}
                       header={
                         <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
