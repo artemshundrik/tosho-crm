@@ -224,7 +224,7 @@ export const handler = async (event: HttpEvent) => {
     let pushFailed = 0;
     let delivered = 0;
     if (pendingRows.length > 0) {
-      const delivery = await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true });
+      const delivery = await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true, category: "contractor" });
       delivered = delivery.delivered;
       pushDelivered = delivery.pushDelivered;
       pushFailed = delivery.pushFailed;

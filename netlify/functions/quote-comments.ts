@@ -235,7 +235,7 @@ export const handler = async (event: HttpEvent) => {
       type: "info",
     }));
 
-    const result = await deliverNotifications(adminClient, rows);
+    const result = await deliverNotifications(adminClient, rows, { category: "quote_comment" });
     return { delivered: result.delivered };
   };
 

@@ -249,7 +249,7 @@ export const handler = async (event: HttpEvent) => {
       href: "/profile",
       type: decision === "rejected" ? "warning" : "success",
     },
-  ]);
+  ], { category: "probation" });
 
   return jsonResponse(200, {
     success: true,

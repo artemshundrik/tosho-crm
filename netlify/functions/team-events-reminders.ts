@@ -315,7 +315,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (pendingRows.length > 0) {
-      await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true });
+      await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true, category: "team_events" });
     }
 
     return jsonResponse(200, {

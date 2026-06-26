@@ -163,6 +163,25 @@ export const handler = async (event: HttpEvent) => {
     decided_by: userData.user.id,
   });
 
+  // Auth-level lock. Banning rejects future logins and refresh-token requests,
+  // so the user cannot sign in again or extend an existing session. Combined
+  // with the block-aware RLS gates (see scripts/access-lockout.sql), this cuts
+  // off all access — even an already-open tab — while leaving their data intact.
+  // Reactivation lifts the ban. A ~100-year ban is the conventional "forever".
+  let authLockWarning: string | null = null;
+  const { error: banError } = await adminClient.auth.admin.updateUserById(targetUserId, {
+    ban_duration: decision === "inactive" ? "876000h" : "none",
+  });
+  if (banError) {
+    // The employment_status flip already locks data access via RLS; surface the
+    // auth issue so an admin can retry, but don't fail the whole operation.
+    console.error("Failed to update auth ban for", targetUserId, banError);
+    authLockWarning =
+      decision === "inactive"
+        ? "Статус оновлено, але не вдалося заблокувати вхід в акаунт — повторіть дію або перевірте Supabase Auth."
+        : "Статус оновлено, але не вдалося розблокувати вхід — повторіть дію або перевірте Supabase Auth.";
+  }
+
   const targetName =
     targetProfile.full_name?.trim() ||
     [targetProfile.first_name?.trim(), targetProfile.last_name?.trim()].filter(Boolean).join(" ") ||
@@ -182,10 +201,11 @@ export const handler = async (event: HttpEvent) => {
       href: "/profile",
       type: decision === "inactive" ? "warning" : "success",
     },
-  ]);
+  ], { category: "employment" });
 
   return jsonResponse(200, {
     success: true,
+    warning: authLockWarning,
     profile: {
       startDate: targetProfile.start_date ?? "",
       probationEndDate: targetProfile.probation_end_date ?? "",

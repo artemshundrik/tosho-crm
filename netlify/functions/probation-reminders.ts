@@ -123,7 +123,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (rowsToDeliver.length > 0) {
-      await deliverNotifications(adminClient, rowsToDeliver);
+      await deliverNotifications(adminClient, rowsToDeliver, { category: "probation" });
       const dueUserIds = dueProfiles.map((row) => row.user_id);
       await adminClient
         .schema("tosho")

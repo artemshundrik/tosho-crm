@@ -203,7 +203,7 @@ export const handler = async (event: HttpEvent) => {
 
     const delivery =
       pendingRows.length > 0
-        ? await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true })
+        ? await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true, category: "quote_deadline" })
         : { delivered: 0 };
 
     return jsonResponse(200, {

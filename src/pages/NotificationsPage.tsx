@@ -8,6 +8,7 @@ import {
   MonitorSmartphone,
   PlaneTakeoff,
   PartyPopper,
+  Send,
   Settings2,
   ShieldAlert,
   Volume2,
@@ -20,7 +21,12 @@ import {
   enableRealtimeForSession,
   isRealtimeDisabledForSession,
   supabase,
+  db,
 } from "@/lib/supabaseClient";
+import {
+  NOTIFICATION_CATEGORIES,
+  type NotificationChannel,
+} from "@/lib/notificationCategories";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
@@ -452,12 +458,55 @@ export default function NotificationsPage() {
   const [partyAvatars, setPartyAvatars] = useState<NotificationPartyAvatar[]>([]);
   const [quoteAvatars, setQuoteAvatars] = useState<NotificationQuoteAvatar[]>([]);
   const [designTaskAvatars, setDesignTaskAvatars] = useState<NotificationDesignTaskAvatar[]>([]);
+  const [channelPrefs, setChannelPrefs] = useState<Record<string, Record<string, boolean>>>({});
+  const [telegramLinked, setTelegramLinked] = useState(false);
+  const [channelPrefsBusy, setChannelPrefsBusy] = useState(false);
 
   useEffect(() => {
     if (hasCache && loading) {
       setLoading(false);
     }
   }, [hasCache, loading]);
+
+  useEffect(() => {
+    if (!settingsOpen || !userId) return;
+    let active = true;
+    (async () => {
+      const { data } = await db
+        .from("user_notification_settings")
+        .select("telegram_chat_id,channel_prefs")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!active) return;
+      setChannelPrefs((data?.channel_prefs as Record<string, Record<string, boolean>> | null) ?? {});
+      setTelegramLinked(data?.telegram_chat_id != null);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [settingsOpen, userId]);
+
+  const isCategoryChannelOn = (categoryKey: string, channel: NotificationChannel) =>
+    channelPrefs[categoryKey]?.[channel] !== false;
+
+  const toggleCategoryChannel = async (categoryKey: string, channel: NotificationChannel) => {
+    if (!userId || channelPrefsBusy) return;
+    const next = !isCategoryChannelOn(categoryKey, channel);
+    const nextPrefs: Record<string, Record<string, boolean>> = {
+      ...channelPrefs,
+      [categoryKey]: { ...(channelPrefs[categoryKey] ?? {}), [channel]: next },
+    };
+    setChannelPrefs(nextPrefs);
+    setChannelPrefsBusy(true);
+    const { error } = await db
+      .from("user_notification_settings")
+      .upsert({ user_id: userId, channel_prefs: nextPrefs }, { onConflict: "user_id" });
+    setChannelPrefsBusy(false);
+    if (error) {
+      setChannelPrefs(channelPrefs);
+      toast.error("Не вдалося зберегти налаштування.");
+    }
+  };
 
   const loadNotifications = useCallback(
     async (showLoader = false) => {
@@ -1199,6 +1248,56 @@ export default function NotificationsPage() {
                     ) : null}
                   </div>
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-[var(--radius-inner)] border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
+                  <Send className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground sm:text-base">Типи сповіщень по каналах</div>
+                  <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Обери, які сповіщення слати в push і Telegram.
+                    {!telegramLinked ? " Telegram підключається у профілі." : ""}
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-[var(--radius)] border border-border/60">
+                <div className="flex items-center justify-end gap-6 border-b border-border/60 bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="w-12 text-center">Push</span>
+                  <span className="w-16 text-center">Telegram</span>
+                </div>
+                {NOTIFICATION_CATEGORIES.map((cat) => (
+                  <div
+                    key={cat.key}
+                    className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-2.5 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-foreground">{cat.label}</div>
+                      <div className="truncate text-xs text-muted-foreground">{cat.description}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-6">
+                      <div className="flex w-12 justify-center">
+                        <Toggle
+                          checked={isCategoryChannelOn(cat.key, "push")}
+                          disabled={channelPrefsBusy}
+                          onClick={() => toggleCategoryChannel(cat.key, "push")}
+                          label={`Push: ${cat.label}`}
+                        />
+                      </div>
+                      <div className="flex w-16 justify-center">
+                        <Toggle
+                          checked={isCategoryChannelOn(cat.key, "telegram")}
+                          disabled={channelPrefsBusy || !telegramLinked}
+                          onClick={() => toggleCategoryChannel(cat.key, "telegram")}
+                          label={`Telegram: ${cat.label}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           </div>
