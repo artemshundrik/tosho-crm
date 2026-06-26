@@ -5,7 +5,11 @@ import {
   sendTelegramMessage,
   type InlineKeyboard,
 } from "./_telegram";
-import { NOTIFICATION_CATEGORIES } from "./_notificationCategories";
+import {
+  visibleNotificationCategories,
+  type NotificationCategory,
+  type RoleContext,
+} from "./_notificationCategories";
 
 // Telegram webhook:
 //  - /start <nonce> — прив'язка акаунта, /stop — відписка (фаза 1)
@@ -58,12 +62,12 @@ function categoryEnabled(prefs: ChannelPrefs | null, key: string): boolean {
   return entry.telegram !== false;
 }
 
-function buildSettingsKeyboard(row: SettingsRow): InlineKeyboard {
+function buildSettingsKeyboard(row: SettingsRow, categories: NotificationCategory[]): InlineKeyboard {
   const masterOn = row.telegram_enabled !== false;
   const keyboard: InlineKeyboard = [
     [{ text: `${masterOn ? "🔔" : "🔕"} Усі сповіщення: ${masterOn ? "увімкнені" : "вимкнені"}`, callback_data: "m" }],
   ];
-  for (const cat of NOTIFICATION_CATEGORIES) {
+  for (const cat of categories) {
     const on = categoryEnabled(row.channel_prefs, cat.key);
     keyboard.push([{ text: `${on ? "✅" : "⬜"} ${cat.label}`, callback_data: `c:${cat.key}` }]);
   }
@@ -78,6 +82,19 @@ async function loadSettingsByChat(adminClient: AdminClient, chatId: number): Pro
     .eq("telegram_chat_id", chatId)
     .maybeSingle();
   return (data as SettingsRow | null) ?? null;
+}
+
+async function loadRole(adminClient: AdminClient, userId: string): Promise<RoleContext> {
+  const { data } = await adminClient
+    .schema("tosho")
+    .from("memberships_view")
+    .select("access_role,job_role")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    accessRole: (data?.access_role as string | null) ?? null,
+    jobRole: (data?.job_role as string | null) ?? null,
+  };
 }
 
 async function handleMessage(adminClient: AdminClient, message: NonNullable<TelegramUpdate["message"]>) {
@@ -146,8 +163,9 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       await sendTelegramMessage(chatId, NOT_LINKED);
       return;
     }
+    const cats = visibleNotificationCategories(await loadRole(adminClient, row.user_id));
     await sendTelegramMessage(chatId, "Які сповіщення слати в Telegram:", {
-      replyMarkup: { inline_keyboard: buildSettingsKeyboard(row) },
+      replyMarkup: { inline_keyboard: buildSettingsKeyboard(row, cats) },
     });
     return;
   }
@@ -186,6 +204,7 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     return;
   }
 
+  const cats = visibleNotificationCategories(await loadRole(adminClient, row.user_id));
   const nowIso = new Date().toISOString();
   let toastText = "Збережено";
 
@@ -200,7 +219,7 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     toastText = next ? "Усі сповіщення увімкнені" : "Усі сповіщення вимкнені";
   } else if (data.startsWith("c:")) {
     const key = data.slice(2);
-    const known = NOTIFICATION_CATEGORIES.some((c) => c.key === key);
+    const known = cats.some((c) => c.key === key);
     if (known) {
       const prefs: ChannelPrefs = { ...(row.channel_prefs ?? {}) };
       const current = prefs[key]?.telegram !== false;
@@ -214,7 +233,7 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     }
   }
 
-  await editTelegramReplyMarkup(chatId, messageId, buildSettingsKeyboard(row));
+  await editTelegramReplyMarkup(chatId, messageId, buildSettingsKeyboard(row, cats));
   await answerTelegramCallback(cb.id, toastText);
 }
 

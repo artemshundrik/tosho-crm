@@ -34,6 +34,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
+import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
 import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
@@ -2275,6 +2276,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         />
       ) : null}
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
+      <TelegramPromoModal />
       </div>
     </WorkspacePresenceProvider>
   );

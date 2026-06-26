@@ -24,7 +24,7 @@ import {
   db,
 } from "@/lib/supabaseClient";
 import {
-  NOTIFICATION_CATEGORIES,
+  visibleNotificationCategories,
   type NotificationChannel,
 } from "@/lib/notificationCategories";
 import { useAuth } from "@/auth/AuthProvider";
@@ -437,7 +437,11 @@ const NOTIFICATION_BADGE_CLASS =
 const NOTIFICATION_AVATAR_SHELL_CLASS = "relative mt-0.5 flex h-12 w-12 shrink-0 items-start justify-start";
 
 export default function NotificationsPage() {
-  const { userId } = useAuth();
+  const { userId, accessRole, jobRole } = useAuth();
+  const visibleCategories = useMemo(
+    () => visibleNotificationCategories({ accessRole, jobRole }),
+    [accessRole, jobRole]
+  );
   const push = usePushNotifications(userId);
   const location = useLocation();
   const navigate = useNavigate();
@@ -1269,7 +1273,7 @@ export default function NotificationsPage() {
                   <span className="w-12 text-center">Push</span>
                   <span className="w-16 text-center">Telegram</span>
                 </div>
-                {NOTIFICATION_CATEGORIES.map((cat) => (
+                {visibleCategories.map((cat) => (
                   <div
                     key={cat.key}
                     className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-2.5 last:border-b-0"

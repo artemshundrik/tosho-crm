@@ -56,6 +56,38 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   },
 ];
 
+// Видимість категорій за роллю. Чиста функція від рядків ролей —
+// та сама логіка в netlify/functions/_notificationCategories.ts (бот). Тримати синхронно.
+export type RoleContext = { accessRole: string | null; jobRole: string | null };
+
+const QUOTE_JOB_ROLES = ["manager", "менеджер", "sales_manager", "junior_sales_manager", "pm"];
+
+export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: RoleContext): boolean {
+  const access = (ctx.accessRole ?? "").trim().toLowerCase();
+  const job = (ctx.jobRole ?? "").trim().toLowerCase();
+  const isPrivileged = access === "owner" || access === "admin" || job === "seo";
+  const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
+  switch (key) {
+    // Універсальні / персональні — бачать усі.
+    case "team_events":
+    case "probation":
+    case "employment":
+      return true;
+    // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
+    case "customer_followup":
+    case "quote_deadline":
+    case "quote_comment":
+    case "contractor":
+      return isQuoteWorker;
+    default:
+      return true;
+  }
+}
+
+export function visibleNotificationCategories(ctx: RoleContext): NotificationCategory[] {
+  return NOTIFICATION_CATEGORIES.filter((c) => isCategoryVisibleForRole(c.key, ctx));
+}
+
 export type NotificationChannel = "push" | "telegram";
 
 /** Чи дозволяє користувач конкретний канал для категорії (дефолт — увімкнено). */
