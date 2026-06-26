@@ -2564,10 +2564,18 @@ export function TeamMembersPage() {
                       <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getJobBadgeClass(m.job_role))}>
                         {getJobRoleLabel(m.job_role)}
                       </Badge>
-                      <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", getAvailabilityBadgeClass(availability))}>
-                        {getAvailabilityLabel(availability)}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "px-2 py-0.5 text-xs",
+                          isInactive
+                            ? "border-muted-foreground/30 bg-muted text-muted-foreground"
+                            : getAvailabilityBadgeClass(availability)
+                        )}
+                      >
+                        {isInactive ? "Неактивний" : getAvailabilityLabel(availability)}
                       </Badge>
-                      {availabilityRange ? (
+                      {!isInactive && availabilityRange ? (
                         <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
                           {availabilityRange}
                         </Badge>
@@ -2719,7 +2727,14 @@ export function TeamMembersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
-                            {canManage ? (
+                            {isInactive ? (
+                              <Badge
+                                variant="outline"
+                                className="px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit border-muted-foreground/30 bg-muted text-muted-foreground"
+                              >
+                                Неактивний
+                              </Badge>
+                            ) : canManage ? (
                               <div onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                                 <AppDropdown
                                   align="start"
@@ -2763,7 +2778,7 @@ export function TeamMembersPage() {
                                 {getAvailabilityLabel(availability)}
                               </Badge>
                             )}
-                            {availabilityRange ? (
+                            {!isInactive && availabilityRange ? (
                               <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
                                 {availabilityRange}
                               </Badge>
