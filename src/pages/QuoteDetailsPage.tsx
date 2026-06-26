@@ -83,6 +83,7 @@ import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import {
   createQuote,
   getQuoteSummary,
@@ -840,6 +841,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [attachmentAccessUrlByKey, setAttachmentAccessUrlByKey] = useState<Record<string, string>>({});
   const attachmentObjectUrlRegistryRef = useRef<Set<string>>(new Set());
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+  const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
   const [mentionLabelOverrides, setMentionLabelOverrides] = useState<Record<string, string>>({});
   const [designTask, setDesignTask] = useState<{
     id: string;
@@ -1818,8 +1820,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
   const hasRoleInfo = useMemo(() => teamMembers.some((member) => !!member.jobRole), [teamMembers]);
   const designerMembers = useMemo(() => {
-    return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
-  }, [teamMembers]);
+    return teamMembers.filter(
+      (member) => isDesignerJobRole(member.jobRole) && !memberInactiveById[member.id]
+    );
+  }, [teamMembers, memberInactiveById]);
   const selectedDesignOutputFile = useMemo(() => {
     const metadata = designTask?.metadata ?? {};
     const selectedId =
@@ -2693,7 +2697,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           return;
         }
         const rows = await listWorkspaceMembersForDisplay(workspaceId);
+        const nextInactiveById: Record<string, boolean> = {};
         const nextMembers = rows.map((row) => {
+          nextInactiveById[row.userId] = isInactiveEmployment(row.employmentStatus);
           return {
             id: row.userId,
             label: row.label,
@@ -2704,8 +2710,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         if (!active) return;
         setTeamMembers(nextMembers);
+        setMemberInactiveById(nextInactiveById);
       } catch {
-        if (active) setTeamMembers([]);
+        if (active) {
+          setTeamMembers([]);
+          setMemberInactiveById({});
+        }
       }
     };
     void loadMembers();
@@ -7556,6 +7566,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     name={memberById.get(designAssigneeId) ?? designAssigneeId}
                                     fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                                     size={20}
+                                    inactive={memberInactiveById[designAssigneeId] ?? false}
                                     className="text-[9px] font-semibold"
                                   />
                                   <span className="truncate">
@@ -7577,6 +7588,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         name={member.label}
                                         fallback={getInitials(member.label)}
                                         size={20}
+                                        inactive={memberInactiveById[member.id] ?? false}
                                         className="text-[9px] font-semibold"
                                       />
                                       <span>{member.label}</span>
@@ -7666,6 +7678,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     name={memberById.get(designAssigneeId) ?? designAssigneeId}
                                     fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                                     size={20}
+                                    inactive={memberInactiveById[designAssigneeId] ?? false}
                                     className="text-[9px] font-semibold"
                                   />
                                   <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
@@ -7685,6 +7698,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         name={member.label}
                                         fallback={getInitials(member.label)}
                                         size={20}
+                                        inactive={memberInactiveById[member.id] ?? false}
                                         className="text-[9px] font-semibold"
                                       />
                                       <span>{member.label}</span>
@@ -7743,6 +7757,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         name={member.label}
                                         fallback={getInitials(member.label)}
                                         size={20}
+                                        inactive={memberInactiveById[member.id] ?? false}
                                         className="text-[9px] font-semibold"
                                       />
                                       <span>{member.label}</span>
@@ -9071,6 +9086,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           name={memberById.get(designAssigneeId) ?? designAssigneeId}
                           fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                           size={20}
+                          inactive={memberInactiveById[designAssigneeId] ?? false}
                           className="text-[9px] font-semibold"
                         />
                         <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
@@ -9090,6 +9106,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               name={member.label}
                               fallback={getInitials(member.label)}
                               size={20}
+                              inactive={memberInactiveById[member.id] ?? false}
                               className="text-[9px] font-semibold"
                             />
                             <span>{member.label}</span>
@@ -9148,6 +9165,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               name={member.label}
                               fallback={getInitials(member.label)}
                               size={20}
+                              inactive={memberInactiveById[member.id] ?? false}
                               className="text-[9px] font-semibold"
                             />
                             <span>{member.label}</span>

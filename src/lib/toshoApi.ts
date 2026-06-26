@@ -131,6 +131,7 @@ export type TeamMemberRow = {
   accessRole?: string | null;
   jobRole?: string | null;
   availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
+  employmentStatus?: string | null;
 };
 
 export type CustomerRow = {

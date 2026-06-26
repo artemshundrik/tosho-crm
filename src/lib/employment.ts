@@ -223,6 +223,14 @@ export function normalizeEmploymentStatus(
   return probationEndDate ? "probation" : "active";
 }
 
+/**
+ * An offboarded member: cooperation ended ("inactive") or never started ("rejected").
+ * Such members must be visually marked everywhere and excluded from new assignment.
+ */
+export function isInactiveEmployment(value?: string | null): boolean {
+  return value === "inactive" || value === "rejected";
+}
+
 export function getEmploymentStatusLabel(status: EmploymentStatus) {
   if (status === "rejected") return "Не прийнято";
   if (status === "inactive") return "Співпрацю завершено";

@@ -86,6 +86,7 @@ import {
 } from "@/lib/designTaskType";
 import { ACTIVE_DESIGN_STATUSES, calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import { listCatalogModelsByIds, listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
   listCustomerLeadLogoDirectory,
@@ -1063,6 +1064,7 @@ export default function DesignPage() {
     () => initialMemberCache?.memberAvatarById ?? {}
   );
   const [memberAvailabilityById, setMemberAvailabilityById] = useState<Record<string, "available" | "vacation" | "sick_leave" | "offline">>({});
+  const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
     () => initialMemberCache?.managerMembers ?? []
   );
@@ -1273,26 +1275,38 @@ export default function DesignPage() {
         const labelById: Record<string, string> = {};
         const avatarById: Record<string, string | null> = {};
         const availabilityById: Record<string, "available" | "vacation" | "sick_leave" | "offline"> = {};
+        const inactiveById: Record<string, boolean> = {};
         rows.forEach((row) => {
           labelById[row.userId] = row.label;
           avatarById[row.userId] = row.avatarDisplayUrl;
           availabilityById[row.userId] = normalizeTeamAvailabilityStatus(row.availabilityStatus);
+          inactiveById[row.userId] = isInactiveEmployment(row.employmentStatus);
         });
 
         setMemberById(labelById);
         setMemberAvatarById(avatarById);
         setMemberAvailabilityById(availabilityById);
-        const designerRows = rows.filter((row) => isDesignerRole(row.jobRole));
+        setMemberInactiveById(inactiveById);
+        const designerRows = rows.filter(
+          (row) => isDesignerRole(row.jobRole) && !isInactiveEmployment(row.employmentStatus)
+        );
 
-        // If no one is marked as designer, still allow assignment to any team member.
-        const assigneeRows = designerRows.length > 0 ? designerRows : rows;
+        // If no one is marked as designer, still allow assignment to any active team member.
+        const assigneeRows =
+          designerRows.length > 0
+            ? designerRows
+            : rows.filter((row) => !isInactiveEmployment(row.employmentStatus));
 
-        let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
+        let managerRows = rows.filter(
+          (row) => isManagerRole(row.accessRole, row.jobRole) && !isInactiveEmployment(row.employmentStatus)
+        );
         if (managerRows.length === 0 && userId) {
           const me = rows.find((row) => row.userId === userId);
           if (me) managerRows = [me];
         }
-        if (managerRows.length === 0) managerRows = rows;
+        if (managerRows.length === 0) {
+          managerRows = rows.filter((row) => !isInactiveEmployment(row.employmentStatus));
+        }
         const nextManagerMembers = managerRows.map((row) => ({
           id: row.userId,
           label: labelById[row.userId] ?? row.userId,
@@ -2551,11 +2565,12 @@ export default function DesignPage() {
           fallbackClassName="text-[9px] font-semibold"
           availability={getMemberAvailability(value)}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
+          inactive={memberInactiveById[value] ?? false}
         />
         <span className="truncate">{label}</span>
       </span>
     );
-  }, [currentUserDisplayName, getMemberAvatar, getMemberAvailability, memberById, onlineMemberIds, userId]);
+  }, [currentUserDisplayName, getMemberAvatar, getMemberAvailability, memberById, memberInactiveById, onlineMemberIds, userId]);
 
   const visibleTasks = useMemo(
     () =>
@@ -2602,11 +2617,12 @@ export default function DesignPage() {
           size={18}
           className="shrink-0 border-border/60"
           fallbackClassName="text-[9px] font-semibold"
+          inactive={memberInactiveById[value] ?? false}
         />
         <span className="truncate">{label}</span>
       </span>
     );
-  }, [currentUserDisplayName, getMemberAvatar, memberById, userId]);
+  }, [currentUserDisplayName, getMemberAvatar, memberById, memberInactiveById, userId]);
 
   const effectiveDesignerFilter = viewMode === "assignee" ? ALL_DESIGNERS_FILTER : designerFilter;
 
@@ -4981,6 +4997,7 @@ export default function DesignPage() {
                   className="text-[10px] font-semibold ring-2 ring-background"
                   availability={getMemberAvailability(task.assigneeUserId)}
                   presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
+                  inactive={memberInactiveById[task.assigneeUserId] ?? false}
                 />
               ) : (
                 <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground ring-2 ring-background">
@@ -4997,6 +5014,7 @@ export default function DesignPage() {
                   className="text-[9px] font-semibold ring-2 ring-background"
                   availability={getMemberAvailability(entry.userId)}
                   presence={onlineMemberIds.has(entry.userId) ? "online" : "offline"}
+                  inactive={memberInactiveById[entry.userId] ?? false}
                 />
               ))}
             </div>
@@ -5637,6 +5655,7 @@ export default function DesignPage() {
                             fallback={getInitials(getTaskAssigneeLabel(row.task))}
                             size={16}
                             className="border-border/70"
+                            inactive={row.task.assigneeUserId ? (memberInactiveById[row.task.assigneeUserId] ?? false) : false}
                           />
                           {getTaskAssigneeLabel(row.task)}
                         </span>
@@ -5750,6 +5769,7 @@ export default function DesignPage() {
                                 fallback={getInitials(getTaskAssigneeLabel(row.task))}
                                 size={18}
                                 className="shrink-0 border-border/70"
+                                inactive={row.task.assigneeUserId ? (memberInactiveById[row.task.assigneeUserId] ?? false) : false}
                               />
                               <span className="truncate">{getTaskAssigneeLabel(row.task)}</span>
                             </div>
@@ -5862,6 +5882,7 @@ export default function DesignPage() {
                             fallback={getInitials(group.label)}
                             size={34}
                             className="shrink-0 border-border/70"
+                            inactive={group.id ? (memberInactiveById[group.id] ?? false) : false}
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
@@ -5981,6 +6002,7 @@ export default function DesignPage() {
                               fallback={getInitials(label)}
                               size={36}
                               className="shrink-0 border-border/70"
+                              inactive={row.userId ? (memberInactiveById[row.userId] ?? false) : false}
                             />
                             <div className="min-w-0">
                               <div className="truncate text-[15px] font-semibold text-foreground">{label}</div>
@@ -6034,6 +6056,7 @@ export default function DesignPage() {
                   fallback={getInitials(worksDrawerDesigner.label)}
                   size={32}
                   className="shrink-0 border-border/70"
+                  inactive={worksDrawerDesigner.userId ? (memberInactiveById[worksDrawerDesigner.userId] ?? false) : false}
                 />
               ) : null}
               <span className="truncate">{worksDrawerDesigner?.label ?? "Дизайнер"}</span>
@@ -6572,6 +6595,7 @@ export default function DesignPage() {
                           size={20}
                           className="border-border/60"
                           fallbackClassName="text-[10px] font-semibold"
+                          inactive={memberInactiveById[selectedManager.id] ?? false}
                         />
                       ) : (
                         <User className="h-4 w-4" />
@@ -6657,6 +6681,7 @@ export default function DesignPage() {
                             size={20}
                             className="border-border/60"
                             fallbackClassName="text-[10px] font-semibold"
+                            inactive={memberInactiveById[selectedAssignee.id] ?? false}
                           />
                         ) : (
                           <User className="h-4 w-4" />

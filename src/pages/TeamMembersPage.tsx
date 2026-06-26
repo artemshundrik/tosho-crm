@@ -76,6 +76,7 @@ import {
   getEmploymentDurationDays,
   getWorkAnniversaryInsight,
   isProbationReviewDue,
+  isInactiveEmployment,
   normalizeEmploymentStatus,
   getProbationSummary,
   type EmploymentStatus,
@@ -2435,6 +2436,7 @@ export function TeamMembersPage() {
                 const employmentDays = getEmploymentDurationDays(meta?.startDate);
                 const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
                 const employmentSummary = getEmploymentSummary(meta);
+                const isInactive = isInactiveEmployment(meta?.employmentStatus);
                 const displayName = getMemberDisplayName(m);
                 const initials = getInitialsFromName(displayName, m.email ?? null);
                 return (
@@ -2453,10 +2455,21 @@ export function TeamMembersPage() {
                             fallbackClassName="text-xs font-bold"
                             availability={availability}
                             presence={presence?.online ? "online" : "offline"}
+                            inactive={isInactive}
                           />
                         </div>
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{displayName}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={cn("truncate text-sm font-semibold text-foreground", isInactive && "text-muted-foreground line-through")}>{displayName}</span>
+                            {isInactive ? (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 px-1.5 py-0 text-[10px] font-medium border-destructive/40 bg-destructive/10 text-destructive"
+                              >
+                                Завершено
+                              </Badge>
+                            ) : null}
+                          </div>
                           <div className="mt-1 truncate text-xs text-muted-foreground">{m.email || "Не вказано"}</div>
                           <div className="mt-1 text-xs text-muted-foreground">{meta?.phone || "Телефон не вказано"}</div>
                         </div>
@@ -2635,6 +2648,7 @@ export function TeamMembersPage() {
                     );
                     const presence = memberPresenceByUserId[m.user_id];
                     const employmentSummary = getEmploymentSummary(meta);
+                    const isInactive = isInactiveEmployment(meta?.employmentStatus);
                     const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
                     const displayName = getMemberDisplayName(m);
                     const initials = getInitialsFromName(displayName, m.email ?? null);
@@ -2663,11 +2677,20 @@ export function TeamMembersPage() {
                                 fallbackClassName="text-xs font-bold"
                                 availability={availability}
                                 presence={presence?.online ? "online" : "offline"}
+                                inactive={isInactive}
                               />
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-semibold text-foreground">
-                                {displayName}
+                              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <span className={cn(isInactive && "text-muted-foreground line-through")}>{displayName}</span>
+                                {isInactive ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="px-1.5 py-0 text-[10px] font-medium border-destructive/40 bg-destructive/10 text-destructive"
+                                  >
+                                    Співпрацю завершено
+                                  </Badge>
+                                ) : null}
                               </span>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="inline-flex items-center gap-1.5">

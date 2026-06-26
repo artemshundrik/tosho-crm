@@ -56,6 +56,8 @@ type AvatarBaseProps = {
   availability?: TeamAvailabilityStatus | null;
   presence?: TeamPresenceStatus | null;
   showStatusIndicator?: boolean;
+  /** Member is offboarded (employment inactive/rejected): desaturate + show a blocked marker. */
+  inactive?: boolean;
 };
 
 type PlayerAvatarProps = {
@@ -115,6 +117,7 @@ export function AvatarBase({
   availability,
   presence,
   showStatusIndicator = true,
+  inactive = false,
 }: AvatarBaseProps) {
   const avatarRef = React.useRef<HTMLSpanElement | null>(null);
   const [errored, setErrored] = React.useState(false);
@@ -205,8 +208,13 @@ export function AvatarBase({
 
   const initials = getInitials(name, fallback);
   const showImage = Boolean(resolvedSrc) && !errored;
-  const statusTitle = buildTeamStatusTitle({ name, availability, presence });
-  const statusIndicatorClass = getTeamStatusIndicatorClass({ availability, presence });
+  const baseStatusTitle = buildTeamStatusTitle({ name, availability, presence });
+  const statusTitle = inactive
+    ? [name, "Співпрацю завершено"].filter(Boolean).join(" • ")
+    : baseStatusTitle;
+  // An offboarded member's availability/presence is irrelevant — the blocked
+  // marker takes over the indicator slot.
+  const statusIndicatorClass = inactive ? null : getTeamStatusIndicatorClass({ availability, presence });
   const statusIndicatorSizeClass =
     computedSize <= 18 ? "h-2 w-2 border" : computedSize <= 28 ? "h-2.5 w-2.5 border" : "h-3 w-3 border";
   const statusIndicatorEdgeClass = "bottom-0 right-0";
@@ -240,7 +248,7 @@ export function AvatarBase({
         className={cn(
           "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
           shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
-          getTeamAvailabilityAvatarClass(availability),
+          inactive ? "opacity-60 grayscale" : getTeamAvailabilityAvatarClass(availability),
           className
         )}
         style={{ width: computedSize, height: computedSize }}
@@ -268,7 +276,21 @@ export function AvatarBase({
           {initials}
         </AvatarFallback>
       </Avatar>
-      {showStatusIndicator && statusIndicatorClass ? (
+      {inactive ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute z-[1] flex items-center justify-center rounded-full border border-background bg-muted text-muted-foreground",
+            statusIndicatorSizeClass,
+            statusIndicatorEdgeClass
+          )}
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-[70%] w-[70%]" stroke="currentColor" strokeWidth={3}>
+            <circle cx="12" cy="12" r="9" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </span>
+      ) : showStatusIndicator && statusIndicatorClass ? (
         <span
           className={cn(
             "absolute z-[1] rounded-full border-background",

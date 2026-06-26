@@ -80,6 +80,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import {
@@ -502,6 +503,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
   const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
   const [workspaceMemberAvatarById, setWorkspaceMemberAvatarById] = useState<Record<string, string | null>>({});
+  const [workspaceMemberInactiveById, setWorkspaceMemberInactiveById] = useState<Record<string, boolean>>({});
   const [rowStatusBusy, setRowStatusBusy] = useState<string | null>(null);
   const [rowStatusError, setRowStatusError] = useState<string | null>(null);
   const [rowDeleteBusy, setRowDeleteBusy] = useState<string | null>(null);
@@ -808,6 +810,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     },
     [memberById, presenceAvatarById, workspaceMemberAvatarById]
   );
+  const isManagerInactive = useCallback(
+    (assignedTo?: string | null) => {
+      const normalizedValue = (assignedTo ?? "").trim();
+      if (!normalizedValue) return false;
+      return workspaceMemberInactiveById[normalizedValue] ?? false;
+    },
+    [workspaceMemberInactiveById]
+  );
   const resolveManagerMember = useCallback(
     (assignedTo?: string | null) => {
       const normalizedValue = (assignedTo ?? "").trim();
@@ -939,11 +949,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           fallbackClassName="text-[9px] font-semibold"
           availability={member?.availabilityStatus ?? null}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
+          inactive={isManagerInactive(value)}
         />
         <span className="truncate">{label}</span>
       </span>
     );
-  }, [getManagerLabel, onlineMemberIds, resolveManagerMember]);
+  }, [getManagerLabel, isManagerInactive, onlineMemberIds, resolveManagerMember]);
 
   const getDateLabels = (value?: string | null) => {
     if (!value) return "Не вказано";
@@ -1053,13 +1064,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           accessRole: row.accessRole,
           jobRole: row.jobRole,
           availabilityStatus: normalizeTeamAvailabilityStatus(row.availabilityStatus),
+          employmentStatus: row.employmentStatus,
         }));
         const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
         const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
+        const nextInactive = Object.fromEntries(
+          rows.map((row) => [row.userId, isInactiveEmployment(row.employmentStatus)])
+        );
         if (active) {
           setTeamMembers(data);
           setWorkspaceMemberLabelById(nextLabels);
           setWorkspaceMemberAvatarById(nextAvatars);
+          setWorkspaceMemberInactiveById(nextInactive);
           setTeamMembersLoaded(true);
           try {
             sessionStorage.setItem(`quotes-page-members:${teamId}`, JSON.stringify(data));
@@ -1071,6 +1087,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (active) {
           setWorkspaceMemberLabelById({});
           setWorkspaceMemberAvatarById({});
+          setWorkspaceMemberInactiveById({});
           setTeamMembersLoaded(true);
         }
       }
@@ -5740,6 +5757,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         size={20}
                         className="border-border/60 shrink-0"
                         fallbackClassName="text-[10px] font-semibold"
+                        inactive={isManagerInactive(currentUserId ?? null)}
                       />
                       <span className="truncate leading-none">
                         {currentUserManagerLabel || getManagerLabel(currentUserId ?? null)}
@@ -5856,6 +5874,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     getManagerAvatar,
     getManagerLabel,
     hasActiveFilters,
+    isManagerInactive,
     isManagerUser,
     loading,
     managerFilter,
@@ -6487,6 +6506,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             className="text-[9px] font-semibold"
                             availability={manager?.availabilityStatus ?? null}
                             presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                            inactive={isManagerInactive(row.assigned_to)}
                           />
                           <span className="truncate">{managerLabel}</span>
                         </div>
@@ -6700,6 +6720,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     className="text-[10px] font-semibold"
                                     availability={manager?.availabilityStatus ?? null}
                                     presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                                    inactive={isManagerInactive(row.assigned_to)}
                                   />
                                   <span className="truncate">
                                     {managerLabel}
@@ -7198,6 +7219,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         className="text-[10px] font-semibold"
                                         availability={manager?.availabilityStatus ?? null}
                                         presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                                        inactive={isManagerInactive(row.assigned_to)}
                                       />
                                       <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
                                     </div>

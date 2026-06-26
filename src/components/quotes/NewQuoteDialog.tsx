@@ -31,6 +31,7 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
+import { isInactiveEmployment } from "@/lib/employment";
 import { DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
 import { getCatalogModelMetadata } from "@/lib/toshoApi";
 import { formatUserShortName } from "@/lib/userName";
@@ -467,6 +468,7 @@ export type TeamMember = {
   label: string;
   avatarUrl?: string | null;
   jobRole?: string | null;
+  employmentStatus?: string | null;
 };
 
 /**
@@ -792,7 +794,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     [teamMembers]
   );
   const designerMembers = React.useMemo(() => {
-    return teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
+    return teamMembers.filter(
+      (member) => isDesignerJobRole(member.jobRole) && !isInactiveEmployment(member.employmentStatus)
+    );
   }, [teamMembers]);
   const availableStatuses = React.useMemo(() => {
     if (isEditMode) return QUOTE_STATUSES;

@@ -42,6 +42,7 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole, isQuoteManagerJobRole, normalizeJobRole } from "@/lib/permissions";
+import { isInactiveEmployment } from "@/lib/employment";
 import {
   DESIGN_TASK_TYPE_ICONS,
   DESIGN_TASK_TYPE_LABELS,
@@ -188,6 +189,7 @@ export type QuoteBatchTeamMember = {
   label: string;
   avatarUrl?: string | null;
   jobRole?: string | null;
+  employmentStatus?: string | null;
 };
 
 export interface QuoteBatchBuilderDialogProps {
@@ -943,6 +945,7 @@ const TeamMemberChipDropdown: React.FC<{
               name={selected.label}
               fallback={getInitials(selected.label).toUpperCase()}
               size={18}
+              inactive={isInactiveEmployment(selected.employmentStatus)}
               className="mr-2 shrink-0 border-border/60"
               fallbackClassName="text-[9px] font-semibold"
             />
@@ -996,6 +999,7 @@ const TeamMemberChipDropdown: React.FC<{
                     name={member.label}
                     fallback={getInitials(member.label).toUpperCase()}
                     size={20}
+                    inactive={isInactiveEmployment(member.employmentStatus)}
                     className="shrink-0 border-border/60"
                     fallbackClassName="text-[10px] font-semibold"
                   />
@@ -1040,6 +1044,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
               name={selected[0].label}
               fallback={getInitials(selected[0].label).toUpperCase()}
               size={18}
+              inactive={isInactiveEmployment(selected[0].employmentStatus)}
               className="mr-2 shrink-0 border-border/60"
               fallbackClassName="text-[9px] font-semibold"
             />
@@ -1077,6 +1082,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
                     name={member.label}
                     fallback={getInitials(member.label).toUpperCase()}
                     size={20}
+                    inactive={isInactiveEmployment(member.employmentStatus)}
                     className="shrink-0 border-border/60"
                     fallbackClassName="text-[10px] font-semibold"
                   />
@@ -1926,8 +1932,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     [teamMembers]
   );
   const designerMembers = React.useMemo(() => {
-    const designers = teamMembers.filter((member) => isDesignerJobRole(member.jobRole));
-    return designers.length > 0 || hasRoleInfo ? designers : teamMembers;
+    const selectable = teamMembers.filter((member) => !isInactiveEmployment(member.employmentStatus));
+    const designers = selectable.filter((member) => isDesignerJobRole(member.jobRole));
+    return designers.length > 0 || hasRoleInfo ? designers : selectable;
   }, [hasRoleInfo, teamMembers]);
   const selectedManager = teamMembers.find((member) => member.id === managerId) ?? null;
   const activeDeliveryType = activeProduct?.deliveryType ?? "";

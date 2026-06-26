@@ -34,6 +34,7 @@ import {
   formatEmploymentDate,
   getBirthdayInsight,
   getWorkAnniversaryInsight,
+  isInactiveEmployment,
 } from "@/lib/employment";
 import {
   getTeamAvailabilityBadgeClass,
@@ -677,6 +678,7 @@ export function TeamPage() {
                         size={44}
                         availability={member.availabilityStatus}
                         presence={member.online ? "online" : "offline"}
+                        inactive={isInactiveEmployment(member.employmentStatus)}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-foreground">{member.label}</div>
@@ -774,6 +776,7 @@ export function TeamPage() {
                           fallback={getInitialsFromName(label, member?.email)}
                           assetVariant="md"
                           size={34}
+                          inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-foreground">{label}</div>
@@ -846,6 +849,7 @@ export function TeamPage() {
                       size={36}
                       availability={member.availabilityStatus}
                       presence={member.online ? "online" : "offline"}
+                      inactive={isInactiveEmployment(member.employmentStatus)}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-foreground">{member.label}</div>
@@ -1052,7 +1056,9 @@ export function TeamPage() {
                   <SelectValue placeholder="Оберіть співробітника" />
                 </SelectTrigger>
                 <SelectContent>
-                  {enrichedMembers.map((member) => (
+                  {enrichedMembers
+                    .filter((member) => !isInactiveEmployment(member.employmentStatus))
+                    .map((member) => (
                     <SelectItem key={member.userId} value={member.userId}>
                       <span className="flex min-w-0 items-center gap-2">
                         <AvatarBase

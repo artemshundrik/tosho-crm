@@ -86,6 +86,7 @@ import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StorageObjectVideo } from "@/components/app/StorageObjectVideo";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import { listCatalogModelsByIds } from "@/lib/toshoApi";
 import {
   listCustomerLeadLogoDirectory,
@@ -1378,6 +1379,7 @@ export default function DesignTaskPage() {
   const [memberById, setMemberById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
   const [memberRoleById, setMemberRoleById] = useState<Record<string, string>>({});
+  const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>([]);
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string }>>([]);
   const [designQueueTasks, setDesignQueueTasks] = useState<DesignTask[]>([]);
@@ -1766,13 +1768,16 @@ export default function DesignTaskPage() {
 
         const labels: Record<string, string> = {};
         const avatars: Record<string, string | null> = {};
+        const inactiveById: Record<string, boolean> = {};
         rows.forEach((row) => {
           labels[row.userId] = row.label;
           avatars[row.userId] = row.avatarDisplayUrl;
+          if (isInactiveEmployment(row.employmentStatus)) inactiveById[row.userId] = true;
         });
 
         setMemberById(labels);
         setMemberAvatarById(avatars);
+        setMemberInactiveById(inactiveById);
 
         const resolvedRoleById: Record<string, string> = {};
         rows.forEach((row) => {
@@ -1785,14 +1790,16 @@ export default function DesignTaskPage() {
 
         setDesignerMembers(
           rows
-            .filter((row) => isDesignerRole(row.jobRole))
+            .filter((row) => isDesignerRole(row.jobRole) && !isInactiveEmployment(row.employmentStatus))
             .map((row) => ({
               id: row.userId,
               label: labels[row.userId] ?? row.userId,
               avatarUrl: avatars[row.userId] ?? null,
             }))
         );
-        let managerRows = rows.filter((row) => isManagerRole(row.accessRole, row.jobRole));
+        let managerRows = rows.filter(
+          (row) => isManagerRole(row.accessRole, row.jobRole) && !isInactiveEmployment(row.employmentStatus)
+        );
         if (managerRows.length === 0 && userId) {
           const me = rows.find((row) => row.userId === userId);
           if (me) managerRows = [me];
@@ -7114,7 +7121,7 @@ export default function DesignTaskPage() {
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       Object.entries(memberById)
-        .filter(([memberId]) => memberId !== userId)
+        .filter(([memberId]) => memberId !== userId && !memberInactiveById[memberId])
         .map(([memberId, label]) => ({
           id: memberId,
           label,
@@ -7127,7 +7134,7 @@ export default function DesignTaskPage() {
           if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
           return a.label.localeCompare(b.label, "uk");
         }),
-    [memberAvatarById, memberById, userId]
+    [memberAvatarById, memberById, memberInactiveById, userId]
   );
   const mentionLookup = useMemo(() => {
     const lookup = new Map<string, Set<string>>();
@@ -8907,6 +8914,7 @@ export default function DesignTaskPage() {
                 fallback={getInitials(getMemberLabel(task.assigneeUserId))}
                 size={16}
                 className="border-border/70"
+                inactive={task.assigneeUserId ? (memberInactiveById[task.assigneeUserId] ?? false) : false}
               />
               <span className="truncate max-w-[160px]">{getMemberLabel(task.assigneeUserId)}</span>
             </Badge>
@@ -8921,6 +8929,7 @@ export default function DesignTaskPage() {
                       fallback={getInitials(entry.label)}
                       size={16}
                       className="border-border/70 ring-2 ring-background"
+                      inactive={memberInactiveById[entry.userId] ?? false}
                     />
                   ))}
                 </span>
@@ -10036,6 +10045,7 @@ export default function DesignTaskPage() {
                               fallback={getInitials(getMemberLabel(comment.created_by))}
                               size={14}
                               className="shrink-0 border-border/70"
+                              inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
                             />
                             <span>{getMemberLabel(comment.created_by)}</span>
                             <span>·</span>
@@ -10066,6 +10076,7 @@ export default function DesignTaskPage() {
                           fallback={getInitials(getMemberLabel(comment.created_by))}
                           size={14}
                           className="shrink-0 border-border/70"
+                          inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
                         />
                         <span>{getMemberLabel(comment.created_by)}</span>
                         <span>·</span>
@@ -10700,7 +10711,7 @@ export default function DesignTaskPage() {
                   {taskRoleLabel}
                 </span>
                 <div className="design-task-detail-value relative">
-                  <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={24} className="shrink-0 border-border/60" />
+                  <AvatarBase src={taskManagerAvatar} name={taskManagerLabel} fallback={getInitials(taskManagerLabel)} size={24} className="shrink-0 border-border/60" inactive={taskManagerUserId ? (memberInactiveById[taskManagerUserId] ?? false) : false} />
                   <span className="truncate">{taskManagerLabel}</span>
                 </div>
                 {!designTaskLockedByOther && managerMembers.length > 0 ? (
@@ -10736,7 +10747,7 @@ export default function DesignTaskPage() {
                 <div className="design-task-detail-value relative">
                   {task.assigneeUserId ? (
                     <>
-                      <AvatarBase src={getMemberAvatar(task.assigneeUserId)} name={getMemberLabel(task.assigneeUserId)} fallback={getInitials(getMemberLabel(task.assigneeUserId))} size={24} className="shrink-0 border-border/60" />
+                      <AvatarBase src={getMemberAvatar(task.assigneeUserId)} name={getMemberLabel(task.assigneeUserId)} fallback={getInitials(getMemberLabel(task.assigneeUserId))} size={24} className="shrink-0 border-border/60" inactive={memberInactiveById[task.assigneeUserId] ?? false} />
                       <span className="truncate">{getMemberLabel(task.assigneeUserId)}</span>
                     </>
                   ) : (
@@ -10810,6 +10821,7 @@ export default function DesignTaskPage() {
                             fallback={getInitials(entry.label)}
                             size={24}
                             className="shrink-0 border-border/60 ring-2 ring-background"
+                            inactive={memberInactiveById[entry.userId] ?? false}
                           />
                         ))}
                       </span>
@@ -11151,6 +11163,7 @@ export default function DesignTaskPage() {
                                       src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
                                       name={event.actorLabel}
                                       fallback={getInitials(event.actorLabel)}
+                                      inactive={event.actorUserId ? (memberInactiveById[event.actorUserId] ?? false) : false}
                                       size={14}
                                       className="shrink-0 border-border/70"
                                     />

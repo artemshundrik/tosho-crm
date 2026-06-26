@@ -35,6 +35,7 @@ import {
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import {
@@ -1274,6 +1275,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           size={20}
           className="border-border/60 shrink-0"
           fallbackClassName="text-[10px] font-semibold"
+          inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
         />
         <span className="truncate">{managerLabel}</span>
       </div>
@@ -1293,6 +1295,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             size={18}
             className="border-border/60 shrink-0"
             fallbackClassName="text-[9px] font-semibold"
+            inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
           />
           <span className="truncate">{value}</span>
         </span>
@@ -3118,6 +3121,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               size={20}
               className="shrink-0 border-border/60"
               fallbackClassName="text-[10px] font-semibold"
+              inactive={isInactiveEmployment(memberById.get(userId ?? "")?.employmentStatus)}
             />
             <span className="truncate">{currentManagerLabel || defaultManagerName || "Менеджер"}</span>
           </div>
