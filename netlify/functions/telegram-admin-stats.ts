@@ -109,10 +109,12 @@ export const handler = async (event: HttpEvent) => {
     }
 
     // 3) Воронка з activity_log (унікальні користувачі).
+    // Рахуємо по user_id учасників воркспейсу, а не по team_id: activity_log
+    // використовує операційну team_id (useAuth.teamId), яка != workspace_id.
     const { data: events } = await admin
       .from("activity_log")
       .select("user_id,action")
-      .eq("team_id", teamId)
+      .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"])
       .in("action", [PROMO_SHOWN, PROMO_CLICKED])
       .limit(20000);
     const shownUsers = new Set<string>();
