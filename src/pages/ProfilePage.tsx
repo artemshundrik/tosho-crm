@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Save, Loader2, Camera, Globe, BriefcaseBusiness, Hourglass, BellRing } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { Save, Loader2, Camera, Globe, BriefcaseBusiness, Hourglass, BellRing, Send } from "lucide-react";
+import { supabase, db } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
@@ -102,6 +102,13 @@ export function ProfilePage() {
   );
   const [avatarStoragePath, setAvatarStoragePath] = useState<string | null>(null);
 
+  // Telegram-сповіщення (фаза 1)
+  const [tgChatId, setTgChatId] = useState<number | null>(null);
+  const [tgUsername, setTgUsername] = useState<string | null>(null);
+  const [tgEnabled, setTgEnabled] = useState(true);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgLinkHint, setTgLinkHint] = useState(false);
+
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
     if (!userId) return;
     setCache({
@@ -132,6 +139,109 @@ export function ProfilePage() {
      
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCache]);
+
+  const TELEGRAM_BOT_USERNAME = "ToShoCRM_bot";
+
+  const applyTelegramSettings = (data: {
+    telegram_chat_id?: number | null;
+    telegram_username?: string | null;
+    telegram_enabled?: boolean | null;
+  } | null) => {
+    setTgChatId(data?.telegram_chat_id ?? null);
+    setTgUsername(data?.telegram_username ?? null);
+    setTgEnabled(data?.telegram_enabled == null ? true : Boolean(data.telegram_enabled));
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    (async () => {
+      const { data } = await db
+        .from("user_notification_settings")
+        .select("telegram_chat_id,telegram_username,telegram_enabled")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (active) applyTelegramSettings(data);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  const handleTelegramConnect = async () => {
+    if (!userId) return;
+    setTgBusy(true);
+    try {
+      const nonce = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const { error } = await db
+        .from("telegram_link_tokens")
+        .insert({ nonce, user_id: userId, expires_at: expiresAt });
+      if (error) throw error;
+      window.open(`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${nonce}`, "_blank", "noopener");
+      setTgLinkHint(true);
+    } catch {
+      toast.error("Не вдалося створити посилання. Спробуй ще раз.");
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
+  const handleTelegramRefresh = async () => {
+    if (!userId) return;
+    setTgBusy(true);
+    try {
+      const { data } = await db
+        .from("user_notification_settings")
+        .select("telegram_chat_id,telegram_username,telegram_enabled")
+        .eq("user_id", userId)
+        .maybeSingle();
+      applyTelegramSettings(data);
+      if (data?.telegram_chat_id) {
+        setTgLinkHint(false);
+        toast.success("Telegram підключено.");
+      } else {
+        toast.message("Ще не підключено. Натисни Start у боті та онови.");
+      }
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
+  const handleTelegramDisconnect = async () => {
+    if (!userId) return;
+    setTgBusy(true);
+    try {
+      const { error } = await db
+        .from("user_notification_settings")
+        .update({ telegram_chat_id: null, telegram_enabled: false })
+        .eq("user_id", userId);
+      if (error) throw error;
+      setTgChatId(null);
+      setTgUsername(null);
+      setTgEnabled(false);
+      setTgLinkHint(false);
+      toast.success("Telegram відключено.");
+    } catch {
+      toast.error("Не вдалося відключити.");
+    } finally {
+      setTgBusy(false);
+    }
+  };
+
+  const handleTelegramToggle = async () => {
+    if (!userId || tgChatId == null) return;
+    const next = !tgEnabled;
+    setTgEnabled(next);
+    const { error } = await db
+      .from("user_notification_settings")
+      .update({ telegram_enabled: next })
+      .eq("user_id", userId);
+    if (error) {
+      setTgEnabled(!next);
+      toast.error("Не вдалося зберегти.");
+    }
+  };
 
   const getProfile = async () => {
     try {
@@ -781,6 +891,66 @@ export function ProfilePage() {
                   <Button asChild type="button" variant="outline" className="min-w-[168px]">
                     <Link to="/notifications">Відкрити</Link>
                   </Button>
+                </div>
+              </div>
+
+              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+                <div className="mb-5">
+                  <div className="text-lg font-semibold text-foreground">Telegram-сповіщення</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Отримуй сповіщення CRM у Telegram через бота @{TELEGRAM_BOT_USERNAME}.
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Send className="h-4 w-4 text-primary" />
+                        {tgChatId != null ? "Telegram підключено" : "Telegram не підключено"}
+                      </div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {tgChatId != null
+                          ? tgUsername
+                            ? `Акаунт @${tgUsername}`
+                            : "Акаунт підключено"
+                          : "Натисни «Підключити» — відкриється бот, там натисни Start."}
+                      </div>
+                    </div>
+                    {tgChatId != null ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={tgEnabled ? "primary" : "outline"}
+                          className="min-w-[132px]"
+                          onClick={handleTelegramToggle}
+                          disabled={tgBusy}
+                        >
+                          {tgEnabled ? "Увімкнено" : "Вимкнено"}
+                        </Button>
+                        <Button type="button" variant="outline" onClick={handleTelegramDisconnect} disabled={tgBusy}>
+                          Відключити
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-w-[168px]"
+                        onClick={handleTelegramConnect}
+                        disabled={tgBusy}
+                      >
+                        {tgBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Підключити Telegram"}
+                      </Button>
+                    )}
+                  </div>
+                  {tgChatId == null && tgLinkHint ? (
+                    <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                      <span>Натиснув Start у боті?</span>
+                      <Button type="button" variant="ghost" className="h-8" onClick={handleTelegramRefresh} disabled={tgBusy}>
+                        Я підключив — оновити статус
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
