@@ -1,6 +1,6 @@
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Download, ExternalLink, Eye, Trash2 } from "lucide-react";
+import { BellRing, Download, ExternalLink, Eye, MousePointerClick, Send, Trash2, UserX } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabaseClient";
+import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
 
 export type ObservabilityTone = "good" | "warning" | "danger" | "neutral";
 export type ChartRange = "1d" | "7d" | "30d" | "all";
@@ -909,6 +911,198 @@ export function BackupsTabPanel({
           </section>
         ))}
       </section>
+    </TabsContent>
+  );
+}
+
+type TelegramAdminStats = {
+  totals: { members: number; linked: number; enabled: number; notLinked: number; clickedNotLinked: number };
+  funnel: { shown: number; clicked: number; linked: number; enabled: number };
+  categoryOptOuts: Record<string, number>;
+  members: Array<{
+    userId: string;
+    name: string;
+    accessRole: string | null;
+    jobRole: string | null;
+    linked: boolean;
+    enabled: boolean;
+    linkedAt: string | null;
+    username: string | null;
+  }>;
+};
+
+const TELEGRAM_CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
+  NOTIFICATION_CATEGORIES.map((c) => [c.key, c.label])
+);
+
+function formatTelegramDate(value: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
+}
+
+export function TelegramTabPanel() {
+  const [stats, setStats] = useState<TelegramAdminStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) throw new Error("Немає активної сесії");
+        const res = await fetch("/.netlify/functions/telegram-admin-stats", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error((body as { error?: string })?.error || `HTTP ${res.status}`);
+        if (active) setStats(body as TelegramAdminStats);
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "Помилка завантаження");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const optOuts = stats ? Object.entries(stats.categoryOptOuts).filter(([, n]) => n > 0) : [];
+
+  return (
+    <TabsContent value="telegram" className="mt-6 space-y-4">
+      {loading ? (
+        <AppSectionLoader
+          label="Завантаження статистики Telegram..."
+          className="rounded-[24px] border border-border/60 bg-card/95 py-12"
+        />
+      ) : error ? (
+        <section className="rounded-[24px] border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
+          Не вдалося завантажити: {error}
+        </section>
+      ) : stats ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              icon={Send}
+              title="Підключили Telegram"
+              value={`${stats.totals.linked} / ${stats.totals.members}`}
+              hint="Прив'язали бота до акаунта"
+            />
+            <MetricCard
+              icon={BellRing}
+              title="Сповіщення увімкнені"
+              value={String(stats.totals.enabled)}
+              hint="Підключені з активним тумблером"
+            />
+            <MetricCard
+              icon={UserX}
+              title="Не підключили"
+              value={String(stats.totals.notLinked)}
+              hint="Ще не прив'язали Telegram"
+            />
+            <MetricCard
+              icon={MousePointerClick}
+              title="Перейшли, не підключили"
+              value={String(stats.totals.clickedNotLinked)}
+              hint="Тиснули «Перейти» в промо, але не завершили"
+            />
+          </div>
+
+          <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+            <div className="text-sm font-semibold text-foreground">Воронка підключення</div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              {[
+                { label: "Побачили промо", value: stats.funnel.shown },
+                { label: "Натиснули", value: stats.funnel.clicked },
+                { label: "Підключили", value: stats.funnel.linked },
+                { label: "Увімкнули", value: stats.funnel.enabled },
+              ].map((step, i, arr) => (
+                <div key={step.label} className="flex items-center gap-3">
+                  <div className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-2 text-center">
+                    <div className="text-2xl font-semibold tracking-tight text-foreground">{step.value}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{step.label}</div>
+                  </div>
+                  {i < arr.length - 1 ? <span className="text-muted-foreground">→</span> : null}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {optOuts.length ? (
+            <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+              <div className="text-sm font-semibold text-foreground">Вимкнули по категоріях</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {optOuts.map(([key, n]) => (
+                  <Badge key={key} variant="outline" className="rounded-full px-3 py-1 text-[12px] font-medium">
+                    {TELEGRAM_CATEGORY_LABEL[key] ?? key}: {n}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+            <div className="flex items-center justify-between gap-3 p-5 pb-3">
+              <div className="text-sm font-semibold text-foreground">Співробітники</div>
+              <div className="text-xs text-muted-foreground">{stats.members.length} осіб</div>
+            </div>
+            <div className="overflow-x-auto px-2 pb-2">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ім'я</TableHead>
+                    <TableHead>Роль</TableHead>
+                    <TableHead>Telegram</TableHead>
+                    <TableHead>Сповіщення</TableHead>
+                    <TableHead>Підключено</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.members.map((m) => (
+                    <TableRow key={m.userId}>
+                      <TableCell className="font-medium text-foreground">{m.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{m.jobRole || m.accessRole || "—"}</TableCell>
+                      <TableCell>
+                        {m.linked ? (
+                          <Badge variant="outline" className={cn("rounded-full", toneClasses("good"))}>
+                            {m.username ? `@${m.username}` : "Підключено"}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={cn("rounded-full", toneClasses("neutral"))}>
+                            Ні
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {!m.linked ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : m.enabled ? (
+                          <Badge variant="outline" className={cn("rounded-full", toneClasses("good"))}>
+                            Увімкнено
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={cn("rounded-full", toneClasses("warning"))}>
+                            Вимкнено
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatTelegramDate(m.linkedAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        </>
+      ) : null}
     </TabsContent>
   );
 }

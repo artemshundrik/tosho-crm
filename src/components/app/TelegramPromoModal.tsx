@@ -5,13 +5,14 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { db } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
+import { logActivity } from "@/lib/activityLogger";
 
 // Промо «Підключи Telegram-бот». Показуємо раз тим, хто ще не підключив.
 // Версіонуємо ключем: щоб показати знову при наступній хвилі — зміни на _v2.
 const PROMO_KEY = "promo_telegram_v1_dismissed";
 
 export function TelegramPromoModal() {
-  const { userId } = useAuth();
+  const { userId, teamId } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -33,6 +34,13 @@ export function TelegramPromoModal() {
         if (!active) return;
         if (data?.telegram_chat_id == null) {
           setOpen(true);
+          void logActivity({
+            teamId,
+            userId,
+            action: "telegram_promo_shown",
+            entityType: "telegram_promo",
+            metadata: { promo: PROMO_KEY },
+          });
         } else {
           // вже підключено — більше не турбуємо
           try {
@@ -47,7 +55,7 @@ export function TelegramPromoModal() {
       active = false;
       clearTimeout(timer);
     };
-  }, [userId]);
+  }, [userId, teamId]);
 
   const dismiss = () => {
     try {
@@ -59,6 +67,13 @@ export function TelegramPromoModal() {
   };
 
   const goToSettings = () => {
+    void logActivity({
+      teamId,
+      userId,
+      action: "telegram_promo_clicked",
+      entityType: "telegram_promo",
+      metadata: { promo: PROMO_KEY },
+    });
     dismiss();
     navigate("/profile");
   };

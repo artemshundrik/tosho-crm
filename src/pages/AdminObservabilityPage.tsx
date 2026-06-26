@@ -45,6 +45,9 @@ const AttachmentsTabPanel = lazy(() =>
 const BackupsTabPanel = lazy(() =>
   import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.BackupsTabPanel }))
 );
+const TelegramTabPanel = lazy(() =>
+  import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.TelegramTabPanel }))
+);
 
 type QueryStat = {
   query_text?: string | null;
@@ -337,7 +340,7 @@ export default function AdminObservabilityPage() {
   const { teamId, userId, loading: authLoading, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [backupRuns, setBackupRuns] = useState<BackupRunRow[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups" | "telegram">("overview");
   const [operationsRange, setOperationsRange] = useState<ChartRange>("7d");
   const [operationsMetric, setOperationsMetric] = useState<OperationsMetricKey>("storageTodayMb");
   const [loading, setLoading] = useState(true);
@@ -993,7 +996,7 @@ export default function AdminObservabilityPage() {
             </div>
           </section>
         ) : (
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups")} className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups" | "telegram")} className="w-full">
             {refreshError ? (
               <section className="mb-6 rounded-[24px] border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -1024,6 +1027,12 @@ export default function AdminObservabilityPage() {
                   className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Orphan files review
+                </TabsTrigger>
+                <TabsTrigger
+                  value="telegram"
+                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
+                  Telegram
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -1221,6 +1230,18 @@ export default function AdminObservabilityPage() {
                 formatBytes={formatBytes}
                 formatDateTimeShort={formatDateTimeShort}
               />
+            </Suspense>
+
+            <Suspense
+              fallback={
+                activeTab === "telegram" ? (
+                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                    <AppSectionLoader label="Завантаження статистики Telegram..." className="border-none bg-transparent py-12" />
+                  </section>
+                ) : null
+              }
+            >
+              <TelegramTabPanel />
             </Suspense>
           </Tabs>
         )}
