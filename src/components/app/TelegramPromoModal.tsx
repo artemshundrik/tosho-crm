@@ -7,9 +7,27 @@ import { db } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { logActivity } from "@/lib/activityLogger";
 
-// Промо «Підключи Telegram-бот». Показуємо раз тим, хто ще не підключив.
-// Версіонуємо ключем: щоб показати знову при наступній хвилі — зміни на _v2.
-const PROMO_KEY = "promo_telegram_v1_dismissed";
+// Промо «Підключи Telegram-бот». «Дотискаємо» незалучених: показуємо до
+// MAX_SHOWS разів із добовим інтервалом, поки не підключать. Підключив — більше
+// ніколи. Версія в ключі (_v1) — зміни на _v2, щоб запустити нову хвилю.
+const PROMO_VER = "promo_telegram_v1";
+const COUNT_KEY = `${PROMO_VER}_count`;
+const LAST_KEY = `${PROMO_VER}_last`;
+const LEGACY_KEY = `${PROMO_VER}_dismissed`;
+const MAX_SHOWS = 3;
+const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function readShowCount(): number {
+  try {
+    const raw = localStorage.getItem(COUNT_KEY);
+    if (raw != null) return Number(raw) || 0;
+    // міграція зі старого булевого прапорця: вважаємо що показ уже був 1 раз
+    if (localStorage.getItem(LEGACY_KEY) === "1") return 1;
+    return 0;
+  } catch {
+    return MAX_SHOWS; // нема доступу до storage — не нав'язуємось
+  }
+}
 
 export function TelegramPromoModal() {
   const { userId, teamId } = useAuth();
@@ -18,11 +36,16 @@ export function TelegramPromoModal() {
 
   useEffect(() => {
     if (!userId) return;
+    const count = readShowCount();
+    if (count >= MAX_SHOWS) return; // ліміт показів вичерпано
+    let last = 0;
     try {
-      if (localStorage.getItem(PROMO_KEY) === "1") return;
+      last = Number(localStorage.getItem(LAST_KEY) || "0");
     } catch {
-      // ignore storage access issues
+      return;
     }
+    if (last && Date.now() - last < COOLDOWN_MS) return; // показували нещодавно — чекаємо добу
+
     let active = true;
     const timer = setTimeout(() => {
       void (async () => {
@@ -34,17 +57,23 @@ export function TelegramPromoModal() {
         if (!active) return;
         if (data?.telegram_chat_id == null) {
           setOpen(true);
+          try {
+            localStorage.setItem(COUNT_KEY, String(count + 1));
+            localStorage.setItem(LAST_KEY, String(Date.now()));
+          } catch {
+            // ignore
+          }
           void logActivity({
             teamId,
             userId,
             action: "telegram_promo_shown",
             entityType: "telegram_promo",
-            metadata: { promo: PROMO_KEY },
+            metadata: { promo: PROMO_VER, show: count + 1 },
           });
         } else {
-          // вже підключено — більше не турбуємо
+          // вже підключено — глушимо назавжди
           try {
-            localStorage.setItem(PROMO_KEY, "1");
+            localStorage.setItem(COUNT_KEY, String(MAX_SHOWS));
           } catch {
             // ignore
           }
@@ -58,11 +87,8 @@ export function TelegramPromoModal() {
   }, [userId, teamId]);
 
   const dismiss = () => {
-    try {
-      localStorage.setItem(PROMO_KEY, "1");
-    } catch {
-      // ignore
-    }
+    // Показ уже зараховано — просто закриваємо; за добу покажемо знову, поки не
+    // вичерпано MAX_SHOWS і не підключив.
     setOpen(false);
   };
 
@@ -72,7 +98,7 @@ export function TelegramPromoModal() {
       userId,
       action: "telegram_promo_clicked",
       entityType: "telegram_promo",
-      metadata: { promo: PROMO_KEY },
+      metadata: { promo: PROMO_VER },
     });
     dismiss();
     navigate("/profile");
