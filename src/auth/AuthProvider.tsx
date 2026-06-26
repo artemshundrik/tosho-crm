@@ -87,6 +87,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Hard lockout: if the user has been offboarded (employment_status
+    // inactive/rejected) they must not stay in the app — even with a currently
+    // open tab. The RLS gates already deny their data, this forces a clean
+    // logout instead of a broken UI. Runs on every focus/visibility refresh.
+    try {
+      const { data: blocked, error: blockedError } = await supabase
+        .schema("tosho")
+        .rpc("current_user_blocked");
+      if (!blockedError && blocked === true) {
+        resetTeamContext();
+        await supabase.auth.signOut();
+        return;
+      }
+    } catch (error) {
+      // RPC not deployed yet or transient failure — fall through, never lock a
+      // legitimate user out because the check itself errored.
+      console.error("Failed to check access lockout", error);
+    }
+
     if (options?.forceRefresh) {
       invalidateWorkspaceResolution(effectiveUserId);
     }
