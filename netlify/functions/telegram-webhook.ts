@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
   answerTelegramCallback,
@@ -237,13 +238,24 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
   await answerTelegramCallback(cb.id, toastText);
 }
 
+function secretMatches(expected: string, got: string | undefined): boolean {
+  if (!got) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(got);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && event.httpMethod !== "POST") return ok();
 
+  // Fail-closed: без налаштованого секрету вебхук не приймає жодного апдейту,
+  // інакше будь-хто міг би слати фейкові апдейти на публічний ендпоінт.
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (expectedSecret) {
-    const got = event.headers?.["x-telegram-bot-api-secret-token"];
-    if (got !== expectedSecret) return { statusCode: 401, body: "unauthorized" };
+  if (!expectedSecret) return { statusCode: 401, body: "unauthorized" };
+  const got = event.headers?.["x-telegram-bot-api-secret-token"];
+  if (!secretMatches(expectedSecret, got)) {
+    return { statusCode: 401, body: "unauthorized" };
   }
 
   let update: TelegramUpdate;
