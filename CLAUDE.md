@@ -8,10 +8,11 @@ Claude Code uses the same project guidance as Codex. **Read [AGENTS.md](AGENTS.m
 2. [docs/CODEX_PROJECT_GUIDE.md](docs/CODEX_PROJECT_GUIDE.md) — project snapshot, directory map, navigation surfaces, canonical product areas
 3. [docs/DB_MAP.md](docs/DB_MAP.md) — schema/roles/storage/cross-table behavior
 4. [docs/CODEX_WORKFLOWS.md](docs/CODEX_WORKFLOWS.md) — implementation + verification patterns per task type
-5. Current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
-6. Tracked SQL in `scripts/*.sql`
-7. Ops/handoff docs (`docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, etc.)
-8. Local machine state for machine-specific tasks
+5. [docs/SECURITY.md](docs/SECURITY.md) — security baseline + pre-merge checklist for RLS/storage/functions/auth/secrets/webhooks
+6. Current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
+7. Tracked SQL in `scripts/*.sql`
+8. Ops/handoff docs (`docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, etc.)
+9. Local machine state for machine-specific tasks
 
 If older docs conflict with current code, current code wins.
 
@@ -31,7 +32,7 @@ If older docs conflict with current code, current code wins.
 
 Most skills auto-trigger from request wording. These two are easy to miss and matter here:
 
-- **`/security-review`** — run before declaring done on any change that touches auth, RLS, Netlify Functions, privileged Supabase writes, attachment ACLs, or admin observability. This repo has plenty of those surfaces.
+- **`/security-review`** — run before declaring done on any change that touches auth, RLS, Netlify Functions, privileged Supabase writes, attachment ACLs, or admin observability. This repo has plenty of those surfaces. Pair it with the baseline + pre-merge checklist in [docs/SECURITY.md](docs/SECURITY.md).
 - **`/review`** — run before opening a PR with multi-file changes or any quote/order/design-workflow logic. Independent second opinion catches the cross-file regressions our giant pages tend to hide.
 
 UI work auto-triggers `ui-ux-pro-max`; backend/Supabase work auto-triggers `anthropic-skills:server` — no need to invoke manually.

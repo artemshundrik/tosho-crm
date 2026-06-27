@@ -7,13 +7,14 @@ This repository has project-specific Codex guidance. Start here before broad exp
 1. Read [docs/CODEX_PROJECT_GUIDE.md](/Users/artem/Projects/tosho-crm/docs/CODEX_PROJECT_GUIDE.md).
 2. If the task touches schema, roles, storage, observability, or cross-table behavior, read [docs/DB_MAP.md](/Users/artem/Projects/tosho-crm/docs/DB_MAP.md).
 3. For implementation and verification patterns, read [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md).
+4. If the task touches RLS, storage buckets, Netlify functions, auth, privileged Supabase writes, secrets, or webhooks, read [docs/SECURITY.md](/Users/artem/Projects/tosho-crm/docs/SECURITY.md) and run its pre-merge checklist.
 
 ## Trust Order
 
 When sources disagree, use this order:
 
 1. `AGENTS.md`
-2. `docs/CODEX_PROJECT_GUIDE.md`, `docs/DB_MAP.md`, `docs/CODEX_WORKFLOWS.md`
+2. `docs/CODEX_PROJECT_GUIDE.md`, `docs/DB_MAP.md`, `docs/CODEX_WORKFLOWS.md`, `docs/SECURITY.md`
 3. current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
 4. tracked SQL scripts in `scripts/*.sql`
 5. operational or handoff docs such as `docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, `docs/DIRECTOR_ACCESS_HANDOFF.md`, `docs/HANDOFF_SIMPLE_TEMPLATE_UA.md`, `docs/ONEPASSWORD_FILL_CHECKLIST.md`
@@ -29,6 +30,7 @@ When sources disagree, use this order:
 - Design tasks are primarily `activity_log`-backed entities with metadata, not a simple `design_tasks` table. Confirm this model before changing design flows.
 - Orders/production screens use derived records assembled in `src/features/orders/orderRecords.ts`; do not assume `tosho.orders` alone explains the UI.
 - For user-initiated server actions, prefer the established pattern: user-scoped auth/RLS check first, privileged write second.
+- Security is a required review dimension for any change touching RLS, storage, Netlify functions, auth, secrets, or webhooks: every new table needs RLS (deny-by-default, never RLS-off with anon/authenticated grants); every function must verify the JWT AND authorize the action (never trust body-supplied user_id/role); webhooks fail closed. Follow [docs/SECURITY.md](/Users/artem/Projects/tosho-crm/docs/SECURITY.md) and prove isolation by simulating roles in `psql` (`set role anon` / `set_config('request.jwt.claims', ...)`), don't eyeball it.
 - When a change adds or updates tracked SQL in `scripts/*.sql`, apply the migration yourself against the configured Supabase/Postgres database using available local credentials such as `.env.backup`/`BACKUP_DB_URL` and `psql`; do not ask the user to run SQL manually unless database access is actually blocked.
 - Be conservative around permissions, route/module access, quote workflow state, design-task metadata contracts, attachment deletion, and admin observability queries.
 - Treat performance as a required review dimension for every change. Reuse caches/directories before adding queries, avoid N+1 lookups or broad unbounded reads, and sanity-check whether the first render now does more work than before.
