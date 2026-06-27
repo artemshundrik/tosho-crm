@@ -8,6 +8,7 @@ type RequestBody = {
   href?: string | null;
   type?: "info" | "success" | "warning";
   dedupeByHref?: boolean;
+  category?: string;
 };
 
 type HttpEvent = {
@@ -98,8 +99,16 @@ export const handler = async (event: HttpEvent) => {
     type: payload.type ?? "info",
   }));
 
+  // Категорія для гейтингу каналів: явна або виведена з href.
+  // Дизайн-сповіщення мають href виду «/design/...» → категорія "design".
+  const category =
+    payload.category ?? (typeof payload.href === "string" && payload.href.startsWith("/design") ? "design" : undefined);
+
   try {
-    const result = await deliverNotifications(adminClient, rows, { dedupeByHref: payload.dedupeByHref === true });
+    const result = await deliverNotifications(adminClient, rows, {
+      dedupeByHref: payload.dedupeByHref === true,
+      category,
+    });
     return jsonResponse(200, { success: true, ...result });
   } catch (error) {
     return jsonResponse(500, {

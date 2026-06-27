@@ -7,6 +7,7 @@ export type NotificationCategoryKey =
   | "customer_followup"
   | "quote_deadline"
   | "quote_comment"
+  | "design"
   | "contractor"
   | "team_events"
   | "probation"
@@ -33,6 +34,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "quote_comment",
     label: "Коментарі у прорахунках",
     description: "Нові коментарі та згадки у прорахунках",
+  },
+  {
+    key: "design",
+    label: "Дизайн-задачі",
+    description: "Згадки, коментарі та статуси у дизайн-задачах",
   },
   {
     key: "contractor",
@@ -67,12 +73,16 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const job = (ctx.jobRole ?? "").trim().toLowerCase();
   const isPrivileged = access === "owner" || access === "admin" || job === "seo";
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
+  const isDesigner = job === "designer" || job === "дизайнер";
   switch (key) {
     // Універсальні / персональні — бачать усі.
     case "team_events":
     case "probation":
     case "employment":
       return true;
+    // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
+    case "design":
+      return isQuoteWorker || isDesigner;
     // Збут / прорахунки / контрагенти — лише ті, хто з цим працює.
     case "customer_followup":
     case "quote_deadline":
