@@ -671,6 +671,25 @@ export const handler = async (event: HttpEvent) => {
 
   const accessRole = payload.accessRole || "member";
   const jobRole = payload.jobRole ?? null;
+
+  // Authorization: only owner/admin may create invites; only owner may invite an owner.
+  const { data: actorMembership, error: actorMembershipError } = await userClient
+    .schema("tosho")
+    .from("memberships_view")
+    .select("access_role,job_role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userData.user.id)
+    .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+  if (actorMembershipError) {
+    return jsonResponse(500, { error: actorMembershipError.message });
+  }
+  if (!canManageTeam(actorMembership)) {
+    return jsonResponse(403, { error: "Only Super Admin or Admin can invite members" });
+  }
+  if ((actorMembership?.access_role ?? null) !== "owner" && accessRole === "owner") {
+    return jsonResponse(403, { error: "Admin cannot invite a Super Admin" });
+  }
+
   const expiresInDays =
     typeof payload.expiresInDays === "number" && payload.expiresInDays > 0
       ? payload.expiresInDays

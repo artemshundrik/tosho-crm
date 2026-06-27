@@ -1,8 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
 import { dropboxService } from "./_lib/dropbox.service";
 
 type HttpEvent = {
   httpMethod?: string;
   body?: string | null;
+  headers?: Record<string, string | undefined> | null;
   queryStringParameters?: Record<string, string | undefined> | null;
 };
 
@@ -11,7 +13,7 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
     statusCode,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
@@ -50,6 +52,28 @@ export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {
     return jsonResponse(405, { error: "Method Not Allowed" });
+  }
+
+  // Auth: any signed-in member may inspect/create Dropbox folders for their work.
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) {
+    return jsonResponse(500, { error: "Missing Supabase env vars" });
+  }
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
+  const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : null;
+  if (!token) {
+    return jsonResponse(401, { error: "Unauthorized" });
+  }
+  const userClient = createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userData, error: userError } = await userClient.auth.getUser();
+  if (userError || !userData?.user) {
+    return jsonResponse(401, { error: "Unauthorized" });
   }
 
   const payload = readPayload(event);

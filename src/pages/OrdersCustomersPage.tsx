@@ -811,10 +811,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
   );
 
   const ensureCustomerDropboxFolders = useCallback(async (clientName: string) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
     const response = await fetch("/.netlify/functions/dropbox-manage", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
         action: "create-client",
@@ -831,8 +834,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
   }, []);
 
   const inspectCustomerDropboxFolder = useCallback(async (clientPath: string) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
     const response = await fetch(
-      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(normalizeCustomerDropboxPath(clientPath))}`
+      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(normalizeCustomerDropboxPath(clientPath))}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
     );
     const payload = (await response.json().catch(() => null)) as DropboxManageCreateClientResponse | null;
     if (!response.ok || !payload?.ok) {

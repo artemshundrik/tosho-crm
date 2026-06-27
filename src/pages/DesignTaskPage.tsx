@@ -7469,8 +7469,11 @@ export default function DesignTaskPage() {
   }, [latestDropboxExportedAt]);
 
   const inspectDropboxFolder = useCallback(async (path: string) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
     const response = await fetch(
-      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(path)}`
+      `/.netlify/functions/dropbox-manage?action=inspect&path=${encodeURIComponent(path)}`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
     );
     const payload = (await response.json().catch(() => null)) as { sharedUrl?: string | null; error?: string | null } | null;
     if (!response.ok || !payload) {
@@ -7531,10 +7534,13 @@ export default function DesignTaskPage() {
       setDropboxFolderError(null);
       setDropboxExporting(true);
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
         const response = await fetch("/.netlify/functions/dropbox-manage", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             action: "create-client",
@@ -7679,10 +7685,13 @@ export default function DesignTaskPage() {
         throw new Error("Сесія закінчилась. Увійдіть знову, щоб експортувати в Dropbox.");
       }
 
+      const { data: projectSessionData } = await supabase.auth.getSession();
+      const projectToken = projectSessionData.session?.access_token;
       const projectResponse = await fetch("/.netlify/functions/dropbox-manage", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(projectToken ? { Authorization: `Bearer ${projectToken}` } : {}),
         },
         body: JSON.stringify({
           action: "create-project",
