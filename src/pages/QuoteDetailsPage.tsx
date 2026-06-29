@@ -6414,8 +6414,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                                              Бажаний заробіток
+                                            <Label className="block text-[11px] uppercase leading-tight tracking-wide text-muted-foreground">
+                                              Бажаний особистий заробіток
                                             </Label>
                                             <Input
                                               type="number"
