@@ -81,6 +81,23 @@ Schedule behavior:
 bash scripts/backup-storage-and-upload.sh
 ```
 
+Storage backup keeps a persistent local mirror at `${BACKUP_STORAGE_ROOT}/.mirror/<bucket>`
+(default `backups/storage/.mirror/<bucket>`). Each run does `aws s3 sync --delete` into
+that mirror, so only new/changed objects are downloaded — the weekly run transfers just
+the delta instead of re-pulling every bucket. The dated `*-storage.tar.gz` archive is then
+built from hardlinks into the mirror (no extra download, ~no extra disk until tar compresses).
+
+Notes:
+- The **first** run after introducing the mirror downloads everything once (mirror is empty);
+  every run afterwards is delta-only. This was the fix for the Supabase "Disk IO Budget" /
+  Storage Egress spikes — previously sync targeted a throwaway timestamped dir, so it
+  re-downloaded all objects (~18GB) every Sunday.
+- The mirror costs ~one bucket's worth of local disk persistently. It is excluded from the
+  tar archive and from the `*.tar.gz` retention prune. Safe to delete to reclaim space — the
+  next run just re-mirrors (one full egress pull again).
+- `--delete` makes the mirror a faithful snapshot of current bucket state. History of objects
+  deleted from storage is still preserved in the older dated archives (retention: 8 weekly).
+
 ## 5. Run restore
 
 Set restore target DB and explicit confirmation:

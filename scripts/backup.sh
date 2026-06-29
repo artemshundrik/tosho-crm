@@ -87,6 +87,17 @@ if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" ]]; then
   export AWS_MAX_ATTEMPTS="${AWS_MAX_ATTEMPTS:-5}"
   export AWS_RETRY_MODE="${AWS_RETRY_MODE:-adaptive}"
 
+  # Persistent local mirror of the buckets. `aws s3 sync` only transfers objects
+  # whose size/mtime differ from the destination, so syncing into a stable mirror
+  # makes each run download just the weekly delta. Previously we synced straight
+  # into the throwaway timestamped WORK_DIR, which is empty every run — so sync
+  # re-downloaded EVERY object each time, turning a weekly backup into a full
+  # ~18GB egress spike that drained the Supabase Disk IO budget. The dated archive
+  # is built from hardlinks into the mirror (see below): no extra download, and
+  # ~no extra disk until tar compresses it.
+  STORAGE_MIRROR_ROOT="${STORAGE_MIRROR_ROOT:-${BACKUP_ROOT}/.mirror}"
+  mkdir -p "${STORAGE_MIRROR_ROOT}"
+
   OLDIFS="$IFS"
   IFS=','
   read -r -a BUCKETS <<< "${STORAGE_BUCKETS}"
@@ -100,7 +111,19 @@ if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" ]]; then
       echo "  - skipping missing or inaccessible bucket: ${bucket}"
       continue
     fi
-    aws --endpoint-url "${STORAGE_S3_ENDPOINT}" s3 sync "s3://${bucket}" "${WORK_DIR}/storage/${bucket}" --only-show-errors
+    mirror_dir="${STORAGE_MIRROR_ROOT}/${bucket}"
+    mkdir -p "${mirror_dir}"
+    # Delta-only download: reconcile the mirror with the live bucket. --delete keeps
+    # the mirror a faithful snapshot of current bucket state (objects deleted from
+    # storage are dropped locally too); point-in-time history of those objects is
+    # still preserved in the older dated archives we keep.
+    aws --endpoint-url "${STORAGE_S3_ENDPOINT}" s3 sync "s3://${bucket}" "${mirror_dir}" --delete --only-show-errors
+    # Snapshot the mirror into this run's archive tree. Hardlinks cost no download
+    # and no extra disk (same inodes); fall back to a real copy if the mirror and
+    # work dir somehow land on different filesystems.
+    if ! cp -al "${mirror_dir}" "${WORK_DIR}/storage/${bucket}" 2>/dev/null; then
+      cp -a "${mirror_dir}" "${WORK_DIR}/storage/${bucket}"
+    fi
   done
 fi
 
