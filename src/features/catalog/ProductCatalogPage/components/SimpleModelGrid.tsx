@@ -4,6 +4,7 @@
  * Grid display of models using SimpleModelCard
  */
 
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, PackageSearch, Search } from "lucide-react";
 import { SimpleModelCard } from "./SimpleModelCard";
@@ -20,7 +21,7 @@ interface SimpleModelGridProps {
   onClearFilters: () => void;
 }
 
-export function SimpleModelGrid({
+function SimpleModelGridBase({
   filteredModels,
   globalSearch,
   hasActiveSelection,
@@ -36,9 +37,9 @@ export function SimpleModelGrid({
         <div className="rounded-full bg-muted/30 p-6 mb-4">
           <PackageSearch className="h-12 w-12 text-muted-foreground/40" />
         </div>
-        <p className="text-lg font-medium text-muted-foreground mb-2">Оберіть вид у каталозі</p>
+        <p className="text-lg font-medium text-muted-foreground mb-2">Оберіть категорію або вид</p>
         <p className="text-sm text-muted-foreground/60 mb-4">
-          На старті каталог більше не відкриває першу позицію автоматично.
+          Виберіть категорію чи вид зліва, щоб переглянути моделі.
         </p>
       </div>
     );
@@ -51,7 +52,7 @@ export function SimpleModelGrid({
           <Loader2 className="h-12 w-12 animate-spin text-muted-foreground/40" />
         </div>
         <p className="text-lg font-medium text-muted-foreground mb-2">Завантажуємо моделі</p>
-        <p className="text-sm text-muted-foreground/60">Підтягуємо тільки вибраний вид, а не весь каталог.</p>
+        <p className="text-sm text-muted-foreground/60">Готуємо каталог продукції.</p>
       </div>
     );
   }
@@ -91,3 +92,5 @@ export function SimpleModelGrid({
     </div>
   );
 }
+
+export const SimpleModelGrid = memo(SimpleModelGridBase);

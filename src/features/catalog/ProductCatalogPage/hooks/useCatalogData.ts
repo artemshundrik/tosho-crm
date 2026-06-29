@@ -142,12 +142,22 @@ export function useCatalogData(teamId: string | null) {
         return { models: [], modelMethods: [], tiers: [] };
       }
 
-      const [{ data: modelMethodRows, error: modelMethodError }] =
-        await Promise.all([
-          supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds),
-        ]);
+      // Methods + price tiers fetched in parallel, each a single batched query
+      // (model_id IN [...]) — fixed query count regardless of catalog size.
+      const [
+        { data: modelMethodRows, error: modelMethodError },
+        { data: tierRows, error: tierError },
+      ] = await Promise.all([
+        supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds),
+        supabase
+          .schema("tosho")
+          .from("catalog_price_tiers")
+          .select("id,model_id,min_qty,max_qty,price")
+          .in("model_id", modelIds),
+      ]);
 
       if (modelMethodError) throw modelMethodError;
+      if (tierError) throw tierError;
 
       return {
         models: (modelRows ?? []) as Array<{
@@ -159,7 +169,13 @@ export function useCatalogData(teamId: string | null) {
           metadata?: unknown;
         }>,
         modelMethods: (modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>,
-        tiers: [],
+        tiers: (tierRows ?? []) as Array<{
+          id: string;
+          model_id: string;
+          min_qty: number;
+          max_qty: number | null;
+          price: number;
+        }>,
       };
     },
     [teamId]

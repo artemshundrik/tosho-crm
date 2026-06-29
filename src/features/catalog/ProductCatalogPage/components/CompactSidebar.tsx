@@ -9,8 +9,22 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, Edit2, Package, Plus, Printer, Shirt } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer, Shirt } from "lucide-react";
 import type { CatalogType, QuoteType } from "@/types/catalog";
+
+/** Small amber pill showing how many models in a category/kind are incomplete. */
+function IncompleteBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 text-[10px] font-semibold leading-none text-amber-500"
+      title={`${count} незавершених`}
+    >
+      <AlertTriangle className="h-2.5 w-2.5" />
+      {count}
+    </span>
+  );
+}
 
 interface CompactSidebarProps {
   catalog: CatalogType[];
@@ -18,6 +32,8 @@ interface CompactSidebarProps {
   selectedKindId: string;
   totalModels: number;
   incompleteModels: number;
+  incompleteByType?: Map<string, number>;
+  incompleteByKind?: Map<string, number>;
   onSelectType: (typeId: string) => void;
   onSelectKind: (kindId: string) => void;
   onAddType: (quoteType?: QuoteType) => void;
@@ -32,6 +48,8 @@ export function CompactSidebar({
   selectedKindId,
   totalModels,
   incompleteModels,
+  incompleteByType,
+  incompleteByKind,
   onSelectType,
   onSelectKind,
   onAddType,
@@ -190,6 +208,7 @@ export function CompactSidebar({
                                 className="flex-1 flex items-center gap-2 text-left min-w-0"
                               >
                                 <span className="font-medium truncate">{type.name}</span>
+                                <IncompleteBadge count={incompleteByType?.get(type.id) ?? 0} />
                               </button>
                               {onEditType && (
                                 <button
@@ -231,13 +250,16 @@ export function CompactSidebar({
                                         className="flex-1 flex items-center justify-between gap-2 text-left min-w-0"
                                       >
                                         <span className="truncate">{kind.name}</span>
-                                        <span
-                                          className={cn(
-                                            "text-xs tabular-nums shrink-0",
-                                            isKindSelected ? "text-primary/70" : "text-muted-foreground/50"
-                                          )}
-                                        >
-                                          {kind.modelCount}
+                                        <span className="flex shrink-0 items-center gap-1.5">
+                                          <IncompleteBadge count={incompleteByKind?.get(kind.id) ?? 0} />
+                                          <span
+                                            className={cn(
+                                              "text-xs tabular-nums",
+                                              isKindSelected ? "text-primary/70" : "text-muted-foreground/50"
+                                            )}
+                                          >
+                                            {kind.modelCount}
+                                          </span>
                                         </span>
                                       </button>
                                       {onEditKind && (

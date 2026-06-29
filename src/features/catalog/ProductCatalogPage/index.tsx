@@ -8,7 +8,7 @@
  * sub-components for a modular architecture.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AlertCircle } from "lucide-react";
@@ -35,6 +35,21 @@ import { CompactSidebar } from "./components/CompactSidebar";
 import { ContentHeader } from "./components/ContentHeader";
 import { SearchBar } from "./components/SearchBar";
 import { SimpleModelGrid } from "./components/SimpleModelGrid";
+
+/**
+ * Returns a callback whose identity never changes but always calls the latest
+ * `fn`. Lets us pass stable handlers to memoized cards without rewriting the
+ * large useModelEditor hook to wrap every handler in useCallback.
+ */
+function useStableCallback<Args extends unknown[]>(fn: (...args: Args) => unknown) {
+  const ref = useRef(fn);
+  useEffect(() => {
+    ref.current = fn;
+  });
+  return useCallback((...args: Args) => {
+    ref.current(...args);
+  }, []);
+}
 
 export default function ProductCatalogPage() {
   // View mode state
@@ -63,22 +78,22 @@ export default function ProductCatalogPage() {
     catalogLoading,
     catalogModelsLoading,
     catalogError,
-    ensureKindModelsLoaded,
     ensureAllModelsLoaded,
   } = useCatalogData(teamId);
 
   // Initialize filters (will auto-select first type/kind when catalog loads)
   const filters = useFilters({ catalog });
 
+  // Eagerly load the whole catalog's models in the background as soon as the
+  // metadata is in. This makes validation/error badges accurate GLOBALLY (not
+  // only for the kind you clicked). It's cheap: a fixed ~3 batched queries
+  // regardless of catalog size, and it runs once (guarded internally). Depending
+  // on `catalog` re-triggers it after a stale background refresh resets models.
   useEffect(() => {
-    if (filters.globalSearch.trim()) {
+    if (catalog.length > 0) {
       void ensureAllModelsLoaded();
-      return;
     }
-    if (filters.selectedKindId) {
-      void ensureKindModelsLoaded(filters.selectedKindId);
-    }
-  }, [ensureAllModelsLoaded, ensureKindModelsLoaded, filters.globalSearch, filters.selectedKindId]);
+  }, [catalog, ensureAllModelsLoaded]);
 
   // Bulk selection (for table view)
   const bulkSelection = useBulkSelection({
@@ -112,6 +127,17 @@ export default function ProductCatalogPage() {
       .find((t) => t.id === modelEditor.draftTypeId)
       ?.kinds.find((k) => k.id === modelEditor.draftKindId)?.methods ?? [];
   }, [catalog, modelEditor.draftTypeId, modelEditor.draftKindId]);
+
+  // Stable handlers so the memoized model grid/cards don't re-render when the
+  // page re-renders for unrelated reasons (dialogs, hover, search typing).
+  const handleGridClone = useStableCallback(modelEditor.handleCloneModel);
+  const handleGridEdit = useStableCallback(modelEditor.openEditDrawer);
+  const handleGridDelete = useStableCallback(modelEditor.confirmDeleteModel);
+  const { setGlobalSearch, setShowOnlyIncomplete } = filters;
+  const handleClearFilters = useCallback(() => {
+    setGlobalSearch("");
+    setShowOnlyIncomplete(false);
+  }, [setGlobalSearch, setShowOnlyIncomplete]);
 
   // Command Palette
   const commandPalette = useCommandPalette({
@@ -336,7 +362,7 @@ export default function ProductCatalogPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
+    <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
       <div className="min-h-0 flex-1 overflow-hidden rounded-[var(--radius-section)] border border-border bg-card/60">
         {/* Main Layout: Sidebar + Content */}
         <div className="flex h-full min-h-0">
@@ -347,6 +373,8 @@ export default function ProductCatalogPage() {
             selectedKindId={filters.selectedKindId}
             totalModels={filters.totalModels}
             incompleteModels={filters.incompleteModels}
+            incompleteByType={filters.incompleteByType}
+            incompleteByKind={filters.incompleteByKind}
             onSelectType={handleSelectType}
             onSelectKind={handleSelectKind}
             onAddType={categoryManager.openAddType}
@@ -399,13 +427,10 @@ export default function ProductCatalogPage() {
                 globalSearch={filters.globalSearch}
                 hasActiveSelection={!!filters.selectedKindId || !!filters.globalSearch.trim()}
                 loading={catalogModelsLoading}
-                onClone={modelEditor.handleCloneModel}
-                onEdit={modelEditor.openEditDrawer}
-                onDelete={modelEditor.confirmDeleteModel}
-                onClearFilters={() => {
-                  filters.setGlobalSearch("");
-                  filters.setShowOnlyIncomplete(false);
-                }}
+                onClone={handleGridClone}
+                onEdit={handleGridEdit}
+                onDelete={handleGridDelete}
+                onClearFilters={handleClearFilters}
               />
             </div>
           </section>

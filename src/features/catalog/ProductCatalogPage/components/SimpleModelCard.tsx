@@ -4,7 +4,7 @@
  * Simplified model card matching the reference design with product type placeholder
  */
 
-import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { memo, useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ interface SimpleModelCardProps {
   onDelete: (modelId: string) => void;
 }
 
-export function SimpleModelCard({
+function SimpleModelCardBase({
   item,
   onEdit,
   onClone,
@@ -220,6 +220,8 @@ export function SimpleModelCard({
             src={displayImageUrl}
             alt={displayTitle}
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
             onError={() => markImageFailed(displayImageUrl)}
           />
         ) : (
@@ -348,3 +350,10 @@ export function SimpleModelCard({
     </div>
   );
 }
+
+/**
+ * Memoized so a card only re-renders when its own model/validation or the
+ * (now stable) action callbacks change — not on every parent state change
+ * (hover, search typing, selection). Keeps the full grid cheap to re-render.
+ */
+export const SimpleModelCard = memo(SimpleModelCardBase);

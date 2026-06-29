@@ -94,6 +94,19 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
   const totalModels = allModelsWithContext.length;
   const incompleteModels = allModelsWithContext.filter((item) => !item.validation.isValid).length;
 
+  // Per-kind / per-type counts of incomplete models, so the sidebar can show
+  // error badges on every category without the user clicking into it.
+  const { incompleteByKind, incompleteByType } = useMemo(() => {
+    const byKind = new Map<string, number>();
+    const byType = new Map<string, number>();
+    allModelsWithContext.forEach((item) => {
+      if (item.validation.isValid) return;
+      byKind.set(item.kindId, (byKind.get(item.kindId) ?? 0) + 1);
+      byType.set(item.typeId, (byType.get(item.typeId) ?? 0) + 1);
+    });
+    return { incompleteByKind: byKind, incompleteByType: byType };
+  }, [allModelsWithContext]);
+
   return {
     selectedTypeId,
     setSelectedTypeId,
@@ -109,6 +122,8 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
     selectedKind,
     totalModels,
     incompleteModels,
+    incompleteByKind,
+    incompleteByType,
     allModelsWithContext,
   };
 }
