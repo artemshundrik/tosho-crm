@@ -22,6 +22,38 @@ type QuoteReminderRow = {
 const REMINDER_LOOKBACK_DAYS = 30;
 const DEADLINE_SCAN_AHEAD_DAYS = 35;
 const EXISTING_NOTIFICATION_LOOKBACK_DAYS = 45;
+// Internal quote deadlines are stored as "floating" wall-clock times — the time
+// the user picked (e.g. 10:00) labelled with a +00 offset rather than a true UTC
+// instant. To fire the reminder at the right real-world moment we reinterpret
+// that wall clock in the company timezone (DST-aware).
+const DEADLINE_TIME_ZONE = "Europe/Kiev";
+
+function zonedWallClockOffsetMs(utcMs: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return asUtc - utcMs;
+}
+
+function wallClockToInstant(value: string, timeZone: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return new Date(value);
+  const [, y, mo, d, hh, mm, ss] = match;
+  const base = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(hh), Number(mm), Number(ss ?? "0"));
+  let instant = base - zonedWallClockOffsetMs(base, timeZone);
+  // refine once so DST-transition boundaries resolve correctly
+  instant = base - zonedWallClockOffsetMs(instant, timeZone);
+  return new Date(instant);
+}
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -151,7 +183,7 @@ export const handler = async (event: HttpEvent) => {
       if (!quote.id || !quote.deadline_at) continue;
       if (["approved", "cancelled"].includes((quote.status ?? "").trim().toLowerCase())) continue;
 
-      const deadline = new Date(quote.deadline_at);
+      const deadline = wallClockToInstant(quote.deadline_at, DEADLINE_TIME_ZONE);
       if (Number.isNaN(deadline.getTime())) continue;
 
       const offsetMinutes = Number(quote.deadline_reminder_offset_minutes ?? NaN);

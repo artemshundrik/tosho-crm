@@ -1659,8 +1659,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const parseDeadlineDate = (value?: string | null) => {
     if (!value) return null;
+    // Deadlines are stored as floating wall-clock times; ignore any trailing
+    // timezone offset (e.g. "+00:00"/"Z") and read the wall-clock components.
     const dateTimeMatch = value.match(
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/
     );
     if (dateTimeMatch) {
       const [, y, m, d, hh, mm, ss] = dateTimeMatch;
