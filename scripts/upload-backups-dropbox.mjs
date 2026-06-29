@@ -10,12 +10,67 @@ const DROPBOX_API_BASE_URL = "https://api.dropboxapi.com/2";
 const DROPBOX_CONTENT_API_BASE_URL = "https://content.dropboxapi.com/2";
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 const CHUNK_SIZE = 8 * 1024 * 1024;
+// Backups run from a laptop on a flaky link: a single transient blip (429, 5xx,
+// reset socket) must not kill a multi-GB upload that has no resume. Retry with
+// backoff, honor Retry-After, and bound every request so a stalled socket can't
+// hang the whole launchd run forever. All request bodies here are Buffers or
+// strings, so re-sending them across attempts is safe.
+const MAX_RETRY_ATTEMPTS = Math.max(1, Number(process.env.DROPBOX_MAX_RETRY_ATTEMPTS ?? 5));
+const REQUEST_TIMEOUT_MS = Math.max(30_000, Number(process.env.DROPBOX_REQUEST_TIMEOUT_MS ?? 5 * 60 * 1000));
+const MAX_BACKOFF_MS = 30 * 1000;
 
 let cachedAccessToken = null;
 let cachedRootNamespaceId = null;
 
 async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetriableStatus(status) {
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+function backoffDelayMs(attempt, response) {
+  const retryAfter = response?.headers?.get?.("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, MAX_BACKOFF_MS);
+  }
+  const base = Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS);
+  return base + Math.floor(Math.random() * 500);
+}
+
+// Single network entry point for every Dropbox call. Retries transient failures
+// (network errors, timeouts, 429, 5xx) and returns the Response so the caller can
+// read the body exactly once. Non-retriable 4xx (auth, path/conflict, not_found)
+// are returned as-is for the caller's existing error handling.
+async function dropboxFetch(url, init, label) {
+  let lastError = null;
+  for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+    let response;
+    try {
+      response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= MAX_RETRY_ATTEMPTS - 1) throw error;
+      const delay = backoffDelayMs(attempt, null);
+      console.warn(`Dropbox ${label} network error (${error?.message ?? error}); retry ${attempt + 1}/${MAX_RETRY_ATTEMPTS} in ${Math.round(delay / 1000)}s`);
+      await sleep(delay);
+      continue;
+    }
+
+    if (isRetriableStatus(response.status) && attempt < MAX_RETRY_ATTEMPTS - 1) {
+      const delay = backoffDelayMs(attempt, response);
+      await response.arrayBuffer().catch(() => {}); // drain so the socket can be reused
+      console.warn(`Dropbox ${label} got HTTP ${response.status}; retry ${attempt + 1}/${MAX_RETRY_ATTEMPTS} in ${Math.round(delay / 1000)}s`);
+      await sleep(delay);
+      continue;
+    }
+
+    return response;
+  }
+
+  throw lastError ?? new Error(`Dropbox ${label} failed after ${MAX_RETRY_ATTEMPTS} attempts`);
 }
 
 function loadEnvFile(filePath) {
@@ -79,7 +134,7 @@ async function refreshAccessToken() {
   const appSecret = requireEnv("DROPBOX_APP_SECRET");
   const refreshToken = requireEnv("DROPBOX_REFRESH_TOKEN");
 
-  const response = await fetch("https://api.dropboxapi.com/oauth2/token", {
+  const response = await dropboxFetch("https://api.dropboxapi.com/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -88,7 +143,7 @@ async function refreshAccessToken() {
       client_id: appKey,
       client_secret: appSecret,
     }),
-  });
+  }, "token refresh");
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.access_token) {
@@ -116,14 +171,14 @@ async function getAccessToken() {
 async function getRootNamespaceId() {
   if (cachedRootNamespaceId) return cachedRootNamespaceId;
   const accessToken = await getAccessToken();
-  const response = await fetch(`${DROPBOX_API_BASE_URL}/users/get_current_account`, {
+  const response = await dropboxFetch(`${DROPBOX_API_BASE_URL}/users/get_current_account`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
     body: "null",
-  });
+  }, "get_current_account");
 
   const payload = await response.json().catch(() => null);
   const rootNamespaceId = payload?.root_info?.root_namespace_id;
@@ -150,11 +205,11 @@ async function dropboxApiRequest(apiPath, body, options = {}) {
     });
   }
 
-  const response = await fetch(`${DROPBOX_API_BASE_URL}${apiPath}`, {
+  const response = await dropboxFetch(`${DROPBOX_API_BASE_URL}${apiPath}`, {
     method: "POST",
     headers,
     body: body === null ? "null" : JSON.stringify(body),
-  });
+  }, apiPath);
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -171,7 +226,7 @@ async function dropboxApiRequest(apiPath, body, options = {}) {
 async function dropboxContentRequest(apiPath, body, apiArg) {
   const accessToken = await getAccessToken();
   const rootNamespaceId = await getRootNamespaceId();
-  const response = await fetch(`${DROPBOX_CONTENT_API_BASE_URL}${apiPath}`, {
+  const response = await dropboxFetch(`${DROPBOX_CONTENT_API_BASE_URL}${apiPath}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -183,7 +238,7 @@ async function dropboxContentRequest(apiPath, body, apiArg) {
       }),
     },
     body,
-  });
+  }, apiPath);
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {

@@ -226,6 +226,18 @@ Retention:
 - Storage monthly: keep 6
 - Local Storage archives: keep 8
 
+Upload resilience: every Dropbox API/content call retries transient failures
+(network errors, request timeouts, HTTP 429, 5xx) with exponential backoff and
+honors `Retry-After`; non-retriable 4xx (auth, path conflicts) fail fast. Tunable
+via `.env.backup`:
+- `DROPBOX_MAX_RETRY_ATTEMPTS` (default 5)
+- `DROPBOX_REQUEST_TIMEOUT_MS` (default 300000 — per-request cap so a stalled
+  socket can't hang the launchd run)
+
+Known limit: chunked upload sessions restart from the beginning on the next run if
+a chunk's success is never acknowledged (no mid-session resume) — self-heals on the
+next scheduled run.
+
 Add Dropbox vars to `.env.backup`:
 
 ```bash
