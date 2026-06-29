@@ -6185,10 +6185,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                                 {(() => {
                                   const linkMeta = item.metadata as unknown as Record<string, unknown> | null;
-                                  const supplierUrl =
-                                    typeof linkMeta?.supplierUrl === "string" ? linkMeta.supplierUrl.trim() : "";
-                                  const avantprintUrl =
-                                    typeof linkMeta?.avantprintUrl === "string" ? linkMeta.avantprintUrl.trim() : "";
+                                  const snapshotSupplier =
+                                    typeof linkMeta?.supplierUrl === "string" ? linkMeta.supplierUrl : "";
+                                  const snapshotAvantprint =
+                                    typeof linkMeta?.avantprintUrl === "string" ? linkMeta.avantprintUrl : "";
+                                  // Prefer the live catalog model link so editing the model updates
+                                  // every quote instantly; fall back to the snapshot on the item.
+                                  const linkModel = catalogTypes
+                                    .find((type) => type.id === resolvedTypeId)
+                                    ?.kinds.find((kind) => kind.id === resolvedKindId)
+                                    ?.models.find((model) => model.id === resolvedModelId);
+                                  const supplierUrl = (linkModel?.metadata?.supplierUrl ?? snapshotSupplier).trim();
+                                  const avantprintUrl = (
+                                    linkModel?.metadata?.avantprintUrl ?? snapshotAvantprint
+                                  ).trim();
                                   const avantprintIcon = (
                                     <img
                                       src="https://avantprint.ua/favicon.ico"
