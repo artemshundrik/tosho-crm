@@ -217,7 +217,7 @@ export function CompactSidebar({
                                     onEditType(type.id);
                                   }}
                                   className={cn(
-                                    "p-1 rounded hover:bg-muted transition-colors opacity-0 group-hover:opacity-100",
+                                    "p-1 rounded hover:bg-muted transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
                                     isSelected && "opacity-100"
                                   )}
                                   title="Редагувати категорію"
@@ -269,7 +269,7 @@ export function CompactSidebar({
                                             onEditKind(kind.id);
                                           }}
                                           className={cn(
-                                            "p-1 rounded hover:bg-muted/60 transition-colors opacity-0 group-hover/kind:opacity-100",
+                                            "p-1 rounded hover:bg-muted/60 transition-colors opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:group-focus-within/kind:opacity-100",
                                             isKindSelected && "opacity-100"
                                           )}
                                           title="Редагувати вид"

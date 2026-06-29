@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronDown, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
 
 interface BasicInfoTabProps {
@@ -117,7 +117,10 @@ export function BasicInfoTab({
   const showActiveImagePreview = Boolean(activeImageUrl) && !activeImageFailed;
   const descriptionValue = draftMetadata.description ?? "";
   const descriptionPreview = descriptionValue.replace(/\s+/g, " ").trim();
-  const productSourceUrl = draftMetadata.source?.url ?? "";
+  const supplierUrl = draftMetadata.supplierUrl ?? "";
+  // Avantprint link falls back to the legacy import source.url so already-imported
+  // models keep their link; editing then persists it to the dedicated field.
+  const avantprintUrl = draftMetadata.avantprintUrl ?? draftMetadata.source?.url ?? "";
 
   React.useEffect(() => {
     if (variants.length === 0) {
@@ -302,22 +305,13 @@ export function BasicInfoTab({
       description: value.trim() ? value : null,
     });
   };
-  const updateProductSourceUrl = (value: string) => {
-    const normalizedUrl = value.trim();
-    onMetadataChange({
-      ...draftMetadata,
-      source: normalizedUrl
-        ? {
-            ...(draftMetadata.source ?? {}),
-            url: normalizedUrl,
-          }
-        : draftMetadata.source?.vendor || draftMetadata.source?.importedAt
-          ? {
-              ...(draftMetadata.source ?? {}),
-              url: null,
-            }
-          : null,
-    });
+  const updateSupplierUrl = (value: string) => {
+    const normalized = value.trim();
+    onMetadataChange({ ...draftMetadata, supplierUrl: normalized ? normalized : null });
+  };
+  const updateAvantprintUrl = (value: string) => {
+    const normalized = value.trim();
+    onMetadataChange({ ...draftMetadata, avantprintUrl: normalized ? normalized : null });
   };
   const handleActiveVariantFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isActivePrimary) {
@@ -485,17 +479,75 @@ export function BasicInfoTab({
                 rows={4}
                 className="min-h-[112px] resize-y bg-background/70"
               />
-              <div className="grid gap-2">
-                <Label>Посилання на товар</Label>
-                <Input
-                  value={productSourceUrl}
-                  onChange={(event) => updateProductSourceUrl(event.target.value)}
-                  placeholder="https://avanprint.ua/... або сторінка товару на нашому сайті"
-                  className="bg-background/70"
-                />
-              </div>
             </div>
           ) : null}
+        </div>
+      </div>
+
+      {/* Product links — flow into the quote product card buttons */}
+      <div className="space-y-4 rounded-xl border border-border/50 bg-card/70 p-4">
+        <div>
+          <Label className="inline-flex items-center gap-2 text-sm font-semibold">
+            <Link2 className="h-4 w-4 text-muted-foreground" />
+            Посилання
+          </Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Підтягнуться в картку товару прорахунку — звідти кнопки на сайт постачальника та Аванпринт.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Сайт постачальника</Label>
+            <div className="relative">
+              <ExternalLink className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+              <Input
+                type="url"
+                inputMode="url"
+                value={supplierUrl}
+                onChange={(event) => updateSupplierUrl(event.target.value)}
+                placeholder="https://сайт-постачальника/товар"
+                className="bg-background/70 pl-9 pr-10"
+              />
+              {supplierUrl.trim() ? (
+                <a
+                  href={supplierUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Відкрити в новій вкладці"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Аванпринт (наш сайт)</Label>
+            <div className="relative">
+              <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+              <Input
+                type="url"
+                inputMode="url"
+                value={avantprintUrl}
+                onChange={(event) => updateAvantprintUrl(event.target.value)}
+                placeholder="https://avantprint.ua/..."
+                className="bg-background/70 pl-9 pr-10"
+              />
+              {avantprintUrl.trim() ? (
+                <a
+                  href={avantprintUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Відкрити в новій вкладці"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
 

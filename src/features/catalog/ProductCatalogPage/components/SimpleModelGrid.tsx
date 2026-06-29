@@ -6,9 +6,12 @@
 
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, PackageSearch, Search } from "lucide-react";
+import { PackageSearch, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SimpleModelCard } from "./SimpleModelCard";
 import type { ModelWithContext } from "@/types/catalog";
+
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
 
 interface SimpleModelGridProps {
   filteredModels: ModelWithContext[];
@@ -47,12 +50,23 @@ function SimpleModelGridBase({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center py-16">
-        <div className="rounded-full bg-muted/30 p-6 mb-4">
-          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground/40" />
-        </div>
-        <p className="text-lg font-medium text-muted-foreground mb-2">Завантажуємо моделі</p>
-        <p className="text-sm text-muted-foreground/60">Готуємо каталог продукції.</p>
+      <div className={GRID_CLASS} aria-busy="true" aria-label="Завантаження моделей">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
+          >
+            <Skeleton className="aspect-[4/5] w-full rounded-none" />
+            <div className="flex flex-col gap-3 p-4">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <div className="flex gap-1.5 pt-1">
+                <Skeleton className="h-6 w-16 rounded-md" />
+                <Skeleton className="h-6 w-12 rounded-md" />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -79,7 +93,7 @@ function SimpleModelGridBase({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className={GRID_CLASS}>
       {filteredModels.map((item) => (
         <SimpleModelCard
           key={item.model.id}

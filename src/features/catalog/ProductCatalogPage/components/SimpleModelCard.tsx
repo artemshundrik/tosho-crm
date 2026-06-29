@@ -8,7 +8,7 @@ import { memo, useEffect, useState, type KeyboardEvent, type MouseEvent } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Image as ImageIcon, Layers, MoreVertical } from "lucide-react";
+import { AlertTriangle, Copy, Image as ImageIcon, Layers, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +32,6 @@ function SimpleModelCardBase({
   onDelete,
 }: SimpleModelCardProps) {
   const { model, kindName, validation } = item;
-  const [isHovered, setIsHovered] = useState(false);
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(() => new Set());
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const hasTiers = model.priceTiers && model.priceTiers.length > 0;
@@ -170,16 +169,14 @@ function SimpleModelCardBase({
       role="button"
       tabIndex={0}
       className={cn(
-        "group relative flex cursor-pointer flex-col rounded-xl border transition-all duration-200",
+        "group relative flex cursor-pointer flex-col rounded-xl border bg-card transition-all duration-200",
         "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
         !validation.isValid
-          ? "tone-warning-subtle"
-          : "border-border/60 bg-card hover:border-primary/30"
+          ? "border-amber-500/40 hover:border-amber-500/60"
+          : "border-border/60 hover:border-primary/30"
       )}
       onClick={openEditor}
       onKeyDown={handleCardKeyDown}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Three Dots Menu - Top Right (on hover) */}
       <div className="absolute top-3 right-3 z-20" onClick={stopCardClick}>
@@ -188,26 +185,27 @@ function SimpleModelCardBase({
             <Button
               size="icon"
               variant="ghost"
-              className={cn(
-                "h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm shadow-md transition-opacity",
-                isHovered ? "opacity-100" : "opacity-0"
-              )}
+              aria-label="Дії з моделлю"
+              className="h-8 w-8 rounded-full border border-border/60 bg-background/90 text-muted-foreground shadow-md backdrop-blur-sm transition-all hover:bg-background hover:text-foreground hover:shadow-lg data-[state=open]:bg-background data-[state=open]:text-foreground data-[state=open]:ring-2 data-[state=open]:ring-primary/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 data-[state=open]:opacity-100"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(model.id)}>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={() => onEdit(model.id)} className="gap-2">
+              <Pencil className="h-4 w-4 text-muted-foreground" />
               Редагувати
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onClone(model.id)}>
+            <DropdownMenuItem onClick={() => onClone(model.id)} className="gap-2">
+              <Copy className="h-4 w-4 text-muted-foreground" />
               Копіювати
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(model.id)}
-              className="text-destructive"
+              className="gap-2 text-destructive focus:text-destructive"
             >
+              <Trash2 className="h-4 w-4" />
               Видалити
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -321,7 +319,8 @@ function SimpleModelCardBase({
 
         <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
           {hasNoMethods ? (
-            <span className="text-xs text-muted-foreground italic">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-500/90">
+              <AlertTriangle className="h-3 w-3" />
               Методи не вказані
             </span>
           ) : (

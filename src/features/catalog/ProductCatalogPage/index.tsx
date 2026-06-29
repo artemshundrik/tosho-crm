@@ -395,6 +395,8 @@ export default function ProductCatalogPage() {
               globalSearch={filters.globalSearch}
               setGlobalSearch={filters.setGlobalSearch}
               filteredModelsCount={filters.filteredGlobalModels.length}
+              showOnlyIncomplete={filters.showOnlyIncomplete}
+              setShowOnlyIncomplete={filters.setShowOnlyIncomplete}
               onCreateModel={modelEditor.openCreateDrawer}
             />
 

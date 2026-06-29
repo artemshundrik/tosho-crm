@@ -10,6 +10,8 @@ export type CatalogModel = {
   imageUrl?: string;
   metadata?: {
     configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+    supplierUrl?: string | null;
+    avantprintUrl?: string | null;
   };
 };
 export type CatalogKind = {

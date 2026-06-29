@@ -2516,7 +2516,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           supabase
             .schema("tosho")
             .from("catalog_models")
-            .select("id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset")
+            .select(
+              "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
+            )
             .eq("team_id", teamId)
             .order("name", { ascending: true }),
         ]);
@@ -2544,6 +2546,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             price?: number | null;
             image_url?: string | null;
             configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+            supplierUrl?: string | null;
+            avantprintUrl?: string | null;
           }>).forEach((row) => {
             const list = modelsByKind.get(row.kind_id) ?? [];
             list.push({
@@ -2551,7 +2555,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               name: row.name,
               price: row.price ?? undefined,
               imageUrl: row.image_url ?? undefined,
-              metadata: row.configuratorPreset ? { configuratorPreset: row.configuratorPreset } : undefined,
+              metadata:
+                row.configuratorPreset || row.supplierUrl || row.avantprintUrl
+                  ? {
+                      configuratorPreset: row.configuratorPreset ?? undefined,
+                      supplierUrl: row.supplierUrl ?? null,
+                      avantprintUrl: row.avantprintUrl ?? null,
+                    }
+                  : undefined,
               methodIds: methodIdsByModel.get(row.id) ?? [],
               priceTiers: tiersByModel.get(row.id),
             });
@@ -5119,8 +5130,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           url: itemAttachment.url,
         }
       : null;
-    const existingItemMetadata =
+    // Carry the catalog model's supplier / Avantprint links into the quote item
+    // so the link buttons on the quote product card light up. On edit we keep any
+    // links already on the item and only fill in missing ones from the model.
+    const selectedCatalogModel =
+      itemFormMode === "advanced" && effectiveItemModelId
+        ? catalogTypes
+            .find((type) => type.id === effectiveItemTypeId)
+            ?.kinds.find((kind) => kind.id === effectiveItemKindId)
+            ?.models.find((model) => model.id === effectiveItemModelId)
+        : undefined;
+    const modelSupplierUrl = selectedCatalogModel?.metadata?.supplierUrl?.trim() || null;
+    const modelAvantprintUrl = selectedCatalogModel?.metadata?.avantprintUrl?.trim() || null;
+    const previousItemMetadata =
       editingItemId ? items.find((item) => item.id === editingItemId)?.metadata ?? null : null;
+    const existingItemMetadata =
+      previousItemMetadata || modelSupplierUrl || modelAvantprintUrl
+        ? {
+            ...(previousItemMetadata ?? {}),
+            supplierUrl: previousItemMetadata?.supplierUrl ?? modelSupplierUrl,
+            avantprintUrl: previousItemMetadata?.avantprintUrl ?? modelAvantprintUrl,
+          }
+        : null;
 
     const newItem: QuoteItem = {
       id: editingItemId || createLocalId(),

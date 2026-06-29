@@ -7,11 +7,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   ChevronRight,
-  Edit2,
   MapPin,
   Package,
   Plus,
@@ -56,6 +56,7 @@ export function ContentHeader({
   const QuoteTypeIcon = quoteType === "merch" ? Shirt : quoteType === "print" ? Printer : Package;
   const availableMethods = selectedKind?.methods || [];
   const printPositions = selectedKind?.printPositions || [];
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [positionModalOpen, setPositionModalOpen] = useState(false);
   const [positionModalMode, setPositionModalMode] = useState<"add" | "edit">("add");
   const [positionModalId, setPositionModalId] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export function ContentHeader({
   };
 
   useEffect(() => {
+    setSettingsOpen(false);
     setPositionModalOpen(false);
     setMethodModalOpen(false);
     setPositionModalId(null);
@@ -112,115 +114,115 @@ export function ContentHeader({
   }
 
   return (
-    <div className="p-6 border-b border-border/40 space-y-4">
-      {/* Breadcrumb + Actions */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1 flex-1 min-w-0">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground inline-flex items-center gap-1.5">
+    <>
+      {/* Lean header: breadcrumb + view settings */}
+      <div className="border-b border-border/40 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground">
               <QuoteTypeIcon className="h-3.5 w-3.5" />
               {quoteTypeLabel}
             </span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-            <span className="font-semibold">{selectedType.name}</span>
-            <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-            <span className="font-semibold text-primary">{selectedKind.name}</span>
-            <button
-              className="ml-1 p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-              title="Редагувати назву"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </button>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+            <span className="truncate font-semibold">{selectedType.name}</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+            <span className="truncate font-semibold text-primary">{selectedKind.name}</span>
           </div>
 
-          {/* Description */}
-          <p className="text-xs text-muted-foreground">
-            Керування моделями та налаштуваннями друку для категорії
-          </p>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            title="Налаштування виду"
-          >
-            <Settings className="h-4 w-4" />
-            Налаштування виду
-          </Button>
-        </div>
-      </div>
-
-      {/* Print Positions Chips */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Місця:
-          </span>
-          <div className="flex flex-wrap gap-2 flex-1">
-            {printPositions.map((pos) => (
-              <button
-                key={pos.id}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-medium text-foreground transition",
-                  "hover:bg-muted/60 hover:border-border",
-                  positionModalId === pos.id && positionModalOpen && "ring-1 ring-primary/30"
-                )}
-                type="button"
-                onClick={() => openEditPositionModal(pos.id, pos.label)}
-              >
-                {pos.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={openAddPositionModal}
-              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Додати місце
-            </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="hidden text-xs text-muted-foreground lg:inline">
+              {availableMethods.length} {availableMethods.length === 1 ? "метод" : "методів"} · {printPositions.length}{" "}
+              {printPositions.length === 1 ? "місце" : "місць"}
+            </span>
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setSettingsOpen(true)}>
+              <Settings className="h-4 w-4" />
+              Налаштування виду
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Methods Chips */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Методи:
-          </span>
-          <div className="flex flex-wrap gap-2 flex-1">
-            {availableMethods.map((method) => (
-              <button
-                key={method.id}
-                type="button"
-                onClick={() => openEditMethodModal(method.id, method.name)}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition",
-                  "hover:bg-primary/15",
-                  methodModalId === method.id && methodModalOpen && "ring-1 ring-primary/30"
-                )}
-              >
-                {method.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={openAddMethodModal}
-              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition hover:bg-primary/15"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Додати метод
-            </button>
+      {/* View settings drawer: places + methods */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Налаштування виду</SheetTitle>
+            <SheetDescription>
+              {selectedType.name} › {selectedKind.name}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-6">
+            {/* Places */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Місця нанесення
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {printPositions.map((pos) => (
+                  <button
+                    key={pos.id}
+                    type="button"
+                    onClick={() => openEditPositionModal(pos.id, pos.label)}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-medium text-foreground transition",
+                      "hover:border-border hover:bg-muted/60",
+                      positionModalId === pos.id && positionModalOpen && "ring-1 ring-primary/30"
+                    )}
+                  >
+                    {pos.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={openAddPositionModal}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Додати місце
+                </button>
+              </div>
+            </section>
+
+            {/* Methods */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Методи нанесення
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {availableMethods.map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => openEditMethodModal(method.id, method.name)}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition",
+                      "hover:bg-primary/15",
+                      methodModalId === method.id && methodModalOpen && "ring-1 ring-primary/30"
+                    )}
+                  >
+                    {method.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={openAddMethodModal}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition hover:bg-primary/15"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Додати метод
+                </button>
+              </div>
+            </section>
           </div>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Print Position Modal */}
       <Dialog open={positionModalOpen} onOpenChange={setPositionModalOpen}>
@@ -367,6 +369,6 @@ export function ContentHeader({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

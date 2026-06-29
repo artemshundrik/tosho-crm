@@ -47,6 +47,10 @@ export type CatalogImageAsset = {
 
 export type CatalogModelMetadata = {
   sku?: string | null;
+  /** Link to this product on the supplier's site (becomes a button in quotes). */
+  supplierUrl?: string | null;
+  /** Link to this product on our Avantprint site (becomes a button in quotes). */
+  avantprintUrl?: string | null;
   baseVariantName?: string | null;
   variants?: CatalogModelVariant[];
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;

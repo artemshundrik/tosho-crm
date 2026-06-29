@@ -97,6 +97,9 @@ export type QuoteItemMetadata = {
   configuratorPreset?: PrintConfiguratorPreset | null;
   printProduct?: PrintProductConfig | null;
   printPackage?: PrintProductConfig | null;
+  /** Carried over from the catalog model so quote cards can link out. */
+  supplierUrl?: string | null;
+  avantprintUrl?: string | null;
 };
 
 export type PrintPackageDetailField = {
