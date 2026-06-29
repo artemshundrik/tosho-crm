@@ -146,7 +146,7 @@ import {
   Loader2,
   Package,
   Image,
-  Lock,
+  ExternalLink,
   Calculator,
   TrendingUp,
   Wallet,
@@ -260,6 +260,8 @@ function sanitizeQuoteSummaryForCache(quote: QuoteSummaryRow): QuoteSummaryRow {
 }
 
 const DEFAULT_DEADLINE_TIME = "09:00";
+const DEADLINE_FIELD_LABEL_CLASS =
+  "text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
@@ -5875,11 +5877,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             ) : null}
 
             <section className={cn("py-2", activeQuoteTab !== "products" && "hidden")}>
-              <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <div className="text-2xl font-semibold tracking-tight text-foreground">Товари і тиражі</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {items.length} {items.length === 1 ? "товар" : "товари"} · {runs.length} тиражів · фіксовано
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold tracking-tight text-foreground">Товари і тиражі</div>
+                    <div className="text-xs text-muted-foreground">
+                      {items.length} {items.length === 1 ? "товар" : "товари"} · {runs.length} тиражів · фіксовано
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -6144,11 +6151,66 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 ) : null}
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-2">
-                                <Badge variant="secondary" className="h-7 gap-1 rounded-lg px-2 text-xs">
-                                  <Lock className="h-3.5 w-3.5" />
-                                  Фіксовано
-                                </Badge>
+                              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                                {(() => {
+                                  const linkMeta = item.metadata as unknown as Record<string, unknown> | null;
+                                  const supplierUrl =
+                                    typeof linkMeta?.supplierUrl === "string" ? linkMeta.supplierUrl.trim() : "";
+                                  const avantprintUrl =
+                                    typeof linkMeta?.avantprintUrl === "string" ? linkMeta.avantprintUrl.trim() : "";
+                                  const avantprintIcon = (
+                                    <img
+                                      src="https://avantprint.ua/favicon.ico"
+                                      alt=""
+                                      aria-hidden
+                                      className="h-4 w-4 rounded-[3px]"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                      }}
+                                    />
+                                  );
+                                  const renderLinkButton = (
+                                    url: string,
+                                    icon: JSX.Element,
+                                    label: string,
+                                    hint: string
+                                  ) =>
+                                    url ? (
+                                      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+                                        <a href={url} target="_blank" rel="noopener noreferrer">
+                                          {icon}
+                                          {label}
+                                        </a>
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 gap-1.5"
+                                        disabled
+                                        title={hint}
+                                      >
+                                        {icon}
+                                        {label}
+                                      </Button>
+                                    );
+                                  return (
+                                    <>
+                                      {renderLinkButton(
+                                        supplierUrl,
+                                        <ExternalLink className="h-3.5 w-3.5" />,
+                                        "Сайт постачальника",
+                                        "Посилання на товар у постачальника зʼявиться після його додавання в товарі"
+                                      )}
+                                      {renderLinkButton(
+                                        avantprintUrl,
+                                        avantprintIcon,
+                                        "Аванпринт",
+                                        "Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
+                                      )}
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
 
@@ -6437,7 +6499,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         <div className="my-4 border-t border-border/60" />
 
                                         <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_1.2fr]">
-                                          <div className="rounded-xl p-2">
+                                          <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
                                             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                               Собівартість
                                             </div>
@@ -6540,7 +6602,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="relative">
                     <button
                       type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                       aria-label="Інформація про тиражі"
                       onClick={(event) => event.preventDefault()}
                     >
@@ -6882,7 +6944,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                    className="h-7 w-7 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       void removeRun(idx);
@@ -6938,8 +7000,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               )}
             </details>
 
-            <details open className={cn("group py-2", activeQuoteTab !== "deadlines" && "hidden")}>
-              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+            <section className={cn("py-2", activeQuoteTab !== "deadlines" && "hidden")}>
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
                     <Calendar className="h-4 w-4" />
@@ -6948,7 +7010,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="relative">
                     <button
                       type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                       aria-label="Інформація про дедлайни та задачу"
                       onClick={(event) => event.preventDefault()}
                     >
@@ -6959,15 +7021,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
+              </div>
 
               <div className="space-y-4">
                 <Tabs defaultValue="internal" className="w-full">
-                  <TabsList className="mb-5 grid h-auto w-full grid-cols-1 auto-rows-fr gap-2 border-0 bg-transparent p-0 shadow-none md:grid-cols-3">
+                  <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+                  <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0 shadow-none">
                     <TabsTrigger
                       value="customer"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
@@ -7011,7 +7073,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="internal"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
@@ -7041,7 +7103,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="design"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] data-[state=active]:border-primary/30 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
@@ -7084,225 +7146,263 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </TabsTrigger>
                   </TabsList>
 
-                  <div className="p-0">
+                  <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4 md:p-5">
                     <TabsContent value="customer" className="mt-0">
-                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
-                        <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                              onClick={() => setCustomerDeadlinePopoverOpen(true)}
-                            >
-                              {customerDeadlineDate
-                                ? formatDeadlineDateOnlyLabel(customerDeadlineDate)
-                                : "Оберіть день"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                            <CalendarPicker
-                              mode="single"
-                              selected={toLocalDate(customerDeadlineDate)}
-                              onSelect={(date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setCustomerDeadlineDate(nextDate);
-                                setCustomerDeadlinePopoverOpen(false);
-                              }}
-                              initialFocus
+                      <div className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
+                            <Popover open={customerDeadlinePopoverOpen} onOpenChange={setCustomerDeadlinePopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  onClick={() => setCustomerDeadlinePopoverOpen(true)}
+                                >
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  {customerDeadlineDate
+                                    ? formatDeadlineDateOnlyLabel(customerDeadlineDate)
+                                    : "Оберіть день"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                                <CalendarPicker
+                                  mode="single"
+                                  selected={toLocalDate(customerDeadlineDate)}
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setCustomerDeadlineDate(nextDate);
+                                    setCustomerDeadlinePopoverOpen(false);
+                                  }}
+                                  initialFocus
+                                />
+                                <DateQuickActions
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setCustomerDeadlineDate(nextDate);
+                                    setCustomerDeadlinePopoverOpen(false);
+                                  }}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
+                            <Input
+                              type="time"
+                              className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                              value={customerDeadlineTime}
+                              onChange={(e) => setCustomerDeadlineTime(e.target.value)}
                             />
-                            <DateQuickActions
-                              onSelect={(date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setCustomerDeadlineDate(nextDate);
-                                setCustomerDeadlinePopoverOpen(false);
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Input
-                          type="time"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
-                          value={customerDeadlineTime}
-                          onChange={(e) => setCustomerDeadlineTime(e.target.value)}
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-9 w-10 border-border/40 bg-muted/[0.03]"
-                          onClick={() =>
-                            void handleSaveSecondaryDeadline("customer_deadline_at", {
-                              date: customerDeadlineDate,
-                              time: customerDeadlineTime,
-                              title: "Дедлайн Замовника",
-                              action: "змінив дедлайн замовника",
-                            })
-                          }
-                          disabled={deadlineSaving || !customerDeadlineDate}
-                          aria-label="Зберегти дедлайн замовника"
-                        >
-                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            onClick={() =>
+                              void handleSaveSecondaryDeadline("customer_deadline_at", {
+                                date: customerDeadlineDate,
+                                time: customerDeadlineTime,
+                                title: "Дедлайн Замовника",
+                                action: "змінив дедлайн замовника",
+                              })
+                            }
+                            disabled={deadlineSaving || !customerDeadlineDate}
+                          >
+                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            Зберегти
+                          </Button>
+                        </div>
                       </div>
                     </TabsContent>
 
                     <TabsContent value="internal" className="mt-0">
-                      <div className="max-w-[560px] space-y-2">
-                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
-                          <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                                onClick={() => setDeadlinePopoverOpen(true)}
-                              >
-                                {deadlineDate
-                                  ? formatDeadlineDateOnlyLabel(deadlineDate)
-                                  : "Оберіть день"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                              <CalendarPicker
-                                mode="single"
-                                selected={toLocalDate(deadlineDate)}
-                                onSelect={(date) => {
-                                  const nextDate = formatDateInput(date ?? null);
-                                  setDeadlineDate(nextDate);
-                                  setDeadlinePopoverOpen(false);
-                                }}
-                                initialFocus
-                              />
-                              <DateQuickActions
-                                onSelect={(date) => {
-                                  const nextDate = formatDateInput(date ?? null);
-                                  setDeadlineDate(nextDate);
-                                  setDeadlinePopoverOpen(false);
-                                }}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <Input
-                            type="time"
-                            className="h-9 w-full border-border/40 bg-muted/[0.03]"
-                            value={deadlineTime}
-                            onChange={(e) => setDeadlineTime(e.target.value)}
-                          />
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-9 w-10 border-border/40 bg-muted/[0.03]"
-                            onClick={() => void handleSaveDeadline()}
-                            disabled={deadlineSaving}
-                            aria-label="Зберегти дедлайн прорахунку"
-                          >
-                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                          </Button>
+                      <div className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
+                            <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  onClick={() => setDeadlinePopoverOpen(true)}
+                                >
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  {deadlineDate
+                                    ? formatDeadlineDateOnlyLabel(deadlineDate)
+                                    : "Оберіть день"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                                <CalendarPicker
+                                  mode="single"
+                                  selected={toLocalDate(deadlineDate)}
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setDeadlineDate(nextDate);
+                                    setDeadlinePopoverOpen(false);
+                                  }}
+                                  initialFocus
+                                />
+                                <DateQuickActions
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setDeadlineDate(nextDate);
+                                    setDeadlinePopoverOpen(false);
+                                  }}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
+                            <Input
+                              type="time"
+                              className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                              value={deadlineTime}
+                              onChange={(e) => setDeadlineTime(e.target.value)}
+                            />
+                          </div>
                         </div>
-                        <div className="grid gap-2 sm:grid-cols-[220px_minmax(0,1fr)]">
-                          <Select
-                            value={deadlineReminderOffset}
-                            onValueChange={(value) => {
-                              setDeadlineReminderOffset(value);
-                              void handleSaveDeadline({ reminderOffset: value });
-                            }}
-                          >
-                            <SelectTrigger className="h-9 border-border/40 bg-muted/[0.03]">
-                              <SelectValue placeholder="Коли нагадати" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {DEADLINE_REMINDER_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Нагадування</div>
+                            <Select
+                              value={deadlineReminderOffset}
+                              onValueChange={(value) => {
+                                setDeadlineReminderOffset(value);
+                                void handleSaveDeadline({ reminderOffset: value });
+                              }}
+                            >
+                              <SelectTrigger className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                                <SelectValue placeholder="Коли нагадати" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DEADLINE_REMINDER_OPTIONS.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Текст нагадування</div>
+                            <Input
+                              className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                              placeholder="Напр. передзвонити клієнту"
+                              value={deadlineReminderComment}
+                              onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                              maxLength={200}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className={DEADLINE_FIELD_LABEL_CLASS}>Коментар</div>
                           <Input
-                            className="h-9 border-border/40 bg-muted/[0.03]"
-                            placeholder="Текст нагадування"
-                            value={deadlineReminderComment}
-                            onChange={(e) => setDeadlineReminderComment(e.target.value)}
+                            className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                            placeholder="Внутрішня примітка до дедлайну"
+                            value={deadlineNote}
+                            onChange={(e) => setDeadlineNote(e.target.value)}
                             maxLength={200}
                           />
                         </div>
-                        <Input
-                          className="h-9 max-w-[520px] border-border/40 bg-muted/[0.03]"
-                          placeholder="Коментар до внутрішнього дедлайну"
-                          value={deadlineNote}
-                          onChange={(e) => setDeadlineNote(e.target.value)}
-                          maxLength={200}
-                        />
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            onClick={() => void handleSaveDeadline()}
+                            disabled={deadlineSaving}
+                          >
+                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            Зберегти
+                          </Button>
+                        </div>
                       </div>
                     </TabsContent>
 
                     <TabsContent value="design" className="mt-0">
-                      <div className="grid max-w-[560px] gap-2 sm:grid-cols-[minmax(0,1fr)_112px_40px]">
-                        <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
-                              onClick={() => setDesignDeadlinePopoverOpen(true)}
-                            >
-                              {designDeadlineDate
-                                ? formatDeadlineDateOnlyLabel(designDeadlineDate)
-                                : "Оберіть день"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
-                            <CalendarPicker
-                              mode="single"
-                              selected={toLocalDate(designDeadlineDate)}
-                              onSelect={(date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDesignDeadlineDate(nextDate);
-                                setDesignDeadlinePopoverOpen(false);
-                              }}
-                              initialFocus
+                      <div className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Дата</div>
+                            <Popover open={designDeadlinePopoverOpen} onOpenChange={setDesignDeadlinePopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="h-9 w-full justify-start gap-2 border-border/40 bg-muted/[0.03] font-normal hover:bg-muted/[0.06]"
+                                  onClick={() => setDesignDeadlinePopoverOpen(true)}
+                                >
+                                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                                  {designDeadlineDate
+                                    ? formatDeadlineDateOnlyLabel(designDeadlineDate)
+                                    : "Оберіть день"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="start" className="w-fit max-w-[calc(100vw-2rem)] p-0">
+                                <CalendarPicker
+                                  mode="single"
+                                  selected={toLocalDate(designDeadlineDate)}
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setDesignDeadlineDate(nextDate);
+                                    setDesignDeadlinePopoverOpen(false);
+                                  }}
+                                  initialFocus
+                                />
+                                <DateQuickActions
+                                  onSelect={(date) => {
+                                    const nextDate = formatDateInput(date ?? null);
+                                    setDesignDeadlineDate(nextDate);
+                                    setDesignDeadlinePopoverOpen(false);
+                                  }}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
+                            <Input
+                              type="time"
+                              className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                              value={designDeadlineTime}
+                              onChange={(e) => setDesignDeadlineTime(e.target.value)}
                             />
-                            <DateQuickActions
-                              onSelect={(date) => {
-                                const nextDate = formatDateInput(date ?? null);
-                                setDesignDeadlineDate(nextDate);
-                                setDesignDeadlinePopoverOpen(false);
-                              }}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <Input
-                          type="time"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
-                          value={designDeadlineTime}
-                          onChange={(e) => setDesignDeadlineTime(e.target.value)}
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-9 w-10 border-border/40 bg-muted/[0.03]"
-                          onClick={() =>
-                            void handleSaveSecondaryDeadline("design_deadline_at", {
-                              date: designDeadlineDate,
-                              time: designDeadlineTime,
-                              title: "Дедлайн дизайну",
-                              action: "змінив дедлайн дизайну",
-                            })
-                          }
-                          disabled={deadlineSaving || !designDeadlineDate}
-                          aria-label="Зберегти дедлайн дизайну"
-                        >
-                          {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="outline"
+                            className="h-9 gap-2 border-border/40 bg-muted/[0.03]"
+                            onClick={() =>
+                              void handleSaveSecondaryDeadline("design_deadline_at", {
+                                date: designDeadlineDate,
+                                time: designDeadlineTime,
+                                title: "Дедлайн дизайну",
+                                action: "змінив дедлайн дизайну",
+                              })
+                            }
+                            disabled={deadlineSaving || !designDeadlineDate}
+                          >
+                            {deadlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            Зберегти
+                          </Button>
+                        </div>
                       </div>
                     </TabsContent>
+                  </div>
                   </div>
                 </Tabs>
               </div>
 
               {deadlineError && <div className="mt-4 text-xs text-destructive">{deadlineError}</div>}
               {updatedMinutes !== null && <></>}
-            </details>
+            </section>
 
-            <details open className={cn("group py-2", activeQuoteTab !== "design" && "hidden")}>
-              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+            <section className={cn("py-2", activeQuoteTab !== "design" && "hidden")}>
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
                     <Palette className="h-4 w-4" />
@@ -7311,7 +7411,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="relative">
                     <button
                       type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                       aria-label="Інформація про дизайн"
                       onClick={(event) => event.preventDefault()}
                     >
@@ -7322,8 +7422,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
+              </div>
 
               <Tabs defaultValue="brief" className="w-full">
                 <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
@@ -7382,7 +7481,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           }}
                           onBlur={handleBriefInlineBlur}
                           placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
-                          className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[220px]")}
+                          className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[180px]")}
                         />
                       ) : (
                         <div
@@ -7398,7 +7497,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             }
                           }}
                         >
-                          <div className={cn("min-h-[220px]", BRIEF_SURFACE_TEXT_CLASS)}>
+                          <div className={cn("min-h-[120px]", BRIEF_SURFACE_TEXT_CLASS)}>
                             {renderBriefRichText(briefText)}
                           </div>
                         </div>
@@ -7482,10 +7581,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   path={file.storagePath}
                                   alt={getAttachmentDisplayName(file)}
                                   variant="thumb"
-                                  className="h-full w-full"
+                                  className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <div className="text-xs text-muted-foreground">{extension}</div>
+                                <div className="flex flex-col items-center gap-2 text-muted-foreground/70">
+                                  <FileText className="h-8 w-8" />
+                                  <span className="text-[11px] font-semibold uppercase tracking-wide">
+                                    {extension ?? "Файл"}
+                                  </span>
+                                </div>
                               )}
                             </button>
                             <div className="mt-3 truncate text-sm font-medium text-foreground" title={getAttachmentDisplayName(file)}>
@@ -7540,7 +7644,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   ) : designTaskError ? (
                     <div className="text-sm text-destructive">{designTaskError}</div>
                   ) : designTask ? (
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <div className="grid max-w-3xl gap-4 rounded-xl border border-border/40 bg-muted/[0.02] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end md:p-5">
                       <div className="space-y-2">
                         <div className="text-sm font-semibold text-foreground">Дизайн-задача</div>
                         {selectedDesignOutputFileName ? (
@@ -7796,10 +7900,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   )}
                 </TabsContent>
               </Tabs>
-            </details>
+            </section>
 
-            <details open className={cn("group py-2", activeQuoteTab !== "discussion" && "hidden")}>
-              <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+            <section className={cn("py-2", activeQuoteTab !== "discussion" && "hidden")}>
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
                     <FileText className="h-4 w-4" />
@@ -7808,7 +7912,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="relative">
                     <button
                       type="button"
-                      className="peer flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                       aria-label="Інформація про обговорення"
                       onClick={(event) => event.preventDefault()}
                     >
@@ -7819,28 +7923,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
+              </div>
 
               <Tabs value={detailsTab} onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")} className="w-full">
                 <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
                   <TabsTrigger
                     value="comments"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Коментарі
                     <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="files"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Вкладення
                     <span className="ml-2 text-xs text-muted-foreground">{attachments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="activity"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Активність
                   </TabsTrigger>
@@ -7966,12 +8069,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-baseline justify-between gap-2">
-                                  <div className="text-sm font-semibold">
+                                  <div className="min-w-0 truncate text-sm font-semibold">
                                     {comment.created_by
                                       ? memberById.get(comment.created_by) ?? "Користувач"
                                       : "Користувач"}
                                   </div>
-                                  <div className="whitespace-nowrap text-xs text-muted-foreground">
+                                  <div className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                                     {new Date(comment.created_at).toLocaleDateString("uk-UA", {
                                       day: "numeric",
                                       month: "short",
@@ -8014,7 +8117,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         role="button"
                         tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between text-left"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         onClick={() => setFilesCustomerOpen((v) => !v)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -8125,7 +8228,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                                        className="shrink-0 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                                         onClick={() => {
                                           void ensureAttachmentAccessUrl(file).then((url) => {
                                             if (url) {
@@ -8144,7 +8247,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="shrink-0 text-destructive opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                                          className="shrink-0 text-destructive opacity-100 transition-opacity hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                                           onClick={() => requestDeleteAttachment(file)}
                                           disabled={attachmentsDeletingId === file.id}
                                         >
@@ -8169,7 +8272,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         role="button"
                         tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between text-left"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         onClick={() => setFilesDocsOpen((v) => !v)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -8282,7 +8385,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                 </TabsContent>
               </Tabs>
-            </details>
+            </section>
           </div>
         </main>
 
