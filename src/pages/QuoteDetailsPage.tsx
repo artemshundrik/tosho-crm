@@ -6199,28 +6199,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   const avantprintUrl = (
                                     linkModel?.metadata?.avantprintUrl ?? snapshotAvantprint
                                   ).trim();
-                                  const avantprintIcon = (
-                                    <img
-                                      src="https://avantprint.ua/favicon.ico"
-                                      alt=""
-                                      aria-hidden
-                                      className="h-4 w-4 rounded-[3px]"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = "none";
-                                      }}
-                                    />
-                                  );
-                                  const renderLinkButton = (
-                                    url: string,
-                                    icon: JSX.Element,
-                                    label: string,
-                                    hint: string
-                                  ) =>
+                                  const renderLinkButton = (url: string, label: string, hint: string) =>
                                     url ? (
                                       <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
                                         <a href={url} target="_blank" rel="noopener noreferrer">
-                                          {icon}
                                           {label}
+                                          <ExternalLink className="h-3.5 w-3.5" />
                                         </a>
                                       </Button>
                                     ) : (
@@ -6231,21 +6215,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         disabled
                                         title={hint}
                                       >
-                                        {icon}
                                         {label}
+                                        <ExternalLink className="h-3.5 w-3.5" />
                                       </Button>
                                     );
                                   return (
                                     <>
                                       {renderLinkButton(
                                         supplierUrl,
-                                        <ExternalLink className="h-3.5 w-3.5" />,
-                                        "Сайт постачальника",
+                                        "Постачальник",
                                         "Посилання на товар у постачальника зʼявиться після його додавання в товарі"
                                       )}
                                       {renderLinkButton(
                                         avantprintUrl,
-                                        avantprintIcon,
                                         "Аванпринт",
                                         "Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
                                       )}
