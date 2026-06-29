@@ -89,6 +89,8 @@ type CustomerRow = {
   id: string;
   team_id?: string | null;
   name?: string | null;
+  payment_type?: string | null;
+  source?: string | null;
   legal_name?: string | null;
   manager?: string | null;
   manager_user_id?: string | null;
@@ -127,6 +129,7 @@ type LeadRow = {
   id: string;
   team_id?: string | null;
   company_name?: string | null;
+  payment_type?: string | null;
   legal_name?: string | null;
   ownership_type?: string | null;
   tax_id?: string | null;
@@ -265,6 +268,8 @@ const EMPTY_CUSTOMER_CONTACT: CustomerContact = {
 
 const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerFormState => ({
   name: "",
+  paymentType: "invoice",
+  source: "",
   manager,
   managerId,
   website: "",
@@ -361,6 +366,8 @@ const CUSTOMER_BASE_COLUMNS = [
   "id",
   "team_id",
   "name",
+  "payment_type",
+  "source",
   "legal_name",
   "manager",
   "manager_user_id",
@@ -402,6 +409,7 @@ const LEAD_COLUMNS = [
   "id",
   "team_id",
   "company_name",
+  "payment_type",
   "legal_name",
   "ownership_type",
   "tax_id",
@@ -594,6 +602,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [leadDeleteError, setLeadDeleteError] = useState<string | null>(null);
   const [leadForm, setLeadForm] = useState<LeadFormState>({
     companyName: "",
+    paymentType: "invoice",
     legalName: "",
     ownershipType: "",
     logoUrl: "",
@@ -1342,6 +1351,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const resetLeadForm = useCallback(() => {
     setLeadForm({
       companyName: "",
+      paymentType: "invoice",
       legalName: "",
       ownershipType: "",
       logoUrl: "",
@@ -1644,6 +1654,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setEditingId(row.id);
     setForm({
       name: row.name ?? "",
+      paymentType: row.payment_type === "cash" ? "cash" : "invoice",
+      source: row.source ?? "",
       manager: resolveManagerLabel(row.manager_user_id, row.manager),
       managerId: row.manager_user_id ?? "",
       website: row.website ?? "",
@@ -1684,6 +1696,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadEditingId(lead.id);
     setLeadForm({
       companyName: lead.company_name ?? "",
+      paymentType: lead.payment_type === "cash" ? "cash" : "invoice",
       legalName: lead.legal_name ?? "",
       ownershipType: lead.ownership_type ?? "",
       taxId: lead.tax_id ?? "",
@@ -2201,6 +2214,38 @@ function CustomersPage({ teamId }: { teamId: string }) {
     void loadLeads({ append: true });
   }, [leadsHasMore, leadsLoading, leadsRefreshing, loadLeads]);
 
+  // Infinite scroll: auto-load the next page when the bottom sentinel nears the
+  // viewport. Loads the same batches as the "Показати ще" button (which stays as
+  // a fallback), so it's no heavier than today — just no click required.
+  const customersSentinelRef = useRef<HTMLDivElement | null>(null);
+  const leadsSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = customersSentinelRef.current;
+    if (!el || !customersHasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) handleLoadMoreCustomers();
+      },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handleLoadMoreCustomers, customersHasMore]);
+
+  useEffect(() => {
+    const el = leadsSentinelRef.current;
+    if (!el || !leadsHasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) handleLoadMoreLeads();
+      },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [handleLoadMoreLeads, leadsHasMore]);
+
   useEffect(() => {
     writeCustomersPageCache(teamId, {
       activeTab,
@@ -2493,6 +2538,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return;
     }
 
+    if (!form.source.trim()) {
+      setSaving(false);
+      setFormError("Вкажіть, звідки прийшов замовник.");
+      return;
+    }
+
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
@@ -2549,6 +2600,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       vat_rate: primaryLegalEntity?.vat_rate ?? null,
       tax_id: primaryLegalEntity?.tax_id ?? null,
       website: form.website.trim() || null,
+      source: form.source.trim() || null,
       iban: primaryLegalEntity?.iban ?? null,
       logo_url: optimizedLogoUrl,
       legal_entities: legalEntities.length > 0 ? legalEntities : null,
@@ -2782,6 +2834,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const payload: Record<string, unknown> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
+      payment_type: leadForm.paymentType,
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
       tax_id: leadForm.taxId.trim() || null,
@@ -3684,7 +3737,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   </Table>
                 </div>
                 {customersHasMore ? (
-                  <div className="flex items-center justify-center px-4 pb-6 pt-4 md:px-6">
+                  <div className="flex flex-col items-center justify-center gap-2 px-4 pb-6 pt-4 md:px-6">
+                    <div ref={customersSentinelRef} aria-hidden className="h-px w-full" />
                     <Button variant="outline" onClick={handleLoadMoreCustomers} disabled={customersRefreshing}>
                       {customersRefreshing ? (
                         <>
@@ -3886,7 +3940,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   </Table>
                 </div>
                 {leadsHasMore ? (
-                  <div className="flex items-center justify-center px-4 pb-6 pt-4 md:px-6">
+                  <div className="flex flex-col items-center justify-center gap-2 px-4 pb-6 pt-4 md:px-6">
+                    <div ref={leadsSentinelRef} aria-hidden className="h-px w-full" />
                     <Button variant="outline" onClick={handleLoadMoreLeads} disabled={leadsRefreshing}>
                       {leadsRefreshing ? (
                         <>

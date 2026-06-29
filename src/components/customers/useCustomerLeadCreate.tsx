@@ -58,6 +58,8 @@ const defaultResolveErrorMessage = (error: unknown, fallback: string) => {
 
 const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: string): CustomerFormState => ({
   name: prefillName,
+  paymentType: "invoice",
+  source: "",
   manager: defaultManagerLabel,
   managerId: "",
   website: "",
@@ -80,6 +82,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
 
 const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string): LeadFormState => ({
   companyName: prefillName,
+  paymentType: "invoice",
   legalName: "",
   ownershipType: "",
   firstName: "",
@@ -298,9 +301,14 @@ export const useCustomerLeadCreate = ({
       setCustomerError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
       return;
     }
-    if (!contacts.some((contact) => contact.email)) {
+    if (customerForm.paymentType !== "cash" && !contacts.some((contact) => contact.email)) {
       setCustomerSaving(false);
       setCustomerError("Для замовника обовʼязково вкажіть email.");
+      return;
+    }
+    if (!customerForm.source.trim()) {
+      setCustomerSaving(false);
+      setCustomerError("Вкажіть, звідки прийшов замовник.");
       return;
     }
     const primaryContact = contacts[0] ?? null;
@@ -309,6 +317,7 @@ export const useCustomerLeadCreate = ({
     const payload: Record<string, unknown> = {
       team_id: teamId,
       name: customerForm.name.trim(),
+      payment_type: customerForm.paymentType,
       legal_name: primaryLegalEntity?.legal_name ?? null,
       manager: selectedManagerLabel || defaultManagerLabel || null,
       manager_user_id: customerForm.managerId || null,
@@ -316,6 +325,7 @@ export const useCustomerLeadCreate = ({
       vat_rate: primaryLegalEntity?.vat_rate ?? null,
       tax_id: primaryLegalEntity?.tax_id ?? null,
       website: customerForm.website.trim() || null,
+      source: customerForm.source.trim() || null,
       iban: primaryLegalEntity?.iban ?? null,
       logo_url: optimizedLogoUrl,
       contacts: contacts.length > 0 ? contacts : null,
@@ -478,6 +488,7 @@ export const useCustomerLeadCreate = ({
     const basePayload: Record<string, unknown> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
+      payment_type: leadForm.paymentType,
       legal_name: leadForm.legalName.trim() || null,
       ownership_type: leadForm.ownershipType || null,
       tax_id: leadForm.taxId.trim() || null,

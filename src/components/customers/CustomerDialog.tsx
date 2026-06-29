@@ -12,10 +12,10 @@ import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -59,6 +59,7 @@ import {
   UserPlus,
   PackageCheck,
   ReceiptText,
+  Building2,
 } from "lucide-react";
 
 export type OwnershipOption = {
@@ -74,8 +75,12 @@ export type VatOption = {
   rate: number | null;
 };
 
+export type CustomerPaymentType = "invoice" | "cash";
+
 export type CustomerFormState = {
   name: string;
+  paymentType: CustomerPaymentType;
+  source: string;
   manager: string;
   managerId: string;
   website: string;
@@ -155,8 +160,36 @@ export type CustomerDialogProps = {
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground">{children}</h4>
+  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    {children}
+  </h4>
 );
+
+/** Elevated section surface: a titled card on the dark canvas for depth + grouping. */
+const SectionCard = ({
+  title,
+  action,
+  children,
+  className,
+}: {
+  title?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm", className)}>
+    {title ? (
+      <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
+        <SectionHeader>{title}</SectionHeader>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    ) : null}
+    {children}
+  </section>
+);
+
+const UNDERLINE_TAB =
+  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "Не вказано";
@@ -494,7 +527,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="w-full sm:max-w-[640px] overflow-y-auto p-0 flex flex-col">
         <div className="px-6 py-4 border-b shrink-0 bg-muted/20">
           <SheetHeader>
             <SheetTitle className="text-base font-medium flex items-center gap-2">
@@ -507,54 +540,32 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
-        {isDropboxLinked && onOpenClientFiles ? (
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={onOpenClientFiles} disabled={dropboxAction !== null}>
-              {dropboxAction === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
-              Відкрити папку Dropbox
-            </Button>
-            {onDetachDropboxFolder ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-10 px-0 shrink-0"
-                onClick={onDetachDropboxFolder}
-                disabled={dropboxAction !== null}
-                title="Відв'язати папку Dropbox"
-                aria-label="Відв'язати папку Dropbox"
-              >
-                {dropboxAction === "detach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
-              </Button>
-            ) : null}
-          </div>
-        ) : (!isDropboxLinked && (onCreateDropboxFolder || onAttachDropboxFolder)) ? (
-          <div className="flex flex-wrap gap-2">
-            {onCreateDropboxFolder ? (
-              <Button type="button" variant="outline" size="sm" onClick={onCreateDropboxFolder} disabled={dropboxAction !== null}>
-                {dropboxAction === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
-                Створити папку Dropbox
-              </Button>
-            ) : null}
-            {onAttachDropboxFolder ? (
-              <Button type="button" variant="outline" size="sm" onClick={onAttachDropboxFolder} disabled={dropboxAction !== null}>
-                {dropboxAction === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
-                Прив'язати папку Dropbox
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Identity header — logo + name + payment + manager hub */}
+        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={<ImageIcon className="h-4 w-4" />}
-                active={!!displayedLogoUrl}
+              <button
+                type="button"
+                title="Змінити лого"
+                className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                {hasInvalidLogoUrl ? "Лого невалідне" : displayedLogoUrl ? "Лого додано" : "Лого"}
-              </Chip>
+                {displayedLogoUrl || form.logoUrl.trim() ? (
+                  <EntityAvatar
+                    src={displayedLogoUrl ?? form.logoUrl ?? null}
+                    name={form.name || "Замовник"}
+                    fallback={getInitials(form.name)}
+                    size={56}
+                    fallbackClassName="text-sm font-semibold"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground/70">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                )}
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                  <ImageIcon className="h-4 w-4 text-white" />
+                </span>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-[320px] p-3" align="start">
               <div className="flex items-center gap-3">
@@ -648,108 +659,180 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             </PopoverContent>
           </Popover>
 
-          <Popover open={managerOpen} onOpenChange={setManagerOpen}>
-            <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={
-                  selectedManager ? (
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="truncate text-lg font-semibold tracking-tight text-foreground">
+                {form.name.trim() || "Новий замовник"}
+              </div>
+              <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-border/50 bg-background p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, paymentType: "invoice" }))}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    form.paymentType === "invoice"
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Рахунок
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, paymentType: "cash" }))}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    form.paymentType === "cash"
+                      ? "bg-[hsl(var(--accent-tone-foreground)/0.15)] text-[hsl(var(--accent-tone-foreground))]"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Готівка
+                </button>
+              </div>
+            </div>
+            {form.paymentType === "cash" ? (
+              <div className="mt-1 text-[11px] text-[hsl(var(--accent-tone-foreground))]">
+                Готівка — email і реквізити необовʼязкові
+              </div>
+            ) : null}
+            <Popover open={managerOpen} onOpenChange={setManagerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  title="Змінити менеджера"
+                >
+                  {selectedManager ? (
                     <AvatarBase
                       src={selectedManager.avatarUrl ?? null}
                       name={selectedManager.label}
                       fallback={selectedManager.label.slice(0, 2).toUpperCase()}
-                      size={20}
-                      className="border-border/60"
-                      fallbackClassName="text-[10px] font-semibold"
+                      size={18}
+                      className="border-border/60 shrink-0"
+                      fallbackClassName="text-[9px] font-semibold"
                     />
                   ) : (
-                    <User className="h-4 w-4" />
-                  )
-                }
-                active={!!form.manager.trim()}
-              >
-                {form.manager.trim() || "Менеджер"}
-              </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-2" align="start">
-              <div className="space-y-1">
-                {teamMembers.length > 0 ? (
-                  teamMembers.map((member) => (
+                    <User className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">
+                    {form.manager.trim() ? `Менеджер: ${form.manager.trim()}` : "Додати менеджера"}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="space-y-1">
+                  {teamMembers.length > 0 ? (
+                    teamMembers.map((member) => (
+                      <Button
+                        key={member.id}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start gap-2 h-9 text-sm truncate"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
+                          setManagerOpen(false);
+                        }}
+                        title={member.label}
+                      >
+                        <AvatarBase
+                          src={member.avatarUrl ?? null}
+                          name={member.label}
+                          fallback={member.label.slice(0, 2).toUpperCase()}
+                          size={20}
+                          className="border-border/60 shrink-0"
+                          fallbackClassName="text-[10px] font-semibold"
+                        />
+                        <span className="truncate">{member.label}</span>
+                      </Button>
+                    ))
+                  ) : (
+                    <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
+                  )}
+                  {form.manager.trim() ? (
                     <Button
-                      key={member.id}
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start gap-2 h-9 text-sm truncate"
+                      className="w-full justify-start text-sm text-muted-foreground"
                       onClick={() => {
-                        setForm((prev) => ({ ...prev, manager: member.label, managerId: member.id }));
+                        setForm((prev) => ({ ...prev, manager: "", managerId: "" }));
                         setManagerOpen(false);
                       }}
-                      title={member.label}
                     >
-                      <AvatarBase
-                        src={member.avatarUrl ?? null}
-                        name={member.label}
-                        fallback={member.label.slice(0, 2).toUpperCase()}
-                        size={20}
-                        className="border-border/60 shrink-0"
-                        fallbackClassName="text-[10px] font-semibold"
-                      />
-                      <span className="truncate">{member.label}</span>
+                      Очистити
                     </Button>
-                  ))
-                ) : (
-                  <div className="text-xs text-muted-foreground p-2">Немає менеджерів</div>
-                )}
-                {form.manager.trim() ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-sm text-muted-foreground"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, manager: "", managerId: "" }));
-                      setManagerOpen(false);
-                    }}
-                  >
-                    Очистити
-                  </Button>
-                ) : null}
-              </div>
-            </PopoverContent>
-          </Popover>
+                  ) : null}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={quickMode ? "secondary" : "ghost"}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => {
+                setQuickMode(true);
+                setSection("basic");
+              }}
+            >
+              Швидко
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={!quickMode ? "secondary" : "ghost"}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => setQuickMode(false)}
+            >
+              Повна
+            </Button>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 p-1.5">
-            <span className="text-xs text-muted-foreground">Режим форми</span>
-            <div className="inline-flex items-center gap-1 rounded-md bg-background p-1">
+        {isDropboxLinked && onOpenClientFiles ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onOpenClientFiles} disabled={dropboxAction !== null}>
+              {dropboxAction === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
+              Відкрити папку Dropbox
+            </Button>
+            {onDetachDropboxFolder ? (
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
-                variant={quickMode ? "secondary" : "ghost"}
-                className="h-7 px-2 text-xs"
-                onClick={() => {
-                  setQuickMode(true);
-                  setSection("basic");
-                }}
+                className="w-10 px-0 shrink-0"
+                onClick={onDetachDropboxFolder}
+                disabled={dropboxAction !== null}
+                title="Відв'язати папку Dropbox"
+                aria-label="Відв'язати папку Dropbox"
               >
-                Швидко
+                {dropboxAction === "detach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={!quickMode ? "secondary" : "ghost"}
-                className="h-7 px-2 text-xs"
-                onClick={() => setQuickMode(false)}
-              >
-                Повна картка
-              </Button>
-            </div>
+            ) : null}
           </div>
+        ) : (!isDropboxLinked && (onCreateDropboxFolder || onAttachDropboxFolder)) ? (
+          <div className="flex flex-wrap gap-2">
+            {onCreateDropboxFolder ? (
+              <Button type="button" variant="outline" size="sm" onClick={onCreateDropboxFolder} disabled={dropboxAction !== null}>
+                {dropboxAction === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
+                Створити папку Dropbox
+              </Button>
+            ) : null}
+            {onAttachDropboxFolder ? (
+              <Button type="button" variant="outline" size="sm" onClick={onAttachDropboxFolder} disabled={dropboxAction !== null}>
+                {dropboxAction === "attach" ? <Loader2 className="h-4 w-4 animate-spin" /> : <DropboxIcon className="h-4 w-4 shrink-0" />}
+                Прив'язати папку Dropbox
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
+        <div className="space-y-3">
           {quickMode ? (
-            <div className="space-y-4">
-              <SectionHeader>Основне</SectionHeader>
-              <div className="space-y-3">
+            <div className="space-y-5">
+              <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
@@ -769,7 +852,17 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       className="h-9"
                     />
                   </div>
+                  <div className="grid gap-2">
+                    <Label>Джерело <span className="text-destructive">*</span></Label>
+                    <SourceSelect
+                      value={form.source}
+                      onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
+                    />
+                  </div>
                 </div>
+              </SectionCard>
+
+              <SectionCard title="Контакт">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Імʼя контакту <span className="text-destructive">*</span></Label>
@@ -789,10 +882,15 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       className="h-9"
                     />
                   </div>
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
-                    <Label>Email <span className="text-destructive">*</span></Label>
+                    <Label>
+                      Email{" "}
+                      {form.paymentType === "invoice" ? (
+                        <span className="text-destructive">*</span>
+                      ) : (
+                        <span className="text-[10px] font-normal text-muted-foreground">необовʼязково</span>
+                      )}
+                    </Label>
                     <Input
                       type="email"
                       value={form.contacts[0]?.email ?? ""}
@@ -821,8 +919,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </Select>
                     </div>
                   ) : null}
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Telegram</Label>
                     <Input
@@ -833,29 +929,28 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     />
                   </div>
                 </div>
-              </div>
+              </SectionCard>
               <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
               </Button>
             </div>
           ) : (
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-            <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
-              <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
-              <TabsTrigger value="legalEntities" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Юр. Особи</TabsTrigger>
-              <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
-              <TabsTrigger value="accountant" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Бухгалтер</TabsTrigger>
-              <TabsTrigger value="related" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+            <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0 shadow-none">
+              <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
+              <TabsTrigger value="legalEntities" className={UNDERLINE_TAB}>Юр. особи</TabsTrigger>
+              <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
+              <TabsTrigger value="accountant" className={UNDERLINE_TAB}>Бухгалтер</TabsTrigger>
+              <TabsTrigger value="related" className={UNDERLINE_TAB}>
                 Пов'язане
-                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
                   {relatedTotalCount}
                 </span>
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="basic" className="space-y-3 mt-3">
-              <SectionHeader>Компанія</SectionHeader>
-              <div className="space-y-3">
+            <TabsContent value="basic" className="space-y-4 mt-3">
+              <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
@@ -875,27 +970,36 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       className="h-9"
                     />
                   </div>
-                </div>
-              </div>
-
-              <SectionHeader>Контакти</SectionHeader>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    Додайте кілька контактів: імʼя, номер{isFopOwnership ? "" : ", посада"}, email.
+                  <div className="grid gap-2">
+                    <Label>Джерело <span className="text-destructive">*</span></Label>
+                    <SourceSelect
+                      value={form.source}
+                      onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
+                    />
                   </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="Контакти"
+                action={
                   <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={addContact}>
                     <PlusCircle className="mr-1 h-4 w-4" />
                     Додати контакт
                   </Button>
-                </div>
-                {contactMissingFields.length > 0 ? (
-                  <div className="rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5">
-                    Для договору та відправки документів додайте: {contactMissingFields.join(", ")}.
+                }
+              >
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Додайте кілька контактів: імʼя, номер{isFopOwnership ? "" : ", посада"}, email.
                   </div>
-                ) : null}
-                {form.contacts.map((contact, index) => (
-                  <div key={`customer-contact-${index}`} className="space-y-3 rounded-lg border border-border/50 p-3">
+                  {contactMissingFields.length > 0 ? (
+                    <div className="rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5">
+                      Для договору та відправки документів додайте: {contactMissingFields.join(", ")}.
+                    </div>
+                  ) : null}
+                  {form.contacts.map((contact, index) => (
+                    <div key={`customer-contact-${index}`} className="space-y-3 rounded-lg border border-border/50 bg-background/40 p-3">
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-medium text-muted-foreground">Контакт {index + 1}</div>
                       {form.contacts.length > 1 ? (
@@ -985,8 +1089,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </SectionCard>
             </TabsContent>
 
             <TabsContent value="legalEntities" className="space-y-3 mt-3">
@@ -1344,8 +1449,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
             </TabsContent>
 
-            <TabsContent value="communication" className="space-y-3 mt-3">
-              <SectionHeader>Нагадування</SectionHeader>
+            <TabsContent value="communication" className="space-y-4 mt-3">
+              <SectionCard title="Нагадування">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Дата</Label>
@@ -1414,8 +1519,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   />
                 </div>
               </div>
+              </SectionCard>
 
-              <SectionHeader>Подія</SectionHeader>
+              <SectionCard title="Подія">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Назва події</Label>
@@ -1482,8 +1588,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   />
                 </div>
               </div>
+              </SectionCard>
 
-              <SectionHeader>Коментарі</SectionHeader>
+              <SectionCard title="Коментарі">
               <div className="grid gap-2">
                 <Label>Загальні коментарі</Label>
                 <Textarea
@@ -1493,10 +1600,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   className="min-h-16"
                 />
               </div>
+              </SectionCard>
             </TabsContent>
 
             <TabsContent value="accountant" className="space-y-3 mt-3">
-              <SectionHeader>Бухгалтер контрагента</SectionHeader>
+              <SectionCard title="Бухгалтер контрагента">
+              <div className="space-y-4">
               <div className="text-xs text-muted-foreground">
                 Дані для відправки документів через «Вчасно»: на який email слати та ЄДРПОУ/ІПН отримувача. Якщо порожньо — підставляється основний email і податковий номер контрагента.
               </div>
@@ -1530,6 +1639,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   className="h-9"
                 />
               </div>
+              </div>
+              </SectionCard>
             </TabsContent>
 
             <TabsContent value="related" className="space-y-3 mt-3">

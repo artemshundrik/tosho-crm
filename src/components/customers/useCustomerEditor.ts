@@ -29,6 +29,8 @@ type CustomerRecord = {
   id: string;
   team_id?: string | null;
   name?: string | null;
+  payment_type?: string | null;
+  source?: string | null;
   legal_name?: string | null;
   manager?: string | null;
   manager_user_id?: string | null;
@@ -62,6 +64,8 @@ const CUSTOMER_COLUMNS = [
   "id",
   "team_id",
   "name",
+  "payment_type",
+  "source",
   "legal_name",
   "manager",
   "manager_user_id",
@@ -102,6 +106,8 @@ const EMPTY_CONTACT: CustomerContact = {
 
 const buildEmptyForm = (): CustomerFormState => ({
   name: "",
+  paymentType: "invoice",
+  source: "",
   manager: "",
   managerId: "",
   website: "",
@@ -263,6 +269,8 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           : undefined;
         setForm({
           name: data.name ?? "",
+          paymentType: data.payment_type === "cash" ? "cash" : "invoice",
+          source: data.source ?? "",
           manager: resolvedMember?.label ?? (data.manager ?? ""),
           managerId: data.manager_user_id ?? "",
           website: data.website ?? "",
@@ -365,6 +373,8 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
 
     const payload: Record<string, unknown> = {
       name: form.name.trim(),
+      payment_type: form.paymentType,
+      source: form.source.trim() || null,
       legal_name: primaryLegalEntity?.legal_name ?? null,
       manager: selectedManagerLabel || null,
       manager_user_id: selectedManagerUserId,

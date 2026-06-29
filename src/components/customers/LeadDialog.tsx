@@ -11,14 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
-import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
-import { AvatarBase } from "@/components/app/avatar-kit";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
@@ -34,6 +34,7 @@ import { PackageCheck, ReceiptText } from "lucide-react";
 
 export type LeadFormState = {
   companyName: string;
+  paymentType: "invoice" | "cash";
   legalName: string;
   ownershipType: string;
   firstName: string;
@@ -105,8 +106,34 @@ export type LeadDialogProps = {
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground">{children}</h4>
+  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</h4>
 );
+
+/** Elevated section surface: a titled card on the dark canvas for depth + grouping. */
+const SectionCard = ({
+  title,
+  action,
+  children,
+  className,
+}: {
+  title?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm", className)}>
+    {title ? (
+      <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
+        <SectionHeader>{title}</SectionHeader>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    ) : null}
+    {children}
+  </section>
+);
+
+const UNDERLINE_TAB =
+  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "ЛД";
@@ -336,7 +363,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="w-full sm:max-w-[640px] overflow-y-auto p-0 flex flex-col">
         <div className="px-6 py-4 border-b shrink-0 bg-muted/20">
           <SheetHeader>
             <SheetTitle className="text-base font-medium flex items-center gap-2">
@@ -349,72 +376,32 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
         
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Popover open={ownershipOpen} onOpenChange={setOwnershipOpen}>
-            <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={<Building2 className="h-4 w-4" />}
-                active={!!form.ownershipType}
-              >
-                {currentOwnership?.label ?? "Тип контрагента"}
-              </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-[360px] p-2" align="start">
-              <div className="space-y-2">
-                {groupedOwnershipOptions.map(([groupName, options]) => (
-                  <div key={groupName} className="space-y-1">
-                    <div className="px-2 pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {groupName}
-                    </div>
-                    {options.map((option) => (
-                      <Button
-                        key={option.value}
-                        variant="ghost"
-                        size="sm"
-                        className="h-auto min-h-9 w-full justify-start gap-2 py-2 text-left"
-                        onClick={() => {
-                          setForm((prev) => ({ ...prev, ownershipType: option.value }));
-                          setOwnershipOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "mt-0.5 h-3.5 w-3.5 shrink-0 text-primary",
-                            form.ownershipType === option.value ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <span className="text-sm leading-5">{formatOwnershipOptionText(option)}</span>
-                      </Button>
-                    ))}
-                  </div>
-                ))}
-                {form.ownershipType ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start h-9 text-sm text-muted-foreground"
-                    onClick={() => {
-                      setForm((prev) => ({ ...prev, ownershipType: "" }));
-                      setOwnershipOpen(false);
-                    }}
-                  >
-                    Очистити
-                  </Button>
-                ) : null}
-              </div>
-            </PopoverContent>
-          </Popover>
-
+        {/* Identity header — logo + name + payment + manager hub */}
+        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={<ImageIcon className="h-4 w-4" />}
-                active={!!displayedLogoUrl}
+              <button
+                type="button"
+                title="Змінити лого"
+                className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
-                {hasInvalidLogoUrl ? "Лого невалідне" : displayedLogoUrl ? "Лого додано" : "Лого"}
-              </Chip>
+                {displayedLogoUrl || form.logoUrl.trim() ? (
+                  <EntityAvatar
+                    src={displayedLogoUrl ?? form.logoUrl ?? null}
+                    name={form.companyName || "Лід"}
+                    fallback={getInitials(form.companyName || `${form.firstName} ${form.lastName}`.trim())}
+                    size={56}
+                    fallbackClassName="text-sm font-semibold"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-muted-foreground/70">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                )}
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                  <ImageIcon className="h-4 w-4 text-white" />
+                </span>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-[320px] p-3" align="start">
               <div className="flex items-center gap-3">
@@ -508,29 +495,68 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </PopoverContent>
           </Popover>
 
-          <Popover open={managerOpen} onOpenChange={setManagerOpen}>
-            <PopoverTrigger asChild>
-              <Chip
-                size="md"
-                icon={
-                  selectedManager ? (
-                    <AvatarBase
-                      src={selectedManager.avatarUrl ?? null}
-                      name={selectedManager.label}
-                      fallback={selectedManager.label.slice(0, 2).toUpperCase()}
-                      size={20}
-                      className="border-border/60"
-                      fallbackClassName="text-[10px] font-semibold"
-                    />
-                  ) : (
-                    <User className="h-4 w-4" />
-                  )
-                }
-                active={!!form.manager.trim()}
-              >
-                {form.manager.trim() || "Менеджер"}
-              </Chip>
-            </PopoverTrigger>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="truncate text-lg font-semibold tracking-tight text-foreground">
+                {form.companyName.trim() || "Новий лід"}
+              </div>
+              <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-border/50 bg-background p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, paymentType: "invoice" }))}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    form.paymentType === "invoice"
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Рахунок
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, paymentType: "cash" }))}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    form.paymentType === "cash"
+                      ? "bg-[hsl(var(--accent-tone-foreground)/0.15)] text-[hsl(var(--accent-tone-foreground))]"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Готівка
+                </button>
+              </div>
+            </div>
+            {form.paymentType === "cash" ? (
+              <div className="mt-1 text-[11px] text-[hsl(var(--accent-tone-foreground))]">
+                Готівка — реквізити необовʼязкові
+              </div>
+            ) : null}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Popover open={managerOpen} onOpenChange={setManagerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    title="Змінити менеджера"
+                  >
+                    {selectedManager ? (
+                      <AvatarBase
+                        src={selectedManager.avatarUrl ?? null}
+                        name={selectedManager.label}
+                        fallback={selectedManager.label.slice(0, 2).toUpperCase()}
+                        size={18}
+                        className="border-border/60 shrink-0"
+                        fallbackClassName="text-[9px] font-semibold"
+                      />
+                    ) : (
+                      <User className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {form.manager.trim() ? `Менеджер: ${form.manager.trim()}` : "Додати менеджера"}
+                    </span>
+                  </button>
+                </PopoverTrigger>
             <PopoverContent className="w-64 p-2" align="start">
               <div className="space-y-1">
                 {form.manager && !hasManagerInList ? (
@@ -599,46 +625,94 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 ) : null}
               </div>
             </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="rounded-md border border-border/50 bg-muted/15 px-3 py-2 text-xs text-muted-foreground">
-          {[form.companyName || "Без назви", form.manager || "Без менеджера", form.reminderDate || "Без нагадування"]
-            .filter(Boolean)
-            .join(" • ")}
+              </Popover>
+              <Popover open={ownershipOpen} onOpenChange={setOwnershipOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    title="Тип контрагента"
+                  >
+                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{currentOwnership?.label ?? "Тип контрагента"}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[360px] p-2" align="start">
+                  <div className="space-y-2">
+                    {groupedOwnershipOptions.map(([groupName, options]) => (
+                      <div key={groupName} className="space-y-1">
+                        <div className="px-2 pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {groupName}
+                        </div>
+                        {options.map((option) => (
+                          <Button
+                            key={option.value}
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto min-h-9 w-full justify-start gap-2 py-2 text-left"
+                            onClick={() => {
+                              setForm((prev) => ({ ...prev, ownershipType: option.value }));
+                              setOwnershipOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mt-0.5 h-3.5 w-3.5 shrink-0 text-primary",
+                                form.ownershipType === option.value ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="text-sm leading-5">{formatOwnershipOptionText(option)}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    ))}
+                    {form.ownershipType ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start h-9 text-sm text-muted-foreground"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, ownershipType: "" }));
+                          setOwnershipOpen(false);
+                        }}
+                      >
+                        Очистити
+                      </Button>
+                    ) : null}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <div className="inline-flex shrink-0 items-center gap-0.5 self-start rounded-md bg-background p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={quickMode ? "secondary" : "ghost"}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => {
+                setQuickMode(true);
+                setSection("basic");
+              }}
+            >
+              Швидко
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={!quickMode ? "secondary" : "ghost"}
+              className="h-7 px-2.5 text-xs"
+              onClick={() => setQuickMode(false)}
+            >
+              Повна
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 p-1.5">
-            <span className="text-xs text-muted-foreground">Режим форми</span>
-            <div className="inline-flex items-center gap-1 rounded-md bg-background p-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={quickMode ? "secondary" : "ghost"}
-                className="h-7 px-2 text-xs"
-                onClick={() => {
-                  setQuickMode(true);
-                  setSection("basic");
-                }}
-              >
-                Швидко
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={!quickMode ? "secondary" : "ghost"}
-                className="h-7 px-2 text-xs"
-                onClick={() => setQuickMode(false)}
-              >
-                Повна картка
-              </Button>
-            </div>
-          </div>
-
           {quickMode ? (
             <div className="space-y-4">
-              <SectionHeader>Основне</SectionHeader>
+              <SectionCard title="Основне">
               <div className="space-y-3">
                 <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
@@ -652,11 +726,9 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>Джерело <span className="text-destructive">*</span></Label>
-                    <Input
+                    <SourceSelect
                       value={form.source}
-                      onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
-                      placeholder="Звідки отримали контакт"
-                      className="h-9"
+                      onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
                     />
                   </div>
                 </div>
@@ -727,26 +799,27 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                 </div>
               </div>
+              </SectionCard>
               <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
                 Відкрити повну картку
               </Button>
             </div>
           ) : (
             <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-              <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
-                <TabsTrigger value="basic" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Основне</TabsTrigger>
-                <TabsTrigger value="requisites" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Реквізити</TabsTrigger>
-                <TabsTrigger value="communication" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>Комунікація</TabsTrigger>
-                <TabsTrigger value="related" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
+              <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0 shadow-none">
+                <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
+                <TabsTrigger value="requisites" className={UNDERLINE_TAB}>Реквізити</TabsTrigger>
+                <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
+                <TabsTrigger value="related" className={UNDERLINE_TAB}>
                   Пов'язане
-                  <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
                     {relatedTotalCount}
                   </span>
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="basic" className="space-y-3 mt-3">
-                <SectionHeader>Компанія</SectionHeader>
+                <SectionCard title="Компанія">
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
@@ -780,17 +853,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </div>
                     <div className="grid gap-2">
                       <Label>Джерело <span className="text-destructive">*</span></Label>
-                      <Input
+                      <SourceSelect
                         value={form.source}
-                        onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
-                        placeholder="Звідки отримали контакт"
-                        className="h-9"
+                        onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
                       />
                     </div>
                   </div>
                 </div>
+                </SectionCard>
 
-                <SectionHeader>Контакти</SectionHeader>
+                <SectionCard title="Контакти">
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
@@ -859,10 +931,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </div>
                   </div>
                 </div>
+                </SectionCard>
               </TabsContent>
 
               <TabsContent value="requisites" className="space-y-3 mt-3">
-                <SectionHeader>Реквізити</SectionHeader>
+                <SectionCard title="Реквізити">
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
@@ -923,10 +996,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     </Select>
                   </div>
                 </div>
+                </SectionCard>
               </TabsContent>
 
               <TabsContent value="communication" className="space-y-3 mt-3">
-                <SectionHeader>Нагадування</SectionHeader>
+                <SectionCard title="Нагадування">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Дата</Label>
@@ -995,8 +1069,9 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     />
                   </div>
                 </div>
+                </SectionCard>
 
-                <SectionHeader>Подія</SectionHeader>
+                <SectionCard title="Подія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Назва події</Label>
@@ -1063,8 +1138,9 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     />
                   </div>
                 </div>
+                </SectionCard>
 
-                <SectionHeader>Коментарі</SectionHeader>
+                <SectionCard title="Коментарі">
                 <div className="grid gap-2">
                   <Label>Загальні коментарі</Label>
                   <Textarea
@@ -1074,6 +1150,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     className="min-h-16"
                   />
                 </div>
+                </SectionCard>
               </TabsContent>
 
               <TabsContent value="related" className="space-y-3 mt-3">
