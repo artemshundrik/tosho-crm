@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { Loader2, RefreshCw, Files, Lock, Calendar, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, RefreshCw, Files, Lock, Calendar, FileText, Check, ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +11,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
+import {
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  DESIGN_TASK_TYPE_OPTIONS,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
 
 const RASTER_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"]);
 
@@ -43,8 +50,7 @@ export type DuplicateSourceView = {
   assigneeLabel: string | null;
   assigneeAvatarUrl: string | null;
   deadline: string | null;
-  taskTypeLabel: string | null;
-  TaskTypeIcon?: ComponentType<{ className?: string }> | null;
+  taskType: DesignTaskType | null;
   hasBrief: boolean;
   files: DuplicateSourceFile[];
 };
@@ -52,6 +58,7 @@ export type DuplicateSourceView = {
 export type DuplicateDesignTaskOptions = {
   briefFileIds: string[];
   briefMode: "edit" | "new";
+  taskType: DesignTaskType | null;
   carryAssignee: boolean;
   carryDeadline: boolean;
 };
@@ -75,6 +82,8 @@ export function DuplicateDesignTaskDialog({
 }: DuplicateDesignTaskDialogProps) {
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [briefMode, setBriefMode] = useState<"edit" | "new">("edit");
+  const [taskType, setTaskType] = useState<DesignTaskType | null>(null);
+  const [typePopoverOpen, setTypePopoverOpen] = useState(false);
   const [carryAssignee, setCarryAssignee] = useState(false);
   const [carryDeadline, setCarryDeadline] = useState(false);
   const [previewByFileId, setPreviewByFileId] = useState<Record<string, string | null>>({});
@@ -85,6 +94,7 @@ export function DuplicateDesignTaskDialog({
     if (open && source) {
       setFileIds(source.files.map((file) => file.id));
       setBriefMode(source.hasBrief ? "edit" : "new");
+      setTaskType(source.taskType);
       setCarryAssignee(false);
       setCarryDeadline(false);
     }
@@ -126,7 +136,7 @@ export function DuplicateDesignTaskDialog({
     setFileIds((prev) => (checked ? Array.from(new Set([...prev, id])) : prev.filter((value) => value !== id)));
   };
 
-  const TaskTypeIcon = source?.TaskTypeIcon ?? null;
+  const TaskTypeIcon = taskType ? DESIGN_TASK_TYPE_ICONS[taskType] : null;
   const selectedCount = fileIds.length;
   const totalFiles = source?.files.length ?? 0;
 
@@ -263,18 +273,48 @@ export function DuplicateDesignTaskDialog({
               </div>
             </div>
 
-            {source.taskTypeLabel ? (
-              <div className="flex items-center gap-3 border-t py-3">
-                <Checkbox checked disabled aria-label="Тип задачі переноситься" />
-                <span className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                  {TaskTypeIcon ? <TaskTypeIcon className="h-[18px] w-[18px]" /> : null}
-                </span>
-                <div className="flex-1">
-                  <div className="text-sm">Тип задачі</div>
-                  <div className="text-xs text-muted-foreground">{source.taskTypeLabel}</div>
-                </div>
+            <div className="flex items-center gap-3 border-t py-3">
+              <Checkbox checked disabled aria-label="Тип задачі переноситься" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                {TaskTypeIcon ? <TaskTypeIcon className="h-[18px] w-[18px]" /> : null}
+              </span>
+              <div className="flex-1">
+                <div className="text-sm">Тип задачі</div>
+                <div className="text-xs text-muted-foreground">можна змінити для нової задачі</div>
               </div>
-            ) : null}
+              <Popover open={typePopoverOpen} onOpenChange={setTypePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5">
+                    <span>{taskType ? DESIGN_TASK_TYPE_LABELS[taskType] : "Обрати тип"}</span>
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="end">
+                  <div className="space-y-1">
+                    {DESIGN_TASK_TYPE_OPTIONS.map((option) => {
+                      const TypeIcon = DESIGN_TASK_TYPE_ICONS[option.value];
+                      return (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-full justify-start gap-2 text-sm"
+                          onClick={() => {
+                            setTaskType(option.value);
+                            setTypePopoverOpen(false);
+                          }}
+                        >
+                          <TypeIcon className="h-3.5 w-3.5" />
+                          <span>{option.label}</span>
+                          {taskType === option.value ? <Check className="ml-auto h-4 w-4" /> : null}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
 
             {source.assigneeUserId ? (
               <label className="flex cursor-pointer items-center gap-3 border-t py-3">
@@ -325,7 +365,7 @@ export function DuplicateDesignTaskDialog({
               Скасувати
             </Button>
             <Button
-              onClick={() => onConfirm({ briefFileIds: fileIds, briefMode, carryAssignee, carryDeadline })}
+              onClick={() => onConfirm({ briefFileIds: fileIds, briefMode, taskType, carryAssignee, carryDeadline })}
               disabled={saving || !source}
             >
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

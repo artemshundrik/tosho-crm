@@ -4267,7 +4267,13 @@ export default function DesignPage() {
 
   const duplicateStandaloneTask = async (
     source: DesignTask,
-    options: { briefFileIds: string[]; briefMode: "edit" | "new"; carryAssignee: boolean; carryDeadline: boolean }
+    options: {
+      briefFileIds: string[];
+      briefMode: "edit" | "new";
+      taskType: DesignTaskType | null;
+      carryAssignee: boolean;
+      carryDeadline: boolean;
+    }
   ) => {
     if (!effectiveTeamId || duplicateSaving) return;
     setDuplicateSaving(true);
@@ -4299,7 +4305,8 @@ export default function DesignPage() {
           ? sourceMeta.manager_user_id.trim()
           : source.quoteManagerUserId ?? userId ?? null;
       const managerLabel = managerUserId ? getMemberLabel(managerUserId) : actorName;
-      const designTaskType = source.designTaskType ?? parseDesignTaskType(sourceMeta.design_task_type);
+      const designTaskType =
+        options.taskType ?? source.designTaskType ?? parseDesignTaskType(sourceMeta.design_task_type);
 
       const carriedBrief =
         options.briefMode === "edit" &&
@@ -7019,12 +7026,7 @@ export default function DesignPage() {
                   ? getMemberAvatar(duplicateSource.assigneeUserId)
                   : null,
                 deadline: duplicateSource.designDeadline ?? null,
-                taskTypeLabel: duplicateSource.designTaskType
-                  ? DESIGN_TASK_TYPE_LABELS[duplicateSource.designTaskType]
-                  : null,
-                TaskTypeIcon: duplicateSource.designTaskType
-                  ? DESIGN_TASK_TYPE_ICONS[duplicateSource.designTaskType]
-                  : null,
+                taskType: duplicateSource.designTaskType ?? null,
                 hasBrief:
                   typeof duplicateSource.metadata?.design_brief === "string" &&
                   (duplicateSource.metadata.design_brief as string).trim().length > 0,
