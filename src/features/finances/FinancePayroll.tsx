@@ -319,7 +319,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 <TableHead className="whitespace-nowrap text-right">Бонус</TableHead>
                 <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
                 <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
-                <TableHead className="w-full">Нотатка</TableHead>
+                <TableHead className="w-[200px]">Нотатка</TableHead>
                 <TableHead className="whitespace-nowrap">Юрособа</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
               </TableRow>
@@ -382,7 +382,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
                       {formatUAH(totalFor(person.userId))}
                     </TableCell>
-                    <TableCell className="w-full max-w-0">
+                    <TableCell className="w-[200px]">
                       <PayrollNoteCell
                         note={entries.get(person.userId)?.note ?? null}
                         onSave={(text) => saveNote(person.userId, text)}
@@ -527,9 +527,9 @@ function PayrollNoteCell({
           onMouseLeave={closeHover}
           onClick={startEdit}
           className={cn(
-            // Fills the flexible column; the cell's max-w-0 lets long notes
-            // truncate with «…» instead of stretching the table.
-            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            // Definite 200px so the note truncates with «…»; the rest of the
+            // table's width spreads across the other (auto) columns.
+            "flex w-[200px] max-w-[200px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
             hasNote ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
