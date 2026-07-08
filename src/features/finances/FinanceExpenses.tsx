@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, PiggyBank, Pin, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2, PiggyBank, Pin, Plus, X } from "lucide-react";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,19 @@ const monthLabel = (key: string) => {
   if (!key) return "Без дати";
   const [year, month] = key.split("-").map(Number);
   return `${MONTHS[(month || 1) - 1]} ${year}`;
+};
+
+// «YYYY-MM» → «Лип» (3-letter month) for the compact overview strip.
+const monthShort = (key: string) => {
+  const [, month] = key.split("-").map(Number);
+  return MONTHS[(month || 1) - 1].slice(0, 3);
+};
+
+// Shift a «YYYY-MM» key by a number of months.
+const shiftMonthKey = (key: string, delta: number) => {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, (month || 1) - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -165,9 +178,14 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [fixed]
   );
 
-  // Group variable expenses by month («YYYY-MM») and add the fixed baseline to
-  // each month's total. The current month is always shown, newest first.
-  const monthlyGroups = React.useMemo(() => {
+  // Month-focused view: one month at a time so the page never becomes an endless
+  // scroll as data accumulates. The overview strip handles cross-month navigation.
+  const currentKey = React.useMemo(() => todayISO().slice(0, 7), []);
+  const [selectedMonth, setSelectedMonth] = React.useState(currentKey);
+  const [fixedOpen, setFixedOpen] = React.useState(false);
+
+  // Variable expenses bucketed by month key («YYYY-MM»; «» = no date).
+  const variableByMonth = React.useMemo(() => {
     const map = new Map<string, FinanceExpense[]>();
     for (const expense of variable) {
       const key = (expense.expenseDate ?? "").slice(0, 7);
@@ -175,22 +193,43 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       if (list) list.push(expense);
       else map.set(key, [expense]);
     }
-    const nowKey = todayISO().slice(0, 7);
-    if (!map.has(nowKey)) map.set(nowKey, []);
-    // Sort keys descending; the empty «Без дати» key falls to the end.
-    const keys = Array.from(map.keys()).sort((a, b) => {
-      if (!a) return 1;
-      if (!b) return -1;
-      return b.localeCompare(a);
-    });
-    return keys.map((key) => {
-      const items = (map.get(key) ?? [])
+    return map;
+  }, [variable]);
+
+  const monthTotalFor = React.useCallback(
+    (key: string) =>
+      fixedBaseline + (variableByMonth.get(key)?.reduce((sum, e) => sum + e.amount, 0) ?? 0),
+    [fixedBaseline, variableByMonth]
+  );
+
+  // Continuous last 12 calendar months (ending at the current month) for the
+  // overview trend strip — independent of which months happen to have data.
+  const overview = React.useMemo(() => {
+    const months: { key: string; total: number }[] = [];
+    for (let i = 11; i >= 0; i -= 1) {
+      const key = shiftMonthKey(currentKey, -i);
+      months.push({ key, total: monthTotalFor(key) });
+    }
+    return months;
+  }, [currentKey, monthTotalFor]);
+
+  const maxOverviewTotal = React.useMemo(
+    () => overview.reduce((max, m) => Math.max(max, m.total), 0),
+    [overview]
+  );
+
+  const selectedItems = React.useMemo(
+    () =>
+      (variableByMonth.get(selectedMonth) ?? [])
         .slice()
-        .sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? ""));
-      const variableSum = items.reduce((sum, e) => sum + e.amount, 0);
-      return { key, items, variableSum, total: fixedBaseline + variableSum };
-    });
-  }, [variable, fixedBaseline]);
+        .sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? "")),
+    [variableByMonth, selectedMonth]
+  );
+  const selectedVariableSum = React.useMemo(
+    () => selectedItems.reduce((sum, e) => sum + e.amount, 0),
+    [selectedItems]
+  );
+  const undatedItems = React.useMemo(() => variableByMonth.get("") ?? [], [variableByMonth]);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceExpense | null>(null);
@@ -287,47 +326,152 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Month navigator */}
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Попередній місяць"
+              onClick={() => setSelectedMonth((k) => shiftMonthKey(k, -1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="min-w-[150px] text-center text-sm font-semibold">
+              {monthLabel(selectedMonth)}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Наступний місяць"
+              onClick={() => setSelectedMonth((k) => shiftMonthKey(k, 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            {selectedMonth !== currentKey ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-1 h-8"
+                onClick={() => setSelectedMonth(currentKey)}
+              >
+                Поточний
+              </Button>
+            ) : null}
+          </div>
+
+          {/* Overview strip: last 12 months, click a bar to jump */}
+          <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Огляд по місяцях
+              </span>
+              <span className="text-[11px] text-muted-foreground">останні 12 міс</span>
+            </div>
+            <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
+              {overview.map((mo) => {
+                const active = mo.key === selectedMonth;
+                const height =
+                  maxOverviewTotal > 0 ? Math.max(4, Math.round((mo.total / maxOverviewTotal) * 56)) : 4;
+                return (
+                  <button
+                    key={mo.key}
+                    type="button"
+                    onClick={() => setSelectedMonth(mo.key)}
+                    title={`${monthLabel(mo.key)} · ${formatOrderMoney(mo.total, "UAH")}`}
+                    className={cn(
+                      "group flex w-11 shrink-0 cursor-pointer flex-col items-center gap-1 rounded-md px-1 pb-1 pt-2 transition-colors",
+                      active ? "bg-primary/10" : "hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="flex h-14 w-full items-end justify-center">
+                      <div
+                        style={{ height }}
+                        className={cn(
+                          "w-4 rounded-t transition-colors",
+                          active ? "bg-primary" : "bg-muted-foreground/30 group-hover:bg-muted-foreground/50"
+                        )}
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "text-[10px]",
+                        active ? "font-semibold text-primary" : "text-muted-foreground"
+                      )}
+                    >
+                      {monthShort(mo.key)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* KPI cells for the selected month */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ExpenseKpi label="Сталі (щомісячні)" value={formatOrderMoney(fixedBaseline, "UAH")} />
+            <ExpenseKpi label="Змінні за місяць" value={formatOrderMoney(selectedVariableSum, "UAH")} />
+            <ExpenseKpi
+              label="Разом за місяць"
+              value={formatOrderMoney(fixedBaseline + selectedVariableSum, "UAH")}
+              accent
+            />
+          </div>
+
+          {/* Fixed baseline — collapsed by default since it repeats every month */}
           {fixed.length > 0 ? (
-            <div>
-              <h3 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <Pin className="h-3 w-3" /> Сталі (щомісячні)
+            <div className="rounded-xl border border-border/60">
+              <button
+                type="button"
+                onClick={() => setFixedOpen((o) => !o)}
+                className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left"
+              >
+                <span className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Pin className="h-3 w-3" /> Сталі (щомісячні)
+                  </span>
+                  <Badge variant="outline" className="text-[10px] font-semibold text-foreground">
+                    {formatOrderMoney(fixedBaseline, "UAH")} / міс
+                  </Badge>
                 </span>
-                <Badge variant="outline" className="text-[10px] font-semibold text-foreground">
-                  {formatOrderMoney(fixedBaseline, "UAH")} / міс
-                </Badge>
-              </h3>
-              <div className="grid gap-2">{fixed.map(renderRow)}</div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Враховуються в загальній сумі кожного місяця нижче.
-              </p>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                    fixedOpen && "rotate-180"
+                  )}
+                />
+              </button>
+              {fixedOpen ? <div className="grid gap-2 px-3 pb-3">{fixed.map(renderRow)}</div> : null}
             </div>
           ) : null}
 
-          {monthlyGroups.map((group) => (
-            <div key={group.key || "no-date"} className="rounded-xl border border-border/60 bg-muted/10">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
-                <span className="text-sm font-semibold text-foreground">{monthLabel(group.key)}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground">
-                    сталі {formatOrderMoney(fixedBaseline, "UAH")} + змінні {formatOrderMoney(group.variableSum, "UAH")}
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
-                    {formatOrderMoney(group.total, "UAH")}
-                  </span>
-                </div>
+          {/* Variable expenses for the selected month */}
+          <div>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Змінні витрати · {monthLabel(selectedMonth)}
+            </h3>
+            {selectedItems.length > 0 ? (
+              <div className="grid gap-2">{selectedItems.map(renderRow)}</div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                Немає змінних витрат за {monthLabel(selectedMonth)}.
               </div>
-              <div className="p-3">
-                {group.items.length > 0 ? (
-                  <div className="grid gap-2">{group.items.map(renderRow)}</div>
-                ) : (
-                  <p className="px-1 py-2 text-xs text-muted-foreground">
-                    Лише сталі витрати цього місяця.
-                  </p>
-                )}
-              </div>
+            )}
+          </div>
+
+          {/* Variable expenses without a date — surfaced so they aren't lost */}
+          {undatedItems.length > 0 ? (
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Без дати ({undatedItems.length})
+              </h3>
+              <div className="grid gap-2">{undatedItems.map(renderRow)}</div>
             </div>
-          ))}
+          ) : null}
         </div>
       )}
 
@@ -346,6 +490,27 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           onSaved={reload}
         />
       ) : null}
+    </div>
+  );
+}
+
+function ExpenseKpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border/60 bg-card p-3",
+        accent && "border-primary/40 bg-primary/5"
+      )}
+    >
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-1 text-base font-semibold tabular-nums text-foreground",
+          accent && "text-primary"
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
