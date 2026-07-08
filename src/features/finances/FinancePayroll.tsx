@@ -44,7 +44,7 @@ type Person = {
   initials: string | null;
 };
 
-type Draft = { base: string; bonus: string };
+type Draft = { base: string; bonus: string; deduction: string };
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -99,7 +99,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         setMeta(nextMeta);
         const nextDrafts: Record<string, Draft> = {};
         nextEntries.forEach((entry, uid) => {
-          nextDrafts[uid] = { base: amountToInput(entry.baseAmount), bonus: amountToInput(entry.bonusAmount) };
+          nextDrafts[uid] = {
+            base: amountToInput(entry.baseAmount),
+            bonus: amountToInput(entry.bonusAmount),
+            deduction: amountToInput(entry.deductionAmount),
+          };
         });
         setDrafts(nextDrafts);
       })
@@ -140,12 +144,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   }, [members]);
 
   const draftFor = (uid: string): Draft =>
-    drafts[uid] ?? { base: "", bonus: "" };
+    drafts[uid] ?? { base: "", bonus: "", deduction: "" };
 
   const totalFor = (uid: string): number => {
     const d = draftFor(uid);
-    const entry = entries.get(uid);
-    return parsePayrollAmount(d.base) + parsePayrollAmount(d.bonus) - (entry?.deductionAmount ?? 0);
+    return parsePayrollAmount(d.base) + parsePayrollAmount(d.bonus) - parsePayrollAmount(d.deduction);
   };
 
   const totals = React.useMemo(() => {
@@ -157,8 +160,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       const d = draftFor(person.userId);
       const b = parsePayrollAmount(d.base);
       const bo = parsePayrollAmount(d.bonus);
-      const entry = entries.get(person.userId);
-      const t = b + bo - (entry?.deductionAmount ?? 0);
+      const t = b + bo - parsePayrollAmount(d.deduction);
       base += b;
       bonus += bo;
       total += t;
@@ -183,7 +185,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         values: {
           baseAmount: parsePayrollAmount(d.base),
           bonusAmount: parsePayrollAmount(d.bonus),
-          deductionAmount: entry?.deductionAmount ?? 0,
+          deductionAmount: parsePayrollAmount(d.deduction),
           note: entry?.note ?? null,
         },
       }).catch((error) => toast.error("Не збереглося", { description: getErrorMessage(error, "") }));
@@ -193,24 +195,22 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const saveNote = async (uid: string, note: string) => {
     if (!workspaceId) return;
     const d = draftFor(uid);
-    const entry = entries.get(uid);
     const trimmed = note.trim();
     const nextNote = trimmed ? trimmed : null;
     const baseAmount = parsePayrollAmount(d.base);
     const bonusAmount = parsePayrollAmount(d.bonus);
-    const deductionAmount = entry?.deductionAmount ?? 0;
+    const deductionAmount = parsePayrollAmount(d.deduction);
     // Optimistic — keep the shared payroll_entries snapshot in sync so the cell
     // reflects the saved note immediately.
     setEntries((prev) => {
       const next = new Map(prev);
-      const cur = next.get(uid);
       next.set(uid, {
         userId: uid,
         period,
         baseAmount,
         bonusAmount,
         deductionAmount,
-        totalAmount: cur?.totalAmount ?? baseAmount + bonusAmount - deductionAmount,
+        totalAmount: baseAmount + bonusAmount - deductionAmount,
         note: nextNote,
       });
       return next;
@@ -265,7 +265,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Ставка, премія та статус виплати по кожному за місяць. Дані спільні зі сторінкою зарплат.
+          Ставка, бонус, офіційна ЗП та статус виплати по кожному за місяць. Дані спільні зі сторінкою зарплат.
         </p>
         <div className="flex items-center gap-1">
           <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftMonth(-1)}>
@@ -282,7 +282,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Ставки" value={formatUAH(totals.base)} />
-        <Kpi label="Премії" value={formatUAH(totals.bonus)} />
+        <Kpi label="Бонуси" value={formatUAH(totals.bonus)} />
         <Kpi label="До виплати" value={formatUAH(totals.total)} accent />
         <Kpi label="Виплачено" value={formatUAH(totals.paid)} tone="success" />
       </div>
@@ -298,7 +298,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
               <TableRow>
                 <TableHead>Співробітник</TableHead>
                 <TableHead className="text-right">Ставка</TableHead>
-                <TableHead className="text-right">Премія</TableHead>
+                <TableHead className="text-right">Бонус</TableHead>
+                <TableHead className="text-right">Офіційна ЗП</TableHead>
                 <TableHead className="text-right">До виплати</TableHead>
                 <TableHead>Нотатка</TableHead>
                 <TableHead>Юрособа</TableHead>
@@ -342,6 +343,15 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                       <Input
                         value={d.bonus}
                         onChange={(e) => queueSaveAmount(person.userId, { bonus: e.target.value })}
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="h-8 w-28 text-right"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        value={d.deduction}
+                        onChange={(e) => queueSaveAmount(person.userId, { deduction: e.target.value })}
                         inputMode="decimal"
                         placeholder="0"
                         className="h-8 w-28 text-right"
