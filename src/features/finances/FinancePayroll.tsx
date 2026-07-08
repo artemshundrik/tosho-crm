@@ -311,7 +311,9 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border/60">
-          <Table size="sm">
+          {/* Content-width so every inter-column gap is the same cell padding;
+              leftover space falls to the right of the last column. */}
+          <Table size="sm" className="!w-auto">
             <TableHeader>
               <TableRow>
                 <TableHead className="whitespace-nowrap">Співробітник</TableHead>
@@ -320,7 +322,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
                 <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
                 <TableHead className="w-[200px]">Нотатка</TableHead>
-                <TableHead className="w-full p-0" aria-hidden />
                 <TableHead className="whitespace-nowrap">Юрособа</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
               </TableRow>
@@ -389,7 +390,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         onSave={(text) => saveNote(person.userId, text)}
                       />
                     </TableCell>
-                    <TableCell className="p-0" aria-hidden />
                     <TableCell>
                       <Select
                         value={m?.legalEntityId ?? "none"}
