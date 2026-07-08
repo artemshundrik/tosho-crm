@@ -51,6 +51,18 @@ type FinanceExpensesProps = {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const MONTHS = [
+  "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
+  "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
+];
+
+// «YYYY-MM» → «Липень 2026»; empty key → «Без дати».
+const monthLabel = (key: string) => {
+  if (!key) return "Без дати";
+  const [year, month] = key.split("-").map(Number);
+  return `${MONTHS[(month || 1) - 1]} ${year}`;
+};
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -146,6 +158,39 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     }
     return { fixed: fixedList, variable: variableList };
   }, [visibleExpenses]);
+
+  // Fixed (recurring) expenses are a monthly baseline counted in every month.
+  const fixedBaseline = React.useMemo(
+    () => fixed.reduce((sum, e) => sum + e.amount, 0),
+    [fixed]
+  );
+
+  // Group variable expenses by month («YYYY-MM») and add the fixed baseline to
+  // each month's total. The current month is always shown, newest first.
+  const monthlyGroups = React.useMemo(() => {
+    const map = new Map<string, FinanceExpense[]>();
+    for (const expense of variable) {
+      const key = (expense.expenseDate ?? "").slice(0, 7);
+      const list = map.get(key);
+      if (list) list.push(expense);
+      else map.set(key, [expense]);
+    }
+    const nowKey = todayISO().slice(0, 7);
+    if (!map.has(nowKey)) map.set(nowKey, []);
+    // Sort keys descending; the empty «Без дати» key falls to the end.
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (!a) return 1;
+      if (!b) return -1;
+      return b.localeCompare(a);
+    });
+    return keys.map((key) => {
+      const items = (map.get(key) ?? [])
+        .slice()
+        .sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? ""));
+      const variableSum = items.reduce((sum, e) => sum + e.amount, 0);
+      return { key, items, variableSum, total: fixedBaseline + variableSum };
+    });
+  }, [variable, fixedBaseline]);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceExpense | null>(null);
@@ -244,20 +289,45 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         <div className="space-y-4">
           {fixed.length > 0 ? (
             <div>
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Pin className="h-3 w-3" /> Сталі (щомісячні)
+              <h3 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Pin className="h-3 w-3" /> Сталі (щомісячні)
+                </span>
+                <Badge variant="outline" className="text-[10px] font-semibold text-foreground">
+                  {formatOrderMoney(fixedBaseline, "UAH")} / міс
+                </Badge>
               </h3>
               <div className="grid gap-2">{fixed.map(renderRow)}</div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Враховуються в загальній сумі кожного місяця нижче.
+              </p>
             </div>
           ) : null}
-          {variable.length > 0 ? (
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Змінні (під замовлення)
-              </h3>
-              <div className="grid gap-2">{variable.map(renderRow)}</div>
+
+          {monthlyGroups.map((group) => (
+            <div key={group.key || "no-date"} className="rounded-xl border border-border/60 bg-muted/10">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-2.5">
+                <span className="text-sm font-semibold text-foreground">{monthLabel(group.key)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    сталі {formatOrderMoney(fixedBaseline, "UAH")} + змінні {formatOrderMoney(group.variableSum, "UAH")}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    {formatOrderMoney(group.total, "UAH")}
+                  </span>
+                </div>
+              </div>
+              <div className="p-3">
+                {group.items.length > 0 ? (
+                  <div className="grid gap-2">{group.items.map(renderRow)}</div>
+                ) : (
+                  <p className="px-1 py-2 text-xs text-muted-foreground">
+                    Лише сталі витрати цього місяця.
+                  </p>
+                )}
+              </div>
             </div>
-          ) : null}
+          ))}
         </div>
       )}
 
