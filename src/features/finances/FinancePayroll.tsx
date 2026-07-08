@@ -33,8 +33,14 @@ type FinancePayrollProps = {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
-const fmtUAH = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const formatUAH = (value: number) => `${fmtUAH.format(value)} грн`;
+const fmtUAH0 = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmtUAH2 = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Hide kopecks for whole amounts («38 000 грн»), keep them when present («38 000,50 грн»).
+const formatUAH = (value: number) => {
+  const rounded = Math.round(value * 100) / 100;
+  const hasKopecks = Math.round(rounded * 100) % 100 !== 0;
+  return `${(hasKopecks ? fmtUAH2 : fmtUAH0).format(rounded)} грн`;
+};
 const amountToInput = (value: number) => (value ? String(value) : "");
 
 // Compact display name for the payout table: «Тетяна Карандюк» → «Тетяна К.».
@@ -313,7 +319,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 <TableHead className="whitespace-nowrap text-right">Бонус</TableHead>
                 <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
                 <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
-                <TableHead className="w-full min-w-[140px]">Нотатка</TableHead>
+                <TableHead className="w-[200px]">Нотатка</TableHead>
+                <TableHead className="w-full p-0" aria-hidden />
                 <TableHead className="whitespace-nowrap">Юрособа</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
               </TableRow>
@@ -373,13 +380,16 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         className="h-8 w-28 text-right"
                       />
                     </TableCell>
-                    <TableCell className="text-right text-sm font-medium">{formatUAH(totalFor(person.userId))}</TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
+                      {formatUAH(totalFor(person.userId))}
+                    </TableCell>
+                    <TableCell className="w-[200px]">
                       <PayrollNoteCell
                         note={entries.get(person.userId)?.note ?? null}
                         onSave={(text) => saveNote(person.userId, text)}
                       />
                     </TableCell>
+                    <TableCell className="p-0" aria-hidden />
                     <TableCell>
                       <Select
                         value={m?.legalEntityId ?? "none"}
