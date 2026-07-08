@@ -36,6 +36,17 @@ const fmtUAH = new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximu
 const formatUAH = (value: number) => `${fmtUAH.format(value)} грн`;
 const amountToInput = (value: number) => (value ? String(value) : "");
 
+// Compact display name for the payout table: «Тетяна Карандюк» → «Тетяна К.».
+// Keeps the given name and abbreviates the surname to a single initial so the
+// column stays narrow. Single-word names are returned as-is.
+const shortenName = (name: string): string => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  const [first, second] = parts;
+  const initial = second.charAt(0).toUpperCase();
+  return initial ? `${first} ${initial}.` : first;
+};
+
 type Person = {
   userId: string;
   name: string;
@@ -296,14 +307,14 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Співробітник</TableHead>
+                <TableHead className="whitespace-nowrap">Співробітник</TableHead>
                 <TableHead className="text-right">Ставка</TableHead>
                 <TableHead className="text-right">Бонус</TableHead>
                 <TableHead className="text-right">Офіційна ЗП</TableHead>
                 <TableHead className="text-right">До виплати</TableHead>
-                <TableHead>Нотатка</TableHead>
-                <TableHead>Юрособа</TableHead>
-                <TableHead className="text-center">Статус</TableHead>
+                <TableHead className="w-full min-w-[120px]">Нотатка</TableHead>
+                <TableHead className="whitespace-nowrap">Юрособа</TableHead>
+                <TableHead className="text-center whitespace-nowrap">Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -313,7 +324,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 const isPaid = m?.status === "paid";
                 return (
                   <TableRow key={person.userId}>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <AvatarBase
                           src={person.avatarUrl}
@@ -323,7 +334,9 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                           className="border-border/60"
                         />
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{person.name}</div>
+                          <div className="text-sm font-medium" title={person.name}>
+                            {shortenName(person.name)}
+                          </div>
                           {person.jobRole ? (
                             <div className="truncate text-[11px] text-muted-foreground">{person.jobRole}</div>
                           ) : null}
@@ -510,7 +523,7 @@ function PayrollNoteCell({
           {hasNote ? (
             <span className="truncate">{note}</span>
           ) : (
-            <span className="text-xs">Додати нотатку</span>
+            <span className="text-xs">Нотатка</span>
           )}
         </button>
       </PopoverAnchor>
