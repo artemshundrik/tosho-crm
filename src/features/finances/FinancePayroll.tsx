@@ -8,6 +8,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
@@ -304,17 +305,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border/60">
-          <Table>
+          <Table size="sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="whitespace-nowrap">Співробітник</TableHead>
-                <TableHead className="text-right">Ставка</TableHead>
-                <TableHead className="text-right">Бонус</TableHead>
-                <TableHead className="text-right">Офіційна ЗП</TableHead>
-                <TableHead className="text-right">До виплати</TableHead>
-                <TableHead className="w-full min-w-[120px]">Нотатка</TableHead>
+                <TableHead className="whitespace-nowrap text-right">Ставка</TableHead>
+                <TableHead className="whitespace-nowrap text-right">Бонус</TableHead>
+                <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
+                <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
+                <TableHead className="w-full min-w-[140px]">Нотатка</TableHead>
                 <TableHead className="whitespace-nowrap">Юрособа</TableHead>
-                <TableHead className="text-center whitespace-nowrap">Статус</TableHead>
+                <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -338,7 +339,9 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                             {shortenName(person.name)}
                           </div>
                           {person.jobRole ? (
-                            <div className="truncate text-[11px] text-muted-foreground">{person.jobRole}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {formatJobRole(person.jobRole)}
+                            </div>
                           ) : null}
                         </div>
                       </div>
@@ -515,7 +518,7 @@ function PayrollNoteCell({
           onMouseLeave={closeHover}
           onClick={startEdit}
           className={cn(
-            "flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
             hasNote ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
