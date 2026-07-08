@@ -311,9 +311,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border/60">
-          {/* Content-width so every inter-column gap is the same cell padding;
-              leftover space falls to the right of the last column. */}
-          <Table size="sm" className="!w-auto">
+          <Table size="sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="whitespace-nowrap">Співробітник</TableHead>
@@ -321,7 +319,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 <TableHead className="whitespace-nowrap text-right">Бонус</TableHead>
                 <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
                 <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
-                <TableHead className="w-[200px]">Нотатка</TableHead>
+                <TableHead className="w-full">Нотатка</TableHead>
                 <TableHead className="whitespace-nowrap">Юрособа</TableHead>
                 <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
               </TableRow>
@@ -384,7 +382,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
                       {formatUAH(totalFor(person.userId))}
                     </TableCell>
-                    <TableCell className="w-[200px]">
+                    <TableCell className="w-full max-w-0">
                       <PayrollNoteCell
                         note={entries.get(person.userId)?.note ?? null}
                         onSave={(text) => saveNote(person.userId, text)}
@@ -487,6 +485,7 @@ function PayrollNoteCell({
 
   const openHover = () => {
     if (editing) return;
+    if (!hasNote) return; // no hover popover for empty notes — click to add instead
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setOpen(true);
   };
@@ -528,9 +527,9 @@ function PayrollNoteCell({
           onMouseLeave={closeHover}
           onClick={startEdit}
           className={cn(
-            // Definite px width so the note truncates with «…» instead of
-            // stretching the auto-layout table when the note is long.
-            "flex w-[200px] max-w-[200px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            // Fills the flexible column; the cell's max-w-0 lets long notes
+            // truncate with «…» instead of stretching the table.
+            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
             hasNote ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
