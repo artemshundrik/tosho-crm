@@ -1,8 +1,10 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -188,6 +190,44 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     }, 600);
   };
 
+  const saveNote = async (uid: string, note: string) => {
+    if (!workspaceId) return;
+    const d = draftFor(uid);
+    const entry = entries.get(uid);
+    const trimmed = note.trim();
+    const nextNote = trimmed ? trimmed : null;
+    const baseAmount = parsePayrollAmount(d.base);
+    const bonusAmount = parsePayrollAmount(d.bonus);
+    const deductionAmount = entry?.deductionAmount ?? 0;
+    // Optimistic — keep the shared payroll_entries snapshot in sync so the cell
+    // reflects the saved note immediately.
+    setEntries((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(uid);
+      next.set(uid, {
+        userId: uid,
+        period,
+        baseAmount,
+        bonusAmount,
+        deductionAmount,
+        totalAmount: cur?.totalAmount ?? baseAmount + bonusAmount - deductionAmount,
+        note: nextNote,
+      });
+      return next;
+    });
+    try {
+      await upsertPayrollEntry({
+        workspaceId,
+        userId: uid,
+        period,
+        updatedBy: userId,
+        values: { baseAmount, bonusAmount, deductionAmount, note: nextNote },
+      });
+    } catch (error) {
+      toast.error("Не вдалося зберегти нотатку", { description: getErrorMessage(error, "") });
+    }
+  };
+
   const saveMeta = async (uid: string, patch: Partial<FinancePayoutMeta>) => {
     if (!teamId) return;
     const current = meta.get(uid);
@@ -260,6 +300,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 <TableHead className="text-right">Ставка</TableHead>
                 <TableHead className="text-right">Премія</TableHead>
                 <TableHead className="text-right">До виплати</TableHead>
+                <TableHead>Нотатка</TableHead>
                 <TableHead>Юрособа</TableHead>
                 <TableHead className="text-center">Статус</TableHead>
               </TableRow>
@@ -307,6 +348,12 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                       />
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium">{formatUAH(totalFor(person.userId))}</TableCell>
+                    <TableCell>
+                      <PayrollNoteCell
+                        note={entries.get(person.userId)?.note ?? null}
+                        onSave={(text) => saveNote(person.userId, text)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={m?.legalEntityId ?? "none"}
@@ -370,5 +417,151 @@ function Kpi({
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
+  );
+}
+
+// Note cell for the payout register. Hover the trigger to read the full note in a
+// popover; click to edit it inline. Backed by the shared payroll_entries.note.
+function PayrollNoteCell({
+  note,
+  onSave,
+}: {
+  note: string | null;
+  onSave: (text: string) => Promise<void>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(note ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasNote = Boolean(note && note.trim());
+
+  // Keep the local draft in sync with the persisted note while not editing.
+  React.useEffect(() => {
+    if (!editing) setDraft(note ?? "");
+  }, [note, editing]);
+
+  React.useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    []
+  );
+
+  const openHover = () => {
+    if (editing) return;
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const closeHover = () => {
+    if (editing) return;
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 90);
+  };
+
+  const startEdit = () => {
+    setDraft(note ?? "");
+    setEditing(true);
+    setOpen(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setEditing(false);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setEditing(false);
+      }}
+    >
+      <PopoverAnchor asChild>
+        <button
+          type="button"
+          onMouseEnter={openHover}
+          onMouseLeave={closeHover}
+          onClick={startEdit}
+          className={cn(
+            "flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            hasNote ? "text-foreground" : "text-muted-foreground/70"
+          )}
+        >
+          <StickyNote className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {hasNote ? (
+            <span className="truncate">{note}</span>
+          ) : (
+            <span className="text-xs">Додати нотатку</span>
+          )}
+        </button>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        onMouseEnter={openHover}
+        onMouseLeave={closeHover}
+        onOpenAutoFocus={(e) => {
+          if (!editing) e.preventDefault();
+        }}
+        className="w-80 space-y-2 p-3"
+      >
+        {editing ? (
+          <>
+            <Textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={4}
+              placeholder="Нотатка про виплату…"
+              className="resize-none text-sm"
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void save();
+                }
+              }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                disabled={saving}
+                onClick={() => {
+                  setEditing(false);
+                  setOpen(false);
+                }}
+              >
+                Скасувати
+              </Button>
+              <Button type="button" size="sm" className="h-7" disabled={saving} onClick={() => void save()}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Зберегти"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="whitespace-pre-wrap break-words text-sm text-foreground">
+              {hasNote ? note : <span className="text-muted-foreground">Нотатки ще немає</span>}
+            </div>
+            <div className="flex justify-end">
+              <Button type="button" size="sm" variant="ghost" className="h-7" onClick={startEdit}>
+                Редагувати
+              </Button>
+            </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

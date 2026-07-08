@@ -463,20 +463,19 @@ export default function PayrollPage() {
               <TableHead className="text-right">Бонус</TableHead>
               <TableHead className="text-right">Офіційна ЗП</TableHead>
               <TableHead className="text-right">Разом</TableHead>
-              <TableHead className="min-w-[180px]">Нотатка</TableHead>
               <TableHead className="w-10" aria-label="Статус збереження" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {membersLoading ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                 </TableCell>
               </TableRow>
             ) : people.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                   Немає співробітників для відображення.
                 </TableCell>
               </TableRow>
@@ -579,17 +578,6 @@ export default function PayrollPage() {
                     >
                       {formatUAH(rowTotal)}
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        value={draft.note}
-                        placeholder="—"
-                        aria-label={`Нотатка, ${name}`}
-                        className="h-9 focus-visible:ring-2 focus-visible:ring-primary/30"
-                        onChange={(e) =>
-                          handleField(person.userId, "note", e.target.value)
-                        }
-                      />
-                    </TableCell>
                     <TableCell className="text-center">
                       <span className="inline-flex h-4 w-4 items-center justify-center">
                         {renderStatus(person.userId)}
@@ -619,7 +607,7 @@ export default function PayrollPage() {
                 <TableCell className="text-right font-semibold tabular-nums text-primary">
                   {formatUAH(totals.total)}
                 </TableCell>
-                <TableCell colSpan={2} />
+                <TableCell />
               </TableRow>
             </TableFooter>
           ) : null}
