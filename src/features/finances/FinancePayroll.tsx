@@ -528,13 +528,15 @@ function PayrollNoteCell({
           onMouseLeave={closeHover}
           onClick={startEdit}
           className={cn(
-            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            // Definite px width so the note truncates with «…» instead of
+            // stretching the auto-layout table when the note is long.
+            "flex w-[200px] max-w-[200px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
             hasNote ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
           <StickyNote className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           {hasNote ? (
-            <span className="truncate">{note}</span>
+            <span className="min-w-0 flex-1 truncate">{note}</span>
           ) : (
             <span className="text-xs">Нотатка</span>
           )}
