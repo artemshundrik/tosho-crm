@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
@@ -22,8 +21,8 @@ import {
   MANUAL_PAYROLL_PEOPLE,
   type PayrollEntry,
 } from "@/lib/payroll";
-import { listLegalEntities, listPayoutMeta, upsertPayoutMeta } from "./api";
-import { formatLegalEntityLabel, type FinanceLegalEntity, type FinancePayoutMeta } from "./types";
+import { listPayoutMeta, upsertPayoutMeta } from "./api";
+import { type FinancePayoutMeta } from "./types";
 
 type FinancePayrollProps = {
   teamId: string | null;
@@ -74,7 +73,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const [members, setMembers] = React.useState<WorkspaceMemberDisplayRow[]>([]);
   const [entries, setEntries] = React.useState<Map<string, PayrollEntry>>(new Map());
   const [meta, setMeta] = React.useState<Map<string, FinancePayoutMeta>>(new Map());
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
   const [drafts, setDrafts] = React.useState<Record<string, Draft>>({});
   const [loading, setLoading] = React.useState(true);
 
@@ -88,14 +86,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       try {
         const wsId = await resolveWorkspaceId(userId);
         if (!wsId || cancelled) return;
-        const [rows, ents] = await Promise.all([
-          listWorkspaceMembersForDisplay(wsId),
-          teamId ? listLegalEntities(teamId) : Promise.resolve([]),
-        ]);
+        const rows = await listWorkspaceMembersForDisplay(wsId);
         if (cancelled) return;
         setWorkspaceId(wsId);
         setMembers(rows);
-        setEntities(ents);
       } catch (error) {
         if (!cancelled) toast.error("Не вдалося завантажити команду", { description: getErrorMessage(error, "") });
       }
@@ -310,18 +304,19 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border/60">
-          <Table size="sm">
+        <div className="rounded-xl border border-border/60">
+          {/* table-fixed + % widths: columns stretch to fill the width and scale
+              down on narrower screens without a horizontal scrollbar. */}
+          <Table size="sm" className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="whitespace-nowrap">Співробітник</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Ставка</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Бонус</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Офіційна ЗП</TableHead>
-                <TableHead className="whitespace-nowrap text-right">До виплати</TableHead>
-                <TableHead className="w-[200px]">Нотатка</TableHead>
-                <TableHead className="whitespace-nowrap">Юрособа</TableHead>
-                <TableHead className="whitespace-nowrap text-center">Статус</TableHead>
+                <TableHead className="w-[24%]">Співробітник</TableHead>
+                <TableHead className="w-[12%] text-right">Ставка</TableHead>
+                <TableHead className="w-[12%] text-right">Бонус</TableHead>
+                <TableHead className="w-[14%] text-right">Офіційна ЗП</TableHead>
+                <TableHead className="w-[14%] text-right">До виплати</TableHead>
+                <TableHead className="w-[13%]">Нотатка</TableHead>
+                <TableHead className="w-[11%] text-center">Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -341,7 +336,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                           className="border-border/60"
                         />
                         <div className="min-w-0">
-                          <div className="text-sm font-medium" title={person.name}>
+                          <div className="truncate text-sm font-medium" title={person.name}>
                             {shortenName(person.name)}
                           </div>
                           {person.jobRole ? (
@@ -358,7 +353,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         onChange={(e) => queueSaveAmount(person.userId, { base: e.target.value })}
                         inputMode="decimal"
                         placeholder="0"
-                        className="h-8 w-28 text-right"
+                        className="h-8 w-full text-right"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -367,7 +362,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         onChange={(e) => queueSaveAmount(person.userId, { bonus: e.target.value })}
                         inputMode="decimal"
                         placeholder="0"
-                        className="h-8 w-28 text-right"
+                        className="h-8 w-full text-right"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -376,35 +371,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         onChange={(e) => queueSaveAmount(person.userId, { deduction: e.target.value })}
                         inputMode="decimal"
                         placeholder="0"
-                        className="h-8 w-28 text-right"
+                        className="h-8 w-full text-right"
                       />
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
                       {formatUAH(totalFor(person.userId))}
                     </TableCell>
-                    <TableCell className="w-[200px]">
+                    <TableCell>
                       <PayrollNoteCell
                         note={entries.get(person.userId)?.note ?? null}
                         onSave={(text) => saveNote(person.userId, text)}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={m?.legalEntityId ?? "none"}
-                        onValueChange={(v) => void saveMeta(person.userId, { legalEntityId: v === "none" ? null : v })}
-                      >
-                        <SelectTrigger className="h-8 w-[150px]">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {entities.map((entity) => (
-                            <SelectItem key={entity.id} value={entity.id}>
-                              {formatLegalEntityLabel(entity)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button
@@ -527,9 +504,8 @@ function PayrollNoteCell({
           onMouseLeave={closeHover}
           onClick={startEdit}
           className={cn(
-            // Definite 200px so the note truncates with «…»; the rest of the
-            // table's width spreads across the other (auto) columns.
-            "flex w-[200px] max-w-[200px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
+            // Fills the fixed-layout note column; content truncates with «…».
+            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
             hasNote ? "text-foreground" : "text-muted-foreground/70"
           )}
         >
