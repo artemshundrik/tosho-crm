@@ -80,6 +80,7 @@ export const MANUAL_PAYROLL_PEOPLE: ManualPayrollPerson[] = [
   { userId: "30e3147f-3c00-45f9-ac04-91a160799efd", name: "Тетяна Карандюк", jobRole: "Бухгалтер" },
   { userId: "d604c8de-9976-42db-b9ec-f2f756818295", name: "Юлія Кубенко", jobRole: "Бухгалтер" },
   { userId: "e557e3da-8a9f-4f17-8f74-219864b79fdd", name: "Анастасія К.", jobRole: "Маркетолог" },
+  { userId: "5630d0bc-5ae7-40a1-bd4b-2f46c89e1000", name: "Сашко", jobRole: "Пакувальник" },
 ];
 
 export const parsePayrollAmount = (raw: string): number => {

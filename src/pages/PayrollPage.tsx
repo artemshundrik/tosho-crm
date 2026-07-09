@@ -11,6 +11,7 @@ import {
   loadPayrollEntries,
   periodKey,
   upsertPayrollEntry,
+  MANUAL_PAYROLL_PEOPLE,
   type PayrollValues,
 } from "@/lib/payroll";
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -69,15 +70,9 @@ const EXCLUDED_USER_IDS = new Set<string>([
   "e73aee8c-ebc8-449f-af12-6420a363498a", // Євгенія Безручко
 ]);
 
-// People paid through this sheet who don't have a CRM account yet. Their entries are
-// stored in payroll_entries under a fixed placeholder user id; once they get a real
-// account we re-key the rows (update ... set user_id = <real> where user_id = <placeholder>).
-type ManualPerson = { userId: string; name: string; jobRole: string };
-const MANUAL_PEOPLE: ManualPerson[] = [
-  { userId: "30e3147f-3c00-45f9-ac04-91a160799efd", name: "Тетяна Карандюк", jobRole: "Бухгалтер" },
-  { userId: "d604c8de-9976-42db-b9ec-f2f756818295", name: "Юлія Кубенко", jobRole: "Бухгалтер" },
-  { userId: "e557e3da-8a9f-4f17-8f74-219864b79fdd", name: "Анастасія К.", jobRole: "Маркетолог" },
-];
+// People paid through this sheet who don't have a CRM account yet are defined
+// once in @/lib/payroll (MANUAL_PAYROLL_PEOPLE) so this page and the Finance
+// «Виплати команді» view stay in sync.
 
 type PayrollPerson = {
   userId: string;
@@ -195,7 +190,7 @@ export default function PayrollPage() {
         availability: m.availabilityStatus,
         manual: false,
       }));
-    const manual: PayrollPerson[] = MANUAL_PEOPLE.map((p) => ({
+    const manual: PayrollPerson[] = MANUAL_PAYROLL_PEOPLE.map((p) => ({
       userId: p.userId,
       name: p.name,
       jobRole: p.jobRole,
@@ -222,7 +217,7 @@ export default function PayrollPage() {
         const next: Record<string, Draft> = {};
         const ids = [
           ...members.map((m) => m.userId),
-          ...MANUAL_PEOPLE.map((p) => p.userId),
+          ...MANUAL_PAYROLL_PEOPLE.map((p) => p.userId),
         ];
         for (const id of ids) {
           const entry = map.get(id);
