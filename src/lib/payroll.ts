@@ -64,7 +64,7 @@ export const PAYROLL_MONTHS = [
 /**
  * Accounts intentionally kept off the payroll sheet (owner / management / a
  * duplicate account). Excluded by user id since display names change.
- * Shared between the legacy /payroll page and the finance "Виплати команді".
+ * Used by the finance "Виплати команді" view.
  */
 export const PAYROLL_EXCLUDED_USER_IDS = new Set<string>([
   "438b2643-e6fb-4366-bb92-83a88475c1f4", // Артем Шундрик (owner)

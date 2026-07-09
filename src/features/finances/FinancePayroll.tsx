@@ -59,6 +59,7 @@ type Person = {
   jobRole: string | null;
   avatarUrl: string | null;
   initials: string | null;
+  departed: boolean;
 };
 
 type Draft = { base: string; bonus: string; deduction: string };
@@ -132,18 +133,20 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 
   const people = React.useMemo<Person[]>(() => {
     const real = members
-      .filter(
-        (m) =>
-          m.employmentStatus !== "rejected" &&
-          m.employmentStatus !== "inactive" &&
-          !PAYROLL_EXCLUDED_USER_IDS.has(m.userId)
-      )
+      .filter((m) => {
+        if (PAYROLL_EXCLUDED_USER_IDS.has(m.userId)) return false;
+        const departed = m.employmentStatus === "rejected" || m.employmentStatus === "inactive";
+        // Active people always show; those we ended collaboration with only appear
+        // in months where they have a payroll entry (past months), never future ones.
+        return !departed || entries.has(m.userId);
+      })
       .map<Person>((m) => ({
         userId: m.userId,
         name: m.displayName || m.fullName || m.label || m.email || "Без імені",
         jobRole: m.jobRole,
         avatarUrl: m.avatarDisplayUrl ?? null,
         initials: m.initials ?? null,
+        departed: m.employmentStatus === "rejected" || m.employmentStatus === "inactive",
       }));
     const manual = MANUAL_PAYROLL_PEOPLE.map<Person>((p) => ({
       userId: p.userId,
@@ -151,9 +154,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       jobRole: p.jobRole,
       avatarUrl: null,
       initials: null,
+      departed: false,
     }));
     return [...real, ...manual];
-  }, [members]);
+  }, [members, entries]);
 
   const draftFor = (uid: string): Draft =>
     drafts[uid] ?? { base: "", bonus: "", deduction: "" };
@@ -333,10 +337,16 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                           name={person.name}
                           fallback={person.initials ?? person.name.slice(0, 2)}
                           size={28}
-                          className="border-border/60"
+                          className={cn("border-border/60", person.departed && "grayscale opacity-80")}
                         />
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium" title={person.name}>
+                          <div
+                            className={cn(
+                              "truncate text-sm font-medium",
+                              person.departed && "text-muted-foreground line-through"
+                            )}
+                            title={person.name}
+                          >
                             {shortenName(person.name)}
                           </div>
                           {person.jobRole ? (

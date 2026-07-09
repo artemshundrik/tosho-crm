@@ -5,7 +5,6 @@ import {
   Bell,
   BarChart3,
   Banknote,
-  Coins,
   BriefcaseBusiness,
   Building2,
   Calculator,
@@ -415,7 +414,6 @@ const ROUTES = {
   contractors: "/contractors",
   sampleStock: "/stock/samples",
   finances: "/finances",
-  payroll: "/payroll",
   team: "/team",
 
   workspaceSettings: "/workspace-settings",
@@ -460,12 +458,6 @@ const baseSidebarLinks: SidebarLink[] = [
     group: "operations",
     icon: Banknote,
     moduleKey: "finance",
-  },
-  {
-    label: "Зарплати",
-    to: ROUTES.payroll,
-    group: "operations",
-    icon: Coins,
   },
 
   // Акаунт
@@ -563,14 +555,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Рахунки, видаткові накладні, акти, звірки та витрати компанії.",
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finances,
-      showPageHeader: false,
-    };
-  if (pathname.startsWith(ROUTES.payroll))
-    return {
-      title: "Зарплати",
-      subtitle: "Зарплатна відомість: ставка, премія та утримання по місяцях.",
-      breadcrumbLabel: "Зарплати",
-      breadcrumbTo: ROUTES.payroll,
       showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.team))
@@ -758,9 +742,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       sidebarLinks.filter((link) => {
         if (link.to === ROUTES.observability && !(permissions.isSuperAdmin || permissions.isAdmin)) {
           return false;
-        }
-        if (link.to === ROUTES.payroll) {
-          return permissions.isSuperAdmin || permissions.isSeo;
         }
         if (link.moduleKey) {
           if ((link.moduleKey === "contractors" || link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSuperAdmin) {
