@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Layers,
   LayoutGrid,
   ListChecks,
   Loader2,
@@ -149,6 +150,15 @@ type ViewMode = "showcase" | "grid";
 type KindFilter = "visualization" | "layout" | "all";
 type SortMode = "newest" | "oldest" | "customer";
 
+// Near-identical visuals from one design task are collapsed into a single
+// stack in the feed; opening it reveals every sibling in a filmstrip.
+type VisualGroup = {
+  key: string;
+  taskId: string;
+  items: GalleryVisual[];
+  cover: GalleryVisual;
+};
+
 // =======================
 // Constants
 // =======================
@@ -283,6 +293,21 @@ const chunkArray = <T,>(items: T[], size: number): T[][] => {
 };
 
 const getRecordKey = (taskId: string, fileId: string) => `${taskId}:${fileId}`;
+
+// Count pill for filter chips — a self-contained badge so the number reads as
+// separate from the label instead of colliding with it ("Нове 3", not "Нове3").
+function CountPill({ value, active }: { value: number; active?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-px text-[10px] font-semibold leading-none tabular-nums",
+        active ? "bg-primary/20 text-primary" : "bg-foreground/10 text-muted-foreground"
+      )}
+    >
+      {value}
+    </span>
+  );
+}
 
 // =======================
 // Page
@@ -578,6 +603,24 @@ export default function MarketingPage() {
     return list;
   }, [baseFiltered, statusFilter, sortMode, getRecord]);
 
+  // Collapse visuals of the same design task into one stack. Insertion order of
+  // the Map preserves the `filtered` sort, so groups appear where their first
+  // (highest-ranked) visual would. Cover = a favourited visual, else the first.
+  const groups = useMemo<VisualGroup[]>(() => {
+    const byTask = new Map<string, GalleryVisual[]>();
+    filtered.forEach((visual) => {
+      const bucket = byTask.get(visual.taskId);
+      if (bucket) bucket.push(visual);
+      else byTask.set(visual.taskId, [visual]);
+    });
+    return Array.from(byTask.values()).map((items) => ({
+      key: items[0].taskId,
+      taskId: items[0].taskId,
+      items,
+      cover: items.find((visual) => getRecord(visual.key).isFavorite) ?? items[0],
+    }));
+  }, [filtered, getRecord]);
+
   const allTags = useMemo(() => {
     const counts = new Map<string, { tag: string; count: number }>();
     kindFiltered.forEach((visual) => {
@@ -613,7 +656,15 @@ export default function MarketingPage() {
     [filtered, selectedKey]
   );
   const selectedRecord = selected ? getRecord(selected.key) : null;
-  const selectedIndex = selected ? filtered.findIndex((visual) => visual.key === selected.key) : -1;
+  // Navigation inside the dialog is scoped to the open visual's stack, so arrows
+  // and the filmstrip cycle the task's siblings rather than the whole feed.
+  const activeGroupItems = useMemo<GalleryVisual[]>(() => {
+    if (!selected) return [];
+    return groups.find((group) => group.taskId === selected.taskId)?.items ?? [selected];
+  }, [selected, groups]);
+  const activeGroupIndex = selected
+    ? activeGroupItems.findIndex((visual) => visual.key === selected.key)
+    : -1;
 
   // ---------- mutations ----------
 
@@ -704,14 +755,26 @@ export default function MarketingPage() {
 
   const stepDetail = useCallback(
     (direction: 1 | -1) => {
-      if (selectedIndex === -1 || filtered.length === 0) return;
+      if (!selected || activeGroupItems.length <= 1) return;
       commitNotesDraft();
-      const nextIndex = (selectedIndex + direction + filtered.length) % filtered.length;
+      const currentIndex = activeGroupItems.findIndex((visual) => visual.key === selected.key);
+      if (currentIndex === -1) return;
+      const nextIndex = (currentIndex + direction + activeGroupItems.length) % activeGroupItems.length;
       setNewTag("");
       setNewChecklistItem("");
-      setSelectedKey(filtered[nextIndex].key);
+      setSelectedKey(activeGroupItems[nextIndex].key);
     },
-    [selectedIndex, filtered, commitNotesDraft]
+    [selected, activeGroupItems, commitNotesDraft]
+  );
+
+  const selectSibling = useCallback(
+    (visual: GalleryVisual) => {
+      commitNotesDraft();
+      setNewTag("");
+      setNewChecklistItem("");
+      setSelectedKey(visual.key);
+    },
+    [commitNotesDraft]
   );
 
   const handleAddTag = useCallback(
@@ -787,109 +850,145 @@ export default function MarketingPage() {
     );
   }, []);
 
-  const renderCard = useCallback(
-    (visual: GalleryVisual, options?: { className?: string }) => {
+  const renderGroup = useCallback(
+    (group: VisualGroup, options?: { className?: string }) => {
+      const visual = group.cover;
       const record = getRecord(visual.key);
       const customerInfo = visual.customerId ? customerInfoById[visual.customerId] : undefined;
       const designerLabel = visual.designerUserId ? memberLabelById[visual.designerUserId] : null;
       const designerAvatar = visual.designerUserId ? memberAvatarById[visual.designerUserId] : null;
+      const stackCount = group.items.length;
+      const isStack = stackCount > 1;
 
       return (
-        <article
-          key={visual.key}
-          className={cn(
-            "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-            "shadow-[var(--shadow-surface)] transition-all duration-200 ease-out",
-            "hover:-translate-y-0.5 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-            record.isHidden && "opacity-70",
-            options?.className
-          )}
-          role="button"
-          tabIndex={0}
-          aria-label={`${visual.customerName} — ${visual.taskTitle}`}
-          onClick={() => openDetail(visual)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              openDetail(visual);
-            }
-          }}
-        >
-          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/30">
-            <StorageObjectImage
-              bucket={visual.bucket}
-              path={visual.path}
-              alt={`${visual.customerName} — ${visual.fileName}`}
-              variant="preview"
-              className="h-full w-full"
-              imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
-            />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-            <div className="absolute left-2.5 top-2.5">{renderStatusBadge(record.status)}</div>
-            <button
-              type="button"
-              aria-label={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-              className={cn(
-                "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full",
-                "bg-black/25 text-white backdrop-blur-sm transition-colors duration-150",
-                "hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
-                record.isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                handleToggleFavorite(visual);
-              }}
-            >
-              <Star className={cn("h-4 w-4", record.isFavorite && "fill-warning text-warning")} />
-            </button>
-          </div>
-
-          <div className="flex flex-1 flex-col gap-2 p-3.5">
-            <div className="flex items-center gap-2">
-              <EntityAvatar
-                src={customerInfo?.logoUrl ?? null}
-                name={visual.customerName}
-                size={22}
-                className="shrink-0"
+        <div key={group.key} className={cn("group/stack relative", options?.className)}>
+          {isStack ? (
+            <>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 translate-x-[7px] translate-y-[7px] rounded-2xl border border-border/40 bg-card shadow-[var(--shadow-surface)] transition-transform duration-200 ease-out group-hover/stack:translate-x-[11px] group-hover/stack:translate-y-[11px] motion-reduce:transition-none"
               />
-              <span className="truncate text-[13px] font-semibold text-foreground">{visual.customerName}</span>
-            </div>
-            <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{visual.taskTitle}</p>
-            {record.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {record.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {record.tags.length > 3 ? (
-                  <span className="px-1 text-[10px] font-medium text-muted-foreground/70">
-                    +{record.tags.length - 3}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-              <span className="inline-flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
-                {designerLabel ? (
-                  <>
-                    <AvatarBase src={designerAvatar} name={designerLabel} size={18} shape="circle" />
-                    <span className="truncate">{designerLabel}</span>
-                  </>
-                ) : (
-                  <span className="truncate">{formatDate(visual.createdAt)}</span>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 translate-x-[3.5px] translate-y-[3.5px] rounded-2xl border border-border/55 bg-card shadow-[var(--shadow-surface)] transition-transform duration-200 ease-out group-hover/stack:translate-x-[6px] group-hover/stack:translate-y-[6px] motion-reduce:transition-none"
+              />
+            </>
+          ) : null}
+          <article
+            className={cn(
+              "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
+              "shadow-[var(--shadow-surface)] transition-all duration-200 ease-out",
+              "hover:-translate-y-0.5 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              record.isHidden && "opacity-70"
+            )}
+            role="button"
+            tabIndex={0}
+            aria-label={
+              isStack
+                ? `${visual.customerName} — ${visual.taskTitle}, ${stackCount} візуалів у стеку`
+                : `${visual.customerName} — ${visual.taskTitle}`
+            }
+            onClick={() => openDetail(visual)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openDetail(visual);
+              }
+            }}
+          >
+            <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/30">
+              <StorageObjectImage
+                bucket={visual.bucket}
+                path={visual.path}
+                alt={`${visual.customerName} — ${visual.fileName}`}
+                variant="preview"
+                className="h-full w-full"
+                imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent opacity-0 transition-opacity duration-200 group-hover/card:opacity-100" />
+              <div className="absolute left-2.5 top-2.5">{renderStatusBadge(record.status)}</div>
+              <button
+                type="button"
+                aria-label={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                className={cn(
+                  "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full",
+                  "bg-black/25 text-white backdrop-blur-sm transition-colors duration-150",
+                  "hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                  record.isFavorite
+                    ? "opacity-100"
+                    : "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100"
                 )}
-              </span>
-              {renderChecklistProgress(record) ?? (
-                <span className="text-[11px] text-muted-foreground/70">{formatDate(visual.createdAt)}</span>
-              )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleToggleFavorite(visual);
+                }}
+              >
+                <Star className={cn("h-4 w-4", record.isFavorite && "fill-warning text-warning")} />
+              </button>
+              {isStack ? (
+                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+                  <Layers className="h-3 w-3" />
+                  {stackCount}
+                </span>
+              ) : null}
             </div>
-          </div>
-        </article>
+
+            <div className="flex flex-1 flex-col gap-2 p-3.5">
+              <div className="flex items-center gap-2">
+                <EntityAvatar
+                  src={customerInfo?.logoUrl ?? null}
+                  name={visual.customerName}
+                  size={22}
+                  className="shrink-0"
+                />
+                <span className="truncate text-[13px] font-semibold text-foreground">
+                  {visual.customerName}
+                </span>
+              </div>
+              <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{visual.taskTitle}</p>
+              {record.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {record.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  {record.tags.length > 3 ? (
+                    <span className="px-1 text-[10px] font-medium text-muted-foreground/70">
+                      +{record.tags.length - 3}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                <span className="inline-flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                  {designerLabel ? (
+                    <>
+                      <AvatarBase src={designerAvatar} name={designerLabel} size={18} shape="circle" />
+                      <span className="truncate">{designerLabel}</span>
+                    </>
+                  ) : (
+                    <span className="truncate">{formatDate(visual.createdAt)}</span>
+                  )}
+                </span>
+                {isStack ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                    <Layers className="h-3.5 w-3.5" />
+                    {stackCount} візуали
+                  </span>
+                ) : (
+                  renderChecklistProgress(record) ?? (
+                    <span className="text-[11px] text-muted-foreground/70">{formatDate(visual.createdAt)}</span>
+                  )
+                )}
+              </div>
+            </div>
+          </article>
+        </div>
       );
     },
     [
@@ -906,20 +1005,24 @@ export default function MarketingPage() {
 
   // ---------- showcase pieces ----------
 
-  const heroVisual = useMemo(() => {
-    const ready = filtered.filter((visual) => getRecord(visual.key).status === "ready");
-    return ready[0] ?? filtered[0] ?? null;
-  }, [filtered, getRecord]);
+  const heroGroup = useMemo(() => {
+    const ready = groups.find((group) => getRecord(group.cover.key).status === "ready");
+    return ready ?? groups[0] ?? null;
+  }, [groups, getRecord]);
+  const heroVisual = heroGroup?.cover ?? null;
 
   const showcaseRows = useMemo(
     () =>
       SHOWCASE_ROWS.map((row) => ({
         ...row,
-        items: filtered.filter(
-          (visual) => getRecord(visual.key).status === row.status && visual.key !== heroVisual?.key
-        ).slice(0, 20),
-      })).filter((row) => row.items.length > 0),
-    [filtered, getRecord, heroVisual]
+        groups: groups
+          .filter(
+            (group) =>
+              getRecord(group.cover.key).status === row.status && group.taskId !== heroGroup?.taskId
+          )
+          .slice(0, 20),
+      })).filter((row) => row.groups.length > 0),
+    [groups, getRecord, heroGroup]
   );
 
   // ---------- render ----------
@@ -1020,10 +1123,10 @@ export default function MarketingPage() {
           </Select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Chip size="sm" active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
             Всі
-            <span className="text-muted-foreground/80">{baseFiltered.length}</span>
+            <CountPill value={baseFiltered.length} active={statusFilter === "all"} />
           </Chip>
           {MARKETING_STATUSES.map((status) => {
             const meta = MARKETING_STATUS_META[status];
@@ -1037,7 +1140,7 @@ export default function MarketingPage() {
                 onClick={() => setStatusFilter((prev) => (prev === status ? "all" : status))}
               >
                 {meta.label}
-                <span className="text-muted-foreground/80">{statusCounts[status]}</span>
+                <CountPill value={statusCounts[status]} active={statusFilter === status} />
               </Chip>
             );
           })}
@@ -1058,7 +1161,7 @@ export default function MarketingPage() {
               onClick={() => setShowHidden((prev) => !prev)}
             >
               Приховані
-              <span className="text-muted-foreground/80">{hiddenCount}</span>
+              <CountPill value={hiddenCount} active={showHidden} />
             </Chip>
           ) : null}
           {allTags.length > 0 ? <span className="mx-1 hidden h-4 w-px bg-border sm:block" /> : null}
@@ -1071,7 +1174,7 @@ export default function MarketingPage() {
               onClick={() => setTagFilter((prev) => (prev?.toLowerCase() === tag.toLowerCase() ? null : tag))}
             >
               {tag}
-              <span className="text-muted-foreground/80">{count}</span>
+              <CountPill value={count} active={tagFilter?.toLowerCase() === tag.toLowerCase()} />
             </Chip>
           ))}
         </div>
@@ -1111,8 +1214,8 @@ export default function MarketingPage() {
           }
         />
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filtered.map((visual) => renderCard(visual))}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {groups.map((group) => renderGroup(group))}
         </div>
       ) : (
         <div className="flex flex-col gap-8">
@@ -1194,7 +1297,7 @@ export default function MarketingPage() {
                   <h2 className="inline-flex items-center gap-2 text-base font-semibold text-foreground">
                     <Icon className="h-4 w-4 text-muted-foreground" />
                     {row.title}
-                    <span className="text-sm font-normal text-muted-foreground">{row.items.length}</span>
+                    <span className="text-sm font-normal text-muted-foreground">{row.groups.length}</span>
                   </h2>
                   <Button
                     variant="ghost"
@@ -1209,9 +1312,9 @@ export default function MarketingPage() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6">
-                  {row.items.map((visual) =>
-                    renderCard(visual, { className: "w-[220px] shrink-0 snap-start sm:w-[248px]" })
+                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 pr-6 pt-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6">
+                  {row.groups.map((group) =>
+                    renderGroup(group, { className: "w-[220px] shrink-0 snap-start sm:w-[248px]" })
                   )}
                 </div>
               </section>
@@ -1238,59 +1341,98 @@ export default function MarketingPage() {
           {selected && selectedRecord ? (
             <>
               {/* Image side */}
-              <div className="relative flex min-h-[240px] items-center justify-center bg-muted/40 md:min-h-[520px]">
-                <StorageObjectImage
-                  bucket={selected.bucket}
-                  path={selected.path}
-                  alt={`${selected.customerName} — ${selected.fileName}`}
-                  variant="preview"
-                  className="h-full max-h-[38dvh] w-full md:max-h-none"
-                  imageClassName="h-full w-full object-contain"
-                />
-                {filtered.length > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Попередній візуал"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                      onClick={() => stepDetail(-1)}
+              <div className="relative flex flex-col bg-muted/40 md:min-h-[520px]">
+                <div className="relative flex min-h-[240px] flex-1 items-center justify-center">
+                  <StorageObjectImage
+                    bucket={selected.bucket}
+                    path={selected.path}
+                    alt={`${selected.customerName} — ${selected.fileName}`}
+                    variant="preview"
+                    className="h-full max-h-[38dvh] w-full md:max-h-none"
+                    imageClassName="h-full w-full object-contain"
+                  />
+                  {activeGroupItems.length > 1 ? (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Попередній візуал"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                        onClick={() => stepDetail(-1)}
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Наступний візуал"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                        onClick={() => stepDetail(1)}
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  ) : null}
+                  <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
+                      onClick={() => void handleOpenOriginal(selected)}
                     >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Наступний візуал"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-2 text-white backdrop-blur-sm transition-colors hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                      onClick={() => stepDetail(1)}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Оригінал
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
+                      onClick={() => void handleDownload(selected)}
                     >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
-                ) : null}
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
-                    onClick={() => void handleOpenOriginal(selected)}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Оригінал
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 gap-1.5 rounded-lg bg-black/35 text-white backdrop-blur-sm hover:bg-black/55"
-                    onClick={() => void handleDownload(selected)}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Завантажити
-                  </Button>
+                      <Download className="h-3.5 w-3.5" />
+                      Завантажити
+                    </Button>
+                  </div>
+                  {activeGroupItems.length > 1 && activeGroupIndex !== -1 ? (
+                    <span className="absolute bottom-3 right-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                      {activeGroupIndex + 1} / {activeGroupItems.length}
+                    </span>
+                  ) : null}
                 </div>
-                {selectedIndex !== -1 ? (
-                  <span className="absolute bottom-3 right-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-                    {selectedIndex + 1} / {filtered.length}
-                  </span>
+                {activeGroupItems.length > 1 ? (
+                  <div
+                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-border/60 bg-card/60 p-2.5 [scrollbar-width:thin]"
+                    role="listbox"
+                    aria-label="Візуали цього проєкту"
+                  >
+                    {activeGroupItems.map((item, index) => {
+                      const isActive = item.key === selected.key;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          role="option"
+                          aria-selected={isActive}
+                          aria-label={`Візуал ${index + 1}`}
+                          onClick={() => selectSibling(item)}
+                          className={cn(
+                            "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-150",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                            isActive
+                              ? "border-primary shadow-[var(--shadow-elevated-sm)]"
+                              : "border-transparent opacity-60 hover:opacity-100"
+                          )}
+                        >
+                          <StorageObjectImage
+                            bucket={item.bucket}
+                            path={item.path}
+                            alt=""
+                            variant="thumb"
+                            className="h-full w-full"
+                            imageClassName="h-full w-full object-cover"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
                 ) : null}
               </div>
 
