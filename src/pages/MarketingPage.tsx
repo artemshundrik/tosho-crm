@@ -348,6 +348,7 @@ export default function MarketingPage() {
         offset = 0;
         while (true) {
           const { data, error: fetchError } = await supabase
+            .schema("tosho")
             .from("marketing_visuals")
             .select("id,design_task_id,output_file_id,status,tags,checklist,notes,is_favorite,is_hidden")
             .eq("team_id", teamId)
@@ -432,6 +433,7 @@ export default function MarketingPage() {
 
         for (const chunk of chunkArray(customerIds, 150)) {
           const { data } = await supabase
+            .schema("tosho")
             .from("customers")
             .select("id,name,logo_url,contact_name,contact_phone,contact_email")
             .in("id", chunk);
@@ -450,8 +452,10 @@ export default function MarketingPage() {
 
         for (const chunk of chunkArray(leadIds, 150)) {
           const { data } = await supabase
+            .schema("tosho")
             .from("leads")
             .select("id,company_name,first_name,last_name,email,phone_numbers,logo_url")
+            .eq("team_id", teamId)
             .in("id", chunk);
           (data ?? []).forEach((row: Record<string, unknown>) => {
             const id = toNonEmptyString(row.id);
@@ -630,6 +634,7 @@ export default function MarketingPage() {
         updated_at: new Date().toISOString(),
       };
       const { error: upsertError } = await supabase
+        .schema("tosho")
         .from("marketing_visuals")
         .upsert(payload, { onConflict: "team_id,design_task_id,output_file_id" });
       if (upsertError) {
