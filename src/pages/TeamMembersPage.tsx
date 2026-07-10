@@ -141,6 +141,7 @@ type MemberProfileMeta = {
     finance: boolean;
     vchasno: boolean;
     vchasno_send: boolean;
+    marketing: boolean;
     team: boolean;
   };
 };
@@ -266,6 +267,7 @@ const DEFAULT_MODULE_ACCESS = {
   finance: false,
   vchasno: false,
   vchasno_send: false,
+  marketing: false,
   team: false,
 };
 
@@ -280,6 +282,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   finance: "Фінанси",
   vchasno: "Вчасно — завантаження",
   vchasno_send: "Вчасно — надсилання",
+  marketing: "Маркетинг",
   team: "Управління командою",
 };
 
@@ -294,6 +297,7 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "finance",
   "vchasno",
   "vchasno_send",
+  "marketing",
   "team",
 ];
 
@@ -378,6 +382,11 @@ function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | 
   );
 }
 
+function hasDefaultMarketingAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "marketer";
+}
+
 function isForcedModuleAccess(key: keyof MemberProfileMeta["moduleAccess"], accessRole?: string | null, jobRole?: string | null) {
   if (key === "contractors" && (accessRole ?? "").trim().toLowerCase() === "owner") return true;
   if (key === "stock" && hasDefaultStockAccess(accessRole, jobRole)) return true;
@@ -406,6 +415,8 @@ function normalizeModuleAccess(
         ? input.vchasno_send
         : (accessRole ?? "").trim().toLowerCase() === "owner" ||
           (jobRole ?? "").trim().toLowerCase() === "chief_accountant",
+    marketing:
+      typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }

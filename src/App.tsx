@@ -77,6 +77,7 @@ const DesignTaskPage = lazyWithRetry(() => import("./pages/DesignTaskPage"));
 const ContractorsPage = lazyWithRetry(() => import("./pages/ContractorsPage"));
 const SampleStockPage = lazyWithRetry(() => import("./pages/SampleStockPage"));
 const FinancesPage = lazyWithRetry(() => import("./pages/FinancesPage"));
+const MarketingPage = lazyWithRetry(() => import("./pages/MarketingPage"));
 const OverviewPage = lazyWithRetry(() =>
   import("./pages/OverviewPage").then((module) => ({ default: module.OverviewPage }))
 );
@@ -1026,6 +1027,22 @@ function AppRoutes() {
             >
               <RouteSuspense shell>
                 <FinancesPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="marketing"
+          element={
+            <ModuleRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              isSuperAdmin={permissions.isSuperAdmin}
+              moduleKey="marketing"
+              moduleLabel="Маркетинг"
+            >
+              <RouteSuspense shell>
+                <MarketingPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

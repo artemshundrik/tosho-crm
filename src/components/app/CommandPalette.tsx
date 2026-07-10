@@ -19,6 +19,7 @@ import {
   Factory,
   FolderKanban,
   History,
+  Megaphone,
   Package,
   Palette,
   Search,
@@ -402,6 +403,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         ],
         to: "/finances",
         icon: Banknote,
+      },
+      {
+        key: "route-marketing",
+        label: "Маркетинг",
+        description: "Галерея дизайн-візуалів для зйомки та промо",
+        kindLabel: "Сторінка",
+        keywords: ["маркетинг", "marketing", "галерея", "візуали", "фото", "зйомка"],
+        to: "/marketing",
+        icon: Megaphone,
       },
       {
         key: "route-design",

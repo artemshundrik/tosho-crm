@@ -26,6 +26,7 @@ const routeImporters: RoutePreloadEntry[] = [
   { pattern: /^\/contractors$/, importer: () => import("../pages/ContractorsPage"), heavy: true },
   { pattern: /^\/stock\/samples$/, importer: () => import("../pages/SampleStockPage"), heavy: true },
   { pattern: /^\/finances$/, importer: () => import("../pages/FinancesPage") },
+  { pattern: /^\/marketing$/, importer: () => import("../pages/MarketingPage"), heavy: true },
 ];
 
 const prefetched = new Set<string>();

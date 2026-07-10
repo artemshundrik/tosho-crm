@@ -12,6 +12,7 @@ import {
   FolderKanban,
   KeyRound,
   LayoutGrid,
+  Megaphone,
   Menu,
   Moon,
   Palette,
@@ -98,7 +99,17 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?: "overview" | "orders" | "design" | "logistics" | "catalog" | "contractors" | "stock" | "finance" | "team";
+  moduleKey?:
+    | "overview"
+    | "orders"
+    | "design"
+    | "logistics"
+    | "catalog"
+    | "contractors"
+    | "stock"
+    | "finance"
+    | "marketing"
+    | "team";
 };
 
 type HeaderConfig = {
@@ -414,6 +425,7 @@ const ROUTES = {
   contractors: "/contractors",
   sampleStock: "/stock/samples",
   finances: "/finances",
+  marketing: "/marketing",
   team: "/team",
 
   workspaceSettings: "/workspace-settings",
@@ -458,6 +470,13 @@ const baseSidebarLinks: SidebarLink[] = [
     group: "operations",
     icon: Banknote,
     moduleKey: "finance",
+  },
+  {
+    label: "Маркетинг",
+    to: ROUTES.marketing,
+    group: "operations",
+    icon: Megaphone,
+    moduleKey: "marketing",
   },
 
   // Акаунт
@@ -555,6 +574,14 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Рахунки, видаткові накладні, акти, звірки та витрати компанії.",
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finances,
+      showPageHeader: false,
+    };
+  if (pathname.startsWith(ROUTES.marketing))
+    return {
+      title: "Маркетинг",
+      subtitle: "Галерея дизайн-візуалів для зйомки та промо.",
+      breadcrumbLabel: "Маркетинг",
+      breadcrumbTo: ROUTES.marketing,
       showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.team))

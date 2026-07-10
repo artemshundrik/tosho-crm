@@ -149,6 +149,7 @@ const DEFAULT_MODULE_ACCESS = {
   finance: false,
   vchasno: false,
   vchasno_send: false,
+  marketing: false,
   team: false,
 };
 
@@ -205,6 +206,12 @@ function hasDefaultVchasnoSendAccess(accessRole?: string | null, jobRole?: strin
   return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "chief_accountant";
 }
 
+// Маркетинг: галерея візуалів — власник, SEO та маркетолог за замовчуванням.
+function hasDefaultMarketingAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "marketer";
+}
+
 function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
@@ -218,6 +225,7 @@ function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRo
     finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
     vchasno: typeof input.vchasno === "boolean" ? input.vchasno : hasDefaultVchasnoAccess(accessRole, jobRole),
     vchasno_send: typeof input.vchasno_send === "boolean" ? input.vchasno_send : hasDefaultVchasnoSendAccess(accessRole, jobRole),
+    marketing: typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
   };
 }
