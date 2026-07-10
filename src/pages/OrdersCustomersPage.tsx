@@ -57,6 +57,7 @@ import {
   parseCustomerLegalEntities,
   serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
+import { parseCustomerDeliveryPoints, serializeCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 import {
   areCompanyNamesEquivalent,
   buildCompanySearchVariants,
@@ -118,6 +119,7 @@ type CustomerRow = {
   event_at?: string | null;
   event_comment?: string | null;
   notes?: string | null;
+  delivery_points?: unknown;
   dropbox_client_path?: string | null;
   dropbox_brand_path?: string | null;
   dropbox_shared_url?: string | null;
@@ -152,6 +154,7 @@ type LeadRow = {
   event_at?: string | null;
   event_comment?: string | null;
   notes?: string | null;
+  delivery_points?: unknown;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -278,6 +281,7 @@ const createInitialCustomerFormState = (manager = "", managerId = ""): CustomerF
   logoUploadMode: "url",
   legalEntities: [createEmptyCustomerLegalEntity()],
   contacts: [{ ...EMPTY_CUSTOMER_CONTACT }],
+  deliveryPoints: [],
   reminderDate: "",
   reminderTime: "",
   reminderComment: "",
@@ -395,6 +399,7 @@ const CUSTOMER_BASE_COLUMNS = [
   "event_at",
   "event_comment",
   "notes",
+  "delivery_points",
   "created_at",
   "updated_at",
 ];
@@ -432,6 +437,7 @@ const LEAD_COLUMNS = [
   "event_at",
   "event_comment",
   "notes",
+  "delivery_points",
   "created_at",
   "updated_at",
 ].join(",");
@@ -628,6 +634,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     eventDate: "",
     eventComment: "",
     notes: "",
+    deliveryPoints: [],
   });
   const customerDropboxColumnsAvailableRef = useRef<boolean | null>(null);
   const [customerDropboxLinks, setCustomerDropboxLinks] = useState<Record<string, CustomerDropboxLink>>(() =>
@@ -1377,6 +1384,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       eventDate: "",
       eventComment: "",
       notes: "",
+      deliveryPoints: [],
     });
     setLeadFormError(null);
   }, [currentManagerLabel, defaultManagerName, userId]);
@@ -1664,6 +1672,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       logoUploadMode: "url",
       legalEntities: parseCustomerLegalEntities(row),
       contacts,
+      deliveryPoints: parseCustomerDeliveryPoints(row.delivery_points),
       reminderDate: getLocalReminderDateInputValue(row.reminder_at),
       reminderTime: getLocalReminderTimeInputValue(row.reminder_at),
       reminderComment: row.reminder_comment ?? "",
@@ -1722,6 +1731,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       eventDate: lead.event_at ? lead.event_at.slice(0, 10) : "",
       eventComment: lead.event_comment ?? "",
       notes: lead.notes ?? "",
+      deliveryPoints: parseCustomerDeliveryPoints(lead.delivery_points),
     });
     setLeadFormError(null);
     setLeadDialogOpen(true);
@@ -2621,6 +2631,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       event_at: form.eventDate || null,
       event_comment: form.eventComment.trim() || null,
       notes: form.notes.trim() || null,
+      delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
     };
 
     const basePayload: Record<string, unknown> = {
@@ -2656,6 +2667,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       delete clone.event_at;
       delete clone.event_comment;
       delete clone.notes;
+      delete clone.delivery_points;
       return clone;
     };
 
@@ -2857,6 +2869,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       event_at: leadForm.eventDate || null,
       event_comment: leadForm.eventComment.trim() || null,
       notes: leadForm.notes.trim() || null,
+      delivery_points: serializeCustomerDeliveryPoints(leadForm.deliveryPoints),
     };
 
     let managerFieldsPersisted = true;
@@ -3002,6 +3015,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           event_at: leadForm.eventDate || null,
           event_comment: leadForm.eventComment.trim() || null,
           notes: leadForm.notes.trim() || null,
+          delivery_points: serializeCustomerDeliveryPoints(leadForm.deliveryPoints),
         };
 
         const { error: customerInsertError } = await supabase

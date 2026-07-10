@@ -22,6 +22,11 @@ import {
   parseCustomerLegalEntities,
   formatCustomerLegalEntitySummary,
 } from "@/lib/customerLegalEntities";
+import {
+  DELIVERY_POINT_TYPE_ICONS,
+  DELIVERY_POINT_TYPE_LABELS,
+  parseCustomerDeliveryPoints,
+} from "@/lib/customerDeliveryPoints";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
@@ -59,6 +64,7 @@ type CustomerRow = {
   contact_position?: string | null;
   contact_phone?: string | null;
   contact_email?: string | null;
+  delivery_points?: unknown;
 };
 
 type LeadRow = {
@@ -74,6 +80,7 @@ type LeadRow = {
   manager?: string | null;
   manager_user_id?: string | null;
   logo_url?: string | null;
+  delivery_points?: unknown;
 };
 
 type RelatedQuoteRow = {
@@ -125,6 +132,7 @@ const CUSTOMER_COLUMNS = [
   "contact_position",
   "contact_phone",
   "contact_email",
+  "delivery_points",
 ].join(",");
 
 const LEAD_COLUMNS = [
@@ -140,6 +148,7 @@ const LEAD_COLUMNS = [
   "manager",
   "manager_user_id",
   "logo_url",
+  "delivery_points",
 ].join(",");
 const LEAD_COLUMNS_WITHOUT_MANAGER_USER_ID = LEAD_COLUMNS.replace("manager_user_id,", "");
 const LEAD_COLUMNS_BASE = LEAD_COLUMNS_WITHOUT_MANAGER_USER_ID.replace("logo_url,", "");
@@ -600,6 +609,9 @@ export function CustomerLeadQuickViewDialog({
   const avatarSrc = customer?.logo_url ?? lead?.logo_url ?? customerLogoUrl ?? null;
   const primaryContact = buildPrimaryContact(customer);
   const primaryLegalEntity = customer ? parseCustomerLegalEntities(customer)[0] ?? null : null;
+  const deliveryPoints = parseCustomerDeliveryPoints(
+    entityKind === "customer" ? customer?.delivery_points : lead?.delivery_points
+  );
   const managerLabel = customer?.manager ?? lead?.manager ?? null;
   const managerUserId = customer?.manager_user_id ?? lead?.manager_user_id ?? null;
   const managerAvatarUrl =
@@ -866,6 +878,37 @@ export function CustomerLeadQuickViewDialog({
                     <div className="mt-2 text-2xl font-semibold">{designTasks.length}</div>
                   </div>
                 </div>
+                {deliveryPoints.length > 0 ? (
+                  <div className="rounded-xl border border-border/60 bg-card/80 p-4">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Логістика</div>
+                    <div className="mt-2 space-y-2">
+                      {deliveryPoints.map((point) => {
+                        const PointIcon = DELIVERY_POINT_TYPE_ICONS[point.type];
+                        return (
+                          <div key={point.id} className="flex items-start gap-2.5 text-sm">
+                            <PointIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0">
+                              <div className="font-medium text-foreground">
+                                {[point.city, point.address].filter(Boolean).join(", ") ||
+                                  DELIVERY_POINT_TYPE_LABELS[point.type]}
+                                {point.isDefault ? (
+                                  <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    основна
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {DELIVERY_POINT_TYPE_LABELS[point.type]}
+                                {point.contactName ? ` · ${point.contactName}` : ""}
+                                {point.contactPhone ? ` · ${point.contactPhone}` : ""}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </TabsContent>
 
               <TabsContent value="quotes" className="mt-4 space-y-3">

@@ -75,6 +75,7 @@ const createInitialCustomerForm = (prefillName: string, defaultManagerLabel: str
   eventDate: "",
   eventComment: "",
   notes: "",
+  deliveryPoints: [],
   accountantName: "",
   accountantEmail: "",
   accountantEdrpou: "",
@@ -108,6 +109,7 @@ const createInitialLeadForm = (prefillName: string, defaultManagerLabel: string)
   eventDate: "",
   eventComment: "",
   notes: "",
+  deliveryPoints: [],
 });
 
 const normalizeOptionalDate = (value: string) => {

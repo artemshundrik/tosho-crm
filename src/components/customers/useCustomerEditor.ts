@@ -21,6 +21,7 @@ import {
   getLocalReminderDateInputValue,
   getLocalReminderTimeInputValue,
 } from "@/lib/reminderDateTime";
+import { parseCustomerDeliveryPoints, serializeCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -58,6 +59,7 @@ type CustomerRecord = {
   event_at?: string | null;
   event_comment?: string | null;
   notes?: string | null;
+  delivery_points?: unknown;
 };
 
 const CUSTOMER_COLUMNS = [
@@ -93,6 +95,7 @@ const CUSTOMER_COLUMNS = [
   "event_at",
   "event_comment",
   "notes",
+  "delivery_points",
 ].join(",");
 
 const EMPTY_CONTACT: CustomerContact = {
@@ -116,6 +119,7 @@ const buildEmptyForm = (): CustomerFormState => ({
   logoUploadMode: "url",
   legalEntities: [createEmptyCustomerLegalEntity()],
   contacts: [{ ...EMPTY_CONTACT }],
+  deliveryPoints: [],
   reminderDate: "",
   reminderTime: "",
   reminderComment: "",
@@ -279,6 +283,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
           logoUploadMode: "url",
           legalEntities: parseCustomerLegalEntities(data),
           contacts: parseContactsFromRow(data),
+          deliveryPoints: parseCustomerDeliveryPoints(data.delivery_points),
           reminderDate: getLocalReminderDateInputValue(data.reminder_at),
           reminderTime: getLocalReminderTimeInputValue(data.reminder_at),
           reminderComment: data.reminder_comment ?? "",
@@ -402,6 +407,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
       event_at: form.eventDate || null,
       event_comment: form.eventComment.trim() || null,
       notes: form.notes.trim() || null,
+      delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
     };
 
     try {

@@ -43,6 +43,8 @@ import {
   hasCustomerLegalEntityIdentity,
   type CustomerLegalEntity,
 } from "@/lib/customerLegalEntities";
+import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
+import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
@@ -89,6 +91,7 @@ export type CustomerFormState = {
   logoUploadMode: ImageUploadMode;
   legalEntities: CustomerLegalEntity[];
   contacts: CustomerContact[];
+  deliveryPoints: CustomerDeliveryPoint[];
   reminderDate: string;
   reminderTime: string;
   reminderComment: string;
@@ -111,6 +114,7 @@ export type CustomerContact = {
 };
 
 export type { CustomerLegalEntity } from "@/lib/customerLegalEntities";
+export type { CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 
 export type CustomerLinkedItem = {
   id: string;
@@ -294,7 +298,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [activeLegalEntityId, setActiveLegalEntityId] = React.useState<string | null>(null);
-  const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "accountant" | "related">(
+  const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "logistics" | "accountant" | "related">(
     "basic"
   );
   const [quickMode, setQuickMode] = React.useState(true);
@@ -523,6 +527,41 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
       if (prev.contacts.length <= 1) return prev;
       return { ...prev, contacts: prev.contacts.filter((_, i) => i !== index) };
     });
+  };
+
+  const addDeliveryPoint = () => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: [
+        ...prev.deliveryPoints,
+        { ...createEmptyCustomerDeliveryPoint(), isDefault: prev.deliveryPoints.length === 0 },
+      ],
+    }));
+  };
+
+  const removeDeliveryPoint = (index: number) => {
+    setForm((prev) => {
+      const next = prev.deliveryPoints.filter((_, i) => i !== index);
+      // Якщо видалили дефолтну точку — дефолт переходить на першу з решти.
+      if (next.length > 0 && !next.some((point) => point.isDefault)) {
+        next[0] = { ...next[0], isDefault: true };
+      }
+      return { ...prev, deliveryPoints: next };
+    });
+  };
+
+  const updateDeliveryPoint = (index: number, patch: Partial<CustomerDeliveryPoint>) => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: prev.deliveryPoints.map((point, i) => (i === index ? { ...point, ...patch } : point)),
+    }));
+  };
+
+  const setDefaultDeliveryPoint = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: prev.deliveryPoints.map((point, i) => ({ ...point, isDefault: i === index })),
+    }));
   };
 
   return (
@@ -940,6 +979,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
               <TabsTrigger value="legalEntities" className={UNDERLINE_TAB}>Юр. особи</TabsTrigger>
               <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
+              <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
+                Логістика
+                {form.deliveryPoints.length > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    {form.deliveryPoints.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
               <TabsTrigger value="accountant" className={UNDERLINE_TAB}>Бухгалтер</TabsTrigger>
               <TabsTrigger value="related" className={UNDERLINE_TAB}>
                 Пов'язане
@@ -1601,6 +1648,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 />
               </div>
               </SectionCard>
+            </TabsContent>
+
+            <TabsContent value="logistics" className="space-y-3 mt-3">
+              <DeliveryPointsSection
+                points={form.deliveryPoints}
+                onAdd={addDeliveryPoint}
+                onRemove={removeDeliveryPoint}
+                onUpdate={updateDeliveryPoint}
+                onSetDefault={setDefaultDeliveryPoint}
+              />
             </TabsContent>
 
             <TabsContent value="accountant" className="space-y-3 mt-3">

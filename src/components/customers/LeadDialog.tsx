@@ -31,6 +31,8 @@ import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
 import { PackageCheck, ReceiptText } from "lucide-react";
+import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
+import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 
 export type LeadFormState = {
   companyName: string;
@@ -60,6 +62,7 @@ export type LeadFormState = {
   eventDate: string;
   eventComment: string;
   notes: string;
+  deliveryPoints: CustomerDeliveryPoint[];
 };
 
 export type LeadLinkedItem = {
@@ -213,7 +216,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [quickMode, setQuickMode] = React.useState(true);
-  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "related">(
+  const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "logistics" | "related">(
     "basic"
   );
   const normalizedLogoUrl = React.useMemo(() => normalizeCustomerLogoUrl(form.logoUrl), [form.logoUrl]);
@@ -286,6 +289,40 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
       if (prev.phones.length <= 1) return prev;
       return { ...prev, phones: prev.phones.filter((_, i) => i !== index) };
     });
+  };
+
+  const addDeliveryPoint = () => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: [
+        ...prev.deliveryPoints,
+        { ...createEmptyCustomerDeliveryPoint(), isDefault: prev.deliveryPoints.length === 0 },
+      ],
+    }));
+  };
+
+  const removeDeliveryPoint = (index: number) => {
+    setForm((prev) => {
+      const next = prev.deliveryPoints.filter((_, i) => i !== index);
+      if (next.length > 0 && !next.some((point) => point.isDefault)) {
+        next[0] = { ...next[0], isDefault: true };
+      }
+      return { ...prev, deliveryPoints: next };
+    });
+  };
+
+  const updateDeliveryPoint = (index: number, patch: Partial<CustomerDeliveryPoint>) => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: prev.deliveryPoints.map((point, i) => (i === index ? { ...point, ...patch } : point)),
+    }));
+  };
+
+  const setDefaultDeliveryPoint = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      deliveryPoints: prev.deliveryPoints.map((point, i) => ({ ...point, isDefault: i === index })),
+    }));
   };
 
   const handleReminderTimeChange = (value: string) => {
@@ -810,6 +847,14 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
                 <TabsTrigger value="requisites" className={UNDERLINE_TAB}>Реквізити</TabsTrigger>
                 <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
+                <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
+                  Логістика
+                  {form.deliveryPoints.length > 0 ? (
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                      {form.deliveryPoints.length}
+                    </span>
+                  ) : null}
+                </TabsTrigger>
                 <TabsTrigger value="related" className={UNDERLINE_TAB}>
                   Пов'язане
                   <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
@@ -1151,6 +1196,16 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   />
                 </div>
                 </SectionCard>
+              </TabsContent>
+
+              <TabsContent value="logistics" className="space-y-3 mt-3">
+                <DeliveryPointsSection
+                  points={form.deliveryPoints}
+                  onAdd={addDeliveryPoint}
+                  onRemove={removeDeliveryPoint}
+                  onUpdate={updateDeliveryPoint}
+                  onSetDefault={setDefaultDeliveryPoint}
+                />
               </TabsContent>
 
               <TabsContent value="related" className="space-y-3 mt-3">
