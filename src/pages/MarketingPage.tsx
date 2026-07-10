@@ -882,27 +882,16 @@ export default function MarketingPage() {
       const isStack = stackCount > 1;
 
       return (
-        <div key={group.key} className={cn("relative", options?.className)}>
-          {isStack ? (
-            <>
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-3 inset-y-0 translate-y-[7px] rounded-2xl border border-border/40 bg-muted/50"
-              />
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-1.5 inset-y-0 translate-y-[3.5px] rounded-2xl border border-border/55 bg-card"
-              />
-            </>
-          ) : null}
-          <article
-            className={cn(
-              "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-              "shadow-[var(--shadow-surface)] transition-[border-color,box-shadow] duration-200 ease-out",
-              "hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-              record.isHidden && "opacity-70"
-            )}
+        <article
+          key={group.key}
+          className={cn(
+            "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
+            "shadow-[var(--shadow-surface)] transition-[border-color,box-shadow] duration-200 ease-out",
+            "hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            record.isHidden && "opacity-70",
+            options?.className
+          )}
             role="button"
             tabIndex={0}
             aria-label={
@@ -1015,7 +1004,6 @@ export default function MarketingPage() {
               </div>
             </div>
           </article>
-        </div>
       );
     },
     [
@@ -1245,7 +1233,7 @@ export default function MarketingPage() {
           }
         />
       ) : showAsGrid ? (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {groups.map((group) => renderGroup(group))}
         </div>
       ) : (
@@ -1343,7 +1331,7 @@ export default function MarketingPage() {
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 pr-6 pt-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6">
+                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6">
                   {row.groups.map((group) =>
                     renderGroup(group, { className: "w-[220px] shrink-0 snap-start sm:w-[248px]" })
                   )}
