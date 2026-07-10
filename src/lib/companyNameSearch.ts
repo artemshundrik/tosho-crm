@@ -88,10 +88,22 @@ const LATIN_TO_CYRILLIC_CHAR_MAP: Record<string, string> = {
 const stripToWords = (value?: string | null) =>
   (value ?? "")
     .toLowerCase()
+    // Protect Cyrillic letters that NFKD decomposes into base + combining mark
+    // (й→и+breve, ї→і+diaeresis, ё→е+diaeresis, ў→у+breve). They are distinct
+    // letters, not strippable accents — folding them broke ILIKE search for any
+    // name containing them (e.g. "Лайфселл" became "лаифселл" → no DB match).
+    .replace(/й/g, "")
+    .replace(/ї/g, "")
+    .replace(/ё/g, "")
+    .replace(/ў/g, "")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[`"'’«»]/g, "")
     .replace(/[&/\\+]+/g, " ")
+    .replace(//g, "й")
+    .replace(//g, "ї")
+    .replace(//g, "ё")
+    .replace(//g, "ў")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
