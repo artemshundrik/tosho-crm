@@ -60,6 +60,7 @@ import {
   type FinanceLegalEntity,
   type LegalEntityKind,
 } from "./types";
+import { getExpenseCategoryIcon } from "./expenseCategoryIcons";
 
 type FinanceSettingsProps = {
   teamId: string | null;
@@ -765,22 +766,26 @@ function CategoriesPanel({
                 {EXPENSE_CATEGORY_KIND_LABELS[group.kind]}
               </h4>
               <div className="flex flex-wrap gap-2">
-                {group.items.map((category) => (
-                  <div
-                    key={category.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-sm"
-                  >
-                    <span>{category.name}</span>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => void remove(category)}
-                      aria-label={`Видалити ${category.name}`}
+                {group.items.map((category) => {
+                  const Icon = getExpenseCategoryIcon(category.name, category.kind);
+                  return (
+                    <div
+                      key={category.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-sm"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{category.name}</span>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => void remove(category)}
+                        aria-label={`Видалити ${category.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

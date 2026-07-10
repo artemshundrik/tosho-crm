@@ -41,6 +41,7 @@ import {
   type FinanceLegalEntity,
   type FinanceOrderRef,
 } from "./types";
+import { getExpenseCategoryIcon } from "./expenseCategoryIcons";
 
 type FinanceExpensesProps = {
   teamId: string | null;
@@ -248,6 +249,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 
   const renderRow = (expense: FinanceExpense) => {
     const category = expense.categoryId ? categoryById.get(expense.categoryId) : null;
+    const CategoryIcon = category ? getExpenseCategoryIcon(category.name, category.kind) : null;
     const account = expense.accountId ? accountById.get(expense.accountId) : null;
     const allocatedTotal = expense.allocations.reduce((sum, a) => sum + a.amount, 0);
     return (
@@ -259,7 +261,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-foreground">{formatOrderMoney(expense.amount, "UAH")}</span>
             {category ? (
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                {CategoryIcon ? <CategoryIcon className="h-3 w-3" /> : null}
                 {category.name}
               </Badge>
             ) : null}
@@ -645,11 +648,17 @@ function ExpenseDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Без статті</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name} · {EXPENSE_CATEGORY_KIND_LABELS[category.kind]}
-                    </SelectItem>
-                  ))}
+                  {categories.map((category) => {
+                    const Icon = getExpenseCategoryIcon(category.name, category.kind);
+                    return (
+                      <SelectItem key={category.id} value={category.id}>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          {category.name} · {EXPENSE_CATEGORY_KIND_LABELS[category.kind]}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
