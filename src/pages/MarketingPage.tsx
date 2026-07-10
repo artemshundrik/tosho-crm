@@ -180,6 +180,10 @@ const DEFAULT_CHECKLIST_TEMPLATE = [
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif", "heic", "bmp", "svg"]);
 
+// Design visuals are 16:9 presentation slides. Match the card image box to that
+// so a standard visual fills it edge-to-edge without being cropped.
+const VISUAL_ASPECT_CLASS = "aspect-[16/9]";
+
 const DEFAULT_RECORD: MarketingRecord = {
   id: null,
   status: "new",
@@ -927,7 +931,7 @@ export default function MarketingPage() {
               }
             }}
           >
-            <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/30">
+            <div className={cn("relative w-full overflow-hidden bg-muted/30", VISUAL_ASPECT_CLASS)}>
               <StorageObjectImage
                 bucket={visual.bucket}
                 path={visual.path}
@@ -1170,7 +1174,7 @@ export default function MarketingPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, index) => (
             <div key={index} className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-              <Skeleton className="aspect-[4/3] w-full rounded-none" />
+              <Skeleton className={cn("w-full rounded-none", VISUAL_ASPECT_CLASS)} />
               <div className="space-y-2 p-3.5">
                 <Skeleton className="h-3.5 w-2/3" />
                 <Skeleton className="h-3 w-full" />
