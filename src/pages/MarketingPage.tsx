@@ -664,6 +664,14 @@ export default function MarketingPage() {
     [visualizationVisuals, getRecord]
   );
 
+  const favoritesCount = useMemo(
+    () =>
+      new Set(
+        visualizationVisuals.filter((visual) => getRecord(visual.key).isFavorite).map((visual) => visual.taskId)
+      ).size,
+    [visualizationVisuals, getRecord]
+  );
+
   const selected = useMemo(
     () => (selectedKey ? baseFiltered.find((visual) => visual.key === selectedKey) ?? null : null),
     [baseFiltered, selectedKey]
@@ -923,20 +931,27 @@ export default function MarketingPage() {
               <button
                 type="button"
                 aria-label={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                aria-pressed={record.isFavorite}
                 className={cn(
-                  "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full",
-                  "bg-black/25 text-white backdrop-blur-sm transition-colors duration-150",
-                  "hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+                  "absolute right-2.5 top-2.5 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full backdrop-blur-sm transition-colors duration-150",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
                   record.isFavorite
-                    ? "opacity-100"
-                    : "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100"
+                    ? "bg-black/45 opacity-100"
+                    : "bg-black/25 text-white opacity-0 hover:bg-black/45 group-hover/card:opacity-100 focus-visible:opacity-100"
                 )}
                 onClick={(event) => {
                   event.stopPropagation();
                   handleToggleFavorite(visual);
                 }}
               >
-                <Star className={cn("h-4 w-4", record.isFavorite && "fill-warning text-warning")} />
+                <Star
+                  className={cn(
+                    "h-4 w-4",
+                    record.isFavorite
+                      ? "fill-amber-400 text-amber-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
+                      : "text-white"
+                  )}
+                />
               </button>
               {isStack ? (
                 <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
@@ -1155,10 +1170,11 @@ export default function MarketingPage() {
           <Chip
             size="sm"
             active={onlyFavorites}
-            icon={<Star className={cn("h-3.5 w-3.5", onlyFavorites && "fill-warning text-warning")} />}
+            icon={<Star className={cn("h-3.5 w-3.5", onlyFavorites && "fill-amber-400 text-amber-400")} />}
             onClick={() => setOnlyFavorites((prev) => !prev)}
           >
             Обрані
+            <CountPill value={favoritesCount} active={onlyFavorites} />
           </Chip>
           {hiddenCount > 0 || showHidden ? (
             <Chip
@@ -1479,7 +1495,7 @@ export default function MarketingPage() {
                       onClick={() => handleToggleFavorite(selected)}
                     >
                       <Star
-                        className={cn("h-4 w-4", selectedRecord.isFavorite && "fill-warning text-warning")}
+                        className={cn("h-4 w-4", selectedRecord.isFavorite && "fill-amber-400 text-amber-400")}
                       />
                     </button>
                   </div>
