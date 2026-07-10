@@ -147,7 +147,6 @@ type MarketingVisualRow = {
 };
 
 type ViewMode = "showcase" | "grid";
-type KindFilter = "visualization" | "layout" | "all";
 type SortMode = "newest" | "oldest" | "customer";
 
 // Near-identical visuals from one design task are collapsed into a single
@@ -328,7 +327,6 @@ export default function MarketingPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("showcase");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | MarketingStatus>("all");
-  const [kindFilter, setKindFilter] = useState<KindFilter>("visualization");
   const [designerFilter, setDesignerFilter] = useState<string>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -544,17 +542,18 @@ export default function MarketingPage() {
     [records]
   );
 
-  const kindFiltered = useMemo(() => {
-    return visuals.filter((visual) => {
-      if (kindFilter === "all") return true;
-      if (kindFilter === "layout") return visual.outputKind === "layout";
-      return visual.outputKind === "visualization" || (visual.outputKind === null && visual.isPreviewable);
-    });
-  }, [visuals, kindFilter]);
+  // The gallery is visuals-only — layouts and other output files never appear.
+  const visualizationVisuals = useMemo(
+    () =>
+      visuals.filter(
+        (visual) => visual.outputKind === "visualization" || (visual.outputKind === null && visual.isPreviewable)
+      ),
+    [visuals]
+  );
 
   const baseFiltered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return kindFiltered.filter((visual) => {
+    return visualizationVisuals.filter((visual) => {
       const record = getRecord(visual.key);
       if (!showHidden && record.isHidden) return false;
       if (showHidden && !record.isHidden) return false;
@@ -576,65 +575,76 @@ export default function MarketingPage() {
       }
       return true;
     });
-  }, [kindFiltered, getRecord, search, designerFilter, tagFilter, onlyFavorites, showHidden]);
+  }, [visualizationVisuals, getRecord, search, designerFilter, tagFilter, onlyFavorites, showHidden]);
+
+  // Everything the feed shows and counts is a stack: one design task = one card,
+  // never raw files. Cover = a favourited visual, else the first.
+  const groupVisuals = useCallback(
+    (list: GalleryVisual[]): VisualGroup[] => {
+      const byTask = new Map<string, GalleryVisual[]>();
+      list.forEach((visual) => {
+        const bucket = byTask.get(visual.taskId);
+        if (bucket) bucket.push(visual);
+        else byTask.set(visual.taskId, [visual]);
+      });
+      return Array.from(byTask.values()).map((items) => ({
+        key: items[0].taskId,
+        taskId: items[0].taskId,
+        items,
+        cover: items.find((visual) => getRecord(visual.key).isFavorite) ?? items[0],
+      }));
+    },
+    [getRecord]
+  );
+
+  const groupStatus = useCallback(
+    (group: VisualGroup) => getRecord(group.cover.key).status,
+    [getRecord]
+  );
+
+  const baseGroups = useMemo(() => groupVisuals(baseFiltered), [groupVisuals, baseFiltered]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<MarketingStatus, number> = { new: 0, in_progress: 0, review: 0, ready: 0, shot: 0 };
-    baseFiltered.forEach((visual) => {
-      counts[getRecord(visual.key).status] += 1;
+    baseGroups.forEach((group) => {
+      counts[groupStatus(group)] += 1;
     });
     return counts;
-  }, [baseFiltered, getRecord]);
+  }, [baseGroups, groupStatus]);
 
-  const filtered = useMemo(() => {
+  const groups = useMemo<VisualGroup[]>(() => {
     const list =
       statusFilter === "all"
-        ? [...baseFiltered]
-        : baseFiltered.filter((visual) => getRecord(visual.key).status === statusFilter);
+        ? [...baseGroups]
+        : baseGroups.filter((group) => groupStatus(group) === statusFilter);
     list.sort((a, b) => {
       if (sortMode === "customer") {
-        const byCustomer = a.customerName.localeCompare(b.customerName, "uk");
+        const byCustomer = a.cover.customerName.localeCompare(b.cover.customerName, "uk");
         if (byCustomer !== 0) return byCustomer;
-        return b.createdAt.localeCompare(a.createdAt);
+        return b.cover.createdAt.localeCompare(a.cover.createdAt);
       }
-      if (sortMode === "oldest") return a.createdAt.localeCompare(b.createdAt);
-      return b.createdAt.localeCompare(a.createdAt);
+      if (sortMode === "oldest") return a.cover.createdAt.localeCompare(b.cover.createdAt);
+      return b.cover.createdAt.localeCompare(a.cover.createdAt);
     });
     return list;
-  }, [baseFiltered, statusFilter, sortMode, getRecord]);
+  }, [baseGroups, statusFilter, sortMode, groupStatus]);
 
-  // Collapse visuals of the same design task into one stack. Insertion order of
-  // the Map preserves the `filtered` sort, so groups appear where their first
-  // (highest-ranked) visual would. Cover = a favourited visual, else the first.
-  const groups = useMemo<VisualGroup[]>(() => {
-    const byTask = new Map<string, GalleryVisual[]>();
-    filtered.forEach((visual) => {
-      const bucket = byTask.get(visual.taskId);
-      if (bucket) bucket.push(visual);
-      else byTask.set(visual.taskId, [visual]);
-    });
-    return Array.from(byTask.values()).map((items) => ({
-      key: items[0].taskId,
-      taskId: items[0].taskId,
-      items,
-      cover: items.find((visual) => getRecord(visual.key).isFavorite) ?? items[0],
-    }));
-  }, [filtered, getRecord]);
-
+  // Tag / hidden counts are also per-stack (distinct design tasks), not per file.
   const allTags = useMemo(() => {
-    const counts = new Map<string, { tag: string; count: number }>();
-    kindFiltered.forEach((visual) => {
+    const byTag = new Map<string, { tag: string; tasks: Set<string> }>();
+    visualizationVisuals.forEach((visual) => {
       getRecord(visual.key).tags.forEach((tag) => {
         const key = tag.toLowerCase();
-        const existing = counts.get(key);
-        if (existing) existing.count += 1;
-        else counts.set(key, { tag, count: 1 });
+        const existing = byTag.get(key);
+        if (existing) existing.tasks.add(visual.taskId);
+        else byTag.set(key, { tag, tasks: new Set([visual.taskId]) });
       });
     });
-    return Array.from(counts.values())
+    return Array.from(byTag.values())
+      .map((entry) => ({ tag: entry.tag, count: entry.tasks.size }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 12);
-  }, [kindFiltered, getRecord]);
+  }, [visualizationVisuals, getRecord]);
 
   const designerOptions = useMemo(() => {
     const ids = new Set<string>();
@@ -647,13 +657,16 @@ export default function MarketingPage() {
   }, [visuals, memberLabelById]);
 
   const hiddenCount = useMemo(
-    () => kindFiltered.filter((visual) => getRecord(visual.key).isHidden).length,
-    [kindFiltered, getRecord]
+    () =>
+      new Set(
+        visualizationVisuals.filter((visual) => getRecord(visual.key).isHidden).map((visual) => visual.taskId)
+      ).size,
+    [visualizationVisuals, getRecord]
   );
 
   const selected = useMemo(
-    () => (selectedKey ? filtered.find((visual) => visual.key === selectedKey) ?? null : null),
-    [filtered, selectedKey]
+    () => (selectedKey ? baseFiltered.find((visual) => visual.key === selectedKey) ?? null : null),
+    [baseFiltered, selectedKey]
   );
   const selectedRecord = selected ? getRecord(selected.key) : null;
   // Navigation inside the dialog is scoped to the open visual's stack, so arrows
@@ -861,24 +874,24 @@ export default function MarketingPage() {
       const isStack = stackCount > 1;
 
       return (
-        <div key={group.key} className={cn("group/stack relative", options?.className)}>
+        <div key={group.key} className={cn("relative", options?.className)}>
           {isStack ? (
             <>
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 translate-x-[7px] translate-y-[7px] rounded-2xl border border-border/40 bg-card shadow-[var(--shadow-surface)] transition-transform duration-200 ease-out group-hover/stack:translate-x-[11px] group-hover/stack:translate-y-[11px] motion-reduce:transition-none"
+                className="pointer-events-none absolute inset-x-3 inset-y-0 translate-y-[7px] rounded-2xl border border-border/40 bg-muted/50"
               />
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 translate-x-[3.5px] translate-y-[3.5px] rounded-2xl border border-border/55 bg-card shadow-[var(--shadow-surface)] transition-transform duration-200 ease-out group-hover/stack:translate-x-[6px] group-hover/stack:translate-y-[6px] motion-reduce:transition-none"
+                className="pointer-events-none absolute inset-x-1.5 inset-y-0 translate-y-[3.5px] rounded-2xl border border-border/55 bg-card"
               />
             </>
           ) : null}
           <article
             className={cn(
               "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-              "shadow-[var(--shadow-surface)] transition-all duration-200 ease-out",
-              "hover:-translate-y-0.5 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
+              "shadow-[var(--shadow-surface)] transition-[border-color,box-shadow] duration-200 ease-out",
+              "hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
               record.isHidden && "opacity-70"
             )}
@@ -906,7 +919,6 @@ export default function MarketingPage() {
                 className="h-full w-full"
                 imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
               />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent opacity-0 transition-opacity duration-200 group-hover/card:opacity-100" />
               <div className="absolute left-2.5 top-2.5">{renderStatusBadge(record.status)}</div>
               <button
                 type="button"
@@ -1027,7 +1039,12 @@ export default function MarketingPage() {
 
   // ---------- render ----------
 
-  const isEmpty = !loading && filtered.length === 0;
+  const isEmpty = !loading && groups.length === 0;
+  // Any content-narrowing filter reads best as a flat grid of results; the
+  // status-organised showcase is only for the unfiltered "browse everything" mode.
+  const isNarrowed =
+    onlyFavorites || Boolean(tagFilter) || Boolean(search.trim()) || designerFilter !== "all";
+  const showAsGrid = viewMode === "grid" || isNarrowed;
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 pb-24 pt-4 sm:px-6 md:pb-10">
@@ -1088,16 +1105,6 @@ export default function MarketingPage() {
             wrapperClassName="w-full sm:max-w-[360px]"
             className={cn(TOOLBAR_CONTROL, "pl-9")}
           />
-          <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as KindFilter)}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[150px]")} aria-label="Тип файлів">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="visualization">Візуали</SelectItem>
-              <SelectItem value="layout">Макети</SelectItem>
-              <SelectItem value="all">Всі файли</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={designerFilter} onValueChange={setDesignerFilter}>
             <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")} aria-label="Автор дизайну">
               <SelectValue placeholder="Всі дизайнери" />
@@ -1126,7 +1133,7 @@ export default function MarketingPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Chip size="sm" active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
             Всі
-            <CountPill value={baseFiltered.length} active={statusFilter === "all"} />
+            <CountPill value={baseGroups.length} active={statusFilter === "all"} />
           </Chip>
           {MARKETING_STATUSES.map((status) => {
             const meta = MARKETING_STATUS_META[status];
@@ -1206,14 +1213,22 @@ export default function MarketingPage() {
       ) : isEmpty ? (
         <EmptyStateCard
           badgeLabel="Порожньо"
-          title={visuals.length === 0 ? "Поки що немає візуалів" : "Нічого не знайдено"}
+          title={
+            visuals.length === 0
+              ? "Поки що немає візуалів"
+              : onlyFavorites
+                ? "Немає обраних візуалів"
+                : "Нічого не знайдено"
+          }
           description={
             visuals.length === 0
               ? "Коли дизайнери завантажать візуали у дизайн-задачі, вони зʼявляться тут автоматично."
-              : "Спробуйте змінити фільтри або пошуковий запит."
+              : onlyFavorites
+                ? "Натисніть ★ на візуалі, щоб додати його в обране."
+                : "Спробуйте змінити фільтри або пошуковий запит."
           }
         />
-      ) : viewMode === "grid" ? (
+      ) : showAsGrid ? (
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {groups.map((group) => renderGroup(group))}
         </div>
