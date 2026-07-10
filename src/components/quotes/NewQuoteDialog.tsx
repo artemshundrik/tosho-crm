@@ -33,6 +33,19 @@ import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
 import { isInactiveEmployment } from "@/lib/employment";
 import { DESIGN_TASK_TYPE_OPTIONS, type DesignTaskType } from "@/lib/designTaskType";
+import {
+  QuoteDeliveryFields,
+  createEmptyQuoteDeliveryDetails,
+  patchFromDeliveryPoint,
+  type QuoteDeliveryDetails,
+} from "@/components/quotes/QuoteDeliveryFields";
+import {
+  appendDeliveryPointToParty,
+  createEmptyCustomerDeliveryPoint,
+  listPartyDeliveryPoints,
+  npDeliveryTypeToPointType,
+  type CustomerDeliveryPoint,
+} from "@/lib/customerDeliveryPoints";
 import { getCatalogModelMetadata } from "@/lib/toshoApi";
 import { formatUserShortName } from "@/lib/userName";
 import {
@@ -122,17 +135,6 @@ const DELIVERY_OPTIONS = [
   { value: "cargo", label: "Вантажне перевезення", icon: Truck },
 ];
 
-const NOVA_POSHTA_DELIVERY_TYPES = [
-  { value: "branch", label: "Відділення" },
-  { value: "locker", label: "Поштомат" },
-  { value: "address", label: "Адресна" },
-];
-
-const DELIVERY_PAYER_OPTIONS = [
-  { value: "company", label: "Ми" },
-  { value: "client", label: "Замовник" },
-];
-
 const DEFAULT_DEADLINE_TIME = "10:00";
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const createDefaultDeadline = (time = DEFAULT_DEADLINE_TIME) => {
@@ -188,14 +190,7 @@ type QuoteRunDraft = {
   quantity: string;
 };
 
-type DeliveryDetails = {
-  region: string;
-  city: string;
-  address: string;
-  street: string;
-  npDeliveryType: string;
-  payer: string;
-};
+type DeliveryDetails = QuoteDeliveryDetails;
 
 const normalizePartyLabel = (value?: string | null) =>
   (value ?? "")
@@ -590,14 +585,44 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [currency, setCurrency] = React.useState("UAH");
   const [quoteType, setQuoteType] = React.useState("merch");
   const [deliveryType, setDeliveryType] = React.useState("");
-  const [deliveryDetails, setDeliveryDetails] = React.useState<DeliveryDetails>({
-    region: "",
-    city: "",
-    address: "",
-    street: "",
-    npDeliveryType: "",
-    payer: "",
-  });
+  const [deliveryDetails, setDeliveryDetails] = React.useState<DeliveryDetails>(() =>
+    createEmptyQuoteDeliveryDetails()
+  );
+  const [savedDeliveryPoints, setSavedDeliveryPoints] = React.useState<CustomerDeliveryPoint[]>([]);
+  const [saveDeliveryToCard, setSaveDeliveryToCard] = React.useState(true);
+
+  // Адреси з книги обраного замовника/ліда — для пікера «Адреса з картки клієнта».
+  React.useEffect(() => {
+    if (!open || !teamId || !customerId) {
+      setSavedDeliveryPoints([]);
+      return;
+    }
+    let cancelled = false;
+    listPartyDeliveryPoints({ teamId, partyType: customerType, partyId: customerId })
+      .then((points) => {
+        if (!cancelled) setSavedDeliveryPoints(points);
+      })
+      .catch((error) => {
+        console.warn("Failed to load party delivery points", error);
+        if (!cancelled) setSavedDeliveryPoints([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, teamId, customerId, customerType]);
+
+  // Обрали «Нова пошта», форма порожня, а в книзі є основна (★) адреса — підставляємо її.
+  React.useEffect(() => {
+    if (deliveryType !== "nova_poshta") return;
+    if (savedDeliveryPoints.length === 0) return;
+    setDeliveryDetails((prev) => {
+      if (prev.deliveryPointId || prev.city.trim() || prev.address.trim() || prev.street.trim()) return prev;
+      const usablePoints = savedDeliveryPoints.filter((point) => point.type !== "other");
+      const defaultPoint = usablePoints.find((point) => point.isDefault) ?? usablePoints[0];
+      if (!defaultPoint) return prev;
+      return { ...prev, ...patchFromDeliveryPoint(defaultPoint) };
+    });
+  }, [deliveryType, savedDeliveryPoints]);
   const [designAssigneeId, setDesignAssigneeId] = React.useState<string | null>(null);
   const [designCollaboratorIds, setDesignCollaboratorIds] = React.useState<string[]>([]);
   const [designTaskType, setDesignTaskType] = React.useState<DesignTaskType | null>(null);
@@ -844,7 +869,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       street: initialValues?.deliveryDetails?.street ?? "",
       npDeliveryType: initialValues?.deliveryDetails?.npDeliveryType ?? "",
       payer: initialValues?.deliveryDetails?.payer ?? "",
+      contactName: initialValues?.deliveryDetails?.contactName ?? "",
+      contactPhone: initialValues?.deliveryDetails?.contactPhone ?? "",
+      deliveryPointId: initialValues?.deliveryDetails?.deliveryPointId ?? "",
     });
+    setSaveDeliveryToCard(true);
     setCategoryId(initialValues?.categoryId ?? "");
     setKindId(initialValues?.kindId ?? "");
     setModelId(initialValues?.modelId ?? "");
@@ -1337,7 +1366,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     const hasNpDeliveryType = trim(deliveryDetails.npDeliveryType).length > 0;
 
     if (deliveryType === "nova_poshta") {
-      if (!hasRegion) {
+      // Для адреси з книги клієнта область не вимагаємо: місто + відділення
+      // повністю ідентифікують точку доставки.
+      if (!hasRegion && !trim(deliveryDetails.deliveryPointId)) {
         showValidationError("Для Нової пошти заповніть область");
         return;
       }
@@ -1425,6 +1456,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       street: "",
       npDeliveryType: "",
       payer: trim(deliveryDetails.payer),
+      contactName: "",
+      contactPhone: "",
+      deliveryPointId: "",
     };
     if (deliveryType === "nova_poshta") {
       sanitizedDeliveryDetails.region = trim(deliveryDetails.region);
@@ -1432,6 +1466,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       sanitizedDeliveryDetails.npDeliveryType = trim(deliveryDetails.npDeliveryType);
       sanitizedDeliveryDetails.street =
         sanitizedDeliveryDetails.npDeliveryType === "address" ? trim(deliveryDetails.street) : "";
+      sanitizedDeliveryDetails.address =
+        sanitizedDeliveryDetails.npDeliveryType === "address" ? "" : trim(deliveryDetails.address);
+      sanitizedDeliveryDetails.contactName = trim(deliveryDetails.contactName);
+      sanitizedDeliveryDetails.contactPhone = trim(deliveryDetails.contactPhone);
+      sanitizedDeliveryDetails.deliveryPointId = trim(deliveryDetails.deliveryPointId);
     }
     if (deliveryType === "taxi") {
       sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
@@ -1441,6 +1480,43 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       sanitizedDeliveryDetails.region = trim(deliveryDetails.region);
       sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
       sanitizedDeliveryDetails.address = trim(deliveryDetails.address);
+    }
+
+    // Введену вручну НП-адресу за бажанням дописуємо в книгу клієнта (Логістика).
+    // Помилка тут не блокує збереження прорахунку — лише попереджаємо.
+    if (
+      deliveryType === "nova_poshta" &&
+      saveDeliveryToCard &&
+      !sanitizedDeliveryDetails.deliveryPointId &&
+      customerId &&
+      teamId &&
+      (sanitizedDeliveryDetails.city || sanitizedDeliveryDetails.address || sanitizedDeliveryDetails.street)
+    ) {
+      const pointType = npDeliveryTypeToPointType(sanitizedDeliveryDetails.npDeliveryType);
+      if (pointType) {
+        try {
+          const savedPointId = await appendDeliveryPointToParty({
+            teamId,
+            partyType: customerType,
+            partyId: customerId,
+            point: {
+              ...createEmptyCustomerDeliveryPoint(),
+              type: pointType,
+              city: sanitizedDeliveryDetails.city,
+              address:
+                pointType === "np_courier"
+                  ? sanitizedDeliveryDetails.street
+                  : sanitizedDeliveryDetails.address,
+              contactName: sanitizedDeliveryDetails.contactName ?? "",
+              contactPhone: sanitizedDeliveryDetails.contactPhone ?? "",
+            },
+          });
+          sanitizedDeliveryDetails.deliveryPointId = savedPointId;
+        } catch (saveError) {
+          console.warn("Failed to save delivery point to party card", saveError);
+          toast.warning("Адресу не вдалося зберегти в картку клієнта — прорахунок збережеться без неї.");
+        }
+      }
     }
 
     const formData: NewQuoteFormData = {
@@ -1821,14 +1897,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     className="w-full justify-start gap-2 h-9 text-sm"
                     onClick={() => {
                       setDeliveryType(option.value);
-                      setDeliveryDetails({
-                        region: "",
-                        city: "",
-                        address: "",
-                        street: "",
-                        npDeliveryType: "",
-                        payer: "",
-                      });
+                      setDeliveryDetails(createEmptyQuoteDeliveryDetails());
+                      setSaveDeliveryToCard(true);
                       setDeliveryPopoverOpen(false);
                     }}
                   >
@@ -1901,190 +1971,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {deliveryType ? (
           <div className="mt-5 space-y-4">
             <SectionHeader>Логістика</SectionHeader>
-            <div className="grid gap-3 md:grid-cols-2">
-              {deliveryType === "nova_poshta" ? (
-                <>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Область *</div>
-                    <Input
-                      value={deliveryDetails.region}
-                      onChange={(e) =>
-                        setDeliveryDetails((prev) => ({ ...prev, region: e.target.value }))
-                      }
-                      placeholder="Київська"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Місто *</div>
-                    <Input
-                      value={deliveryDetails.city}
-                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
-                      placeholder="Київ"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Тип доставки *</div>
-                    <Select
-                      value={deliveryDetails.npDeliveryType}
-                      onValueChange={(value) =>
-                        setDeliveryDetails((prev) => ({
-                          ...prev,
-                          npDeliveryType: value,
-                          street: value === "address" ? prev.street : "",
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть тип доставки" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {NOVA_POSHTA_DELIVERY_TYPES.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Хто платить</div>
-                    <Select
-                      value={deliveryDetails.payer}
-                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть варіант" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DELIVERY_PAYER_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {deliveryDetails.npDeliveryType === "address" ? (
-                    <div className="space-y-1 md:col-span-2">
-                      <div className="text-sm text-muted-foreground">Вулиця *</div>
-                      <Input
-                        value={deliveryDetails.street}
-                        onChange={(e) =>
-                          setDeliveryDetails((prev) => ({ ...prev, street: e.target.value }))
-                        }
-                        placeholder="Вул. Хрещатик, 1"
-                        className="h-9"
-                      />
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-
-              {deliveryType === "taxi" ? (
-                <>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Місто *</div>
-                    <Input
-                      value={deliveryDetails.city}
-                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
-                      placeholder="Київ"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Хто платить</div>
-                    <Select
-                      value={deliveryDetails.payer}
-                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть варіант" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DELIVERY_PAYER_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="text-sm text-muted-foreground">Адреса *</div>
-                    <Input
-                      value={deliveryDetails.address}
-                      onChange={(e) =>
-                        setDeliveryDetails((prev) => ({ ...prev, address: e.target.value }))
-                      }
-                      placeholder="Вул. Хрещатик, 1"
-                      className="h-9"
-                    />
-                  </div>
-                </>
-              ) : null}
-
-              {deliveryType === "cargo" ? (
-                <>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Область *</div>
-                    <Input
-                      value={deliveryDetails.region}
-                      onChange={(e) =>
-                        setDeliveryDetails((prev) => ({ ...prev, region: e.target.value }))
-                      }
-                      placeholder="Київська"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Місто *</div>
-                    <Input
-                      value={deliveryDetails.city}
-                      onChange={(e) => setDeliveryDetails((prev) => ({ ...prev, city: e.target.value }))}
-                      placeholder="Київ"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="text-sm text-muted-foreground">Адреса *</div>
-                    <Input
-                      value={deliveryDetails.address}
-                      onChange={(e) =>
-                        setDeliveryDetails((prev) => ({ ...prev, address: e.target.value }))
-                      }
-                      placeholder="Вул. Хрещатик, 1"
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Хто платить</div>
-                    <Select
-                      value={deliveryDetails.payer}
-                      onValueChange={(value) => setDeliveryDetails((prev) => ({ ...prev, payer: value }))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Оберіть варіант" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DELIVERY_PAYER_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              ) : null}
-
-              {deliveryType === "pickup" ? (
-                <div className="text-sm text-muted-foreground md:col-span-2">
-                  Для самовивозу додаткові поля не потрібні.
-                </div>
-              ) : null}
-            </div>
+            <QuoteDeliveryFields
+              deliveryType={deliveryType}
+              details={deliveryDetails}
+              onChange={(patch) => setDeliveryDetails((prev) => ({ ...prev, ...patch }))}
+              savedPoints={savedDeliveryPoints}
+              saveToCard={saveDeliveryToCard}
+              onSaveToCardChange={setSaveDeliveryToCard}
+              canSaveToCard={Boolean(customerId)}
+            />
           </div>
         ) : null}
 

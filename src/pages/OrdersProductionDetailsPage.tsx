@@ -71,7 +71,14 @@ import {
   Pencil,
   Phone,
   Send,
+  Truck,
 } from "lucide-react";
+import {
+  OrderDeliveryDialog,
+  parseQuoteDeliveryDetails,
+  type OrderDeliverySnapshot,
+} from "@/components/orders/OrderDeliveryDialog";
+import { DELIVERY_TYPE_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 const getInitials = (value?: string | null) => {
   const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
@@ -1133,6 +1140,41 @@ export default function OrdersProductionDetailsPage() {
   const [contractNumberInput, setContractNumberInput] = useState("");
   const [contractDateInput, setContractDateInput] = useState("");
   const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
+  // Доставка живе на прорахунку (quotes.delivery_type/delivery_details);
+  // замовлення читає і редагує саме її, щоб обидва екрани показували одне.
+  const [orderDelivery, setOrderDelivery] = useState<OrderDeliverySnapshot | null>(null);
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!teamId || !record?.quoteId) {
+      setOrderDelivery(null);
+      return;
+    }
+    let cancelled = false;
+    const loadDelivery = async () => {
+      const { data, error: deliveryError } = await supabase
+        .schema("tosho")
+        .from("quotes")
+        .select("delivery_type,delivery_details")
+        .eq("team_id", teamId)
+        .eq("id", record.quoteId)
+        .maybeSingle<{ delivery_type?: string | null; delivery_details?: unknown }>();
+      if (cancelled) return;
+      if (deliveryError) {
+        console.warn("Failed to load order delivery info", deliveryError);
+        setOrderDelivery(null);
+        return;
+      }
+      setOrderDelivery({
+        deliveryType: data?.delivery_type ?? "",
+        deliveryDetails: parseQuoteDeliveryDetails(data?.delivery_details),
+      });
+    };
+    void loadDelivery();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, record?.quoteId]);
 
   const refreshRecord = useCallback(async () => {
     if (!teamId || !id) return;
@@ -1735,6 +1777,55 @@ export default function OrdersProductionDetailsPage() {
               <div className="text-xs text-muted-foreground">Відповідальний за замовлення</div>
             </div>
           </div>
+        </Card>
+
+        <Card className="border-border/60 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+              <Truck className="h-3.5 w-3.5" />
+              Доставка
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => setDeliveryDialogOpen(true)}
+            >
+              <Pencil className="h-3 w-3" />
+              Змінити
+            </Button>
+          </div>
+          {orderDelivery?.deliveryType ? (
+            <>
+              <div className="mt-2 text-sm font-semibold text-foreground">
+                {DELIVERY_TYPE_OPTIONS.find((option) => option.id === orderDelivery.deliveryType)?.label ??
+                  orderDelivery.deliveryType}
+              </div>
+              {(() => {
+                const details = orderDelivery.deliveryDetails;
+                const location = [details.city, details.npDeliveryType === "address" ? details.street : details.address]
+                  .filter(Boolean)
+                  .join(", ");
+                const recipient = [details.contactName, details.contactPhone].filter(Boolean).join(" · ");
+                return (
+                  <>
+                    {location ? <div className="mt-1 text-sm text-foreground">{location}</div> : null}
+                    {recipient ? (
+                      <div className="mt-1 text-xs text-muted-foreground">Отримувач: {recipient}</div>
+                    ) : null}
+                    {details.payer ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Платить: {details.payer === "company" ? "ми" : "замовник"}
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
+            </>
+          ) : (
+            <div className="mt-2 text-sm text-muted-foreground">Спосіб доставки не вказаний</div>
+          )}
         </Card>
       </div>
 
@@ -2468,6 +2559,19 @@ export default function OrdersProductionDetailsPage() {
         </DialogContent>
       </Dialog>
       <CustomerDialog {...customerEditorProps} />
+      {teamId && record ? (
+        <OrderDeliveryDialog
+          open={deliveryDialogOpen}
+          onOpenChange={setDeliveryDialogOpen}
+          teamId={teamId}
+          quoteId={record.quoteId}
+          partyType={record.partyType}
+          partyId={record.customerId}
+          initialDeliveryType={orderDelivery?.deliveryType ?? ""}
+          initialDetails={orderDelivery?.deliveryDetails ?? parseQuoteDeliveryDetails(null)}
+          onSaved={setOrderDelivery}
+        />
+      ) : null}
     </PageCanvas>
   );
 }

@@ -1,4 +1,5 @@
 import { Building2, MapPin, Package, Truck, type LucideIcon } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 /**
  * Delivery points (Логістика) for customers and leads.
@@ -142,3 +143,72 @@ export const formatCustomerDeliveryPointSummary = (point: CustomerDeliveryPoint)
   const location = [point.city, point.address].filter(Boolean).join(", ");
   return location ? `${DELIVERY_POINT_TYPE_LABELS[point.type]} · ${location}` : DELIVERY_POINT_TYPE_LABELS[point.type];
 };
+
+// ---------------------------------------------------------------------------
+// Міст із формою прорахунку: там тип НП зберігається як npDeliveryType
+// ("branch" | "locker" | "address"), у книзі клієнта — як CustomerDeliveryPointType.
+// ---------------------------------------------------------------------------
+
+export const npDeliveryTypeToPointType = (value: string): CustomerDeliveryPointType | null => {
+  if (value === "branch") return "np_branch";
+  if (value === "locker") return "np_postomat";
+  if (value === "address") return "np_courier";
+  return null;
+};
+
+export const pointTypeToNpDeliveryType = (type: CustomerDeliveryPointType): string => {
+  if (type === "np_branch") return "branch";
+  if (type === "np_postomat") return "locker";
+  if (type === "np_courier") return "address";
+  return "";
+};
+
+/** Адреси доставки замовника або ліда (порожній масив, якщо сторону не знайдено). */
+export async function listPartyDeliveryPoints(params: {
+  teamId: string;
+  partyType: "customer" | "lead";
+  partyId: string;
+}): Promise<CustomerDeliveryPoint[]> {
+  const table = params.partyType === "lead" ? "leads" : "customers";
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from(table)
+    .select("delivery_points")
+    .eq("team_id", params.teamId)
+    .eq("id", params.partyId)
+    .maybeSingle<{ delivery_points?: unknown }>();
+  if (error) throw error;
+  return parseCustomerDeliveryPoints(data?.delivery_points);
+}
+
+const deliveryPointDedupeKey = (point: Pick<CustomerDeliveryPoint, "type" | "city" | "address">) =>
+  [point.type, point.city.trim().toLowerCase(), point.address.trim().toLowerCase()].join("|");
+
+/**
+ * Дописує адресу в книгу замовника/ліда (read-modify-write). Якщо така сама
+ * точка (тип+місто+адреса) вже збережена — нічого не пише й повертає її id,
+ * тож повторні збереження з прорахунків не плодять дублі.
+ */
+export async function appendDeliveryPointToParty(params: {
+  teamId: string;
+  partyType: "customer" | "lead";
+  partyId: string;
+  point: CustomerDeliveryPoint;
+}): Promise<string> {
+  const existing = await listPartyDeliveryPoints(params);
+  const duplicate = existing.find(
+    (entry) => deliveryPointDedupeKey(entry) === deliveryPointDedupeKey(params.point)
+  );
+  if (duplicate) return duplicate.id;
+
+  const nextPoint: CustomerDeliveryPoint = { ...params.point, isDefault: existing.length === 0 };
+  const table = params.partyType === "lead" ? "leads" : "customers";
+  const { error } = await supabase
+    .schema("tosho")
+    .from(table)
+    .update({ delivery_points: serializeCustomerDeliveryPoints([...existing, nextPoint]) })
+    .eq("team_id", params.teamId)
+    .eq("id", params.partyId);
+  if (error) throw error;
+  return nextPoint.id;
+}
