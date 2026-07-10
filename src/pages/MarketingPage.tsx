@@ -14,18 +14,14 @@ import {
   Eye,
   EyeOff,
   Layers,
-  LayoutGrid,
   ListChecks,
-  Loader2,
   Mail,
   Megaphone,
   Palette,
   Phone,
   Plus,
-  RefreshCcw,
   Search,
   Sparkles,
-  SquarePlay,
   Star,
   Tags,
   Trash2,
@@ -69,8 +65,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM, TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
+import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
 
 // =======================
 // Types
@@ -146,7 +141,6 @@ type MarketingVisualRow = {
   is_hidden: boolean;
 };
 
-type ViewMode = "showcase" | "grid";
 type SortMode = "newest" | "oldest" | "customer";
 
 // Near-identical visuals from one design task are collapsed into a single
@@ -174,14 +168,6 @@ const MARKETING_STATUS_META: Record<
   ready: { label: "Готово до фото", tone: "success", icon: Camera },
   shot: { label: "Відзнято", tone: "accent", icon: CheckCircle2 },
 };
-
-const SHOWCASE_ROWS: Array<{ status: MarketingStatus; title: string }> = [
-  { status: "ready", title: "Готові до фото" },
-  { status: "review", title: "На узгодженні" },
-  { status: "in_progress", title: "В роботі" },
-  { status: "new", title: "Свіжі візуали" },
-  { status: "shot", title: "Вже відзнято" },
-];
 
 const DEFAULT_CHECKLIST_TEMPLATE = [
   "Загальний план продукту",
@@ -283,6 +269,21 @@ const formatDate = (iso: string | null | undefined) => {
   return date.toLocaleDateString("uk-UA", { day: "numeric", month: "long", year: "numeric" });
 };
 
+// "Нове" is a freshness signal, not a blanket default: an untriaged visual is
+// only "Нове" for its first 2 days. Older untriaged visuals carry no status
+// badge, and once a marketer sets a real status that status always wins.
+const NEW_STATUS_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
+const isWithinNewWindow = (iso: string) => {
+  const time = new Date(iso).getTime();
+  return Number.isFinite(time) && Date.now() - time <= NEW_STATUS_WINDOW_MS;
+};
+
+const resolveDisplayStatus = (record: MarketingRecord, createdAt: string): MarketingStatus | null => {
+  if (record.status !== "new") return record.status;
+  return isWithinNewWindow(createdAt) ? "new" : null;
+};
+
 const chunkArray = <T,>(items: T[], size: number): T[][] => {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -316,7 +317,6 @@ export default function MarketingPage() {
   const { teamId, userId } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visuals, setVisuals] = useState<GalleryVisual[]>([]);
   const [records, setRecords] = useState<Record<string, MarketingRecord>>({});
@@ -324,7 +324,6 @@ export default function MarketingPage() {
   const [memberLabelById, setMemberLabelById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
 
-  const [viewMode, setViewMode] = useState<ViewMode>("showcase");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | MarketingStatus>("all");
   const [designerFilter, setDesignerFilter] = useState<string>("all");
@@ -337,6 +336,7 @@ export default function MarketingPage() {
   const [newTag, setNewTag] = useState("");
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const notesDraftRef = useRef<string | null>(null);
+  const lastLoadedAtRef = useRef(0);
 
   // ---------- data loading ----------
 
@@ -344,7 +344,6 @@ export default function MarketingPage() {
     async (mode: "initial" | "refresh" = "initial") => {
       if (!teamId) return;
       if (mode === "initial") setLoading(true);
-      else setRefreshing(true);
       setError(null);
 
       try {
@@ -503,7 +502,7 @@ export default function MarketingPage() {
         setError("Не вдалося завантажити галерею. Спробуйте оновити сторінку.");
       } finally {
         setLoading(false);
-        setRefreshing(false);
+        lastLoadedAtRef.current = Date.now();
       }
     },
     [teamId]
@@ -511,6 +510,23 @@ export default function MarketingPage() {
 
   useEffect(() => {
     void loadGallery("initial");
+  }, [loadGallery]);
+
+  // No manual refresh button — new visuals arrive on their own. We refetch
+  // silently only when the tab regains focus/visibility, throttled so switching
+  // tabs quickly never hammers the DB (no polling).
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (Date.now() - lastLoadedAtRef.current < 30_000) return;
+      void loadGallery("refresh");
+    };
+    window.addEventListener("focus", maybeRefresh);
+    document.addEventListener("visibilitychange", maybeRefresh);
+    return () => {
+      window.removeEventListener("focus", maybeRefresh);
+      document.removeEventListener("visibilitychange", maybeRefresh);
+    };
   }, [loadGallery]);
 
   useEffect(() => {
@@ -597,8 +613,10 @@ export default function MarketingPage() {
     [getRecord]
   );
 
+  // Display status is date-aware: untriaged visuals are "Нове" only while fresh.
   const groupStatus = useCallback(
-    (group: VisualGroup) => getRecord(group.cover.key).status,
+    (group: VisualGroup): MarketingStatus | null =>
+      resolveDisplayStatus(getRecord(group.cover.key), group.cover.createdAt),
     [getRecord]
   );
 
@@ -607,7 +625,8 @@ export default function MarketingPage() {
   const statusCounts = useMemo(() => {
     const counts: Record<MarketingStatus, number> = { new: 0, in_progress: 0, review: 0, ready: 0, shot: 0 };
     baseGroups.forEach((group) => {
-      counts[groupStatus(group)] += 1;
+      const status = groupStatus(group);
+      if (status) counts[status] += 1;
     });
     return counts;
   }, [baseGroups, groupStatus]);
@@ -875,6 +894,7 @@ export default function MarketingPage() {
     (group: VisualGroup, options?: { className?: string }) => {
       const visual = group.cover;
       const record = getRecord(visual.key);
+      const displayStatus = resolveDisplayStatus(record, visual.createdAt);
       const customerInfo = visual.customerId ? customerInfoById[visual.customerId] : undefined;
       const designerLabel = visual.designerUserId ? memberLabelById[visual.designerUserId] : null;
       const designerAvatar = visual.designerUserId ? memberAvatarById[visual.designerUserId] : null;
@@ -916,7 +936,9 @@ export default function MarketingPage() {
                 className="h-full w-full"
                 imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
               />
-              <div className="absolute left-2.5 top-2.5">{renderStatusBadge(record.status)}</div>
+              {displayStatus ? (
+                <div className="absolute left-2.5 top-2.5">{renderStatusBadge(displayStatus)}</div>
+              ) : null}
               <button
                 type="button"
                 aria-label={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
@@ -1018,36 +1040,9 @@ export default function MarketingPage() {
     ]
   );
 
-  // ---------- showcase pieces ----------
-
-  const heroGroup = useMemo(() => {
-    const ready = groups.find((group) => getRecord(group.cover.key).status === "ready");
-    return ready ?? groups[0] ?? null;
-  }, [groups, getRecord]);
-  const heroVisual = heroGroup?.cover ?? null;
-
-  const showcaseRows = useMemo(
-    () =>
-      SHOWCASE_ROWS.map((row) => ({
-        ...row,
-        groups: groups
-          .filter(
-            (group) =>
-              getRecord(group.cover.key).status === row.status && group.taskId !== heroGroup?.taskId
-          )
-          .slice(0, 20),
-      })).filter((row) => row.groups.length > 0),
-    [groups, getRecord, heroGroup]
-  );
-
   // ---------- render ----------
 
   const isEmpty = !loading && groups.length === 0;
-  // Any content-narrowing filter reads best as a flat grid of results; the
-  // status-organised showcase is only for the unfiltered "browse everything" mode.
-  const isNarrowed =
-    onlyFavorites || Boolean(tagFilter) || Boolean(search.trim()) || designerFilter !== "all";
-  const showAsGrid = viewMode === "grid" || isNarrowed;
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 pb-24 pt-4 sm:px-6 md:pb-10">
@@ -1063,36 +1058,6 @@ export default function MarketingPage() {
               Галерея дизайн-візуалів: що зняти на виробництві та використати у промо.
             </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5 rounded-xl"
-            disabled={refreshing}
-            onClick={() => void loadGallery("refresh")}
-          >
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-            Оновити
-          </Button>
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(value) => {
-              if (value === "showcase" || value === "grid") setViewMode(value);
-            }}
-            className={SEGMENTED_GROUP_SM}
-            aria-label="Режим перегляду"
-          >
-            <ToggleGroupItem value="showcase" className={SEGMENTED_TRIGGER_SM}>
-              <SquarePlay className="h-3.5 w-3.5" />
-              Вітрина
-            </ToggleGroupItem>
-            <ToggleGroupItem value="grid" className={SEGMENTED_TRIGGER_SM}>
-              <LayoutGrid className="h-3.5 w-3.5" />
-              Галерея
-            </ToggleGroupItem>
-          </ToggleGroup>
         </div>
       </header>
 
@@ -1232,113 +1197,9 @@ export default function MarketingPage() {
                 : "Спробуйте змінити фільтри або пошуковий запит."
           }
         />
-      ) : showAsGrid ? (
+      ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {groups.map((group) => renderGroup(group))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-8">
-          {heroVisual ? (
-            <section
-              className={cn(
-                "group relative cursor-pointer overflow-hidden rounded-3xl border border-border/60 bg-card",
-                "shadow-[var(--shadow-surface)] transition-shadow duration-200 hover:shadow-[var(--shadow-elevated-sm)]"
-              )}
-              role="button"
-              tabIndex={0}
-              aria-label={`${heroVisual.customerName} — відкрити деталі`}
-              onClick={() => openDetail(heroVisual)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openDetail(heroVisual);
-                }
-              }}
-            >
-              <div className="relative aspect-[16/10] w-full sm:aspect-[21/9]">
-                <StorageObjectImage
-                  bucket={heroVisual.bucket}
-                  path={heroVisual.path}
-                  alt={`${heroVisual.customerName} — ${heroVisual.fileName}`}
-                  variant="preview"
-                  className="h-full w-full"
-                  imageClassName="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.02]"
-                />
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-5 sm:p-7">
-                  <div className="flex items-center gap-2">
-                    {renderStatusBadge(getRecord(heroVisual.key).status, "md")}
-                    {heroVisual.taskType ? (
-                      <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-medium text-white/90 backdrop-blur-sm">
-                        {DESIGN_TASK_TYPE_LABELS[heroVisual.taskType]}
-                      </span>
-                    ) : null}
-                  </div>
-                  <h2 className="max-w-3xl text-xl font-semibold leading-tight text-white sm:text-2xl">
-                    {heroVisual.customerName}
-                  </h2>
-                  <p className="line-clamp-2 max-w-2xl text-sm text-white/85">{heroVisual.taskTitle}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      className="h-9 gap-1.5 rounded-xl"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openDetail(heroVisual);
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                      Відкрити деталі
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-9 gap-1.5 rounded-xl bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleDownload(heroVisual);
-                      }}
-                    >
-                      <Download className="h-4 w-4" />
-                      Завантажити
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          {showcaseRows.map((row) => {
-            const Icon = MARKETING_STATUS_META[row.status].icon;
-            return (
-              <section key={row.status} className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="inline-flex items-center gap-2 text-base font-semibold text-foreground">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    {row.title}
-                    <span className="text-sm font-normal text-muted-foreground">{row.groups.length}</span>
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1 rounded-lg text-muted-foreground"
-                    onClick={() => {
-                      setStatusFilter(row.status);
-                      setViewMode("grid");
-                    }}
-                  >
-                    Всі
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:px-6">
-                  {row.groups.map((group) =>
-                    renderGroup(group, { className: "w-[220px] shrink-0 snap-start sm:w-[248px]" })
-                  )}
-                </div>
-              </section>
-            );
-          })}
         </div>
       )}
 
@@ -1520,22 +1381,25 @@ export default function MarketingPage() {
                     </div>
                   ) : null}
 
-                  {/* Status */}
+                  {/* Status — "Нове" is automatic (date-based), so the picker only
+                      offers the workflow statuses; clicking the active one clears
+                      it back to untriaged. */}
                   <div className="flex flex-col gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Статус для зйомки
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {MARKETING_STATUSES.map((status) => {
+                      {MARKETING_STATUSES.filter((status) => status !== "new").map((status) => {
                         const meta = MARKETING_STATUS_META[status];
                         const Icon = meta.icon;
+                        const active = selectedRecord.status === status;
                         return (
                           <Chip
                             key={status}
                             size="sm"
-                            active={selectedRecord.status === status}
+                            active={active}
                             icon={<Icon className="h-3.5 w-3.5" />}
-                            onClick={() => updateRecord(selected, { status })}
+                            onClick={() => updateRecord(selected, { status: active ? "new" : status })}
                           >
                             {meta.label}
                           </Chip>
