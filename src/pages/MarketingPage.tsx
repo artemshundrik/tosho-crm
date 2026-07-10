@@ -47,6 +47,7 @@ import {
 } from "@/lib/attachmentPreview";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
+import { StackHoverPreview } from "@/components/app/StackHoverPreview";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -932,14 +933,21 @@ export default function MarketingPage() {
             }}
           >
             <div className={cn("relative w-full overflow-hidden bg-muted/30", VISUAL_ASPECT_CLASS)}>
-              <StorageObjectImage
-                bucket={visual.bucket}
-                path={visual.path}
-                alt={`${visual.customerName} — ${visual.fileName}`}
-                variant="preview"
-                className="h-full w-full"
-                imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
-              />
+              {isStack ? (
+                <StackHoverPreview
+                  items={[group.cover, ...group.items.filter((item) => item.key !== group.cover.key)]}
+                  alt={`${visual.customerName} — ${visual.fileName}`}
+                />
+              ) : (
+                <StorageObjectImage
+                  bucket={visual.bucket}
+                  path={visual.path}
+                  alt={`${visual.customerName} — ${visual.fileName}`}
+                  variant="preview"
+                  className="h-full w-full"
+                  imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
+                />
+              )}
               {displayStatus ? (
                 <div className="absolute left-2.5 top-2.5">{renderStatusBadge(displayStatus)}</div>
               ) : null}
