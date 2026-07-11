@@ -97,6 +97,39 @@ select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid=c.relna
 where n.nspname in ('tosho','public') and c.relkind='r' and c.relrowsecurity=false;
 ```
 
+### Prove WRITES too — a blocked write fails *silently*
+
+The checks above are read-visibility. RLS changes that gate `UPDATE`/`DELETE`/`INSERT`
+need the same role simulation, but the proof differs: **a write whose row fails the
+`USING` clause matches 0 rows and raises NO error** — it is not a "permission denied",
+so naive testing reads `UPDATE 0` as success. Verify with the returned row count plus a
+read-back, inside a transaction so prod is untouched. (Only a failing `WITH CHECK`
+raises `new row violates row-level security policy`.)
+
+```sql
+-- BLOCKED role: expect 0 rows back AND the value unchanged.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<blocked-uuid>","role":"authenticated"}', true);
+update tosho.<table> set <col> = 'probe' where id = '<row-uuid>' returning id;   -- expect 0 rows
+select <col> from tosho.<table> where id = '<row-uuid>';                         -- expect original value
+rollback;
+
+-- ALLOWED role: expect exactly 1 row back with the new value.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<allowed-uuid>","role":"authenticated"}', true);
+update tosho.<table> set <col> = 'probe' where id = '<row-uuid>' returning id, <col>;  -- expect 1 row
+rollback;
+```
+
+**`set local role` is mandatory:** `BACKUP_DB_URL` connects as an owner role that
+*bypasses* RLS, so without it every write "succeeds" and the test proves nothing. The
+`RETURNING` row count is the verdict (1 = policy admitted, 0 = policy rejected) — no
+`COMMIT` needed. This is the class of bug that ships silently: a write that *looks*
+applied but was rejected or persisted stale data — read the row back, don't trust the
+call returning without error.
+
 ## When in doubt
 
 Run the `/security-review` skill before declaring done on any change in the surfaces
