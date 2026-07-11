@@ -36,6 +36,24 @@ When sources disagree, use this order:
 - Treat performance as a required review dimension for every change. Reuse caches/directories before adding queries, avoid N+1 lookups or broad unbounded reads, and sanity-check whether the first render now does more work than before.
 - Treat backup/ops automation as a partially legacy zone. Verify actual tracked files and local machine state before relying on old doc snippets.
 
+## Task Workflows — Fix And Feature
+
+Two required flows. They map onto the installed `superpowers` skills — invoke the named skill, don't wing it.
+
+### Fixing a bug / error  (docs → root cause → fix → verify)
+
+1. **Docs first.** Read the canonical docs before touching code — the `Required Read Order` above (`docs/CODEX_PROJECT_GUIDE.md` → domain files → `docs/DB_MAP.md` → `docs/CODEX_WORKFLOWS.md`; `docs/SECURITY.md` if the bug is on a security surface). Do not open with a broad repo-wide search. For the giant pages use `docs/LARGE_FILES_MAP.md` offsets.
+2. **Root cause before fix.** Invoke `superpowers:systematic-debugging`. For any bug that defies static analysis or resists a first fix, instrument and get runtime evidence before claiming a cause — don't ship theories. This repo has psql role-simulation + row read-back for exactly this (`docs/SECURITY.md` §"Verify by simulating the role").
+3. **Fix** — reuse canonical helpers; stay conservative in the flagged zones above.
+4. **Verify immediately.** `npx tsc --noEmit` + `npm run lint` (add NO new type/lint errors — the lint baseline is currently red, see `docs/AUDIT-2026-07-11.md`), then exercise the actual flow. Invoke `superpowers:verification-before-completion` — evidence before "done", never a bare success claim.
+
+### New feature  (document → build → verify)
+
+1. **Document first.** Invoke `superpowers:brainstorming` to scope, then `superpowers:writing-plans`. Non-trivial features get a short design doc following the existing `docs/*_DESIGN.md` pattern (FINANCES / TELEGRAM / VCHASNO).
+2. **Build to the plan** — reuse workspace/permission/notification/attachment/order helpers; run the `New Route Or Module Checklist` below if a route or module changes.
+3. **Verify** — `npx tsc --noEmit` + `npm run lint` + exercise the flow; run `/security-review` if it touches RLS, Netlify functions, auth, secrets, or webhooks.
+4. **Done = documented + built + verified**, not just "code written".
+
 ## New Route Or Module Checklist
 
 If a task adds or changes a top-level route or module, check these surfaces:
