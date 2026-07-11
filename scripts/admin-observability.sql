@@ -397,17 +397,30 @@ begin
         where ed.path = ao.name
       )
   ),
-  missing_variants as (
-    select po.storage_path, variant_name.variant
+  -- ВАЖЛИВО: рівність по одному виразу в кожному NOT EXISTS, щоб планер міг
+  -- узяти hash anti join. Форма `ao.name in (expr1, expr2)` змушувала nested
+  -- loop з ~15 млн обчислень regexp_replace і зростала квадратично з даними
+  -- (67s на ~2k оригіналів — RPC вбивався ролевим statement_timeout).
+  missing_variant_candidates as (
+    select
+      po.storage_path,
+      variant_name.variant,
+      regexp_replace(po.storage_path, '(\.[^.]+)?$', '') || '__' || variant_name.variant as expected_base
     from previewable_originals po
     cross join (values ('thumb'), ('preview')) as variant_name(variant)
+  ),
+  missing_variants as (
+    select mvc.storage_path, mvc.variant
+    from missing_variant_candidates mvc
     where not exists (
       select 1
       from attachment_objects ao
-      where ao.name in (
-        regexp_replace(po.storage_path, '(\.[^.]+)?$', '') || '__' || variant_name.variant || '.webp',
-        regexp_replace(po.storage_path, '(\.[^.]+)?$', '') || '__' || variant_name.variant || '.png'
-      )
+      where ao.name = mvc.expected_base || '.webp'
+    )
+    and not exists (
+      select 1
+      from attachment_objects ao
+      where ao.name = mvc.expected_base || '.png'
     )
   )
   select
