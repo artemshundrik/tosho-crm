@@ -67,15 +67,12 @@ export const handler = async (event: HttpEvent) => {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
-  const npApiKey = process.env.NOVA_POSHTA_API_KEY;
   if (!supabaseUrl || !anonKey) {
     return jsonResponse(500, { error: "Missing Supabase env vars" });
   }
-  if (!npApiKey) {
-    return jsonResponse(500, { error: "Nova Poshta API key is not configured" });
-  }
 
-  // Авторизація: валідний JWT + учасник воркспейсу (як в інших приватних функціях).
+  // Авторизація ПЕРШОЮ (не розкриваємо конфіг неавторизованим): валідний JWT +
+  // учасник воркспейсу, як в інших приватних функціях.
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   const token =
     typeof authHeader === "string" && authHeader.startsWith("Bearer ")
@@ -105,6 +102,11 @@ export const handler = async (event: HttpEvent) => {
   const modelName = ALLOWED_METHODS[calledMethod];
   if (!modelName) {
     return jsonResponse(400, { error: `Method not allowed: ${calledMethod || "(empty)"}` });
+  }
+
+  const npApiKey = process.env.NOVA_POSHTA_API_KEY;
+  if (!npApiKey) {
+    return jsonResponse(500, { error: "Nova Poshta API key is not configured" });
   }
 
   try {
