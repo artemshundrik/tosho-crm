@@ -577,7 +577,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
           </SheetHeader>
         </div>
         
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3 space-y-5">
 
         {/* Identity header — logo + name + payment + manager hub */}
         <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
@@ -1372,16 +1372,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             maxLength={12}
                             className="h-9"
                           />
-                          {activeLegalEntity.vatRate !== "none" && activeLegalEntity.vatRate !== "" ? (
-                            activeLegalEntity.vatId.trim() === "" ? (
-                              <p className="text-xs text-muted-foreground">
-                                Обовʼязково для платника ПДВ — рівно 12 цифр. Без нього не можна створити замовлення.
-                              </p>
-                            ) : activeLegalEntity.vatId.trim().length !== 12 ? (
-                              <p className="text-xs text-destructive">
-                                ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
-                              </p>
-                            ) : null
+                          {activeLegalEntity.vatRate !== "none" &&
+                          activeLegalEntity.vatRate !== "" &&
+                          activeLegalEntity.vatId.trim() !== "" &&
+                          activeLegalEntity.vatId.trim().length !== 12 ? (
+                            <p className="text-xs text-destructive">
+                              ІПН має містити рівно 12 цифр (зараз {activeLegalEntity.vatId.trim().length}).
+                            </p>
                           ) : null}
                         </div>
                       ) : null}
@@ -1413,9 +1410,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <Label>IBAN</Label>
                         <Input
                           value={activeLegalEntity.iban}
-                          onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { iban: e.target.value })}
-                          placeholder="UA..."
-                          className="h-9"
+                          onChange={(e) =>
+                            updateLegalEntity(activeLegalEntityIndex, {
+                              iban: e.target.value.toUpperCase().replace(/\s+/g, ""),
+                            })
+                          }
+                          placeholder="UA••• (не обовʼязково)"
+                          className="h-9 font-mono"
                         />
                       </div>
                     </div>

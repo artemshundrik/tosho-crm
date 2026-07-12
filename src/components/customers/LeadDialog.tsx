@@ -996,9 +996,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <Label>IBAN</Label>
                       <Input
                         value={form.iban}
-                        onChange={(e) => setForm((prev) => ({ ...prev, iban: e.target.value }))}
-                        placeholder="UA..."
-                        className="h-9"
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, iban: e.target.value.toUpperCase().replace(/\s+/g, "") }))
+                        }
+                        placeholder="UA••• (не обовʼязково)"
+                        className="h-9 font-mono"
                       />
                     </div>
                   </div>

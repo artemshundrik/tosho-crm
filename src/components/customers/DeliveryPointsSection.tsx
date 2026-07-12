@@ -60,11 +60,6 @@ export function DeliveryPointsSection({
       </div>
 
       <div className="space-y-3">
-        <div className="text-xs text-muted-foreground">
-          Відділення чи поштомат Нової Пошти, адресна доставка — і хто приймає вантаж у кожній точці. Точка з
-          позначкою ★ підставлятиметься за замовчуванням.
-        </div>
-
         {points.length === 0 ? (
           <button
             type="button"
@@ -203,9 +198,9 @@ export function DeliveryPointsSection({
                     <div className="grid gap-2">
                       <Label>ЄДРПОУ отримувача</Label>
                       <Input
-                        value={point.recipientEdrpou}
+                        value={point.recipientEdrpou || defaultEdrpou || ""}
                         onChange={(e) => onUpdate(index, { recipientEdrpou: e.target.value })}
-                        placeholder={defaultEdrpou ? `${defaultEdrpou} — замовник` : "8 цифр"}
+                        placeholder="8 цифр"
                         inputMode="numeric"
                         className="h-9"
                       />
