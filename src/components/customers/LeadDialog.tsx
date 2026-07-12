@@ -14,7 +14,7 @@ import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -1000,11 +1000,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>{isFopOwnership ? "Прописка" : "Юридична адреса"}</Label>
-                    <Textarea
+                    <AutoTextarea
                       value={form.legalAddress}
                       onChange={(e) => setForm((prev) => ({ ...prev, legalAddress: e.target.value }))}
                       placeholder={isFopOwnership ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
-                      className="min-h-[76px]"
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1102,11 +1101,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2 col-span-2">
                     <Label>Коментар нагадування</Label>
-                    <Textarea
+                    <AutoTextarea
                       value={form.reminderComment}
                       onChange={(e) => setForm((prev) => ({ ...prev, reminderComment: e.target.value }))}
                       placeholder="Що треба зробити"
-                      className="min-h-16"
                     />
                   </div>
                 </div>
@@ -1171,11 +1169,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2 col-span-2">
                     <Label>Коментар події</Label>
-                    <Textarea
+                    <AutoTextarea
                       value={form.eventComment}
                       onChange={(e) => setForm((prev) => ({ ...prev, eventComment: e.target.value }))}
                       placeholder="Контекст події"
-                      className="min-h-16"
                     />
                   </div>
                 </div>
@@ -1184,11 +1181,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <SectionCard title="Коментарі">
                 <div className="grid gap-2">
                   <Label>Загальні коментарі</Label>
-                  <Textarea
+                  <AutoTextarea
                     value={form.notes}
                     onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                     placeholder="Що замовляє, коли, важливі деталі комунікації..."
-                    className="min-h-16"
                   />
                 </div>
                 </SectionCard>

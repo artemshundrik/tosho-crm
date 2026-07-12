@@ -3,6 +3,7 @@ import { MapPin, PlusCircle, Star, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -240,11 +241,10 @@ export function DeliveryPointsSection({
 
                 <div className="grid gap-2">
                   <Label>Коментар</Label>
-                  <Input
+                  <AutoTextarea
                     value={point.comment}
                     onChange={(e) => onUpdate(index, { comment: e.target.value })}
                     placeholder="Напр. дзвонити за годину до відправки"
-                    className="h-9"
                   />
                 </div>
               </div>

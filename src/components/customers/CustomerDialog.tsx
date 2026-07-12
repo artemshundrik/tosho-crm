@@ -30,7 +30,7 @@ import {
   type CustomerLtvEntry,
   type RfmSegment,
 } from "@/lib/customerLtv";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
@@ -1387,11 +1387,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
                     <div className="mt-4 grid gap-2">
                       <Label>{activeLegalEntityIsPerson ? "Прописка" : "Юридична адреса"}</Label>
-                      <Textarea
+                      <AutoTextarea
                         value={activeLegalEntity.legalAddress}
                         onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalAddress: e.target.value })}
                         placeholder={activeLegalEntityIsPerson ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
-                        className="min-h-[76px]"
                       />
                     </div>
 
@@ -1554,11 +1553,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </div>
                 <div className="grid gap-2 col-span-2">
                   <Label>Коментар нагадування</Label>
-                  <Textarea
+                  <AutoTextarea
                     value={form.reminderComment}
                     onChange={(e) => setForm((prev) => ({ ...prev, reminderComment: e.target.value }))}
                     placeholder="Що треба зробити"
-                    className="min-h-16"
                   />
                 </div>
               </div>
@@ -1623,11 +1621,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </div>
                 <div className="grid gap-2 col-span-2">
                   <Label>Коментар події</Label>
-                  <Textarea
+                  <AutoTextarea
                     value={form.eventComment}
                     onChange={(e) => setForm((prev) => ({ ...prev, eventComment: e.target.value }))}
                     placeholder="Контекст події"
-                    className="min-h-16"
                   />
                 </div>
               </div>
@@ -1636,11 +1633,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <SectionCard title="Коментарі">
               <div className="grid gap-2">
                 <Label>Загальні коментарі</Label>
-                <Textarea
+                <AutoTextarea
                   value={form.notes}
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
                   placeholder="Що замовляє, коли, важливі деталі комунікації..."
-                  className="min-h-16"
                 />
               </div>
               </SectionCard>
