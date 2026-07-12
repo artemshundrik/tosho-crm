@@ -4708,6 +4708,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         contactName: String((quote.delivery_details as Record<string, unknown> | null)?.contactName ?? ""),
         contactPhone: String((quote.delivery_details as Record<string, unknown> | null)?.contactPhone ?? ""),
         deliveryPointId: String((quote.delivery_details as Record<string, unknown> | null)?.deliveryPointId ?? ""),
+        npCityRef: String((quote.delivery_details as Record<string, unknown> | null)?.npCityRef ?? ""),
+        npWarehouseRef: String((quote.delivery_details as Record<string, unknown> | null)?.npWarehouseRef ?? ""),
       },
       categoryId: primaryItem?.catalogTypeId ?? "",
       kindId: primaryItem?.catalogKindId ?? "",

@@ -14,6 +14,7 @@ import {
   pointTypeToNpDeliveryType,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
+import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 
 /**
  * Знімок доставки, що зберігається у quotes.delivery_details (jsonb).
@@ -31,6 +32,9 @@ export type QuoteDeliveryDetails = {
   contactName?: string;
   contactPhone?: string;
   deliveryPointId?: string;
+  /** НП refs довідника (заповнюються автокомплітом) — для збереження в книгу й ТТН. */
+  npCityRef?: string;
+  npWarehouseRef?: string;
 };
 
 export const createEmptyQuoteDeliveryDetails = (): QuoteDeliveryDetails => ({
@@ -43,6 +47,8 @@ export const createEmptyQuoteDeliveryDetails = (): QuoteDeliveryDetails => ({
   contactName: "",
   contactPhone: "",
   deliveryPointId: "",
+  npCityRef: "",
+  npWarehouseRef: "",
 });
 
 export const NOVA_POSHTA_DELIVERY_TYPES = [
@@ -65,6 +71,8 @@ export const patchFromDeliveryPoint = (point: CustomerDeliveryPoint): Partial<Qu
   contactName: point.contactName,
   contactPhone: point.contactPhone,
   deliveryPointId: point.id,
+  npCityRef: point.npCityRef ?? "",
+  npWarehouseRef: point.npWarehouseRef ?? "",
 });
 
 const MANUAL_POINT_VALUE = "__manual__";
@@ -151,11 +159,17 @@ export function QuoteDeliveryFields({
           </div>
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Місто *</div>
-            <Input
-              value={details.city}
-              onChange={(e) => onChange({ city: e.target.value })}
-              placeholder="Київ"
-              className="h-9"
+            <NpCityCombobox
+              city={details.city}
+              onCityChange={(city) => onChange({ city, npCityRef: "", npWarehouseRef: "" })}
+              onSelect={(settlement) =>
+                onChange({
+                  city: settlement.present,
+                  npCityRef: settlement.ref,
+                  address: "",
+                  npWarehouseRef: "",
+                })
+              }
             />
           </div>
           <div className="space-y-1">
@@ -206,11 +220,14 @@ export function QuoteDeliveryFields({
           ) : (
             <div className="space-y-1 md:col-span-2">
               <div className="text-sm text-muted-foreground">Відділення / поштомат</div>
-              <Input
+              <NpWarehouseCombobox
+                cityRef={details.npCityRef ?? ""}
+                postomat={details.npDeliveryType === "locker"}
                 value={details.address}
-                onChange={(e) => onChange({ address: e.target.value })}
-                placeholder="Напр. Відділення №23"
-                className="h-9"
+                onValueChange={(address) => onChange({ address, npWarehouseRef: "" })}
+                onSelect={(warehouse) =>
+                  onChange({ address: warehouse.description, npWarehouseRef: warehouse.ref })
+                }
               />
             </div>
           )}

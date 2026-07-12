@@ -1471,6 +1471,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       sanitizedDeliveryDetails.contactName = trim(deliveryDetails.contactName);
       sanitizedDeliveryDetails.contactPhone = trim(deliveryDetails.contactPhone);
       sanitizedDeliveryDetails.deliveryPointId = trim(deliveryDetails.deliveryPointId);
+      sanitizedDeliveryDetails.npCityRef = trim(deliveryDetails.npCityRef);
+      sanitizedDeliveryDetails.npWarehouseRef = trim(deliveryDetails.npWarehouseRef);
     }
     if (deliveryType === "taxi") {
       sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
@@ -1509,6 +1511,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   : sanitizedDeliveryDetails.address,
               contactName: sanitizedDeliveryDetails.contactName ?? "",
               contactPhone: sanitizedDeliveryDetails.contactPhone ?? "",
+              npCityRef: sanitizedDeliveryDetails.npCityRef || null,
+              npWarehouseRef: sanitizedDeliveryDetails.npWarehouseRef || null,
             },
           });
           sanitizedDeliveryDetails.deliveryPointId = savedPointId;

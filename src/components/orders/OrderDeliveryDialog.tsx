@@ -51,6 +51,8 @@ export const parseQuoteDeliveryDetails = (value: unknown): QuoteDeliveryDetails 
     contactName: toStr(raw.contactName),
     contactPhone: toStr(raw.contactPhone),
     deliveryPointId: toStr(raw.deliveryPointId),
+    npCityRef: toStr(raw.npCityRef),
+    npWarehouseRef: toStr(raw.npWarehouseRef),
   };
 };
 
@@ -153,6 +155,8 @@ export function OrderDeliveryDialog({
       sanitized.contactName = trim(details.contactName);
       sanitized.contactPhone = trim(details.contactPhone);
       sanitized.deliveryPointId = trim(details.deliveryPointId);
+      sanitized.npCityRef = trim(details.npCityRef);
+      sanitized.npWarehouseRef = trim(details.npWarehouseRef);
     }
     if (deliveryType === "taxi" || deliveryType === "cargo") {
       sanitized.region = deliveryType === "cargo" ? trim(details.region) : "";
@@ -183,6 +187,8 @@ export function OrderDeliveryDialog({
                 address: pointType === "np_courier" ? sanitized.street : sanitized.address,
                 contactName: sanitized.contactName ?? "",
                 contactPhone: sanitized.contactPhone ?? "",
+                npCityRef: sanitized.npCityRef || null,
+                npWarehouseRef: sanitized.npWarehouseRef || null,
               },
             });
           } catch (saveError) {
