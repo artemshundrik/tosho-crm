@@ -2,6 +2,7 @@ import * as React from "react";
 import { Star } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   Select,
   SelectContent,
@@ -242,11 +243,9 @@ export function QuoteDeliveryFields({
           </div>
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Телефон отримувача</div>
-            <Input
+            <PhoneInput
               value={details.contactPhone ?? ""}
-              onChange={(e) => onChange({ contactPhone: e.target.value })}
-              placeholder="+380..."
-              className="h-9"
+              onChange={(contactPhone) => onChange({ contactPhone })}
             />
           </div>
           {canSaveToCard && !details.deliveryPointId ? (

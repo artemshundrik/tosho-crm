@@ -34,6 +34,10 @@ import { PackageCheck, ReceiptText } from "lucide-react";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import { IbanInput } from "@/components/customers/IbanInput";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { EmailInput } from "@/components/ui/email-input";
+import { DigitsInput } from "@/components/ui/digits-input";
+import { normalizeSiteUrl } from "@/lib/inputFormat";
 
 export type LeadFormState = {
   companyName: string;
@@ -795,12 +799,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     <div className="flex h-8 items-center">
                       <Label>Email</Label>
                     </div>
-                    <Input
-                      type="email"
+                    <EmailInput
                       value={form.email}
-                      onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                      onChange={(email) => setForm((prev) => ({ ...prev, email }))}
                       placeholder="name@company.com"
-                      className="h-9"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -814,11 +816,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                     <div className="space-y-2">
                       {form.phones.map((phone, index) => (
                         <div key={`phone-${index}`} className="flex items-center gap-2">
-                          <Input
+                          <PhoneInput
                             value={phone}
-                            onChange={(e) => updatePhone(index, e.target.value)}
-                            placeholder="+380..."
-                            className="h-9"
+                            onChange={(value) => updatePhone(index, value)}
+                            className="flex-1 min-w-0"
                           />
                           {form.phones.length > 1 ? (
                             <Button
@@ -893,6 +894,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <Input
                         value={form.website}
                         onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                        onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                         placeholder={isFopOwnership ? "@brandname" : "https://"}
                         className="h-9"
                       />
@@ -935,12 +937,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <div className="flex h-8 items-center">
                         <Label>Email</Label>
                       </div>
-                      <Input
-                        type="email"
+                      <EmailInput
                         value={form.email}
-                        onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                        onChange={(email) => setForm((prev) => ({ ...prev, email }))}
                         placeholder="name@company.com"
-                        className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -954,11 +954,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       <div className="space-y-2">
                         {form.phones.map((phone, index) => (
                           <div key={`phone-${index}`} className="flex items-center gap-2">
-                            <Input
+                            <PhoneInput
                               value={phone}
-                              onChange={(e) => updatePhone(index, e.target.value)}
-                              placeholder="+380..."
-                              className="h-9"
+                              onChange={(value) => updatePhone(index, value)}
+                              className="flex-1 min-w-0"
                             />
                             {form.phones.length > 1 ? (
                               <Button
@@ -986,11 +985,11 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="grid gap-2">
                       <Label>{isFopOwnership ? "ІПН" : "ЄДРПОУ / ІПН"}</Label>
-                      <Input
+                      <DigitsInput
                         value={form.taxId}
-                        onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
+                        onChange={(taxId) => setForm((prev) => ({ ...prev, taxId }))}
+                        maxLength={12}
                         placeholder={isFopOwnership ? "ІПН" : "Код або ІПН"}
-                        className="h-9"
                       />
                     </div>
                     <div className="grid gap-2">

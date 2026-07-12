@@ -46,6 +46,11 @@ import {
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
 import { IbanInput } from "@/components/customers/IbanInput";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { TelegramInput } from "@/components/ui/telegram-input";
+import { EmailInput } from "@/components/ui/email-input";
+import { DigitsInput } from "@/components/ui/digits-input";
+import { normalizeSiteUrl } from "@/lib/inputFormat";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
@@ -888,6 +893,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <Input
                       value={form.website}
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                      onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
                       className="h-9"
                     />
@@ -915,11 +921,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>Телефон <span className="text-destructive">*</span></Label>
-                    <Input
+                    <PhoneInput
                       value={form.contacts[0]?.phone ?? ""}
-                      onChange={(e) => updateContact(0, { phone: e.target.value })}
-                      placeholder="+380..."
-                      className="h-9"
+                      onChange={(phone) => updateContact(0, { phone })}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -931,12 +935,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <span className="text-[10px] font-normal text-muted-foreground">необовʼязково</span>
                       )}
                     </Label>
-                    <Input
-                      type="email"
+                    <EmailInput
                       value={form.contacts[0]?.email ?? ""}
-                      onChange={(e) => updateContact(0, { email: e.target.value })}
+                      onChange={(email) => updateContact(0, { email })}
                       placeholder="name@company.com"
-                      className="h-9"
                     />
                   </div>
                   {!isFopOwnership ? (
@@ -961,11 +963,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   ) : null}
                   <div className="grid gap-2">
                     <Label>Telegram</Label>
-                    <Input
+                    <TelegramInput
                       value={form.contacts[0]?.telegram ?? ""}
-                      onChange={(e) => updateContact(0, { telegram: e.target.value })}
-                      placeholder="@username"
-                      className="h-9"
+                      onChange={(telegram) => updateContact(0, { telegram })}
                     />
                   </div>
                 </div>
@@ -1014,6 +1014,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <Input
                       value={form.website}
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
+                      onBlur={() => setForm((prev) => ({ ...prev, website: normalizeSiteUrl(prev.website) }))}
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
                       className="h-9"
                     />
@@ -1096,21 +1097,17 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
                         <Label>Номер телефону</Label>
-                        <Input
+                        <PhoneInput
                           value={contact.phone}
-                          onChange={(e) => updateContact(index, { phone: e.target.value })}
-                          placeholder="+380..."
-                          className="h-9"
+                          onChange={(phone) => updateContact(index, { phone })}
                         />
                       </div>
                       <div className="grid gap-2">
                         <Label>Email</Label>
-                        <Input
-                          type="email"
+                        <EmailInput
                           value={contact.email}
-                          onChange={(e) => updateContact(index, { email: e.target.value })}
+                          onChange={(email) => updateContact(index, { email })}
                           placeholder="name@company.com"
-                          className="h-9"
                         />
                       </div>
                     </div>
@@ -1128,11 +1125,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                       <div className="grid gap-2">
                         <Label>Telegram</Label>
-                        <Input
+                        <TelegramInput
                           value={contact.telegram}
-                          onChange={(e) => updateContact(index, { telegram: e.target.value })}
-                          placeholder="@username"
-                          className="h-9"
+                          onChange={(telegram) => updateContact(index, { telegram })}
                         />
                       </div>
                     </div>
@@ -1340,17 +1335,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">
                         <Label>{activeLegalEntityIsPerson ? "ІПН (10 цифр)" : "Код ЄДРПОУ"}</Label>
-                        <Input
+                        <DigitsInput
                           value={activeLegalEntity.taxId}
-                          onChange={(e) =>
-                            updateLegalEntity(activeLegalEntityIndex, {
-                              taxId: e.target.value.replace(/\D/g, "").slice(0, activeLegalEntityIsPerson ? 10 : 8),
-                            })
-                          }
-                          placeholder={activeLegalEntityIsPerson ? "10-значний ІПН" : "8-значний код"}
-                          inputMode="numeric"
+                          onChange={(taxId) => updateLegalEntity(activeLegalEntityIndex, { taxId })}
                           maxLength={activeLegalEntityIsPerson ? 10 : 8}
-                          className="h-9"
+                          validLength={activeLegalEntityIsPerson ? 10 : 8}
+                          placeholder={activeLegalEntityIsPerson ? "10-значний ІПН" : "8-значний код"}
                         />
                       </div>
                       {!activeLegalEntityIsPerson ? (
@@ -1361,17 +1351,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                               <span className="text-destructive"> *</span>
                             ) : null}
                           </Label>
-                          <Input
+                          <DigitsInput
                             value={activeLegalEntity.vatId}
-                            onChange={(e) =>
-                              updateLegalEntity(activeLegalEntityIndex, {
-                                vatId: e.target.value.replace(/\D/g, "").slice(0, 12),
-                              })
-                            }
-                            placeholder="12-значний ІПН"
-                            inputMode="numeric"
+                            onChange={(vatId) => updateLegalEntity(activeLegalEntityIndex, { vatId })}
                             maxLength={12}
-                            className="h-9"
+                            validLength={12}
+                            placeholder="12-значний ІПН"
                           />
                           {activeLegalEntity.vatRate !== "none" &&
                           activeLegalEntity.vatRate !== "" &&
@@ -1398,11 +1383,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       {activeLegalEntityIsPerson ? (
                         <div className="grid gap-2">
                           <Label>Номер карти</Label>
-                          <Input
+                          <DigitsInput
                             value={activeLegalEntity.cardNumber}
-                            onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { cardNumber: e.target.value })}
+                            onChange={(cardNumber) => updateLegalEntity(activeLegalEntityIndex, { cardNumber })}
+                            maxLength={19}
+                            groupSize={4}
+                            emitGrouped
                             placeholder="0000 0000 0000 0000"
-                            className="h-9"
                           />
                         </div>
                       ) : null}
@@ -1662,21 +1649,19 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Email для документів</Label>
-                  <Input
-                    type="email"
+                  <EmailInput
                     value={form.accountantEmail}
-                    onChange={(e) => setForm((prev) => ({ ...prev, accountantEmail: e.target.value }))}
+                    onChange={(accountantEmail) => setForm((prev) => ({ ...prev, accountantEmail }))}
                     placeholder="buh@example.com"
-                    className="h-9"
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label>ЄДРПОУ / ІПН отримувача</Label>
-                  <Input
+                  <DigitsInput
                     value={form.accountantEdrpou}
-                    onChange={(e) => setForm((prev) => ({ ...prev, accountantEdrpou: e.target.value }))}
+                    onChange={(accountantEdrpou) => setForm((prev) => ({ ...prev, accountantEdrpou }))}
+                    maxLength={12}
                     placeholder="напр. 3247719674"
-                    className="h-9"
                   />
                 </div>
               </div>

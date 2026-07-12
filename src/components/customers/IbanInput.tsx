@@ -1,5 +1,5 @@
-import * as React from "react";
 import { cn } from "@/lib/utils";
+import { PrefixField, PREFIX_FIELD_INPUT } from "@/components/ui/prefix-field";
 
 /**
  * Поле IBAN із зафіксованим префіксом "UA": його не можна стерти, далі — лише
@@ -29,16 +29,7 @@ export function IbanInput({ value, onChange, className, id }: IbanInputProps) {
   const digits = digitsFromValue(value);
 
   return (
-    <div
-      className={cn(
-        "flex h-9 items-center overflow-hidden rounded-md border border-input bg-background text-sm ring-offset-background transition-colors",
-        "focus-within:ring-2 focus-within:ring-[hsl(var(--soft-ring))] focus-within:ring-offset-1",
-        className
-      )}
-    >
-      <span className="flex h-full select-none items-center border-r border-border/60 bg-muted/50 px-2.5 font-mono text-sm font-semibold tracking-wide text-muted-foreground">
-        UA
-      </span>
+    <PrefixField prefix="UA" className={className}>
       <input
         id={id}
         value={groupDigits(digits)}
@@ -49,8 +40,8 @@ export function IbanInput({ value, onChange, className, id }: IbanInputProps) {
         inputMode="numeric"
         autoComplete="off"
         placeholder="00 0000 0000 0000 0000 0000 000"
-        className="h-full w-full bg-transparent px-2.5 font-mono tracking-wide outline-none placeholder:text-muted-foreground/50"
+        className={cn(PREFIX_FIELD_INPUT, "font-mono tracking-wide")}
       />
-    </div>
+    </PrefixField>
   );
 }

@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -230,11 +231,9 @@ export function DeliveryPointsSection({
                   </div>
                   <div className="grid gap-2">
                     <Label>Телефон</Label>
-                    <Input
+                    <PhoneInput
                       value={point.contactPhone}
-                      onChange={(e) => onUpdate(index, { contactPhone: e.target.value })}
-                      placeholder="+380..."
-                      className="h-9"
+                      onChange={(contactPhone) => onUpdate(index, { contactPhone })}
                     />
                   </div>
                 </div>
