@@ -44,6 +44,7 @@ import {
   createEmptyCustomerDeliveryPoint,
   listPartyDeliveryPoints,
   npDeliveryTypeToPointType,
+  splitContactName,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { getCatalogModelMetadata } from "@/lib/toshoApi";
@@ -1509,7 +1510,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 pointType === "np_courier"
                   ? sanitizedDeliveryDetails.street
                   : sanitizedDeliveryDetails.address,
-              contactName: sanitizedDeliveryDetails.contactName ?? "",
+              contactFirstName: splitContactName(sanitizedDeliveryDetails.contactName ?? "").first,
+              contactLastName: splitContactName(sanitizedDeliveryDetails.contactName ?? "").last,
               contactPhone: sanitizedDeliveryDetails.contactPhone ?? "",
               npCityRef: sanitizedDeliveryDetails.npCityRef || null,
               npWarehouseRef: sanitizedDeliveryDetails.npWarehouseRef || null,

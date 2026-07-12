@@ -20,7 +20,10 @@ export type CustomerDeliveryPoint = {
   city: string;
   /** Відділення/поштомат ("Відділення №23") або вулиця-будинок для адресної доставки. */
   address: string;
-  /** Хто приймає вантаж у цій точці. */
+  /** Отримувач: ім'я та прізвище окремо — Нова Пошта вимагає їх нарізно для ТТН. */
+  contactFirstName: string;
+  contactLastName: string;
+  /** Похідне "Ім'я Прізвище" — для показу й сумісності зі старими читачами. */
   contactName: string;
   contactPhone: string;
   comment: string;
@@ -69,6 +72,8 @@ export const createEmptyCustomerDeliveryPoint = (): CustomerDeliveryPoint => ({
   type: "np_branch",
   city: "",
   address: "",
+  contactFirstName: "",
+  contactLastName: "",
   contactName: "",
   contactPhone: "",
   comment: "",
@@ -79,18 +84,38 @@ export const createEmptyCustomerDeliveryPoint = (): CustomerDeliveryPoint => ({
 
 const toTrimmedString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
+/** "Іван Петренко" → { first: "Іван", last: "Петренко" }. Перший токен — ім'я, решта — прізвище. */
+export const splitContactName = (value: string): { first: string; last: string } => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: "", last: "" };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+};
+
+const joinContactName = (first: string, last: string) => [first.trim(), last.trim()].filter(Boolean).join(" ");
+
 export const parseCustomerDeliveryPoints = (value: unknown): CustomerDeliveryPoint[] => {
   if (!Array.isArray(value)) return [];
   const points = value
     .map((entry) => {
       if (!entry || typeof entry !== "object") return null;
       const row = entry as Record<string, unknown>;
+      const legacyContactName = toTrimmedString(row.contact_name);
+      let contactFirstName = toTrimmedString(row.contact_first_name);
+      let contactLastName = toTrimmedString(row.contact_last_name);
+      // Міграція старого одного поля: якщо нових нема, розбиваємо "Ім'я Прізвище".
+      if (!contactFirstName && !contactLastName && legacyContactName) {
+        const split = splitContactName(legacyContactName);
+        contactFirstName = split.first;
+        contactLastName = split.last;
+      }
       const point: CustomerDeliveryPoint = {
         id: toTrimmedString(row.id) || generateDeliveryPointId(),
         type: isDeliveryPointType(row.type) ? row.type : "np_branch",
         city: toTrimmedString(row.city),
         address: toTrimmedString(row.address),
-        contactName: toTrimmedString(row.contact_name),
+        contactFirstName,
+        contactLastName,
+        contactName: joinContactName(contactFirstName, contactLastName) || legacyContactName,
         contactPhone: toTrimmedString(row.contact_phone),
         comment: toTrimmedString(row.comment),
         isDefault: row.is_default === true,
@@ -116,20 +141,28 @@ const ensureSingleDefault = (points: CustomerDeliveryPoint[]): CustomerDeliveryP
 export const serializeCustomerDeliveryPoints = (points: CustomerDeliveryPoint[]) =>
   ensureSingleDefault(
     points
-      .map((point) => ({
-        ...point,
-        city: point.city.trim(),
-        address: point.address.trim(),
-        contactName: point.contactName.trim(),
-        contactPhone: point.contactPhone.trim(),
-        comment: point.comment.trim(),
-      }))
+      .map((point) => {
+        const contactFirstName = point.contactFirstName.trim();
+        const contactLastName = point.contactLastName.trim();
+        return {
+          ...point,
+          city: point.city.trim(),
+          address: point.address.trim(),
+          contactFirstName,
+          contactLastName,
+          contactName: joinContactName(contactFirstName, contactLastName),
+          contactPhone: point.contactPhone.trim(),
+          comment: point.comment.trim(),
+        };
+      })
       .filter((point) => point.city || point.address || point.contactName || point.contactPhone || point.comment)
   ).map((point) => ({
     id: point.id,
     type: point.type,
     city: point.city,
     address: point.address,
+    contact_first_name: point.contactFirstName,
+    contact_last_name: point.contactLastName,
     contact_name: point.contactName,
     contact_phone: point.contactPhone,
     comment: point.comment,

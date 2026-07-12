@@ -28,6 +28,7 @@ import {
   createEmptyCustomerDeliveryPoint,
   listPartyDeliveryPoints,
   npDeliveryTypeToPointType,
+  splitContactName,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { updateQuote } from "@/lib/toshoApi";
@@ -185,7 +186,8 @@ export function OrderDeliveryDialog({
                 type: pointType,
                 city: sanitized.city,
                 address: pointType === "np_courier" ? sanitized.street : sanitized.address,
-                contactName: sanitized.contactName ?? "",
+                contactFirstName: splitContactName(sanitized.contactName ?? "").first,
+                contactLastName: splitContactName(sanitized.contactName ?? "").last,
                 contactPhone: sanitized.contactPhone ?? "",
                 npCityRef: sanitized.npCityRef || null,
                 npWarehouseRef: sanitized.npWarehouseRef || null,

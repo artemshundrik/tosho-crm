@@ -167,13 +167,22 @@ export function DeliveryPointsSection({ points, onAdd, onRemove, onUpdate, onSet
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="grid gap-2">
-                    <Label>Контактна особа</Label>
+                    <Label>Ім'я отримувача</Label>
                     <Input
-                      value={point.contactName}
-                      onChange={(e) => onUpdate(index, { contactName: e.target.value })}
-                      placeholder="Хто приймає вантаж"
+                      value={point.contactFirstName}
+                      onChange={(e) => onUpdate(index, { contactFirstName: e.target.value })}
+                      placeholder="Іван"
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Прізвище</Label>
+                    <Input
+                      value={point.contactLastName}
+                      onChange={(e) => onUpdate(index, { contactLastName: e.target.value })}
+                      placeholder="Петренко"
                       className="h-9"
                     />
                   </div>
