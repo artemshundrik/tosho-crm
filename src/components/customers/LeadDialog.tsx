@@ -33,6 +33,7 @@ import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2,
 import { PackageCheck, ReceiptText } from "lucide-react";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
+import { IbanInput } from "@/components/customers/IbanInput";
 
 export type LeadFormState = {
   companyName: string;
@@ -993,15 +994,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>IBAN</Label>
-                      <Input
-                        value={form.iban}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, iban: e.target.value.toUpperCase().replace(/\s+/g, "") }))
-                        }
-                        placeholder="UA••• (не обовʼязково)"
-                        className="h-9 font-mono"
-                      />
+                      <Label>IBAN <span className="text-[10px] font-normal text-muted-foreground">не обовʼязково</span></Label>
+                      <IbanInput value={form.iban} onChange={(iban) => setForm((prev) => ({ ...prev, iban }))} />
                     </div>
                   </div>
                   <div className="grid gap-2">

@@ -45,6 +45,7 @@ import {
 } from "@/lib/customerLegalEntities";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
+import { IbanInput } from "@/components/customers/IbanInput";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
@@ -1407,16 +1408,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         </div>
                       ) : null}
                       <div className="grid gap-2">
-                        <Label>IBAN</Label>
-                        <Input
+                        <Label>IBAN <span className="text-[10px] font-normal text-muted-foreground">не обовʼязково</span></Label>
+                        <IbanInput
                           value={activeLegalEntity.iban}
-                          onChange={(e) =>
-                            updateLegalEntity(activeLegalEntityIndex, {
-                              iban: e.target.value.toUpperCase().replace(/\s+/g, ""),
-                            })
-                          }
-                          placeholder="UA••• (не обовʼязково)"
-                          className="h-9 font-mono"
+                          onChange={(iban) => updateLegalEntity(activeLegalEntityIndex, { iban })}
                         />
                       </div>
                     </div>
