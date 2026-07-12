@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { assertCronAuthorized } from "./_cronAuth";
 
 type HttpEvent = {
   httpMethod?: string;
+  headers?: Record<string, string | undefined>;
 };
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
@@ -23,6 +25,9 @@ export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {
     return jsonResponse(405, { error: "Method Not Allowed" });
   }
+
+  const cronDenied = assertCronAuthorized(event);
+  if (cronDenied) return cronDenied;
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
