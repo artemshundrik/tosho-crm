@@ -1,6 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { PostgrestClient } from "@supabase/postgrest-js";
 
+// NOTE: generated schema types live in ./database.types.ts (`Database`). Flipping this
+// client to SupabaseClient<Database> surfaces ~119 pre-existing schema-drift errors across
+// the giant pages — activation is a dedicated follow-up (see docs/AUDIT-2026-07-11.md).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
