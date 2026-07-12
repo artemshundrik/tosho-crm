@@ -1205,6 +1205,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   onRemove={removeDeliveryPoint}
                   onUpdate={updateDeliveryPoint}
                   onSetDefault={setDefaultDeliveryPoint}
+                  defaultEdrpou={form.taxId}
                 />
               </TabsContent>
 

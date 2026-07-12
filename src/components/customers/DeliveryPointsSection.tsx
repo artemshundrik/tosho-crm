@@ -14,8 +14,10 @@ import {
 import {
   DELIVERY_POINT_TYPE_ICONS,
   DELIVERY_POINT_TYPE_OPTIONS,
+  DELIVERY_RECIPIENT_TYPE_OPTIONS,
   type CustomerDeliveryPoint,
   type CustomerDeliveryPointType,
+  type DeliveryRecipientType,
 } from "@/lib/customerDeliveryPoints";
 import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 
@@ -25,6 +27,8 @@ type DeliveryPointsSectionProps = {
   onRemove: (index: number) => void;
   onUpdate: (index: number, patch: Partial<CustomerDeliveryPoint>) => void;
   onSetDefault: (index: number) => void;
+  /** ЄДРПОУ замовника — підказка/дефолт для організації-отримувача. */
+  defaultEdrpou?: string;
 };
 
 const isAddressType = (type: CustomerDeliveryPointType) => type === "np_courier" || type === "other";
@@ -35,7 +39,14 @@ const isAddressType = (type: CustomerDeliveryPointType) => type === "np_courier"
  * Спільний для CustomerDialog і LeadDialog. Поки що ручне введення; коли
  * підключимо НП API, місто/відділення стануть автокомплітом із довідника.
  */
-export function DeliveryPointsSection({ points, onAdd, onRemove, onUpdate, onSetDefault }: DeliveryPointsSectionProps) {
+export function DeliveryPointsSection({
+  points,
+  onAdd,
+  onRemove,
+  onUpdate,
+  onSetDefault,
+  defaultEdrpou,
+}: DeliveryPointsSectionProps) {
   return (
     <section className="rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
@@ -167,9 +178,44 @@ export function DeliveryPointsSection({ points, onAdd, onRemove, onUpdate, onSet
                   )}
                 </div>
 
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Отримувач</Label>
+                    <Select
+                      value={point.recipientType}
+                      onValueChange={(value) =>
+                        onUpdate(index, { recipientType: value as DeliveryRecipientType })
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DELIVERY_RECIPIENT_TYPE_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {point.recipientType === "organization" ? (
+                    <div className="grid gap-2">
+                      <Label>ЄДРПОУ отримувача</Label>
+                      <Input
+                        value={point.recipientEdrpou}
+                        onChange={(e) => onUpdate(index, { recipientEdrpou: e.target.value })}
+                        placeholder={defaultEdrpou ? `${defaultEdrpou} — замовник` : "8 цифр"}
+                        inputMode="numeric"
+                        className="h-9"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="grid gap-2">
-                    <Label>Ім'я отримувача</Label>
+                    <Label>{point.recipientType === "organization" ? "Ім'я контактної особи" : "Ім'я отримувача"}</Label>
                     <Input
                       value={point.contactFirstName}
                       onChange={(e) => onUpdate(index, { contactFirstName: e.target.value })}

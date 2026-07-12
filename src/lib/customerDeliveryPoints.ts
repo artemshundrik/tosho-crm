@@ -13,9 +13,21 @@ import { supabase } from "@/lib/supabaseClient";
 
 export type CustomerDeliveryPointType = "np_branch" | "np_postomat" | "np_courier" | "other";
 
+/** Отримувач у Новій Пошті: організація (з ЄДРПОУ) або приватна особа. */
+export type DeliveryRecipientType = "organization" | "private";
+
+export const DELIVERY_RECIPIENT_TYPE_OPTIONS: Array<{ value: DeliveryRecipientType; label: string }> = [
+  { value: "organization", label: "Організація" },
+  { value: "private", label: "Приватна особа" },
+];
+
 export type CustomerDeliveryPoint = {
   id: string;
   type: CustomerDeliveryPointType;
+  /** Тип отримувача (organization потребує ЄДРПОУ для ТТН). */
+  recipientType: DeliveryRecipientType;
+  /** ЄДРПОУ організації-отримувача. Порожньо + organization → береться ЄДРПОУ замовника. */
+  recipientEdrpou: string;
   /** Населений пункт, як його вводить менеджер (пізніше — з довідника НП). */
   city: string;
   /** Відділення/поштомат ("Відділення №23") або вулиця-будинок для адресної доставки. */
@@ -60,6 +72,9 @@ export const DELIVERY_POINT_TYPE_ICONS: Record<CustomerDeliveryPointType, Lucide
 const isDeliveryPointType = (value: unknown): value is CustomerDeliveryPointType =>
   value === "np_branch" || value === "np_postomat" || value === "np_courier" || value === "other";
 
+const isRecipientType = (value: unknown): value is DeliveryRecipientType =>
+  value === "organization" || value === "private";
+
 const generateDeliveryPointId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -70,6 +85,8 @@ const generateDeliveryPointId = () => {
 export const createEmptyCustomerDeliveryPoint = (): CustomerDeliveryPoint => ({
   id: generateDeliveryPointId(),
   type: "np_branch",
+  recipientType: "organization",
+  recipientEdrpou: "",
   city: "",
   address: "",
   contactFirstName: "",
@@ -111,6 +128,8 @@ export const parseCustomerDeliveryPoints = (value: unknown): CustomerDeliveryPoi
       const point: CustomerDeliveryPoint = {
         id: toTrimmedString(row.id) || generateDeliveryPointId(),
         type: isDeliveryPointType(row.type) ? row.type : "np_branch",
+        recipientType: isRecipientType(row.recipient_type) ? row.recipient_type : "organization",
+        recipientEdrpou: toTrimmedString(row.recipient_edrpou),
         city: toTrimmedString(row.city),
         address: toTrimmedString(row.address),
         contactFirstName,
@@ -159,6 +178,8 @@ export const serializeCustomerDeliveryPoints = (points: CustomerDeliveryPoint[])
   ).map((point) => ({
     id: point.id,
     type: point.type,
+    recipient_type: point.recipientType,
+    recipient_edrpou: point.recipientType === "organization" ? point.recipientEdrpou.trim() : "",
     city: point.city,
     address: point.address,
     contact_first_name: point.contactFirstName,

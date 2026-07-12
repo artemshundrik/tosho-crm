@@ -1657,6 +1657,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 onRemove={removeDeliveryPoint}
                 onUpdate={updateDeliveryPoint}
                 onSetDefault={setDefaultDeliveryPoint}
+                defaultEdrpou={form.legalEntities[0]?.taxId ?? ""}
               />
             </TabsContent>
 
