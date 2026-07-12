@@ -6,7 +6,7 @@ import {
 } from "@/lib/customerLegalEntities";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  getQuoteRuns,
+  listQuoteRunsForQuotes,
   listCatalogModelsByIds,
   listQuoteItemsForQuotes,
   listQuotesByIds,
@@ -647,7 +647,9 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       });
       return Array.from(unique.values());
     })(),
-    Promise.all(quoteIds.map(async (quoteId) => ({ quoteId, runs: await getQuoteRuns(quoteId, teamId) }))),
+    listQuoteRunsForQuotes({ teamId, quoteIds }).then((runsByQuote) =>
+      quoteIds.map((quoteId) => ({ quoteId, runs: runsByQuote.get(quoteId) ?? [] }))
+    ),
   ]);
 
   if (customersResult.error) throw customersResult.error;
@@ -1024,7 +1026,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
       storedQuoteIds.length > 0 ? listQuoteItemsForQuotes({ teamId, quoteIds: storedQuoteIds }) : [],
       storedQuoteIds.length > 0 ? listQuotesByIds(teamId, storedQuoteIds) : [],
-      Promise.all(storedQuoteIds.map(async (quoteId) => ({ quoteId, runs: await getQuoteRuns(quoteId, teamId) }))),
+      listQuoteRunsForQuotes({ teamId, quoteIds: storedQuoteIds }).then((runsByQuote) =>
+        storedQuoteIds.map((quoteId) => ({ quoteId, runs: runsByQuote.get(quoteId) ?? [] }))
+      ),
       storedQuoteIds.length > 0
         ? supabase
             .from("activity_log")

@@ -1208,6 +1208,72 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
   }));
 }
 
+// Batched sibling of getQuoteRuns: one `.in("quote_id", …)` query for many quotes,
+// grouped by quote_id. Mirrors getQuoteRuns' schema-tolerant fallback + mapping so the
+// per-quote result is identical — collapses the N+1 in order derivation to a single read.
+export async function listQuoteRunsForQuotes(params: {
+  teamId?: string | null;
+  quoteIds: string[];
+}): Promise<Map<string, Awaited<ReturnType<typeof getQuoteRuns>>>> {
+  const teamId = params.teamId ?? null;
+  const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
+  const byQuote = new Map<string, Awaited<ReturnType<typeof getQuoteRuns>>>();
+  if (uniqueQuoteIds.length === 0) return byQuote;
+
+  const runQuery = async (withTeamFilter: boolean, useFallbackSelect = false) => {
+    let query = supabase
+      .schema("tosho")
+      .from("quote_item_runs")
+      .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
+      .in("quote_id", uniqueQuoteIds)
+      .order("created_at", { ascending: true });
+    if (withTeamFilter && teamId) {
+      query = query.eq("team_id", teamId);
+    }
+    return await query;
+  };
+
+  let { data, error } = await runQuery(false);
+  if (
+    error &&
+    /column/i.test(error.message ?? "") &&
+    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
+  ) {
+    ({ data, error } = await runQuery(!!teamId, true));
+    if (
+      error &&
+      teamId &&
+      /column/i.test(error.message ?? "") &&
+      /team_id/i.test(error.message ?? "")
+    ) {
+      ({ data, error } = await runQuery(false, true));
+    }
+  }
+  handleError(error);
+
+  (((data as Array<Partial<QuoteRun>>) ?? [])).forEach((run) => {
+    const quoteId = run.quote_id;
+    if (!quoteId) return;
+    const list = byQuote.get(quoteId) ?? [];
+    list.push({
+      id: run.id,
+      quote_id: run.quote_id,
+      quote_item_id: run.quote_item_id ?? null,
+      quantity: Number(run.quantity ?? 0) || 0,
+      unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+      unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+      logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+      desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+      manager_rate: resolveNumericRate(run.manager_rate, 10),
+      fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, 30),
+      vat_rate: resolveNumericRate(run.vat_rate, 20),
+    });
+    byQuote.set(quoteId, list);
+  });
+
+  return byQuote;
+}
+
 export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   // Ensure quote_id present
   const payload = runs.map((run) => {
