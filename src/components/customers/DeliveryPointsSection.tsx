@@ -17,6 +17,7 @@ import {
   type CustomerDeliveryPoint,
   type CustomerDeliveryPointType,
 } from "@/lib/customerDeliveryPoints";
+import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 
 type DeliveryPointsSectionProps = {
   points: CustomerDeliveryPoint[];
@@ -129,29 +130,41 @@ export function DeliveryPointsSection({ points, onAdd, onRemove, onUpdate, onSet
                   </div>
                   <div className="grid gap-2">
                     <Label>Місто / населений пункт</Label>
-                    <Input
-                      value={point.city}
-                      onChange={(e) => onUpdate(index, { city: e.target.value })}
-                      placeholder="Напр. Київ"
-                      className="h-9"
+                    <NpCityCombobox
+                      city={point.city}
+                      onCityChange={(city) => onUpdate(index, { city, npCityRef: null, npWarehouseRef: null })}
+                      onSelect={(settlement) =>
+                        onUpdate(index, {
+                          city: settlement.present,
+                          npCityRef: settlement.ref,
+                          address: "",
+                          npWarehouseRef: null,
+                        })
+                      }
                     />
                   </div>
                 </div>
 
                 <div className="grid gap-2">
                   <Label>{isAddressType(point.type) ? "Адреса" : "Відділення / поштомат"}</Label>
-                  <Input
-                    value={point.address}
-                    onChange={(e) => onUpdate(index, { address: e.target.value })}
-                    placeholder={
-                      point.type === "np_branch"
-                        ? "Напр. Відділення №23, вул. Хрещатик 1"
-                        : point.type === "np_postomat"
-                          ? "Напр. Поштомат №5432, ТРЦ Gulliver"
-                          : "Вулиця, будинок, квартира/офіс"
-                    }
-                    className="h-9"
-                  />
+                  {point.type === "np_branch" || point.type === "np_postomat" ? (
+                    <NpWarehouseCombobox
+                      cityRef={point.npCityRef ?? ""}
+                      postomat={point.type === "np_postomat"}
+                      value={point.address}
+                      onValueChange={(address) => onUpdate(index, { address, npWarehouseRef: null })}
+                      onSelect={(warehouse) =>
+                        onUpdate(index, { address: warehouse.description, npWarehouseRef: warehouse.ref })
+                      }
+                    />
+                  ) : (
+                    <Input
+                      value={point.address}
+                      onChange={(e) => onUpdate(index, { address: e.target.value })}
+                      placeholder="Вулиця, будинок, квартира/офіс"
+                      className="h-9"
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
