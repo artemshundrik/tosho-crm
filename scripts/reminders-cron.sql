@@ -13,6 +13,15 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
+-- Locked secret store for the x-cron-key header (pg_cron reads it; the value is inserted
+-- manually and NEVER committed). RLS + revoked grants keep anon/authenticated out.
+create table if not exists tosho.cron_config (key text primary key, value text not null);
+alter table tosho.cron_config enable row level security;
+revoke all on tosho.cron_config from anon, authenticated, public;
+-- Provision once (see docs/CRON_SECRET_ROLLOUT.md):
+--   insert into tosho.cron_config(key, value) values ('cron_secret', '<secret>')
+--     on conflict (key) do update set value = excluded.value;
+
 -- ---------------------------------------------------------------------------
 -- Reminder jobs. Each job fires a fire-and-forget POST to the Netlify endpoint.
 -- The functions are idempotent: a partial unique index
@@ -26,7 +35,7 @@ select cron.schedule(
   '* * * * *',
   $$ select net.http_post(
        url := 'https://tosho.pro/.netlify/functions/customer-lead-reminders',
-       headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')),
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );
 
@@ -36,7 +45,7 @@ select cron.schedule(
   '* * * * *',
   $$ select net.http_post(
        url := 'https://tosho.pro/.netlify/functions/quote-deadline-reminders',
-       headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')),
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );
 
@@ -46,7 +55,7 @@ select cron.schedule(
   '* * * * *',
   $$ select net.http_post(
        url := 'https://tosho.pro/.netlify/functions/contractor-reminders',
-       headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')),
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );
 
@@ -58,7 +67,7 @@ select cron.schedule(
   '5 * * * *',
   $$ select net.http_post(
        url := 'https://tosho.pro/.netlify/functions/team-events-reminders',
-       headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')),
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );
 
@@ -70,12 +79,12 @@ select cron.schedule(
 -- Probation review reminders (was 09:00 Kyiv):
 -- select cron.schedule(
 --   'reminders-probation', '0 6 * * *',
---   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/probation-reminders', headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')), timeout_milliseconds := 20000) $$);
+--   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/probation-reminders', headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')), timeout_milliseconds := 20000) $$);
 
 -- Activity-log retention -- DELETES old activity_log rows (was 03:20 Kyiv):
 -- select cron.schedule(
 --   'activity-log-retention', '20 0 * * *',
---   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/activity-log-retention', headers := jsonb_build_object('x-cron-key', coalesce(current_setting('app.cron_secret', true), '')), timeout_milliseconds := 20000) $$);
+--   $$ select net.http_post(url := 'https://tosho.pro/.netlify/functions/activity-log-retention', headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')), timeout_milliseconds := 20000) $$);
 
 -- ---------------------------------------------------------------------------
 -- Verify after running:
@@ -85,11 +94,13 @@ select cron.schedule(
 --
 -- To stop a job:   select cron.unschedule('reminders-team-events');
 --
--- Auth: each job sends an `x-cron-key` header from current_setting('app.cron_secret').
--- The functions enforce it once CRON_SHARED_SECRET is set in the Netlify env (fail-closed;
--- until then requests are allowed so nothing breaks). Activation runbook + verification:
--- docs/CRON_SECRET_ROLLOUT.md. Set the DB secret before re-running this file:
---   ALTER DATABASE postgres SET app.cron_secret = '<secret>';
+-- Auth: each job sends an `x-cron-key` header read from tosho.cron_config (locked table,
+-- created above). The functions enforce it once CRON_SHARED_SECRET is set in the Netlify
+-- env (until then requests are allowed so nothing breaks). Store the secret before/after
+-- scheduling:
+--   insert into tosho.cron_config(key,value) values('cron_secret','<secret>')
+--     on conflict (key) do update set value = excluded.value;
+-- Activation runbook + verification: docs/CRON_SECRET_ROLLOUT.md.
 --
 -- Netlify free tier counts every invocation. Four "* * * * *" jobs ~= 172k
 -- invocations/month. If you hit limits, change "* * * * *" to "*/5 * * * *".
