@@ -572,7 +572,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-[640px] overflow-y-auto p-0 flex flex-col">
+      <SheetContent className="w-full sm:max-w-[820px] overflow-y-auto p-0 flex flex-col">
         <div className="px-6 py-4 border-b shrink-0 bg-muted/20">
           <SheetHeader>
             <SheetTitle className="text-base font-medium flex items-center gap-2">
