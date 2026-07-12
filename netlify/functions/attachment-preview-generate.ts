@@ -83,7 +83,11 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(200, { success: true, skipped: true, reason: "unsupported-extension" });
   }
 
-  const { data: fileBlob, error: downloadError } = await adminClient.storage.from(bucket).download(storagePath);
+  // Authorization: download the source with the USER client so storage RLS enforces that the
+  // caller may actually read this object. This blocks the IDOR where any authenticated user
+  // could force a service-role read of an arbitrary (bucket, storagePath). The admin client is
+  // used only to write the derived preview/thumb next to the (now-authorized) source below.
+  const { data: fileBlob, error: downloadError } = await userClient.storage.from(bucket).download(storagePath);
   if (downloadError || !fileBlob) {
     return jsonResponse(404, { error: "Failed to download source file" });
   }

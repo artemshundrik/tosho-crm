@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import dnsPromises from "node:dns/promises";
+import net from "node:net";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -79,6 +81,72 @@ function getBrowserLikeHeaders(sourceUrl: string, includeReferer: boolean) {
   }
 
   return headers;
+}
+
+function isPrivateOrReservedIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) || // link-local + cloud metadata (169.254.169.254)
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127) // CGNAT
+    );
+  }
+  if (net.isIPv6(ip)) {
+    const low = ip.toLowerCase();
+    return (
+      low === "::1" ||
+      low === "::" ||
+      low.startsWith("fc") ||
+      low.startsWith("fd") || // unique local
+      low.startsWith("fe80") || // link-local
+      low.startsWith("::ffff:127.") ||
+      low.startsWith("::ffff:10.") ||
+      low.startsWith("::ffff:192.168.") ||
+      low.startsWith("::ffff:169.254.")
+    );
+  }
+  return true; // unrecognised → treat as unsafe
+}
+
+// SSRF guard: only fetch http(s) URLs that resolve to public addresses. Blocks the prior
+// hole where any authenticated caller could point sourceUrl at internal/metadata endpoints.
+async function assertSafeExternalUrl(rawUrl: string): Promise<void> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("Некоректний URL зображення.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Дозволені лише http(s) посилання.");
+  }
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
+  ) {
+    throw new Error("Внутрішні адреси заборонені.");
+  }
+  let addresses: string[];
+  if (net.isIP(host)) {
+    addresses = [host];
+  } else {
+    try {
+      addresses = (await dnsPromises.lookup(host, { all: true })).map((r) => r.address);
+    } catch {
+      throw new Error("Не вдалося розпізнати адресу джерела.");
+    }
+  }
+  if (addresses.length === 0 || addresses.some(isPrivateOrReservedIp)) {
+    throw new Error("Джерело вказує на внутрішню/зарезервовану адресу — заборонено.");
+  }
 }
 
 async function fetchSourceImage(sourceUrl: string) {
@@ -169,6 +237,12 @@ export const handler = async (event: HttpEvent) => {
   const { data: userData, error: userError } = await userClient.auth.getUser();
   if (userError || !userData?.user) {
     return jsonResponse(401, { error: "Unauthorized" });
+  }
+
+  try {
+    await assertSafeExternalUrl(sourceUrl);
+  } catch (error) {
+    return jsonResponse(400, { error: error instanceof Error ? error.message : "Заборонений URL." });
   }
 
   let response: Response;

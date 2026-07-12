@@ -91,7 +91,41 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 
-  const rows = userIds.map((userId) => ({
+  // Authorization: a caller may only notify users who share one of their workspaces.
+  // Recipients are resolved server-side against tosho.memberships — the body-supplied
+  // userIds are filtered to that set, never trusted directly.
+  const { data: callerWorkspaces } = await adminClient
+    .schema("tosho")
+    .from("memberships")
+    .select("workspace_id")
+    .eq("user_id", userData.user.id);
+  const workspaceIds = Array.from(
+    new Set(
+      (callerWorkspaces ?? [])
+        .map((row: { workspace_id?: string | null }) => row.workspace_id)
+        .filter((id: string | null | undefined): id is string => typeof id === "string" && id.length > 0)
+    )
+  );
+  if (workspaceIds.length === 0) {
+    return jsonResponse(403, { error: "Caller is not a workspace member" });
+  }
+  const { data: allowedRows } = await adminClient
+    .schema("tosho")
+    .from("memberships")
+    .select("user_id")
+    .in("workspace_id", workspaceIds)
+    .in("user_id", userIds);
+  const allowedRecipients = new Set(
+    (allowedRows ?? [])
+      .map((row: { user_id?: string | null }) => row.user_id)
+      .filter((id: string | null | undefined): id is string => typeof id === "string" && id.length > 0)
+  );
+  const authorizedUserIds = userIds.filter((id) => allowedRecipients.has(id));
+  if (authorizedUserIds.length === 0) {
+    return jsonResponse(200, { success: true, delivered: 0 });
+  }
+
+  const rows = authorizedUserIds.map((userId) => ({
     user_id: userId,
     title,
     body: payload.body ?? null,
