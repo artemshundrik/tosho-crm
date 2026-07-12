@@ -2,7 +2,6 @@ import * as React from "react";
 import { Loader2, MapPin, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   NovaPoshtaNotConfiguredError,
   listNpWarehouses,
@@ -20,6 +19,41 @@ function useDebounced<T>(value: T, delay = DEBOUNCE_MS) {
     return () => window.clearTimeout(id);
   }, [value, delay]);
   return debounced;
+}
+
+/**
+ * Легкий inline-дропдаун під полем. Свідомо НЕ Radix Popover: тригер Radix на
+ * `<Input>` перехоплює pointer/фокус — клік не ставив курсор, ввести було
+ * неможливо. Тут інпут звичайний, а список — власний абсолютний блок.
+ * Пункти закриваємось через onMouseDown+preventDefault, щоб клік по пункту не
+ * викликав blur інпута раніше за вибір.
+ */
+function Dropdown({
+  loading,
+  loadingLabel,
+  empty,
+  children,
+}: {
+  loading: boolean;
+  loadingLabel: string;
+  empty: boolean;
+  children: React.ReactNode;
+}) {
+  if (!loading && empty) return null;
+  return (
+    <div
+      className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1 shadow-[var(--shadow-overlay)]"
+      role="listbox"
+    >
+      {loading ? (
+        <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {loadingLabel}
+        </div>
+      ) : (
+        children
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +100,6 @@ export function NpCityCombobox({ city, onCityChange, onSelect, placeholder, clas
     };
   }, [debouncedCity, open, unavailable]);
 
-  // Ключ НП не налаштований → звичайне текстове поле (працює вручну).
   if (unavailable) {
     return (
       <Input
@@ -79,50 +112,40 @@ export function NpCityCombobox({ city, onCityChange, onSelect, placeholder, clas
   }
 
   return (
-    <Popover open={open && (loading || results.length > 0)} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Input
-          value={city}
-          onChange={(event) => {
-            onCityChange(event.target.value);
-            if (!open) setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder={placeholder ?? "Почніть вводити місто…"}
-          className={cn("h-9", className)}
-          autoComplete="off"
-        />
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[--radix-popover-trigger-width] p-1"
-        align="start"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-      >
-        {loading ? (
-          <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Шукаю…
-          </div>
-        ) : (
-          <div className="max-h-[240px] overflow-y-auto">
-            {results.map((settlement) => (
-              <button
-                key={settlement.ref}
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                onClick={() => {
-                  onSelect(settlement);
-                  setResults([]);
-                  setOpen(false);
-                }}
-              >
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{settlement.present}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+    <div className="relative">
+      <Input
+        value={city}
+        onChange={(event) => {
+          onCityChange(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        placeholder={placeholder ?? "Почніть вводити місто…"}
+        className={cn("h-9", className)}
+        autoComplete="off"
+      />
+      {open ? (
+        <Dropdown loading={loading} loadingLabel="Шукаю…" empty={results.length === 0}>
+          {results.map((settlement) => (
+            <button
+              key={settlement.ref}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(settlement);
+                setResults([]);
+                setOpen(false);
+              }}
+            >
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{settlement.present}</span>
+            </button>
+          ))}
+        </Dropdown>
+      ) : null}
+    </div>
   );
 }
 
@@ -133,7 +156,6 @@ export function NpCityCombobox({ city, onCityChange, onSelect, placeholder, clas
 type NpWarehouseComboboxProps = {
   cityRef: string;
   settlementRef?: string;
-  /** true — поштомати; false — відділення. */
   postomat: boolean;
   value: string;
   onValueChange: (value: string) => void;
@@ -182,7 +204,6 @@ export function NpWarehouseCombobox({
     };
   }, [open, unavailable, cityRef, settlementRef, postomat, debouncedValue]);
 
-  // Немає ключа НП або ще не обрано місто → звичайне текстове поле.
   if (unavailable || !cityRef) {
     return (
       <Input
@@ -195,49 +216,39 @@ export function NpWarehouseCombobox({
   }
 
   return (
-    <Popover open={open && (loading || results.length > 0)} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Input
-          value={value}
-          onChange={(event) => {
-            onValueChange(event.target.value);
-            if (!open) setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder={placeholder ?? (postomat ? "Оберіть поштомат…" : "Оберіть відділення…")}
-          className={cn("h-9", className)}
-          autoComplete="off"
-        />
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-[--radix-popover-trigger-width] p-1"
-        align="start"
-        onOpenAutoFocus={(event) => event.preventDefault()}
-      >
-        {loading ? (
-          <div className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Завантажую відділення…
-          </div>
-        ) : (
-          <div className="max-h-[240px] overflow-y-auto">
-            {results.map((warehouse) => (
-              <button
-                key={warehouse.ref}
-                type="button"
-                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                onClick={() => {
-                  onSelect(warehouse);
-                  setResults([]);
-                  setOpen(false);
-                }}
-              >
-                <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0">{warehouse.description}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(event) => {
+          onValueChange(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        placeholder={placeholder ?? (postomat ? "Оберіть поштомат…" : "Оберіть відділення…")}
+        className={cn("h-9", className)}
+        autoComplete="off"
+      />
+      {open ? (
+        <Dropdown loading={loading} loadingLabel="Завантажую відділення…" empty={results.length === 0}>
+          {results.map((warehouse) => (
+            <button
+              key={warehouse.ref}
+              type="button"
+              className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(warehouse);
+                setResults([]);
+                setOpen(false);
+              }}
+            >
+              <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0">{warehouse.description}</span>
+            </button>
+          ))}
+        </Dropdown>
+      ) : null}
+    </div>
   );
 }
