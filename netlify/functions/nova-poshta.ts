@@ -21,6 +21,8 @@ const ALLOWED: Record<string, Set<string>> = {
   ContactPerson: new Set(["save"]),
   // Створення/розрахунок ТТН (Phase 2). Дію ініціює користувач у діалозі замовлення.
   InternetDocument: new Set(["save", "delete", "getDocumentPrice", "getDocumentDeliveryDate"]),
+  // Відстеження статусу (read-only).
+  TrackingDocument: new Set(["getStatusDocuments"]),
 };
 
 // Фолбек для старих вкладок, що ще шлють лише calledMethod без modelName (Address-only).

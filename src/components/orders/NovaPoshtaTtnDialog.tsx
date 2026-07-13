@@ -30,6 +30,7 @@ import {
   getNpDocumentDeliveryDate,
   createNpInternetDocument,
   deleteNpInternetDocument,
+  trackNpDocument,
   NovaPoshtaNotConfiguredError,
   type NpTtnResult,
 } from "@/lib/novaPoshtaApi";
@@ -124,6 +125,7 @@ export function NovaPoshtaTtnDialog({
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
+  const [trackStatus, setTrackStatus] = useState<string | null>(null);
 
   const shownTtn = createdTtn ?? existingTtn;
 
@@ -181,6 +183,26 @@ export function NovaPoshtaTtnDialog({
       cancelled = true;
     };
   }, [open, existingTtn, teamId, partyId, partyType, delivery, defaultEdrpou, orderTotal]);
+
+  // Живий статус для вже створеної ТТН.
+  useEffect(() => {
+    if (!open || !shownTtn?.number) {
+      setTrackStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await trackNpDocument(shownTtn.number);
+        if (!cancelled) setTrackStatus(result?.status || null);
+      } catch {
+        /* тихо — статус опційний */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, shownTtn?.number]);
 
   const updateRecipient = (patch: Partial<RecipientState>) =>
     setRecipient((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -322,6 +344,12 @@ export function NovaPoshtaTtnDialog({
                 {shownTtn.estimatedDelivery ? <span>Орієнтовно: {shownTtn.estimatedDelivery}</span> : null}
                 {shownTtn.cost != null ? <span>Вартість: {money(shownTtn.cost)}</span> : null}
               </div>
+              {trackStatus ? (
+                <div className="mt-2 text-sm">
+                  <span className="text-muted-foreground">Статус: </span>
+                  <span className="font-medium text-foreground">{trackStatus}</span>
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button

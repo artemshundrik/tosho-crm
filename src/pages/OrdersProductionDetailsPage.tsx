@@ -80,6 +80,7 @@ import {
   type OrderDeliverySnapshot,
 } from "@/components/orders/OrderDeliveryDialog";
 import { NovaPoshtaTtnDialog } from "@/components/orders/NovaPoshtaTtnDialog";
+import { trackNpDocument } from "@/lib/novaPoshtaApi";
 import { DELIVERY_TYPE_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 const getInitials = (value?: string | null) => {
@@ -1163,6 +1164,26 @@ export default function OrdersProductionDetailsPage() {
         : null,
     [record?.npTtnNumber, record?.npTtnRef, record?.npTtnCost, record?.npTtnEstimatedDelivery]
   );
+  const [ttnStatus, setTtnStatus] = useState<string | null>(null);
+  useEffect(() => {
+    const number = record?.npTtnNumber;
+    if (!number) {
+      setTtnStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await trackNpDocument(number, record?.contactPhone ?? undefined);
+        if (!cancelled) setTtnStatus(result?.status || null);
+      } catch {
+        /* статус опційний */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [record?.npTtnNumber, record?.contactPhone]);
 
   useEffect(() => {
     if (!teamId || !record?.quoteId) {
@@ -1855,6 +1876,7 @@ export default function OrdersProductionDetailsPage() {
                     {record.npTtnEstimatedDelivery ? (
                       <div className="text-xs text-muted-foreground">Орієнтовно: {record.npTtnEstimatedDelivery}</div>
                     ) : null}
+                    {ttnStatus ? <div className="text-xs font-medium text-foreground">{ttnStatus}</div> : null}
                   </div>
                   <Button
                     type="button"

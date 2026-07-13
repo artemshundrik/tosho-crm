@@ -342,3 +342,26 @@ export async function deleteNpInternetDocument(ref: string): Promise<void> {
   if (!ref) return;
   await callNovaPoshta("InternetDocument", "delete", { DocumentRefs: ref });
 }
+
+export type NpTrackStatus = {
+  status: string;
+  statusCode: string;
+  /** Фактична дата отримання, якщо вже доставлено (рядок як від НП). */
+  actualDelivery: string;
+};
+
+/** Поточний статус ТТН (TrackingDocument.getStatusDocuments, read-only). */
+export async function trackNpDocument(documentNumber: string, phone?: string): Promise<NpTrackStatus | null> {
+  const number = str(documentNumber).trim();
+  if (!number) return null;
+  const data = await callNovaPoshta("TrackingDocument", "getStatusDocuments", {
+    Documents: [{ DocumentNumber: number, Phone: phone ? npPhone(phone) : "" }],
+  });
+  const row = data[0];
+  if (!row) return null;
+  return {
+    status: str(row.Status),
+    statusCode: str(row.StatusCode),
+    actualDelivery: str(row.ActualDeliveryDate) || str(row.RecipientDateTime),
+  };
+}
