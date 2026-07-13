@@ -4080,6 +4080,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   useEffect(() => {
     if (!quoteId) return;
+    // teamId resolves asynchronously after auth settles. Bail until it's known
+    // so we don't fire every loader once with a null team (which throws a bogus
+    // "Немає доступу" and fetches items/runs without the team filter) and then
+    // re-fire the whole batch a second time once teamId lands.
+    if (!teamId) return;
     const nextInitialCache = readQuoteDetailsCache(teamId, quoteId);
     setQuote(nextInitialCache?.quote ?? null);
     setLoading(!nextInitialCache?.quote);

@@ -32,13 +32,13 @@ export function KanbanSkeleton({
       className={className}
     >
       <KanbanBoard
-        className={cn("h-full pb-2 md:pb-3", boardClassName)}
+        className={cn("h-full pb-2 md:pb-3 [container-type:inline-size]", boardClassName)}
         rowClassName={cn("h-full items-stretch", rowClassName)}
       >
         {columns.map((column, columnIndex) => (
           <KanbanColumn
             key={column.id}
-            className={cn("kanban-column-surface h-full basis-[300px] shrink-0 lg:basis-[320px]", column.className)}
+            className={cn("kanban-column-surface h-full basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0", column.className)}
             bodyClassName="space-y-2 px-2.5 pb-1.5 pt-2.5"
             header={
               <div className="kanban-column-header flex shrink-0 items-center justify-between gap-2 px-3.5 py-3">

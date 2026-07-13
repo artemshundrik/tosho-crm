@@ -4608,7 +4608,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   }, [viewMode]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (viewMode !== "kanban") return;
     if (typeof window === "undefined") return;
 
@@ -4627,7 +4627,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       frameId = window.requestAnimationFrame(measure);
     };
 
-    scheduleMeasure();
+    // Measure synchronously before first paint so the skeleton renders at the
+    // final board height instead of collapsing to the intrinsic card height and
+    // then jumping once the rAF measurement lands.
+    measure();
     window.addEventListener("resize", scheduleMeasure);
 
     const resizeObserver =
