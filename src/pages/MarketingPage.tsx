@@ -937,13 +937,14 @@ export default function MarketingPage() {
                 <StackHoverPreview
                   items={[group.cover, ...group.items.filter((item) => item.key !== group.cover.key)]}
                   alt={`${visual.customerName} — ${visual.fileName}`}
+                  variant="thumb"
                 />
               ) : (
                 <StorageObjectImage
                   bucket={visual.bucket}
                   path={visual.path}
                   alt={`${visual.customerName} — ${visual.fileName}`}
-                  variant="preview"
+                  variant="thumb"
                   className="h-full w-full"
                   imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
                 />

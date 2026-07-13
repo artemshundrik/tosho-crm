@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
+import { getSignedAttachmentUrl, type AttachmentPreviewVariant } from "@/lib/attachmentPreview";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 
 export type StackHoverItem = { key: string; bucket: string; path: string };
@@ -13,6 +13,8 @@ type StackHoverPreviewProps = {
   imageClassName?: string;
   /** Max frames in the hover loop (cover + siblings). Caps egress + keeps the loop snappy. */
   maxFrames?: number;
+  /** Storage variant for cover + sibling frames. Grid cards pass "thumb" to keep egress low. */
+  variant?: AttachmentPreviewVariant;
 };
 
 const HOLD_MS = 900;
@@ -42,6 +44,7 @@ export function StackHoverPreview({
   className,
   imageClassName,
   maxFrames = 5,
+  variant = "preview",
 }: StackHoverPreviewProps) {
   const frames = items.slice(0, Math.max(1, maxFrames));
   const cover = frames[0];
@@ -67,11 +70,11 @@ export function StackHoverPreview({
     resolvedRef.current = true;
     const urls = await Promise.all(
       siblings.map((sibling) =>
-        getSignedAttachmentUrl(sibling.bucket, sibling.path, "preview").catch(() => null)
+        getSignedAttachmentUrl(sibling.bucket, sibling.path, variant).catch(() => null)
       )
     );
     setSiblingUrls(urls);
-  }, [siblings]);
+  }, [siblings, variant]);
 
   const startHover = useCallback(() => {
     if (!canAnimate) return;
@@ -108,7 +111,7 @@ export function StackHoverPreview({
         bucket={cover.bucket}
         path={cover.path}
         alt={alt}
-        variant="preview"
+        variant={variant}
         className="h-full w-full"
         imageClassName={cn("h-full w-full object-cover", imageClassName)}
       />
