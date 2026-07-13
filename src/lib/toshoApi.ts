@@ -1365,11 +1365,11 @@ export async function listStatusHistory(quoteId: string, teamId?: string | null)
 
 export async function setStatus(params: { quoteId: string; status: string; note?: string }) {
   try {
-    const { data, error } = await supabase.rpc("tosho.set_quote_status" as never, {
+    const { data, error } = await supabase.schema("tosho").rpc("set_quote_status", {
       p_quote_id: params.quoteId,
-      p_status: params.status,
-      p_note: params.note ?? null,
-    } as never);
+      p_new_status: params.status as Database["tosho"]["Enums"]["quote_status"],
+      p_note: params.note ?? undefined,
+    });
     handleError(error);
     return data;
   } catch (error: unknown) {
