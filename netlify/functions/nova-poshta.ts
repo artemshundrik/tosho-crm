@@ -11,8 +11,17 @@ import { createClient } from "@supabase/supabase-js";
 
 const NOVA_POSHTA_BASE = "https://api.novaposhta.ua/v2.0/json/";
 
-// Білий список: лише читання довідника адрес. Жодних дій з ТТН/платежами.
-const ALLOWED_METHODS: Record<string, string> = {
+// Білий список пар (модель → дозволені методи). НП розрізняє save/delete лише за
+// modelName, тож клієнт шле modelName явно, а тут валідуємо пару.
+// Phase 1 — довідник адрес (read). Phase 2 (sender settings) — read по Counterparty.
+// Запис (Counterparty.save / InternetDocument.save) додамо разом із його UI.
+const ALLOWED: Record<string, Set<string>> = {
+  Address: new Set(["searchSettlements", "searchSettlementStreets", "getWarehouses", "getSettlementAreas"]),
+  Counterparty: new Set(["getCounterparties", "getCounterpartyContactPersons", "getCounterpartyAddresses"]),
+};
+
+// Фолбек для старих вкладок, що ще шлють лише calledMethod без modelName (Address-only).
+const LEGACY_METHOD_MODEL: Record<string, string> = {
   searchSettlements: "Address",
   searchSettlementStreets: "Address",
   getWarehouses: "Address",
@@ -57,6 +66,7 @@ const resolveWorkspaceId = async (
 };
 
 type NovaPoshtaRequest = {
+  modelName?: string;
   calledMethod?: string;
   methodProperties?: Record<string, unknown>;
 };
@@ -99,9 +109,11 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const calledMethod = (payload.calledMethod ?? "").trim();
-  const modelName = ALLOWED_METHODS[calledMethod];
-  if (!modelName) {
-    return jsonResponse(400, { error: `Method not allowed: ${calledMethod || "(empty)"}` });
+  const modelName = (payload.modelName ?? "").trim() || LEGACY_METHOD_MODEL[calledMethod] || "";
+  if (!modelName || !ALLOWED[modelName]?.has(calledMethod)) {
+    return jsonResponse(400, {
+      error: `Method not allowed: ${modelName || "?"}.${calledMethod || "(empty)"}`,
+    });
   }
 
   const npApiKey = process.env.NOVA_POSHTA_API_KEY;

@@ -58,6 +58,7 @@ const InvitePage = lazyWithRetry(() => import("./pages/InvitePage"));
 const TeamMembersPage = lazyWithRetry(() =>
   import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
 );
+const NovaPoshtaSettingsPage = lazyWithRetry(() => import("./pages/NovaPoshtaSettingsPage"));
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
@@ -242,6 +243,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
+    { pattern: "/settings/nova-poshta", scope: "page", group: "account", test: (value) => value.startsWith("/settings/nova-poshta") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
     { pattern: "/admin/observability", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/observability") },
     { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
@@ -1057,6 +1059,20 @@ function AppRoutes() {
             >
               <RouteSuspense shell>
                 <TeamMembersPage />
+              </RouteSuspense>
+            </TeamMembersRouteGate>
+          }
+        />
+        <Route
+          path="settings/nova-poshta"
+          element={
+            <TeamMembersRouteGate
+              accessRole={accessRole}
+              jobRole={jobRole}
+              canEditMemberRoles={permissions.canEditMemberRoles}
+            >
+              <RouteSuspense shell>
+                <NovaPoshtaSettingsPage />
               </RouteSuspense>
             </TeamMembersRouteGate>
           }

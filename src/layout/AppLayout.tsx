@@ -430,6 +430,7 @@ const ROUTES = {
 
   workspaceSettings: "/workspace-settings",
   membersAccess: "/settings/members",
+  novaPoshta: "/settings/nova-poshta",
   notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
@@ -483,6 +484,7 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users },
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
   { label: "Доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
+  { label: "Нова Пошта", to: ROUTES.novaPoshta, group: "account", icon: Truck, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
 ];
 

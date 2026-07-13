@@ -18,6 +18,7 @@ export class NovaPoshtaNotConfiguredError extends Error {
 }
 
 async function callNovaPoshta(
+  modelName: string,
   calledMethod: string,
   methodProperties: Record<string, unknown>
 ): Promise<Array<Record<string, unknown>>> {
@@ -28,7 +29,7 @@ async function callNovaPoshta(
   const response = await fetch(FUNCTION_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ calledMethod, methodProperties }),
+    body: JSON.stringify({ modelName, calledMethod, methodProperties }),
   });
 
   const body = (await response.json().catch(() => null)) as
@@ -60,7 +61,7 @@ export type NpSettlement = {
 export async function searchNpSettlements(query: string, limit = 20): Promise<NpSettlement[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
-  const data = await callNovaPoshta("searchSettlements", { CityName: trimmed, Limit: String(limit) });
+  const data = await callNovaPoshta("Address", "searchSettlements", { CityName: trimmed, Limit: String(limit) });
   const addresses = Array.isArray(data[0]?.Addresses) ? (data[0].Addresses as Array<Record<string, unknown>>) : [];
   return addresses
     .map((address) => {
@@ -99,7 +100,7 @@ export async function listNpWarehouses(params: {
   else if (params.settlementRef) props.SettlementRef = params.settlementRef;
   if (params.query?.trim()) props.FindByString = params.query.trim();
 
-  const data = await callNovaPoshta("getWarehouses", props);
+  const data = await callNovaPoshta("Address", "getWarehouses", props);
   const parsed = data
     .map((warehouse) => {
       const category = str(warehouse.CategoryOfWarehouse).toLowerCase();
@@ -115,4 +116,53 @@ export async function listNpWarehouses(params: {
 
   if (params.postomat === undefined) return parsed;
   return parsed.filter((warehouse) => warehouse.isPostomat === params.postomat);
+}
+
+/* ── Phase 2: відправник ─────────────────────────────────────────────────
+   Читання з кабінету НП для налаштування відправника. Побічних ефектів нема —
+   лише список твоїх відправників і їхніх контактних осіб. */
+
+export type NpSender = {
+  /** Ref контрагента-відправника (потрібен для ТТН як Sender). */
+  ref: string;
+  name: string;
+  edrpou: string;
+};
+
+/** Список відправників кабінету (Counterparty.getCounterparties, property=Sender). */
+export async function getNpSenders(): Promise<NpSender[]> {
+  const data = await callNovaPoshta("Counterparty", "getCounterparties", {
+    CounterpartyProperty: "Sender",
+    Page: "1",
+  });
+  return data
+    .map((row) => ({
+      ref: str(row.Ref),
+      name: str(row.Description) || str(row.CounterpartyFullName),
+      edrpou: str(row.EDRPOU),
+    }))
+    .filter((sender) => sender.ref && sender.name);
+}
+
+export type NpContactPerson = {
+  /** Ref контактної особи (потрібен для ТТН як ContactSender). */
+  ref: string;
+  name: string;
+  phone: string;
+};
+
+/** Контактні особи відправника (Counterparty.getCounterpartyContactPersons). */
+export async function getNpContactPersons(counterpartyRef: string): Promise<NpContactPerson[]> {
+  if (!counterpartyRef) return [];
+  const data = await callNovaPoshta("Counterparty", "getCounterpartyContactPersons", {
+    Ref: counterpartyRef,
+    Page: "1",
+  });
+  return data
+    .map((row) => ({
+      ref: str(row.Ref),
+      name: str(row.Description),
+      phone: str(row.Phones) || str(row.Phone),
+    }))
+    .filter((contact) => contact.ref && contact.name);
 }
