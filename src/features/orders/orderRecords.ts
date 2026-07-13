@@ -246,6 +246,12 @@ export type DerivedOrderRecord = {
   contractProductionDays: number | null;
   /** Persisted contract generation param: auto-prolongation clause (p.8.5). */
   contractAutoProlongation: boolean;
+  /** Nova Poshta ТТН (Phase 2). null → ще не створено. */
+  npTtnNumber: string | null;
+  npTtnRef: string | null;
+  npTtnCost: number | null;
+  npTtnEstimatedDelivery: string | null;
+  npTtnCreatedAt: string | null;
   designStatuses: string[];
   docs: {
     contract: boolean;
@@ -304,6 +310,11 @@ type StoredOrderRow = {
   contract_date?: string | null;
   contract_production_days?: number | string | null;
   contract_auto_prolongation?: boolean | null;
+  np_ttn_number?: string | null;
+  np_ttn_ref?: string | null;
+  np_ttn_cost?: number | string | null;
+  np_ttn_estimated_delivery?: string | null;
+  np_ttn_created_at?: string | null;
   design_statuses?: string[] | null;
   documents?: {
     contract?: boolean;
@@ -529,7 +540,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -969,6 +980,11 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       contractDate: null,
       contractProductionDays: null,
       contractAutoProlongation: false,
+      npTtnNumber: null,
+      npTtnRef: null,
+      npTtnCost: null,
+      npTtnEstimatedDelivery: null,
+      npTtnCreatedAt: null,
       designStatuses: Array.from(new Set(tasks.map((task) => DESIGN_STATUS_LABELS[task.status] ?? task.status))),
       docs: {
         contract: partyType === "customer" && hasLegalEntityIdentity && Boolean(contactEmail && contactPhone),
@@ -1347,6 +1363,14 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         specificationCreatedAt: order.specification_created_at ?? null,
         contractNumber: order.contract_number?.trim?.() || null,
         contractDate: order.contract_date?.trim?.() || null,
+        npTtnNumber: order.np_ttn_number?.trim?.() || null,
+        npTtnRef: order.np_ttn_ref?.trim?.() || null,
+        npTtnCost:
+          order.np_ttn_cost === null || order.np_ttn_cost === undefined || order.np_ttn_cost === ""
+            ? null
+            : Number(order.np_ttn_cost),
+        npTtnEstimatedDelivery: order.np_ttn_estimated_delivery?.trim?.() || null,
+        npTtnCreatedAt: order.np_ttn_created_at ?? null,
         contractProductionDays:
           order.contract_production_days === null ||
           order.contract_production_days === undefined ||
@@ -1553,6 +1577,45 @@ export async function updateOrderStatuses(params: {
       throw new Error("Таблиці замовлень ще не створені. Запустіть scripts/orders-schema.sql.");
     }
     throw error;
+  }
+}
+
+export async function updateOrderNovaPoshtaTtn(params: {
+  teamId: string;
+  orderId: string;
+  ttn: { number: string; ref: string; cost: number; estimatedDelivery: string } | null;
+}) {
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (params.ttn) {
+    payload.np_ttn_number = params.ttn.number;
+    payload.np_ttn_ref = params.ttn.ref || null;
+    payload.np_ttn_cost = params.ttn.cost || null;
+    payload.np_ttn_estimated_delivery = params.ttn.estimatedDelivery || null;
+    payload.np_ttn_created_at = new Date().toISOString();
+  } else {
+    payload.np_ttn_number = null;
+    payload.np_ttn_ref = null;
+    payload.np_ttn_cost = null;
+    payload.np_ttn_estimated_delivery = null;
+    payload.np_ttn_created_at = null;
+  }
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .update(payload)
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId)
+    .select("id");
+
+  if (error) {
+    if (isMissingOrdersRelationMessage(error.message)) {
+      throw new Error("Таблиці замовлень ще не створені. Запустіть scripts/orders-schema.sql.");
+    }
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    throw new Error("Замовлення не знайдено для збереження ТТН");
   }
 }
 

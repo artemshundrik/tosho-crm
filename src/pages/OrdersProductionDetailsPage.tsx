@@ -67,6 +67,7 @@ import {
   Info,
   Mail,
   MoreHorizontal,
+  PackageCheck,
   Palette,
   Pencil,
   Phone,
@@ -78,6 +79,7 @@ import {
   parseQuoteDeliveryDetails,
   type OrderDeliverySnapshot,
 } from "@/components/orders/OrderDeliveryDialog";
+import { NovaPoshtaTtnDialog } from "@/components/orders/NovaPoshtaTtnDialog";
 import { DELIVERY_TYPE_OPTIONS } from "@/features/quotes/quotes-page/config";
 
 const getInitials = (value?: string | null) => {
@@ -1144,6 +1146,23 @@ export default function OrdersProductionDetailsPage() {
   // замовлення читає і редагує саме її, щоб обидва екрани показували одне.
   const [orderDelivery, setOrderDelivery] = useState<OrderDeliverySnapshot | null>(null);
   const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
+  const [ttnDialogOpen, setTtnDialogOpen] = useState(false);
+  const ttnDelivery = useMemo(
+    () => orderDelivery?.deliveryDetails ?? parseQuoteDeliveryDetails(null),
+    [orderDelivery]
+  );
+  const ttnExisting = useMemo(
+    () =>
+      record?.npTtnNumber
+        ? {
+            number: record.npTtnNumber,
+            ref: record.npTtnRef,
+            cost: record.npTtnCost,
+            estimatedDelivery: record.npTtnEstimatedDelivery,
+          }
+        : null,
+    [record?.npTtnNumber, record?.npTtnRef, record?.npTtnCost, record?.npTtnEstimatedDelivery]
+  );
 
   useEffect(() => {
     if (!teamId || !record?.quoteId) {
@@ -1826,6 +1845,42 @@ export default function OrdersProductionDetailsPage() {
           ) : (
             <div className="mt-2 text-sm text-muted-foreground">Спосіб доставки не вказаний</div>
           )}
+          {record.source === "stored" ? (
+            <div className="mt-3 border-t border-border/50 pt-3">
+              {record.npTtnNumber ? (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">ТТН Нової Пошти</div>
+                    <div className="font-mono text-sm font-semibold">{record.npTtnNumber}</div>
+                    {record.npTtnEstimatedDelivery ? (
+                      <div className="text-xs text-muted-foreground">Орієнтовно: {record.npTtnEstimatedDelivery}</div>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0 px-2 text-xs"
+                    onClick={() => setTtnDialogOpen(true)}
+                  >
+                    Деталі
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full gap-1.5 text-xs"
+                  onClick={() => setTtnDialogOpen(true)}
+                  disabled={!orderDelivery?.deliveryType}
+                >
+                  <PackageCheck className="h-3.5 w-3.5" />
+                  Створити ТТН
+                </Button>
+              )}
+            </div>
+          ) : null}
         </Card>
       </div>
 
@@ -2570,6 +2625,34 @@ export default function OrdersProductionDetailsPage() {
           initialDeliveryType={orderDelivery?.deliveryType ?? ""}
           initialDetails={orderDelivery?.deliveryDetails ?? parseQuoteDeliveryDetails(null)}
           onSaved={setOrderDelivery}
+        />
+      ) : null}
+      {teamId && record ? (
+        <NovaPoshtaTtnDialog
+          open={ttnDialogOpen}
+          onOpenChange={setTtnDialogOpen}
+          teamId={teamId}
+          orderId={record.id}
+          delivery={ttnDelivery}
+          partyType={record.partyType}
+          partyId={record.customerId}
+          defaultEdrpou={record.customerTaxId ?? ""}
+          orderTotal={record.total}
+          existingTtn={ttnExisting}
+          onSaved={(ttn) =>
+            setRecord((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    npTtnNumber: ttn?.number ?? null,
+                    npTtnRef: ttn?.ref ?? null,
+                    npTtnCost: ttn?.cost ?? null,
+                    npTtnEstimatedDelivery: ttn?.estimatedDelivery ?? null,
+                    npTtnCreatedAt: ttn ? new Date().toISOString() : null,
+                  }
+                : prev
+            )
+          }
         />
       ) : null}
     </PageCanvas>

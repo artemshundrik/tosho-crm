@@ -17,7 +17,10 @@ const NOVA_POSHTA_BASE = "https://api.novaposhta.ua/v2.0/json/";
 // Запис (Counterparty.save / InternetDocument.save) додамо разом із його UI.
 const ALLOWED: Record<string, Set<string>> = {
   Address: new Set(["searchSettlements", "searchSettlementStreets", "getWarehouses", "getSettlementAreas"]),
-  Counterparty: new Set(["getCounterparties", "getCounterpartyContactPersons", "getCounterpartyAddresses"]),
+  Counterparty: new Set(["getCounterparties", "getCounterpartyContactPersons", "getCounterpartyAddresses", "save"]),
+  ContactPerson: new Set(["save"]),
+  // Створення/розрахунок ТТН (Phase 2). Дію ініціює користувач у діалозі замовлення.
+  InternetDocument: new Set(["save", "delete", "getDocumentPrice", "getDocumentDeliveryDate"]),
 };
 
 // Фолбек для старих вкладок, що ще шлють лише calledMethod без modelName (Address-only).
