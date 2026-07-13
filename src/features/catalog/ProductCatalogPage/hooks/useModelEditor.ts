@@ -812,12 +812,15 @@ export function useModelEditor({
   /** Counts how many quote_items still reference this method (methods JSONB, no FK). */
   const countMethodUsage = async (methodId: string): Promise<number> => {
     if (!teamId || !methodId) return 0;
+    // NB: pass a JSON *string*, not a JS array. supabase-js serializes an array
+    // arg as a Postgres array literal (cs.{…}) which is invalid for a jsonb
+    // column; a string is passed through verbatim → cs.[{"method_id":…}] → @>.
     const { count, error } = await supabase
       .schema("tosho")
       .from("quote_items")
       .select("id", { count: "exact", head: true })
       .eq("team_id", teamId)
-      .contains("methods", [{ method_id: methodId }]);
+      .contains("methods", JSON.stringify([{ method_id: methodId }]));
     if (error) return 0;
     return count ?? 0;
   };
