@@ -414,6 +414,8 @@ export default function ProductCatalogPage() {
               onAddMethod={modelEditor.handleAddMethod}
               onUpdateMethod={modelEditor.handleUpdateMethod}
               onDeleteMethod={modelEditor.handleDeleteMethod}
+              onCountMethodUsage={modelEditor.countMethodUsage}
+              onCountPrintPositionUsage={modelEditor.countPrintPositionUsage}
             />
 
             {/* Models Grid */}

@@ -35,6 +35,8 @@ interface ContentHeaderProps {
   onAddMethod: (kindId: string, name?: string) => void;
   onUpdateMethod: (kindId: string, methodId: string, name: string) => Promise<boolean>;
   onDeleteMethod: (kindId: string, methodId: string) => void;
+  onCountMethodUsage: (methodId: string) => Promise<number>;
+  onCountPrintPositionUsage: (positionId: string) => Promise<number>;
 }
 
 export function ContentHeader({
@@ -50,6 +52,8 @@ export function ContentHeader({
   onAddMethod,
   onUpdateMethod,
   onDeleteMethod,
+  onCountMethodUsage,
+  onCountPrintPositionUsage,
 }: ContentHeaderProps) {
   const quoteType = selectedType?.quote_type === "merch" || selectedType?.quote_type === "print" ? selectedType.quote_type : "other";
   const quoteTypeLabel = quoteType === "merch" ? "мерч" : quoteType === "print" ? "поліграфія" : "інше";
@@ -67,10 +71,16 @@ export function ContentHeader({
   const [methodModalId, setMethodModalId] = useState<string | null>(null);
   const [methodModalValue, setMethodModalValue] = useState("");
 
+  // Usage counts for the item being edited (null = still checking). Used to
+  // block deleting a place/method that is referenced by existing quotes.
+  const [positionUsage, setPositionUsage] = useState<number | null>(null);
+  const [methodUsage, setMethodUsage] = useState<number | null>(null);
+
   const openAddPositionModal = () => {
     setPositionModalMode("add");
     setPositionModalId(null);
     setPositionModalValue("");
+    setPositionUsage(null);
     setPositionModalOpen(true);
   };
 
@@ -78,13 +88,16 @@ export function ContentHeader({
     setPositionModalMode("edit");
     setPositionModalId(id);
     setPositionModalValue(label);
+    setPositionUsage(null);
     setPositionModalOpen(true);
+    void onCountPrintPositionUsage(id).then(setPositionUsage);
   };
 
   const openAddMethodModal = () => {
     setMethodModalMode("add");
     setMethodModalId(null);
     setMethodModalValue("");
+    setMethodUsage(null);
     setMethodModalOpen(true);
   };
 
@@ -92,7 +105,9 @@ export function ContentHeader({
     setMethodModalMode("edit");
     setMethodModalId(id);
     setMethodModalValue(name);
+    setMethodUsage(null);
     setMethodModalOpen(true);
+    void onCountMethodUsage(id).then(setMethodUsage);
   };
 
   useEffect(() => {
@@ -103,6 +118,8 @@ export function ContentHeader({
     setMethodModalId(null);
     setPositionModalValue("");
     setMethodModalValue("");
+    setPositionUsage(null);
+    setMethodUsage(null);
   }, [selectedKind?.id]);
 
   if (!selectedType || !selectedKind) {
@@ -251,17 +268,26 @@ export function ContentHeader({
           </div>
           <DialogFooter className="gap-2 sm:justify-between">
             {positionModalMode === "edit" && positionModalId ? (
-              <Button
-                variant="destructiveSolid"
-                onClick={() => {
-                  if (!window.confirm("Видалити це місце нанесення?")) return;
-                  onDeletePrintPosition(selectedKind.id, positionModalId);
-                  setPositionModalOpen(false);
-                }}
-                disabled={printPositionSaving}
-              >
-                Видалити
-              </Button>
+              <div className="flex flex-col items-start gap-1">
+                <Button
+                  variant="destructiveSolid"
+                  onClick={() => {
+                    if (!window.confirm("Видалити це місце нанесення?")) return;
+                    onDeletePrintPosition(selectedKind.id, positionModalId);
+                    setPositionModalOpen(false);
+                  }}
+                  disabled={printPositionSaving || positionUsage === null || positionUsage > 0}
+                >
+                  Видалити
+                </Button>
+                {positionUsage === null ? (
+                  <span className="text-[11px] text-muted-foreground">Перевірка використання…</span>
+                ) : positionUsage > 0 ? (
+                  <span className="text-[11px] text-amber-500">
+                    Використовується в {positionUsage} {positionUsage === 1 ? "прорахунку" : "прорахунках"}
+                  </span>
+                ) : null}
+              </div>
             ) : (
               <span />
             )}
@@ -323,17 +349,26 @@ export function ContentHeader({
           </div>
           <DialogFooter className="gap-2 sm:justify-between">
             {methodModalMode === "edit" && methodModalId ? (
-              <Button
-                variant="destructiveSolid"
-                onClick={() => {
-                  if (!window.confirm("Видалити цей метод?")) return;
-                  onDeleteMethod(selectedKind.id, methodModalId);
-                  setMethodModalOpen(false);
-                }}
-                disabled={methodSaving}
-              >
-                Видалити
-              </Button>
+              <div className="flex flex-col items-start gap-1">
+                <Button
+                  variant="destructiveSolid"
+                  onClick={() => {
+                    if (!window.confirm("Видалити цей метод?")) return;
+                    onDeleteMethod(selectedKind.id, methodModalId);
+                    setMethodModalOpen(false);
+                  }}
+                  disabled={methodSaving || methodUsage === null || methodUsage > 0}
+                >
+                  Видалити
+                </Button>
+                {methodUsage === null ? (
+                  <span className="text-[11px] text-muted-foreground">Перевірка використання…</span>
+                ) : methodUsage > 0 ? (
+                  <span className="text-[11px] text-amber-500">
+                    Використовується в {methodUsage} {methodUsage === 1 ? "прорахунку" : "прорахунках"}
+                  </span>
+                ) : null}
+              </div>
             ) : (
               <span />
             )}

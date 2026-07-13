@@ -809,11 +809,47 @@ export function useModelEditor({
   /**
    * Deletes a method from a kind
    */
+  /** Counts how many quote_items still reference this method (methods JSONB, no FK). */
+  const countMethodUsage = async (methodId: string): Promise<number> => {
+    if (!teamId || !methodId) return 0;
+    const { count, error } = await supabase
+      .schema("tosho")
+      .from("quote_items")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId)
+      .contains("methods", [{ method_id: methodId }]);
+    if (error) return 0;
+    return count ?? 0;
+  };
+
+  /** Counts how many quote_items reference this print position (FK column). */
+  const countPrintPositionUsage = async (positionId: string): Promise<number> => {
+    if (!teamId || !positionId) return 0;
+    const { count, error } = await supabase
+      .schema("tosho")
+      .from("quote_items")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId)
+      .eq("print_position_id", positionId);
+    if (error) return 0;
+    return count ?? 0;
+  };
+
   const handleDeleteMethod = async (kindId: string, methodId: string) => {
     if (!teamId || !kindId || !methodId || methodSaving) return;
 
     setMethodSaving(true);
     setMethodError(null);
+
+    // Guard: never silently orphan a method that's still used in quotes.
+    const methodUsage = await countMethodUsage(methodId);
+    if (methodUsage > 0) {
+      setMethodError(
+        `Метод використовується в ${methodUsage} ${methodUsage === 1 ? "прорахунку" : "прорахунках"} — видалення недоступне.`
+      );
+      setMethodSaving(false);
+      return;
+    }
 
     const { error: mapError } = await supabase
       .schema("tosho")
@@ -915,7 +951,17 @@ export function useModelEditor({
    */
   const handleDeletePrintPosition = async (kindId: string, positionId: string) => {
     if (!teamId || !kindId) return;
-    
+
+    // Guard: quote_items.print_position_id has an ON DELETE NO ACTION FK, so a
+    // hard delete of a referenced position would throw. Block it up front.
+    const positionUsage = await countPrintPositionUsage(positionId);
+    if (positionUsage > 0) {
+      setPrintPositionError(
+        `Місце використовується в ${positionUsage} ${positionUsage === 1 ? "прорахунку" : "прорахунках"} — видалення недоступне.`
+      );
+      return;
+    }
+
     const { error } = await supabase
       .schema("tosho")
       .from("catalog_print_positions")
@@ -1905,6 +1951,8 @@ export function useModelEditor({
     handleAddPrintPosition,
     handleDeletePrintPosition,
     handleUpdatePrintPosition,
+    countMethodUsage,
+    countPrintPositionUsage,
     handleImageFileUpload,
     handleVariantImageUrlChange,
     handleVariantImageFileUpload,
