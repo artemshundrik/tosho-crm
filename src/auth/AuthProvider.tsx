@@ -37,7 +37,7 @@ async function resolveOperationalTeamId(userId: string, workspaceId: string | nu
     () =>
       supabase
         .schema("tosho")
-        .from("team_members")
+        .from("team_members" as never)
         .select("team_id")
         .eq("user_id", userId)
         .order("created_at", { ascending: true })

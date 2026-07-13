@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
@@ -502,11 +503,13 @@ async function listQuoteIdsForManager(teamId: string, managerUserId: string) {
   );
 }
 
-function applyDesignTaskActivityStatusFilter<T extends { eq: (column: string, value: unknown) => T }>(
+function applyDesignTaskActivityStatusFilter<T>(
   query: T,
   status?: DesignStatus | null
-) {
-  return status ? query.eq("metadata->>status", status) : query;
+): T {
+  return status
+    ? (query as { eq: (column: string, value: unknown) => T }).eq("metadata->>status", status)
+    : query;
 }
 
 async function listManagerDesignTaskActivityRows(params: {
@@ -3655,7 +3658,7 @@ export default function DesignPage() {
     try {
       const query = supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
 
@@ -4103,7 +4106,7 @@ export default function DesignPage() {
               resolveLabel: getMemberLabel,
               resolveAvatar: getMemberAvatar,
             }
-          ),
+          ) as Json,
         })
         .select("id,entity_id,metadata,title,created_at")
         .single();
@@ -4127,7 +4130,7 @@ export default function DesignPage() {
         };
         const { error: patchError } = await supabase
           .from("activity_log")
-          .update({ metadata: patchedMetadata })
+          .update({ metadata: patchedMetadata as Json })
           .eq("team_id", effectiveTeamId)
           .eq("id", createdRow.id);
         if (patchError) throw patchError;
@@ -4366,7 +4369,7 @@ export default function DesignPage() {
           entity_type: "design_task",
           entity_id: entityId,
           title,
-          metadata: baseMetadata,
+          metadata: baseMetadata as Json,
         })
         .select("id,entity_id,metadata,title,created_at")
         .single();
@@ -4405,7 +4408,7 @@ export default function DesignPage() {
           const patchedMetadata = { ...metadata, standalone_brief_files: briefFiles, has_files: true };
           const { error: patchError } = await supabase
             .from("activity_log")
-            .update({ metadata: patchedMetadata })
+            .update({ metadata: patchedMetadata as Json })
             .eq("team_id", effectiveTeamId)
             .eq("id", createdRow.id);
           if (patchError) throw patchError;
@@ -4659,7 +4662,7 @@ export default function DesignPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;

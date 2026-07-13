@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type ActivityLogPayload = {
@@ -51,6 +52,6 @@ export async function logActivity(payload: ActivityLogPayload) {
     entity_id: payload.entityId ?? null,
     title: payload.title ?? null,
     href: payload.href ?? null,
-    metadata: payload.metadata ?? {},
+    metadata: (payload.metadata ?? {}) as Json,
   });
 }

@@ -1,13 +1,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { PostgrestClient } from "@supabase/postgrest-js";
+import type { Database } from "./database.types";
 
-// NOTE: generated schema types live in ./database.types.ts (`Database`). Flipping this
-// client to SupabaseClient<Database> surfaces ~119 pre-existing schema-drift errors across
-// the giant pages — activation is a dedicated follow-up (see docs/AUDIT-2026-07-11.md).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyPostgrestClient = PostgrestClient<any, any, any>;
+// Typed against the generated schema (./database.types.ts): column names, row shapes, and
+// insert/update payloads are checked at compile time.
+type AnySupabaseClient = SupabaseClient<Database>;
+type AnyPostgrestClient = ReturnType<AnySupabaseClient["schema"]>;
 
 let cachedSupabase: AnySupabaseClient | null = null;
 let cachedDb: AnyPostgrestClient | null = null;
@@ -25,7 +22,7 @@ export function getSupabaseClient(): AnySupabaseClient {
   const url = requireEnv("VITE_SUPABASE_URL");
   const key = requireEnv("VITE_SUPABASE_ANON_KEY");
 
-  cachedSupabase = createClient(url, key, {
+  cachedSupabase = createClient<Database>(url, key, {
     global: {
       headers: {
         apikey: key,
@@ -80,7 +77,9 @@ export const db: AnyPostgrestClient = new Proxy({} as AnyPostgrestClient, {
 }) as AnyPostgrestClient;
 
 export async function supabaseHealthCheck() {
-  return db.from("_healthcheck").select("*").limit(1);
+  // `db` is the tosho-schema client; its schema generic isn't bound here, so `.from()`
+  // types the relation as `never` — cast the table name (runtime unchanged).
+  return db.from("_healthcheck" as never).select("*").limit(1);
 }
 
 export function isRealtimeDisabledForSession(): boolean {

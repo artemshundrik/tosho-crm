@@ -134,7 +134,7 @@ export async function syncDesignOutputFilesToQuoteAttachments(params: {
 
   if (rowsToInsert.length === 0) return 0;
 
-  const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert(rowsToInsert);
+  const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert(rowsToInsert as never);
   if (insertError) throw insertError;
 
   return rowsToInsert.length;

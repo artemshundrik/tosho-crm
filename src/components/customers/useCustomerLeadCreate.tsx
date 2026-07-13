@@ -355,7 +355,7 @@ export const useCustomerLeadCreate = ({
         return supabase
           .schema("tosho")
           .from("customers")
-          .insert(insertPayload)
+          .insert(insertPayload as never)
           .select("id,name,legal_name,logo_url")
           .single();
       };
@@ -524,7 +524,7 @@ export const useCustomerLeadCreate = ({
         return supabase
           .schema("tosho")
           .from("leads")
-          .insert(payload)
+          .insert(payload as never)
           .select("id,company_name,legal_name,logo_url")
           .single();
       };

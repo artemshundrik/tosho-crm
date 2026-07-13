@@ -710,7 +710,7 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
     const { error } = await supabase
       .schema("tosho")
       .from("team_member_profiles")
-      .upsert(variant, { onConflict: "workspace_id,user_id" });
+      .upsert(variant as never, { onConflict: "workspace_id,user_id" });
 
     if (!error) {
       updateCachedWorkspaceMemberProfile(input.workspaceId, input.userId, {

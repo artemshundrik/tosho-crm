@@ -2701,7 +2701,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const { error: insertError } = await supabase
           .schema("tosho")
           .from("customers")
-          .insert(payload);
+          .insert(payload as never);
         if (insertError) {
           const message = insertError.message ?? "";
           if (message.includes("column")) {
@@ -2709,7 +2709,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             const { error: fallbackError } = await supabase
               .schema("tosho")
               .from("customers")
-              .insert(fallbackPayload);
+              .insert(fallbackPayload as never);
             if (fallbackError) throw fallbackError;
           } else {
             throw insertError;
@@ -2913,7 +2913,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const { error: insertError } = await supabase
           .schema("tosho")
           .from("leads")
-          .insert(payload);
+          .insert(payload as never);
         if (insertError) {
           const message = insertError.message ?? "";
           if (message.includes("column") && message.includes("logo_url")) {
@@ -2922,7 +2922,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             const { error: fallbackError } = await supabase
               .schema("tosho")
               .from("leads")
-              .insert(fallbackPayload);
+              .insert(fallbackPayload as never);
             if (fallbackError) throw fallbackError;
           } else if (message.includes("column") && message.includes("manager_user_id")) {
             const fallbackPayload = { ...payload };
@@ -2930,7 +2930,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             const { error: fallbackError } = await supabase
               .schema("tosho")
               .from("leads")
-              .insert(fallbackPayload);
+              .insert(fallbackPayload as never);
             if (fallbackError) throw fallbackError;
           } else {
             throw insertError;
@@ -3021,7 +3021,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         const { error: customerInsertError } = await supabase
           .schema("tosho")
           .from("customers")
-          .insert(customerPayload);
+          .insert(customerPayload as never);
         if (customerInsertError) throw customerInsertError;
 
         const { error: leadDeleteError } = await supabase

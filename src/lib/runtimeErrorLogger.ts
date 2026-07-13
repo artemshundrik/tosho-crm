@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { buildUserNameFromMetadata } from "@/lib/userName";
 
 type RuntimeErrorPayload = {
@@ -47,7 +48,7 @@ export async function logRuntimeError(payload: RuntimeErrorPayload) {
     source: payload.source,
     title: payload.title ?? null,
     href: payload.href ?? null,
-    metadata: payload.metadata ?? {},
+    metadata: (payload.metadata ?? {}) as Json,
   });
 
   if (error) throw error;

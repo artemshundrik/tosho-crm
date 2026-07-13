@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -2261,7 +2262,7 @@ export default function DesignTaskPage() {
           assigneeUserId: rowAssigneeUserId,
           assignedAt: rowAssignedAt,
           metadata: meta,
-          methodsCount: meta.methods_count ?? (item?.methods?.length ?? 0),
+          methodsCount: (meta.methods_count as number | undefined) ?? ((item?.methods as unknown[] | null | undefined)?.length ?? 0),
           hasFiles:
             typeof meta.has_files === "boolean" ? meta.has_files : parsedStandaloneBriefFiles.length > 0,
           designDeadline: rowDesignDeadline,
@@ -3846,7 +3847,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -4025,7 +4026,7 @@ export default function DesignTaskPage() {
 
     const { error: updateError } = await supabase
       .from("activity_log")
-      .update({ metadata: nextMetadata })
+      .update({ metadata: nextMetadata as Json })
       .eq("id", task.id)
       .eq("team_id", effectiveTeamId);
     if (updateError) throw updateError;
@@ -4263,14 +4264,14 @@ export default function DesignTaskPage() {
 
         if (isUuid(task.quoteId)) {
           const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-            team_id: effectiveTeamId,
+            team_id: effectiveTeamId as string,
             quote_id: task.quoteId,
-            file_name: nextAttachment.file_name,
+            file_name: nextAttachment.file_name as string,
             mime_type: uploadResult.contentType || file.type || null,
             file_size: nextAttachment.file_size,
-            storage_bucket: nextAttachment.storage_bucket,
-            storage_path: nextAttachment.storage_path,
-            uploaded_by: userId,
+            storage_bucket: nextAttachment.storage_bucket as string,
+            storage_path: nextAttachment.storage_path as string,
+            uploaded_by: userId as string,
           });
           if (insertError) throw insertError;
         }
@@ -4298,7 +4299,7 @@ export default function DesignTaskPage() {
 
         const { error: updateError } = await supabase
           .from("activity_log")
-          .update({ metadata: nextMetadata })
+          .update({ metadata: nextMetadata as Json })
           .eq("id", task.id)
           .eq("team_id", effectiveTeamId);
         if (updateError) throw updateError;
@@ -4372,8 +4373,8 @@ export default function DesignTaskPage() {
           .from("quote_attachments")
           .delete()
           .eq("quote_id", task.quoteId)
-          .eq("storage_bucket", target.storage_bucket)
-          .eq("storage_path", target.storage_path);
+          .eq("storage_bucket", target.storage_bucket as string)
+          .eq("storage_path", target.storage_path as string);
         if (deleteError) throw deleteError;
       } else {
         const currentFiles = Array.isArray(task.metadata?.standalone_brief_files)
@@ -4394,7 +4395,7 @@ export default function DesignTaskPage() {
         };
         const { error: updateError } = await supabase
           .from("activity_log")
-          .update({ metadata: nextMetadata })
+          .update({ metadata: nextMetadata as Json })
           .eq("id", task.id)
           .eq("team_id", effectiveTeamId);
         if (updateError) throw updateError;
@@ -4492,8 +4493,8 @@ export default function DesignTaskPage() {
       const { data: latestRow, error: latestRowError } = await supabase
         .from("activity_log")
         .select("metadata")
-        .eq("id", task?.id)
-        .eq("team_id", effectiveTeamId)
+        .eq("id", task?.id as string)
+        .eq("team_id", effectiveTeamId as string)
         .maybeSingle();
       if (latestRowError) throw latestRowError;
 
@@ -4550,9 +4551,9 @@ export default function DesignTaskPage() {
       };
       const { data: updatedRows, error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
-        .eq("id", task?.id)
-        .eq("team_id", effectiveTeamId)
+        .update({ metadata: nextMetadata as Json })
+        .eq("id", task?.id as string)
+        .eq("team_id", effectiveTeamId as string)
         .select("id");
       if (updateError) throw updateError;
       // Guard against a silent no-op write (e.g. RLS/lock filtering the row):
@@ -4782,7 +4783,7 @@ export default function DesignTaskPage() {
       const nextMetadata = buildOutputSelectionMetadata(task.metadata ?? {}, nextSelectedByKind, actorLabel);
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -4904,7 +4905,7 @@ export default function DesignTaskPage() {
 
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata, entity_id: quoteCandidate.id })
+        .update({ metadata: nextMetadata as Json, entity_id: quoteCandidate.id })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5146,7 +5147,7 @@ export default function DesignTaskPage() {
 
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5343,7 +5344,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5405,7 +5406,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5515,7 +5516,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5643,7 +5644,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -5815,7 +5816,7 @@ export default function DesignTaskPage() {
     };
     const { error: updateError } = await supabase
       .from("activity_log")
-      .update({ metadata: nextMetadata })
+      .update({ metadata: nextMetadata as Json })
       .eq("id", task.id)
       .eq("team_id", effectiveTeamId);
     if (updateError) throw updateError;
@@ -6025,7 +6026,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -6138,7 +6139,7 @@ export default function DesignTaskPage() {
     try {
       const query = supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       const { error: updateError } = await query;
@@ -6267,7 +6268,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -6353,7 +6354,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -6476,7 +6477,7 @@ export default function DesignTaskPage() {
     try {
       const query = supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       const { error: updateError } = await query;
@@ -6613,7 +6614,7 @@ export default function DesignTaskPage() {
     try {
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
@@ -7592,7 +7593,7 @@ export default function DesignTaskPage() {
         };
         const { error: taskUpdateError } = await supabase
           .from("activity_log")
-          .update({ metadata: nextMetadata })
+          .update({ metadata: nextMetadata as Json })
           .eq("id", currentTask.id)
           .eq("team_id", effectiveTeamId);
         if (taskUpdateError) throw taskUpdateError;
@@ -7633,7 +7634,7 @@ export default function DesignTaskPage() {
           };
           const { error: taskUpdateError } = await supabase
             .from("activity_log")
-            .update({ metadata: nextMetadata })
+            .update({ metadata: nextMetadata as Json })
             .eq("id", currentTask.id)
             .eq("team_id", effectiveTeamId);
           if (taskUpdateError) throw taskUpdateError;
@@ -7826,7 +7827,7 @@ export default function DesignTaskPage() {
 
       const { error: updateError } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", task.id)
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;

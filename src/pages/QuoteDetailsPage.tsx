@@ -70,6 +70,7 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
@@ -2797,7 +2798,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         const [profilesResult, authResult] = await Promise.all([
           supabase
-            .from("team_member_profiles")
+            .from("team_member_profiles" as never)
             .select("user_id,first_name,last_name,full_name")
             .in("user_id", genericMemberIds),
           supabase.auth.getUser(),
@@ -3099,7 +3100,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       const { error } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata, entity_id: quoteId })
+        .update({ metadata: nextMetadata as Json, entity_id: quoteId })
         .eq("id", candidate.id)
         .eq("team_id", teamId);
       if (error) throw error;
@@ -3231,7 +3232,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           entity_type: "design_task",
           entity_id: quoteId,
           title: `Дизайн: ${modelName}`,
-          metadata: designTaskMetadata,
+          metadata: designTaskMetadata as Json,
         })
         .select("id, metadata")
         .single();
@@ -3302,7 +3303,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       const { error } = await supabase
         .from("activity_log")
-        .update({ metadata: nextMetadata })
+        .update({ metadata: nextMetadata as Json })
         .eq("id", designTask.id)
         .eq("team_id", teamId);
       if (error) throw error;
@@ -4057,7 +4058,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           if (!nextMetadata) continue;
           const { error: syncError } = await supabase
             .from("activity_log")
-            .update({ metadata: nextMetadata })
+            .update({ metadata: nextMetadata as Json })
             .eq("id", row.id)
             .eq("team_id", teamId);
           if (syncError) throw syncError;
@@ -4209,7 +4210,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             file_size: selectedDesignOutputFile.file_size,
             storage_bucket: selectedDesignOutputFile.storage_bucket,
             storage_path: selectedDesignOutputFile.storage_path,
-            uploaded_by: selectedDesignOutputFile.uploaded_by ?? userId ?? null,
+            uploaded_by: (selectedDesignOutputFile.uploaded_by ?? userId ?? null) as string,
           });
           if (insertError) throw insertError;
         }
@@ -4605,7 +4606,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const { error: insertItemsError } = await supabase
           .schema("tosho")
           .from("quote_items")
-          .insert(itemRows);
+          .insert(itemRows as never);
         if (insertItemsError) throw insertItemsError;
       }
 
@@ -4649,7 +4650,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               storage_bucket: (row.storage_bucket as string | null) ?? null,
               storage_path: (row.storage_path as string | null) ?? null,
               uploaded_by: (row.uploaded_by as string | null) ?? null,
-            }))
+            })) as never
           );
         if (insertAttachmentsError) throw insertAttachmentsError;
       }
@@ -5528,7 +5529,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             body,
             mentionedUserIds: mentionUserIdsList,
           });
-          data = (fallback?.comment as InsertedCommentRow | null) ?? null;
+          data = ((fallback?.comment as InsertedCommentRow | null) ?? null) as unknown as {
+            id: string;
+            body: string;
+            created_at: string;
+            created_by: string;
+          } | null;
           if (hasMentionsInBody) {
             mentionsHandledViaServer = !fallback?.mentionError;
           }

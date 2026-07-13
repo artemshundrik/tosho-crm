@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { Save, Loader2, Camera, Globe, BriefcaseBusiness, Hourglass, BellRing, Send } from "lucide-react";
 import { supabase, db } from "@/lib/supabaseClient";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
@@ -57,6 +59,10 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   }
   return fallback;
 };
+
+// Strictly-typed handle over the shared tosho-schema db client so the
+// Telegram-settings reads/writes below resolve to real Row/Insert/Update types.
+const tdb = db as unknown as SupabaseClient<Database, "tosho">;
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
@@ -156,7 +162,7 @@ export function ProfilePage() {
     if (!userId) return;
     let active = true;
     (async () => {
-      const { data } = await db
+      const { data } = await tdb
         .from("user_notification_settings")
         .select("telegram_chat_id,telegram_username,telegram_enabled")
         .eq("user_id", userId)
@@ -174,7 +180,7 @@ export function ProfilePage() {
     try {
       const nonce = `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-      const { error } = await db
+      const { error } = await tdb
         .from("telegram_link_tokens")
         .insert({ nonce, user_id: userId, expires_at: expiresAt });
       if (error) throw error;
@@ -191,7 +197,7 @@ export function ProfilePage() {
     if (!userId) return;
     setTgBusy(true);
     try {
-      const { data } = await db
+      const { data } = await tdb
         .from("user_notification_settings")
         .select("telegram_chat_id,telegram_username,telegram_enabled")
         .eq("user_id", userId)
@@ -212,7 +218,7 @@ export function ProfilePage() {
     if (!userId) return;
     setTgBusy(true);
     try {
-      const { error } = await db
+      const { error } = await tdb
         .from("user_notification_settings")
         .update({ telegram_chat_id: null, telegram_enabled: false })
         .eq("user_id", userId);
@@ -233,7 +239,7 @@ export function ProfilePage() {
     if (!userId || tgChatId == null) return;
     const next = !tgEnabled;
     setTgEnabled(next);
-    const { error } = await db
+    const { error } = await tdb
       .from("user_notification_settings")
       .update({ telegram_enabled: next })
       .eq("user_id", userId);

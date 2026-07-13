@@ -1636,19 +1636,19 @@ export function TeamMembersPage() {
               scope === "workspace_user"
                 ? await supabase
                     .schema(schemaName)
-                    .from(attempt.tableName)
+                    .from(attempt.tableName as never)
                     .delete()
                     .eq("workspace_id", workspaceId)
                     .eq("user_id", memberToDelete.user_id)
                 : scope === "membership_id"
                   ? await supabase
                       .schema(schemaName)
-                      .from(attempt.tableName)
+                      .from(attempt.tableName as never)
                       .delete()
                       .eq("id", membershipId as string)
                   : await supabase
                       .schema(schemaName)
-                      .from(attempt.tableName)
+                      .from(attempt.tableName as never)
                       .delete()
                       .eq("team_id", workspaceId)
                       .eq("user_id", memberToDelete.user_id);
@@ -1988,20 +1988,20 @@ export function TeamMembersPage() {
                 scope === "workspace_user"
                   ? await supabase
                       .schema(schemaName)
-                      .from(attempt.tableName)
-                      .update(attempt.payload)
+                      .from(attempt.tableName as never)
+                      .update(attempt.payload as never)
                       .eq("workspace_id", workspaceId)
                       .eq("user_id", editMember.user_id)
                   : scope === "membership_id"
                     ? await supabase
                         .schema(schemaName)
-                        .from(attempt.tableName)
-                        .update(attempt.payload)
+                        .from(attempt.tableName as never)
+                        .update(attempt.payload as never)
                         .eq("id", membershipId as string)
                     : await supabase
                         .schema(schemaName)
-                        .from(attempt.tableName)
-                        .update(attempt.payload)
+                        .from(attempt.tableName as never)
+                        .update(attempt.payload as never)
                         .eq("team_id", workspaceId)
                         .eq("user_id", editMember.user_id);
 

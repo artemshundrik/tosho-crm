@@ -40,7 +40,7 @@ export async function acquireEntityLock(params: {
     p_entity_type: params.entityType,
     p_entity_id: params.entityId,
     p_user_id: params.userId,
-    p_user_label: params.userLabel?.trim() || null,
+    p_user_label: params.userLabel?.trim() || undefined,
     p_ttl_seconds: params.ttlSeconds ?? 45,
   });
   if (error) throw error;

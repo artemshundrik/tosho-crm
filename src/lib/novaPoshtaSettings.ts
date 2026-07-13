@@ -72,7 +72,7 @@ export async function loadNovaPoshtaSettings(teamId: string): Promise<NovaPoshta
   if (!teamId) return null;
   const { data, error } = await supabase
     .schema("tosho")
-    .from("nova_poshta_settings")
+    .from("nova_poshta_settings" as never)
     .select("*")
     .eq("team_id", teamId)
     .maybeSingle<NovaPoshtaSettingsRow>();
@@ -103,7 +103,7 @@ export async function saveNovaPoshtaSettings(teamId: string, settings: NovaPosht
   };
   const { error } = await supabase
     .schema("tosho")
-    .from("nova_poshta_settings")
-    .upsert(row, { onConflict: "team_id" });
+    .from("nova_poshta_settings" as never)
+    .upsert(row as never, { onConflict: "team_id" });
   if (error) throw error;
 }

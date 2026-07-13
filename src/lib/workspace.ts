@@ -18,7 +18,7 @@ const isMissingFunctionError = (message: string) => {
 };
 
 const tryRpcWorkspaceId = async (rpcName: string): Promise<string | null> => {
-  const { data, error } = await supabase.schema("tosho").rpc(rpcName);
+  const { data, error } = await supabase.schema("tosho").rpc(rpcName as "my_workspace_id");
   if (!error && typeof data === "string" && data.trim().length > 0) {
     return data;
   }
@@ -85,7 +85,7 @@ export async function resolveWorkspaceId(
     for (const tableName of membershipTables) {
       const { data: rows, error } = await supabase
         .schema(schemaName)
-        .from(tableName)
+        .from(tableName as never)
         .select("workspace_id")
         .eq("user_id", userId)
         .limit(1);
@@ -147,7 +147,7 @@ export async function resolveWorkspaceMembership(
   for (const candidate of tableCandidates) {
     const result = await supabase
       .schema(candidate.schema)
-      .from(candidate.table)
+      .from(candidate.table as never)
       .select("access_role,job_role")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userId)

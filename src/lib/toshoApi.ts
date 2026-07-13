@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { Database } from "@/lib/database.types";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import {
   buildCompanySearchVariants,
@@ -397,7 +398,7 @@ export async function listQuotes(params: ListQuotesParams) {
       }
 
       if (status && status !== "all") {
-        query = query.eq("status", status);
+        query = query.eq("status", status as Database["tosho"]["Enums"]["quote_status"]);
       }
 
       if (managerUserId?.trim()) {
@@ -837,7 +838,7 @@ export async function createQuote(params: {
     const { data: inserted, error } = await supabase
       .schema("tosho")
       .from("quotes")
-      .insert(data)
+      .insert(data as never)
       .select("id")
       .single();
     handleError(error);
@@ -989,7 +990,7 @@ export async function getQuoteSummary(quoteId: string) {
             .schema("tosho")
             .from("customers")
             .select(withLogo ? "name,legal_name,logo_url" : "name,legal_name")
-            .eq("id", summary.customer_id)
+            .eq("id", summary.customer_id!)
             .maybeSingle();
         };
 
@@ -1298,7 +1299,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
   let { data, error } = await supabase
     .schema("tosho")
     .from("quote_item_runs")
-    .upsert(payload, { onConflict: "id" })
+    .upsert(payload as never, { onConflict: "id" })
     .select(QUOTE_RUN_SELECT);
   if (
     error &&
@@ -1316,7 +1317,7 @@ export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
     ({ data, error } = await supabase
       .schema("tosho")
       .from("quote_item_runs")
-      .upsert(fallbackPayload, { onConflict: "id" })
+      .upsert(fallbackPayload as never, { onConflict: "id" })
       .select(QUOTE_RUN_LEGACY_SELECT));
   }
   handleError(error);
@@ -1364,11 +1365,11 @@ export async function listStatusHistory(quoteId: string, teamId?: string | null)
 
 export async function setStatus(params: { quoteId: string; status: string; note?: string }) {
   try {
-    const { data, error } = await supabase.rpc("tosho.set_quote_status", {
+    const { data, error } = await supabase.rpc("tosho.set_quote_status" as never, {
       p_quote_id: params.quoteId,
       p_status: params.status,
       p_note: params.note ?? null,
-    });
+    } as never);
     handleError(error);
     return data;
   } catch (error: unknown) {
@@ -1377,7 +1378,7 @@ export async function setStatus(params: { quoteId: string; status: string; note?
       const { error: updateError } = await supabase
         .schema("tosho")
         .from("quotes")
-        .update({ status: params.status })
+        .update({ status: params.status as Database["tosho"]["Enums"]["quote_status"] })
         .eq("id", params.quoteId);
       handleError(updateError);
       return true;
@@ -1446,7 +1447,7 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
     await deleteAttachmentStorage(withTeam);
     const tables = ["quote_items", "quote_comments", "quote_attachments", "quote_status_history"];
     for (const table of tables) {
-      const q = schema.from(table).delete().eq("quote_id", quoteId);
+      const q = schema.from(table as never).delete().eq("quote_id", quoteId);
       const { error } = withTeam && teamId ? await q.eq("team_id", teamId) : await q;
       handleError(error);
     }
@@ -2386,7 +2387,7 @@ export async function createQuoteSet(params: {
     const { data, error } = await supabase
       .schema("tosho")
       .from("quote_sets")
-      .insert(payload)
+      .insert(payload as never)
       .select(selectColumns)
       .single();
     handleError(error);

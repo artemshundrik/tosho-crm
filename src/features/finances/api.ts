@@ -1,6 +1,7 @@
 // Finance module — Supabase data access (tosho schema). See docs/FINANCES_DESIGN.md.
 
 import { supabase } from "@/lib/supabaseClient";
+import type { Json } from "@/lib/database.types";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import type {
   ExpenseCategoryKind,
@@ -133,7 +134,7 @@ const serializeLegalEntity = (input: LegalEntityInput) => ({
   edrpou: input.edrpou?.trim() || null,
   ipn: input.ipn?.trim() || null,
   iban: input.iban?.trim() || null,
-  requisites: input.requisites ?? {},
+  requisites: (input.requisites ?? {}) as Json,
   is_active: input.isActive ?? true,
   ...(input.sortOrder !== undefined ? { sort_order: input.sortOrder } : {}),
 });

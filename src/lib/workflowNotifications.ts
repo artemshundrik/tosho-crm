@@ -28,7 +28,7 @@ async function resolveTeamMembers(teamId?: string | null): Promise<TeamMemberRol
   // Roles (access_role / job_role) are stored separately in tosho.memberships_view keyed by user_id.
   const idResults = await Promise.all([
     supabase.from("team_members").select("user_id").eq("team_id", teamId as string),
-    supabase.schema("tosho").from("team_members").select("user_id").eq("team_id", teamId as string),
+    supabase.schema("tosho").from("team_members" as never).select("user_id").eq("team_id", teamId as string),
   ]);
   const userIds = new Set<string>();
   for (const result of idResults) {
@@ -82,7 +82,7 @@ async function resolveDesignTaskManagerUserId(designTaskId?: string | null): Pro
   const { data, error } = await supabase
     .from("activity_log")
     .select("metadata")
-    .eq("id", designTaskId)
+    .eq("id", designTaskId as string)
     .maybeSingle();
   if (error) {
     console.warn("Failed to resolve design task manager for workflow notifications", error);

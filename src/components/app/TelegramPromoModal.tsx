@@ -50,12 +50,13 @@ export function TelegramPromoModal() {
     const timer = setTimeout(() => {
       void (async () => {
         const { data } = await db
-          .from("user_notification_settings")
+          .from("user_notification_settings" as never)
           .select("telegram_chat_id")
           .eq("user_id", userId)
           .maybeSingle();
         if (!active) return;
-        if (data?.telegram_chat_id == null) {
+        const row = data as unknown as { telegram_chat_id?: string | null } | null;
+        if (row?.telegram_chat_id == null) {
           setOpen(true);
           try {
             localStorage.setItem(COUNT_KEY, String(count + 1));

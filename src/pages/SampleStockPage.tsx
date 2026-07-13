@@ -641,7 +641,7 @@ export default function SampleStockPage() {
           p_team_id: teamId,
           p_movement_type: movement.type,
           p_quantity: quantity,
-          p_comment: movement.comment.trim() || null,
+          p_comment: movement.comment.trim() || undefined,
         });
 
       if (movementErrorResponse) throw movementErrorResponse;

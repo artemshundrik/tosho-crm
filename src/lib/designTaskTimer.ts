@@ -373,7 +373,7 @@ export async function startDesignTaskTimer(params: {
     insertPayload.change_request_id = params.changeRequestId;
   }
 
-  const { error } = await supabase.from("design_task_timer_sessions").insert(insertPayload);
+  const { error } = await supabase.from("design_task_timer_sessions").insert(insertPayload as never);
   if (error) throw error;
   dispatchTimerUpdated({ teamId: params.teamId, taskId: params.taskId, userId: params.userId });
 }

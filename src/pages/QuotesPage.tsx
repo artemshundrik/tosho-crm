@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
+import type { Database, Json } from "@/lib/database.types";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
@@ -2486,7 +2487,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             entity_type: "design_task",
             entity_id: created.id,
             title: `Дизайн: ${modelName}`,
-            metadata: designTaskMetadata,
+            metadata: designTaskMetadata as Json,
           })
           .select("id")
           .single();
@@ -2854,7 +2855,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             print_width_mm: primaryPrint?.print_width_mm ?? null,
             print_height_mm: primaryPrint?.print_height_mm ?? null,
             methods: methodsPayload,
-            metadata: Object.keys(itemMetadata).length > 0 ? itemMetadata : null,
+            metadata: Object.keys(itemMetadata).length > 0 ? (itemMetadata as Json) : null,
             unit: normalizeUnitLabel(product.quantityUnit),
           };
 
@@ -2864,7 +2865,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             /column|schema cache|could not find/i.test(itemError.message ?? "") &&
             /metadata/i.test(itemError.message ?? "")
           ) {
-            const fallbackItemPayload = omitPayloadKeys(itemPayload, ["metadata"]);
+            const fallbackItemPayload = omitPayloadKeys(itemPayload, ["metadata"]) as Database["tosho"]["Tables"]["quote_items"]["Insert"];
             ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
           }
           if (
@@ -2878,7 +2879,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               "print_position_id",
               "print_width_mm",
               "print_height_mm",
-            ]);
+            ]) as Database["tosho"]["Tables"]["quote_items"]["Insert"];
             ({ error: itemError } = await supabase.schema("tosho").from("quote_items").insert(fallbackItemPayload));
           }
           if (itemError) throw itemError;
@@ -2899,14 +2900,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }));
 
           let runRowsToInsert: Array<Record<string, unknown>> = runRows;
-          let { error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert);
+          let { error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]);
           if (
             runsError &&
             /column/i.test(runsError.message ?? "") &&
             /team_id/i.test(runsError.message ?? "")
           ) {
             runRowsToInsert = runRowsToInsert.map((row) => omitPayloadKeys(row, ["team_id"]));
-            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert));
+            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]));
           }
           if (
             runsError &&
@@ -2921,7 +2922,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 "vat_rate",
               ])
             );
-            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert));
+            ({ error: runsError } = await supabase.schema("tosho").from("quote_item_runs").insert(runRowsToInsert as Database["tosho"]["Tables"]["quote_item_runs"]["Insert"][]));
           }
           if (runsError) throw runsError;
 
@@ -3501,7 +3502,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         entity_type: "design_task",
         entity_id: params.quoteId,
         title: `Дизайн: ${params.modelName}`,
-        metadata: designTaskMetadata,
+        metadata: designTaskMetadata as Json,
       })
       .select("id")
       .single();
@@ -4761,7 +4762,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       });
 
       if (itemRows.length > 0) {
-        let { error: insertItemsError } = await supabase.schema("tosho").from("quote_items").insert(itemRows);
+        let { error: insertItemsError } = await supabase.schema("tosho").from("quote_items").insert(itemRows as Database["tosho"]["Tables"]["quote_items"]["Insert"][]);
         if (
           insertItemsError &&
           /column/i.test(insertItemsError.message ?? "") &&
@@ -4771,7 +4772,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             .schema("tosho")
             .from("quote_items")
             .insert(
-              itemRows.map(({ metadata: _metadata, ...item }) => item)
+              itemRows.map(({ metadata: _metadata, ...item }) => item) as Database["tosho"]["Tables"]["quote_items"]["Insert"][]
             ));
         }
         if (insertItemsError) throw insertItemsError;

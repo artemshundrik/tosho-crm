@@ -477,13 +477,17 @@ export default function NotificationsPage() {
     let active = true;
     (async () => {
       const { data } = await db
-        .from("user_notification_settings")
+        .from("user_notification_settings" as never)
         .select("telegram_chat_id,channel_prefs")
         .eq("user_id", userId)
         .maybeSingle();
       if (!active) return;
-      setChannelPrefs((data?.channel_prefs as Record<string, Record<string, boolean>> | null) ?? {});
-      setTelegramLinked(data?.telegram_chat_id != null);
+      const row = data as unknown as {
+        channel_prefs?: Record<string, Record<string, boolean>> | null;
+        telegram_chat_id?: string | null;
+      } | null;
+      setChannelPrefs((row?.channel_prefs as Record<string, Record<string, boolean>> | null) ?? {});
+      setTelegramLinked(row?.telegram_chat_id != null);
     })();
     return () => {
       active = false;
@@ -503,8 +507,8 @@ export default function NotificationsPage() {
     setChannelPrefs(nextPrefs);
     setChannelPrefsBusy(true);
     const { error } = await db
-      .from("user_notification_settings")
-      .upsert({ user_id: userId, channel_prefs: nextPrefs }, { onConflict: "user_id" });
+      .from("user_notification_settings" as never)
+      .upsert({ user_id: userId, channel_prefs: nextPrefs } as never, { onConflict: "user_id" });
     setChannelPrefsBusy(false);
     if (error) {
       setChannelPrefs(channelPrefs);
