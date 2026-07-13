@@ -6154,7 +6154,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 zoomImageUrl={productPreview.zoomUrl}
                                 alt={modelLabel ?? "Товар"}
                                 loadStrategy="eager"
-                                className="h-20 w-20 rounded-2xl border-border/50 bg-muted/20 [&>div]:rounded-2xl"
+                                className="h-20 w-20 rounded-2xl border-border/50 bg-muted/20 ring-1 ring-border/50 [&>div]:rounded-2xl"
                                 imageClassName="object-cover"
                               />
                             ) : (
@@ -6169,7 +6169,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 section below never rides up under the product image when
                                 there are no spec chips (e.g. merch without нанесення). */}
                             <div className="sm:min-h-20">
-                            <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                                   <div className="truncate text-xl font-semibold tracking-tight text-foreground">{item.title}</div>
@@ -6217,7 +6217,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   ).trim();
                                   const renderLinkButton = (url: string, label: string, hint: string) =>
                                     url ? (
-                                      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+                                      <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 transition-colors">
                                         <a href={url} target="_blank" rel="noopener noreferrer">
                                           {label}
                                           <ExternalLink className="h-3.5 w-3.5" />
@@ -6227,7 +6227,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 gap-1.5"
+                                        className="h-8 gap-1.5 border-dashed text-muted-foreground/70"
                                         disabled
                                         title={hint}
                                       >
