@@ -85,6 +85,12 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { DesignTaskProductPicker } from "@/components/design/DesignTaskProductPicker";
+import {
+  designTaskTypeShowsProduct,
+  serializeDesignTaskProduct,
+  type DesignTaskProduct,
+} from "@/lib/designTaskProduct";
 import { ACTIVE_DESIGN_STATUSES, calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
@@ -904,6 +910,7 @@ export default function DesignPage() {
   const [createDeadlinePopoverOpen, setCreateDeadlinePopoverOpen] = useState(false);
   const [createDesignTaskType, setCreateDesignTaskType] = useState<DesignTaskType | null>(null);
   const [createDesignTaskTypePopoverOpen, setCreateDesignTaskTypePopoverOpen] = useState(false);
+  const [createProduct, setCreateProduct] = useState<DesignTaskProduct | null>(null);
   const createDeadlineTime = useMemo(() => {
     if (!createDeadline) return DEFAULT_CREATE_DEADLINE_TIME;
     return `${String(createDeadline.getHours()).padStart(2, "0")}:${String(createDeadline.getMinutes()).padStart(2, "0")}`;
@@ -4102,6 +4109,9 @@ export default function DesignPage() {
               deadline,
               methods_count: 0,
               has_files: createFiles.length > 0,
+              ...(designTaskTypeShowsProduct(createDesignTaskType) && createProduct?.catalogModelId
+                ? { product: serializeDesignTaskProduct(createProduct) }
+                : {}),
             },
             collaboratorUserIds,
             {
@@ -4238,6 +4248,7 @@ export default function DesignPage() {
       setCreateCustomerType("customer");
       setCreateCustomerSearch("");
       setCreateDesignTaskType(null);
+      setCreateProduct(null);
       setCreateDeadline(createDefaultDesignDeadline());
       setCreateDeadlinePopoverOpen(false);
       setCreateManagerUserId(userId ?? "none");
@@ -6448,6 +6459,7 @@ export default function DesignPage() {
             setCreateCustomerType("customer");
             setCreateCustomerPopoverOpen(false);
             setCreateDesignTaskType(null);
+            setCreateProduct(null);
             setCreateDesignTaskTypePopoverOpen(false);
             setCreateAssigneePopoverOpen(false);
             setCreateCollaboratorIds([]);
@@ -6859,6 +6871,13 @@ export default function DesignPage() {
                 </PopoverContent>
               </Popover>
             </div>
+            {designTaskTypeShowsProduct(createDesignTaskType) ? (
+              <DesignTaskProductPicker
+                teamId={effectiveTeamId}
+                value={createProduct}
+                onChange={setCreateProduct}
+              />
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
               <Textarea

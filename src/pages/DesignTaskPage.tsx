@@ -162,6 +162,8 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import { DesignTaskProductCard } from "@/components/design/DesignTaskProductCard";
+import { designTaskTypeShowsProduct, parseDesignTaskProduct } from "@/lib/designTaskProduct";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
 import {
@@ -7890,6 +7892,12 @@ export default function DesignTaskPage() {
   }
 
   const isLinkedQuote = isUuid(task.quoteId);
+  // Standalone Візуалізація tasks carry their own catalog product snapshot in
+  // metadata.product (linked-quote tasks pull product data from the quote instead).
+  const standaloneProduct =
+    !isLinkedQuote && designTaskTypeShowsProduct(task.designTaskType)
+      ? parseDesignTaskProduct((task.metadata as Record<string, unknown> | undefined)?.product)
+      : null;
   const taskHeaderTitle = getTaskDisplayNumber(task);
   const taskHeaderName = task.title?.trim() || "Без назви";
   const taskManagerUserId =
@@ -9222,6 +9230,9 @@ export default function DesignTaskPage() {
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
             <div className="space-y-4">
+              {standaloneProduct ? (
+                <DesignTaskProductCard product={standaloneProduct} />
+              ) : null}
               {/* CARD 1: Brief */}
               <Card className="border-border/50 bg-card/40 shadow-none">
                 <CardContent className="space-y-4 p-5">
