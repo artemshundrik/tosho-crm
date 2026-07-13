@@ -7269,6 +7269,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
       <QuoteBatchBuilderDialog
         open={batchBuilderOpen}
+        teamId={teamId}
         onOpenChange={(open) => {
           if (batchCreating) return;
           setBatchBuilderOpen(open);

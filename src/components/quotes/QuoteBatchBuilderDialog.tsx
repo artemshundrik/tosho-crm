@@ -39,6 +39,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
+import {
+  QuoteDeliveryFields,
+  createEmptyQuoteDeliveryDetails,
+  type QuoteDeliveryDetails,
+} from "@/components/quotes/QuoteDeliveryFields";
+import {
+  listPartyDeliveryPoints,
+  appendDeliveryPointToParty,
+  createEmptyCustomerDeliveryPoint,
+  npDeliveryTypeToPointType,
+  splitContactName,
+  type CustomerDeliveryPoint,
+} from "@/lib/customerDeliveryPoints";
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole, isQuoteManagerJobRole, normalizeJobRole } from "@/lib/permissions";
@@ -96,17 +109,6 @@ const DELIVERY_OPTIONS = [
   { value: "cargo", label: "Вантажне перевезення", icon: Truck },
 ] as const;
 
-const NOVA_POSHTA_DELIVERY_TYPES = [
-  { value: "branch", label: "Відділення" },
-  { value: "locker", label: "Поштомат" },
-  { value: "address", label: "Адресна" },
-] as const;
-
-const DELIVERY_PAYER_OPTIONS = [
-  { value: "company", label: "Ми" },
-  { value: "client", label: "Замовник" },
-] as const;
-
 const DEFAULT_DEADLINE_TIME = "10:00";
 const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
@@ -117,14 +119,9 @@ type ProductRunDraft = {
   quantity: string;
 };
 
-type DeliveryDetails = {
-  region: string;
-  city: string;
-  address: string;
-  street: string;
-  npDeliveryType: string;
-  payer: string;
-};
+// Уніфіковано зі спільним QuoteDeliveryFields (пікер книги + НП-автокомпліт +
+// отримувач + збереження в картку) — той самий знімок, що в NewQuoteDialog.
+type DeliveryDetails = QuoteDeliveryDetails;
 
 export type QuoteBatchPrintApplicationDraft = {
   id: string;
@@ -195,6 +192,7 @@ export type QuoteBatchTeamMember = {
 export interface QuoteBatchBuilderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  teamId?: string;
   onSubmit: (data: QuoteBatchBuilderFormData) => void | Promise<void>;
   submitting?: boolean;
   submitError?: string | null;
@@ -324,14 +322,7 @@ const parseDateTimeInput = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const createEmptyDeliveryDetails = (): DeliveryDetails => ({
-  region: "",
-  city: "",
-  address: "",
-  street: "",
-  npDeliveryType: "",
-  payer: "",
-});
+const createEmptyDeliveryDetails = createEmptyQuoteDeliveryDetails;
 
 const trimDelivery = (value?: string | null) => value?.trim() ?? "";
 
@@ -344,10 +335,10 @@ const getDeliveryIssues = (deliveryType?: string | null, details?: DeliveryDetai
   const hasNpDeliveryType = trimDelivery(deliveryDetails.npDeliveryType).length > 0;
 
   if (deliveryType === "nova_poshta") {
-    if (!hasRegion) return "для Нової пошти заповніть область";
     if (!hasCity) return "для Нової пошти заповніть місто";
     if (!hasNpDeliveryType) return "для Нової пошти оберіть тип доставки";
     if (deliveryDetails.npDeliveryType === "address" && !hasStreet) return "для адресної доставки заповніть вулицю";
+    if (deliveryDetails.npDeliveryType !== "address" && !hasAddress) return "для Нової пошти оберіть відділення / поштомат";
   }
   if (deliveryType === "taxi") {
     if (!hasCity) return "для таксі / Uklon заповніть місто";
@@ -372,6 +363,13 @@ const sanitizeDeliveryDetails = (deliveryType?: string | null, details?: Deliver
     sanitizedDeliveryDetails.npDeliveryType = trimDelivery(deliveryDetails.npDeliveryType);
     sanitizedDeliveryDetails.street =
       sanitizedDeliveryDetails.npDeliveryType === "address" ? trimDelivery(deliveryDetails.street) : "";
+    sanitizedDeliveryDetails.address =
+      sanitizedDeliveryDetails.npDeliveryType === "address" ? "" : trimDelivery(deliveryDetails.address);
+    sanitizedDeliveryDetails.contactName = trimDelivery(deliveryDetails.contactName);
+    sanitizedDeliveryDetails.contactPhone = trimDelivery(deliveryDetails.contactPhone);
+    sanitizedDeliveryDetails.deliveryPointId = trimDelivery(deliveryDetails.deliveryPointId);
+    sanitizedDeliveryDetails.npCityRef = trimDelivery(deliveryDetails.npCityRef);
+    sanitizedDeliveryDetails.npWarehouseRef = trimDelivery(deliveryDetails.npWarehouseRef);
   }
   if (deliveryType === "taxi") {
     sanitizedDeliveryDetails.city = trimDelivery(deliveryDetails.city);
@@ -1101,6 +1099,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
 export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = ({
   open,
   onOpenChange,
+  teamId,
   onSubmit,
   submitting = false,
   submitError = null,
@@ -1118,6 +1117,8 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
 }) => {
   const [customerId, setCustomerId] = React.useState("");
   const [customerType, setCustomerType] = React.useState<"customer" | "lead">("customer");
+  const [savedDeliveryPoints, setSavedDeliveryPoints] = React.useState<CustomerDeliveryPoint[]>([]);
+  const [saveDeliveryToCard, setSaveDeliveryToCard] = React.useState(true);
   const [customerSearch, setCustomerSearch] = React.useState("");
   const [customerPopoverOpen, setCustomerPopoverOpen] = React.useState(false);
   const [managerId, setManagerId] = React.useState("");
@@ -1158,6 +1159,8 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     const firstProduct = createProductDraft();
     setCustomerId("");
     setCustomerType("customer");
+    setSavedDeliveryPoints([]);
+    setSaveDeliveryToCard(true);
     setCustomerSearch("");
     setCustomerPopoverOpen(false);
     setManagerId(currentUserId ?? "");
@@ -1182,6 +1185,25 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setQuickModelPopoverOpen(false);
     setContentReady(true);
   }, [contentReady, currentUserId, open]);
+
+  // Книга адрес обраного замовника/ліда — для пікера збережених адрес у «Логістиці».
+  React.useEffect(() => {
+    if (!open || !teamId || !customerId) {
+      setSavedDeliveryPoints([]);
+      return;
+    }
+    let cancelled = false;
+    listPartyDeliveryPoints({ teamId, partyType: customerType, partyId: customerId })
+      .then((points) => {
+        if (!cancelled) setSavedDeliveryPoints(points);
+      })
+      .catch(() => {
+        if (!cancelled) setSavedDeliveryPoints([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, teamId, customerId, customerType]);
 
   const currentManagerKey = React.useMemo(() => {
     const ownLabel =
@@ -1800,6 +1822,44 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       setLocalError(null);
       toast.error("Перевірте білдер", { description: message });
       return;
+    }
+
+    // Введені вручну НП-адреси за бажанням дописуємо в книгу клієнта (Логістика),
+    // щоб наступного разу вони підтягувались у пікер. Помилка не блокує створення.
+    if (saveDeliveryToCard && teamId && customerId) {
+      for (const product of normalizedProducts) {
+        const details = product.deliveryDetails;
+        if (
+          product.deliveryType === "nova_poshta" &&
+          details &&
+          !details.deliveryPointId &&
+          (details.city || details.address || details.street)
+        ) {
+          const pointType = npDeliveryTypeToPointType(details.npDeliveryType ?? "");
+          if (!pointType) continue;
+          try {
+            const savedPointId = await appendDeliveryPointToParty({
+              teamId,
+              partyType: customerType,
+              partyId: customerId,
+              point: {
+                ...createEmptyCustomerDeliveryPoint(),
+                type: pointType,
+                city: details.city ?? "",
+                address: pointType === "np_courier" ? details.street ?? "" : details.address ?? "",
+                contactFirstName: splitContactName(details.contactName ?? "").first,
+                contactLastName: splitContactName(details.contactName ?? "").last,
+                contactPhone: details.contactPhone ?? "",
+                npCityRef: details.npCityRef || null,
+                npWarehouseRef: details.npWarehouseRef || null,
+              },
+            });
+            details.deliveryPointId = savedPointId;
+          } catch (saveError) {
+            console.warn("Failed to save delivery point to party card", saveError);
+          }
+        }
+      }
     }
 
     setLocalError(null);
@@ -2837,134 +2897,16 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       </SelectContent>
                     </Select>
 
-                    {activeDeliveryType === "nova_poshta" ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          value={activeDeliveryDetails.region}
-                          onChange={(event) => updateActiveDeliveryDetails({ region: event.target.value })}
-                          placeholder="Область *"
-                        />
-                        <Input
-                          value={activeDeliveryDetails.city}
-                          onChange={(event) => updateActiveDeliveryDetails({ city: event.target.value })}
-                          placeholder="Місто *"
-                        />
-                        <Select
-                          value={activeDeliveryDetails.npDeliveryType}
-                          onValueChange={(value) =>
-                            updateActiveDeliveryDetails({
-                              npDeliveryType: value,
-                              street: value === "address" ? activeDeliveryDetails.street : "",
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Тип доставки *" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {NOVA_POSHTA_DELIVERY_TYPES.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select
-                          value={activeDeliveryDetails.payer}
-                          onValueChange={(value) => updateActiveDeliveryDetails({ payer: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Хто платить" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DELIVERY_PAYER_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {activeDeliveryDetails.npDeliveryType === "address" ? (
-                          <Input
-                            value={activeDeliveryDetails.street}
-                            onChange={(event) => updateActiveDeliveryDetails({ street: event.target.value })}
-                            placeholder="Вулиця *"
-                            className="sm:col-span-2"
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {activeDeliveryType === "taxi" ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          value={activeDeliveryDetails.city}
-                          onChange={(event) => updateActiveDeliveryDetails({ city: event.target.value })}
-                          placeholder="Місто *"
-                        />
-                        <Select
-                          value={activeDeliveryDetails.payer}
-                          onValueChange={(value) => updateActiveDeliveryDetails({ payer: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Хто платить" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DELIVERY_PAYER_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={activeDeliveryDetails.address}
-                          onChange={(event) => updateActiveDeliveryDetails({ address: event.target.value })}
-                          placeholder="Адреса *"
-                          className="sm:col-span-2"
-                        />
-                      </div>
-                    ) : null}
-
-                    {activeDeliveryType === "cargo" ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          value={activeDeliveryDetails.region}
-                          onChange={(event) => updateActiveDeliveryDetails({ region: event.target.value })}
-                          placeholder="Область *"
-                        />
-                        <Input
-                          value={activeDeliveryDetails.city}
-                          onChange={(event) => updateActiveDeliveryDetails({ city: event.target.value })}
-                          placeholder="Місто *"
-                        />
-                        <Input
-                          value={activeDeliveryDetails.address}
-                          onChange={(event) => updateActiveDeliveryDetails({ address: event.target.value })}
-                          placeholder="Адреса *"
-                        />
-                        <Select
-                          value={activeDeliveryDetails.payer}
-                          onValueChange={(value) => updateActiveDeliveryDetails({ payer: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Хто платить" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DELIVERY_PAYER_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : null}
-
-                    {activeDeliveryType === "pickup" ? (
-                      <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                        Для самовивозу додаткові поля не потрібні.
-                      </div>
+                    {activeDeliveryType ? (
+                      <QuoteDeliveryFields
+                        deliveryType={activeDeliveryType}
+                        details={activeDeliveryDetails}
+                        onChange={updateActiveDeliveryDetails}
+                        savedPoints={savedDeliveryPoints}
+                        saveToCard={saveDeliveryToCard}
+                        onSaveToCardChange={setSaveDeliveryToCard}
+                        canSaveToCard={Boolean(customerId)}
+                      />
                     ) : null}
                   </section>
 
