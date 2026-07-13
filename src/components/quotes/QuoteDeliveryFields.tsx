@@ -111,6 +111,13 @@ export function QuoteDeliveryFields({
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
+      {isNovaPoshta && npPoints.length === 0 && canSaveToCard ? (
+        <div className="md:col-span-2 rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          У клієнта ще немає збережених адрес доставки. Заповніть нову нижче — вона додасться в картку клієнта
+          (Логістика) і наступного разу підтягнеться сюди автоматично.
+        </div>
+      ) : null}
+
       {isNovaPoshta && npPoints.length > 0 ? (
         <div className="space-y-1 md:col-span-2">
           <div className="text-sm text-muted-foreground">Адреса з картки клієнта</div>
