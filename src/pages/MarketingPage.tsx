@@ -185,11 +185,6 @@ const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif", "
 // Design visuals are 16:9 presentation slides. Match the card image box to that
 // so a standard visual fills it edge-to-edge without being cropped.
 const VISUAL_ASPECT_CLASS = "aspect-[16/9]";
-// How many group cards mount per window. The gallery can hold hundreds of groups;
-// mounting them all at once fires a signed-URL/preview request per card and floods
-// the DOM, which is what made the page slow to load. We render a window and grow it
-// on scroll instead.
-const GALLERY_WINDOW_STEP = 48;
 
 const DEFAULT_RECORD: MarketingRecord = {
   id: null,
@@ -691,31 +686,6 @@ export default function MarketingPage() {
     });
     return list;
   }, [baseGroups, statusFilter, sortMode, groupStatus]);
-
-  // Windowed rendering: only mount the first N group cards, grow as the sentinel
-  // scrolls into view. Reset whenever the filtered/sorted set changes.
-  const [visibleGroupCount, setVisibleGroupCount] = useState(GALLERY_WINDOW_STEP);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setVisibleGroupCount(GALLERY_WINDOW_STEP);
-  }, [groups]);
-
-  useEffect(() => {
-    if (visibleGroupCount >= groups.length) return;
-    const node = loadMoreRef.current;
-    if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisibleGroupCount((current) => Math.min(current + GALLERY_WINDOW_STEP, groups.length));
-        }
-      },
-      { rootMargin: "800px" }
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [visibleGroupCount, groups.length]);
 
   // Tag / hidden counts are also per-stack (distinct design tasks), not per file.
   const allTags = useMemo(() => {
@@ -1278,14 +1248,9 @@ export default function MarketingPage() {
           }
         />
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {groups.slice(0, visibleGroupCount).map((group) => renderGroup(group))}
-          </div>
-          {visibleGroupCount < groups.length ? (
-            <div ref={loadMoreRef} className="h-10 w-full" aria-hidden="true" />
-          ) : null}
-        </>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {groups.map((group) => renderGroup(group))}
+        </div>
       )}
 
       {/* Detail dialog */}

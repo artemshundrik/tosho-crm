@@ -30,6 +30,7 @@ export function StorageObjectImage({
 }: StorageObjectImageProps) {
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const [src, setSrc] = useState<string | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
   const [failedVariant, setFailedVariant] = useState(false);
   const [hoverSrc, setHoverSrc] = useState<string | null>(null);
   const [hoverFailed, setHoverFailed] = useState(false);
@@ -80,11 +81,36 @@ export function StorageObjectImage({
     });
   }, [previewWidth]);
 
+  // Only resolve the signed URL (and download the image) once the element is
+  // near the viewport. Grids can mount hundreds of these at once; resolving every
+  // URL on mount floods the storage API and re-downloads thumbnails on every
+  // visit (signed URLs bust the CDN/browser cache), which drives storage egress.
+  useEffect(() => {
+    if (shouldLoad) return;
+    const node = anchorRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setShouldLoad(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
   useEffect(() => {
     let active = true;
     setSrc(null);
     setFailedVariant(false);
-    if (!bucket || !path) return;
+    if (!bucket || !path || !shouldLoad) return;
 
     const load = async () => {
       const nextUrl =
@@ -99,7 +125,7 @@ export function StorageObjectImage({
     return () => {
       active = false;
     };
-  }, [bucket, path, variant]);
+  }, [bucket, path, variant, shouldLoad]);
 
   useEffect(() => {
     if (!hoverOpen) return;
