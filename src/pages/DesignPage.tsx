@@ -88,6 +88,7 @@ import {
 import { DesignTaskProductPicker } from "@/components/design/DesignTaskProductPicker";
 import {
   designTaskTypeShowsProduct,
+  parseDesignTaskProduct,
   serializeDesignTaskProduct,
   type DesignTaskProduct,
 } from "@/lib/designTaskProduct";
@@ -2046,7 +2047,9 @@ export default function DesignPage() {
                   ? metadata.quote_item_name.trim()
                   : typeof metadata.item_name === "string" && metadata.item_name.trim()
                     ? metadata.item_name.trim()
-                    : null,
+                    : (parseDesignTaskProduct(metadata.product)?.name ?? null),
+            productImageUrl: sanitizeImageReference(parseDesignTaskProduct(metadata.product)?.imageUrl ?? null),
+            productZoomImageUrl: sanitizeImageReference(parseDesignTaskProduct(metadata.product)?.imageUrl ?? null),
             methodsCount: metadata.methods_count ?? 0,
             hasFiles: metadata.has_files ?? false,
             designDeadline: metadata.design_deadline ?? metadata.deadline ?? null,
@@ -2311,8 +2314,8 @@ export default function DesignPage() {
           null,
         quoteManagerUserId: t.quoteManagerUserId ?? quoteMap.get(t.quoteId)?.managerUserId ?? null,
         productName: t.productName ?? productNameByQuoteId.get(t.quoteId) ?? null,
-        productImageUrl: sanitizeImageReference(productImageByQuoteId.get(t.quoteId) ?? null),
-        productZoomImageUrl: sanitizeImageReference(productZoomImageByQuoteId.get(t.quoteId) ?? null),
+        productImageUrl: sanitizeImageReference(productImageByQuoteId.get(t.quoteId) ?? t.productImageUrl ?? null),
+        productZoomImageUrl: sanitizeImageReference(productZoomImageByQuoteId.get(t.quoteId) ?? t.productZoomImageUrl ?? null),
         productQtyLabel: productQtyByQuoteId.get(t.quoteId) ?? null,
         assigneeLabel:
           t.assigneeLabel ??
@@ -4977,7 +4980,7 @@ export default function DesignPage() {
             </div>
           </div>
         </div>
-        {isLinkedQuote && task.productName ? (
+        {task.productName ? (
           <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
             <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               <Package className="h-3.5 w-3.5" />
