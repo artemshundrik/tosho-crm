@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
+import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import {
@@ -323,14 +324,32 @@ function CountPill({ value, active }: { value: number; active?: boolean }) {
 // Page
 // =======================
 
+type MarketingCachePayload = {
+  visuals: GalleryVisual[];
+  records: Record<string, MarketingRecord>;
+  customerInfoById: Record<string, CustomerInfo>;
+};
+
+// Keep the built gallery for a few minutes so navigating away and back shows it
+// instantly (no skeleton, no re-fetch, images stay browser-cached). We still
+// revalidate silently once the cache is older than this.
+const MARKETING_CACHE_TTL = 3 * 60 * 1000;
+
 export default function MarketingPage() {
   const { teamId, userId } = useAuth();
+  const {
+    cached: marketingCached,
+    setCache: setMarketingCache,
+    isStale: isMarketingCacheStale,
+  } = usePageCache<MarketingCachePayload>(teamId ? `marketing:v1:${teamId}` : "marketing:v1:none");
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !marketingCached);
   const [error, setError] = useState<string | null>(null);
-  const [visuals, setVisuals] = useState<GalleryVisual[]>([]);
-  const [records, setRecords] = useState<Record<string, MarketingRecord>>({});
-  const [customerInfoById, setCustomerInfoById] = useState<Record<string, CustomerInfo>>({});
+  const [visuals, setVisuals] = useState<GalleryVisual[]>(() => marketingCached?.visuals ?? []);
+  const [records, setRecords] = useState<Record<string, MarketingRecord>>(() => marketingCached?.records ?? {});
+  const [customerInfoById, setCustomerInfoById] = useState<Record<string, CustomerInfo>>(
+    () => marketingCached?.customerInfoById ?? {}
+  );
   const [memberLabelById, setMemberLabelById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
 
@@ -507,6 +526,7 @@ export default function MarketingPage() {
         }
 
         setCustomerInfoById(infoById);
+        setMarketingCache({ visuals: nextVisuals, records: nextRecords, customerInfoById: infoById });
       } catch (loadError) {
         console.warn("Failed to load marketing gallery", loadError);
         setError("Не вдалося завантажити галерею. Спробуйте оновити сторінку.");
@@ -515,11 +535,25 @@ export default function MarketingPage() {
         lastLoadedAtRef.current = Date.now();
       }
     },
-    [teamId]
+    [teamId, setMarketingCache]
   );
 
   useEffect(() => {
-    void loadGallery("initial");
+    // Hydrate instantly from the session cache (no skeleton) and only hit the
+    // network when the cache is missing or stale — so bouncing between pages
+    // doesn't re-download the gallery every time.
+    if (marketingCached) {
+      setVisuals(marketingCached.visuals);
+      setRecords(marketingCached.records);
+      setCustomerInfoById(marketingCached.customerInfoById);
+      setLoading(false);
+      if (isMarketingCacheStale(MARKETING_CACHE_TTL)) {
+        void loadGallery("refresh");
+      }
+    } else {
+      void loadGallery("initial");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadGallery]);
 
   // No manual refresh button — new visuals arrive on their own. We refetch
@@ -775,10 +809,13 @@ export default function MarketingPage() {
     (visual: GalleryVisual, patch: Partial<MarketingRecord>) => {
       const current = records[visual.key] ?? DEFAULT_RECORD;
       const next = { ...current, ...patch };
-      setRecords((prev) => ({ ...prev, [visual.key]: next }));
+      const nextRecords = { ...records, [visual.key]: next };
+      setRecords(nextRecords);
+      // Keep the session cache in sync so a hydrate-from-cache never reverts edits.
+      setMarketingCache({ visuals, records: nextRecords, customerInfoById });
       void persistRecord(visual, next);
     },
-    [records, persistRecord]
+    [records, persistRecord, setMarketingCache, visuals, customerInfoById]
   );
 
   const handleToggleFavorite = useCallback(
