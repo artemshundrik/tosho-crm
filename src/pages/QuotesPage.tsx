@@ -494,16 +494,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
-  // Superadmin sees everyone by default. Designers filter by designer, not by
-  // manager, so they keep "all managers". Everyone else (managers, SEO, admin…)
-  // defaults to just their own and can widen the filter manually.
+  // Manager-filter default (see effect below):
+  //   • superadmin → всі
+  //   • designer   → всі (they filter by designer, not manager)
+  //   • sales-manager job role → себе immediately (definitely owns quotes)
+  //   • everyone else → всі, narrowed to себе only if they actually own ≥1 quote
   const [managerFilter, setManagerFilter] = useState<string>(
-    () =>
-      restoredFilters?.managerFilter ??
-      (!permissions.isSuperAdmin && !permissions.isDesigner && userId ? userId : ALL_MANAGERS_FILTER)
+    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
@@ -792,6 +792,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!currentUserId) return;
+    const ownsRows = rows.some((row) => (row.assigned_to?.trim() ?? "") === currentUserId);
+    if (!ownsRows) return;
     setManagerFilter(currentUserId);
     setDefaultManagerFilterApplied(true);
   }, [
@@ -800,6 +802,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     managerFilter,
     permissions.isDesigner,
     permissions.isSuperAdmin,
+    rows,
   ]);
   const getManagerAvatar = useCallback(
     (assignedTo?: string | null) => {

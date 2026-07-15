@@ -1058,20 +1058,20 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  // Superadmin sees all managers by default. Designers filter by designer, not
-  // by manager, so they keep "all managers" (and default their designer filter
-  // to self below). Everyone else (managers, SEO, admin…) defaults the manager
-  // filter to just their own and can widen it manually.
+  // Manager-filter default (see effect below):
+  //   • superadmin → всі
+  //   • designer   → всі (they filter by designer, not manager — even for tasks
+  //                  they created themselves, where they'd be the manager)
+  //   • sales-manager job role → себе immediately (definitely owns tasks)
+  //   • everyone else → всі, narrowed to себе only if they actually own ≥1 task
   const [managerFilter, setManagerFilter] = useState<string>(
-    () =>
-      restoredFilters?.managerFilter ??
-      (!permissions.isSuperAdmin && !permissions.isDesigner && userId ? userId : ALL_MANAGERS_FILTER)
+    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
     () => restoredFilters?.timelineZoom ?? "day"
@@ -1530,9 +1530,19 @@ export default function DesignPage() {
     if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!userId) return;
-    setManagerFilter(userId);
+    if (loading && tasks.length === 0) return;
+    const ownsTasks = tasks.some((task) => task.quoteManagerUserId === userId);
+    if (ownsTasks) setManagerFilter(userId);
     setDefaultManagerFilterApplied(true);
-  }, [defaultManagerFilterApplied, managerFilter, permissions.isDesigner, permissions.isSuperAdmin, userId]);
+  }, [
+    defaultManagerFilterApplied,
+    loading,
+    managerFilter,
+    permissions.isDesigner,
+    permissions.isSuperAdmin,
+    tasks,
+    userId,
+  ]);
 
   const loadTeamWorkloadTasks = useCallback(async () => {
     if (!effectiveTeamId) {
