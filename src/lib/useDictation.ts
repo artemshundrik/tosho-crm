@@ -94,7 +94,7 @@ export function useDictation(options: UseDictationOptions) {
   }, []);
 
   const transcribe = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, durationMs: number) => {
       setState("transcribing");
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -115,6 +115,7 @@ export function useDictation(options: UseDictationOptions) {
             mimeType: mimeTypeRef.current,
             context,
             clean,
+            durationMs,
           }),
         });
 
@@ -180,6 +181,7 @@ export function useDictation(options: UseDictationOptions) {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
     recorder.onstop = () => {
+      const durationMs = Date.now() - startedAtRef.current;
       clearTimers();
       releaseStream();
       if (cancelledRef.current) {
@@ -192,7 +194,7 @@ export function useDictation(options: UseDictationOptions) {
         setState("idle");
         return;
       }
-      void transcribe(blob);
+      void transcribe(blob, durationMs);
     };
 
     recorder.start();

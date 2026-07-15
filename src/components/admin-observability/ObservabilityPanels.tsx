@@ -1,6 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { BellRing, Download, ExternalLink, Eye, MousePointerClick, Send, Trash2, UserX } from "lucide-react";
+import {
+  BellRing,
+  Download,
+  ExternalLink,
+  Eye,
+  MessageSquare,
+  Mic,
+  MousePointerClick,
+  Search,
+  Send,
+  Sparkles,
+  Trash2,
+  UserX,
+} from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -12,6 +25,7 @@ import {
 } from "recharts";
 
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +34,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
+import { getInitialsFromName } from "@/lib/userName";
 
 export type ObservabilityTone = "good" | "warning" | "danger" | "neutral";
 export type ChartRange = "1d" | "7d" | "30d" | "all";
@@ -1103,6 +1118,289 @@ export function TelegramTabPanel() {
           </section>
         </>
       ) : null}
+    </TabsContent>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI usage / cost tab
+// ---------------------------------------------------------------------------
+
+type AiUsageRange = "7d" | "30d" | "month" | "all";
+type AiUsageByKind = { kind: string; usd: number; calls: number };
+type AiUsageByPerson = { user_id: string | null; actor_name: string; usd: number; calls: number };
+type AiUsageDaily = { date: string; usd: number; calls: number };
+type AiUsageSummary = {
+  totalUsd: number;
+  callCount: number;
+  totalTokens: number;
+  byKind: AiUsageByKind[];
+  byPerson: AiUsageByPerson[];
+  daily: AiUsageDaily[];
+};
+
+const AI_USAGE_RANGES: Array<{ key: AiUsageRange; label: string }> = [
+  { key: "7d", label: "7 днів" },
+  { key: "30d", label: "30 днів" },
+  { key: "month", label: "Цей місяць" },
+  { key: "all", label: "Весь час" },
+];
+
+const AI_KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
+  chat: { label: "ToSho AI чат", icon: MessageSquare },
+  transcription: { label: "Транскрипція", icon: Mic },
+  embedding: { label: "Пошук", icon: Search },
+};
+
+function aiUsageRangeBounds(range: AiUsageRange): { from: string; to: string } {
+  const now = new Date();
+  const to = new Date(now.getTime() + 24 * 60 * 60 * 1000); // include all of today
+  let from: Date;
+  if (range === "7d") from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  else if (range === "30d") from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  else if (range === "month") from = new Date(now.getFullYear(), now.getMonth(), 1);
+  else from = new Date("2024-01-01T00:00:00Z");
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function toNumber(value: unknown): number {
+  const n = typeof value === "string" ? Number(value) : (value as number);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeAiUsage(raw: unknown): AiUsageSummary {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+  return {
+    totalUsd: toNumber(obj.totalUsd),
+    callCount: toNumber(obj.callCount),
+    totalTokens: toNumber(obj.totalTokens),
+    byKind: asArray<Record<string, unknown>>(obj.byKind).map((k) => ({
+      kind: String(k.kind ?? ""),
+      usd: toNumber(k.usd),
+      calls: toNumber(k.calls),
+    })),
+    byPerson: asArray<Record<string, unknown>>(obj.byPerson).map((p) => ({
+      user_id: (p.user_id as string | null) ?? null,
+      actor_name: String(p.actor_name ?? "Система"),
+      usd: toNumber(p.usd),
+      calls: toNumber(p.calls),
+    })),
+    daily: asArray<Record<string, unknown>>(obj.daily).map((d) => ({
+      date: String(d.date ?? ""),
+      usd: toNumber(d.usd),
+      calls: toNumber(d.calls),
+    })),
+  };
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value) || value === 0) return "$0";
+  if (value < 1) return `$${value.toFixed(4)}`;
+  return `$${value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDayLabel(date: string): string {
+  // "YYYY-MM-DD" → "DD.MM"
+  const parts = date.split("-");
+  return parts.length === 3 ? `${parts[2]}.${parts[1]}` : date;
+}
+
+export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null }) {
+  const [range, setRange] = useState<AiUsageRange>("30d");
+  const [summary, setSummary] = useState<AiUsageSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    let active = true;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { from, to } = aiUsageRangeBounds(range);
+        const { data, error: rpcError } = await supabase
+          .schema("tosho")
+          .rpc("get_ai_usage_summary", { p_workspace_id: workspaceId, p_from: from, p_to: to });
+        if (rpcError) throw new Error(rpcError.message);
+        if (active) setSummary(normalizeAiUsage(data));
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "Помилка завантаження");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [workspaceId, range]);
+
+  const kindByKey = new Map((summary?.byKind ?? []).map((k) => [k.kind, k]));
+  const presentKinds = new Set((summary?.byKind ?? []).map((k) => k.kind));
+  // chat + transcription always shown (the tracked kinds); embedding only if present.
+  const kindKeys = ["chat", "transcription", "embedding"].filter(
+    (k) => k === "chat" || k === "transcription" || presentKinds.has(k)
+  );
+  const chartData = (summary?.daily ?? []).map((d) => ({ label: formatDayLabel(d.date), usd: d.usd }));
+  const maxPersonUsd = Math.max(1e-9, ...(summary?.byPerson ?? []).map((p) => p.usd));
+  const hasData = (summary?.callCount ?? 0) > 0;
+
+  return (
+    <TabsContent value="ai-usage" className="mt-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">Витрати на AI</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            ToSho AI, транскрипція голосу та пошук — вартість запитів до OpenAI.
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/30 p-1">
+          {AI_USAGE_RANGES.map((r) => (
+            <Button
+              key={r.key}
+              type="button"
+              size="sm"
+              variant="ghost"
+              aria-pressed={range === r.key}
+              onClick={() => setRange(r.key)}
+              className={cn(
+                "h-7 rounded-full px-3 text-xs",
+                range === r.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              {r.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <AppSectionLoader
+          label="Завантаження витрат на AI..."
+          className="rounded-[24px] border border-border/60 bg-card/95 py-12"
+        />
+      ) : error ? (
+        <section className="rounded-[24px] border border-border/60 bg-card/95 p-6 text-sm text-danger-foreground">
+          Не вдалося завантажити: {error}
+        </section>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              icon={Sparkles}
+              title="Разом за період"
+              value={formatUsd(summary?.totalUsd ?? 0)}
+              hint={`${summary?.callCount ?? 0} запитів · ${(summary?.totalTokens ?? 0).toLocaleString("uk-UA")} токенів`}
+            />
+            {kindKeys.map((key) => {
+              const meta = AI_KIND_META[key] ?? { label: key, icon: Sparkles };
+              const row = kindByKey.get(key);
+              return (
+                <MetricCard
+                  key={key}
+                  icon={meta.icon}
+                  title={meta.label}
+                  value={formatUsd(row?.usd ?? 0)}
+                  hint={`${row?.calls ?? 0} запитів`}
+                />
+              );
+            })}
+          </div>
+
+          {!hasData ? (
+            <section className="rounded-[24px] border border-dashed border-border/60 bg-card/60 py-12 text-center text-sm text-muted-foreground">
+              Ще немає даних за цей період.
+            </section>
+          ) : (
+            <>
+              <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+                <div className="text-sm font-semibold text-foreground">Динаміка витрат по днях</div>
+                <div className="mt-4 h-[240px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 8, bottom: 6 }}>
+                      <defs>
+                        <linearGradient id="aiUsageFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        stroke="hsl(var(--muted-foreground))"
+                        tickLine={false}
+                        width={52}
+                        tickFormatter={(v: number) => formatUsd(v)}
+                      />
+                      <Tooltip
+                        formatter={(v: number | undefined) => [formatUsd(v ?? 0), "Вартість"]}
+                        contentStyle={{
+                          borderRadius: 12,
+                          border: "1px solid hsl(var(--border))",
+                          background: "hsl(var(--card))",
+                          fontSize: 12,
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="usd"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        fill="url(#aiUsageFill)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-border/60 bg-card/95 p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-foreground">Хто скільки використовує</div>
+                  <div className="text-xs text-muted-foreground">{summary?.byPerson.length ?? 0} осіб</div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {(summary?.byPerson ?? []).map((person, index) => (
+                    <div key={person.user_id ?? `system-${index}`} className="flex items-center gap-3">
+                      <AvatarBase
+                        name={person.actor_name}
+                        fallback={getInitialsFromName(person.actor_name)}
+                        size={32}
+                        className="shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="truncate text-sm font-medium text-foreground">{person.actor_name}</span>
+                          <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                            {formatUsd(person.usd)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
+                            <div
+                              className="h-full rounded-full bg-primary/70"
+                              style={{ width: `${Math.max(2, (person.usd / maxPersonUsd) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            {person.calls} запитів
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          <p className="px-1 text-xs text-muted-foreground">
+            Вартість рахується за тарифами в <code>netlify/functions/_aiPricing.ts</code>. Ставки gpt-5.4
+            орієнтовні — звірте з рахунком OpenAI для точних цифр.
+          </p>
+        </>
+      )}
     </TabsContent>
   );
 }

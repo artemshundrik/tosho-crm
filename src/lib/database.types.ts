@@ -3878,6 +3878,10 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: Json
       }
+      get_ai_usage_summary: {
+        Args: { p_workspace_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       has_finance_access: { Args: { _team_id: string }; Returns: boolean }
       is_last_owner: {
         Args: { p_user_id: string; p_workspace_id: string }

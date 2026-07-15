@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+import { logAiUsage } from "./_aiUsageLog";
+import { transcriptionCostUsd, chatCostUsd } from "./_aiPricing";
 
 // Voice dictation → text. Records audio in the browser, forwards it to OpenAI's
 // transcription endpoint, then (optionally) runs a lightweight cleanup pass so the
@@ -20,6 +22,8 @@ type RequestBody = {
   mimeType?: string | null;
   context?: DictationContext;
   clean?: boolean;
+  /** Recording length in ms (from the client) — used to price transcription. */
+  durationMs?: number;
 };
 
 // Netlify sync functions cap the request body at 6 MB; base64 inflates the raw
@@ -82,7 +86,7 @@ async function transcribeAudio(
   apiKey: string,
   audio: Buffer,
   mimeType: string
-): Promise<string> {
+): Promise<{ text: string; model: string }> {
   const model = normalizeText(process.env.OPENAI_TRANSCRIBE_MODEL) || "gpt-4o-transcribe";
   const form = new FormData();
   // Wrap in a fresh Uint8Array so the Blob part is ArrayBuffer-backed (Buffer's
@@ -107,14 +111,26 @@ async function transcribeAudio(
   }
 
   // response_format=text returns the raw transcript as plain text.
-  return normalizeText(await response.text());
+  return { text: normalizeText(await response.text()), model };
+}
+
+type CleanupResult = {
+  text: string;
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+};
+
+function toNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 async function cleanupTranscript(
   apiKey: string,
   transcript: string,
   context: DictationContext
-): Promise<string> {
+): Promise<CleanupResult> {
   const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -141,12 +157,19 @@ async function cleanupTranscript(
   const payload = (await response.json()) as {
     output_text?: string;
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  };
+
+  const usage = {
+    inputTokens: toNullableNumber(payload.usage?.input_tokens),
+    outputTokens: toNullableNumber(payload.usage?.output_tokens),
+    totalTokens: toNullableNumber(payload.usage?.total_tokens),
   };
 
   // The Responses API exposes a convenience `output_text`; fall back to walking
   // the structured output if it is absent.
   const direct = normalizeText(payload.output_text);
-  if (direct) return direct;
+  if (direct) return { text: direct, model, ...usage };
 
   const collected = (payload.output ?? [])
     .flatMap((item) => item.content ?? [])
@@ -154,7 +177,7 @@ async function cleanupTranscript(
     .map((part) => normalizeText(part.text))
     .filter(Boolean)
     .join("\n");
-  return normalizeText(collected);
+  return { text: normalizeText(collected), model, ...usage };
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -167,7 +190,8 @@ export const handler = async (event: HttpEvent) => {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return jsonResponse(500, { error: "Missing Supabase env vars" });
   }
 
@@ -201,6 +225,27 @@ export const handler = async (event: HttpEvent) => {
   if (userError || !userData?.user) {
     return jsonResponse(401, { error: "Unauthorized" });
   }
+  const user = userData.user;
+
+  // Resolve the caller's workspace + display label for the usage log.
+  const { data: membershipRows } = await userClient
+    .schema("tosho")
+    .from("memberships_view")
+    .select("workspace_id")
+    .eq("user_id", user.id)
+    .limit(1);
+  const workspaceId = normalizeText(
+    (membershipRows as Array<{ workspace_id?: string | null }> | null)?.[0]?.workspace_id
+  );
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const actorName =
+    normalizeText(typeof meta.full_name === "string" ? meta.full_name : "") ||
+    normalizeText(user.email) ||
+    user.id;
+
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   const audioBase64 = normalizeText(body.audioBase64);
   if (!audioBase64) {
@@ -229,8 +274,11 @@ export const handler = async (event: HttpEvent) => {
   const shouldClean = body.clean !== false;
 
   let raw: string;
+  let transcribeModel: string;
   try {
-    raw = await transcribeAudio(apiKey, audio, mimeType);
+    const result = await transcribeAudio(apiKey, audio, mimeType);
+    raw = result.text;
+    transcribeModel = result.model;
   } catch (error) {
     return jsonResponse(502, {
       error: "Transcription failed",
@@ -245,13 +293,47 @@ export const handler = async (event: HttpEvent) => {
   // Cleanup is best-effort: if it fails we still return the raw transcript so the
   // user never loses their dictation.
   let cleaned = raw;
+  let cleanup: CleanupResult | null = null;
   if (shouldClean) {
     try {
-      const polished = await cleanupTranscript(apiKey, raw, context);
-      if (polished) cleaned = polished;
+      cleanup = await cleanupTranscript(apiKey, raw, context);
+      if (cleanup.text) cleaned = cleanup.text;
     } catch {
       cleaned = raw;
+      cleanup = null;
     }
+  }
+
+  // Log AI cost for the Observability dashboard (best-effort). Transcription is
+  // priced by audio minutes; the cleanup pass adds its token cost on top.
+  const audioSeconds =
+    typeof body.durationMs === "number" && Number.isFinite(body.durationMs) && body.durationMs > 0
+      ? body.durationMs / 1000
+      : null;
+  const audioCost = transcriptionCostUsd(transcribeModel, audioSeconds);
+  const cleanupCost = cleanup
+    ? chatCostUsd(cleanup.model, cleanup.inputTokens, cleanup.outputTokens)
+    : { costUsd: 0, priceKnown: true };
+  if (workspaceId) {
+    void logAiUsage(adminClient, {
+      workspaceId,
+      userId: user.id,
+      actorName,
+      kind: "transcription",
+      model: transcribeModel,
+      inputTokens: cleanup?.inputTokens ?? null,
+      outputTokens: cleanup?.outputTokens ?? null,
+      totalTokens: cleanup?.totalTokens ?? null,
+      audioSeconds,
+      costUsd: Math.round((audioCost.costUsd + cleanupCost.costUsd) * 1_000_000) / 1_000_000,
+      metadata: {
+        context,
+        cleanupModel: cleanup?.model ?? null,
+        audioCostUsd: audioCost.costUsd,
+        cleanupCostUsd: cleanupCost.costUsd,
+        priceKnown: audioCost.priceKnown && cleanupCost.priceKnown,
+      },
+    });
   }
 
   return jsonResponse(200, { raw, cleaned });

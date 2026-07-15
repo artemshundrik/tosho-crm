@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
+import { logAiUsage } from "./_aiUsageLog";
+import { chatCostUsd } from "./_aiPricing";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -7647,6 +7649,32 @@ async function handleSend(params: {
   ]);
 
   if (messageInsertError) throw new Error(messageInsertError.message);
+
+  // Log AI cost for the Observability dashboard (best-effort). Only when the
+  // real OpenAI call succeeded — the heuristic fallback spends nothing.
+  if (openAiDiagnostics?.attempted && openAiDiagnostics.ok) {
+    const { costUsd, priceKnown } = chatCostUsd(
+      openAiDiagnostics.model,
+      openAiDiagnostics.inputTokens,
+      openAiDiagnostics.outputTokens
+    );
+    void logAiUsage(params.adminClient, {
+      workspaceId: params.auth.workspaceId,
+      userId: params.auth.userId,
+      actorName: params.auth.actorLabel,
+      kind: "chat",
+      model: openAiDiagnostics.model ?? null,
+      inputTokens: openAiDiagnostics.inputTokens,
+      outputTokens: openAiDiagnostics.outputTokens,
+      totalTokens: openAiDiagnostics.totalTokens,
+      costUsd,
+      metadata: {
+        requestId: requestRow.id,
+        responseId: openAiDiagnostics.responseId ?? null,
+        priceKnown,
+      },
+    });
+  }
 
   const shouldNotifyNow =
     assistantDecision.shouldNotify &&
