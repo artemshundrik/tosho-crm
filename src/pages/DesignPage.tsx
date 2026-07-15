@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DuplicateDesignTaskDialog } from "@/components/design/DuplicateDesignTaskDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -87,7 +89,9 @@ import {
 } from "@/lib/designTaskType";
 import { DesignTaskProductPicker } from "@/components/design/DesignTaskProductPicker";
 import {
+  createEmptyDesignTaskProduct,
   designTaskTypeShowsProduct,
+  hasDesignTaskProductSelection,
   parseDesignTaskProduct,
   serializeDesignTaskProduct,
   type DesignTaskProduct,
@@ -925,7 +929,6 @@ export default function DesignPage() {
   const [createFiles, setCreateFiles] = useState<File[]>([]);
   const [createFilesDragActive, setCreateFilesDragActive] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [, setCustomersLoading] = useState(false);
   const [createCustomerOptions, setCreateCustomerOptions] = useState<CustomerOption[]>([]);
@@ -3935,10 +3938,11 @@ export default function DesignPage() {
     const droppedFiles = await collectCreateFilesFromDrop(dataTransfer);
     if (droppedFiles.length > 0) {
       addFilesToCreate(droppedFiles);
-      setCreateError(null);
       return;
     }
-    setCreateError("Не вдалося отримати файл із перетягування. Спробуйте перетягнути саме файл, вставити картинку через Cmd/Ctrl+V або додати її через вибір файлу.");
+    toast.error(
+      "Не вдалося отримати файл із перетягування. Спробуйте перетягнути саме файл, вставити картинку через Cmd/Ctrl+V або додати її через вибір файлу."
+    );
   };
 
   const hasAttachmentPayload = (dataTransfer: DataTransfer | null) => {
@@ -4034,7 +4038,7 @@ export default function DesignPage() {
     const subject = createTitle.trim();
     const customerName = createCustomer.trim();
     if (!subject) {
-      setCreateError("Вкажіть назву задачі.");
+      toast.error("Вкажіть назву задачі.");
       return;
     }
     if (!customerName) {
@@ -4042,12 +4046,11 @@ export default function DesignPage() {
       return;
     }
     if (!createDesignTaskType) {
-      setCreateError("Оберіть тип дизайнерської задачі.");
+      toast.error("Оберіть тип дизайнерської задачі.");
       return;
     }
 
     setCreateSaving(true);
-    setCreateError(null);
     try {
       const assigneeUserId = shouldForceSelfAssignee
         ? (userId ?? null)
@@ -4112,8 +4115,8 @@ export default function DesignPage() {
               deadline,
               methods_count: 0,
               has_files: createFiles.length > 0,
-              ...(designTaskTypeShowsProduct(createDesignTaskType) && createProduct?.catalogModelId
-                ? { product: serializeDesignTaskProduct(createProduct) }
+              ...(designTaskTypeShowsProduct(createDesignTaskType) && hasDesignTaskProductSelection(createProduct)
+                ? { product: serializeDesignTaskProduct(createProduct!) }
                 : {}),
             },
             collaboratorUserIds,
@@ -4270,7 +4273,7 @@ export default function DesignPage() {
         },
       });
     } catch (e: unknown) {
-      setCreateError(getErrorMessage(e, "Не вдалося створити дизайн-задачу"));
+      toast.error(getErrorMessage(e, "Не вдалося створити дизайн-задачу"));
     } finally {
       setCreateSaving(false);
     }
@@ -6455,7 +6458,6 @@ export default function DesignPage() {
         onOpenChange={(open) => {
           setCreateDialogOpen(open);
           if (!open) {
-            setCreateError(null);
             setCreateSaving(false);
             setCreateCustomerId(null);
             setCreateCustomerLogoUrl(null);
@@ -6875,19 +6877,31 @@ export default function DesignPage() {
               </Popover>
             </div>
             {designTaskTypeShowsProduct(createDesignTaskType) ? (
-              <DesignTaskProductPicker
-                teamId={effectiveTeamId}
-                value={createProduct}
-                onChange={setCreateProduct}
-              />
+              <div className="space-y-3">
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-foreground">
+                  <Checkbox
+                    checked={createProduct != null}
+                    onCheckedChange={(checked) =>
+                      setCreateProduct(checked === true ? createEmptyDesignTaskProduct("merch") : null)
+                    }
+                  />
+                  Додати товар
+                </label>
+                {createProduct != null ? (
+                  <DesignTaskProductPicker
+                    teamId={effectiveTeamId}
+                    value={createProduct}
+                    onChange={setCreateProduct}
+                  />
+                ) : null}
+              </div>
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
-              <Textarea
+              <AutoTextarea
                 id="standalone-design-brief"
                 value={createBrief}
                 onChange={(event) => setCreateBrief(event.target.value)}
-                className="min-h-[140px]"
                 placeholder="Опишіть задачу: ціль, референси, формат, текст, обмеження."
               />
             </div>
@@ -6918,7 +6932,7 @@ export default function DesignPage() {
                   setCreateFilesDragActive(false);
                 }}
                 className={cn(
-                  "relative border-2 border-dashed rounded-[var(--radius-md)] p-6 text-center transition-colors cursor-pointer",
+                  "relative flex items-center justify-center gap-2.5 border border-dashed rounded-[var(--radius-md)] px-3 py-2.5 text-center transition-colors cursor-pointer",
                   createFilesDragActive
                     ? "border-primary/70 bg-primary/10"
                     : "border-border/40 hover:border-border/60"
@@ -6931,13 +6945,11 @@ export default function DesignPage() {
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   accept="*/*"
                 />
-                <div className="flex flex-col items-center gap-2">
-                  <Paperclip className={cn("h-5 w-5", createFilesDragActive ? "text-primary" : "text-muted-foreground")} />
-                  <div className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
-                    {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть, вставте або клікніть для вибору"}
-                  </div>
-                  <div className="text-xs text-muted-foreground">до {MAX_BRIEF_FILES} файлів</div>
-                </div>
+                <Paperclip className={cn("h-4 w-4 shrink-0", createFilesDragActive ? "text-primary" : "text-muted-foreground")} />
+                <span className={cn("text-sm", createFilesDragActive ? "text-primary font-medium" : "text-foreground")}>
+                  {createFilesDragActive ? "Відпустіть файли тут" : "Перетягніть, вставте або клікніть"}
+                </span>
+                <span className="text-xs text-muted-foreground">· до {MAX_BRIEF_FILES}</span>
               </div>
               {createFiles.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
@@ -6960,11 +6972,6 @@ export default function DesignPage() {
                 </div>
               ) : null}
             </div>
-            {createError ? (
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {createError}
-              </div>
-            ) : null}
           </div>
           <DialogFooter className="px-4 py-4 pt-0">
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={createSaving}>

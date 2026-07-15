@@ -12,7 +12,7 @@
 import { ExternalLink, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KanbanImageZoomPreview } from "@/components/kanban";
-import type { DesignTaskProduct } from "@/lib/designTaskProduct";
+import { DESIGN_TASK_PRINT_SIDE_LABELS, type DesignTaskProduct } from "@/lib/designTaskProduct";
 
 type DesignTaskProductCardProps = {
   product: DesignTaskProduct;
@@ -63,7 +63,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
 
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Товар
+            {product.productKind === "print" ? "Поліграфія" : "Товар"}
           </div>
           <div className="mt-1 truncate text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl">
             {product.name || "Товар"}
@@ -75,19 +75,33 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
           ) : null}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          {renderLinkButton(
-            product.supplierUrl,
-            "Постачальник",
-            "Посилання на товар у постачальника зʼявиться після його додавання в товарі"
-          )}
-          {renderLinkButton(
-            product.avantprintUrl,
-            "Аванпринт",
-            "Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
-          )}
-        </div>
+        {product.productKind === "print" ? null : (
+          <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+            {renderLinkButton(
+              product.supplierUrl,
+              "Постачальник",
+              "Посилання на товар у постачальника зʼявиться після його додавання в товарі"
+            )}
+            {renderLinkButton(
+              product.avantprintUrl,
+              "Аванпринт",
+              "Посилання на товар на Аванпринті зʼявиться після його додавання в товарі"
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Друк (сторони) — поліграфія only */}
+      {product.productKind === "print" && product.printSides ? (
+        <div className="border-t border-border/50 bg-muted/10 px-4 py-3.5 sm:px-5">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Друк
+          </div>
+          <span className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1.5 text-sm font-medium text-foreground">
+            {DESIGN_TASK_PRINT_SIDE_LABELS[product.printSides]}
+          </span>
+        </div>
+      ) : null}
 
       {/* Surfaces (нанесення) */}
       {product.surfaces.length > 0 ? (

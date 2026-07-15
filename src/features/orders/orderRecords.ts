@@ -846,14 +846,17 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
     const signatoryAuthority = primaryLegalEntity?.signatoryAuthority?.trim() || "";
     const tasks = designTasksByQuoteId.get(quote.id) ?? [];
     const requiresVisualization = tasks.some(
-      (task) => !task.type || task.type === "visualization" || task.type === "visualization_layout_adaptation"
+      (task) => !task.type || task.type === "visualization"
     );
+    // "Візуалізація/адаптація" requires a layout only when one was actually
+    // produced (presence-based) — a merged task that added a layout still holds
+    // the order for it; one that didn't, doesn't. Pure layout types always do.
     const requiresLayout = tasks.some(
       (task) =>
         !task.type ||
         task.type === "layout" ||
         task.type === "layout_adaptation" ||
-        task.type === "visualization_layout_adaptation"
+        (task.type === "visualization" && task.hasSelectedLayout)
     );
     let hasApprovedVisualization = tasks.some(
       (task) =>

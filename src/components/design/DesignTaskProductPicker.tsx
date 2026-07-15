@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo } from "react";
 import { ExternalLink, Plus, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +21,14 @@ import {
   resolveModelPickerValue,
 } from "@/components/catalog/CatalogModelPicker";
 import { useCatalogData } from "@/features/catalog/ProductCatalogPage/hooks/useCatalogData";
-import type { DesignTaskProduct, DesignTaskProductSurface } from "@/lib/designTaskProduct";
+import {
+  createEmptyDesignTaskProduct,
+  DESIGN_TASK_PRINT_SIDE_LABELS,
+  type DesignTaskPrintSide,
+  type DesignTaskProduct,
+  type DesignTaskProductKind,
+  type DesignTaskProductSurface,
+} from "@/lib/designTaskProduct";
 
 type DesignTaskProductPickerProps = {
   teamId: string | null;
@@ -35,13 +43,51 @@ const emptySurface: DesignTaskProductSurface = {
   positionLabel: null,
 };
 
+const PRODUCT_KIND_TABS: Array<{ value: DesignTaskProductKind; label: string }> = [
+  { value: "merch", label: "Одяг / мерч" },
+  { value: "print", label: "Поліграфія" },
+];
+
+const PRINT_SIDE_TABS = Object.entries(DESIGN_TASK_PRINT_SIDE_LABELS) as Array<[DesignTaskPrintSide, string]>;
+
 export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskProductPickerProps) {
   const { catalog, catalogLoading, ensureKindModelsLoaded } = useCatalogData(teamId);
+
+  const productKind: DesignTaskProductKind = value?.productKind ?? "merch";
 
   const merchTypes = useMemo(
     () => catalog.filter((type) => type.quote_type === "merch"),
     [catalog]
   );
+  const printTypes = useMemo(
+    () => catalog.filter((type) => type.quote_type === "print"),
+    [catalog]
+  );
+
+  const selectedPrintType = useMemo(
+    () => printTypes.find((type) => type.id === value?.catalogTypeId) ?? null,
+    [printTypes, value?.catalogTypeId]
+  );
+
+  const switchKind = (kind: DesignTaskProductKind) => {
+    if (kind === productKind) return;
+    onChange(createEmptyDesignTaskProduct(kind));
+  };
+
+  const handlePrintTypeChange = (typeId: string) => {
+    const type = printTypes.find((item) => item.id === typeId) ?? null;
+    onChange({
+      ...createEmptyDesignTaskProduct("print"),
+      catalogTypeId: typeId,
+      name: type?.name ?? "",
+      printSides: value?.printSides ?? "one_side",
+    });
+  };
+
+  const handlePrintSidesChange = (sides: DesignTaskPrintSide) => {
+    if (!value) return;
+    onChange({ ...value, printSides: sides });
+  };
 
   const selectedType = useMemo(
     () => merchTypes.find((type) => type.id === value?.catalogTypeId) ?? null,
@@ -102,9 +148,11 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
 
   const handleTypeChange = (typeId: string) => {
     onChange({
+      productKind: "merch",
       catalogTypeId: typeId,
       catalogKindId: null,
       ...emptyProductFields,
+      printSides: null,
       surfaces: [],
     });
   };
@@ -194,6 +242,27 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
         ) : null}
       </div>
 
+      {/* Product kind — apparel/merch cascade vs simplified поліграфія */}
+      <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5">
+        {PRODUCT_KIND_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => switchKind(tab.value)}
+            className={cn(
+              "h-7 rounded-md px-3 text-xs font-medium transition-colors",
+              productKind === tab.value
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {productKind === "merch" ? (
+      <>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {/* Категорія (apparel types only) */}
         <div className="space-y-1">
@@ -345,6 +414,54 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
           )}
         </div>
       ) : null}
+      </>
+      ) : (
+      <div className="space-y-3">
+        {/* Що друкуєш — print category (поліграфія) */}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Що друкуєш</Label>
+          <Select
+            value={value?.catalogTypeId ?? ""}
+            onValueChange={handlePrintTypeChange}
+            disabled={catalogLoading}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder={catalogLoading ? "Завантаження…" : "Оберіть, що друкуємо"} />
+            </SelectTrigger>
+            <SelectContent>
+              {printTypes.map((type) => (
+                <SelectItem key={type.id} value={type.id}>
+                  {type.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Кількість сторін друку — спрощено */}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Друк</Label>
+          <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5">
+            {PRINT_SIDE_TABS.map(([side, label]) => (
+              <button
+                key={side}
+                type="button"
+                disabled={!selectedPrintType}
+                onClick={() => handlePrintSidesChange(side)}
+                className={cn(
+                  "h-8 rounded-md px-3 text-xs font-medium transition-colors disabled:opacity-50",
+                  value?.printSides === side
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   );
 }

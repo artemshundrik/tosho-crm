@@ -946,11 +946,7 @@ const parseDesignOutputKind = (
 ): DesignOutputKind | null => {
   if (value === "visualization" || value === "layout") return value;
   if (fallbackTaskType === "visualization") return "visualization";
-  if (
-    fallbackTaskType === "layout" ||
-    fallbackTaskType === "layout_adaptation" ||
-    fallbackTaskType === "visualization_layout_adaptation"
-  ) {
+  if (fallbackTaskType === "layout" || fallbackTaskType === "layout_adaptation") {
     return "layout";
   }
   return "layout";
@@ -6773,12 +6769,14 @@ export default function DesignTaskPage() {
     }),
     [designOutputFiles]
   );
-  const requiresVisualizationOutput =
-    task?.designTaskType === "visualization" || task?.designTaskType === "visualization_layout_adaptation";
+  const requiresVisualizationOutput = task?.designTaskType === "visualization";
+  // Presence-based: "Візуалізація/адаптація" requires an approved layout only
+  // when a layout output was actually added. Pure layout types always require one.
+  const hasLayoutOutputs = designOutputCountByKind.layout > 0;
   const requiresLayoutOutput =
     task?.designTaskType === "layout" ||
     task?.designTaskType === "layout_adaptation" ||
-    task?.designTaskType === "visualization_layout_adaptation";
+    (task?.designTaskType === "visualization" && hasLayoutOutputs);
   const clientReviewBlockers = useMemo(() => {
     const blockers: string[] = [];
     if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) {

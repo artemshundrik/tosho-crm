@@ -1,7 +1,6 @@
 import {
   Copy,
   Image,
-  Layers3,
   PanelsTopLeft,
   Presentation,
   Sparkles,
@@ -9,10 +8,9 @@ import {
 } from "lucide-react";
 
 export const DESIGN_TASK_TYPE_OPTIONS = [
-  { value: "visualization", label: "Візуалізація" },
+  { value: "visualization", label: "Візуалізація/адаптація" },
   { value: "presentation", label: "Презентація" },
   { value: "layout_adaptation", label: "Адаптація макету" },
-  { value: "visualization_layout_adaptation", label: "Візуал + адаптація макету" },
   { value: "layout", label: "Верстка" },
   { value: "creative", label: "Креатив" },
 ] as const;
@@ -31,13 +29,24 @@ export const DESIGN_TASK_TYPE_ICONS: Record<DesignTaskType, LucideIcon> = {
   visualization: Image,
   presentation: Presentation,
   layout_adaptation: Copy,
-  visualization_layout_adaptation: Layers3,
   layout: PanelsTopLeft,
   creative: Sparkles,
 };
 
+/**
+ * Legacy stored values folded into a current canonical type. The old
+ * "Візуал + адаптація макету" (visualization_layout_adaptation) is now merged
+ * into the unified "Візуалізація/адаптація" (visualization), so existing tasks
+ * render, filter and group identically with no data migration — the value is
+ * normalized on read here.
+ */
+const LEGACY_DESIGN_TASK_TYPE_ALIASES: Record<string, DesignTaskType> = {
+  visualization_layout_adaptation: "visualization",
+};
+
 export const parseDesignTaskType = (value: unknown): DesignTaskType | null => {
   if (typeof value !== "string") return null;
-  const normalized = value.trim() as DesignTaskType;
-  return normalized in DESIGN_TASK_TYPE_LABELS ? normalized : null;
+  const normalized = value.trim();
+  if (normalized in LEGACY_DESIGN_TASK_TYPE_ALIASES) return LEGACY_DESIGN_TASK_TYPE_ALIASES[normalized];
+  return normalized in DESIGN_TASK_TYPE_LABELS ? (normalized as DesignTaskType) : null;
 };
