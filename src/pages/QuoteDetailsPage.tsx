@@ -54,6 +54,7 @@ import {
   BRIEF_SURFACE_TEXT_CLASS,
   BRIEF_TEXTAREA_CLASS,
 } from "@/components/brief/briefSurfaceStyles";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -7497,6 +7498,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <DictationButton
+                          textareaRef={briefTextareaRef}
+                          value={briefText}
+                          onChange={(next) => {
+                            setBriefText(next);
+                            setBriefDirty(true);
+                            setBriefInlineEditing(true);
+                          }}
+                          onAfterInsert={() =>
+                            resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
+                          }
+                          context="brief"
+                        />
                         <Button
                           type="button"
                           variant="outline"
@@ -8058,19 +8072,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                       <div className="mt-3 flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">{commentText.length} символів</span>
-                        <Button
-                          size="sm"
-                          onClick={handleAddComment}
-                          disabled={!commentText.trim() || commentSaving}
-                          className="gap-2"
-                        >
-                          {commentSaving ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Send className="h-3 w-3" />
-                          )}
-                          {commentSaving ? "Збереження..." : "Додати"}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <DictationButton
+                            textareaRef={commentTextareaRef}
+                            value={commentText}
+                            onChange={setCommentText}
+                            context="comment"
+                            disabled={commentSaving}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={handleAddComment}
+                            disabled={!commentText.trim() || commentSaving}
+                            className="gap-2"
+                          >
+                            {commentSaving ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Send className="h-3 w-3" />
+                            )}
+                            {commentSaving ? "Збереження..." : "Додати"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
 
@@ -8788,6 +8811,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             >
               <ListOrdered className="h-4 w-4" />
             </Button>
+            <div className="ml-auto">
+              <DictationButton
+                textareaRef={briefDialogTextareaRef}
+                value={briefText}
+                onChange={(next) => {
+                  setBriefText(next);
+                  setBriefDirty(true);
+                }}
+                onAfterInsert={() =>
+                  resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT)
+                }
+                context="brief"
+                disabled={briefSaving}
+              />
+            </div>
           </div>
           <Textarea
             ref={briefDialogTextareaRef}

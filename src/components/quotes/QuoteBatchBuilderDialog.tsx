@@ -29,6 +29,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -858,6 +859,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [quickModelPopoverOpen, setQuickModelPopoverOpen] = React.useState(false);
   const [contentReady, setContentReady] = React.useState(false);
   const wasOpenRef = React.useRef(false);
+  const designBriefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useLayoutEffect(() => {
     if (!open) {
@@ -2424,6 +2426,12 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             <Palette className={cn("mr-2 h-3.5 w-3.5", activeProduct.createDesignTask ? "text-primary" : "text-muted-foreground")} />
                             {activeProduct.createDesignTask ? "Задача увімкнена" : "Без задачі"}
                           </button>
+                          <DictationButton
+                            textareaRef={designBriefTextareaRef}
+                            value={activeProduct.designBrief}
+                            onChange={(next) => updateActiveProduct({ designBrief: next })}
+                            context="brief"
+                          />
                           <Button type="button" variant="outline" size="sm" onClick={prepareDesignBrief} className="gap-1.5">
                             <Wand2 className="h-4 w-4" />
                             Підготувати ТЗ
@@ -2476,6 +2484,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         </div>
                       ) : null}
                       <Textarea
+                        ref={designBriefTextareaRef}
                         value={activeProduct.designBrief}
                         onChange={(event) => updateActiveProduct({ designBrief: event.target.value })}
                         placeholder="ТЗ дизайнеру: що нанести, де, розмір, важливі побажання, файли"

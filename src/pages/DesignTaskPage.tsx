@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -9283,15 +9284,31 @@ export default function DesignTaskPage() {
                         </Badge>
                       ) : null}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 gap-1.5 text-xs text-muted-foreground"
-                      onClick={() => setBriefEditorOpen(true)}
-                    >
-                      <PencilLine className="h-3.5 w-3.5" />
-                      Відкрити редактор
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <DictationButton
+                        textareaRef={briefTextareaRef}
+                        value={briefDraft}
+                        onChange={(next) => {
+                          setBriefDraft(next);
+                          setBriefDirty(true);
+                          setBriefInlineEditing(true);
+                        }}
+                        onAfterInsert={() =>
+                          resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
+                        }
+                        context="brief"
+                        disabled={briefSaving || designTaskLockedByOther}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1.5 text-xs text-muted-foreground"
+                        onClick={() => setBriefEditorOpen(true)}
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                        Відкрити редактор
+                      </Button>
+                    </div>
                   </div>
 
                   {briefInlineEditing || briefDirty ? (
@@ -10077,7 +10094,14 @@ export default function DesignTaskPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end gap-2">
+                  <DictationButton
+                    textareaRef={quoteCommentTextareaRef}
+                    value={quoteCommentDraft}
+                    onChange={setQuoteCommentDraft}
+                    context="comment"
+                    disabled={quoteCommentSaving}
+                  />
                   <Button onClick={() => void handleSubmitQuoteComment()} disabled={quoteCommentSaving}>
                     {quoteCommentSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Надіслати коментар
