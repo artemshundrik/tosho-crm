@@ -1529,18 +1529,33 @@ export default function DesignPage() {
     if (defaultManagerFilterApplied) return;
     if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!userId) return;
-    if (loading && tasks.length === 0) return;
-    const ownsTasks = tasks.some((task) => task.quoteManagerUserId === userId);
-    if (ownsTasks) setManagerFilter(userId);
+    if (!userId || !effectiveTeamId) return;
+    // Mark applied up-front so this probe runs exactly once; then ask the DB
+    // directly (pagination-proof) whether this user manages any design task.
     setDefaultManagerFilterApplied(true);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { count } = await supabase
+          .from("activity_log")
+          .select("id", { count: "exact", head: true })
+          .eq("team_id", effectiveTeamId)
+          .eq("action", "design_task")
+          .eq("metadata->>manager_user_id", userId);
+        if (!cancelled && (count ?? 0) > 0) setManagerFilter(userId);
+      } catch {
+        // Probe failed — leave the filter on "all".
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [
     defaultManagerFilterApplied,
-    loading,
+    effectiveTeamId,
     managerFilter,
     permissions.isDesigner,
     permissions.isSuperAdmin,
-    tasks,
     userId,
   ]);
 

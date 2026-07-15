@@ -791,18 +791,34 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (defaultManagerFilterApplied) return;
     if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!currentUserId) return;
-    const ownsRows = rows.some((row) => (row.assigned_to?.trim() ?? "") === currentUserId);
-    if (!ownsRows) return;
-    setManagerFilter(currentUserId);
+    if (!currentUserId || !teamId) return;
+    // Mark applied up-front so this probe runs exactly once; then ask the DB
+    // directly (pagination-proof) whether this user manages any quote at all.
     setDefaultManagerFilterApplied(true);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { count } = await supabase
+          .schema("tosho")
+          .from("quotes")
+          .select("id", { count: "exact", head: true })
+          .eq("team_id", teamId)
+          .eq("assigned_to", currentUserId);
+        if (!cancelled && (count ?? 0) > 0) setManagerFilter(currentUserId);
+      } catch {
+        // Probe failed — leave the filter on "all".
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [
     currentUserId,
     defaultManagerFilterApplied,
     managerFilter,
     permissions.isDesigner,
     permissions.isSuperAdmin,
-    rows,
+    teamId,
   ]);
   const getManagerAvatar = useCallback(
     (assignedTo?: string | null) => {
