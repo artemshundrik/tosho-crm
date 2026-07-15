@@ -34,6 +34,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { usePageCache } from "@/hooks/usePageCache";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { isInactiveEmployment } from "@/lib/employment";
 import {
   parseStoredDesignOutputFiles,
   type StoredDesignOutputFile,
@@ -204,6 +205,27 @@ const DEFAULT_RECORD: MarketingRecord = {
 const toNonEmptyString = (value: unknown): string | null =>
   typeof value === "string" && value.trim() ? value.trim() : null;
 
+type MemberFilterOption = { id: string; label: string; avatarUrl?: string | null };
+
+// Role predicates — mirror DesignPage so the designer/manager filters list only
+// actual designers / managers, not everyone who happened to upload a file.
+const isDesignerRole = (value?: string | null) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "designer" || normalized === "дизайнер";
+};
+
+const isManagerRole = (accessRole?: string | null, jobRole?: string | null) => {
+  const normalizedAccess = (accessRole ?? "").trim().toLowerCase();
+  const normalizedJob = (jobRole ?? "").trim().toLowerCase();
+  return (
+    normalizedAccess === "owner" ||
+    normalizedAccess === "admin" ||
+    normalizedJob === "seo" ||
+    normalizedJob === "manager" ||
+    normalizedJob === "менеджер"
+  );
+};
+
 const getFileExtension = (fileName: string) => {
   const dot = fileName.lastIndexOf(".");
   if (dot === -1) return "";
@@ -348,6 +370,8 @@ export default function MarketingPage() {
   );
   const [memberLabelById, setMemberLabelById] = useState<Record<string, string>>({});
   const [memberAvatarById, setMemberAvatarById] = useState<Record<string, string | null>>({});
+  const [designerMembers, setDesignerMembers] = useState<MemberFilterOption[]>([]);
+  const [managerMembers, setManagerMembers] = useState<MemberFilterOption[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | MarketingStatus>("all");
@@ -587,6 +611,22 @@ export default function MarketingPage() {
         });
         setMemberLabelById(labelById);
         setMemberAvatarById(avatarById);
+
+        const toOption = (row: (typeof rows)[number]): MemberFilterOption => ({
+          id: row.userId,
+          label: row.label,
+          avatarUrl: row.avatarDisplayUrl,
+        });
+        setDesignerMembers(
+          rows
+            .filter((row) => isDesignerRole(row.jobRole) && !isInactiveEmployment(row.employmentStatus))
+            .map(toOption)
+        );
+        setManagerMembers(
+          rows
+            .filter((row) => isManagerRole(row.accessRole, row.jobRole) && !isInactiveEmployment(row.employmentStatus))
+            .map(toOption)
+        );
       } catch (membersError) {
         console.warn("Failed to load workspace members for marketing gallery", membersError);
       }
@@ -709,25 +749,16 @@ export default function MarketingPage() {
       .slice(0, 12);
   }, [visualizationVisuals, getRecord]);
 
-  const designerOptions = useMemo(() => {
-    const ids = new Set<string>();
-    visuals.forEach((visual) => {
-      if (visual.designerUserId) ids.add(visual.designerUserId);
-    });
-    return Array.from(ids)
-      .map((id) => ({ id, label: memberLabelById[id] ?? "Невідомий автор" }))
-      .sort((a, b) => a.label.localeCompare(b.label, "uk"));
-  }, [visuals, memberLabelById]);
+  // Only real designers / managers (by role), not everyone who uploaded a file.
+  const designerOptions = useMemo(
+    () => [...designerMembers].sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" })),
+    [designerMembers]
+  );
 
-  const managerOptions = useMemo(() => {
-    const ids = new Set<string>();
-    visuals.forEach((visual) => {
-      if (visual.managerUserId) ids.add(visual.managerUserId);
-    });
-    return Array.from(ids)
-      .map((id) => ({ id, label: memberLabelById[id] ?? "Невідомий менеджер" }))
-      .sort((a, b) => a.label.localeCompare(b.label, "uk"));
-  }, [visuals, memberLabelById]);
+  const managerOptions = useMemo(
+    () => [...managerMembers].sort((a, b) => a.label.localeCompare(b.label, "uk", { sensitivity: "base" })),
+    [managerMembers]
+  );
 
   const hiddenCount = useMemo(
     () =>
@@ -1149,7 +1180,10 @@ export default function MarketingPage() {
               <SelectItem value="all">Всі дизайнери</SelectItem>
               {designerOptions.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
-                  {option.label}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
+                    <span className="truncate">{option.label}</span>
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1162,7 +1196,10 @@ export default function MarketingPage() {
               <SelectItem value="all">Всі менеджери</SelectItem>
               {managerOptions.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
-                  {option.label}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
+                    <span className="truncate">{option.label}</span>
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
