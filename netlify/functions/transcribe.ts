@@ -227,8 +227,13 @@ export const handler = async (event: HttpEvent) => {
   }
   const user = userData.user;
 
-  // Resolve the caller's workspace + display label for the usage log.
-  const { data: membershipRows } = await userClient
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Resolve the caller's workspace + display label for the usage log. Use the
+  // service-role client so RLS on memberships_view can't silently drop the row.
+  const { data: membershipRows } = await adminClient
     .schema("tosho")
     .from("memberships_view")
     .select("workspace_id")
@@ -242,10 +247,6 @@ export const handler = async (event: HttpEvent) => {
     normalizeText(typeof meta.full_name === "string" ? meta.full_name : "") ||
     normalizeText(user.email) ||
     user.id;
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
   const audioBase64 = normalizeText(body.audioBase64);
   if (!audioBase64) {
@@ -314,8 +315,10 @@ export const handler = async (event: HttpEvent) => {
   const cleanupCost = cleanup
     ? chatCostUsd(cleanup.model, cleanup.inputTokens, cleanup.outputTokens)
     : { costUsd: 0, priceKnown: true };
+  // Await the insert: on Lambda (Netlify) the container freezes once the handler
+  // returns, so a fire-and-forget promise would be dropped before it reaches the DB.
   if (workspaceId) {
-    void logAiUsage(adminClient, {
+    await logAiUsage(adminClient, {
       workspaceId,
       userId: user.id,
       actorName,
@@ -334,6 +337,8 @@ export const handler = async (event: HttpEvent) => {
         priceKnown: audioCost.priceKnown && cleanupCost.priceKnown,
       },
     });
+  } else {
+    console.error("ai_usage skipped: could not resolve workspace_id for user", user.id);
   }
 
   return jsonResponse(200, { raw, cleaned });

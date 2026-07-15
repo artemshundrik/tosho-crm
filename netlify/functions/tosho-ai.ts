@@ -7658,7 +7658,7 @@ async function handleSend(params: {
       openAiDiagnostics.inputTokens,
       openAiDiagnostics.outputTokens
     );
-    void logAiUsage(params.adminClient, {
+    await logAiUsage(params.adminClient, {
       workspaceId: params.auth.workspaceId,
       userId: params.auth.userId,
       actorName: params.auth.actorLabel,
