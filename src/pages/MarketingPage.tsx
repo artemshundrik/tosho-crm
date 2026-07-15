@@ -121,6 +121,7 @@ type GalleryVisual = {
   quoteNumber: string | null;
   brief: string | null;
   designerUserId: string | null;
+  managerUserId: string | null;
 };
 
 type ActivityRow = {
@@ -351,6 +352,7 @@ export default function MarketingPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | MarketingStatus>("all");
   const [designerFilter, setDesignerFilter] = useState<string>("all");
+  const [managerFilter, setManagerFilter] = useState<string>("all");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -423,6 +425,7 @@ export default function MarketingPage() {
           const taskStatus = toNonEmptyString(metadata.status) as DesignStatus | null;
           const taskType = parseDesignTaskType(metadata.design_task_type);
           const assigneeUserId = toNonEmptyString(metadata.assignee_user_id);
+          const managerUserId = toNonEmptyString(metadata.manager_user_id);
 
           files.forEach((file) => {
             nextVisuals.push({
@@ -447,6 +450,7 @@ export default function MarketingPage() {
               quoteNumber,
               brief,
               designerUserId: file.uploaded_by ?? assigneeUserId,
+              managerUserId,
             });
           });
         });
@@ -614,6 +618,7 @@ export default function MarketingPage() {
       if (showHidden && !record.isHidden) return false;
       if (onlyFavorites && !record.isFavorite) return false;
       if (designerFilter !== "all" && visual.designerUserId !== designerFilter) return false;
+      if (managerFilter !== "all" && visual.managerUserId !== managerFilter) return false;
       if (tagFilter && !record.tags.some((tag) => tag.toLowerCase() === tagFilter.toLowerCase())) return false;
       if (query) {
         const haystack = [
@@ -630,7 +635,7 @@ export default function MarketingPage() {
       }
       return true;
     });
-  }, [visualizationVisuals, getRecord, search, designerFilter, tagFilter, onlyFavorites, showHidden]);
+  }, [visualizationVisuals, getRecord, search, designerFilter, managerFilter, tagFilter, onlyFavorites, showHidden]);
 
   // Everything the feed shows and counts is a stack: one design task = one card,
   // never raw files. Cover = a favourited visual, else the first.
@@ -711,6 +716,16 @@ export default function MarketingPage() {
     });
     return Array.from(ids)
       .map((id) => ({ id, label: memberLabelById[id] ?? "Невідомий автор" }))
+      .sort((a, b) => a.label.localeCompare(b.label, "uk"));
+  }, [visuals, memberLabelById]);
+
+  const managerOptions = useMemo(() => {
+    const ids = new Set<string>();
+    visuals.forEach((visual) => {
+      if (visual.managerUserId) ids.add(visual.managerUserId);
+    });
+    return Array.from(ids)
+      .map((id) => ({ id, label: memberLabelById[id] ?? "Невідомий менеджер" }))
       .sort((a, b) => a.label.localeCompare(b.label, "uk"));
   }, [visuals, memberLabelById]);
 
@@ -1133,6 +1148,19 @@ export default function MarketingPage() {
             <SelectContent>
               <SelectItem value="all">Всі дизайнери</SelectItem>
               {designerOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={managerFilter} onValueChange={setManagerFilter}>
+            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")} aria-label="Менеджер">
+              <SelectValue placeholder="Всі менеджери" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Всі менеджери</SelectItem>
+              {managerOptions.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
                   {option.label}
                 </SelectItem>
