@@ -1671,6 +1671,31 @@ export default function DesignTaskPage() {
   }, [briefChangeRequests]);
   const hasBriefHistory = briefVersions.length > 1;
 
+  const newestChangeRequest = useMemo(
+    () => briefChangeRequests.find((cr) => cr.id === newestChangeRequestId) ?? null,
+    [briefChangeRequests, newestChangeRequestId]
+  );
+
+  // A new правка opens a new round that needs its own (re)set deadline. The
+  // deadline counts as "fresh for the round" only if it was updated after that
+  // правка was added (mirrors the existing return-to-«Правки» deadline gate).
+  const deadlineStaleForRound = useMemo(() => {
+    if (!newestChangeRequest) return false;
+    if (!task?.designDeadline) return true;
+    const deadlineUpdatedAt =
+      typeof task?.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
+    if (!deadlineUpdatedAt) return true;
+    return new Date(deadlineUpdatedAt).getTime() <= new Date(newestChangeRequest.requested_at).getTime();
+  }, [newestChangeRequest, task?.designDeadline, task?.metadata]);
+
+  // Required fields for «Записати документ». Empty → save is blocked + surfaced.
+  const documentBlockers = useMemo(() => {
+    const list: string[] = [];
+    if (!briefDraft.trim()) list.push("текст ТЗ");
+    if (deadlineStaleForRound) list.push("дедлайн для нової правки");
+    return list;
+  }, [briefDraft, deadlineStaleForRound]);
+
   // Outputs grouped by the change request (правка) they answer.
   const designOutputsByChangeRequestId = useMemo(() => {
     const map = new Map<string, { files: DesignOutputFile[]; links: DesignOutputLink[] }>();
@@ -5451,6 +5476,18 @@ export default function DesignTaskPage() {
   const saveDesignBrief = async () => {
     if (!task || !effectiveTeamId || briefSaving) return;
     if (!ensureCanEdit()) return;
+    // «Записати документ»: block until required fields are filled, and highlight
+    // what's missing (auto-open the deadline popover for a stale-round deadline).
+    if (documentBlockers.length > 0) {
+      if (deadlineStaleForRound) {
+        setDeadlineDraftDate(toLocalDate(task.designDeadline));
+        const match = (task.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
+        setDeadlineTime(match ? `${match[1]}:${match[2]}` : "12:00");
+        setDeadlinePopoverOpen(true);
+      }
+      toast.error(`Заповніть обовʼязкові поля: ${documentBlockers.join(", ")}.`);
+      return;
+    }
     const nextBrief = briefDraft.trim() ? briefDraft.trim() : null;
     const previousBrief = activeBriefVersion?.brief ?? task.designBrief ?? null;
     if ((previousBrief ?? null) === (nextBrief ?? null)) {
@@ -5487,7 +5524,7 @@ export default function DesignTaskPage() {
       created_at: nowIso,
       created_by: userId ?? null,
       created_by_label: actorLabel,
-      change_request_id: null,
+      change_request_id: newestChangeRequestId,
       note: "Manual update",
     };
     const nextVersions = [...baselineVersions, nextVersion];
@@ -9300,6 +9337,11 @@ export default function DesignTaskPage() {
 
                   {(briefInlineEditing || briefDirty) && (
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      {briefDirty && documentBlockers.length > 0 ? (
+                        <p className="mr-auto text-xs text-destructive">
+                          Заповніть обовʼязкові поля: {documentBlockers.join(", ")}.
+                        </p>
+                      ) : null}
                       {briefDirty ? (
                         <Button
                           size="sm"
@@ -9329,7 +9371,7 @@ export default function DesignTaskPage() {
                         className="gap-1.5"
                       >
                         {briefSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                        Зберегти нову версію
+                        Записати документ
                       </Button>
                     </div>
                   )}
@@ -11397,6 +11439,11 @@ export default function DesignTaskPage() {
                   Скасувати зміни
                 </Button>
               ) : null}
+              {briefDirty && documentBlockers.length > 0 ? (
+                <p className="mr-auto text-xs text-destructive">
+                  Заповніть обовʼязкові поля: {documentBlockers.join(", ")}.
+                </p>
+              ) : null}
               <Button variant="outline" size="sm" onClick={() => setBriefEditorOpen(false)}>
                 Закрити
               </Button>
@@ -11407,7 +11454,7 @@ export default function DesignTaskPage() {
                 className="gap-1.5"
               >
                 {briefSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                Зберегти нову версію
+                Записати документ
               </Button>
             </div>
           </DialogFooter>
