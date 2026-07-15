@@ -83,6 +83,25 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(200, { success: true, skipped: true, reason: "unsupported-extension" });
   }
 
+  // Skip when both variants already exist: re-generating means re-downloading the
+  // multi-MB original from storage on every call, which was the main egress leak.
+  // The existence probe uses the USER client (createSignedUrl enforces storage RLS),
+  // so this reveals nothing the caller couldn't already read — same anti-IDOR
+  // property as the user-client download below.
+  const variantExists = async (variant: "thumb" | "preview") => {
+    for (const ext of ["webp", "png"]) {
+      const { data } = await userClient.storage
+        .from(bucket)
+        .createSignedUrl(getVariantPath(storagePath, variant, ext), 60);
+      if (typeof data?.signedUrl === "string") return true;
+    }
+    return false;
+  };
+  const [thumbExists, previewExists] = await Promise.all([variantExists("thumb"), variantExists("preview")]);
+  if (thumbExists && previewExists) {
+    return jsonResponse(200, { success: true, skipped: true, reason: "already-generated" });
+  }
+
   // Authorization: download the source with the USER client so storage RLS enforces that the
   // caller may actually read this object. This blocks the IDOR where any authenticated user
   // could force a service-role read of an arbitrary (bucket, storagePath). The admin client is

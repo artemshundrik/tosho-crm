@@ -970,18 +970,21 @@ export default function MarketingPage() {
             }}
           >
             <div className={cn("relative w-full overflow-hidden bg-muted/30", VISUAL_ASPECT_CLASS)}>
+              {/* Card covers render ~300px wide, so use the 640px "preview" variant
+                  (avg ~25KB) instead of the blurry 160px thumb. Cheap now that images
+                  are lazy + signed URLs are stable, so each cover downloads once. */}
               {isStack ? (
                 <StackHoverPreview
                   items={[group.cover, ...group.items.filter((item) => item.key !== group.cover.key)]}
                   alt={`${visual.customerName} — ${visual.fileName}`}
-                  variant="thumb"
+                  variant="preview"
                 />
               ) : (
                 <StorageObjectImage
                   bucket={visual.bucket}
                   path={visual.path}
                   alt={`${visual.customerName} — ${visual.fileName}`}
-                  variant="thumb"
+                  variant="preview"
                   className="h-full w-full"
                   imageClassName="h-full w-full object-cover transition-transform duration-300 ease-out group-hover/card:scale-[1.03] motion-reduce:transition-none"
                 />

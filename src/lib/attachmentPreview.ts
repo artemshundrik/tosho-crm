@@ -16,8 +16,72 @@ type UploadedAttachmentResult = {
   optimizedOriginal: boolean;
 };
 
-const SIGNED_URL_CACHE = new Map<string, string>();
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
+// Signed-URL cache, persisted to sessionStorage (mirrors the avatar pipeline).
+// The stored objects are immutable (1-year Cache-Control), but the signed URL's
+// token is the browser's HTTP cache key — if we re-sign on every reload, every
+// thumbnail re-downloads even though the bytes never change. Persisting the
+// token for its whole TTL keeps URLs stable across reloads, so the browser
+// cache actually gets hits. TTL matches avatars (7 days).
+const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
+const SIGNED_URL_CACHE_STORAGE_KEY = "attachment-signed-url-cache-v1";
+const SIGNED_URL_EXPIRY_SKEW_MS = 5 * 60 * 1000;
+
+type SignedUrlCacheEntry = { url: string; expiresAt: number };
+
+const loadPersistedSignedUrlCache = (): Map<string, SignedUrlCacheEntry> => {
+  if (typeof window === "undefined") return new Map();
+  try {
+    const raw = window.sessionStorage.getItem(SIGNED_URL_CACHE_STORAGE_KEY);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw) as Record<string, SignedUrlCacheEntry>;
+    const now = Date.now();
+    const entries = Object.entries(parsed).filter(
+      ([, entry]) =>
+        entry && typeof entry.url === "string" && typeof entry.expiresAt === "number" && entry.expiresAt > now
+    );
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+};
+
+const SIGNED_URL_CACHE = loadPersistedSignedUrlCache();
+
+let signedUrlPersistScheduled = false;
+const persistSignedUrlCache = () => {
+  if (typeof window === "undefined" || signedUrlPersistScheduled) return;
+  signedUrlPersistScheduled = true;
+  window.setTimeout(() => {
+    signedUrlPersistScheduled = false;
+    try {
+      window.sessionStorage.setItem(
+        SIGNED_URL_CACHE_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries(SIGNED_URL_CACHE))
+      );
+    } catch {
+      // Quota/serialization failures just mean we fall back to in-memory only.
+    }
+  }, 250);
+};
+
+const getCachedSignedUrl = (cacheKey: string): string | null => {
+  const entry = SIGNED_URL_CACHE.get(cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    SIGNED_URL_CACHE.delete(cacheKey);
+    persistSignedUrlCache();
+    return null;
+  }
+  return entry.url;
+};
+
+const setCachedSignedUrl = (cacheKey: string, url: string, ttlSeconds: number) => {
+  SIGNED_URL_CACHE.set(cacheKey, {
+    url,
+    expiresAt: Date.now() + ttlSeconds * 1000 - SIGNED_URL_EXPIRY_SKEW_MS,
+  });
+  persistSignedUrlCache();
+};
 const THUMB_MAX_SIZE = 160;
 const PREVIEW_MAX_SIZE = 640;
 const SERVER_PREVIEW_RETRY_DELAY_MS = 1500;
@@ -352,6 +416,7 @@ export async function removeAttachmentWithVariants(bucket: string, storagePath: 
       if (key.startsWith(`${cacheKey}:download:`)) SIGNED_URL_CACHE.delete(key);
     });
   });
+  persistSignedUrlCache();
 }
 
 export async function getSignedAttachmentUrl(
@@ -362,12 +427,12 @@ export async function getSignedAttachmentUrl(
 ) {
   for (const targetPath of getAttachmentVariantCandidatePaths(storagePath, variant)) {
     const cacheKey = `${bucket}:${targetPath}`;
-    const cached = SIGNED_URL_CACHE.get(cacheKey);
+    const cached = getCachedSignedUrl(cacheKey);
     if (cached) return cached;
     const { data, error } = await supabase.storage.from(bucket).createSignedUrl(targetPath, ttlSeconds);
     const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
     if (signedUrl && !error) {
-      SIGNED_URL_CACHE.set(cacheKey, signedUrl);
+      setCachedSignedUrl(cacheKey, signedUrl, ttlSeconds);
       return signedUrl;
     }
   }
@@ -382,7 +447,7 @@ export async function getSignedAttachmentDownloadUrl(
 ) {
   const normalizedFileName = getSignedUrlDownloadFileName(fileName);
   const cacheKey = `${bucket}:${storagePath}:download:${normalizedFileName ?? ""}`;
-  const cached = SIGNED_URL_CACHE.get(cacheKey);
+  const cached = getCachedSignedUrl(cacheKey);
   if (cached) return cached;
 
   const { data, error } = await supabase.storage
@@ -392,7 +457,7 @@ export async function getSignedAttachmentDownloadUrl(
     });
   const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
   if (signedUrl && !error) {
-    SIGNED_URL_CACHE.set(cacheKey, signedUrl);
+    setCachedSignedUrl(cacheKey, signedUrl, ttlSeconds);
     return signedUrl;
   }
   return null;
@@ -433,6 +498,12 @@ export async function waitForSignedAttachmentUrl(
   const ttlSeconds = options?.ttlSeconds ?? SIGNED_URL_TTL_SECONDS;
 
   if (options?.queueServerPreview && variant !== "original" && isServerPreviewableStoragePath(storagePath)) {
+    // Only queue server-side generation when the variant doesn't exist yet.
+    // Queuing unconditionally made every render of a PDF/TIFF attachment invoke
+    // the Netlify function, which re-downloads the multi-MB original from
+    // storage each time — that was the main driver of storage egress.
+    const existingUrl = await getSignedAttachmentUrl(bucket, storagePath, variant, ttlSeconds);
+    if (existingUrl) return existingUrl;
     await ensureServerAttachmentPreviewQueued(bucket, storagePath);
   }
 
