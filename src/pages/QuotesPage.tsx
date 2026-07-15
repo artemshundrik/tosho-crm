@@ -494,11 +494,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
+  // Only the superadmin sees everyone by default; everyone else defaults to
+  // just their own and can widen the filter manually.
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
+    () => restoredFilters?.managerFilter ?? (!permissions.isSuperAdmin && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || !permissions.isSuperAdmin
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
@@ -784,19 +786,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, []);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
+    if (permissions.isSuperAdmin) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!isManagerUser) return;
     if (!currentUserId) return;
-    const hasAssignedRows = rows.some((row) => (row.assigned_to?.trim() ?? "") === currentUserId);
-    if (!hasAssignedRows) return;
     setManagerFilter(currentUserId);
     setDefaultManagerFilterApplied(true);
   }, [
     currentUserId,
     defaultManagerFilterApplied,
-    isManagerUser,
     managerFilter,
-    rows,
+    permissions.isSuperAdmin,
   ]);
   const getManagerAvatar = useCallback(
     (assignedTo?: string | null) => {

@@ -1058,14 +1058,16 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
+  // Only the superadmin sees all managers by default; everyone else defaults to
+  // just their own and can widen the filter manually.
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
+    () => restoredFilters?.managerFilter ?? (!permissions.isSuperAdmin && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || !permissions.isSuperAdmin
   );
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
     () => restoredFilters?.timelineZoom ?? "day"
@@ -1521,15 +1523,12 @@ export default function DesignPage() {
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
+    if (permissions.isSuperAdmin) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
-    if (!isManagerUser || !userId) return;
-    if (loading && tasks.length === 0) return;
-    const hasOwnManagedTasks = tasks.some((task) => task.quoteManagerUserId === userId);
-    if (hasOwnManagedTasks) {
-      setManagerFilter(userId);
-    }
+    if (!userId) return;
+    setManagerFilter(userId);
     setDefaultManagerFilterApplied(true);
-  }, [defaultManagerFilterApplied, isManagerUser, loading, managerFilter, tasks, userId]);
+  }, [defaultManagerFilterApplied, managerFilter, permissions.isSuperAdmin, userId]);
 
   const loadTeamWorkloadTasks = useCallback(async () => {
     if (!effectiveTeamId) {
