@@ -494,13 +494,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
-  // Only the superadmin sees everyone by default; everyone else defaults to
-  // just their own and can widen the filter manually.
+  // Superadmin sees everyone by default. Designers filter by designer, not by
+  // manager, so they keep "all managers". Everyone else (managers, SEO, admin…)
+  // defaults to just their own and can widen the filter manually.
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (!permissions.isSuperAdmin && userId ? userId : ALL_MANAGERS_FILTER)
+    () =>
+      restoredFilters?.managerFilter ??
+      (!permissions.isSuperAdmin && !permissions.isDesigner && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || !permissions.isSuperAdmin
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
@@ -786,7 +789,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, []);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
-    if (permissions.isSuperAdmin) return;
+    if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!currentUserId) return;
     setManagerFilter(currentUserId);
@@ -795,6 +798,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     currentUserId,
     defaultManagerFilterApplied,
     managerFilter,
+    permissions.isDesigner,
     permissions.isSuperAdmin,
   ]);
   const getManagerAvatar = useCallback(

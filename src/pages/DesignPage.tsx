@@ -1058,16 +1058,20 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  // Only the superadmin sees all managers by default; everyone else defaults to
-  // just their own and can widen the filter manually.
+  // Superadmin sees all managers by default. Designers filter by designer, not
+  // by manager, so they keep "all managers" (and default their designer filter
+  // to self below). Everyone else (managers, SEO, admin…) defaults the manager
+  // filter to just their own and can widen it manually.
   const [managerFilter, setManagerFilter] = useState<string>(
-    () => restoredFilters?.managerFilter ?? (!permissions.isSuperAdmin && userId ? userId : ALL_MANAGERS_FILTER)
+    () =>
+      restoredFilters?.managerFilter ??
+      (!permissions.isSuperAdmin && !permissions.isDesigner && userId ? userId : ALL_MANAGERS_FILTER)
   );
   const [defaultDesignerFilterApplied, setDefaultDesignerFilterApplied] = useState(
     () => (restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER) !== ALL_DESIGNERS_FILTER
   );
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
-    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || !permissions.isSuperAdmin
+    () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER
   );
   const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
     () => restoredFilters?.timelineZoom ?? "day"
@@ -1523,12 +1527,12 @@ export default function DesignPage() {
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
-    if (permissions.isSuperAdmin) return;
+    if (permissions.isSuperAdmin || permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!userId) return;
     setManagerFilter(userId);
     setDefaultManagerFilterApplied(true);
-  }, [defaultManagerFilterApplied, managerFilter, permissions.isSuperAdmin, userId]);
+  }, [defaultManagerFilterApplied, managerFilter, permissions.isDesigner, permissions.isSuperAdmin, userId]);
 
   const loadTeamWorkloadTasks = useCallback(async () => {
     if (!effectiveTeamId) {
@@ -4994,7 +4998,7 @@ export default function DesignPage() {
                   imageUrl={task.productImageUrl}
                   zoomImageUrl={task.productZoomImageUrl ?? task.productImageUrl}
                   alt={task.productName}
-                  loadStrategy="eager"
+                  loadStrategy="visible"
                 />
               ) : (
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
