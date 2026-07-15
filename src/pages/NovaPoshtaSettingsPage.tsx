@@ -58,6 +58,8 @@ export default function NovaPoshtaSettingsPage() {
   const [notConfigured, setNotConfigured] = useState(false);
   const [senders, setSenders] = useState<NpSender[]>([]);
   const [contacts, setContacts] = useState<NpContactPerson[]>([]);
+  const [weightText, setWeightText] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
 
   const update = (patch: Partial<NovaPoshtaSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
 
@@ -73,7 +75,10 @@ export default function NovaPoshtaSettingsPage() {
         setTeamId(tid);
         if (tid) {
           const loaded = await loadNovaPoshtaSettings(tid);
-          if (!cancelled && loaded) setSettings(loaded);
+          if (!cancelled && loaded) {
+            setSettings(loaded);
+            setWeightText(loaded.defaultWeight != null ? String(loaded.defaultWeight) : "");
+          }
         }
         try {
           const list = await getNpSenders();
@@ -140,9 +145,25 @@ export default function NovaPoshtaSettingsPage() {
       toast.error("Не знайдено команду");
       return;
     }
+    setShowErrors(true);
+    const missing: string[] = [];
+    if (!settings.senderRef) missing.push("контрагент-відправник");
+    if (!settings.senderContactRef) missing.push("контактна особа");
+    if (!settings.senderPhone) missing.push("телефон відправника");
+    if (!settings.senderCityRef) missing.push("місто відправлення");
+    if (!settings.senderWarehouseRef) missing.push("відділення відправлення");
+    if (missing.length > 0) {
+      toast.error(`Для створення ТТН заповніть: ${missing.join(", ")}.`);
+      return;
+    }
+
+    const parsedWeight = weightText.trim() === "" ? null : Number(weightText);
+    const nextWeight =
+      parsedWeight != null && Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : null;
+
     setSaving(true);
     try {
-      await saveNovaPoshtaSettings(teamId, settings);
+      await saveNovaPoshtaSettings(teamId, { ...settings, defaultWeight: nextWeight });
       toast.success("Налаштування Нової Пошти збережено");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не вдалося зберегти");
@@ -150,6 +171,14 @@ export default function NovaPoshtaSettingsPage() {
       setSaving(false);
     }
   };
+
+  const missingRequired = [
+    !settings.senderRef && "контрагент-відправник",
+    !settings.senderContactRef && "контактна особа",
+    !settings.senderPhone && "телефон відправника",
+    !settings.senderCityRef && "місто відправлення",
+    !settings.senderWarehouseRef && "відділення відправлення",
+  ].filter(Boolean) as string[];
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-6">
@@ -191,7 +220,7 @@ export default function NovaPoshtaSettingsPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Контрагент-відправник</Label>
+                <Label>Контрагент-відправник <span className="text-destructive">*</span></Label>
                 <Select value={settings.senderRef} onValueChange={handleSelectSender} disabled={notConfigured}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder={senders.length ? "Оберіть відправника" : "Немає відправників у кабінеті"} />
@@ -207,7 +236,7 @@ export default function NovaPoshtaSettingsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Контактна особа</Label>
+                <Label>Контактна особа <span className="text-destructive">*</span></Label>
                 <Select
                   value={settings.senderContactRef}
                   onValueChange={handleSelectContact}
@@ -226,7 +255,7 @@ export default function NovaPoshtaSettingsPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Телефон відправника</Label>
+                <Label>Телефон відправника <span className="text-destructive">*</span></Label>
                 <PhoneInput value={settings.senderPhone} onChange={(senderPhone) => update({ senderPhone })} />
               </div>
             </CardContent>
@@ -238,7 +267,7 @@ export default function NovaPoshtaSettingsPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Місто відправлення</Label>
+                <Label>Місто відправлення <span className="text-destructive">*</span></Label>
                 <NpCityCombobox
                   city={settings.senderCityName}
                   onCityChange={(city) => update({ senderCityName: city, senderCityRef: "", senderWarehouseRef: "", senderWarehouseName: "" })}
@@ -253,7 +282,7 @@ export default function NovaPoshtaSettingsPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Відділення відправлення</Label>
+                <Label>Відділення відправлення <span className="text-destructive">*</span></Label>
                 <NpWarehouseCombobox
                   cityRef={settings.senderCityRef}
                   postomat={false}
@@ -339,15 +368,16 @@ export default function NovaPoshtaSettingsPage() {
               <div className="grid gap-2">
                 <Label>Вага за замовчуванням, кг</Label>
                 <Input
-                  value={settings.defaultWeight ?? ""}
+                  value={weightText}
                   onChange={(event) => {
                     const raw = event.target.value.replace(",", ".");
-                    update({ defaultWeight: raw.trim() === "" ? null : Number(raw) || null });
+                    if (/^\d*\.?\d*$/.test(raw)) setWeightText(raw);
                   }}
                   inputMode="decimal"
                   placeholder="напр. 0.5"
                   className="h-9"
                 />
+                <p className="text-xs text-muted-foreground">Якщо порожньо — у ТТН підставиться 0.5 кг.</p>
               </div>
               <div className="grid gap-2">
                 <Label>Кількість місць</Label>
@@ -369,6 +399,12 @@ export default function NovaPoshtaSettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {showErrors && missingRequired.length > 0 ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              Щоб можна було створювати ТТН, заповніть: {missingRequired.join(", ")}.
+            </div>
+          ) : null}
 
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={saving || !teamId}>
