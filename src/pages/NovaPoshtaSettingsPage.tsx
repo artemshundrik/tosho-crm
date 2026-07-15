@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Truck, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
-import { resolveWorkspaceId } from "@/lib/workspace";
+import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -50,8 +49,17 @@ const SERVICE_LABELS: Record<string, string> = {
   DoorsDoors: "Адреса → Адреса",
 };
 
+const errMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const value = (error as { message?: unknown }).message;
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return fallback;
+};
+
 export default function NovaPoshtaSettingsPage() {
-  const [teamId, setTeamId] = useState<string | null>(null);
+  const { teamId } = useAuth();
   const [settings, setSettings] = useState<NovaPoshtaSettings>(EMPTY_NOVA_POSHTA_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,12 +77,8 @@ export default function NovaPoshtaSettingsPage() {
     (async () => {
       setLoading(true);
       try {
-        const { data: userData } = await supabase.auth.getUser();
-        const tid = await resolveWorkspaceId(userData?.user?.id ?? null);
-        if (cancelled) return;
-        setTeamId(tid);
-        if (tid) {
-          const loaded = await loadNovaPoshtaSettings(tid);
+        if (teamId) {
+          const loaded = await loadNovaPoshtaSettings(teamId);
           if (!cancelled && loaded) {
             setSettings(loaded);
             setWeightText(loaded.defaultWeight != null ? String(loaded.defaultWeight) : "");
@@ -91,7 +95,7 @@ export default function NovaPoshtaSettingsPage() {
           }
         }
       } catch (error) {
-        if (!cancelled) toast.error(error instanceof Error ? error.message : "Не вдалося завантажити налаштування");
+        if (!cancelled) toast.error(errMessage(error, "Не вдалося завантажити налаштування"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -99,7 +103,7 @@ export default function NovaPoshtaSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [teamId]);
 
   // Контактні особи обраного відправника.
   useEffect(() => {
@@ -166,7 +170,7 @@ export default function NovaPoshtaSettingsPage() {
       await saveNovaPoshtaSettings(teamId, { ...settings, defaultWeight: nextWeight });
       toast.success("Налаштування Нової Пошти збережено");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не вдалося зберегти");
+      toast.error(errMessage(error, "Не вдалося зберегти"));
     } finally {
       setSaving(false);
     }
