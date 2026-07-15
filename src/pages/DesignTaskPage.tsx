@@ -2728,7 +2728,13 @@ export default function DesignTaskPage() {
   useEffect(() => {
     if (!briefInlineEditing) return;
     const frameId = requestAnimationFrame(() => {
-      briefTextareaRef.current?.focus();
+      const textarea = briefTextareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      // Place the caret at the END so continuing to type appends to existing
+      // ТЗ text instead of prepending at position 0.
+      const length = textarea.value.length;
+      textarea.setSelectionRange(length, length);
     });
     return () => cancelAnimationFrame(frameId);
   }, [briefInlineEditing]);
