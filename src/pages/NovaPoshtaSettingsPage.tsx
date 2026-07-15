@@ -301,6 +301,9 @@ export default function NovaPoshtaSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Дефолти відправлення</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Необовʼязкові — лише підставляються у форму ТТН, де їх можна змінити під кожне відправлення.
+              </p>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
