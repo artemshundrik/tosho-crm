@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -905,6 +906,7 @@ export default function DesignPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
+  const createBriefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [createCustomer, setCreateCustomer] = useState("");
   const [createCustomerId, setCreateCustomerId] = useState<string | null>(null);
   const [createCustomerLogoUrl, setCreateCustomerLogoUrl] = useState<string | null>(null);
@@ -6925,8 +6927,17 @@ export default function DesignPage() {
               </div>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="standalone-design-brief">ТЗ для дизайнера</Label>
+                <DictationButton
+                  textareaRef={createBriefTextareaRef}
+                  value={createBrief}
+                  onChange={setCreateBrief}
+                  context="brief"
+                />
+              </div>
               <AutoTextarea
+                ref={createBriefTextareaRef}
                 id="standalone-design-brief"
                 value={createBrief}
                 onChange={(event) => setCreateBrief(event.target.value)}

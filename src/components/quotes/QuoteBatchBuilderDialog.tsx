@@ -860,6 +860,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [contentReady, setContentReady] = React.useState(false);
   const wasOpenRef = React.useRef(false);
   const designBriefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const notesTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useLayoutEffect(() => {
     if (!open) {
@@ -2018,11 +2019,20 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
               </div>
 
               <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
-                <div className="text-sm font-semibold text-foreground">Доповнення</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-foreground">Доповнення</div>
+                  <DictationButton
+                    textareaRef={notesTextareaRef}
+                    value={notes}
+                    onChange={setNotes}
+                    context="comment"
+                  />
+                </div>
                 <div className="text-xs text-muted-foreground">
                   Тези / нотатки до прорахунку. Відобразяться в його деталях.
                 </div>
                 <Textarea
+                  ref={notesTextareaRef}
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Напр.: домовились про знижку 5%, оплата частинами, особливі вимоги до пакування…"

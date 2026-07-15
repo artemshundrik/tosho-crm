@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import { Chip } from "@/components/ui/chip";
 import {
   Select,
@@ -639,6 +640,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [printApplications, setPrintApplications] = React.useState<PrintApplication[]>([]);
   const [printMode, setPrintMode] = React.useState<"with_print" | "no_print">("no_print");
   const [createDesignTask, setCreateDesignTask] = React.useState(false);
+  const notesTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const briefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
   const [filesDragActive, setFilesDragActive] = React.useState(false);
   const [quickModelName, setQuickModelName] = React.useState("");
@@ -2368,10 +2371,19 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         <div className="mt-8 space-y-4">
           <SectionHeader>Доповнення</SectionHeader>
           <div className="space-y-2 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
-            <div className="text-sm text-muted-foreground">
-              Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-sm text-muted-foreground">
+                Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
+              </div>
+              <DictationButton
+                textareaRef={notesTextareaRef}
+                value={notes}
+                onChange={setNotes}
+                context="comment"
+              />
             </div>
             <Textarea
+              ref={notesTextareaRef}
               className="min-h-[120px] resize-y text-foreground placeholder:text-muted-foreground"
               placeholder="Напр.: домовились про знижку 5%, оплата частинами, особливі вимоги до пакування…"
               value={notes}
@@ -2493,8 +2505,17 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-muted-foreground">ТЗ для дизайнера</div>
+                    <DictationButton
+                      textareaRef={briefTextareaRef}
+                      value={comment}
+                      onChange={setComment}
+                      context="brief"
+                    />
+                  </div>
                   <Textarea
+                    ref={briefTextareaRef}
                     className="min-h-[180px] resize-y text-foreground placeholder:text-muted-foreground"
                     placeholder="Опишіть задачу для дизайнера: референси, текст, побажання, обмеження"
                     value={comment}

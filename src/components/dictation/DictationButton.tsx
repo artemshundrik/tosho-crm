@@ -32,15 +32,19 @@ function formatElapsed(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-// Insert `text` at the textarea caret (replacing any selection), padding with
-// spaces so dictated fragments don't fuse onto adjacent words.
+// Insert `text` into the field. If the textarea is genuinely focused with a
+// caret, insert at that caret (replacing any selection); otherwise append at the
+// end. Clicking the mic button blurs the textarea, so the common case is
+// append-at-end — which is what users expect when dictating into existing text.
 function insertAtCaret(
   textarea: HTMLTextAreaElement | null,
   value: string,
   text: string
 ): { nextValue: string; caret: number } {
-  const start = textarea?.selectionStart ?? value.length;
-  const end = textarea?.selectionEnd ?? value.length;
+  const isFocused =
+    !!textarea && typeof document !== "undefined" && document.activeElement === textarea;
+  const start = isFocused ? textarea.selectionStart ?? value.length : value.length;
+  const end = isFocused ? textarea.selectionEnd ?? value.length : value.length;
   const before = value.slice(0, start);
   const after = value.slice(end);
   const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);

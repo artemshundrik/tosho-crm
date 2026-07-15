@@ -818,6 +818,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [notesEditing, setNotesEditing] = useState(false);
+  const notesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -8581,22 +8582,36 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
               <div className="flex items-center justify-between gap-2">
                 <div className="design-task-side-heading">Доповнення</div>
-                {!notesEditing && !notesDirty && notesText.trim() ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setNotesEditing(true)}
-                  >
-                    Редагувати
-                  </Button>
-                ) : null}
+                <div className="flex items-center gap-1">
+                  <DictationButton
+                    textareaRef={notesTextareaRef}
+                    value={notesText}
+                    onChange={(next) => {
+                      setNotesText(next);
+                      setNotesDirty(true);
+                      setNotesEditing(true);
+                    }}
+                    context="comment"
+                    disabled={notesSaving}
+                  />
+                  {!notesEditing && !notesDirty && notesText.trim() ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setNotesEditing(true)}
+                    >
+                      Редагувати
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <div className="mt-3 space-y-2">
                 {notesEditing || notesDirty ? (
                   <>
                     <Textarea
+                      ref={notesTextareaRef}
                       value={notesText}
                       onChange={(event) => {
                         setNotesText(event.target.value);
