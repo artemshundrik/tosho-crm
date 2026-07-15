@@ -89,6 +89,41 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
     onChange({ ...value, printSides: sides });
   };
 
+  // Concrete printable models under the chosen поліграфія category (flattened
+  // across its kinds — one "Що друкуєш" picker instead of a Вид → Модель cascade).
+  const printModels = useMemo(
+    () => selectedPrintType?.kinds.flatMap((kind) => kind.models) ?? [],
+    [selectedPrintType]
+  );
+
+  useEffect(() => {
+    if (!selectedPrintType) return;
+    for (const kind of selectedPrintType.kinds) void ensureKindModelsLoaded(kind.id);
+  }, [selectedPrintType, ensureKindModelsLoaded]);
+
+  const printModelPickerValue = value?.catalogModelId
+    ? getVariantOptionValue(value.catalogModelId, value.variantId)
+    : "";
+
+  const handlePrintModelChange = (nextValue: string) => {
+    if (!value) return;
+    const resolved = resolveModelPickerValue(printModels, nextValue);
+    if (!resolved) return;
+    const kind = selectedPrintType?.kinds.find((k) => k.models.some((m) => m.id === resolved.modelId)) ?? null;
+    onChange({
+      ...value,
+      catalogKindId: kind?.id ?? null,
+      catalogModelId: resolved.modelId,
+      variantId: resolved.variantId,
+      variantName: resolved.variantName,
+      sku: resolved.sku,
+      name: resolved.name,
+      imageUrl: resolved.imageUrl,
+      supplierUrl: resolved.supplierUrl,
+      avantprintUrl: resolved.avantprintUrl,
+    });
+  };
+
   const selectedType = useMemo(
     () => merchTypes.find((type) => type.id === value?.catalogTypeId) ?? null,
     [merchTypes, value?.catalogTypeId]
@@ -417,16 +452,16 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
       </>
       ) : (
       <div className="space-y-3">
-        {/* Що друкуєш — print category (поліграфія) */}
+        {/* Категорія поліграфії (Пакети / Листівка / …) */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Що друкуєш</Label>
+          <Label className="text-xs text-muted-foreground">Категорія</Label>
           <Select
             value={value?.catalogTypeId ?? ""}
             onValueChange={handlePrintTypeChange}
             disabled={catalogLoading}
           >
             <SelectTrigger className="h-9">
-              <SelectValue placeholder={catalogLoading ? "Завантаження…" : "Оберіть, що друкуємо"} />
+              <SelectValue placeholder={catalogLoading ? "Завантаження…" : "Оберіть категорію"} />
             </SelectTrigger>
             <SelectContent>
               {printTypes.map((type) => (
@@ -436,6 +471,21 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Що друкуєш — concrete printable model (Паперовий пакет тощо) */}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Що друкуєш</Label>
+          <CatalogModelPicker
+            value={printModelPickerValue}
+            onChange={handlePrintModelChange}
+            models={printModels}
+            placeholder={selectedPrintType ? "Оберіть товар" : "Спершу категорія"}
+            disabled={!selectedPrintType}
+          />
+          {value?.sku ? (
+            <p className="pt-0.5 text-xs text-muted-foreground">Артикул: {value.sku}</p>
+          ) : null}
         </div>
 
         {/* Кількість сторін друку — спрощено */}
