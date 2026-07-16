@@ -6605,13 +6605,22 @@ export default function DesignPage() {
 
               <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Chip size="md" icon={<CalendarIcon className="h-4 w-4" />} active={!!createDeadline}>
+                  <Chip
+                    size="md"
+                    icon={<CalendarIcon className="h-4 w-4" />}
+                    active={!!createDeadline}
+                    className="min-w-[210px]"
+                  >
                     {createDeadline
                       ? `${format(createDeadline, "d MMM yyyy", { locale: uk })} · ${isValidDeadlineTime(createDeadlineTime) ? createDeadlineTime : "12:00"}`
                       : "Дедлайн"}
                   </Chip>
                 </PopoverTrigger>
-                <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start" portalled={false}>
+                <PopoverContent
+                  className="w-fit max-w-[calc(100vw-2rem)] p-0"
+                  align="start"
+                  collisionPadding={12}
+                >
                   <Calendar
                     mode="single"
                     selected={createDeadline}
