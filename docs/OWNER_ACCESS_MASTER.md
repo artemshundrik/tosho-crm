@@ -71,11 +71,11 @@ Tosho CRM — веб-застосунок: **фронтенд** (React) + **ба
 ### 🔴 2.4 Supabase (база даних, логін користувачів, файли) — **НАЙВАЖЛИВІШЕ**
 | Поле | Значення |
 |---|---|
-| Проєкт | `fayna-saas`, ref `nqqabedngnndtltzvqyi` ✅ |
+| Проєкт | ref `nqqabedngnndtltzvqyi` (стара назва fayna-saas) ✅ |
 | Акаунт-власник (email) | ⬜ ЗАПОВНИТИ |
 | Пароль + 2FA | ⬜ → сейф секретів |
 | Хто ще в організації (members) | ⬜ ЗАПОВНИТИ |
-| Панель | app.supabase.com → проєкт fayna-saas |
+| Панель | app.supabase.com → проєкт CRM (ref nqqabedngnndtltzvqyi) |
 | Пароль до самої БД (Postgres) | ⬜ → сейф секретів (Database password) |
 | Ключі (anon / service_role) | у Netlify env + сейф секретів; **service_role = супер-доступ** |
 | **Бекапи** | див. розділ 2.12 — це те, що рятує, якщо БД зіпсують/видалять |
