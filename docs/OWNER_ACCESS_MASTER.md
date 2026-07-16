@@ -195,7 +195,69 @@ Tosho CRM — веб-застосунок: **фронтенд** (React) + **ба
 
 ---
 
-## 6. Пов'язані детальні документи
+## 6. 🚀 Повний покроковий гайд передачі (з нуля)
+
+> Мета: щоб **власник міг зайти в усе без тебе**, зі своєю 2FA. Роби зверху вниз.
+> (Назви пунктів у меню можуть трохи відрізнятись — шукай за змістом.)
+
+### Фаза 0 — сейф секретів (10 хв)
+1. **Власник** заходить у свій Google → створює документ **«Tosho CRM — доступи»**.
+   *(Якщо створюєш ти — потім: Share → впиши email власника → біля нього «⋯» → **Make owner**. Так Doc стане його.)*
+2. У документі зроби заголовки-блоки: `Домен`, `GitHub`, `Netlify`, `Supabase`, `OpenAI`, `Telegram`, `Nova Poshta`, `Вчасно`, `Dropbox`, `Web Push`, `Бекапи`, `Recovery / папір`.
+3. Власник вмикає **2FA на своєму Google** (myaccount.google.com → Security → 2-Step Verification).
+
+### Фаза 1 — 🔴 критичні сервіси
+
+**GitHub (код):**
+1. Ти: github.com → **Settings → Password and authentication** → увімкни 2FA (якщо нема) → **збережи recovery-коди в Doc**.
+2. Незалежність власника (обери одне):
+   - *Простіше:* репо → **Settings → Collaborators → Add people** → email власника → роль **Admin**.
+   - *Правильніше:* створити **GitHub-організацію компанії** і **Settings → General → (Danger Zone) → Transfer** репо туди; власника зробити **Owner** організації.
+3. У Doc, блок GitHub: email-акаунт, пароль, 2FA recovery-коди, назва репо `artemshundrik/tosho-crm`.
+
+**Supabase (база даних — найважливіше):**
+1. app.supabase.com → **Account → Security** → увімкни 2FA.
+2. **Organization settings → Team/Members → Invite** → email власника → роль **Owner**.
+3. Запиши в Doc, блок Supabase: email, пароль, 2FA recovery, **Project ref `nqqabedngnndtltzvqyi`**, а також:
+   - **Пароль до БД:** Project → Settings → **Database** → (Reset/Show) → у Doc + **на папір**.
+   - **service_role key:** Project → Settings → **API** → скопіюй `service_role` → у Doc + **на папір**.
+
+**Netlify (хостинг + серверні ключі):**
+1. app.netlify.com → **User settings** → увімкни 2FA.
+2. **Team → Members → Invite members** → email власника.
+3. Запиши в Doc, блок Netlify: email, пароль, 2FA recovery, назва сайту. *(Тут лежать усі env-ключі — доступ до Netlify = доступ до всіх серверних секретів.)*
+
+**Домен `tosho.pro`:**
+1. Зайди до реєстратора, де купував (глянь листи «renewal/домен» у пошті, якщо не пам'ятаєш).
+2. Якщо є «add user / delegate» — додай власника; якщо ні — план: перевести на **спільний акаунт компанії**.
+3. У Doc, блок Домен: назва реєстратора, логін, пароль, **дата закінчення оплати**.
+
+### Фаза 2 — 🟠 сервіси-функції
+
+- **OpenAI:** platform.openai.com → **Settings → Members → Invite** (email власника) · **Settings → Limits** → постав місячний ліміт витрат · ключ уже в Netlify env, значення → Doc.
+- **Telegram-боти:** відкрий чат з **@BotFather** → `/mybots`. Боти належать **твоєму Telegram-номеру** — їх не «додаси членом». План: тримати на **Telegram-акаунті компанії** або записати в Doc, чий номер + токени (вони в Netlify env).
+- **Nova Poshta:** кабінет НП → логін у Doc; API-ключ у Netlify env → Doc.
+- **Вчасно:** 3 кабінети (ФОП ВО / ФОП РО / Avanprint) → логін кожного в Doc; токени в Netlify env.
+- **Dropbox:** розшар потрібну папку з email власника; акаунт → Doc.
+- **Web Push:** ключі VAPID уже в Netlify env → просто скопіюй у Doc.
+
+### Фаза 3 — 📄 папірець у сейф/шухляду (5 хв)
+Випиши **від руки** й поклади фізично (це рятує, коли зникне все цифрове):
+- Майстер-пароль Google-акаунту (де лежить Doc)
+- Supabase: **service_role key** + **пароль до БД**
+- **2FA recovery-коди** GitHub і Supabase
+
+### Фаза 4 — ✅ перевірка «власник може без тебе»
+- [ ] Власник **під своїм акаунтом** реально зайшов у GitHub, Supabase, Netlify (не через твій пароль).
+- [ ] Doc **належить власнику** (він owner), тобі — Editor.
+- [ ] Папірець у сейфі заповнений.
+- [ ] Другій довіреній особі теж дано доступ до Doc.
+
+> Коли всі 4 галочки стоять — handoff справжній: якщо з тобою щось станеться, бізнес не заблоковано.
+
+---
+
+## 7. Пов'язані детальні документи
 
 - `docs/SERVICES_ACCESS_REGISTRY.md` — технічний реєстр (Supabase/Netlify/Dropbox/Web Push/Backup).
 - `docs/DIRECTOR_ACCESS_HANDOFF.md` — розширений handoff + Recovery Notes.
