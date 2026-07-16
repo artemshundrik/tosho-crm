@@ -103,6 +103,15 @@ if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" ]]; then
   read -r -a BUCKETS <<< "${STORAGE_BUCKETS}"
   IFS="$OLDIFS"
 
+  # Count buckets we actually captured this run. If a network/DNS/credential
+  # failure makes every bucket "missing or inaccessible", we must NOT fall through
+  # and tar up an empty archive — downstream reporting would record that empty
+  # archive as a successful storage backup, and the "archive for today already
+  # exists" guard would then block regeneration once the network recovers. This is
+  # exactly what happened on 2026-07-12: an offline Sunday run wrote a 280-byte
+  # empty archive that got uploaded to Dropbox and marked success. Fail loud instead.
+  storage_captured=0
+
   for raw_bucket in "${BUCKETS[@]}"; do
     bucket="$(echo "${raw_bucket}" | xargs)"
     [[ -z "${bucket}" ]] && continue
@@ -124,7 +133,16 @@ if [[ "${BACKUP_INCLUDE_STORAGE:-0}" == "1" ]]; then
     if ! cp -al "${mirror_dir}" "${WORK_DIR}/storage/${bucket}" 2>/dev/null; then
       cp -a "${mirror_dir}" "${WORK_DIR}/storage/${bucket}"
     fi
+    storage_captured=$((storage_captured + 1))
   done
+
+  if (( storage_captured == 0 )); then
+    echo "No storage buckets could be captured — every bucket was missing or inaccessible." >&2
+    echo "This usually means the network/DNS was down or credentials failed. Refusing to write" >&2
+    echo "an empty storage archive that would be mistaken for a successful backup." >&2
+    rm -rf "${WORK_DIR}"
+    exit 1
+  fi
 fi
 
 echo "Compressing backup..."

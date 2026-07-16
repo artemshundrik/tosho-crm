@@ -98,6 +98,19 @@ Notes:
 - `--delete` makes the mirror a faithful snapshot of current bucket state. History of objects
   deleted from storage is still preserved in the older dated archives (retention: 8 weekly).
 
+Failure/staleness safeguards (added after the 2026-07-12 incident, where an offline Sunday run
+wrote a 280-byte empty archive that was uploaded to Dropbox and marked "success"):
+- `backup.sh` now counts captured buckets. If a network/DNS/credential failure makes **every**
+  bucket "missing or inaccessible", it fails loud (exit 1) and writes **no** archive — instead of
+  taring up an empty one that downstream reporting treats as success. No archive means the
+  "archive for today already exists" guard is not poisoned, so the next hourly retry can still run.
+- `backup-storage-if-needed.sh` self-heals a missed schedule: on any day, if the newest local
+  storage archive is missing or older than `STORAGE_MAX_AGE_DAYS` (default 8), it runs even
+  off-schedule. So an offline Sunday recovers on the next hourly tick once the network returns,
+  instead of waiting a full week.
+- To manually force a fresh weekly archive + Dropbox upload (bypasses the Sunday-only schedule):
+  `source .env.backup && DROPBOX_BACKUP_FORCE_WEEKLY=1 bash scripts/backup-storage-and-upload.sh`.
+
 ## 5. Run restore
 
 Set restore target DB and explicit confirmation:
