@@ -3339,7 +3339,7 @@ export function TeamMembersPage() {
       >
         <SheetContent
           side="right"
-          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[620px]"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[680px]"
         >
           <div className="border-b border-border bg-muted/10 px-6 py-5 shrink-0">
             <SheetHeader>
@@ -3354,7 +3354,7 @@ export function TeamMembersPage() {
           <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
             <div className="px-6 py-5">
             <div className="mb-6 rounded-[var(--radius)] border border-border bg-background/80 p-5">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col gap-5">
                 <div className="flex items-center gap-4">
                   <AvatarBase
                     src={getMemberAvatarSource(selectedProfile, editProfileMember ?? undefined)}
@@ -3389,7 +3389,7 @@ export function TeamMembersPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px] lg:flex-1">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
                     <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
@@ -3429,7 +3429,7 @@ export function TeamMembersPage() {
                 </div>
               </div>
             </div>
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.95fr)]">
+            <div className="grid min-w-0 gap-6">
               <div className="min-w-0 space-y-6">
                 <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
                   <div className="space-y-2">
