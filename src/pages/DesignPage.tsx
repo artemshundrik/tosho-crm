@@ -2764,8 +2764,12 @@ export default function DesignPage() {
     setSearch("");
     setStatusFilter("all");
     setDesignerFilter(ALL_DESIGNERS_FILTER);
-    setManagerFilter(isManagerUser && userId ? userId : ALL_MANAGERS_FILTER);
-  }, [isManagerUser, userId]);
+    setManagerFilter(ALL_MANAGERS_FILTER);
+    // Re-arm the role-appropriate defaults (designer → self, manager → self if
+    // they own tasks) instead of hardcoding a stale "managers only → self" rule.
+    setDefaultDesignerFilterApplied(false);
+    setDefaultManagerFilterApplied(false);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !effectiveTeamId) return;
