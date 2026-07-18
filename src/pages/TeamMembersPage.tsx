@@ -50,6 +50,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  PersonActivitySection,
+  PersonAccessHistorySection,
+} from "@/components/team/PersonDetailSections";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -1198,6 +1209,15 @@ export function TeamMembersPage() {
   const pulsePeople = useMemo<PulsePerson[]>(
     () => members.map((member) => resolvePulsePerson(member.user_id)),
     [members, resolvePulsePerson]
+  );
+
+  const resolveActorName = useCallback(
+    (actorUserId: string | null, fallback: string | null) => {
+      if (!actorUserId) return fallback || "Система";
+      const member = members.find((candidate) => candidate.user_id === actorUserId);
+      return member ? getMemberDisplayName(member) : fallback || "Користувач";
+    },
+    [members, getMemberDisplayName]
   );
 
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
@@ -3311,22 +3331,25 @@ export function TeamMembersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <Sheet
         open={!!editProfileMember}
         onOpenChange={(open) => {
           if (!open && !editProfileBusy) closeEditProfileDialog();
         }}
       >
-        <DialogContent className="w-[calc(100vw-1rem)] max-w-[min(1180px,96vw)] !p-0 !gap-0 overflow-hidden border border-border bg-card text-foreground max-h-[94dvh] flex flex-col">
+        <SheetContent
+          side="right"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[620px]"
+        >
           <div className="border-b border-border bg-muted/10 px-6 py-5 shrink-0">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-foreground">Картка учасника</DialogTitle>
-              <DialogDescription className="mt-1.5 text-muted-foreground">
+            <SheetHeader>
+              <SheetTitle className="text-xl font-semibold text-foreground">Картка учасника</SheetTitle>
+              <SheetDescription className="mt-1.5 text-muted-foreground">
                 {canManage
                   ? "Редагування профілю учасника команди. Пароль змінюється тільки в його профілі."
                   : "SEO може керувати відсотком менеджера та приймати рішення по випробувальному терміну. Інші поля доступні лише для перегляду."}
-              </DialogDescription>
-            </DialogHeader>
+              </SheetDescription>
+            </SheetHeader>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
             <div className="px-6 py-5">
@@ -3769,6 +3792,18 @@ export function TeamMembersPage() {
               </div>
             </div>
             </div>
+            {editProfileMember ? (
+              <div className="flex flex-col gap-4 px-6 pb-6">
+                <PersonActivitySection userId={editProfileMember.user_id} />
+                {canManage ? (
+                  <PersonAccessHistorySection
+                    workspaceId={workspaceId}
+                    userId={editProfileMember.user_id}
+                    resolveActorName={resolveActorName}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="shrink-0 border-t border-border bg-card px-6 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
@@ -3785,8 +3820,8 @@ export function TeamMembersPage() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <Dialog
         open={!!editMember}

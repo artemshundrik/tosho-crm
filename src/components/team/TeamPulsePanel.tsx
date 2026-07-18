@@ -26,6 +26,7 @@ import {
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
+import { CATEGORY_META, categorizeAction } from "@/components/team/activityCategories";
 
 export type PulsePerson = {
   userId: string;
@@ -66,29 +67,6 @@ const RANGE_OPTIONS: { value: PulseRange; label: string; days: number; bucket: "
   { value: "month", label: "30 днів", days: 30, bucket: "day" },
   { value: "year", label: "Рік", days: 365, bucket: "day" },
 ];
-
-// Muted categorical palette (saturation kept moderate; no neon).
-const CATEGORY_META: Record<string, { label: string; color: string }> = {
-  design: { label: "Дизайн", color: "hsl(262 45% 58%)" },
-  quote: { label: "Прорахунки", color: "hsl(219 80% 56%)" },
-  order: { label: "Замовлення", color: "hsl(160 50% 42%)" },
-  crm: { label: "Клієнти / ліди", color: "hsl(199 65% 46%)" },
-  status: { label: "Статуси", color: "hsl(28 80% 52%)" },
-  comment: { label: "Коментарі", color: "hsl(48 75% 50%)" },
-  other: { label: "Інше", color: "hsl(0 0% 55%)" },
-};
-
-function categorizeAction(action: string | null, title: string | null): string {
-  const a = (action ?? "").toLowerCase();
-  const t = (title ?? "").toLowerCase();
-  if (a.includes("design") || t.includes("дизайн") || t.includes("макет")) return "design";
-  if (a.includes("quote") || t.includes("прорахун") || t.includes("кошторис")) return "quote";
-  if (a.includes("order") || t.includes("замовлен")) return "order";
-  if (a.includes("comment") || t.includes("комент")) return "comment";
-  if (a.includes("customer") || a.includes("lead") || a.includes("client") || t.includes("клієнт") || t.includes("лід")) return "crm";
-  if (a.includes("status") || t.includes("статус")) return "status";
-  return "other";
-}
 
 function rangeStartMs(days: number) {
   return Date.now() - days * 24 * 60 * 60 * 1000;

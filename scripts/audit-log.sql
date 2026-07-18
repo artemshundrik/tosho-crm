@@ -120,7 +120,13 @@ begin
 
   -- Guard every cast: a non-uuid PK (e.g. bigint) must never break the underlying
   -- write. Fall back to null id rather than raising inside the trigger.
-  v_entity_id := case when (v_rec ->> 'id') ~* v_uuid_re then (v_rec ->> 'id')::uuid else null end;
+  -- Tables without a uuid `id` (e.g. team_member_profiles keyed by user_id) fall
+  -- back to user_id so per-person history stays queryable by entity_id.
+  v_entity_id := case
+    when (v_rec ->> 'id') ~* v_uuid_re then (v_rec ->> 'id')::uuid
+    when (v_rec ->> 'user_id') ~* v_uuid_re then (v_rec ->> 'user_id')::uuid
+    else null
+  end;
   v_workspace := case when (v_rec ->> 'workspace_id') ~* v_uuid_re then (v_rec ->> 'workspace_id')::uuid else null end;
   v_team      := case when (v_rec ->> 'team_id') ~* v_uuid_re then (v_rec ->> 'team_id')::uuid else null end;
 
