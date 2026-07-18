@@ -84,6 +84,7 @@ declare
   v_entity_id uuid;
   v_workspace uuid;
   v_team uuid;
+  v_uuid_re constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_ignore text[] := array[
     'updated_at', 'created_at', 'last_seen_at', 'search_vector',
     'fts', 'tsv', 'last_bucket'
@@ -117,14 +118,21 @@ begin
     v_rec := to_jsonb(new);
   end if;
 
-  v_entity_id := nullif(v_rec ->> 'id', '')::uuid;
-  v_workspace := nullif(v_rec ->> 'workspace_id', '')::uuid;
-  v_team      := nullif(v_rec ->> 'team_id', '')::uuid;
+  -- Guard every cast: a non-uuid PK (e.g. bigint) must never break the underlying
+  -- write. Fall back to null id rather than raising inside the trigger.
+  v_entity_id := case when (v_rec ->> 'id') ~* v_uuid_re then (v_rec ->> 'id')::uuid else null end;
+  v_workspace := case when (v_rec ->> 'workspace_id') ~* v_uuid_re then (v_rec ->> 'workspace_id')::uuid else null end;
+  v_team      := case when (v_rec ->> 'team_id') ~* v_uuid_re then (v_rec ->> 'team_id')::uuid else null end;
 
-  insert into tosho.audit_log
-    (workspace_id, team_id, actor_user_id, entity_type, entity_id, action, changed, created_at)
-  values
-    (v_workspace, v_team, auth.uid(), tg_argv[0], v_entity_id, lower(tg_op), v_changed, now());
+  -- Auditing must never block the underlying business write: swallow any error.
+  begin
+    insert into tosho.audit_log
+      (workspace_id, team_id, actor_user_id, entity_type, entity_id, action, changed, created_at)
+    values
+      (v_workspace, v_team, auth.uid(), tg_argv[0], v_entity_id, lower(tg_op), v_changed, now());
+  exception when others then
+    null;
+  end;
 
   return null;  -- AFTER trigger: return value is ignored
 end;

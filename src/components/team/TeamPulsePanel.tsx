@@ -329,16 +329,19 @@ export function TeamPulsePanel({
           <div className="text-xs text-muted-foreground">Оберіть ширший діапазон або зачекайте на нові дії.</div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2.5 px-4 md:px-5 lg:px-6">
+        <div className="flex flex-col border-t border-border/60">
           {groups.map((group) => {
             const person = resolvePerson(group.userId);
             const isOpen = expanded.has(group.userId);
             return (
-              <div key={group.userId} className="overflow-hidden rounded-[var(--radius-lg)] border border-border/70 bg-card">
+              <div key={group.userId} className="border-b border-border/60">
                 <button
                   type="button"
                   onClick={() => toggle(group.userId)}
-                  className="flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40"
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:px-5 lg:px-6",
+                    isOpen && "bg-muted/30"
+                  )}
                 >
                   <div className="relative shrink-0">
                     <AvatarBase
@@ -373,7 +376,7 @@ export function TeamPulsePanel({
                   </div>
                 </button>
                 {isOpen ? (
-                  <div className="border-t border-border/60 bg-muted/[0.03] px-3 py-2">
+                  <div className="border-t border-border/50 bg-muted/[0.03] px-4 py-2 md:px-5 lg:px-6">
                     <ul className="flex flex-col">
                       {group.events.slice(0, 60).map((event, index) => (
                         <li
