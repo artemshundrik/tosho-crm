@@ -494,11 +494,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   const [status, setStatusFilter] = useState(() => restoredFilters?.status ?? "all");
-  // Manager-filter default (see effect below):
-  //   • superadmin → всі
+  // Manager-filter default (see effect below) — role-agnostic, by ownership:
   //   • designer   → всі (they filter by designer, not manager)
   //   • sales-manager job role → себе immediately (definitely owns quotes)
-  //   • everyone else → всі, narrowed to себе only if they actually own ≥1 quote
+  //   • everyone else (incl. owner/super_admin) → всі, narrowed to себе only if
+  //     they actually own ≥1 quote
   const [managerFilter, setManagerFilter] = useState<string>(
     () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
@@ -789,7 +789,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   }, []);
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
-    if (permissions.isSuperAdmin || permissions.isDesigner) return;
+    if (permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!currentUserId || !teamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
@@ -817,7 +817,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     defaultManagerFilterApplied,
     managerFilter,
     permissions.isDesigner,
-    permissions.isSuperAdmin,
     teamId,
   ]);
   const getManagerAvatar = useCallback(

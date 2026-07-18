@@ -1060,12 +1060,12 @@ export default function DesignPage() {
   const [designerFilter, setDesignerFilter] = useState<string>(
     () => restoredFilters?.designerFilter ?? ALL_DESIGNERS_FILTER
   );
-  // Manager-filter default (see effect below):
-  //   • superadmin → всі
+  // Manager-filter default (see effect below) — role-agnostic, by task ownership:
   //   • designer   → всі (they filter by designer, not manager — even for tasks
   //                  they created themselves, where they'd be the manager)
   //   • sales-manager job role → себе immediately (definitely owns tasks)
-  //   • everyone else → всі, narrowed to себе only if they actually own ≥1 task
+  //   • everyone else (incl. owner/super_admin) → всі, narrowed to себе only if
+  //     they actually own ≥1 task
   const [managerFilter, setManagerFilter] = useState<string>(
     () => restoredFilters?.managerFilter ?? (isQuoteManagerJobRole(jobRole) && userId ? userId : ALL_MANAGERS_FILTER)
   );
@@ -1529,7 +1529,7 @@ export default function DesignPage() {
 
   useEffect(() => {
     if (defaultManagerFilterApplied) return;
-    if (permissions.isSuperAdmin || permissions.isDesigner) return;
+    if (permissions.isDesigner) return;
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!userId || !effectiveTeamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
@@ -1557,7 +1557,6 @@ export default function DesignPage() {
     effectiveTeamId,
     managerFilter,
     permissions.isDesigner,
-    permissions.isSuperAdmin,
     userId,
   ]);
 
