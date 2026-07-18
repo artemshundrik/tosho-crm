@@ -521,6 +521,39 @@ export function useWorkspacePresenceState({
     return () => window.clearInterval(id);
   }, [dbUnavailable, realtimeDisabled, teamId, upsertPresenceRow, userId]);
 
+  // Team Pulse: record one "active minute" per visible minute. Idempotent per
+  // minute server-side (record_activity_minute in scripts/user-activity.sql).
+  // The cast bridges the not-yet-regenerated Supabase types; the call no-ops
+  // server-side until that SQL is applied to the database.
+  useEffect(() => {
+    if (!teamId || !userId) return;
+    let cancelled = false;
+    let workspaceId: string | null = null;
+    void resolveWorkspaceId(userId).then((id) => {
+      workspaceId = id;
+    });
+    const recordMinute = () => {
+      if (cancelled || !workspaceId || !isDocumentVisible()) return;
+      const rpc = supabase.schema("tosho").rpc as unknown as (
+        name: string,
+        args: { p_team_id: string; p_workspace_id: string; p_actor_name: string | null }
+      ) => PromiseLike<{ error: unknown }>;
+      void Promise.resolve(
+        rpc("record_activity_minute", {
+          p_team_id: teamId,
+          p_workspace_id: workspaceId,
+          p_actor_name: selfDisplayName ?? null,
+        })
+      ).then(undefined, () => {});
+    };
+    recordMinute();
+    const id = window.setInterval(recordMinute, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [teamId, userId, selfDisplayName]);
+
   const entries = useMemo<WorkspacePresenceEntry[]>(() => {
     const allUserIds = new Set<string>([
       ...Object.keys(dbRowsByUserId),

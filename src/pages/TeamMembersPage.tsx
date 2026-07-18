@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
@@ -60,9 +60,7 @@ import {
 import {
   CONTROL_BASE,
   SEGMENTED_GROUP,
-  SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
-  SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -82,8 +80,8 @@ import {
   type EmploymentStatus,
 } from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
-import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
 import {
   listWorkspaceMemberDirectory,
   upsertWorkspaceMemberProfile,
@@ -155,12 +153,6 @@ type MemberPresence = {
 type QuickAvailabilityDialogState = {
   member: Member;
   status: MemberProfileMeta["availabilityStatus"];
-};
-
-type TeamActivityItem = {
-  userId: string;
-  title: string;
-  createdAt: string;
 };
 
 type Invite = {
@@ -448,18 +440,6 @@ function getEmploymentStatusBadgeClass(status: EmploymentStatus) {
   return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
-function getRangeStartIso(range: "day" | "week" | "month") {
-  const date = new Date();
-  if (range === "day") {
-    date.setDate(date.getDate() - 1);
-  } else if (range === "week") {
-    date.setDate(date.getDate() - 7);
-  } else {
-    date.setMonth(date.getMonth() - 1);
-  }
-  return date.toISOString();
-}
-
 async function parseJsonSafe<T>(response: Response): Promise<T | null> {
   const raw = await response.text();
   if (!raw.trim()) return null;
@@ -584,13 +564,6 @@ export function TeamMembersPage() {
   const [memberMetaLoading, setMemberMetaLoading] = useState(true);
   const [memberProfileStorageAvailable, setMemberProfileStorageAvailable] = useState(true);
   const [memberPresenceByUserId, setMemberPresenceByUserId] = useState<Record<string, MemberPresence>>({});
-  const [activityRange, setActivityRange] = useState<"day" | "week" | "month">("day");
-  const [teamActivityItems, setTeamActivityItems] = useState<TeamActivityItem[]>([]);
-  const [teamActivityLoading, setTeamActivityLoading] = useState(false);
-  // Latest members without retriggering the activity fetch (avoids reload flicker
-  // when the presence layer merges updates into `members`).
-  const membersRef = useRef(members);
-  membersRef.current = members;
 
   const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
   const [invitesLoading, setInvitesLoading] = useState(false);
@@ -657,6 +630,8 @@ export function TeamMembersPage() {
   const canManage = isSuperAdmin || isAdmin;
   const canManageManagerRates = isSuperAdmin || isSeo;
   const canOpenProfileCard = canManage || canManageManagerRates;
+  // "Пульс" (team activity analytics) is owner/SEO only — the CEO surface.
+  const canPulse = isSuperAdmin || isSeo;
 
   const openEditProfileDialog = useCallback((member: Member) => {
     const meta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
@@ -1076,70 +1051,6 @@ export function TeamMembersPage() {
     }
   }, [invitesError]);
 
-  useEffect(() => {
-    if (!workspaceId || activeTab !== "activity") {
-      setTeamActivityLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadTeamActivity = async () => {
-      setTeamActivityLoading(true);
-      try {
-        const startIso = getRangeStartIso(activityRange);
-        const loadScoped = async (scope: "team" | "workspace" | "none") => {
-          let query = supabase
-            .from("activity_log")
-            .select("user_id,title,action,created_at")
-            .gte("created_at", startIso)
-            .order("created_at", { ascending: false })
-            .limit(500);
-          if (scope === "team") query = query.eq("team_id", workspaceId);
-          if (scope === "workspace") query = query.eq("workspace_id", workspaceId);
-          return query;
-        };
-
-        const [teamScoped, workspaceScoped, unscoped] = await Promise.all([
-          loadScoped("team"),
-          loadScoped("workspace"),
-          loadScoped("none"),
-        ]);
-
-        const candidates = [teamScoped, workspaceScoped, unscoped].filter((candidate) => !candidate.error);
-        const bestCandidate = candidates.sort((a, b) => (b.data?.length ?? 0) - (a.data?.length ?? 0))[0];
-        const rows = (bestCandidate?.data ?? []) as Array<{
-          user_id?: string | null;
-          title?: string | null;
-          action?: string | null;
-          created_at?: string | null;
-        }>;
-        if (cancelled) return;
-
-        const memberIds = new Set(membersRef.current.map((member) => member.user_id));
-        setTeamActivityItems(
-          rows
-            .filter((row) => (row.user_id ?? "") && memberIds.has(row.user_id ?? ""))
-            .map((row) => ({
-              userId: row.user_id ?? "",
-              title: row.title?.trim() || row.action?.trim() || "Дія в CRM",
-              createdAt: row.created_at ?? "",
-            }))
-        );
-      } catch {
-        if (cancelled) return;
-        setTeamActivityItems([]);
-      } finally {
-        if (!cancelled) setTeamActivityLoading(false);
-      }
-    };
-
-    void loadTeamActivity();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, activeTab, activityRange]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -1266,6 +1177,28 @@ export function TeamMembersPage() {
       }) || "Користувач"
     );
   }, [memberMetaByUserId, memberProfilesByUserId]);
+
+  const resolvePulsePerson = useCallback(
+    (userId: string): PulsePerson => {
+      const member = members.find((candidate) => candidate.user_id === userId) ?? null;
+      const profile = memberProfilesByUserId[userId] ?? null;
+      const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
+      return {
+        userId,
+        displayName,
+        avatarSrc: member ? getMemberAvatarSource(profile, member) : null,
+        initials: getInitialsFromName(displayName, member?.email ?? null),
+        jobRole: member?.job_role ?? null,
+        online: !!memberPresenceByUserId[userId]?.online,
+      };
+    },
+    [members, memberProfilesByUserId, memberPresenceByUserId, getMemberDisplayName]
+  );
+
+  const pulsePeople = useMemo<PulsePerson[]>(
+    () => members.map((member) => resolvePulsePerson(member.user_id)),
+    [members, resolvePulsePerson]
+  );
 
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
@@ -2288,8 +2221,7 @@ export function TeamMembersPage() {
       membersLoading ||
       memberProfilesLoading ||
       (canOpenProfileCard && memberMetaLoading) ||
-      (activeTab === "invites" && invitesLoading) ||
-      (activeTab === "activity" && teamActivityLoading)
+      (activeTab === "invites" && invitesLoading)
   );
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
@@ -2366,8 +2298,8 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 px-4 pb-20 pt-4 md:px-5 md:pb-0 lg:px-6">
-      <div className="flex flex-col gap-3">
+    <div className="flex w-full flex-col gap-4 pb-20 pt-4 md:pb-0">
+      <div className="flex flex-col gap-3 px-4 md:px-5 lg:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
           <div className="flex items-center gap-2.5">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
@@ -2398,7 +2330,7 @@ export function TeamMembersPage() {
                   Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                 </Button>
               ) : null}
-              {canManage ? (
+              {canPulse ? (
                 <Button
                   type="button"
                   variant="segmented"
@@ -2407,7 +2339,7 @@ export function TeamMembersPage() {
                   onClick={() => handleTabChange("activity")}
                   className={SEGMENTED_TRIGGER}
                 >
-                  Активність
+                  Пульс
                 </Button>
               ) : null}
             </div>
@@ -2436,7 +2368,7 @@ export function TeamMembersPage() {
       <div className="overflow-hidden flex flex-col">
         {activeTab === "members" ? (
           <>
-          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-1 md:px-5 lg:px-6">
             <FilterChip
               label="Всі"
               count={members.length}
@@ -2503,7 +2435,7 @@ export function TeamMembersPage() {
               </button>
             ) : null}
           </div>
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 px-4 md:hidden">
             {membersError ? (
               <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
             ) : filteredMembers.length === 0 ? (
@@ -2711,7 +2643,7 @@ export function TeamMembersPage() {
             )}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <Table variant="list" size="md">
+            <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableTextHeaderCell widthClass="w-[26%]" className="pl-6">
@@ -3033,7 +2965,7 @@ export function TeamMembersPage() {
 
         {activeTab === "invites" && canManage ? (
           <>
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 px-4 md:hidden">
             {invitesError ? (
               <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {invitesError}</Card>
             ) : invites.length === 0 ? (
@@ -3100,7 +3032,7 @@ export function TeamMembersPage() {
             )}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <Table variant="list" size="md">
+            <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableTextHeaderCell widthClass="w-[40%]" className="pl-6">
@@ -3212,124 +3144,12 @@ export function TeamMembersPage() {
           </>
         ) : null}
 
-        {activeTab === "activity" && canManage ? (
-          <div className="flex flex-col gap-4">
-            <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
-              <Button
-                type="button"
-                variant="segmented"
-                size="xs"
-                aria-pressed={activityRange === "day"}
-                onClick={() => setActivityRange("day")}
-                className={SEGMENTED_TRIGGER_SM}
-              >
-                24 години
-              </Button>
-              <Button
-                type="button"
-                variant="segmented"
-                size="xs"
-                aria-pressed={activityRange === "week"}
-                onClick={() => setActivityRange("week")}
-                className={SEGMENTED_TRIGGER_SM}
-              >
-                7 днів
-              </Button>
-              <Button
-                type="button"
-                variant="segmented"
-                size="xs"
-                aria-pressed={activityRange === "month"}
-                onClick={() => setActivityRange("month")}
-                className={SEGMENTED_TRIGGER_SM}
-              >
-                30 днів
-              </Button>
-            </div>
-            {teamActivityLoading && teamActivityItems.length === 0 ? (
-              <AppSectionLoader label="Завантаження активності..." compact />
-            ) : teamActivityItems.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Немає дій за обраний період.</div>
-            ) : (
-              <>
-              <div className="space-y-3 md:hidden">
-                {teamActivityItems.map((item, index) => {
-                  const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
-                  const profile = member ? memberProfilesByUserId[member.user_id] : null;
-                  const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
-                  const initials = getInitialsFromName(displayName, member?.email ?? null);
-                  return (
-                    <Card key={`${item.userId}-${item.createdAt}-${index}`} className="border-border/60 p-4">
-                      <div className="flex items-center gap-3">
-                        <AvatarBase
-                          src={member ? getMemberAvatarSource(profile, member) : undefined}
-                          name={displayName}
-                          fallback={initials}
-                          assetVariant="xs"
-                          size={36}
-                          shape="circle"
-                          className="border-border bg-muted/50"
-                          fallbackClassName="text-[10px] font-bold"
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
-                          <div className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
-                        </div>
-                      </div>
-                      <div className="mt-3 text-sm text-foreground">{item.title}</div>
-                    </Card>
-                  );
-                })}
-              </div>
-              <div className="hidden overflow-x-auto md:block">
-                <Table variant="list" size="md">
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableTextHeaderCell widthClass="w-[30%]" className="pl-6">
-                        Користувач
-                      </TableTextHeaderCell>
-                      <TableTextHeaderCell>Дія</TableTextHeaderCell>
-                      <TableTextHeaderCell widthClass="w-[18%]">Коли</TableTextHeaderCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {teamActivityItems.map((item, index) => {
-                      const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
-                      const profile = member ? memberProfilesByUserId[member.user_id] : null;
-                      const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
-                      const initials = getInitialsFromName(displayName, member?.email ?? null);
-                      return (
-                        <TableRow key={`${item.userId}-${item.createdAt}-${index}`} className="hover:bg-muted/40 transition-colors">
-                          <TableCell className="pl-6">
-                            <div className="flex items-center gap-2.5">
-                              <AvatarBase
-                                src={member ? getMemberAvatarSource(profile, member) : undefined}
-                                name={displayName}
-                                fallback={initials}
-                                assetVariant="xs"
-                                size={30}
-                                shape="circle"
-                                className="border-border bg-muted/50"
-                                fallbackClassName="text-[10px] font-bold"
-                              />
-                              <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm text-foreground">{item.title}</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.createdAt)}</div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              </>
-            )}
-          </div>
+        {activeTab === "activity" && canPulse ? (
+          <TeamPulsePanel
+            workspaceId={workspaceId}
+            people={pulsePeople}
+            resolvePerson={resolvePulsePerson}
+          />
         ) : null}
       </div>
 
