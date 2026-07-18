@@ -151,6 +151,7 @@ const DEFAULT_MODULE_ACCESS = {
   vchasno_send: false,
   marketing: false,
   team: false,
+  pulse: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -212,6 +213,12 @@ function hasDefaultMarketingAccess(accessRole?: string | null, jobRole?: string 
   return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "marketer";
 }
 
+// Пульс команди: аналітика активності/часу — лише власник та SEO (керівник).
+function hasDefaultPulseAccess(accessRole?: string | null, jobRole?: string | null) {
+  const role = (jobRole ?? "").trim().toLowerCase();
+  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo";
+}
+
 function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
   const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
@@ -227,6 +234,7 @@ function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRo
     vchasno_send: typeof input.vchasno_send === "boolean" ? input.vchasno_send : hasDefaultVchasnoSendAccess(accessRole, jobRole),
     marketing: typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
+    pulse: typeof input.pulse === "boolean" ? input.pulse : hasDefaultPulseAccess(accessRole, jobRole),
   };
 }
 
