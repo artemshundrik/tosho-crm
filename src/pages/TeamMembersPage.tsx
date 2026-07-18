@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
@@ -587,6 +587,10 @@ export function TeamMembersPage() {
   const [activityRange, setActivityRange] = useState<"day" | "week" | "month">("day");
   const [teamActivityItems, setTeamActivityItems] = useState<TeamActivityItem[]>([]);
   const [teamActivityLoading, setTeamActivityLoading] = useState(false);
+  // Latest members without retriggering the activity fetch (avoids reload flicker
+  // when the presence layer merges updates into `members`).
+  const membersRef = useRef(members);
+  membersRef.current = members;
 
   const [invites, setInvites] = useState<Invite[]>(cached?.invites ?? []);
   const [invitesLoading, setInvitesLoading] = useState(false);
@@ -1112,7 +1116,7 @@ export function TeamMembersPage() {
         }>;
         if (cancelled) return;
 
-        const memberIds = new Set(members.map((member) => member.user_id));
+        const memberIds = new Set(membersRef.current.map((member) => member.user_id));
         setTeamActivityItems(
           rows
             .filter((row) => (row.user_id ?? "") && memberIds.has(row.user_id ?? ""))
@@ -1135,7 +1139,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, activeTab, activityRange, members]);
+  }, [workspaceId, activeTab, activityRange]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -2362,17 +2366,16 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 pb-20 pt-4 md:pb-0">
+    <div className="flex w-full flex-col gap-4 px-4 pb-20 pt-4 md:px-5 md:pb-0 lg:px-6">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
           <div className="flex items-center gap-2.5">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
               {members.length}
             </span>
           </div>
-          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end md:gap-2">
-            <div className={SEGMENTED_GROUP}>
+          <div className={SEGMENTED_GROUP}>
               <Button
                 type="button"
                 variant="segmented"
@@ -2409,7 +2412,7 @@ export function TeamMembersPage() {
               ) : null}
             </div>
 
-            <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end">
+            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center md:justify-end lg:ml-auto">
               {activeTab === "members" ? (
                 <div className="relative w-full md:w-72">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -2428,9 +2431,12 @@ export function TeamMembersPage() {
               ) : null}
             </div>
           </div>
-        </div>
+      </div>
+
+      <div className="overflow-hidden flex flex-col">
         {activeTab === "members" ? (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <>
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
             <FilterChip
               label="Всі"
               count={members.length}
@@ -2497,12 +2503,6 @@ export function TeamMembersPage() {
               </button>
             ) : null}
           </div>
-        ) : null}
-      </div>
-
-      <div className="overflow-hidden flex flex-col">
-        {activeTab === "members" ? (
-          <>
           <div className="space-y-3 md:hidden">
             {membersError ? (
               <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
@@ -3213,8 +3213,8 @@ export function TeamMembersPage() {
         ) : null}
 
         {activeTab === "activity" && canManage ? (
-          <div className="p-5">
-            <div className={cn("mb-4", SEGMENTED_GROUP_SM)}>
+          <div className="flex flex-col gap-4">
+            <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
               <Button
                 type="button"
                 variant="segmented"
@@ -3246,7 +3246,7 @@ export function TeamMembersPage() {
                 30 днів
               </Button>
             </div>
-            {teamActivityLoading ? (
+            {teamActivityLoading && teamActivityItems.length === 0 ? (
               <AppSectionLoader label="Завантаження активності..." compact />
             ) : teamActivityItems.length === 0 ? (
               <div className="text-sm text-muted-foreground">Немає дій за обраний період.</div>
@@ -3257,11 +3257,26 @@ export function TeamMembersPage() {
                   const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
                   const profile = member ? memberProfilesByUserId[member.user_id] : null;
                   const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
+                  const initials = getInitialsFromName(displayName, member?.email ?? null);
                   return (
                     <Card key={`${item.userId}-${item.createdAt}-${index}`} className="border-border/60 p-4">
-                      <div className="text-sm font-medium text-foreground">{displayName}</div>
-                      <div className="mt-2 text-sm text-foreground">{item.title}</div>
-                      <div className="mt-2 text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
+                      <div className="flex items-center gap-3">
+                        <AvatarBase
+                          src={member ? getMemberAvatarSource(profile, member) : undefined}
+                          name={displayName}
+                          fallback={initials}
+                          assetVariant="xs"
+                          size={36}
+                          shape="circle"
+                          className="border-border bg-muted/50"
+                          fallbackClassName="text-[10px] font-bold"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">{displayName}</div>
+                          <div className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-sm text-foreground">{item.title}</div>
                     </Card>
                   );
                 })}
@@ -3270,11 +3285,11 @@ export function TeamMembersPage() {
                 <Table variant="list" size="md">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableTextHeaderCell widthClass="w-[28%]" className="pl-6">
+                      <TableTextHeaderCell widthClass="w-[30%]" className="pl-6">
                         Користувач
                       </TableTextHeaderCell>
                       <TableTextHeaderCell>Дія</TableTextHeaderCell>
-                      <TableTextHeaderCell>Коли</TableTextHeaderCell>
+                      <TableTextHeaderCell widthClass="w-[18%]">Коли</TableTextHeaderCell>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -3282,16 +3297,29 @@ export function TeamMembersPage() {
                       const member = members.find((candidate) => candidate.user_id === item.userId) ?? null;
                       const profile = member ? memberProfilesByUserId[member.user_id] : null;
                       const displayName = member ? getMemberDisplayName(member) : profile?.label || "Користувач";
+                      const initials = getInitialsFromName(displayName, member?.email ?? null);
                       return (
                         <TableRow key={`${item.userId}-${item.createdAt}-${index}`} className="hover:bg-muted/40 transition-colors">
                           <TableCell className="pl-6">
-                            <div className="text-sm font-medium text-foreground">{displayName}</div>
+                            <div className="flex items-center gap-2.5">
+                              <AvatarBase
+                                src={member ? getMemberAvatarSource(profile, member) : undefined}
+                                name={displayName}
+                                fallback={initials}
+                                assetVariant="xs"
+                                size={30}
+                                shape="circle"
+                                className="border-border bg-muted/50"
+                                fallbackClassName="text-[10px] font-bold"
+                              />
+                              <span className="truncate text-sm font-medium text-foreground">{displayName}</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm text-foreground">{item.title}</div>
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm text-muted-foreground">{formatDate(item.createdAt)}</div>
+                            <div className="whitespace-nowrap text-sm text-muted-foreground">{formatDate(item.createdAt)}</div>
                           </TableCell>
                         </TableRow>
                       );
