@@ -1,5 +1,8 @@
 import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus";
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
+import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
+import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
+import type { Json } from "@/lib/database.types";
 import {
   formatCustomerLegalEntityTitle,
   parseCustomerLegalEntities,
@@ -360,6 +363,68 @@ export type OrderCreationDraft = {
   quoteNumber: string;
   readiness: DerivedOrderRecord;
   selectableItems: DerivedOrderItem[];
+};
+
+/** Одна позиція для замовлення, створеного вручну (без прорахунку). */
+export type ManualOrderItemInput = {
+  name: string;
+  description?: string | null;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+};
+
+/** Одне нанесення (друк) — вільні поля, як у прорахунку. */
+export type ManualOrderPrintApplication = {
+  method: string;
+  position: string;
+  width: string;
+  height: string;
+};
+
+/**
+ * Вибір дизайну на етапі «Дизайн» (актуально лише коли є друк):
+ * none — без дизайн-задачі; existing — привʼязати наявну; create — створити нову.
+ */
+export type ManualOrderDesignChoice =
+  | { mode: "none" }
+  | { mode: "existing"; designTaskId: string; designTaskNumber?: string | null }
+  | { mode: "create"; designTaskType: DesignTaskType; brief?: string | null };
+
+export type CreateManualOrderParams = {
+  teamId: string;
+  /** Хто натиснув «створити» — стає менеджером замовлення (можна перевизначити нижче). */
+  userId?: string | null;
+  /** Явно призначений менеджер (user_id). Якщо не задано — береться userId. */
+  managerUserId?: string | null;
+  managerLabel?: string | null;
+  /** Обовʼязково: існуючий Замовник (не лід). */
+  customerId: string;
+  currency: string;
+  paymentMethodId: string;
+  paymentTerms: string;
+  incotermsCode: string;
+  incotermsPlace?: string | null;
+  items: ManualOrderItemInput[];
+  /** Логістика — як у прорахунку (delivery_type + delivery_details). */
+  deliveryType?: string | null;
+  deliveryDetails?: Json | null;
+  /** Пакування — вільний опис. */
+  packaging?: string | null;
+  /** Нанесення (друк). Порожній масив = без друку. */
+  printApplications?: ManualOrderPrintApplication[];
+  /** Вибір дизайну (враховується лише коли є друк). */
+  design?: ManualOrderDesignChoice;
+};
+
+/** Селектований елемент для «Обрати готовий дизайн». */
+export type CustomerDesignTaskOption = {
+  id: string;
+  number: string | null;
+  title: string;
+  status: DesignStatus;
+  type: DesignTaskType | null;
+  createdAt: string | null;
 };
 
 const normalizeLookupKey = (value?: string | null) =>
@@ -1552,6 +1617,398 @@ export async function createOrderFromApprovedQuote(params: {
   }
 
   return { id: orderId, created: true as const };
+}
+
+const getManualOrderMonthCode = (date = new Date()) => {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear()).slice(-2);
+  return `${month}${year}`;
+};
+
+/**
+ * Наступний номер для замовлення без прорахунку — формат `ZM-{MMYY}-{0000}`.
+ * Окремий префікс від прорахунків (`TS-`), щоб не плутати нумерацію.
+ * quote_number НЕ унікальний, тож достатньо best-effort max+1 у межах місяця.
+ */
+async function getNextManualOrderNumber(teamId: string) {
+  const monthCode = getManualOrderMonthCode();
+  const pattern = `ZM-${monthCode}-%`;
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .select("quote_number")
+    .eq("team_id", teamId)
+    .like("quote_number", pattern)
+    .order("quote_number", { ascending: false })
+    .limit(1);
+  if (error && !isMissingOrdersRelationMessage(error.message)) throw error;
+  const last = (((data ?? []) as Array<{ quote_number?: string | null }>)[0]?.quote_number ?? "").trim();
+  const parsed = last ? Number.parseInt(last.split("-")[2] ?? "", 10) : NaN;
+  const next = Number.isFinite(parsed) && parsed >= 1 ? parsed + 1 : 1;
+  return `ZM-${monthCode}-${String(next).padStart(4, "0")}`;
+}
+
+/**
+ * Створити замовлення напряму, без затвердженого прорахунку.
+ * Позиції та ціни задаються вручну; реквізити/контакти/підписант підтягуються
+ * з картки Замовника (як у deriv-потоці). quote_id лишається null.
+ */
+export async function createManualOrder(params: CreateManualOrderParams) {
+  const items = params.items
+    .map((item) => ({
+      name: (item.name ?? "").trim(),
+      description: item.description?.trim() || null,
+      qty: Math.max(0, Number(item.qty) || 0),
+      unit: normalizeUnitLabel(item.unit || "шт."),
+      unitPrice: Math.max(0, Number(item.unitPrice) || 0),
+    }))
+    .filter((item) => item.name.length > 0);
+
+  if (!params.customerId?.trim()) {
+    throw new Error("Оберіть Замовника для замовлення.");
+  }
+  if (items.length === 0) {
+    throw new Error("Додайте хоча б одну позицію з назвою.");
+  }
+
+  const customerQuery = await supabase
+    .schema("tosho")
+    .from("customers")
+    .select(
+      "id,name,legal_name,logo_url,contacts,contact_phone,contact_email,tax_id,iban,signatory_name,signatory_position,legal_entities"
+    )
+    .eq("team_id", params.teamId)
+    .eq("id", params.customerId)
+    .maybeSingle<CustomerRecord>();
+  if (customerQuery.error) throw customerQuery.error;
+  const customer = customerQuery.data ?? null;
+  if (!customer) {
+    throw new Error("Замовника не знайдено. Оновіть сторінку й спробуйте ще раз.");
+  }
+
+  const contacts = parseCustomerContacts(customer);
+  const primaryLegalEntity = parseCustomerLegalEntities(customer)[0] ?? null;
+  const contactEmail =
+    contacts.find((entry) => (entry.email ?? "").trim())?.email?.trim() ??
+    customer.contact_email?.trim?.() ??
+    null;
+  const contactPhone =
+    contacts.find((entry) => (entry.phone ?? "").trim())?.phone?.trim() ??
+    customer.contact_phone?.trim?.() ??
+    null;
+  const legalEntityLabel =
+    primaryLegalEntity && primaryLegalEntity.legalName.trim()
+      ? formatCustomerLegalEntityTitle(primaryLegalEntity)
+      : customer.legal_name?.trim?.() ?? null;
+  const signatoryName =
+    primaryLegalEntity?.signatoryName?.trim() || customer.signatory_name?.trim?.() || "";
+  const signatoryPosition =
+    primaryLegalEntity?.signatoryPosition?.trim() || customer.signatory_position?.trim?.() || "";
+
+  const currency = isValidCurrency(params.currency) ? params.currency.toUpperCase() : "UAH";
+  const paymentMethodId = normalizePaymentMethodId(params.paymentMethodId) || "cash";
+  const orderTotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const orderNumber = await getNextManualOrderNumber(params.teamId);
+
+  // Нанесення (друк) — вільні поля, як у прорахунку. Порожньо = без друку.
+  const printApplications = (params.printApplications ?? [])
+    .map((app) => ({
+      method: (app.method ?? "").trim(),
+      position: (app.position ?? "").trim(),
+      width: (app.width ?? "").trim(),
+      height: (app.height ?? "").trim(),
+    }))
+    .filter((app) => app.method || app.position || app.width || app.height);
+  const hasPrint = printApplications.length > 0;
+  const itemMethods = hasPrint
+    ? printApplications.map((app) => {
+        const size = app.width || app.height ? `${app.width || "?"}×${app.height || "?"} мм` : "";
+        const label = [app.method || "Нанесення", app.position, size].filter(Boolean).join(" · ");
+        return {
+          label,
+          method_id: null,
+          print_width_mm: app.width ? Number(app.width) || null : null,
+          print_height_mm: app.height ? Number(app.height) || null : null,
+        };
+      })
+    : null;
+
+  const customerName = customer.name?.trim?.() || customer.legal_name?.trim?.() || "Контрагент без назви";
+  const customerLogoUrl = customer.logo_url?.trim?.() ?? null;
+
+  const orderId = crypto.randomUUID();
+  const nowIso = new Date().toISOString();
+
+  // Дизайн враховується лише коли є друк.
+  const designChoice: ManualOrderDesignChoice = hasPrint ? params.design ?? { mode: "none" } : { mode: "none" };
+
+  const orderPayload = {
+    id: orderId,
+    team_id: params.teamId,
+    quote_id: null,
+    quote_number: orderNumber,
+    customer_id: customer.id,
+    customer_name: customerName,
+    customer_logo_url: customerLogoUrl,
+    party_type: "customer",
+    manager_user_id: params.managerUserId ?? params.userId ?? null,
+    manager_label: params.managerLabel?.trim() || null,
+    currency,
+    total: orderTotal,
+    payment_method_id: paymentMethodId,
+    payment_method_label: PAYMENT_METHOD_LABELS[paymentMethodId] ?? PAYMENT_METHOD_LABELS.cash,
+    payment_terms: (params.paymentTerms ?? "").trim() || DEFAULT_PAYMENT_TERMS,
+    incoterms_code: (params.incotermsCode ?? "").trim() || DEFAULT_INCOTERMS_CODE,
+    incoterms_place: params.incotermsPlace?.trim() || null,
+    delivery_type: params.deliveryType?.trim() || null,
+    delivery_details: params.deliveryDetails ?? null,
+    packaging: params.packaging?.trim() || null,
+    order_status: "on_calculation",
+    payment_status: "awaiting_payment",
+    delivery_status: "not_shipped",
+    contact_email: contactEmail,
+    contact_phone: contactPhone,
+    legal_entity_label: legalEntityLabel,
+    customer_tax_id: primaryLegalEntity?.taxId?.trim() || customer.tax_id?.trim?.() || null,
+    customer_iban: primaryLegalEntity?.iban?.trim() || customer.iban?.trim?.() || null,
+    customer_bank_details: null,
+    customer_legal_address: primaryLegalEntity?.legalAddress?.trim() || null,
+    signatory_label: buildSignatoryLabel(signatoryName, signatoryPosition),
+    customer_signatory_authority: primaryLegalEntity?.signatoryAuthority?.trim() || null,
+    design_statuses: [],
+    documents: { contract: false, invoice: items.length > 0, specification: false, techCard: false },
+    readiness_steps: [],
+    blockers: [],
+    readiness_column: "ready",
+    has_approved_visualization: false,
+    has_approved_layout: false,
+    created_at: nowIso,
+    updated_at: nowIso,
+  };
+
+  let { error: insertOrderError } = await supabase.schema("tosho").from("orders").insert(orderPayload);
+  // Grace path: якщо scripts/orders-manual-order-fields.sql ще не застосовано —
+  // прибираємо нові колонки й вставляємо базовий набір (логістика/пакування/лінк дизайну втратяться).
+  if (insertOrderError && isMissingOrdersColumnMessage(insertOrderError.message)) {
+    const {
+      delivery_type: _dt,
+      delivery_details: _dd,
+      packaging: _pk,
+      ...baseOrderPayload
+    } = orderPayload;
+    void _dt;
+    void _dd;
+    void _pk;
+    ({ error: insertOrderError } = await supabase.schema("tosho").from("orders").insert(baseOrderPayload));
+  }
+  if (insertOrderError) {
+    if (isMissingOrdersRelationMessage(insertOrderError.message)) {
+      throw new Error("Таблиці замовлень ще не створені. Запустіть scripts/orders-schema.sql.");
+    }
+    if (isMissingOrdersColumnMessage(insertOrderError.message)) {
+      throw new Error("Таблиця замовлень не має потрібних полів. Запустіть оновлений scripts/orders-schema.sql.");
+    }
+    throw insertOrderError;
+  }
+
+  const orderItemsPayload = items.map((item, index) => ({
+    id: crypto.randomUUID(),
+    team_id: params.teamId,
+    order_id: orderId,
+    quote_item_id: null,
+    position: index + 1,
+    name: item.name,
+    description: item.description,
+    qty: item.qty,
+    unit: item.unit,
+    unit_price: item.unitPrice,
+    line_total: item.qty * item.unitPrice,
+    methods: itemMethods,
+    catalog_model_id: null,
+    image_url: null,
+    thumb_url: null,
+  }));
+
+  const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);
+  if (insertItemsError) {
+    // Позиції не збереглися — прибираємо порожнє замовлення, щоб не лишати «сироту».
+    await supabase.schema("tosho").from("orders").delete().eq("id", orderId).eq("team_id", params.teamId);
+    if (isMissingOrdersRelationMessage(insertItemsError.message) || isMissingOrdersColumnMessage(insertItemsError.message)) {
+      throw new Error("Таблиці позицій замовлень ще не готові. Запустіть оновлений scripts/orders-schema.sql.");
+    }
+    throw insertItemsError;
+  }
+
+  // Етап «Дизайн» — привʼязати наявну або створити нову дизайн-задачу (лише коли є друк).
+  let designTask: { id: string; number: string | null } | null = null;
+  if (designChoice.mode === "existing" && designChoice.designTaskId) {
+    designTask = { id: designChoice.designTaskId, number: designChoice.designTaskNumber ?? null };
+  } else if (designChoice.mode === "create") {
+    designTask = await createStandaloneDesignTaskForOrder({
+      teamId: params.teamId,
+      userId: params.userId,
+      managerUserId: params.managerUserId ?? params.userId ?? null,
+      managerLabel: params.managerLabel ?? null,
+      customerId: customer.id,
+      customerName,
+      customerLogoUrl,
+      designTaskType: designChoice.designTaskType,
+      brief: designChoice.brief ?? null,
+      subject: `Дизайн для ${orderNumber} · ${customerName}`,
+      orderId,
+      methodsCount: printApplications.length,
+    });
+  }
+
+  if (designTask) {
+    // Окремий const — щоб excess-property-check не спіткнувся об ще-не-згенеровані типи колонок.
+    const designLinkPatch = { design_task_id: designTask.id, design_task_number: designTask.number };
+    const { error: linkError } = await supabase
+      .schema("tosho")
+      .from("orders")
+      .update(designLinkPatch)
+      .eq("id", orderId)
+      .eq("team_id", params.teamId);
+    // Не валимо все замовлення через невдалий soft-link — воно вже створене.
+    if (linkError && !isMissingOrdersColumnMessage(linkError.message)) throw linkError;
+  }
+
+  return { id: orderId, created: true as const, orderNumber, designTaskId: designTask?.id ?? null };
+}
+
+/**
+ * Список дизайн-задач Замовника для «Обрати готовий дизайн».
+ * Union двох ознак (як у CustomerLeadQuickViewDialog):
+ *   metadata.customer_id === customerId  АБО  metadata.quote_id ∈ (прорахунки цього замовника).
+ */
+export async function listCustomerDesignTasks(teamId: string, customerId: string): Promise<CustomerDesignTaskOption[]> {
+  if (!customerId?.trim()) return [];
+
+  const quotesResult = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id")
+    .eq("team_id", teamId)
+    .eq("customer_id", customerId);
+  if (quotesResult.error) throw quotesResult.error;
+  const customerQuoteIds = new Set(
+    (((quotesResult.data ?? []) as Array<{ id?: string | null }>) ?? [])
+      .map((row) => row.id ?? "")
+      .filter(Boolean)
+  );
+
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select(
+      "id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,customer_id:metadata->>customer_id,quote_id:metadata->>quote_id"
+    )
+    .eq("team_id", teamId)
+    .eq("action", "design_task")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+
+  const rows =
+    (((data ?? []) as unknown) as Array<{
+      id: string;
+      title?: string | null;
+      created_at?: string | null;
+      status?: string | null;
+      design_task_number?: string | null;
+      design_task_type?: string | null;
+      customer_id?: string | null;
+      quote_id?: string | null;
+    }>) ?? [];
+
+  return rows
+    .filter((row) => row.customer_id === customerId || (row.quote_id ? customerQuoteIds.has(row.quote_id) : false))
+    .map((row) => {
+      const statusRaw = (row.status ?? "new").trim().toLowerCase();
+      const status = (statusRaw in DESIGN_STATUS_LABELS ? statusRaw : "new") as DesignStatus;
+      return {
+        id: row.id,
+        number: row.design_task_number?.trim() || null,
+        title: row.title?.trim() || "Дизайн-задача",
+        status,
+        type: parseDesignTaskType(row.design_task_type),
+        createdAt: row.created_at ?? null,
+      } satisfies CustomerDesignTaskOption;
+    });
+}
+
+/**
+ * Створити standalone дизайн-задачу прямо із замовлення (quote_id null, привʼязка через customer_id + order_id).
+ * Дзеркалить insert зі стандартного standalone-потоку в DesignPage.
+ */
+async function createStandaloneDesignTaskForOrder(params: {
+  teamId: string;
+  userId?: string | null;
+  managerUserId: string | null;
+  managerLabel: string | null;
+  customerId: string;
+  customerName: string;
+  customerLogoUrl: string | null;
+  designTaskType: DesignTaskType;
+  brief: string | null;
+  subject: string;
+  orderId: string;
+  methodsCount: number;
+}): Promise<{ id: string; number: string }> {
+  const entityId = `standalone-${crypto.randomUUID()}`;
+  const createdAtIso = new Date().toISOString();
+  const number = await getNextDesignTaskNumber(params.teamId, createdAtIso);
+  const actorName = params.managerLabel?.trim() || "Менеджер";
+
+  const metadata = withDesignTaskCollaboratorMetadata(
+    {
+      source: "design_task_created_manual",
+      task_kind: "standalone",
+      task_owner_role: "manager",
+      created_by_user_id: params.userId ?? null,
+      status: "new",
+      design_task_number: number,
+      quote_id: null,
+      order_id: params.orderId,
+      assignee_user_id: null,
+      assignee_label: null,
+      assignee_avatar_url: null,
+      assigned_at: null,
+      manager_user_id: params.managerUserId,
+      manager_label: params.managerLabel?.trim() || actorName,
+      customer_id: params.customerId,
+      customer_name: params.customerName || null,
+      customer_type: params.customerName ? "customer" : null,
+      customer_logo_url: params.customerLogoUrl,
+      design_task_type: params.designTaskType,
+      design_brief: params.brief?.trim() || null,
+      standalone_brief_files: [],
+      design_deadline: null,
+      deadline: null,
+      methods_count: params.methodsCount,
+      has_files: false,
+    },
+    [],
+    { assigneeUserId: null, resolveLabel: (id) => id, resolveAvatar: () => null }
+  );
+
+  const { data, error } = await supabase
+    .from("activity_log")
+    .insert({
+      team_id: params.teamId,
+      user_id: params.userId ?? null,
+      actor_name: actorName,
+      action: "design_task",
+      entity_type: "design_task",
+      entity_id: entityId,
+      title: params.subject,
+      metadata: metadata as Json,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  const id = (data as { id?: string } | null)?.id;
+  if (!id) throw new Error("Не вдалося створити дизайн-задачу для замовлення.");
+  return { id, number };
 }
 
 export async function updateOrderStatuses(params: {

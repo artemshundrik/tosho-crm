@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
+  TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { CreateManualOrderDialog } from "@/components/orders/CreateManualOrderDialog";
 import { ORDER_DOCUMENT_EXECUTOR, ORDER_PAYMENT_TERMS_OPTIONS, ORDER_READINESS_COLUMNS } from "@/features/orders/config";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import {
@@ -48,6 +50,7 @@ import {
   Loader2,
   Package,
   Palette,
+  Plus,
   X,
   Search,
   ShieldCheck,
@@ -368,6 +371,7 @@ export default function OrdersProductionPage() {
   );
   const [viewTab, setViewTab] = useState<"queue" | "register">(() => restoredFilters?.viewTab ?? "register");
   const [selectedSpecificationIds, setSelectedSpecificationIds] = useState<string[]>([]);
+  const [createOrderOpen, setCreateOrderOpen] = useState(false);
 
   const openRecord = (record: DerivedOrderRecord) => {
     if (record.source === "stored") {
@@ -709,6 +713,13 @@ export default function OrdersProductionPage() {
               <span className="hidden sm:inline">Kanban</span>
             </Button>
           </div>
+          <Button
+            onClick={() => setCreateOrderOpen(true)}
+            className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
+          >
+            <Plus className="h-4 w-4" />
+            Створити замовлення
+          </Button>
         </>
       }
       search={
@@ -1224,6 +1235,15 @@ export default function OrdersProductionPage() {
             )}
         </EstimatesKanbanCanvas>
       )}
+
+      <CreateManualOrderDialog
+        open={createOrderOpen}
+        onOpenChange={setCreateOrderOpen}
+        onCreated={({ id }) => {
+          void loadOrders();
+          navigate(`/orders/production/${id}`);
+        }}
+      />
     </PageCanvas>
   );
 }

@@ -2143,6 +2143,11 @@ export type Database = {
           customer_signatory_authority: string | null
           customer_tax_id: string | null
           delivery_status: string
+          delivery_type: string | null
+          delivery_details: Json | null
+          packaging: string | null
+          design_task_id: string | null
+          design_task_number: string | null
           design_statuses: Json
           documents: Json
           has_approved_layout: boolean
@@ -2193,6 +2198,11 @@ export type Database = {
           customer_signatory_authority?: string | null
           customer_tax_id?: string | null
           delivery_status?: string
+          delivery_type?: string | null
+          delivery_details?: Json | null
+          packaging?: string | null
+          design_task_id?: string | null
+          design_task_number?: string | null
           design_statuses?: Json
           documents?: Json
           has_approved_layout?: boolean
@@ -2243,6 +2253,11 @@ export type Database = {
           customer_signatory_authority?: string | null
           customer_tax_id?: string | null
           delivery_status?: string
+          delivery_type?: string | null
+          delivery_details?: Json | null
+          packaging?: string | null
+          design_task_id?: string | null
+          design_task_number?: string | null
           design_statuses?: Json
           documents?: Json
           has_approved_layout?: boolean
