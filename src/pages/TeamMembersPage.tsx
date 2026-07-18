@@ -15,8 +15,8 @@ import {
   Loader2,
   AlertTriangle,
   Activity,
-  Shield,
   Gift,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
@@ -519,6 +519,44 @@ function isRecoverableTeamProfileError(message: string) {
   );
 }
 
+type MemberFilterKey = "attention" | "birthday" | "startDate" | "probation" | "absence";
+
+function FilterChip({
+  label,
+  count,
+  active,
+  tone = "default",
+  icon: Icon,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  tone?: "default" | "warning";
+  icon?: LucideIcon;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : tone === "warning"
+            ? "tone-warning-subtle tone-text-warning border-transparent hover:brightness-[0.97]"
+            : "border-border/70 bg-muted/[0.04] text-muted-foreground hover:bg-muted/[0.08] hover:text-foreground",
+      )}
+    >
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      <span>{label}</span>
+      <span className="tabular-nums opacity-70">{count}</span>
+    </button>
+  );
+}
+
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
@@ -555,6 +593,7 @@ export function TeamMembersPage() {
   const [invitesError, setInvitesError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -1117,14 +1156,44 @@ export function TeamMembersPage() {
     const lastName = (memberMetaByUserId[m.user_id]?.lastName ?? "").toLowerCase();
     const phone = (memberMetaByUserId[m.user_id]?.phone ?? "").toLowerCase();
     const q = searchQuery.toLowerCase();
-    return (
+    const searchMatches =
       email.includes(q) ||
       name.includes(q) ||
       fallbackName.includes(q) ||
       firstName.includes(q) ||
       lastName.includes(q) ||
-      phone.includes(q)
-    );
+      phone.includes(q);
+    if (!searchMatches) return false;
+    if (!activeFilter) return true;
+    const meta = memberMetaByUserId[m.user_id];
+    switch (activeFilter) {
+      case "birthday":
+        return !meta?.birthDate;
+      case "startDate":
+        return !meta?.startDate;
+      case "probation":
+        return isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate);
+      case "absence": {
+        const availabilityStatus = normalizeTeamAvailabilityStatus(meta?.availabilityStatus);
+        return (
+          availabilityStatus !== "available" &&
+          !!meta?.availabilityStartDate &&
+          !meta?.availabilityEndDate
+        );
+      }
+      case "attention": {
+        const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
+        return (
+          !meta?.birthDate ||
+          !meta?.startDate ||
+          !(m.job_role ?? "").trim() ||
+          isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate) ||
+          probation?.status === "upcoming"
+        );
+      }
+      default:
+        return true;
+    }
   });
 
   const formatDate = (dateStr: string) => {
@@ -2293,81 +2362,16 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6 pb-20 pt-4 md:pb-0">
-      <div className="overflow-hidden">
-        <div className="p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1 text-xs font-medium text-primary">
-                <Shield className="h-3.5 w-3.5" />
-                Адміністрування команди
-              </div>
-              <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
-                Тут не про щоденний стан команди, а про якість даних, ролі, доступи й HR-контроль
-              </div>
-              <div className="mt-2 text-sm leading-6 text-muted-foreground">
-                Командний дашборд з онлайн-статусами та подіями винесений на окрему сторінку `Команда`. Тут лишається те, що треба адміну: прогалини в профілях, випробувальні та речі, які потребують дії.
-              </div>
-            </div>
-            <div className="grid min-w-[260px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
-              <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Усього людей</div>
-                <div className="mt-1 text-2xl font-semibold text-foreground">{members.length}</div>
-              </div>
-              <div className="tone-warning-subtle rounded-2xl border px-4 py-3">
-                <div className="tone-text-warning text-xs uppercase tracking-wide">Потребують уваги</div>
-                <div className="mt-1 text-2xl font-semibold text-foreground">{needsAttentionCount}</div>
-              </div>
-              <div className="tone-success-subtle rounded-2xl border px-4 py-3">
-                <div className="tone-text-success text-xs uppercase tracking-wide">Інвайти</div>
-                <div className="mt-1 text-2xl font-semibold text-foreground">{activeInvitesCount}</div>
-              </div>
-            </div>
+    <div className="flex w-full flex-col gap-4 pb-20 pt-4 md:pb-0">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+              {members.length}
+            </span>
           </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Без дня народження</div>
-                <Gift className="h-4 w-4 text-muted-foreground/70" />
-              </div>
-              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{missingBirthdayCount}</div>
-              <div className="mt-1 text-sm text-muted-foreground">профілів треба доповнити</div>
-            </div>
-
-            <div className="rounded-2xl border border-border/70 bg-muted/[0.04] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Без дати старту</div>
-                <Calendar className="h-4 w-4 text-muted-foreground/70" />
-              </div>
-              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{missingStartDateCount}</div>
-              <div className="mt-1 text-sm text-muted-foreground">не вдасться порахувати стаж</div>
-            </div>
-
-            <div className="tone-warning-subtle rounded-2xl border px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium uppercase tracking-wide tone-text-warning">Випробувальний</div>
-                <AlertTriangle className="tone-text-warning h-4 w-4" />
-              </div>
-              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{probationReviewDueCount}</div>
-              <div className="mt-1 text-sm tone-copy-warning">чекають рішення або рев’ю</div>
-            </div>
-
-            <div className="tone-warning-subtle rounded-2xl border px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="tone-text-warning text-xs font-medium uppercase tracking-wide">Відсутність без кінця</div>
-                <Activity className="tone-text-warning h-4 w-4" />
-              </div>
-              <div className="mt-3 text-3xl font-semibold tabular-nums text-foreground">{openAbsenceRangeCount}</div>
-              <div className="mt-1 text-sm tone-copy-warning">період треба закрити датою</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-hidden flex flex-col">
-        <div className="flex flex-col gap-4 p-5 pb-0">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center md:justify-end md:gap-2">
             <div className={SEGMENTED_GROUP}>
               <Button
                 type="button"
@@ -2425,7 +2429,78 @@ export function TeamMembersPage() {
             </div>
           </div>
         </div>
+        {activeTab === "members" ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <FilterChip
+              label="Всі"
+              count={members.length}
+              active={activeFilter === null}
+              onClick={() => setActiveFilter(null)}
+            />
+            {needsAttentionCount > 0 ? (
+              <FilterChip
+                label="Потребують уваги"
+                count={needsAttentionCount}
+                tone="warning"
+                icon={AlertTriangle}
+                active={activeFilter === "attention"}
+                onClick={() => setActiveFilter((prev) => (prev === "attention" ? null : "attention"))}
+              />
+            ) : null}
+            {probationReviewDueCount > 0 ? (
+              <FilterChip
+                label="Випробувальний"
+                count={probationReviewDueCount}
+                tone="warning"
+                icon={Clock}
+                active={activeFilter === "probation"}
+                onClick={() => setActiveFilter((prev) => (prev === "probation" ? null : "probation"))}
+              />
+            ) : null}
+            {openAbsenceRangeCount > 0 ? (
+              <FilterChip
+                label="Відсутність без кінця"
+                count={openAbsenceRangeCount}
+                tone="warning"
+                icon={Activity}
+                active={activeFilter === "absence"}
+                onClick={() => setActiveFilter((prev) => (prev === "absence" ? null : "absence"))}
+              />
+            ) : null}
+            {missingBirthdayCount > 0 ? (
+              <FilterChip
+                label="Без дня народження"
+                count={missingBirthdayCount}
+                icon={Gift}
+                active={activeFilter === "birthday"}
+                onClick={() => setActiveFilter((prev) => (prev === "birthday" ? null : "birthday"))}
+              />
+            ) : null}
+            {missingStartDateCount > 0 ? (
+              <FilterChip
+                label="Без дати старту"
+                count={missingStartDateCount}
+                icon={Calendar}
+                active={activeFilter === "startDate"}
+                onClick={() => setActiveFilter((prev) => (prev === "startDate" ? null : "startDate"))}
+              />
+            ) : null}
+            {activeInvitesCount > 0 && canManage ? (
+              <button
+                type="button"
+                onClick={() => handleTabChange("invites")}
+                className="tone-success-subtle tone-text-success ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-3 py-1 text-xs font-medium transition-colors duration-200 hover:brightness-[0.97]"
+              >
+                <LinkIcon className="h-3.5 w-3.5" />
+                <span>Активні інвайти</span>
+                <span className="tabular-nums opacity-70">{activeInvitesCount}</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
+      <div className="overflow-hidden flex flex-col">
         {activeTab === "members" ? (
           <>
           <div className="space-y-3 md:hidden">
