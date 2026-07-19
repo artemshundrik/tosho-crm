@@ -162,11 +162,6 @@ type MemberPresence = {
   online: boolean;
 };
 
-type QuickAvailabilityDialogState = {
-  member: Member;
-  status: MemberProfileMeta["availabilityStatus"];
-};
-
 type Invite = {
   id: string;
   email: string;
@@ -608,10 +603,6 @@ export function TeamMembersPage() {
   const [editProfileModuleAccess, setEditProfileModuleAccess] =
     useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
   const [editProfileBusy, setEditProfileBusy] = useState(false);
-  const [quickAvailabilityDialog, setQuickAvailabilityDialog] = useState<QuickAvailabilityDialogState | null>(null);
-  const [quickAvailabilityStartDate, setQuickAvailabilityStartDate] = useState("");
-  const [quickAvailabilityEndDate, setQuickAvailabilityEndDate] = useState("");
-  const [quickAvailabilityBusy, setQuickAvailabilityBusy] = useState(false);
   const [probationActionBusy, setProbationActionBusy] = useState<"active" | "rejected" | "extend" | null>(null);
   const [pendingProbationDecision, setPendingProbationDecision] = useState<"rejected" | null>(null);
   const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
@@ -1314,13 +1305,6 @@ export function TeamMembersPage() {
     setParams(nextParams);
   };
 
-  const closeQuickAvailabilityDialog = () => {
-    if (quickAvailabilityBusy) return;
-    setQuickAvailabilityDialog(null);
-    setQuickAvailabilityStartDate("");
-    setQuickAvailabilityEndDate("");
-  };
-
   const saveMemberProfile = async () => {
     if (!editProfileMember || !workspaceId || !canOpenProfileCard) return;
 
@@ -1859,31 +1843,6 @@ export function TeamMembersPage() {
       toast.success(status === "offline" ? "Учасника переведено в неактивний стан" : "Статус учасника оновлено");
     } catch (error: unknown) {
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(error) });
-    }
-  };
-
-  const saveQuickAvailabilityDialog = async () => {
-    if (!quickAvailabilityDialog) return;
-    if (
-      quickAvailabilityStartDate &&
-      quickAvailabilityEndDate &&
-      new Date(`${quickAvailabilityEndDate}T12:00:00`).getTime() < new Date(`${quickAvailabilityStartDate}T12:00:00`).getTime()
-    ) {
-      toast.error("Кінець відсутності не може бути раніше дати початку");
-      return;
-    }
-
-    setQuickAvailabilityBusy(true);
-    try {
-      await updateAvailabilityStatus(quickAvailabilityDialog.member, quickAvailabilityDialog.status, {
-        availabilityStartDate: quickAvailabilityStartDate.trim(),
-        availabilityEndDate: quickAvailabilityEndDate.trim(),
-      });
-      setQuickAvailabilityDialog(null);
-      setQuickAvailabilityStartDate("");
-      setQuickAvailabilityEndDate("");
-    } finally {
-      setQuickAvailabilityBusy(false);
     }
   };
 
@@ -3123,64 +3082,6 @@ export function TeamMembersPage() {
                 </Button>
               </div>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!quickAvailabilityDialog}
-        onOpenChange={(open) => {
-          if (!open) closeQuickAvailabilityDialog();
-        }}
-      >
-        <DialogContent className="sm:max-w-[460px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
-          <div className="border-b border-border bg-muted/10 px-6 py-5">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-foreground">
-                {quickAvailabilityDialog ? getAvailabilityLabel(quickAvailabilityDialog.status) : "Статус відсутності"}
-              </DialogTitle>
-              <DialogDescription className="mt-1.5 text-muted-foreground">
-                {quickAvailabilityDialog
-                  ? `Вкажи період для ${getMemberDisplayName(quickAvailabilityDialog.member)}.`
-                  : "Вкажи період відсутності."}
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          <div className="space-y-4 px-6 py-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Початок</Label>
-                <Input
-                  type="date"
-                  value={quickAvailabilityStartDate}
-                  onChange={(event) => setQuickAvailabilityStartDate(event.target.value)}
-                  className="h-11"
-                  disabled={quickAvailabilityBusy}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Завершення</Label>
-                <Input
-                  type="date"
-                  value={quickAvailabilityEndDate}
-                  onChange={(event) => setQuickAvailabilityEndDate(event.target.value)}
-                  className="h-11"
-                  disabled={quickAvailabilityBusy}
-                />
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Можна залишити дату завершення порожньою, якщо повернення ще невідоме.
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={closeQuickAvailabilityDialog} disabled={quickAvailabilityBusy}>
-                Скасувати
-              </Button>
-              <Button type="button" onClick={() => void saveQuickAvailabilityDialog()} disabled={quickAvailabilityBusy}>
-                {quickAvailabilityBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Зберегти
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
