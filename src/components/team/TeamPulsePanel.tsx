@@ -72,6 +72,23 @@ function rangeStartMs(days: number) {
   return Date.now() - days * 24 * 60 * 60 * 1000;
 }
 
+function toDateOnly(ms: number) {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatMinutes(min: number) {
+  if (!min || min <= 0) return "0 хв";
+  const hours = Math.floor(min / 60);
+  const rest = min % 60;
+  if (hours === 0) return `${rest} хв`;
+  if (rest === 0) return `${hours} год`;
+  return `${hours} год ${rest} хв`;
+}
+
 function formatWhen(iso: string) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("uk-UA", { dateStyle: "short", timeStyle: "short" });
@@ -104,6 +121,8 @@ export function TeamPulsePanel({
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [totalMinutes, setTotalMinutes] = useState(0);
+  const [minutesByUser, setMinutesByUser] = useState<Map<string, number>>(new Map());
   const memberIdsRef = useRef<Set<string>>(new Set());
   memberIdsRef.current = new Set(people.map((p) => p.userId));
 
@@ -142,7 +161,42 @@ export function TeamPulsePanel({
         if (!cancelled) setLoading(false);
       }
     };
+
+    // Active-minutes from the pre-aggregated user_activity_daily via the RPC.
+    // get_team_pulse_summary lives in scripts/user-activity.sql; the cast bridges
+    // the not-yet-regenerated Supabase types. Owner/SEO-gated server-side.
+    const loadMinutes = async () => {
+      try {
+        const rpc = supabase.schema("tosho").rpc as unknown as (
+          name: string,
+          args: { p_workspace_id: string; p_team_id: string | null; p_from: string; p_to: string }
+        ) => PromiseLike<{ data: unknown; error: unknown }>;
+        const { data } = await rpc("get_team_pulse_summary", {
+          p_workspace_id: workspaceId,
+          p_team_id: null,
+          p_from: toDateOnly(rangeStartMs(rangeMeta.days)),
+          p_to: toDateOnly(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        if (cancelled) return;
+        const summary = (data ?? null) as
+          | { activeMinutes?: number; perPerson?: { userId: string; activeMinutes: number }[] }
+          | null;
+        setTotalMinutes(summary?.activeMinutes ?? 0);
+        const map = new Map<string, number>();
+        for (const person of summary?.perPerson ?? []) {
+          map.set(person.userId, person.activeMinutes ?? 0);
+        }
+        setMinutesByUser(map);
+      } catch {
+        if (!cancelled) {
+          setTotalMinutes(0);
+          setMinutesByUser(new Map());
+        }
+      }
+    };
+
     void load();
+    void loadMinutes();
     return () => {
       cancelled = true;
     };
@@ -242,13 +296,8 @@ export function TeamPulsePanel({
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} />
           <KpiTile icon={Users} label="Активних людей" value={activeUsers} />
+          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText />
           <KpiTile icon={Activity} label="Всього дій" value={totalActions} />
-          <KpiTile
-            icon={Clock}
-            label="Найактивніший"
-            value={groups[0] ? resolvePerson(groups[0].userId).displayName : "—"}
-            isText
-          />
         </div>
 
         {trend.length > 1 ? (
@@ -339,8 +388,14 @@ export function TeamPulsePanel({
                       <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
                       {person.online ? <span className="tone-text-success text-[11px] font-medium">онлайн</span> : null}
                     </div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      Остання дія {formatRelative(group.lastActiveAt)}
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="truncate">Остання дія {formatRelative(group.lastActiveAt)}</span>
+                      {(minutesByUser.get(group.userId) ?? 0) > 0 ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                          <Clock className="h-3 w-3" />
+                          {formatMinutes(minutesByUser.get(group.userId) ?? 0)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <CategoryBreakdown byCategory={group.byCategory} total={group.total} />
