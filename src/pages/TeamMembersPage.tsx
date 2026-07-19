@@ -6,7 +6,6 @@ import {
   ShieldAlert,
   MoreHorizontal,
   Search,
-  Mail,
   Calendar,
   Link as LinkIcon,
   Clock,
@@ -16,6 +15,8 @@ import {
   AlertTriangle,
   Activity,
   Gift,
+  ChevronRight,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -337,14 +338,6 @@ function normalizeJobRoleInput(role: string | null) {
   return !role || role === "none" ? null : role;
 }
 
-function getTodayDateOnly() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getAccessBadgeClass(role: string | null) {
   if (role === "owner") return "tone-accent";
   if (role === "admin") return "bg-info-soft text-info-foreground border-info-soft-border";
@@ -582,6 +575,7 @@ export function TeamMembersPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -1220,6 +1214,55 @@ export function TeamMembersPage() {
     [members, getMemberDisplayName]
   );
 
+  // Row-action menu items, shared by the desktop master list and (potentially)
+  // other member surfaces. Mirrors the previous inline table row menu.
+  const getMemberRowMenuItems = (m: Member, availability: string) => [
+    { type: "label" as const, label: "Дії" },
+    { type: "separator" as const },
+    canOpenProfileCard
+      ? (canManage ? memberProfileStorageAvailable : true)
+        ? { label: canManage ? "Редагувати профіль" : "Відсоток менеджера", onSelect: () => openEditProfileDialog(m) }
+        : { label: "Профіль (read-only)", disabled: true, muted: true }
+      : { label: "Тільки перегляд", disabled: true, muted: true },
+    canManage && (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
+      ? { label: "Змінити доступи", onSelect: () => openEditRolesDialog(m) }
+      : {
+          label: !isSuperAdmin && m.user_id === currentUserId ? "Admin не може змінити себе" : "Тільки перегляд",
+          disabled: true,
+          muted: true,
+        },
+    canManage
+      ? { label: "Надіслати reset паролю", onSelect: () => void sendPasswordReset(m) }
+      : { label: "Reset паролю недоступний", disabled: true, muted: true },
+    canManage
+      ? {
+          label: availability === "offline" ? "Повернути в роботу" : "Позначити як неактивного",
+          onSelect: () => void updateAvailabilityStatus(m, availability === "offline" ? "available" : "offline"),
+        }
+      : { label: "Зміна статусу недоступна", disabled: true, muted: true },
+    canManage && (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
+      ? { label: "Видалити користувача", destructive: true, onSelect: () => confirmDeleteMember(m) }
+      : {
+          label: m.user_id === currentUserId ? "Не можна видалити себе" : "Видалення недоступне",
+          disabled: true,
+          muted: true,
+        },
+  ];
+
+  const panelMember =
+    (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) ?? null : null) ??
+    filteredMembers[0] ??
+    null;
+  const panelProfile = panelMember ? memberProfilesByUserId[panelMember.user_id] : null;
+  const panelMeta = panelMember ? memberMetaByUserId[panelMember.user_id] : undefined;
+  const panelDisplayName = panelMember ? getMemberDisplayName(panelMember) : "";
+  const panelInitials = panelMember ? getInitialsFromName(panelDisplayName, panelMember.email ?? null) : "";
+  const panelSeniority = (() => {
+    if (!panelMeta) return "—";
+    const summary = getEmploymentSummary(panelMeta);
+    return (typeof summary === "string" ? summary : summary?.primary) || "—";
+  })();
+
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
     "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
@@ -1817,17 +1860,6 @@ export function TeamMembersPage() {
     } catch (error: unknown) {
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(error) });
     }
-  };
-
-  const handleQuickAvailabilitySelection = (member: Member, status: MemberProfileMeta["availabilityStatus"]) => {
-    if (status === "vacation" || status === "sick_leave") {
-      const currentMeta = memberMetaByUserId[member.user_id] ?? DEFAULT_MEMBER_META;
-      setQuickAvailabilityDialog({ member, status });
-      setQuickAvailabilityStartDate(currentMeta.availabilityStartDate || getTodayDateOnly());
-      setQuickAvailabilityEndDate(currentMeta.availabilityEndDate || "");
-      return;
-    }
-    void updateAvailabilityStatus(member, status);
   };
 
   const saveQuickAvailabilityDialog = async () => {
@@ -2455,7 +2487,7 @@ export function TeamMembersPage() {
               </button>
             ) : null}
           </div>
-          <div className="space-y-3 px-4 md:hidden">
+          <div className="space-y-3 px-4 lg:hidden">
             {membersError ? (
               <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
             ) : filteredMembers.length === 0 ? (
@@ -2662,323 +2694,145 @@ export function TeamMembersPage() {
               })
             )}
           </div>
-          <div className="hidden overflow-x-auto md:block">
-            <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableTextHeaderCell widthClass="w-[26%]" className="pl-6">
-                    Користувач
-                  </TableTextHeaderCell>
-                  <TableTextHeaderCell>Доступ</TableTextHeaderCell>
-                  <TableTextHeaderCell>Роль / Посада</TableTextHeaderCell>
-                  <TableTextHeaderCell>Статус</TableTextHeaderCell>
-                  <TableTextHeaderCell>Дата народження</TableTextHeaderCell>
-                  <TableTextHeaderCell widthClass="w-[18%]">Робота / Випробувальний</TableTextHeaderCell>
-                  <TableActionHeaderCell>Дії</TableActionHeaderCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {membersError ? (
-                  <TableEmptyRow colSpan={7}>Помилка завантаження: {membersError}</TableEmptyRow>
-                ) : filteredMembers.length === 0 ? (
-                  <TableEmptyRow colSpan={7}>Нема учасників.</TableEmptyRow>
-                ) : (
-                  filteredMembers.map((m) => {
-                    const profile = memberProfilesByUserId[m.user_id];
-                    const meta = memberMetaByUserId[m.user_id];
-                    const availability = meta?.availabilityStatus ?? "available";
-                    const availabilityRange = formatAvailabilityRange(
-                      availability,
-                      meta?.availabilityStartDate,
-                      meta?.availabilityEndDate
-                    );
-                    const presence = memberPresenceByUserId[m.user_id];
-                    const employmentSummary = getEmploymentSummary(meta);
-                    const isInactive = isInactiveEmployment(meta?.employmentStatus);
-                    const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
-                    const displayName = getMemberDisplayName(m);
-                    const initials = getInitialsFromName(displayName, m.email ?? null);
+          <div className="hidden border-t border-border/60 lg:grid lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
+            <div className="max-h-[calc(100dvh-210px)] overflow-y-auto border-r border-border/60">
+              {membersError ? (
+                <div className="p-4 text-sm text-destructive">Помилка завантаження: {membersError}</div>
+              ) : filteredMembers.length === 0 ? (
+                <div className="p-6 text-sm text-muted-foreground">Нема учасників за фільтром.</div>
+              ) : (
+                <ul className="flex flex-col">
+                  {filteredMembers.map((m) => {
+                    const listProfile = memberProfilesByUserId[m.user_id];
+                    const listMeta = memberMetaByUserId[m.user_id];
+                    const listAvailability = listMeta?.availabilityStatus ?? "available";
+                    const listPresence = memberPresenceByUserId[m.user_id];
+                    const listInactive = isInactiveEmployment(listMeta?.employmentStatus);
+                    const listName = getMemberDisplayName(m);
+                    const listInitials = getInitialsFromName(listName, m.email ?? null);
+                    const isSelected = panelMember?.user_id === m.user_id;
                     return (
-                      <TableRow
+                      <li
                         key={m.user_id}
                         className={cn(
-                          "transition-colors group",
-                          canOpenProfileCard ? "cursor-pointer hover:bg-muted/40" : "hover:bg-muted/40"
+                          "group flex items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors",
+                          isSelected ? "bg-primary/[0.07]" : "hover:bg-muted/40"
                         )}
-                        onClick={() => {
-                          if (canOpenProfileCard) openEditProfileDialog(m);
-                        }}
                       >
-                        <TableCell className="pl-6">
-                          <div className="flex items-center gap-3">
-                            <div className="relative shrink-0">
-                              <AvatarBase
-                                src={getMemberAvatarSource(profile, m)}
-                                name={displayName}
-                                fallback={initials}
-                                assetVariant="md"
-                                size={48}
-                                shape="circle"
-                                className="border-border bg-muted/50"
-                                fallbackClassName="text-xs font-bold"
-                                availability={availability}
-                                presence={presence?.online ? "online" : "offline"}
-                                inactive={isInactive}
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <span className={cn(isInactive && "text-muted-foreground line-through")}>{displayName}</span>
-                                {isInactive ? (
-                                  <Badge
-                                    variant="outline"
-                                    className="px-1.5 py-0 text-[10px] font-medium border-destructive/40 bg-destructive/10 text-destructive"
-                                  >
-                                    Співпрацю завершено
-                                  </Badge>
-                                ) : null}
-                              </span>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Mail className="w-3 h-3 opacity-70" />
-                                  <span className="truncate max-w-[220px]">{m.email || "Не вказано"}</span>
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn("px-2.5 py-1 font-medium rounded-[var(--radius)]", getAccessBadgeClass(m.access_role))}
-                          >
-                            {getAccessRoleLabel(m.access_role)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn("px-2.5 py-1 font-medium rounded-[var(--radius)]", getJobBadgeClass(m.job_role))}
-                          >
-                            {getJobRoleLabel(m.job_role)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {isInactive ? (
-                              <Badge
-                                variant="outline"
-                                className="px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit border-muted-foreground/30 bg-muted text-muted-foreground"
-                              >
-                                Неактивний
-                              </Badge>
-                            ) : canManage ? (
-                              <div onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                                <AppDropdown
-                                  align="start"
-                                  contentClassName="w-52"
-                                  trigger={
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit cursor-pointer transition-opacity hover:opacity-80",
-                                        getAvailabilityBadgeClass(availability)
-                                      )}
-                                    >
-                                      {getAvailabilityLabel(availability)}
-                                    </Badge>
-                                  }
-                                  items={AVAILABILITY_OPTIONS.map((option) => ({
-                                    label: (
-                                      <div className="flex w-full items-center justify-between gap-3">
-                                        <span>{option.label}</span>
-                                        {option.value === availability ? (
-                                          <span
-                                            className={cn(
-                                              "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                              getAvailabilityBadgeClass(option.value)
-                                            )}
-                                          >
-                                            Активний
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    ),
-                                    onSelect: () => handleQuickAvailabilitySelection(m, option.value),
-                                  }))}
-                                />
-                              </div>
-                            ) : (
-                              <Badge
-                                variant="outline"
-                                className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)] w-fit", getAvailabilityBadgeClass(availability))}
-                              >
-                                {getAvailabilityLabel(availability)}
-                              </Badge>
-                            )}
-                            {!isInactive && availabilityRange ? (
-                              <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
-                                {availabilityRange}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="w-3.5 h-3.5 opacity-70" />
-                            <span>{formatBirthDate(meta?.birthDate)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <div className="space-y-1">
-                              <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                {employmentSummary.primary}
-                              </div>
-                              {employmentSummary.secondary ? (
-                                <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <span className="whitespace-nowrap">{employmentSummary.secondary}</span>
-                                </div>
-                              ) : null}
-                            </div>
-                            {probation && probation.status !== "completed" ? (
-                                <div className="rounded-[var(--radius)] border border-border/60 bg-background px-3 py-2">
-                                  <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    Випробувальний
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      "h-7 px-2.5 py-0 text-[11px] rounded-[var(--radius)] shrink-0",
-                                      getProbationBadgeClass(probation.status)
-                                    )}
-                                  >
-                                    {probation.statusLabel}
-                                  </Badge>
-                                  <div className="h-1.5 min-w-[72px] flex-1 max-w-[104px] overflow-hidden rounded-full bg-muted">
-                                    <div
-                                      className={cn(
-                                        "h-full rounded-full",
-                                        probation.status === "active"
-                                          ? "tone-dot-warning"
-                                          : "bg-muted-foreground/40"
-                                      )}
-                                      style={{ width: `${probation.progress}%` }}
-                                    />
-                                  </div>
-                                  <span className="min-w-[36px] whitespace-nowrap text-right">
-                                    {probation.daysLeft >= 0
-                                      ? `${probation.daysLeft} дн`
-                                      : `${Math.abs(probation.daysLeft)} дн тому`}
-                                  </span>
-                                </div>
-                                </div>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableActionCell
-                          className="pr-6"
-                          onClick={(event) => event.stopPropagation()}
-                          onPointerDown={(event) => event.stopPropagation()}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMemberId(m.user_id)}
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
                         >
-                          <AppDropdown
-                            align="end"
-                            contentClassName="w-48"
-                            trigger={
-                              <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            }
-                            items={[
-                              { type: "label", label: "Дії" },
-                              { type: "separator" },
-                              canOpenProfileCard
-                                ? (canManage ? memberProfileStorageAvailable : true)
-                                  ? {
-                                    label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
-                                    onSelect: () => openEditProfileDialog(m),
-                                  }
-                                  : {
-                                    label: "Профіль (read-only)",
-                                    disabled: true,
-                                    muted: true,
-                                  }
-                                : {
-                                    label: "Тільки перегляд",
-                                    disabled: true,
-                                    muted: true,
-                                  },
-                              canManage &&
-                              (isSuperAdmin ||
-                                (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
-                                ? {
-                                    label: "Змінити доступи",
-                                    onSelect: () => openEditRolesDialog(m),
-                                  }
-                                : {
-                                    label:
-                                      !isSuperAdmin && m.user_id === currentUserId
-                                        ? "Admin не може змінити себе"
-                                        : "Тільки перегляд",
-                                    disabled: true,
-                                    muted: true,
-                                  },
-                              canManage
-                                ? {
-                                    label: "Надіслати reset паролю",
-                                    onSelect: () => void sendPasswordReset(m),
-                                  }
-                                : {
-                                    label: "Reset паролю недоступний",
-                                    disabled: true,
-                                    muted: true,
-                                  },
-                              canManage
-                                ? {
-                                    label:
-                                      availability === "offline"
-                                        ? "Повернути в роботу"
-                                        : "Позначити як неактивного",
-                                    onSelect: () =>
-                                      void updateAvailabilityStatus(
-                                        m,
-                                        availability === "offline" ? "available" : "offline"
-                                      ),
-                                  }
-                                : {
-                                    label: "Зміна статусу недоступна",
-                                    disabled: true,
-                                    muted: true,
-                                  },
-                              canManage &&
-                              (isSuperAdmin ||
-                                (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
-                                ? {
-                                    label: "Видалити користувача",
-                                    destructive: true,
-                                    onSelect: () => confirmDeleteMember(m),
-                                  }
-                                : {
-                                    label:
-                                      m.user_id === currentUserId
-                                        ? "Не можна видалити себе"
-                                        : "Видалення недоступне",
-                                    disabled: true,
-                                    muted: true,
-                                  },
-                            ]}
+                          <AvatarBase
+                            src={getMemberAvatarSource(listProfile, m)}
+                            name={listName}
+                            fallback={listInitials}
+                            assetVariant="xs"
+                            size={36}
+                            shape="circle"
+                            className="border-border bg-muted/50"
+                            fallbackClassName="text-[10px] font-bold"
+                            availability={listAvailability}
+                            presence={listPresence?.online ? "online" : "offline"}
+                            inactive={listInactive}
                           />
-                        </TableActionCell>
-                      </TableRow>
+                          <span className="min-w-0 flex-1">
+                            <span className={cn("block truncate text-sm font-medium text-foreground", listInactive && "text-muted-foreground line-through")}>
+                              {listName}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">{getJobRoleLabel(m.job_role ?? null)}</span>
+                          </span>
+                        </button>
+                        {isSelected ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : null}
+                        <AppDropdown
+                          align="end"
+                          contentClassName="w-48"
+                          trigger={
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          }
+                          items={getMemberRowMenuItems(m, listAvailability)}
+                        />
+                      </li>
                     );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="max-h-[calc(100dvh-210px)] overflow-y-auto">
+              {panelMember ? (
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <AvatarBase
+                        src={getMemberAvatarSource(panelProfile, panelMember)}
+                        name={panelDisplayName}
+                        fallback={panelInitials}
+                        size={56}
+                        shape="circle"
+                        className="border-border bg-muted/50"
+                        fallbackClassName="text-sm font-bold"
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-lg font-semibold text-foreground">{panelDisplayName}</div>
+                        <div className="truncate text-sm text-muted-foreground">{panelMember.email ?? "Не вказано"}</div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getAccessBadgeClass(panelMember.access_role ?? null))}>
+                            {getAccessRoleLabel(panelMember.access_role ?? null)}
+                          </Badge>
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getJobBadgeClass(panelMember.job_role ?? null))}>
+                            {getJobRoleLabel(panelMember.job_role ?? null)}
+                          </Badge>
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getEmploymentStatusBadgeClass(panelMeta?.employmentStatus ?? "active"))}>
+                            {getEmploymentStatusLabel(panelMeta?.employmentStatus ?? "active")}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    {canOpenProfileCard ? (
+                      <Button variant="outline" size="sm" className="shrink-0" onClick={() => openEditProfileDialog(panelMember)}>
+                        {canManage ? "Редагувати" : "Відкрити"}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">День народження</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">{formatBirthDate(panelMeta?.birthDate)}</div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Стаж</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">{panelSeniority}</div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">{getAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Телефон</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">{panelMeta?.phone || "—"}</div>
+                    </div>
+                  </div>
+
+                  <PersonActivitySection userId={panelMember.user_id} />
+                  {canManage ? (
+                    <PersonAccessHistorySection
+                      workspaceId={workspaceId}
+                      userId={panelMember.user_id}
+                      resolveActorName={resolveActorName}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-2 p-10 text-center">
+                  <Users className="h-6 w-6 text-muted-foreground/60" />
+                  <div className="text-sm text-muted-foreground">Оберіть людину зі списку</div>
+                </div>
+              )}
+            </div>
           </div>
           </>
         ) : null}
