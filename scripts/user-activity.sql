@@ -93,6 +93,19 @@ begin
     return;
   end if;
 
+  -- Authorize the write: only record minutes into a workspace the caller actually
+  -- belongs to. Without this, an authenticated caller could inject their own
+  -- activity rows (with an attacker-controlled actor_name) into any workspace's
+  -- analytics. Silent no-op keeps the heartbeat's fire-and-forget style.
+  if not exists (
+    select 1
+    from tosho.memberships_view mv
+    where mv.workspace_id = p_workspace_id
+      and mv.user_id = v_user
+  ) then
+    return;
+  end if;
+
   -- Fast path: bump an existing row, but only if this minute was not counted yet.
   update tosho.user_activity_daily
     set active_minutes    = active_minutes + 1,
