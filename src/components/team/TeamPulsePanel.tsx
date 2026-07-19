@@ -26,7 +26,15 @@ import {
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
-import { CATEGORY_META, categorizeAction } from "@/components/team/activityCategories";
+import { Link } from "react-router-dom";
+import {
+  CATEGORY_META,
+  categorizeAction,
+  categoryColor,
+  actionLabel,
+  entityLabel,
+  isNoiseActivity,
+} from "@/components/team/activityCategories";
 
 export type PulsePerson = {
   userId: string;
@@ -43,12 +51,16 @@ type ActivityRow = {
   user_id?: string | null;
   title?: string | null;
   action?: string | null;
+  entity_type?: string | null;
+  href?: string | null;
   created_at?: string | null;
 };
 
 type PulseEvent = {
   title: string;
   action: string | null;
+  entityType: string | null;
+  href: string | null;
   createdAt: string;
   categoryKey: string;
 };
@@ -87,6 +99,22 @@ function formatMinutes(min: number) {
   if (hours === 0) return `${rest} хв`;
   if (rest === 0) return `${hours} год`;
   return `${hours} год ${rest} хв`;
+}
+
+// Group a person's events into scannable buckets by fine-grained action label,
+// most frequent first, so the expanded view reads as "what they did" not a
+// flat status-change stream.
+function buildActionGroups(events: PulseEvent[]) {
+  const map = new Map<string, PulseEvent[]>();
+  for (const event of events) {
+    const label = actionLabel(event.action);
+    const bucket = map.get(label);
+    if (bucket) bucket.push(event);
+    else map.set(label, [event]);
+  }
+  return Array.from(map.entries())
+    .map(([label, evs]) => ({ label, events: evs, categoryKey: evs[0]?.categoryKey ?? "other" }))
+    .sort((a, b) => b.events.length - a.events.length);
 }
 
 function formatWhen(iso: string) {
@@ -138,7 +166,7 @@ export function TeamPulsePanel({
         const build = (scope: "team" | "workspace" | "none") => {
           let query = supabase
             .from("activity_log")
-            .select("user_id,title,action,created_at")
+            .select("user_id,title,action,entity_type,href,created_at")
             .gte("created_at", startIso)
             .order("created_at", { ascending: false })
             .limit(2000);
@@ -204,13 +232,20 @@ export function TeamPulsePanel({
 
   const { groups, totalActions, activeUsers, trend } = useMemo(() => {
     const memberIds = memberIdsRef.current;
-    const scoped = rows.filter((row) => (row.user_id ?? "") && memberIds.has(row.user_id ?? ""));
+    const scoped = rows.filter(
+      (row) =>
+        (row.user_id ?? "") &&
+        memberIds.has(row.user_id ?? "") &&
+        !isNoiseActivity(row.action ?? null, row.title ?? null)
+    );
     const byUser = new Map<string, PulseEvent[]>();
     for (const row of scoped) {
       const userId = row.user_id ?? "";
       const event: PulseEvent = {
         title: row.title?.trim() || row.action?.trim() || "Дія в CRM",
         action: row.action ?? null,
+        entityType: row.entity_type ?? null,
+        href: row.href ?? null,
         createdAt: row.created_at ?? "",
         categoryKey: categorizeAction(row.action ?? null, row.title ?? null),
       };
@@ -409,27 +444,53 @@ export function TeamPulsePanel({
                   </div>
                 </button>
                 {isOpen ? (
-                  <div className="border-t border-border/50 bg-muted/[0.03] px-4 py-2 md:px-5 lg:px-6">
-                    <ul className="flex flex-col">
-                      {group.events.slice(0, 60).map((event, index) => (
-                        <li
-                          key={`${group.userId}-${event.createdAt}-${index}`}
-                          className="flex items-center gap-2.5 border-b border-border/40 py-2 last:border-0"
-                        >
+                  <div className="flex flex-col gap-3 border-t border-border/50 bg-muted/[0.03] px-4 py-3 md:px-5 lg:px-6">
+                    {buildActionGroups(group.events).map((actionGroup) => (
+                      <div key={actionGroup.label}>
+                        <div className="mb-1 flex items-center gap-2">
                           <span
                             className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: CATEGORY_META[event.categoryKey]?.color ?? CATEGORY_META.other.color }}
+                            style={{ background: categoryColor(actionGroup.categoryKey) }}
                           />
-                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{event.title}</span>
-                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{formatWhen(event.createdAt)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {group.events.length > 60 ? (
-                      <div className="pt-2 text-xs text-muted-foreground">
-                        …та ще {group.events.length - 60} дій
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {actionGroup.label}
+                          </span>
+                          <span className="text-xs tabular-nums text-muted-foreground">· {actionGroup.events.length}</span>
+                        </div>
+                        <ul className="flex flex-col">
+                          {actionGroup.events.slice(0, 15).map((event, index) => {
+                            const entity = entityLabel(event.entityType);
+                            const linkable = !!event.href && event.href.startsWith("/");
+                            return (
+                              <li
+                                key={`${event.createdAt}-${index}`}
+                                className="flex items-center gap-2.5 border-b border-border/30 py-1.5 pl-4 last:border-0"
+                              >
+                                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{event.title}</span>
+                                {entity && linkable ? (
+                                  <Link
+                                    to={event.href as string}
+                                    className="shrink-0 whitespace-nowrap text-xs text-primary hover:underline"
+                                  >
+                                    {entity} ↗
+                                  </Link>
+                                ) : entity ? (
+                                  <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{entity}</span>
+                                ) : null}
+                                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                                  {formatWhen(event.createdAt)}
+                                </span>
+                              </li>
+                            );
+                          })}
+                          {actionGroup.events.length > 15 ? (
+                            <li className="pl-4 pt-1 text-xs text-muted-foreground">
+                              …та ще {actionGroup.events.length - 15}
+                            </li>
+                          ) : null}
+                        </ul>
                       </div>
-                    ) : null}
+                    ))}
                   </div>
                 ) : null}
               </div>

@@ -1,11 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Activity, History, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { CATEGORY_META, categorizeAction } from "@/components/team/activityCategories";
+import {
+  CATEGORY_META,
+  categorizeAction,
+  categoryColor,
+  actionLabel,
+  entityLabel,
+  isNoiseActivity,
+} from "@/components/team/activityCategories";
 
 type ActivityRow = {
   title?: string | null;
   action?: string | null;
+  entity_type?: string | null;
+  href?: string | null;
   created_at?: string | null;
 };
 
@@ -30,7 +40,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
         const startIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         const { data } = await supabase
           .from("activity_log")
-          .select("title,action,created_at")
+          .select("title,action,entity_type,href,created_at")
           .eq("user_id", userId)
           .gte("created_at", startIso)
           .order("created_at", { ascending: false })
@@ -48,9 +58,10 @@ export function PersonActivitySection({ userId }: { userId: string }) {
     };
   }, [userId]);
 
-  const { byCategory, total, recent } = useMemo(() => {
+  const { byCategory, total, actionGroups } = useMemo(() => {
+    const meaningful = rows.filter((row) => !isNoiseActivity(row.action ?? null, row.title ?? null));
     const counts = new Map<string, number>();
-    for (const row of rows) {
+    for (const row of meaningful) {
       const key = categorizeAction(row.action ?? null, row.title ?? null);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
@@ -62,7 +73,23 @@ export function PersonActivitySection({ userId }: { userId: string }) {
         count,
       }))
       .sort((a, b) => b.count - a.count);
-    return { byCategory: cats, total: rows.length, recent: rows.slice(0, 12) };
+
+    const groupMap = new Map<string, ActivityRow[]>();
+    for (const row of meaningful) {
+      const label = actionLabel(row.action ?? null);
+      const bucket = groupMap.get(label);
+      if (bucket) bucket.push(row);
+      else groupMap.set(label, [row]);
+    }
+    const groups = Array.from(groupMap.entries())
+      .map(([label, rs]) => ({
+        label,
+        rows: rs,
+        categoryKey: categorizeAction(rs[0]?.action ?? null, rs[0]?.title ?? null),
+      }))
+      .sort((a, b) => b.rows.length - a.rows.length);
+
+    return { byCategory: cats, total: meaningful.length, actionGroups: groups };
   }, [rows]);
 
   return (
@@ -100,23 +127,44 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               </span>
             ))}
           </div>
-          <ul className="flex flex-col">
-            {recent.map((row, index) => (
-              <li
-                key={`${row.created_at}-${index}`}
-                className="flex items-center gap-2.5 border-b border-border/40 py-1.5 last:border-0"
-              >
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: CATEGORY_META[categorizeAction(row.action ?? null, row.title ?? null)]?.color ?? CATEGORY_META.other.color }}
-                />
-                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                  {row.title?.trim() || row.action?.trim() || "Дія в CRM"}
-                </span>
-                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{formatWhen(row.created_at ?? "")}</span>
-              </li>
+          <div className="flex flex-col gap-3">
+            {actionGroups.map((actionGroup) => (
+              <div key={actionGroup.label}>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: categoryColor(actionGroup.categoryKey) }} />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{actionGroup.label}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">· {actionGroup.rows.length}</span>
+                </div>
+                <ul className="flex flex-col">
+                  {actionGroup.rows.slice(0, 8).map((row, index) => {
+                    const entity = entityLabel(row.entity_type ?? null);
+                    const linkable = !!row.href && row.href.startsWith("/");
+                    return (
+                      <li
+                        key={`${row.created_at}-${index}`}
+                        className="flex items-center gap-2.5 border-b border-border/30 py-1.5 pl-4 last:border-0"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                          {row.title?.trim() || row.action?.trim() || "Дія в CRM"}
+                        </span>
+                        {entity && linkable ? (
+                          <Link to={row.href as string} className="shrink-0 whitespace-nowrap text-xs text-primary hover:underline">
+                            {entity} ↗
+                          </Link>
+                        ) : entity ? (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{entity}</span>
+                        ) : null}
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{formatWhen(row.created_at ?? "")}</span>
+                      </li>
+                    );
+                  })}
+                  {actionGroup.rows.length > 8 ? (
+                    <li className="pl-4 pt-1 text-xs text-muted-foreground">…та ще {actionGroup.rows.length - 8}</li>
+                  ) : null}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         </>
       )}
     </section>
