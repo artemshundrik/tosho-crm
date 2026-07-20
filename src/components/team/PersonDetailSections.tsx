@@ -1,23 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, History, Loader2 } from "lucide-react";
+import { Activity, ChevronDown, Clock, History, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
+import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
 import {
-  CATEGORY_META,
-  categorizeAction,
-  categoryColor,
-  actionLabel,
-  entityLabel,
-  isNoiseActivity,
-} from "@/components/team/activityCategories";
-
-type ActivityRow = {
-  title?: string | null;
-  action?: string | null;
-  entity_type?: string | null;
-  href?: string | null;
-  created_at?: string | null;
-};
+  buildEntityGroups,
+  collectEntityIds,
+  formatGroupHeading,
+  UNGROUPED_KEY,
+  type ActivityRow,
+  type EntityInfo,
+} from "@/components/team/activityGrouping";
 
 function formatWhen(iso: string) {
   if (!iso) return "—";
@@ -25,72 +19,110 @@ function formatWhen(iso: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-person activity: category breakdown + recent events (from activity_log).
+// Per-person activity, grouped by the ENTITY touched (a specific design task /
+// quote), each group expanding into its own chronology. See activityGrouping.ts
+// for the rationale and the pure logic (unit-tested).
 // ---------------------------------------------------------------------------
 export function PersonActivitySection({ userId }: { userId: string }) {
   const [rows, setRows] = useState<ActivityRow[]>([]);
+  const [entityInfo, setEntityInfo] = useState<Record<string, EntityInfo>>({});
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
+
     const load = async () => {
       setLoading(true);
       try {
         const startIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         const { data } = await supabase
           .from("activity_log")
-          .select("title,action,entity_type,href,created_at")
+          .select("title,action,entity_type,entity_id,href,created_at")
           .eq("user_id", userId)
           .gte("created_at", startIso)
           .order("created_at", { ascending: false })
-          .limit(200);
-        if (!cancelled) setRows((data ?? []) as ActivityRow[]);
+          .limit(300);
+        if (cancelled) return;
+
+        const activityRows = (data ?? []) as ActivityRow[];
+        setRows(activityRows);
+
+        // Resolve entity numbers/names so a group reads like
+        // "Дизайн-задача TS-0726-0049 · Візуал шоперів" instead of a bare id.
+        const { designTaskIds, quoteIds } = collectEntityIds(activityRows);
+        const [taskRes, quoteRes] = await Promise.all([
+          designTaskIds.length
+            ? supabase
+                .from("activity_log")
+                .select("entity_id,title,metadata")
+                .eq("action", "design_task")
+                .in("entity_id", designTaskIds)
+            : Promise.resolve({ data: [] as unknown[] }),
+          quoteIds.length
+            ? supabase.schema("tosho").from("quotes").select("id,number").in("id", quoteIds)
+            : Promise.resolve({ data: [] as unknown[] }),
+        ]);
+        if (cancelled) return;
+
+        const info: Record<string, EntityInfo> = {};
+        for (const row of (taskRes.data ?? []) as Array<{
+          entity_id?: string | null;
+          title?: string | null;
+          metadata?: Record<string, unknown> | null;
+        }>) {
+          const id = (row.entity_id ?? "").trim();
+          if (!id) continue;
+          const number = row.metadata?.design_task_number;
+          info[id] = {
+            number: typeof number === "string" ? number : null,
+            name: row.title ?? null,
+          };
+        }
+        for (const row of (quoteRes.data ?? []) as Array<{ id?: string | null; number?: string | null }>) {
+          const id = (row.id ?? "").trim();
+          if (!id) continue;
+          info[id] = { number: row.number ?? null, name: null };
+        }
+        setEntityInfo(info);
       } catch {
-        if (!cancelled) setRows([]);
+        if (!cancelled) {
+          setRows([]);
+          setEntityInfo({});
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
+
     void load();
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
-  const { byCategory, total, actionGroups } = useMemo(() => {
-    const meaningful = rows.filter((row) => !isNoiseActivity(row.action ?? null, row.title ?? null));
+  const { groups, byCategory, total } = useMemo(() => {
+    const built = buildEntityGroups(rows, entityInfo);
     const counts = new Map<string, number>();
-    for (const row of meaningful) {
-      const key = categorizeAction(row.action ?? null, row.title ?? null);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+    let events = 0;
+    for (const group of built) {
+      counts.set(group.categoryKey, (counts.get(group.categoryKey) ?? 0) + group.events.length);
+      events += group.events.length;
     }
     const cats = Array.from(counts.entries())
-      .map(([key, count]) => ({
-        key,
-        label: CATEGORY_META[key]?.label ?? key,
-        color: CATEGORY_META[key]?.color ?? CATEGORY_META.other.color,
-        count,
-      }))
+      .map(([key, count]) => ({ key, label: categoryLabel(key), color: categoryColor(key), count }))
       .sort((a, b) => b.count - a.count);
+    return { groups: built, byCategory: cats, total: events };
+  }, [rows, entityInfo]);
 
-    const groupMap = new Map<string, ActivityRow[]>();
-    for (const row of meaningful) {
-      const label = actionLabel(row.action ?? null);
-      const bucket = groupMap.get(label);
-      if (bucket) bucket.push(row);
-      else groupMap.set(label, [row]);
-    }
-    const groups = Array.from(groupMap.entries())
-      .map(([label, rs]) => ({
-        label,
-        rows: rs,
-        categoryKey: categorizeAction(rs[0]?.action ?? null, rs[0]?.title ?? null),
-      }))
-      .sort((a, b) => b.rows.length - a.rows.length);
-
-    return { byCategory: cats, total: meaningful.length, actionGroups: groups };
-  }, [rows]);
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   return (
     <section className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
@@ -127,43 +159,65 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               </span>
             ))}
           </div>
-          <div className="flex flex-col gap-3">
-            {actionGroups.map((actionGroup) => (
-              <div key={actionGroup.label}>
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: categoryColor(actionGroup.categoryKey) }} />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{actionGroup.label}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">· {actionGroup.rows.length}</span>
-                </div>
-                <ul className="flex flex-col">
-                  {actionGroup.rows.slice(0, 8).map((row, index) => {
-                    const entity = entityLabel(row.entity_type ?? null);
-                    const linkable = !!row.href && row.href.startsWith("/");
-                    return (
-                      <li
-                        key={`${row.created_at}-${index}`}
-                        className="flex items-center gap-2.5 border-b border-border/30 py-1.5 pl-4 last:border-0"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                          {row.title?.trim() || row.action?.trim() || "Дія в CRM"}
-                        </span>
-                        {entity && linkable ? (
-                          <Link to={row.href as string} className="shrink-0 whitespace-nowrap text-xs text-primary hover:underline">
-                            {entity} ↗
-                          </Link>
-                        ) : entity ? (
-                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{entity}</span>
-                        ) : null}
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{formatWhen(row.created_at ?? "")}</span>
-                      </li>
-                    );
-                  })}
-                  {actionGroup.rows.length > 8 ? (
-                    <li className="pl-4 pt-1 text-xs text-muted-foreground">…та ще {actionGroup.rows.length - 8}</li>
+
+          <div className="overflow-hidden rounded-[var(--radius)] border border-border/60 bg-background/40">
+            {groups.map((group) => {
+              const isOpen = expanded.has(group.key);
+              const heading = formatGroupHeading(group);
+              return (
+                <div key={group.key} className="border-b border-border/50 last:border-0">
+                  <button
+                    type="button"
+                    onClick={() => toggle(group.key)}
+                    title={heading}
+                    className={cn(
+                      "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50",
+                      isOpen && "bg-muted/40"
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: categoryColor(group.categoryKey) }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading}</span>
+                    <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                      {group.events.length} · {formatWhen(group.lastAt)}
+                    </span>
+                    <ChevronDown
+                      className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")}
+                    />
+                  </button>
+
+                  {isOpen ? (
+                    <div className="border-t border-border/40 bg-muted/[0.04] px-3 py-1.5">
+                      {group.href && group.key !== UNGROUPED_KEY ? (
+                        <Link
+                          to={group.href}
+                          className="mb-1 inline-block text-xs text-primary hover:underline"
+                        >
+                          Відкрити {group.entityTypeLabel?.toLowerCase() ?? "запис"} ↗
+                        </Link>
+                      ) : null}
+                      <ul className="flex flex-col">
+                        {group.events.map((event, index) => (
+                          <li
+                            key={`${group.key}-${event.created_at}-${index}`}
+                            className="flex items-center gap-2.5 border-b border-border/30 py-1.5 last:border-0"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                              {event.title?.trim() || event.action?.trim() || "Дія в CRM"}
+                            </span>
+                            <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                              {formatWhen(event.created_at ?? "")}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : null}
-                </ul>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -306,5 +360,105 @@ export function PersonAccessHistorySection({
         </ul>
       )}
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Time spent in the CRM for one person, from the pre-aggregated
+// tosho.user_activity_daily (populated by the presence heartbeat).
+// RLS restricts that table to workspace owner/SEO, so render this only for them.
+// ---------------------------------------------------------------------------
+function sumMinutes(rows: MinutesRow[], fromDay: string) {
+  return rows.reduce((acc, row) => {
+    const day = (row.day ?? "").slice(0, 10);
+    if (day && day >= fromDay) return acc + (row.active_minutes ?? 0);
+    return acc;
+  }, 0);
+}
+
+function dayOffset(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function formatMinutesLabel(min: number) {
+  if (!min || min <= 0) return "—";
+  const hours = Math.floor(min / 60);
+  const rest = min % 60;
+  if (hours === 0) return `${rest} хв`;
+  if (rest === 0) return `${hours} год`;
+  return `${hours} год ${rest} хв`;
+}
+
+type MinutesRow = { day?: string | null; active_minutes?: number | null };
+
+// user_activity_daily (scripts/user-activity.sql) is not in the generated
+// Supabase types yet; this shim keeps the call typed until they are regenerated.
+type MinutesQuery = {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => {
+      gte: (column: string, value: string) => PromiseLike<{ data: MinutesRow[] | null }>;
+    };
+  };
+};
+
+export function PersonTimeInCrm({ userId }: { userId: string }) {
+  const [rows, setRows] = useState<MinutesRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const fromTosho = supabase.schema("tosho").from as unknown as (relation: string) => MinutesQuery;
+        const { data } = await fromTosho("user_activity_daily")
+          .select("day,active_minutes")
+          .eq("user_id", userId)
+          .gte("day", dayOffset(30));
+        if (!cancelled) setRows(data ?? []);
+      } catch {
+        if (!cancelled) setRows([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const today = sumMinutes(rows, dayOffset(0));
+  const week = sumMinutes(rows, dayOffset(7));
+  const month = sumMinutes(rows, dayOffset(30));
+
+  return (
+    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+      <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Clock className="h-3.5 w-3.5" />
+        Час у CRM
+      </div>
+      {loading ? (
+        <div className="text-sm text-muted-foreground">Завантаження…</div>
+      ) : month === 0 ? (
+        <div className="text-sm text-muted-foreground">Дані ще накопичуються</div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Сьогодні", value: today },
+            { label: "7 днів", value: week },
+            { label: "30 днів", value: month },
+          ].map((cell) => (
+            <div key={cell.label}>
+              <div className="text-[11px] text-muted-foreground">{cell.label}</div>
+              <div className="text-sm font-semibold tabular-nums text-foreground">{formatMinutesLabel(cell.value)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

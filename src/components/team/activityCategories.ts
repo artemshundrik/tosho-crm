@@ -1,18 +1,34 @@
 // Shared categorization for CRM activity_log rows, used by the team Пульс tab
-// and the per-person activity section. Muted categorical palette (moderate
-// saturation, no neon) so the breakdown stays readable in light and dark.
-
+// and the per-person activity section.
+//
+// Palette is led by the app's brand blue (var(--brand-*), the same primary the
+// rest of the UI uses) — the dominant "Дизайн" category takes the primary, the
+// rest are a restrained blue→teal→warm ramp. Deliberately no purple/violet: it
+// is not part of this product's palette.
 export const CATEGORY_META: Record<string, { label: string; color: string }> = {
-  design: { label: "Дизайн", color: "hsl(262 45% 58%)" },
-  quote: { label: "Прорахунки", color: "hsl(219 80% 56%)" },
-  order: { label: "Замовлення", color: "hsl(160 50% 42%)" },
-  crm: { label: "Клієнти / ліди", color: "hsl(199 65% 46%)" },
-  status: { label: "Статуси", color: "hsl(28 80% 52%)" },
-  comment: { label: "Коментарі", color: "hsl(48 75% 50%)" },
+  design: { label: "Дизайн", color: "hsl(var(--brand-h) var(--brand-s) var(--brand-l))" },
+  quote: { label: "Прорахунки", color: "hsl(199 80% 46%)" },
+  order: { label: "Замовлення", color: "hsl(160 50% 40%)" },
+  crm: { label: "Клієнти / ліди", color: "hsl(28 78% 52%)" },
+  status: { label: "Статуси", color: "hsl(48 68% 47%)" },
+  comment: { label: "Коментарі", color: "hsl(215 16% 52%)" },
   other: { label: "Інше", color: "hsl(0 0% 55%)" },
 };
 
-export function categorizeAction(action: string | null, title: string | null): string {
+export function categorizeAction(
+  action: string | null,
+  title: string | null,
+  entityType?: string | null
+): string {
+  // entity_type is the most reliable signal (it is set on every real row), and
+  // many quote actions are free-form Ukrainian phrases that the text heuristics
+  // below would otherwise misfile (e.g. "змінив статус" on a quote → "Статуси").
+  const e = (entityType ?? "").trim().toLowerCase();
+  if (e.startsWith("design_task")) return "design";
+  if (e.startsWith("quote")) return "quote";
+  if (e.startsWith("order")) return "order";
+  if (e.startsWith("customer") || e.startsWith("lead") || e.startsWith("client")) return "crm";
+
   const a = (action ?? "").toLowerCase();
   const t = (title ?? "").toLowerCase();
   if (a.includes("design") || t.includes("дизайн") || t.includes("макет")) return "design";
@@ -84,11 +100,14 @@ export function actionLabel(action: string | null): string {
 
 // Human label for the entity an event touched (for a context chip / link).
 export function entityLabel(entityType: string | null): string | null {
-  const e = (entityType ?? "").toLowerCase();
-  if (e === "design_task") return "Дизайн-задача";
-  if (e === "quote") return "Прорахунок";
-  if (e === "order") return "Замовлення";
-  if (e === "customer") return "Клієнт";
-  if (e === "lead") return "Лід";
+  // activity_log stores both singular and plural forms (e.g. entity_type
+  // "design_task" but "quotes"), so match on prefix rather than exact value.
+  const e = (entityType ?? "").trim().toLowerCase();
+  if (!e) return null;
+  if (e.startsWith("design_task")) return "Дизайн-задача";
+  if (e.startsWith("quote")) return "Прорахунок";
+  if (e.startsWith("order")) return "Замовлення";
+  if (e.startsWith("customer") || e.startsWith("client")) return "Клієнт";
+  if (e.startsWith("lead")) return "Лід";
   return null;
 }

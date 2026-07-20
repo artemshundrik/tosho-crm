@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
-  ChevronDown,
+  ChevronRight,
   Clock,
   Radio,
   TrendingUp,
@@ -26,13 +26,9 @@ import {
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
-import { Link } from "react-router-dom";
 import {
   CATEGORY_META,
   categorizeAction,
-  categoryColor,
-  actionLabel,
-  entityLabel,
   isNoiseActivity,
 } from "@/components/team/activityCategories";
 
@@ -101,27 +97,6 @@ function formatMinutes(min: number) {
   return `${hours} год ${rest} хв`;
 }
 
-// Group a person's events into scannable buckets by fine-grained action label,
-// most frequent first, so the expanded view reads as "what they did" not a
-// flat status-change stream.
-function buildActionGroups(events: PulseEvent[]) {
-  const map = new Map<string, PulseEvent[]>();
-  for (const event of events) {
-    const label = actionLabel(event.action);
-    const bucket = map.get(label);
-    if (bucket) bucket.push(event);
-    else map.set(label, [event]);
-  }
-  return Array.from(map.entries())
-    .map(([label, evs]) => ({ label, events: evs, categoryKey: evs[0]?.categoryKey ?? "other" }))
-    .sort((a, b) => b.events.length - a.events.length);
-}
-
-function formatWhen(iso: string) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("uk-UA", { dateStyle: "short", timeStyle: "short" });
-}
-
 function formatRelative(iso: string) {
   if (!iso) return "—";
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -139,8 +114,11 @@ export function TeamPulsePanel({
   workspaceId,
   people,
   resolvePerson,
+  onSelectPerson,
 }: {
   workspaceId: string | null;
+  /** Пульс is an aggregate + entry point: drilling into a person opens their card. */
+  onSelectPerson: (userId: string) => void;
   /** current online members, for the "online now" KPI */
   people: PulsePerson[];
   resolvePerson: (userId: string) => PulsePerson;
@@ -148,7 +126,6 @@ export function TeamPulsePanel({
   const [range, setRange] = useState<PulseRange>("week");
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [totalMinutes, setTotalMinutes] = useState(0);
   const [minutesByUser, setMinutesByUser] = useState<Map<string, number>>(new Map());
   const memberIdsRef = useRef<Set<string>>(new Set());
@@ -299,14 +276,6 @@ export function TeamPulsePanel({
 
   const onlineNow = people.filter((person) => person.online).length;
 
-  const toggle = useCallback((userId: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
-  }, []);
 
   return (
     <div className="flex flex-col gap-5">
@@ -394,106 +363,51 @@ export function TeamPulsePanel({
         <div className="flex flex-col border-t border-border/60">
           {groups.map((group) => {
             const person = resolvePerson(group.userId);
-            const isOpen = expanded.has(group.userId);
+            const minutes = minutesByUser.get(group.userId) ?? 0;
             return (
-              <div key={group.userId} className="border-b border-border/60">
-                <button
-                  type="button"
-                  onClick={() => toggle(group.userId)}
-                  className={cn(
-                    "flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:px-5 lg:px-6",
-                    isOpen && "bg-muted/30"
-                  )}
-                >
-                  <div className="relative shrink-0">
-                    <AvatarBase
-                      src={person.avatarSrc}
-                      name={person.displayName}
-                      fallback={person.initials}
-                      assetVariant="xs"
-                      size={38}
-                      shape="circle"
-                      className="border-border bg-muted/50"
-                      fallbackClassName="text-[11px] font-bold"
-                      presence={person.online ? "online" : "offline"}
-                    />
+              <button
+                key={group.userId}
+                type="button"
+                onClick={() => onSelectPerson(group.userId)}
+                title={`Відкрити картку: ${person.displayName}`}
+                className="flex w-full cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:px-5 lg:px-6"
+              >
+                <div className="relative shrink-0">
+                  <AvatarBase
+                    src={person.avatarSrc}
+                    name={person.displayName}
+                    fallback={person.initials}
+                    assetVariant="xs"
+                    size={38}
+                    shape="circle"
+                    className="border-border bg-muted/50"
+                    fallbackClassName="text-[11px] font-bold"
+                    presence={person.online ? "online" : "offline"}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
+                    {person.online ? <span className="tone-text-success text-[11px] font-medium">онлайн</span> : null}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
-                      {person.online ? <span className="tone-text-success text-[11px] font-medium">онлайн</span> : null}
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="truncate">Остання дія {formatRelative(group.lastActiveAt)}</span>
-                      {(minutesByUser.get(group.userId) ?? 0) > 0 ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                          <Clock className="h-3 w-3" />
-                          {formatMinutes(minutesByUser.get(group.userId) ?? 0)}
-                        </span>
-                      ) : null}
-                    </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="truncate">Остання дія {formatRelative(group.lastActiveAt)}</span>
+                    {minutes > 0 ? (
+                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                        <Clock className="h-3 w-3" />
+                        {formatMinutes(minutes)}
+                      </span>
+                    ) : null}
                   </div>
-                  <CategoryBreakdown byCategory={group.byCategory} total={group.total} />
-                  <div className="ml-1 flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
-                      {group.total}
-                    </span>
-                    <ChevronDown
-                      className={cn("h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")}
-                    />
-                  </div>
-                </button>
-                {isOpen ? (
-                  <div className="flex flex-col gap-3 border-t border-border/50 bg-muted/[0.03] px-4 py-3 md:px-5 lg:px-6">
-                    {buildActionGroups(group.events).map((actionGroup) => (
-                      <div key={actionGroup.label}>
-                        <div className="mb-1 flex items-center gap-2">
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ background: categoryColor(actionGroup.categoryKey) }}
-                          />
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            {actionGroup.label}
-                          </span>
-                          <span className="text-xs tabular-nums text-muted-foreground">· {actionGroup.events.length}</span>
-                        </div>
-                        <ul className="flex flex-col">
-                          {actionGroup.events.slice(0, 15).map((event, index) => {
-                            const entity = entityLabel(event.entityType);
-                            const linkable = !!event.href && event.href.startsWith("/");
-                            return (
-                              <li
-                                key={`${event.createdAt}-${index}`}
-                                className="flex items-center gap-2.5 border-b border-border/30 py-1.5 pl-4 last:border-0"
-                              >
-                                <span className="min-w-0 flex-1 truncate text-sm text-foreground">{event.title}</span>
-                                {entity && linkable ? (
-                                  <Link
-                                    to={event.href as string}
-                                    className="shrink-0 whitespace-nowrap text-xs text-primary hover:underline"
-                                  >
-                                    {entity} ↗
-                                  </Link>
-                                ) : entity ? (
-                                  <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{entity}</span>
-                                ) : null}
-                                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                                  {formatWhen(event.createdAt)}
-                                </span>
-                              </li>
-                            );
-                          })}
-                          {actionGroup.events.length > 15 ? (
-                            <li className="pl-4 pt-1 text-xs text-muted-foreground">
-                              …та ще {actionGroup.events.length - 15}
-                            </li>
-                          ) : null}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                </div>
+                <CategoryBreakdown byCategory={group.byCategory} total={group.total} />
+                <div className="ml-1 flex shrink-0 items-center gap-2">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
+                    {group.total}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </button>
             );
           })}
         </div>

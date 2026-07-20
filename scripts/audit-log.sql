@@ -52,12 +52,29 @@ create policy audit_log_select
   on tosho.audit_log
   for select
   using (
-    exists (
-      select 1
-      from tosho.memberships_view mv
-      where mv.workspace_id = audit_log.workspace_id
-        and mv.user_id = auth.uid()
-        and lower(coalesce(mv.access_role::text, '')) in ('owner', 'admin')
+    -- workspace-scoped rows (e.g. team_member_profiles)
+    (
+      audit_log.workspace_id is not null
+      and exists (
+        select 1
+        from tosho.memberships_view mv
+        where mv.workspace_id = audit_log.workspace_id
+          and mv.user_id = auth.uid()
+          and lower(coalesce(mv.access_role::text, '')) in ('owner', 'admin')
+      )
+    )
+    -- team-scoped rows: every business table (quotes/orders/customers/leads/
+    -- catalog_models) has team_id but NO workspace_id, so without this branch
+    -- their audit history is written but unreadable by anyone.
+    or (
+      audit_log.team_id is not null
+      and public.is_team_member(audit_log.team_id)
+      and exists (
+        select 1
+        from tosho.memberships_view mv
+        where mv.user_id = auth.uid()
+          and lower(coalesce(mv.access_role::text, '')) in ('owner', 'admin')
+      )
     )
   );
 
@@ -196,12 +213,15 @@ create trigger audit_team_member_profiles
 -- Pass p_entity_type + p_entity_id for an entity card, or p_actor_user_id for a
 -- person's history. Actor display names are resolved on the client.
 -- ---------------------------------------------------------------------------
+drop function if exists tosho.get_audit_log(uuid, text, uuid, uuid, integer);
+
 create or replace function tosho.get_audit_log(
   p_workspace_id uuid,
   p_entity_type text default null,
   p_entity_id uuid default null,
   p_actor_user_id uuid default null,
-  p_limit integer default 100
+  p_limit integer default 100,
+  p_team_id uuid default null
 )
 returns jsonb
 language plpgsql
@@ -230,6 +250,11 @@ begin
     raise exception 'Only workspace owners or admins can view audit history';
   end if;
 
+  -- A team id may only be used to widen the read if the caller is in that team.
+  if p_team_id is not null and not public.is_team_member(p_team_id) then
+    raise exception 'Not a member of the requested team';
+  end if;
+
   select coalesce(jsonb_agg(row order by (row->>'createdAt') desc), '[]'::jsonb)
   into result
   from (
@@ -244,7 +269,10 @@ begin
       'createdAt', a.created_at
     ) as row
     from tosho.audit_log a
-    where a.workspace_id = p_workspace_id
+    where (
+        a.workspace_id = p_workspace_id
+        or (p_team_id is not null and a.team_id = p_team_id)
+      )
       and (p_entity_type is null or a.entity_type = p_entity_type)
       and (p_entity_id is null or a.entity_id = p_entity_id)
       and (p_actor_user_id is null or a.actor_user_id = p_actor_user_id)
@@ -256,4 +284,4 @@ begin
 end;
 $$;
 
-grant execute on function tosho.get_audit_log(uuid, text, uuid, uuid, integer) to authenticated;
+grant execute on function tosho.get_audit_log(uuid, text, uuid, uuid, integer, uuid) to authenticated;

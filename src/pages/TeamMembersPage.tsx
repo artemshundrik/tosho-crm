@@ -61,6 +61,7 @@ import {
 import {
   PersonActivitySection,
   PersonAccessHistorySection,
+  PersonTimeInCrm,
 } from "@/components/team/PersonDetailSections";
 import { Label } from "@/components/ui/label";
 import {
@@ -153,6 +154,7 @@ type MemberProfileMeta = {
     vchasno_send: boolean;
     marketing: boolean;
     team: boolean;
+    pulse: boolean;
   };
 };
 
@@ -268,6 +270,7 @@ const DEFAULT_MODULE_ACCESS = {
   vchasno_send: false,
   marketing: false,
   team: false,
+  pulse: false,
 };
 
 const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
@@ -283,6 +286,7 @@ const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], stri
   vchasno_send: "Вчасно — надсилання",
   marketing: "Маркетинг",
   team: "Управління командою",
+  pulse: "Пульс команди (аналітика)",
 };
 
 const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]> = [
@@ -298,6 +302,7 @@ const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]>
   "vchasno_send",
   "marketing",
   "team",
+  "pulse",
 ];
 
 const DEFAULT_MEMBER_META: MemberProfileMeta = {
@@ -409,6 +414,11 @@ function normalizeModuleAccess(
     marketing:
       typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
     team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
+    pulse:
+      typeof input.pulse === "boolean"
+        ? input.pulse
+        : (accessRole ?? "").trim().toLowerCase() === "owner" ||
+          (jobRole ?? "").trim().toLowerCase() === "seo",
   };
 }
 
@@ -1295,6 +1305,17 @@ export function TeamMembersPage() {
   const handleTabChange = (next: "members" | "invites" | "activity") => {
     setActiveTab(next);
     setParams(next === "members" ? {} : { tab: next });
+  };
+
+  // Пульс drill-down: jump to the person's card in Учасники. Clears the active
+  // filter/search first, otherwise the target could be filtered out of the list
+  // and the panel would fall back to someone else.
+  const openPersonCard = (userId: string) => {
+    setActiveFilter(null);
+    setSearchQuery("");
+    setSelectedMemberId(userId);
+    setActiveTab("members");
+    setParams({ member: userId });
   };
 
   const closeEditProfileDialog = () => {
@@ -2776,6 +2797,8 @@ export function TeamMembersPage() {
                     </div>
                   </div>
 
+                  {/* user_activity_daily is RLS-restricted to owner/SEO */}
+                  {canPulse ? <PersonTimeInCrm userId={panelMember.user_id} /> : null}
                   <PersonActivitySection userId={panelMember.user_id} />
                   {canManage ? (
                     <PersonAccessHistorySection
@@ -2982,6 +3005,7 @@ export function TeamMembersPage() {
             workspaceId={workspaceId}
             people={pulsePeople}
             resolvePerson={resolvePulsePerson}
+            onSelectPerson={openPersonCard}
           />
         ) : null}
       </div>
@@ -3547,18 +3571,6 @@ export function TeamMembersPage() {
               </div>
             </div>
             </div>
-            {editProfileMember ? (
-              <div className="flex flex-col gap-4 px-6 pb-6">
-                <PersonActivitySection userId={editProfileMember.user_id} />
-                {canManage ? (
-                  <PersonAccessHistorySection
-                    workspaceId={workspaceId}
-                    userId={editProfileMember.user_id}
-                    resolveActorName={resolveActorName}
-                  />
-                ) : null}
-              </div>
-            ) : null}
           </div>
           <div className="shrink-0 border-t border-border bg-card px-6 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
