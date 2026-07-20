@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import {
   ShieldAlert,
   MoreHorizontal,
-  Search,
+  Columns2,
+  Rows3,
   Calendar,
   Link as LinkIcon,
   Clock,
@@ -583,9 +584,21 @@ export function TeamMembersPage() {
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [invitesError, setInvitesError] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
   const [activeSection, setActiveSection] = useState<PersonSection>("overview");
+  // Two ways to look at the team: "panel" (master-detail card) for working with
+  // one person, "rows" (comparison table) for scanning everyone side by side.
+  const [viewMode, setViewMode] = useState<"panel" | "rows">(() => {
+    if (typeof window === "undefined") return "panel";
+    return window.localStorage.getItem("team-members-view") === "rows" ? "rows" : "panel";
+  });
+  useEffect(() => {
+    window.localStorage.setItem("team-members-view", viewMode);
+  }, [viewMode]);
+  // The two-pane columns fill the exact space below the toolbar/chips instead of
+  // a hardcoded max-h calc (which drifted and clipped the list bottom).
+  const twoPaneRef = useRef<HTMLDivElement | null>(null);
+  const [twoPaneTop, setTwoPaneTop] = useState<number | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -1076,21 +1089,6 @@ export function TeamMembersPage() {
   }, [workspaceId, members, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
 
   const filteredMembers = members.filter((m) => {
-    const email = (m.email ?? "").toLowerCase();
-    const name = (m.full_name ?? "").toLowerCase();
-    const fallbackName = (memberProfilesByUserId[m.user_id]?.label ?? "").toLowerCase();
-    const firstName = (memberMetaByUserId[m.user_id]?.firstName ?? "").toLowerCase();
-    const lastName = (memberMetaByUserId[m.user_id]?.lastName ?? "").toLowerCase();
-    const phone = (memberMetaByUserId[m.user_id]?.phone ?? "").toLowerCase();
-    const q = searchQuery.toLowerCase();
-    const searchMatches =
-      email.includes(q) ||
-      name.includes(q) ||
-      fallbackName.includes(q) ||
-      firstName.includes(q) ||
-      lastName.includes(q) ||
-      phone.includes(q);
-    if (!searchMatches) return false;
     if (!activeFilter) return true;
     const meta = memberMetaByUserId[m.user_id];
     switch (activeFilter) {
@@ -1348,7 +1346,6 @@ export function TeamMembersPage() {
   // and the panel would fall back to someone else.
   const openPersonCard = (userId: string) => {
     setActiveFilter(null);
-    setSearchQuery("");
     setSelectedMemberId(userId);
     setActiveTab("members");
     setParams({ member: userId });
@@ -2303,6 +2300,15 @@ export function TeamMembersPage() {
       (canOpenProfileCard && memberMetaLoading) ||
       (activeTab === "invites" && invitesLoading)
   );
+  useEffect(() => {
+    const el = twoPaneRef.current;
+    if (!el || activeTab !== "members" || viewMode !== "panel") return;
+    const update = () => setTwoPaneTop(Math.round(el.getBoundingClientRect().top));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [activeTab, viewMode, activeFilter, showSkeleton]);
+
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
     : ACCESS_ROLE_OPTIONS.filter((option) => option.value !== "owner");
@@ -2410,30 +2416,49 @@ export function TeamMembersPage() {
                   Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                 </Button>
               ) : null}
+            </div>
+
+            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
               {canPulse ? (
                 <Button
                   type="button"
-                  variant="segmented"
-                  size="xs"
+                  variant="outline"
+                  size="sm"
                   aria-pressed={activeTab === "activity"}
                   onClick={() => handleTabChange("activity")}
-                  className={SEGMENTED_TRIGGER}
+                  className={cn(
+                    "h-9 gap-1.5",
+                    activeTab === "activity" && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                  )}
                 >
+                  <Activity className="h-4 w-4" />
                   Пульс
                 </Button>
               ) : null}
-            </div>
-
-            <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center md:justify-end lg:ml-auto">
               {activeTab === "members" ? (
-                <div className="relative w-full md:w-72">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-10 bg-background border-input rounded-[var(--radius-lg)]"
-                    placeholder="Пошук учасників..."
-                  />
+                <div className={SEGMENTED_GROUP_SM}>
+                  <Button
+                    type="button"
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={viewMode === "panel"}
+                    onClick={() => setViewMode("panel")}
+                    className={SEGMENTED_TRIGGER_SM}
+                    title="Панель: список + картка людини"
+                  >
+                    <Columns2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={viewMode === "rows"}
+                    onClick={() => setViewMode("rows")}
+                    className={SEGMENTED_TRIGGER_SM}
+                    title="Рядки: таблиця для порівняння"
+                  >
+                    <Rows3 className="h-4 w-4" />
+                  </Button>
                 </div>
               ) : null}
               {canManage ? (
@@ -2731,12 +2756,15 @@ export function TeamMembersPage() {
             )}
           </div>
           <div
+            ref={twoPaneRef}
             className={cn(
-              "border-t border-border/60 lg:grid lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]",
-              selectedMemberId ? "block" : "hidden lg:grid"
+              "border-t border-border/60 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]",
+              selectedMemberId ? "block" : "hidden",
+              viewMode === "panel" ? "lg:grid" : "lg:hidden"
             )}
+            style={twoPaneTop != null ? { ["--team-panes-h" as string]: `calc(100dvh - ${twoPaneTop}px)` } : undefined}
           >
-            <div className="hidden max-h-[calc(100dvh-210px)] overflow-y-auto border-r border-border/60 lg:block">
+            <div className="hidden border-r border-border/60 lg:block lg:h-[var(--team-panes-h,auto)] lg:overflow-y-auto">
               {membersError ? (
                 <div className="p-4 text-sm text-destructive">Помилка завантаження: {membersError}</div>
               ) : filteredMembers.length === 0 ? (
@@ -2802,7 +2830,7 @@ export function TeamMembersPage() {
                 </ul>
               )}
             </div>
-            <div className="max-h-[calc(100dvh-210px)] overflow-y-auto">
+            <div className="lg:h-[var(--team-panes-h,auto)] lg:overflow-y-auto">
               {panelMember ? (
                 <div className="flex flex-col gap-4 p-5">
                   <Button
@@ -3316,6 +3344,134 @@ export function TeamMembersPage() {
               )}
             </div>
           </div>
+
+          {viewMode === "rows" ? (
+            <div className="hidden border-t border-border/60 lg:block">
+              <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableTextHeaderCell widthClass="w-[24%]" className="pl-6">Користувач</TableTextHeaderCell>
+                    <TableTextHeaderCell>Доступ</TableTextHeaderCell>
+                    <TableTextHeaderCell>Посада</TableTextHeaderCell>
+                    <TableTextHeaderCell>Статус</TableTextHeaderCell>
+                    <TableTextHeaderCell>День народження</TableTextHeaderCell>
+                    <TableTextHeaderCell widthClass="w-[20%]">Робота / Випробувальний</TableTextHeaderCell>
+                    <TableActionHeaderCell />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredMembers.length === 0 ? (
+                    <TableEmptyRow colSpan={7}>Нема учасників за фільтром.</TableEmptyRow>
+                  ) : (
+                    filteredMembers.map((m) => {
+                      const rowProfile = memberProfilesByUserId[m.user_id];
+                      const rowMeta = memberMetaByUserId[m.user_id];
+                      const rowAvailability = rowMeta?.availabilityStatus ?? "available";
+                      const rowRange = formatAvailabilityRange(rowAvailability, rowMeta?.availabilityStartDate, rowMeta?.availabilityEndDate);
+                      const rowPresence = memberPresenceByUserId[m.user_id];
+                      const rowInactive = isInactiveEmployment(rowMeta?.employmentStatus);
+                      const rowName = getMemberDisplayName(m);
+                      const rowInitials = getInitialsFromName(rowName, m.email ?? null);
+                      const rowEmployment = getEmploymentSummary(rowMeta);
+                      const rowProbation = getProbationSummary(rowMeta?.startDate, rowMeta?.probationEndDate);
+                      return (
+                        <TableRow
+                          key={m.user_id}
+                          className="cursor-pointer transition-colors hover:bg-muted/40"
+                          onClick={() => {
+                            setSelectedMemberId(m.user_id);
+                            setViewMode("panel");
+                            setActiveSection("overview");
+                          }}
+                        >
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-2.5">
+                              <AvatarBase
+                                src={getMemberAvatarSource(rowProfile, m)}
+                                name={rowName}
+                                fallback={rowInitials}
+                                assetVariant="xs"
+                                size={34}
+                                shape="circle"
+                                className="border-border bg-muted/50"
+                                fallbackClassName="text-[10px] font-bold"
+                                availability={rowAvailability}
+                                presence={rowPresence?.online ? "online" : "offline"}
+                                inactive={rowInactive}
+                              />
+                              <div className="min-w-0">
+                                <div className={cn("truncate text-sm font-medium text-foreground", rowInactive && "text-muted-foreground line-through")}>{rowName}</div>
+                                <div className="truncate text-xs text-muted-foreground">{m.email ?? ""}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-[var(--radius)]", getAccessBadgeClass(m.access_role ?? null))}>
+                              {getAccessRoleLabel(m.access_role ?? null)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-[var(--radius)]", getJobBadgeClass(m.job_role ?? null))}>
+                              {getJobRoleLabel(m.job_role ?? null)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {rowInactive ? (
+                                <Badge variant="outline" className="w-fit px-2 py-0.5 text-xs rounded-[var(--radius)] border-muted-foreground/30 bg-muted text-muted-foreground">
+                                  Співпрацю завершено
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className={cn("w-fit px-2 py-0.5 text-xs rounded-[var(--radius)]", getAvailabilityBadgeClass(rowAvailability))}>
+                                  {getAvailabilityLabel(rowAvailability)}
+                                </Badge>
+                              )}
+                              {!rowInactive && rowRange ? (
+                                <Badge variant="outline" className="w-fit px-2 py-0.5 text-xs text-muted-foreground">{rowRange}</Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">{formatBirthDate(rowMeta?.birthDate)}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-medium text-foreground">{rowEmployment.primary}</span>
+                              {rowEmployment.secondary ? (
+                                <span className="text-xs text-muted-foreground">{rowEmployment.secondary}</span>
+                              ) : null}
+                              {rowProbation && rowProbation.status !== "completed" ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                                    <div className="h-full rounded-full bg-primary" style={{ width: `${rowProbation.progress}%` }} />
+                                  </div>
+                                  <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">{rowProbation.statusLabel}</span>
+                                </div>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableActionCell>
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <AppDropdown
+                                align="end"
+                                contentClassName="w-48"
+                                trigger={
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                }
+                                items={getMemberRowMenuItems(m, rowAvailability)}
+                              />
+                            </div>
+                          </TableActionCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
           </>
         ) : null}
 
