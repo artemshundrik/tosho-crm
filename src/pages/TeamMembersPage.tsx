@@ -52,13 +52,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   PersonActivitySection,
   PersonAccessHistorySection,
   PersonTimeInCrm,
@@ -73,7 +66,9 @@ import {
 import {
   CONTROL_BASE,
   SEGMENTED_GROUP,
+  SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
+  SEGMENTED_TRIGGER_SM,
 } from "@/components/ui/controlStyles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -81,11 +76,9 @@ import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } f
 import {
   addMonthsToDateOnly,
   getEmploymentStatusLabel,
-  getBirthdayInsight,
   formatEmploymentDate,
   formatEmploymentDuration,
   getEmploymentDurationDays,
-  getWorkAnniversaryInsight,
   isProbationReviewDue,
   isInactiveEmployment,
   normalizeEmploymentStatus,
@@ -508,6 +501,18 @@ function isRecoverableTeamProfileError(message: string) {
   );
 }
 
+// Sections of a person's card. One surface per person: the card owns every
+// per-person view and edit, so there is no separate edit drawer or roles dialog.
+type PersonSection = "overview" | "profile" | "access" | "activity" | "hr";
+
+const PERSON_SECTIONS: { key: PersonSection; label: string }[] = [
+  { key: "overview", label: "Огляд" },
+  { key: "profile", label: "Профіль" },
+  { key: "access", label: "Доступи" },
+  { key: "activity", label: "Активність" },
+  { key: "hr", label: "HR" },
+];
+
 type MemberFilterKey = "attention" | "birthday" | "startDate" | "probation" | "absence";
 
 function FilterChip({
@@ -580,6 +585,7 @@ export function TeamMembersPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
+  const [activeSection, setActiveSection] = useState<PersonSection>("overview");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -1222,11 +1228,25 @@ export function TeamMembersPage() {
     { type: "separator" as const },
     canOpenProfileCard
       ? (canManage ? memberProfileStorageAvailable : true)
-        ? { label: canManage ? "Редагувати профіль" : "Відсоток менеджера", onSelect: () => openEditProfileDialog(m) }
+        ? {
+            label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
+            onSelect: () => {
+              setSelectedMemberId(m.user_id);
+              openEditProfileDialog(m);
+              setActiveSection("profile");
+            },
+          }
         : { label: "Профіль (read-only)", disabled: true, muted: true }
       : { label: "Тільки перегляд", disabled: true, muted: true },
     canManage && (isSuperAdmin || (m.user_id !== currentUserId && (m.access_role ?? null) !== "owner"))
-      ? { label: "Змінити доступи", onSelect: () => openEditRolesDialog(m) }
+      ? {
+            label: "Змінити доступи",
+            onSelect: () => {
+              setSelectedMemberId(m.user_id);
+              openEditRolesDialog(m);
+              setActiveSection("access");
+            },
+          }
       : {
           label: !isSuperAdmin && m.user_id === currentUserId ? "Admin не може змінити себе" : "Тільки перегляд",
           disabled: true,
@@ -1254,8 +1274,31 @@ export function TeamMembersPage() {
     (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) ?? null : null) ??
     filteredMembers[0] ??
     null;
+  // Mirrors the row-menu guard: an Admin may not edit their own roles nor an owner's.
+  const canEditPanelRoles =
+    canManage &&
+    !!panelMember &&
+    (isSuperAdmin || (panelMember.user_id !== currentUserId && (panelMember.access_role ?? null) !== "owner"));
+  const visiblePersonSections = PERSON_SECTIONS.filter((section) => {
+    if (section.key === "access" || section.key === "hr") return canOpenProfileCard;
+    if (section.key === "profile") return canOpenProfileCard;
+    return true;
+  });
   const panelProfile = panelMember ? memberProfilesByUserId[panelMember.user_id] : null;
   const panelMeta = panelMember ? memberMetaByUserId[panelMember.user_id] : undefined;
+
+  // One surface per person: whoever is selected in the list is also the person
+  // the Профіль/Доступи sections edit, so the edit state follows the selection.
+  const panelUserId = panelMember?.user_id ?? null;
+  useEffect(() => {
+    if (!panelMember || !canOpenProfileCard) return;
+    if (editProfileMember?.user_id === panelUserId) return;
+    openEditProfileDialog(panelMember);
+    setEditMember(panelMember);
+    setEditAccessRole(panelMember.access_role ?? "member");
+    setEditJobRole(panelMember.job_role ?? "none");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelUserId, canOpenProfileCard]);
   const panelDisplayName = panelMember ? getMemberDisplayName(panelMember) : "";
   const panelInitials = panelMember ? getInitialsFromName(panelDisplayName, panelMember.email ?? null) : "";
   const panelSeniority = (() => {
@@ -1270,17 +1313,10 @@ export function TeamMembersPage() {
   const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
   const selectedEmploymentDays = getEmploymentDurationDays(editProfileStartDate);
   const selectedProbation = getProbationSummary(editProfileStartDate, editProfileProbationEndDate);
-  const selectedBirthdayInsight = getBirthdayInsight(editProfileBirthDate);
-  const selectedAnniversaryInsight = getWorkAnniversaryInsight(editProfileStartDate);
   const selectedEmploymentStatus = normalizeEmploymentStatus(
     memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
     editProfileProbationEndDate
   );
-  const selectedDisplayName = editProfileMember ? getMemberDisplayName(editProfileMember) : "Учасник";
-  const selectedProfile = editProfileMember ? memberProfilesByUserId[editProfileMember.user_id] : null;
-  const selectedInitials = editProfileMember
-    ? getInitialsFromName(selectedDisplayName, editProfileMember.email ?? null)
-    : "U";
   const shouldShowManagerRateField =
     canManageManagerRates && supportsManagerRate(editProfileMember?.job_role ?? null);
   const shouldShowProbationSection =
@@ -1873,6 +1909,20 @@ export function TeamMembersPage() {
     setEditJobRole(member.job_role ?? "none");
   };
 
+  // The Доступи section owns both halves of "access": roles live in memberships
+  // (Netlify fn) and module toggles live in the profile row, so saving the
+  // section persists roles first, then the profile.
+  const saveAccessSection = async () => {
+    if (!panelMember) return;
+    const rolesChanged =
+      (panelMember.access_role ?? "member") !== editAccessRole ||
+      (panelMember.job_role ?? "none") !== editJobRole;
+    if (rolesChanged && canEditPanelRoles) {
+      await saveMemberRoles();
+    }
+    await saveMemberProfile();
+  };
+
   const saveMemberRoles = async () => {
     if (!editMember || !workspaceId || !canManage) return;
     if (!isSuperAdmin && (editMember.access_role ?? null) === "owner") {
@@ -1892,7 +1942,6 @@ export function TeamMembersPage() {
     const roleDidChange =
       accessRoleChanged || jobRoleChanged;
     if (!roleDidChange) {
-      setEditMember(null);
       return;
     }
 
@@ -2142,7 +2191,6 @@ export function TeamMembersPage() {
       } else {
         toast.success("Права учасника оновлено");
       }
-      setEditMember(null);
     } catch (error: unknown) {
       toast.error("Не вдалося змінити ролі", { description: getErrorMessage(error) });
     } finally {
@@ -2490,7 +2538,11 @@ export function TeamMembersPage() {
                 const displayName = getMemberDisplayName(m);
                 const initials = getInitialsFromName(displayName, m.email ?? null);
                 return (
-                  <Card key={m.user_id} className="border-border/60 p-4">
+                  <Card
+                    key={m.user_id}
+                    className={cn("border-border/60 p-4", canOpenProfileCard && "cursor-pointer")}
+                    onClick={canOpenProfileCard ? () => setSelectedMemberId(m.user_id) : undefined}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="relative shrink-0">
@@ -2539,7 +2591,11 @@ export function TeamMembersPage() {
                             ? (canManage ? memberProfileStorageAvailable : true)
                               ? {
                                   label: canManage ? "Редагувати профіль" : "Відсоток менеджера",
-                                  onSelect: () => openEditProfileDialog(m),
+                                  onSelect: () => {
+                                    setSelectedMemberId(m.user_id);
+                                    openEditProfileDialog(m);
+                                    setActiveSection("profile");
+                                  },
                                 }
                               : {
                                   label: "Профіль (read-only)",
@@ -2674,8 +2730,13 @@ export function TeamMembersPage() {
               })
             )}
           </div>
-          <div className="hidden border-t border-border/60 lg:grid lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
-            <div className="max-h-[calc(100dvh-210px)] overflow-y-auto border-r border-border/60">
+          <div
+            className={cn(
+              "border-t border-border/60 lg:grid lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]",
+              selectedMemberId ? "block" : "hidden lg:grid"
+            )}
+          >
+            <div className="hidden max-h-[calc(100dvh-210px)] overflow-y-auto border-r border-border/60 lg:block">
               {membersError ? (
                 <div className="p-4 text-sm text-destructive">Помилка завантаження: {membersError}</div>
               ) : filteredMembers.length === 0 ? (
@@ -2744,6 +2805,14 @@ export function TeamMembersPage() {
             <div className="max-h-[calc(100dvh-210px)] overflow-y-auto">
               {panelMember ? (
                 <div className="flex flex-col gap-4 p-5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 w-fit lg:hidden"
+                    onClick={() => setSelectedMemberId(null)}
+                  >
+                    ← До списку
+                  </Button>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-4">
                       <AvatarBase
@@ -2771,41 +2840,472 @@ export function TeamMembersPage() {
                         </div>
                       </div>
                     </div>
-                    {canOpenProfileCard ? (
-                      <Button variant="outline" size="sm" className="shrink-0" onClick={() => openEditProfileDialog(panelMember)}>
-                        {canManage ? "Редагувати" : "Відкрити"}
+                  </div>
+
+                  <div className={cn(SEGMENTED_GROUP_SM, "flex-wrap")}>
+                    {visiblePersonSections.map((section) => (
+                      <Button key={section.key} type="button" variant="segmented" size="xs"
+                        aria-pressed={activeSection === section.key}
+                        onClick={() => setActiveSection(section.key)}
+                        className={SEGMENTED_TRIGGER_SM}>
+                        {section.label}
                       </Button>
+                    ))}
+                  </div>
+
+                  {activeSection === "overview" ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-wide text-muted-foreground">День народження</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{formatBirthDate(panelMeta?.birthDate)}</div>
+                        </div>
+                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Стаж</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{panelSeniority}</div>
+                        </div>
+                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{getAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
+                        </div>
+                        <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
+                          <div className="text-xs uppercase tracking-wide text-muted-foreground">Телефон</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{panelMeta?.phone || "—"}</div>
+                        </div>
+                      </div>
+                      {canPulse ? <PersonTimeInCrm userId={panelMember.user_id} /> : null}
+                    </>
+                  ) : null}
+
+                  {activeSection === "profile" ? (
+                    <div className="flex flex-col gap-4">
+                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground">Email</Label>
+                        <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
+                      </div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                      <div className="mb-4 text-sm font-semibold text-foreground">Особисті дані</div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Імʼя</Label>
+                          <Input
+                            value={editProfileFirstName}
+                            onChange={(event) => setEditProfileFirstName(event.target.value)}
+                            className="h-11"
+                            placeholder="Імʼя"
+                            disabled={!canManage}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Прізвище</Label>
+                          <Input
+                            value={editProfileLastName}
+                            onChange={(event) => setEditProfileLastName(event.target.value)}
+                            className="h-11"
+                            placeholder="Прізвище"
+                            disabled={!canManage}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Дата народження</Label>
+                          <Input
+                            type="date"
+                            value={editProfileBirthDate}
+                            onChange={(event) => setEditProfileBirthDate(event.target.value)}
+                            className="h-11"
+                            disabled={!canManage}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Телефон</Label>
+                          <Input
+                            value={editProfilePhone}
+                            onChange={(event) => setEditProfilePhone(event.target.value)}
+                            className="h-11"
+                            placeholder="+380..."
+                            disabled={!canManage}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                      <div className="mb-4 text-sm font-semibold text-foreground">Робочі параметри</div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {shouldShowManagerRateField ? (
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label className="text-sm font-medium text-foreground">% менеджера</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={editProfileManagerRate}
+                              onChange={(event) => setEditProfileManagerRate(event.target.value)}
+                              className="h-11"
+                              placeholder={String(DEFAULT_MANAGER_RATE)}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
+                          <Select
+                            value={editProfileAvailabilityStatus}
+                            onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
+                            disabled={!canManage}
+                          >
+                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                              {getAvailabilityLabel(editProfileAvailabilityStatus)}
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AVAILABILITY_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {editProfileAvailabilityStatus !== "available" ? (
+                          <>
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium text-foreground">Початок відсутності</Label>
+                              <Input
+                                type="date"
+                                value={editProfileAvailabilityStartDate}
+                                onChange={(event) => setEditProfileAvailabilityStartDate(event.target.value)}
+                                className="h-11"
+                                disabled={!canManage}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium text-foreground">Кінець відсутності</Label>
+                              <Input
+                                type="date"
+                                value={editProfileAvailabilityEndDate}
+                                onChange={(event) => setEditProfileAvailabilityEndDate(event.target.value)}
+                                className="h-11"
+                                disabled={!canManage}
+                              />
+                              <div className="text-xs text-muted-foreground">
+                                {selectedAvailabilityRange || "Можна залишити порожнім, якщо дата повернення невідома"}
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Менеджер</Label>
+                          <Select
+                            value={editProfileManagerUserId || "__none__"}
+                            onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
+                            disabled={!canManage}
+                          >
+                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Не обрано</SelectItem>
+                              {managerOptions
+                                .filter((option) => option.id !== editProfileMember?.user_id)
+                                .map((option) => (
+                                  <SelectItem key={option.id} value={option.id}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Дата старту</Label>
+                          <Input
+                            type="date"
+                            value={editProfileStartDate}
+                            onChange={(event) => setEditProfileStartDate(event.target.value)}
+                            className="h-11"
+                            disabled={!canManage}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
+                          <Input
+                            type="date"
+                            value={editProfileProbationEndDate}
+                            onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
+                            className="h-11"
+                            disabled={!canManage}
+                          />
+                          {canManage ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-primary transition-opacity hover:opacity-80 disabled:text-muted-foreground"
+                              disabled={!editProfileStartDate}
+                              onClick={() => setEditProfileProbationEndDate(addMonthsToDateOnly(editProfileStartDate, 1))}
+                            >
+                              Поставити +1 місяць від дати старту
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    {canOpenProfileCard ? (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <Button variant="outline" className="h-10 sm:min-w-[140px]" onClick={() => openEditProfileDialog(panelMember)} disabled={editProfileBusy}>
+                          Скинути
+                        </Button>
+                        <Button className="h-10 sm:min-w-[180px]" onClick={saveMemberProfile} disabled={editProfileBusy}>
+                          {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : canManage ? "Зберегти профіль" : "Зберегти %"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    </div>
+                  ) : null}
+
+                  {activeSection === "access" ? (
+                    <div className="flex flex-col gap-4">
+                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                      <div className="mb-4 text-sm font-semibold text-foreground">Ролі</div>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
+                          <Select value={editAccessRole} onValueChange={setEditAccessRole} disabled={!canEditPanelRoles}>
+                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                              {memberAccessRoleOptions.find((o) => o.value === editAccessRole)?.label}
+                            </SelectTrigger>
+                            <SelectContent>
+                              {memberAccessRoleOptions.map((role) => (
+                                <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-foreground">Роль у команді</Label>
+                          <Select value={editJobRole} onValueChange={setEditJobRole} disabled={!canEditPanelRoles}>
+                            <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
+                              {JOB_ROLE_OPTIONS.find((o) => o.value === editJobRole)?.label}
+                            </SelectTrigger>
+                            <SelectContent>
+                              {JOB_ROLE_OPTIONS.map((role) => (
+                                <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {!canEditPanelRoles ? (
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          {!isSuperAdmin && panelMember.user_id === currentUserId
+                            ? "Admin не може змінювати власні доступи"
+                            : "Редагування доступів недоступне"}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
+                      <div className="mb-4 text-sm font-semibold text-foreground">Доступ до модулів</div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
+                          <label
+                            key={key}
+                            className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
+                          >
+                            <Checkbox
+                              checked={
+                                isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
+                                  ? true
+                                  : editProfileModuleAccess[key]
+                              }
+                              disabled={
+                                !canManage ||
+                                isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
+                              }
+                              onCheckedChange={(checked) =>
+                                setEditProfileModuleAccess((prev) => ({
+                                  ...prev,
+                                  [key]: checked === true,
+                                }))
+                              }
+                            />
+                            <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    {canManage ? (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        <Button className="h-10 sm:min-w-[180px]" onClick={saveAccessSection} disabled={editBusy || editProfileBusy}>
+                          {editBusy || editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти доступи"}
+                        </Button>
+                      </div>
+                    ) : null}
+                      {canManage ? (
+                        <PersonAccessHistorySection workspaceId={workspaceId} userId={panelMember.user_id} resolveActorName={resolveActorName} />
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {activeSection === "activity" ? <PersonActivitySection userId={panelMember.user_id} /> : null}
+
+                  {activeSection === "hr" ? (
+                <div className="min-w-0 space-y-4">
+                  <div className={cn("grid gap-4", shouldShowProbationSection ? "sm:grid-cols-2 xl:grid-cols-1" : "grid-cols-1")}>
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <Activity className="h-4 w-4 text-muted-foreground" />
+                        Стаж роботи
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-foreground">
+                        {selectedEmploymentDuration || "Ще не задано"}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {editProfileStartDate
+                          ? `${formatEmploymentDate(editProfileStartDate)}${selectedEmploymentDays !== null && selectedEmploymentDays >= 0 ? `, ${selectedEmploymentDays} днів у компанії` : ""}`
+                          : "Вкажи дату старту, щоб побачити стаж"}
+                      </div>
+                    </div>
+                    {shouldShowProbationSection ? (
+                      <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          Випробувальний
+                        </div>
+                        {selectedProbation ? (
+                          <>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "px-2 py-0.5 text-[11px] rounded-[var(--radius)]",
+                                  getProbationBadgeClass(selectedProbation.status)
+                                )}
+                              >
+                                {selectedProbation.statusLabel}
+                              </Badge>
+                              <span className="text-[11px] text-muted-foreground">{selectedProbation.progress}%</span>
+                            </div>
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full",
+                                  selectedProbation.status === "completed"
+                                    ? "tone-dot-success"
+                                    : selectedProbation.status === "active"
+                                    ? "tone-dot-warning"
+                                    : "bg-muted-foreground/40"
+                                )}
+                                style={{ width: `${selectedProbation.progress}%` }}
+                              />
+                            </div>
+                            <div className="mt-2 text-xs text-muted-foreground">{selectedProbation.caption}</div>
+                          </>
+                        ) : (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Вкажи дату завершення, щоб показати шкалу випробувального терміну.
+                          </div>
+                        )}
+                      </div>
                     ) : null}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">День народження</div>
-                      <div className="mt-1 text-sm font-medium text-foreground">{formatBirthDate(panelMeta?.birthDate)}</div>
+                  {shouldShowProbationSection ? (
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between xl:flex-col xl:items-start">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">Рішення по випробувальному</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {selectedEmploymentStatus === "probation"
+                              ? selectedProbationReviewDue
+                                ? "Термін завершився. Можна взяти в штат, дати ще місяць або завершити співпрацю."
+                                : "Рішення можна прийняти достроково. Продовження доступне після завершення терміну."
+                              : "Співробітник не був прийнятий після випробувального."}
+                          </div>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "w-fit px-2.5 py-1 rounded-[var(--radius)]",
+                            getEmploymentStatusBadgeClass(selectedEmploymentStatus)
+                          )}
+                        >
+                          {getEmploymentStatusLabel(selectedEmploymentStatus)}
+                        </Badge>
+                      </div>
+                      {selectedEmploymentStatus === "probation" ? (
+                        <div className="mt-4 flex flex-col gap-2">
+                          <Button
+                            type="button"
+                            className="h-10 w-full"
+                            onClick={() => void applyProbationDecision("active")}
+                            disabled={probationActionBusy !== null || !canApproveProbationNow}
+                          >
+                            {probationActionBusy === "active" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {selectedProbationReviewDue ? "Взяти на роботу" : "Взяти на роботу достроково"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10 w-full"
+                            onClick={() => void applyProbationDecision("extend")}
+                            disabled={probationActionBusy !== null || !canExtendProbationNow}
+                          >
+                            {probationActionBusy === "extend" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            Дати ще місяць
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10 w-full border-danger-soft-border text-danger-foreground"
+                            onClick={requestProbationRejection}
+                            disabled={probationActionBusy !== null || !canRejectProbationNow}
+                          >
+                            {probationActionBusy === "rejected" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            {selectedProbationReviewDue ? "Не брати" : "Завершити співпрацю"}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Стаж</div>
-                      <div className="mt-1 text-sm font-medium text-foreground">{panelSeniority}</div>
+                  ) : null}
+                  {selectedEmploymentStatus === "active" || selectedEmploymentStatus === "inactive" ? (
+                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">Статус співпраці</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {selectedEmploymentStatus === "active"
+                              ? "Співробітник працює у штаті. Якщо людина пішла або її звільнили, тут можна завершити співпрацю."
+                              : "Співпрацю вже завершено. За потреби співробітника можна повернути в штат."}
+                          </div>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "w-fit px-2.5 py-1 rounded-[var(--radius)]",
+                            getEmploymentStatusBadgeClass(selectedEmploymentStatus)
+                          )}
+                        >
+                          {getEmploymentStatusLabel(selectedEmploymentStatus)}
+                        </Badge>
+                        {selectedEmploymentStatus === "active" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10 w-full border-danger-soft-border text-danger-foreground"
+                            onClick={() => setPendingEmploymentDecision("inactive")}
+                            disabled={employmentActionBusy !== null || !canDeactivateEmployment}
+                          >
+                            {employmentActionBusy === "inactive" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            Завершити співпрацю
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            className="h-10 w-full"
+                            onClick={() => void applyEmploymentDecision("reactivate")}
+                            disabled={employmentActionBusy !== null || !canReactivateEmployment}
+                          >
+                            {employmentActionBusy === "reactivate" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                            Повернути в штат
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
-                      <div className="mt-1 text-sm font-medium text-foreground">{getAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
-                    </div>
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Телефон</div>
-                      <div className="mt-1 text-sm font-medium text-foreground">{panelMeta?.phone || "—"}</div>
-                    </div>
-                  </div>
-
-                  {/* user_activity_daily is RLS-restricted to owner/SEO */}
-                  {canPulse ? <PersonTimeInCrm userId={panelMember.user_id} /> : null}
-                  <PersonActivitySection userId={panelMember.user_id} />
-                  {canManage ? (
-                    <PersonAccessHistorySection
-                      workspaceId={workspaceId}
-                      userId={panelMember.user_id}
-                      resolveActorName={resolveActorName}
-                    />
+                  ) : null}
+                </div>
                   ) : null}
                 </div>
               ) : (
@@ -3110,552 +3610,7 @@ export function TeamMembersPage() {
         </DialogContent>
       </Dialog>
 
-      <Sheet
-        open={!!editProfileMember}
-        onOpenChange={(open) => {
-          if (!open && !editProfileBusy) closeEditProfileDialog();
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[680px]"
-        >
-          <div className="border-b border-border bg-muted/10 px-6 py-5 shrink-0">
-            <SheetHeader>
-              <SheetTitle className="text-xl font-semibold text-foreground">Картка учасника</SheetTitle>
-              <SheetDescription className="mt-1.5 text-muted-foreground">
-                {canManage
-                  ? "Редагування профілю учасника команди. Пароль змінюється тільки в його профілі."
-                  : "SEO може керувати відсотком менеджера та приймати рішення по випробувальному терміну. Інші поля доступні лише для перегляду."}
-              </SheetDescription>
-            </SheetHeader>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
-            <div className="px-6 py-5">
-            <div className="mb-6 rounded-[var(--radius)] border border-border bg-background/80 p-5">
-              <div className="flex flex-col gap-5">
-                <div className="flex items-center gap-4">
-                  <AvatarBase
-                    src={getMemberAvatarSource(selectedProfile, editProfileMember ?? undefined)}
-                    name={selectedDisplayName}
-                    fallback={selectedInitials}
-                    size={64}
-                    shape="circle"
-                    className="border-border bg-muted/50"
-                    fallbackClassName="text-base font-bold"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-xl font-semibold text-foreground">{selectedDisplayName}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      {editProfileMember?.email ?? "Не вказано"}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getAccessBadgeClass(editProfileMember?.access_role ?? null))}>
-                        {getAccessRoleLabel(editProfileMember?.access_role ?? null)}
-                      </Badge>
-                      <Badge variant="outline" className={cn("px-2.5 py-1 font-medium", getJobBadgeClass(editProfileMember?.job_role ?? null))}>
-                        {getJobRoleLabel(editProfileMember?.job_role ?? null)}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "px-2.5 py-1 font-medium rounded-[var(--radius)]",
-                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
-                        )}
-                      >
-                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      День народження
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-foreground">
-                      {selectedBirthdayInsight?.label ?? formatBirthDate(editProfileBirthDate)}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {selectedBirthdayInsight?.caption ?? "Дата не вказана"}
-                    </div>
-                  </div>
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      <Activity className="h-3.5 w-3.5" />
-                      Річниця в компанії
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-foreground">
-                      {selectedAnniversaryInsight?.label ?? (selectedEmploymentDuration || "Стаж не вказано")}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {selectedAnniversaryInsight?.caption ?? "Додай дату старту"}
-                    </div>
-                  </div>
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" />
-                      Статус доступності
-                    </div>
-                    <div className="mt-2 text-base font-semibold text-foreground">
-                      {getAvailabilityLabel(editProfileAvailabilityStatus)}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {selectedAvailabilityRange || "Діє без обмеження по датах"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="grid min-w-0 gap-6">
-              <div className="min-w-0 space-y-6">
-                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-foreground">Email</Label>
-                    <Input value={editProfileMember?.email ?? "Не вказано"} disabled className="h-11" />
-                  </div>
-                </div>
-                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                  <div className="mb-4 text-sm font-semibold text-foreground">Особисті дані</div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Імʼя</Label>
-                      <Input
-                        value={editProfileFirstName}
-                        onChange={(event) => setEditProfileFirstName(event.target.value)}
-                        className="h-11"
-                        placeholder="Імʼя"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Прізвище</Label>
-                      <Input
-                        value={editProfileLastName}
-                        onChange={(event) => setEditProfileLastName(event.target.value)}
-                        className="h-11"
-                        placeholder="Прізвище"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Дата народження</Label>
-                      <Input
-                        type="date"
-                        value={editProfileBirthDate}
-                        onChange={(event) => setEditProfileBirthDate(event.target.value)}
-                        className="h-11"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Телефон</Label>
-                      <Input
-                        value={editProfilePhone}
-                        onChange={(event) => setEditProfilePhone(event.target.value)}
-                        className="h-11"
-                        placeholder="+380..."
-                        disabled={!canManage}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                  <div className="mb-4 text-sm font-semibold text-foreground">Робочі параметри</div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {shouldShowManagerRateField ? (
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label className="text-sm font-medium text-foreground">% менеджера</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={editProfileManagerRate}
-                          onChange={(event) => setEditProfileManagerRate(event.target.value)}
-                          className="h-11"
-                          placeholder={String(DEFAULT_MANAGER_RATE)}
-                        />
-                      </div>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
-                      <Select
-                        value={editProfileAvailabilityStatus}
-                        onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
-                        disabled={!canManage}
-                      >
-                        <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                          {getAvailabilityLabel(editProfileAvailabilityStatus)}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AVAILABILITY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {editProfileAvailabilityStatus !== "available" ? (
-                      <>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Початок відсутності</Label>
-                          <Input
-                            type="date"
-                            value={editProfileAvailabilityStartDate}
-                            onChange={(event) => setEditProfileAvailabilityStartDate(event.target.value)}
-                            className="h-11"
-                            disabled={!canManage}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Кінець відсутності</Label>
-                          <Input
-                            type="date"
-                            value={editProfileAvailabilityEndDate}
-                            onChange={(event) => setEditProfileAvailabilityEndDate(event.target.value)}
-                            className="h-11"
-                            disabled={!canManage}
-                          />
-                          <div className="text-xs text-muted-foreground">
-                            {selectedAvailabilityRange || "Можна залишити порожнім, якщо дата повернення невідома"}
-                          </div>
-                        </div>
-                      </>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Менеджер</Label>
-                      <Select
-                        value={editProfileManagerUserId || "__none__"}
-                        onValueChange={(value) => setEditProfileManagerUserId(value === "__none__" ? "" : value)}
-                        disabled={!canManage}
-                      >
-                        <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>{selectedManagerLabel}</SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Не обрано</SelectItem>
-                          {managerOptions
-                            .filter((option) => option.id !== editProfileMember?.user_id)
-                            .map((option) => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Дата старту</Label>
-                      <Input
-                        type="date"
-                        value={editProfileStartDate}
-                        onChange={(event) => setEditProfileStartDate(event.target.value)}
-                        className="h-11"
-                        disabled={!canManage}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
-                      <Input
-                        type="date"
-                        value={editProfileProbationEndDate}
-                        onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
-                        className="h-11"
-                        disabled={!canManage}
-                      />
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-primary transition-opacity hover:opacity-80 disabled:text-muted-foreground"
-                          disabled={!editProfileStartDate}
-                          onClick={() => setEditProfileProbationEndDate(addMonthsToDateOnly(editProfileStartDate, 1))}
-                        >
-                          Поставити +1 місяць від дати старту
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
-                  <div className="mb-4 text-sm font-semibold text-foreground">Доступ до модулів</div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
-                      <label
-                        key={key}
-                        className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
-                      >
-                        <Checkbox
-                          checked={
-                            isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
-                              ? true
-                              : editProfileModuleAccess[key]
-                          }
-                          disabled={
-                            !canManage ||
-                            isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
-                          }
-                          onCheckedChange={(checked) =>
-                            setEditProfileModuleAccess((prev) => ({
-                              ...prev,
-                              [key]: checked === true,
-                            }))
-                          }
-                        />
-                        <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="min-w-0 space-y-4">
-                <div className={cn("grid gap-4", shouldShowProbationSection ? "sm:grid-cols-2 xl:grid-cols-1" : "grid-cols-1")}>
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Activity className="h-4 w-4 text-muted-foreground" />
-                      Стаж роботи
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-foreground">
-                      {selectedEmploymentDuration || "Ще не задано"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {editProfileStartDate
-                        ? `${formatEmploymentDate(editProfileStartDate)}${selectedEmploymentDays !== null && selectedEmploymentDays >= 0 ? `, ${selectedEmploymentDays} днів у компанії` : ""}`
-                        : "Вкажи дату старту, щоб побачити стаж"}
-                    </div>
-                  </div>
-                  {shouldShowProbationSection ? (
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        Випробувальний
-                      </div>
-                      {selectedProbation ? (
-                        <>
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "px-2 py-0.5 text-[11px] rounded-[var(--radius)]",
-                                getProbationBadgeClass(selectedProbation.status)
-                              )}
-                            >
-                              {selectedProbation.statusLabel}
-                            </Badge>
-                            <span className="text-[11px] text-muted-foreground">{selectedProbation.progress}%</span>
-                          </div>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
-                            <div
-                              className={cn(
-                                "h-full rounded-full",
-                                selectedProbation.status === "completed"
-                                  ? "tone-dot-success"
-                                  : selectedProbation.status === "active"
-                                  ? "tone-dot-warning"
-                                  : "bg-muted-foreground/40"
-                              )}
-                              style={{ width: `${selectedProbation.progress}%` }}
-                            />
-                          </div>
-                          <div className="mt-2 text-xs text-muted-foreground">{selectedProbation.caption}</div>
-                        </>
-                      ) : (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          Вкажи дату завершення, щоб показати шкалу випробувального терміну.
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-                {shouldShowProbationSection ? (
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between xl:flex-col xl:items-start">
-                      <div>
-                        <div className="text-sm font-medium text-foreground">Рішення по випробувальному</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {selectedEmploymentStatus === "probation"
-                            ? selectedProbationReviewDue
-                              ? "Термін завершився. Можна взяти в штат, дати ще місяць або завершити співпрацю."
-                              : "Рішення можна прийняти достроково. Продовження доступне після завершення терміну."
-                            : "Співробітник не був прийнятий після випробувального."}
-                        </div>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "w-fit px-2.5 py-1 rounded-[var(--radius)]",
-                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
-                        )}
-                      >
-                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
-                      </Badge>
-                    </div>
-                    {selectedEmploymentStatus === "probation" ? (
-                      <div className="mt-4 flex flex-col gap-2">
-                        <Button
-                          type="button"
-                          className="h-10 w-full"
-                          onClick={() => void applyProbationDecision("active")}
-                          disabled={probationActionBusy !== null || !canApproveProbationNow}
-                        >
-                          {probationActionBusy === "active" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          {selectedProbationReviewDue ? "Взяти на роботу" : "Взяти на роботу достроково"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 w-full"
-                          onClick={() => void applyProbationDecision("extend")}
-                          disabled={probationActionBusy !== null || !canExtendProbationNow}
-                        >
-                          {probationActionBusy === "extend" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          Дати ще місяць
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 w-full border-danger-soft-border text-danger-foreground"
-                          onClick={requestProbationRejection}
-                          disabled={probationActionBusy !== null || !canRejectProbationNow}
-                        >
-                          {probationActionBusy === "rejected" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          {selectedProbationReviewDue ? "Не брати" : "Завершити співпрацю"}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {selectedEmploymentStatus === "active" || selectedEmploymentStatus === "inactive" ? (
-                  <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-foreground">Статус співпраці</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {selectedEmploymentStatus === "active"
-                            ? "Співробітник працює у штаті. Якщо людина пішла або її звільнили, тут можна завершити співпрацю."
-                            : "Співпрацю вже завершено. За потреби співробітника можна повернути в штат."}
-                        </div>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "w-fit px-2.5 py-1 rounded-[var(--radius)]",
-                          getEmploymentStatusBadgeClass(selectedEmploymentStatus)
-                        )}
-                      >
-                        {getEmploymentStatusLabel(selectedEmploymentStatus)}
-                      </Badge>
-                      {selectedEmploymentStatus === "active" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 w-full border-danger-soft-border text-danger-foreground"
-                          onClick={() => setPendingEmploymentDecision("inactive")}
-                          disabled={employmentActionBusy !== null || !canDeactivateEmployment}
-                        >
-                          {employmentActionBusy === "inactive" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          Завершити співпрацю
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          className="h-10 w-full"
-                          onClick={() => void applyEmploymentDecision("reactivate")}
-                          disabled={employmentActionBusy !== null || !canReactivateEmployment}
-                        >
-                          {employmentActionBusy === "reactivate" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                          Повернути в штат
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            </div>
-          </div>
-          <div className="shrink-0 border-t border-border bg-card px-6 py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                className="h-11 min-w-[180px]"
-                onClick={closeEditProfileDialog}
-                disabled={editProfileBusy}
-              >
-                Скасувати
-              </Button>
-              <Button className="h-11 min-w-[220px]" onClick={saveMemberProfile} disabled={editProfileBusy}>
-                {editProfileBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : canManage ? "Зберегти профіль" : "Зберегти %"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
-      <Dialog
-        open={!!editMember}
-        onOpenChange={(open) => {
-          if (!open && !editBusy) setEditMember(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
-          <div className="p-6 border-b border-border bg-muted/10">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold text-foreground">Змінити доступи учасника</DialogTitle>
-              <DialogDescription className="mt-1.5 text-muted-foreground">
-                Доступно для Super Admin та Admin. Призначення Super Admin доступне лише Super Admin.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-          <div className="p-6 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground">Користувач</Label>
-              <Input value={editMember?.email ?? "Не вказано"} disabled className="h-11" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground">Рівень доступу</Label>
-              <Select value={editAccessRole} onValueChange={setEditAccessRole}>
-                <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                  {memberAccessRoleOptions.find((o) => o.value === editAccessRole)?.label}
-                </SelectTrigger>
-                <SelectContent>
-                  {memberAccessRoleOptions.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground">Роль у команді</Label>
-              <Select value={editJobRole} onValueChange={setEditJobRole}>
-                <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                  {JOB_ROLE_OPTIONS.find((o) => o.value === editJobRole)?.label}
-                </SelectTrigger>
-                <SelectContent>
-                  {JOB_ROLE_OPTIONS.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                variant="outline"
-                className="flex-1 h-11"
-                onClick={() => setEditMember(null)}
-                disabled={editBusy}
-              >
-                Скасувати
-              </Button>
-              <Button className="flex-1 h-11" onClick={saveMemberRoles} disabled={editBusy}>
-                {editBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Зберегти"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
         <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[var(--radius-inner)]">
