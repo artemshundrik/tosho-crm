@@ -554,7 +554,7 @@ function FilterChip({
 
 export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"members" | "invites" | "activity">("members");
+  const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
   const { entries } = useWorkspacePresence();
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
@@ -588,9 +588,10 @@ export function TeamMembersPage() {
   const [activeSection, setActiveSection] = useState<PersonSection>("overview");
   // Two ways to look at the team: "panel" (master-detail card) for working with
   // one person, "rows" (comparison table) for scanning everyone side by side.
-  const [viewMode, setViewMode] = useState<"panel" | "rows">(() => {
+  const [viewMode, setViewMode] = useState<"panel" | "rows" | "pulse">(() => {
     if (typeof window === "undefined") return "panel";
-    return window.localStorage.getItem("team-members-view") === "rows" ? "rows" : "panel";
+    const stored = window.localStorage.getItem("team-members-view");
+    return stored === "rows" || stored === "pulse" ? stored : "panel";
   });
   useEffect(() => {
     window.localStorage.setItem("team-members-view", viewMode);
@@ -640,8 +641,12 @@ export function TeamMembersPage() {
 
   useEffect(() => {
     const tab = params.get("tab");
-    if (tab === "invites" || tab === "members" || tab === "activity") {
+    if (tab === "invites" || tab === "members") {
       setActiveTab(tab);
+    } else if (tab === "activity" || tab === "pulse") {
+      // Пульс used to be a tab; it is a view of Учасники now.
+      setActiveTab("members");
+      setViewMode("pulse");
     }
   }, [params]);
 
@@ -1272,6 +1277,10 @@ export function TeamMembersPage() {
     (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) ?? null : null) ??
     filteredMembers[0] ??
     null;
+  // "pulse" is owner/SEO-only; anyone else falls back to the panel view (the
+  // preference may linger in localStorage from another account on this machine).
+  const effectiveViewMode = viewMode === "pulse" && !canPulse ? "panel" : viewMode;
+
   // Mirrors the row-menu guard: an Admin may not edit their own roles nor an owner's.
   const canEditPanelRoles =
     canManage &&
@@ -1336,7 +1345,7 @@ export function TeamMembersPage() {
 
   const isExpired = (dateStr: string) => new Date(dateStr) < new Date();
 
-  const handleTabChange = (next: "members" | "invites" | "activity") => {
+  const handleTabChange = (next: "members" | "invites") => {
     setActiveTab(next);
     setParams(next === "members" ? {} : { tab: next });
   };
@@ -1348,6 +1357,7 @@ export function TeamMembersPage() {
     setActiveFilter(null);
     setSelectedMemberId(userId);
     setActiveTab("members");
+    setViewMode("panel");
     setParams({ member: userId });
   };
 
@@ -2302,12 +2312,12 @@ export function TeamMembersPage() {
   );
   useEffect(() => {
     const el = twoPaneRef.current;
-    if (!el || activeTab !== "members" || viewMode !== "panel") return;
+    if (!el || activeTab !== "members" || effectiveViewMode !== "panel") return;
     const update = () => setTwoPaneTop(Math.round(el.getBoundingClientRect().top));
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [activeTab, viewMode, activeFilter, showSkeleton]);
+  }, [activeTab, effectiveViewMode, activeFilter, showSkeleton]);
 
   const inviteAccessRoleOptions = isSuperAdmin
     ? ACCESS_ROLE_OPTIONS
@@ -2419,29 +2429,13 @@ export function TeamMembersPage() {
             </div>
 
             <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
-              {canPulse ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-pressed={activeTab === "activity"}
-                  onClick={() => handleTabChange("activity")}
-                  className={cn(
-                    "h-9 gap-1.5",
-                    activeTab === "activity" && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
-                  )}
-                >
-                  <Activity className="h-4 w-4" />
-                  Пульс
-                </Button>
-              ) : null}
               {activeTab === "members" ? (
                 <div className={SEGMENTED_GROUP_SM}>
                   <Button
                     type="button"
                     variant="segmented"
                     size="xs"
-                    aria-pressed={viewMode === "panel"}
+                    aria-pressed={effectiveViewMode === "panel"}
                     onClick={() => setViewMode("panel")}
                     className={SEGMENTED_TRIGGER_SM}
                     title="Панель: список + картка людини"
@@ -2452,13 +2446,27 @@ export function TeamMembersPage() {
                     type="button"
                     variant="segmented"
                     size="xs"
-                    aria-pressed={viewMode === "rows"}
+                    aria-pressed={effectiveViewMode === "rows"}
                     onClick={() => setViewMode("rows")}
                     className={SEGMENTED_TRIGGER_SM}
                     title="Рядки: таблиця для порівняння"
                   >
                     <Rows3 className="h-4 w-4" />
                   </Button>
+                  {canPulse ? (
+                    <Button
+                      type="button"
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={effectiveViewMode === "pulse"}
+                      onClick={() => setViewMode("pulse")}
+                      className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5")}
+                      title="Пульс: аналітика активності команди"
+                    >
+                      <Activity className="h-4 w-4" />
+                      Пульс
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
               {canManage ? (
@@ -2471,7 +2479,7 @@ export function TeamMembersPage() {
       </div>
 
       <div className="overflow-hidden flex flex-col">
-        {activeTab === "members" ? (
+        {activeTab === "members" && effectiveViewMode !== "pulse" ? (
           <>
           <div className="flex flex-wrap items-center gap-1.5 px-4 pb-1 md:px-5 lg:px-6">
             <FilterChip
@@ -2760,7 +2768,7 @@ export function TeamMembersPage() {
             className={cn(
               "border-t border-border/60 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]",
               selectedMemberId ? "block" : "hidden",
-              viewMode === "panel" ? "lg:grid" : "lg:hidden"
+              effectiveViewMode === "panel" ? "lg:grid" : "lg:hidden"
             )}
             style={twoPaneTop != null ? { ["--team-panes-h" as string]: `calc(100dvh - ${twoPaneTop}px)` } : undefined}
           >
@@ -3345,7 +3353,7 @@ export function TeamMembersPage() {
             </div>
           </div>
 
-          {viewMode === "rows" ? (
+          {effectiveViewMode === "rows" ? (
             <div className="hidden border-t border-border/60 lg:block">
               <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
                 <TableHeader>
@@ -3656,7 +3664,7 @@ export function TeamMembersPage() {
           </>
         ) : null}
 
-        {activeTab === "activity" && canPulse ? (
+        {activeTab === "members" && effectiveViewMode === "pulse" && canPulse ? (
           <TeamPulsePanel
             workspaceId={workspaceId}
             people={pulsePeople}
