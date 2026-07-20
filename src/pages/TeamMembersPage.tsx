@@ -86,6 +86,8 @@ import {
 } from "@/lib/employment";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
 import {
   listWorkspaceMemberDirectory,
@@ -2296,114 +2298,95 @@ export function TeamMembersPage() {
     }).length;
   }, [members, memberMetaByUserId]);
 
-  if (showSkeleton) {
-    return <ListSkeleton />;
-  }
-
-  if (!workspaceId) {
-    return (
-      <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
-        <div className="overflow-hidden flex flex-col">
-          <div className="p-6">
-            <div className="text-sm font-semibold text-foreground">Workspace not selected</div>
-            <div className="mt-1 text-sm text-muted-foreground">
-              Немає доступного workspace. Перевір права доступу або створіть workspace.
+  const headerActions = useMemo(
+    () => (
+      <UnifiedPageToolbar
+        topLeft={
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+                {members.length}
+              </span>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex w-full flex-col gap-5 pb-20 pt-4 md:pb-0">
-      <div className="flex flex-col gap-3 px-4 md:px-5 lg:px-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-              {members.length}
-            </span>
-          </div>
-          <div className={SEGMENTED_GROUP}>
-              <Button
-                type="button"
-                variant="segmented"
-                size="xs"
-                aria-pressed={activeTab === "members"}
-                onClick={() => handleTabChange("members")}
-                className={SEGMENTED_TRIGGER}
-              >
-                Учасники ({members.length})
-              </Button>
-              {canManage ? (
+            <div className={SEGMENTED_GROUP}>
                 <Button
                   type="button"
                   variant="segmented"
                   size="xs"
-                  aria-pressed={activeTab === "invites"}
-                  onClick={() => handleTabChange("invites")}
+                  aria-pressed={activeTab === "members"}
+                  onClick={() => handleTabChange("members")}
                   className={SEGMENTED_TRIGGER}
                 >
-                  Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
+                  Учасники ({members.length})
                 </Button>
-              ) : null}
-            </div>
-
-            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
-              {activeTab === "members" ? (
-                <div className={SEGMENTED_GROUP_SM}>
+                {canManage ? (
                   <Button
                     type="button"
                     variant="segmented"
                     size="xs"
-                    aria-pressed={effectiveViewMode === "panel"}
-                    onClick={() => setViewMode("panel")}
-                    className={SEGMENTED_TRIGGER_SM}
-                    title="Панель: список + картка людини"
+                    aria-pressed={activeTab === "invites"}
+                    onClick={() => handleTabChange("invites")}
+                    className={SEGMENTED_TRIGGER}
                   >
-                    <Columns2 className="h-4 w-4" />
+                    Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                   </Button>
-                  <Button
-                    type="button"
-                    variant="segmented"
-                    size="xs"
-                    aria-pressed={effectiveViewMode === "rows"}
-                    onClick={() => setViewMode("rows")}
-                    className={SEGMENTED_TRIGGER_SM}
-                    title="Рядки: таблиця для порівняння"
-                  >
-                    <Rows3 className="h-4 w-4" />
-                  </Button>
-                  {canPulse ? (
-                    <Button
-                      type="button"
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={effectiveViewMode === "pulse"}
-                      onClick={() => setViewMode("pulse")}
-                      className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5")}
-                      title="Пульс: аналітика активності команди"
-                    >
-                      <Activity className="h-4 w-4" />
-                      Пульс
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-              {canManage ? (
-                <Button variant="primary" size="lg" className="h-10 md:px-5" onClick={openInviteDialog}>
-                  Інвайт
-                </Button>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
           </div>
-      </div>
-
-      <div className="overflow-hidden flex flex-col">
-        {activeTab === "members" && effectiveViewMode !== "pulse" ? (
-          <>
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3 md:px-5 lg:px-6">
+        }
+        topRight={
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
+            {activeTab === "members" ? (
+              <div className={SEGMENTED_GROUP_SM}>
+                <Button
+                  type="button"
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={effectiveViewMode === "panel"}
+                  onClick={() => setViewMode("panel")}
+                  className={SEGMENTED_TRIGGER_SM}
+                  title="Панель: список + картка людини"
+                >
+                  <Columns2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={effectiveViewMode === "rows"}
+                  onClick={() => setViewMode("rows")}
+                  className={SEGMENTED_TRIGGER_SM}
+                  title="Рядки: таблиця для порівняння"
+                >
+                  <Rows3 className="h-4 w-4" />
+                </Button>
+                {canPulse ? (
+                  <Button
+                    type="button"
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={effectiveViewMode === "pulse"}
+                    onClick={() => setViewMode("pulse")}
+                    className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5")}
+                    title="Пульс: аналітика активності команди"
+                  >
+                    <Activity className="h-4 w-4" />
+                    Пульс
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {canManage ? (
+              <Button variant="primary" size="lg" className="h-10 md:px-5" onClick={openInviteDialog}>
+                Інвайт
+              </Button>
+            ) : null}
+          </div>
+        }
+        filters={
+          activeTab === "members" && effectiveViewMode !== "pulse" ? (
+            <div className="flex flex-wrap items-center gap-1.5">
             <FilterChip
               label="Всі"
               count={members.length}
@@ -2459,7 +2442,54 @@ export function TeamMembersPage() {
                 <span className="tabular-nums opacity-70">{activeInvitesCount}</span>
               </button>
             ) : null}
+            </div>
+          ) : undefined
+        }
+      />
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      activeTab,
+      effectiveViewMode,
+      members.length,
+      invites,
+      canManage,
+      canPulse,
+      activeFilter,
+      needsAttentionCount,
+      missingBirthdayCount,
+      missingStartDateCount,
+      openAbsenceRangeCount,
+      activeInvitesCount,
+    ]
+  );
+
+  usePageHeaderActions(headerActions, [headerActions]);
+
+  if (showSkeleton) {
+    return <ListSkeleton />;
+  }
+
+  if (!workspaceId) {
+    return (
+      <div className="flex flex-col gap-6 w-full max-w-[1400px] mx-auto pb-20 md:pb-0">
+        <div className="overflow-hidden flex flex-col">
+          <div className="p-6">
+            <div className="text-sm font-semibold text-foreground">Workspace not selected</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              Немає доступного workspace. Перевір права доступу або створіть workspace.
+            </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col pb-20 md:pb-0">
+      <div className="overflow-hidden flex flex-col">
+        {activeTab === "members" && effectiveViewMode !== "pulse" ? (
+          <>
           <div className="space-y-3 px-4 lg:hidden">
             {membersError ? (
               <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
