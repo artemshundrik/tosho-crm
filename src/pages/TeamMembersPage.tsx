@@ -70,6 +70,7 @@ import {
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
   SEGMENTED_TRIGGER_SM,
+  TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
@@ -2309,14 +2310,14 @@ export function TeamMembersPage() {
                 {members.length}
               </span>
             </div>
-            <div className={SEGMENTED_GROUP}>
+            <div className={cn(SEGMENTED_GROUP, "h-10")}>
                 <Button
                   type="button"
                   variant="segmented"
                   size="xs"
                   aria-pressed={activeTab === "members"}
                   onClick={() => handleTabChange("members")}
-                  className={SEGMENTED_TRIGGER}
+                  className={cn(SEGMENTED_TRIGGER, "h-8")}
                 >
                   Учасники ({members.length})
                 </Button>
@@ -2327,7 +2328,7 @@ export function TeamMembersPage() {
                     size="xs"
                     aria-pressed={activeTab === "invites"}
                     onClick={() => handleTabChange("invites")}
-                    className={SEGMENTED_TRIGGER}
+                    className={cn(SEGMENTED_TRIGGER, "h-8")}
                   >
                     Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                   </Button>
@@ -2338,14 +2339,14 @@ export function TeamMembersPage() {
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
             {activeTab === "members" ? (
-              <div className={SEGMENTED_GROUP_SM}>
+              <div className={cn(SEGMENTED_GROUP, "h-10")}>
                 <Button
                   type="button"
                   variant="segmented"
                   size="xs"
                   aria-pressed={effectiveViewMode === "panel"}
                   onClick={() => setViewMode("panel")}
-                  className={SEGMENTED_TRIGGER_SM}
+                  className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
                   title="Панель: список + картка людини"
                 >
                   <Columns2 className="h-4 w-4" />
@@ -2356,7 +2357,7 @@ export function TeamMembersPage() {
                   size="xs"
                   aria-pressed={effectiveViewMode === "rows"}
                   onClick={() => setViewMode("rows")}
-                  className={SEGMENTED_TRIGGER_SM}
+                  className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
                   title="Рядки: таблиця для порівняння"
                 >
                   <Rows3 className="h-4 w-4" />
@@ -2368,7 +2369,7 @@ export function TeamMembersPage() {
                     size="xs"
                     aria-pressed={effectiveViewMode === "pulse"}
                     onClick={() => setViewMode("pulse")}
-                    className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5")}
+                    className={cn(SEGMENTED_TRIGGER, "h-8 gap-1.5 px-3")}
                     title="Пульс: аналітика активності команди"
                   >
                     <Activity className="h-4 w-4" />
@@ -2378,7 +2379,7 @@ export function TeamMembersPage() {
               </div>
             ) : null}
             {canManage ? (
-              <Button variant="primary" size="lg" className="h-10 md:px-5" onClick={openInviteDialog}>
+              <Button variant="primary" size="lg" className={cn(TOOLBAR_ACTION_BUTTON, "md:px-5")} onClick={openInviteDialog}>
                 Інвайт
               </Button>
             ) : null}

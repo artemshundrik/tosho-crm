@@ -280,7 +280,7 @@ export function TeamPulsePanel({
   return (
     <div className="flex flex-col gap-5">
       {/* Range + KPIs */}
-      <div className="flex flex-col gap-4 px-4 md:px-5 lg:px-6">
+      <div className="flex flex-col gap-4 px-4 pt-4 md:px-5 lg:px-6">
         <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
           {RANGE_OPTIONS.map((option) => (
             <Button
@@ -312,7 +312,7 @@ export function TeamPulsePanel({
             </div>
             <div className="h-[140px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+                <AreaChart data={trend} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="pulseTrend" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="hsl(var(--brand-h) var(--brand-s) var(--brand-l))" stopOpacity={0.28} />
@@ -321,7 +321,7 @@ export function TeamPulsePanel({
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} minTickGap={16} />
-                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} width={32} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} width={40} />
                   <Tooltip
                     cursor={{ stroke: "hsl(var(--border))" }}
                     contentStyle={{
