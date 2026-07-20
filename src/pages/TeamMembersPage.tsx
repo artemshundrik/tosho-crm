@@ -75,12 +75,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import {
-  addMonthsToDateOnly,
   getEmploymentStatusLabel,
   formatEmploymentDate,
   formatEmploymentDuration,
   getEmploymentDurationDays,
-  isProbationReviewDue,
   isInactiveEmployment,
   normalizeEmploymentStatus,
   getProbationSummary,
@@ -436,6 +434,30 @@ function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
   return "bg-muted text-muted-foreground border-border";
 }
 
+// Probation was removed from this page. Legacy rows may still carry
+// employment_status = 'probation'; show them as working so nobody is stranded
+// with a badge that has no action behind it any more.
+// Offboarded people stay visible (history, audit) but must never sit between
+// active colleagues: they sink to the bottom, alphabetical within each group.
+function sortMembersForList(
+  list: Member[],
+  metaByUserId: Record<string, MemberProfileMeta>
+): Member[] {
+  return [...list].sort((a, b) => {
+    const aOut = isInactiveEmployment(metaByUserId[a.user_id]?.employmentStatus) ? 1 : 0;
+    const bOut = isInactiveEmployment(metaByUserId[b.user_id]?.employmentStatus) ? 1 : 0;
+    if (aOut !== bOut) return aOut - bOut;
+    const aName = (a.full_name ?? a.email ?? "").toLowerCase();
+    const bName = (b.full_name ?? b.email ?? "").toLowerCase();
+    return aName.localeCompare(bName, "uk");
+  });
+}
+
+function displayEmploymentStatus(value?: string | null): EmploymentStatus {
+  const status = normalizeEmploymentStatus(value, null);
+  return status === "probation" ? "active" : status;
+}
+
 function getEmploymentStatusBadgeClass(status: EmploymentStatus) {
   if (status === "rejected") return "bg-danger-soft text-danger-foreground border-danger-soft-border";
   if (status === "inactive") return "bg-muted text-muted-foreground border-border";
@@ -514,7 +536,7 @@ const PERSON_SECTIONS: { key: PersonSection; label: string }[] = [
   { key: "hr", label: "HR" },
 ];
 
-type MemberFilterKey = "attention" | "birthday" | "startDate" | "probation" | "absence";
+type MemberFilterKey = "attention" | "birthday" | "startDate" | "absence";
 
 function FilterChip({
   label,
@@ -633,8 +655,6 @@ export function TeamMembersPage() {
   const [editProfileModuleAccess, setEditProfileModuleAccess] =
     useState<MemberProfileMeta["moduleAccess"]>(DEFAULT_MODULE_ACCESS);
   const [editProfileBusy, setEditProfileBusy] = useState(false);
-  const [probationActionBusy, setProbationActionBusy] = useState<"active" | "rejected" | "extend" | null>(null);
-  const [pendingProbationDecision, setPendingProbationDecision] = useState<"rejected" | null>(null);
   const [employmentActionBusy, setEmploymentActionBusy] = useState<"inactive" | "reactivate" | null>(null);
   const [pendingEmploymentDecision, setPendingEmploymentDecision] = useState<"inactive" | null>(null);
   const [, setWorkspaceFunctionAvailable] = useState<boolean | null>(null);
@@ -1093,7 +1113,7 @@ export function TeamMembersPage() {
     });
   }, [workspaceId, members, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
 
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = sortMembersForList(members.filter((m) => {
     if (!activeFilter) return true;
     const meta = memberMetaByUserId[m.user_id];
     switch (activeFilter) {
@@ -1101,8 +1121,6 @@ export function TeamMembersPage() {
         return !meta?.birthDate;
       case "startDate":
         return !meta?.startDate;
-      case "probation":
-        return isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate);
       case "absence": {
         const availabilityStatus = normalizeTeamAvailabilityStatus(meta?.availabilityStatus);
         return (
@@ -1111,20 +1129,13 @@ export function TeamMembersPage() {
           !meta?.availabilityEndDate
         );
       }
-      case "attention": {
-        const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
-        return (
-          !meta?.birthDate ||
-          !meta?.startDate ||
-          !(m.job_role ?? "").trim() ||
-          isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate) ||
-          probation?.status === "upcoming"
-        );
-      }
+      case "attention":
+        // Missing profile data only — probation is no longer tracked here.
+        return !meta?.birthDate || !meta?.startDate || !(m.job_role ?? "").trim();
       default:
         return true;
     }
-  });
+  }), memberMetaByUserId);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "Не вказано";
@@ -1319,27 +1330,18 @@ export function TeamMembersPage() {
     "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
   const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
   const selectedEmploymentDays = getEmploymentDurationDays(editProfileStartDate);
-  const selectedProbation = getProbationSummary(editProfileStartDate, editProfileProbationEndDate);
-  const selectedEmploymentStatus = normalizeEmploymentStatus(
-    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
-    editProfileProbationEndDate
+  const selectedEmploymentStatus = displayEmploymentStatus(
+    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus
   );
   const shouldShowManagerRateField =
     canManageManagerRates && supportsManagerRate(editProfileMember?.job_role ?? null);
   const shouldShowProbationSection =
     selectedEmploymentStatus === "probation" || selectedEmploymentStatus === "rejected";
-  const selectedProbationReviewDue = isProbationReviewDue(
-    memberMetaByUserId[editProfileMember?.user_id ?? ""]?.employmentStatus,
-    editProfileProbationEndDate
-  );
   const selectedAvailabilityRange = formatAvailabilityRange(
     editProfileAvailabilityStatus,
     editProfileAvailabilityStartDate,
     editProfileAvailabilityEndDate
   );
-  const canApproveProbationNow = selectedEmploymentStatus === "probation";
-  const canRejectProbationNow = selectedEmploymentStatus === "probation";
-  const canExtendProbationNow = selectedEmploymentStatus === "probation" && selectedProbationReviewDue;
   const canDeactivateEmployment = selectedEmploymentStatus === "active";
   const canReactivateEmployment = selectedEmploymentStatus === "inactive";
 
@@ -1553,73 +1555,6 @@ export function TeamMembersPage() {
     }
   };
 
-  const applyProbationDecision = async (decision: "active" | "rejected" | "extend") => {
-    if (!editProfileMember || !workspaceId) return;
-
-    setProbationActionBusy(decision);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
-
-      const response = await fetch("/.netlify/functions/team-member-probation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: editProfileMember.user_id,
-          decision,
-        }),
-      });
-
-      const payload = await parseJsonSafe<{
-        error?: string;
-        profile?: Partial<MemberProfileMeta>;
-      }>(response);
-
-      if (!response.ok) {
-        throw new Error(payload?.error || `Не вдалося оновити випробувальний термін (HTTP ${response.status})`);
-      }
-
-      const current = memberMetaByUserId[editProfileMember.user_id] ?? DEFAULT_MEMBER_META;
-      const nextMeta: MemberProfileMeta = {
-        ...current,
-        ...payload?.profile,
-        employmentStatus: normalizeEmploymentStatus(payload?.profile?.employmentStatus, payload?.profile?.probationEndDate),
-        probationReviewNotifiedAt: payload?.profile?.probationReviewNotifiedAt ?? current.probationReviewNotifiedAt,
-        probationReviewedAt: payload?.profile?.probationReviewedAt ?? current.probationReviewedAt,
-        probationReviewedBy: payload?.profile?.probationReviewedBy ?? current.probationReviewedBy,
-        probationExtensionCount: payload?.profile?.probationExtensionCount ?? current.probationExtensionCount,
-      };
-
-      setMemberMetaByUserId((prev) => ({
-        ...prev,
-        [editProfileMember.user_id]: nextMeta,
-      }));
-      setEditProfileStartDate(nextMeta.startDate);
-      setEditProfileProbationEndDate(nextMeta.probationEndDate);
-
-      toast.success(
-        decision === "active"
-          ? "Співробітника переведено в штат"
-          : decision === "extend"
-          ? "Випробувальний термін продовжено"
-          : "Рішення по випробувальному збережено"
-      );
-      setPendingProbationDecision(null);
-    } catch (error: unknown) {
-      toast.error("Не вдалося оновити випробувальний термін", { description: getErrorMessage(error) });
-    } finally {
-      setProbationActionBusy(null);
-    }
-  };
-
-  const requestProbationRejection = () => {
-    if (!canRejectProbationNow) return;
-    setPendingProbationDecision("rejected");
-  };
 
   const applyEmploymentDecision = async (decision: "inactive" | "reactivate") => {
     if (!editProfileMember || !workspaceId) return;
@@ -2344,20 +2279,7 @@ export function TeamMembersPage() {
   const needsAttentionCount = useMemo(() => {
     return members.filter((member) => {
       const meta = memberMetaByUserId[member.user_id];
-      const probation = getProbationSummary(meta?.startDate, meta?.probationEndDate);
-      return (
-        !meta?.birthDate ||
-        !meta?.startDate ||
-        !(member.job_role ?? "").trim() ||
-        isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate) ||
-        probation?.status === "upcoming"
-      );
-    }).length;
-  }, [members, memberMetaByUserId]);
-  const probationReviewDueCount = useMemo(() => {
-    return members.filter((member) => {
-      const meta = memberMetaByUserId[member.user_id];
-      return isProbationReviewDue(meta?.employmentStatus, meta?.probationEndDate);
+      return !meta?.birthDate || !meta?.startDate || !(member.job_role ?? "").trim();
     }).length;
   }, [members, memberMetaByUserId]);
   const missingBirthdayCount = useMemo(() => {
@@ -2394,7 +2316,7 @@ export function TeamMembersPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 pb-20 pt-4 md:pb-0">
+    <div className="flex w-full flex-col gap-5 pb-20 pt-4 md:pb-0">
       <div className="flex flex-col gap-3 px-4 md:px-5 lg:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-3">
           <div className="flex items-center gap-2.5">
@@ -2481,7 +2403,7 @@ export function TeamMembersPage() {
       <div className="overflow-hidden flex flex-col">
         {activeTab === "members" && effectiveViewMode !== "pulse" ? (
           <>
-          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-1 md:px-5 lg:px-6">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3 md:px-5 lg:px-6">
             <FilterChip
               label="Всі"
               count={members.length}
@@ -2496,16 +2418,6 @@ export function TeamMembersPage() {
                 icon={AlertTriangle}
                 active={activeFilter === "attention"}
                 onClick={() => setActiveFilter((prev) => (prev === "attention" ? null : "attention"))}
-              />
-            ) : null}
-            {probationReviewDueCount > 0 ? (
-              <FilterChip
-                label="Випробувальний"
-                count={probationReviewDueCount}
-                tone="warning"
-                icon={Clock}
-                active={activeFilter === "probation"}
-                onClick={() => setActiveFilter((prev) => (prev === "probation" ? null : "probation"))}
               />
             ) : null}
             {openAbsenceRangeCount > 0 ? (
@@ -2870,8 +2782,8 @@ export function TeamMembersPage() {
                           <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getJobBadgeClass(panelMember.job_role ?? null))}>
                             {getJobRoleLabel(panelMember.job_role ?? null)}
                           </Badge>
-                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getEmploymentStatusBadgeClass(panelMeta?.employmentStatus ?? "active"))}>
-                            {getEmploymentStatusLabel(panelMeta?.employmentStatus ?? "active")}
+                          <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", getEmploymentStatusBadgeClass(displayEmploymentStatus(panelMeta?.employmentStatus)))}>
+                            {getEmploymentStatusLabel(displayEmploymentStatus(panelMeta?.employmentStatus))}
                           </Badge>
                         </div>
                       </div>
@@ -3058,26 +2970,6 @@ export function TeamMembersPage() {
                             disabled={!canManage}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-foreground">Кінець випробувального</Label>
-                          <Input
-                            type="date"
-                            value={editProfileProbationEndDate}
-                            onChange={(event) => setEditProfileProbationEndDate(event.target.value)}
-                            className="h-11"
-                            disabled={!canManage}
-                          />
-                          {canManage ? (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-primary transition-opacity hover:opacity-80 disabled:text-muted-foreground"
-                              disabled={!editProfileStartDate}
-                              onClick={() => setEditProfileProbationEndDate(addMonthsToDateOnly(editProfileStartDate, 1))}
-                            >
-                              Поставити +1 місяць від дати старту
-                            </button>
-                          ) : null}
-                        </div>
                       </div>
                     </div>
                     {canOpenProfileCard ? (
@@ -3195,107 +3087,7 @@ export function TeamMembersPage() {
                           : "Вкажи дату старту, щоб побачити стаж"}
                       </div>
                     </div>
-                    {shouldShowProbationSection ? (
-                      <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          Випробувальний
-                        </div>
-                        {selectedProbation ? (
-                          <>
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "px-2 py-0.5 text-[11px] rounded-[var(--radius)]",
-                                  getProbationBadgeClass(selectedProbation.status)
-                                )}
-                              >
-                                {selectedProbation.statusLabel}
-                              </Badge>
-                              <span className="text-[11px] text-muted-foreground">{selectedProbation.progress}%</span>
-                            </div>
-                            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background">
-                              <div
-                                className={cn(
-                                  "h-full rounded-full",
-                                  selectedProbation.status === "completed"
-                                    ? "tone-dot-success"
-                                    : selectedProbation.status === "active"
-                                    ? "tone-dot-warning"
-                                    : "bg-muted-foreground/40"
-                                )}
-                                style={{ width: `${selectedProbation.progress}%` }}
-                              />
-                            </div>
-                            <div className="mt-2 text-xs text-muted-foreground">{selectedProbation.caption}</div>
-                          </>
-                        ) : (
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            Вкажи дату завершення, щоб показати шкалу випробувального терміну.
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
-                  {shouldShowProbationSection ? (
-                    <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between xl:flex-col xl:items-start">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">Рішення по випробувальному</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {selectedEmploymentStatus === "probation"
-                              ? selectedProbationReviewDue
-                                ? "Термін завершився. Можна взяти в штат, дати ще місяць або завершити співпрацю."
-                                : "Рішення можна прийняти достроково. Продовження доступне після завершення терміну."
-                              : "Співробітник не був прийнятий після випробувального."}
-                          </div>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "w-fit px-2.5 py-1 rounded-[var(--radius)]",
-                            getEmploymentStatusBadgeClass(selectedEmploymentStatus)
-                          )}
-                        >
-                          {getEmploymentStatusLabel(selectedEmploymentStatus)}
-                        </Badge>
-                      </div>
-                      {selectedEmploymentStatus === "probation" ? (
-                        <div className="mt-4 flex flex-col gap-2">
-                          <Button
-                            type="button"
-                            className="h-10 w-full"
-                            onClick={() => void applyProbationDecision("active")}
-                            disabled={probationActionBusy !== null || !canApproveProbationNow}
-                          >
-                            {probationActionBusy === "active" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {selectedProbationReviewDue ? "Взяти на роботу" : "Взяти на роботу достроково"}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10 w-full"
-                            onClick={() => void applyProbationDecision("extend")}
-                            disabled={probationActionBusy !== null || !canExtendProbationNow}
-                          >
-                            {probationActionBusy === "extend" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            Дати ще місяць
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10 w-full border-danger-soft-border text-danger-foreground"
-                            onClick={requestProbationRejection}
-                            disabled={probationActionBusy !== null || !canRejectProbationNow}
-                          >
-                            {probationActionBusy === "rejected" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                            {selectedProbationReviewDue ? "Не брати" : "Завершити співпрацю"}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
                   {selectedEmploymentStatus === "active" || selectedEmploymentStatus === "inactive" ? (
                     <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-4">
                       <div className="flex flex-col gap-3">
@@ -3840,27 +3632,6 @@ export function TeamMembersPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog
-        open={pendingProbationDecision === "rejected"}
-        onOpenChange={(open) => {
-          if (!open && probationActionBusy !== "rejected") setPendingProbationDecision(null);
-        }}
-        title={selectedProbationReviewDue ? "Не брати після випробувального?" : "Достроково завершити співпрацю?"}
-        description={
-          editProfileMember
-            ? selectedProbationReviewDue
-              ? `Для ${getMemberDisplayName(editProfileMember)} буде зафіксовано рішення не брати на роботу після випробувального терміну.`
-              : `Ти достроково завершуєш випробувальний термін для ${getMemberDisplayName(editProfileMember)} і позначаєш, що співпрацю не продовжено.`
-            : undefined
-        }
-        icon={<AlertTriangle className="h-5 w-5 text-danger-foreground" />}
-        confirmLabel={selectedProbationReviewDue ? "Так, не брати" : "Так, завершити"}
-        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-        loading={probationActionBusy === "rejected"}
-        onConfirm={() => {
-          void applyProbationDecision("rejected");
-        }}
-      />
 
       <ConfirmDialog
         open={pendingEmploymentDecision === "inactive"}
