@@ -69,6 +69,7 @@ import {
   readInAppNotificationPreferences,
 } from "@/lib/inAppNotificationPreferences";
 import { MINFIN_MB_URL, type MinfinFxResponse } from "@/lib/minfinFx";
+import { FX_RATES_UPDATED_EVENT } from "@/lib/fxRates";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
@@ -1055,6 +1056,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             sourceLabel,
           })
         );
+        // Сторінки, які рахують валюту (напр. підписки у Фінансах), слухають цю подію,
+        // бо localStorage не сповіщає ту саму вкладку.
+        window.dispatchEvent(new Event(FX_RATES_UPDATED_EVENT));
       } catch {
         // Ignore storage failures (private mode, quota etc).
       }

@@ -1,5 +1,7 @@
 // Finance module — shared types. See docs/FINANCES_DESIGN.md.
 
+import { convertToUah, type FxCurrency, type FxRates } from "@/lib/fxRates";
+
 export type LegalEntityKind = "llc" | "sole_prop" | "individual";
 
 export type FinanceLegalEntity = {
@@ -214,6 +216,28 @@ export type FinanceExpenseAllocation = {
   amount: number;
 };
 
+/** Період білінгу сталої витрати / підписки. */
+export type BillingPeriod = "monthly" | "quarterly" | "yearly";
+
+export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = {
+  monthly: "Щомісяця",
+  quarterly: "Щокварталу",
+  yearly: "Щороку",
+};
+
+/** На скільки місяців розтягується один платіж — база для розбиття річної оплати. */
+export const BILLING_PERIOD_MONTHS: Record<BillingPeriod, number> = {
+  monthly: 1,
+  quarterly: 3,
+  yearly: 12,
+};
+
+export const isBillingPeriod = (value: unknown): value is BillingPeriod =>
+  value === "monthly" || value === "quarterly" || value === "yearly";
+
+export const billingPeriodOf = (expense: { recurrence: string | null }): BillingPeriod =>
+  isBillingPeriod(expense.recurrence) ? expense.recurrence : "monthly";
+
 export type FinanceExpense = {
   id: string;
   teamId: string;
@@ -222,16 +246,39 @@ export type FinanceExpense = {
   categoryId: string | null;
   supplierName: string | null;
   amount: number;
+  currency: FxCurrency;
+  fxRate: number | null;
   vatAmount: number;
   expenseDate: string;
   isRecurring: boolean;
   recurrence: string | null;
+  nextChargeDate: string | null;
+  vendorKey: string | null;
+  logoUrl: string | null;
   notes: string | null;
   file: string | null;
   enteredBy: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   allocations: FinanceExpenseAllocation[];
+};
+
+/**
+ * Гривнева вартість витрати. Валютні суми — за зафіксованим курсом операції,
+ * а якщо його нема (план на майбутнє) — за поточним курсом Мінфіну з шапки.
+ * null означає «курс невідомий» — рахувати не можна, показуємо суму як є.
+ */
+export const expenseUahAmount = (expense: FinanceExpense, rates: FxRates): number | null =>
+  convertToUah(expense.amount, expense.currency, rates, expense.fxRate);
+
+/**
+ * Скільки ця стала витрата коштує на місяць у гривні.
+ * Річний платіж ділиться на 12, квартальний — на 3 (див. п.9 побажань CEO).
+ */
+export const expenseMonthlyUah = (expense: FinanceExpense, rates: FxRates): number | null => {
+  const uah = expenseUahAmount(expense, rates);
+  if (uah === null) return null;
+  return uah / BILLING_PERIOD_MONTHS[billingPeriodOf(expense)];
 };
 
 // --- Team payouts overlay (finance_payout_meta) ----------------------------

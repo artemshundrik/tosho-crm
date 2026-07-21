@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Banknote,
@@ -14,6 +14,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { FinanceToolbarProvider } from "@/features/finances/financeToolbar";
 import { SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
@@ -112,20 +114,30 @@ export default function FinancesPage() {
     [setSearchParams]
   );
 
+  // Дії активного розділу, які він публікує в шапку сторінки.
+  const [sectionActions, setSectionActions] = useState<ReactNode>(null);
+
   return (
     <div className="w-full pb-20 md:pb-0">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-          <Banknote className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div>
-          <div className="text-lg font-semibold text-foreground">Фінанси</div>
-          <div className="text-sm text-muted-foreground">
-            Облік коштів по контурах: ТОВ, ФОПи, готівка, крипта.
+      <UnifiedPageToolbar
+        className="mb-4"
+        topLeft={
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+              <Banknote className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-foreground">Фінанси</div>
+              <div className="text-sm text-muted-foreground">
+                Облік коштів по контурах: ТОВ, ФОПи, готівка, крипта.
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+        topRight={sectionActions}
+      />
 
+      <FinanceToolbarProvider onActionsChange={setSectionActions}>
       <Tabs value={activeSection} onValueChange={handleSectionChange}>
         <TabsList
           className={cn(
@@ -155,8 +167,10 @@ export default function FinancesPage() {
           })}
         </TabsList>
 
+        {/* Корінь сторінки — pb-20 md:pb-0, тож на десктопі відступ знизу
+            винен собі кожен розділ сам, інакше останній рядок лягає впритул. */}
         {visibleSections.map((section) => (
-          <TabsContent key={section.id} value={section.id} className="mt-0">
+          <TabsContent key={section.id} value={section.id} className="mt-0 pb-8">
             {section.id === "settings" ? (
               <FinanceSettings teamId={teamId} canSeeSensitive={canSeeSensitive} />
             ) : section.id === "sales" ? (
@@ -185,6 +199,7 @@ export default function FinancesPage() {
           </TabsContent>
         ))}
       </Tabs>
+      </FinanceToolbarProvider>
     </div>
   );
 }

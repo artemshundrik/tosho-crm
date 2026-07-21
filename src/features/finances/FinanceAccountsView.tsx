@@ -3,9 +3,11 @@ import { toast } from "sonner";
 import { Loader2, ShieldAlert, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
+import { useFxRates } from "@/lib/fxRates";
 import { listAccounts, listExpenses, listPayments } from "./api";
 import {
   ACCOUNT_KIND_LABELS,
+  expenseUahAmount,
   paymentUahValue,
   type FinanceAccount,
   type FinanceExpense,
@@ -18,6 +20,7 @@ const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccountsViewProps) {
+  const rates = useFxRates();
   const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
   const [payments, setPayments] = React.useState<FinancePayment[]>([]);
   const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
@@ -59,10 +62,11 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
     const map = new Map<string, number>();
     for (const e of expenses) {
       if (!e.accountId) continue;
-      map.set(e.accountId, (map.get(e.accountId) ?? 0) + e.amount);
+      // Валютні витрати переводимо в гривню, інакше $200 віднімались би як 200 ₴.
+      map.set(e.accountId, (map.get(e.accountId) ?? 0) + (expenseUahAmount(e, rates) ?? 0));
     }
     return map;
-  }, [expenses]);
+  }, [expenses, rates]);
 
   const grandBalance = React.useMemo(
     () => visibleAccounts.reduce((s, a) => s + ((inByAccount.get(a.id) ?? 0) - (outByAccount.get(a.id) ?? 0)), 0),

@@ -3,7 +3,9 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import { isFxCurrency, type FxCurrency } from "@/lib/fxRates";
 import type {
+  BillingPeriod,
   ExpenseCategoryKind,
   FinanceAccount,
   FinanceAccountKind,
@@ -668,7 +670,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,vat_amount,expense_date,is_recurring,recurrence,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -678,10 +680,15 @@ type ExpenseRow = {
   category_id: string | null;
   supplier_name: string | null;
   amount: number | string | null;
+  currency: string | null;
+  fx_rate: number | string | null;
   vat_amount: number | string | null;
   expense_date: string;
   is_recurring: boolean | null;
   recurrence: string | null;
+  next_charge_date: string | null;
+  vendor_key: string | null;
+  logo_url: string | null;
   notes: string | null;
   file: string | null;
   entered_by: string | null;
@@ -711,10 +718,15 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   categoryId: row.category_id ?? null,
   supplierName: row.supplier_name ?? null,
   amount: toNumber(row.amount),
+  currency: isFxCurrency(row.currency) ? row.currency : "UAH",
+  fxRate: toNullableNumber(row.fx_rate),
   vatAmount: toNumber(row.vat_amount),
   expenseDate: row.expense_date,
   isRecurring: Boolean(row.is_recurring),
   recurrence: row.recurrence ?? null,
+  nextChargeDate: row.next_charge_date ?? null,
+  vendorKey: row.vendor_key ?? null,
+  logoUrl: row.logo_url ?? null,
   notes: row.notes ?? null,
   file: row.file ?? null,
   enteredBy: row.entered_by ?? null,
@@ -765,10 +777,15 @@ export type ExpenseInput = {
   categoryId?: string | null;
   supplierName?: string | null;
   amount: number;
+  currency?: FxCurrency;
+  fxRate?: number | null;
   vatAmount?: number;
   expenseDate: string;
   isRecurring: boolean;
-  recurrence?: string | null;
+  recurrence?: BillingPeriod | null;
+  nextChargeDate?: string | null;
+  vendorKey?: string | null;
+  logoUrl?: string | null;
   notes?: string | null;
   enteredBy?: string | null;
   allocations: ExpenseAllocationInput[];
@@ -780,10 +797,16 @@ const serializeExpense = (input: ExpenseInput) => ({
   category_id: input.categoryId || null,
   supplier_name: input.supplierName?.trim() || null,
   amount: input.amount,
+  currency: input.currency ?? "UAH",
+  fx_rate: input.fxRate ?? null,
   vat_amount: input.vatAmount ?? 0,
   expense_date: input.expenseDate,
   is_recurring: input.isRecurring,
   recurrence: input.isRecurring ? input.recurrence || "monthly" : null,
+  // Дата наступного списання має сенс лише для сталої витрати/підписки.
+  next_charge_date: input.isRecurring ? input.nextChargeDate || null : null,
+  vendor_key: input.vendorKey || null,
+  logo_url: input.logoUrl?.trim() || null,
   notes: input.notes?.trim() || null,
 });
 
