@@ -204,7 +204,7 @@ export function TeamPulsePanel({
     };
   }, [workspaceId, range, rangeMeta.days]);
 
-  const { groups, totalActions, activeUsers, trend } = useMemo(() => {
+  const { groups, totalActions, trend } = useMemo(() => {
     const memberIds = memberIdsRef.current;
     const scoped = rows.filter(
       (row) =>
@@ -266,13 +266,45 @@ export function TeamPulsePanel({
     return {
       groups: nextGroups,
       totalActions: scoped.length,
-      activeUsers: byUser.size,
       trend: trendData,
     };
   }, [rows, rangeMeta.bucket]);
 
   const onlineNow = people.filter((person) => person.online).length;
-  const maxGroupTotal = groups[0]?.total ?? 0;
+
+  // Actions come from activity_log, minutes from user_activity_daily. Ranking on
+  // actions alone hid anyone who was present but did not trigger an event (they
+  // still fed the "Активні хвилини" KPI, which looked like a contradiction).
+  const rankedPeople = useMemo(() => {
+    const byId = new Map<
+      string,
+      {
+        userId: string;
+        actions: number;
+        minutes: number;
+        lastActiveAt: string;
+        byCategory: PulseGroup["byCategory"];
+      }
+    >();
+    for (const group of groups) {
+      byId.set(group.userId, {
+        userId: group.userId,
+        actions: group.total,
+        minutes: minutesByUser.get(group.userId) ?? 0,
+        lastActiveAt: group.lastActiveAt,
+        byCategory: group.byCategory,
+      });
+    }
+    for (const [userId, minutes] of minutesByUser) {
+      if (minutes <= 0 || byId.has(userId) || !memberIdsRef.current.has(userId)) continue;
+      byId.set(userId, { userId, actions: 0, minutes, lastActiveAt: "", byCategory: [] });
+    }
+    return Array.from(byId.values()).sort(
+      (a, b) => b.actions - a.actions || b.minutes - a.minutes
+    );
+  }, [groups, minutesByUser]);
+
+  const maxGroupTotal = rankedPeople[0]?.actions ?? 0;
 
 
   return (
@@ -297,7 +329,7 @@ export function TeamPulsePanel({
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} hint="просто зараз" />
-          <KpiTile icon={Users} label="Активних людей" value={activeUsers} hint={rangeMeta.label.toLowerCase()} />
+          <KpiTile icon={Users} label="Активних людей" value={rankedPeople.length} hint={rangeMeta.label.toLowerCase()} />
           <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText hint={rangeMeta.label.toLowerCase()} />
           <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={rangeMeta.label.toLowerCase()} />
         </div>
@@ -360,14 +392,13 @@ export function TeamPulsePanel({
         </div>
       ) : (
         <div className="flex flex-col border-t border-border/60">
-          {groups.map((group) => {
-            const person = resolvePerson(group.userId);
-            const minutes = minutesByUser.get(group.userId) ?? 0;
+          {rankedPeople.map((entry) => {
+            const person = resolvePerson(entry.userId);
             return (
               <button
-                key={group.userId}
+                key={entry.userId}
                 type="button"
-                onClick={() => onSelectPerson(group.userId)}
+                onClick={() => onSelectPerson(entry.userId)}
                 title={`Відкрити картку: ${person.displayName}`}
                 className="flex w-full cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:px-5 lg:px-6"
               >
@@ -389,20 +420,23 @@ export function TeamPulsePanel({
                     <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
                     {person.online ? <span className="tone-text-success text-[11px] font-medium">онлайн</span> : null}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="truncate">Остання дія {formatRelative(group.lastActiveAt)}</span>
-                    {minutes > 0 ? (
-                      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                        <Clock className="h-3 w-3" />
-                        {formatMinutes(minutes)}
-                      </span>
-                    ) : null}
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {entry.actions > 0
+                        ? `Остання дія ${formatRelative(entry.lastActiveAt)}`
+                        : "Був у CRM, без дій"}
+                    </span>
                   </div>
                 </div>
-                <CategoryBreakdown byCategory={group.byCategory} total={group.total} maxTotal={maxGroupTotal} />
-                <div className="ml-1 flex shrink-0 items-center gap-2">
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
-                    {group.total}
+                <CategoryBreakdown byCategory={entry.byCategory} total={entry.actions} maxTotal={maxGroupTotal} />
+                <div className="ml-1 flex shrink-0 flex-col items-end gap-0.5 text-right">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold tabular-nums text-foreground">
+                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                    {entry.actions} дій
+                  </span>
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {formatMinutes(entry.minutes)}
                   </span>
                 </div>
               </button>
