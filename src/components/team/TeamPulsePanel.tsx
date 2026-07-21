@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Radio,
   TrendingUp,
@@ -17,6 +19,13 @@ import {
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc } from "@/lib/toshoRpc";
+import {
+  bucketOf,
+  formatPulsePeriod,
+  getPulsePeriod,
+  toDateOnly,
+  type PulseRange,
+} from "@/components/team/pulsePeriod";
 import { cn } from "@/lib/utils";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
@@ -40,8 +49,6 @@ export type PulsePerson = {
   jobRole: string | null;
   online: boolean;
 };
-
-type PulseRange = "day" | "week" | "month" | "year";
 
 type ActivityRow = {
   user_id?: string | null;
@@ -69,24 +76,12 @@ type PulseGroup = {
   events: PulseEvent[];
 };
 
-const RANGE_OPTIONS: { value: PulseRange; label: string; days: number; bucket: "hour" | "day" }[] = [
-  { value: "day", label: "24 години", days: 1, bucket: "hour" },
-  { value: "week", label: "7 днів", days: 7, bucket: "day" },
-  { value: "month", label: "30 днів", days: 30, bucket: "day" },
-  { value: "year", label: "Рік", days: 365, bucket: "day" },
+const RANGE_OPTIONS: { value: PulseRange; label: string }[] = [
+  { value: "day", label: "День" },
+  { value: "week", label: "Тиждень" },
+  { value: "month", label: "Місяць" },
+  { value: "year", label: "Рік" },
 ];
-
-function rangeStartMs(days: number) {
-  return Date.now() - days * 24 * 60 * 60 * 1000;
-}
-
-function toDateOnly(ms: number) {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function formatMinutes(min: number) {
   if (!min || min <= 0) return "0 хв";
@@ -123,7 +118,8 @@ export function TeamPulsePanel({
   people: PulsePerson[];
   resolvePerson: (userId: string) => PulsePerson;
 }) {
-  const [range, setRange] = useState<PulseRange>("week");
+  const [range, setRange] = useState<PulseRange>("day");
+  const [periodOffset, setPeriodOffset] = useState(0);
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalMinutes, setTotalMinutes] = useState(0);
@@ -131,7 +127,9 @@ export function TeamPulsePanel({
   const memberIdsRef = useRef<Set<string>>(new Set());
   memberIdsRef.current = new Set(people.map((p) => p.userId));
 
-  const rangeMeta = RANGE_OPTIONS.find((option) => option.value === range) ?? RANGE_OPTIONS[1];
+  const period = useMemo(() => getPulsePeriod(range, periodOffset), [range, periodOffset]);
+  const periodLabel = formatPulsePeriod(range, periodOffset, period.start, period.end);
+  const bucket = bucketOf(range);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -139,12 +137,14 @@ export function TeamPulsePanel({
     const load = async () => {
       setLoading(true);
       try {
-        const startIso = new Date(rangeStartMs(rangeMeta.days)).toISOString();
+        const startIso = period.start.toISOString();
+        const endIso = period.end.toISOString();
         const build = (scope: "team" | "workspace" | "none") => {
           let query = supabase
             .from("activity_log")
             .select("user_id,title,action,entity_type,href,created_at")
             .gte("created_at", startIso)
+            .lt("created_at", endIso)
             .order("created_at", { ascending: false })
             .limit(2000);
           if (scope === "team") query = query.eq("team_id", workspaceId);
@@ -178,8 +178,8 @@ export function TeamPulsePanel({
         }>("get_team_pulse_summary", {
           p_workspace_id: workspaceId,
           p_team_id: null,
-          p_from: toDateOnly(rangeStartMs(rangeMeta.days)),
-          p_to: toDateOnly(Date.now() + 24 * 60 * 60 * 1000),
+          p_from: toDateOnly(period.start),
+          p_to: toDateOnly(period.end),
         });
         if (cancelled) return;
         const summary = data;
@@ -202,7 +202,7 @@ export function TeamPulsePanel({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, range, rangeMeta.days]);
+  }, [workspaceId, period.start, period.end]);
 
   const { groups, totalActions, trend } = useMemo(() => {
     const memberIds = memberIdsRef.current;
@@ -250,12 +250,14 @@ export function TeamPulsePanel({
 
     // Time buckets for the trend chart.
     const buckets = new Map<string, number>();
-    const isHour = rangeMeta.bucket === "hour";
+    const isHour = bucket === "hour";
     for (const row of scoped) {
       if (!row.created_at) continue;
       const date = new Date(row.created_at);
       const key = isHour
         ? `${date.getHours().toString().padStart(2, "0")}:00`
+        : bucket === "month"
+        ? date.toLocaleDateString("uk-UA", { month: "short" })
         : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
       buckets.set(key, (buckets.get(key) ?? 0) + 1);
     }
@@ -268,7 +270,7 @@ export function TeamPulsePanel({
       totalActions: scoped.length,
       trend: trendData,
     };
-  }, [rows, rangeMeta.bucket]);
+  }, [rows, bucket]);
 
   const onlineNow = people.filter((person) => person.online).length;
 
@@ -311,27 +313,61 @@ export function TeamPulsePanel({
     <div className="flex flex-col">
       {/* Range + KPIs */}
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 px-4 pb-8 pt-4 md:px-5 lg:px-6">
-        <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
-          {RANGE_OPTIONS.map((option) => (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
+            {RANGE_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={range === option.value}
+                onClick={() => {
+                  setRange(option.value);
+                  setPeriodOffset(0);
+                }}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Step through periods: "сьогодні" answers the daily question, one
+              click back answers "а вчора?" without a second control. */}
+          <div className="flex items-center gap-1">
             <Button
-              key={option.value}
               type="button"
-              variant="segmented"
-              size="xs"
-              aria-pressed={range === option.value}
-              onClick={() => setRange(option.value)}
-              className={SEGMENTED_TRIGGER_SM}
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Попередній період"
+              onClick={() => setPeriodOffset((prev) => prev - 1)}
             >
-              {option.label}
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-          ))}
+            <span className="min-w-[150px] text-center text-sm font-medium text-foreground">
+              {periodLabel}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Наступний період"
+              disabled={periodOffset >= 0}
+              onClick={() => setPeriodOffset((prev) => Math.min(0, prev + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} hint="просто зараз" />
-          <KpiTile icon={Users} label="Активних людей" value={rankedPeople.length} hint={rangeMeta.label.toLowerCase()} />
-          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText hint={rangeMeta.label.toLowerCase()} />
-          <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={rangeMeta.label.toLowerCase()} />
+          <KpiTile icon={Users} label="Активних людей" value={rankedPeople.length} hint={periodLabel.toLowerCase()} />
+          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText hint={periodLabel.toLowerCase()} />
+          <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={periodLabel.toLowerCase()} />
         </div>
 
         {trend.length > 1 ? (
