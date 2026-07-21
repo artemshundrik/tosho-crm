@@ -365,31 +365,46 @@ export type OrderCreationDraft = {
   selectableItems: DerivedOrderItem[];
 };
 
-/** Одна позиція для замовлення, створеного вручну (без прорахунку). */
+/** Одне нанесення (друк) на товарі — метод/позиція з каталогу, розмір у мм. */
+export type ManualOrderPrintApplication = {
+  methodId?: string | null;
+  methodLabel?: string | null;
+  positionId?: string | null;
+  positionLabel?: string | null;
+  width?: string | null;
+  height?: string | null;
+};
+
+/** Один товар замовлення, створеного вручну (без прорахунку). Товар — з каталогу. */
 export type ManualOrderItemInput = {
   name: string;
   description?: string | null;
   qty: number;
   unit: string;
   unitPrice: number;
-};
-
-/** Одне нанесення (друк) — вільні поля, як у прорахунку. */
-export type ManualOrderPrintApplication = {
-  method: string;
-  position: string;
-  width: string;
-  height: string;
+  catalogModelId?: string | null;
+  imageUrl?: string | null;
+  thumbUrl?: string | null;
+  /** Нанесення саме цього товару. Порожньо = товар без друку. */
+  printApplications?: ManualOrderPrintApplication[];
 };
 
 /**
- * Вибір дизайну на етапі «Дизайн» (актуально лише коли є друк):
+ * Вибір дизайну на етапі «Дизайн» (актуально лише коли хоч один товар із друком):
  * none — без дизайн-задачі; existing — привʼязати наявну; create — створити нову.
  */
 export type ManualOrderDesignChoice =
   | { mode: "none" }
-  | { mode: "existing"; designTaskId: string; designTaskNumber?: string | null }
-  | { mode: "create"; designTaskType: DesignTaskType; brief?: string | null };
+  | { mode: "existing"; designTaskId: string; designTaskNumber?: string | null; designApproved?: boolean }
+  | {
+      mode: "create";
+      designTaskType: DesignTaskType;
+      brief?: string | null;
+      assigneeUserId?: string | null;
+      assigneeLabel?: string | null;
+      /** ISO-рядок дедлайну (локальний wall-clock), напр. 2026-07-30T10:00:00. */
+      deadline?: string | null;
+    };
 
 export type CreateManualOrderParams = {
   teamId: string;
@@ -411,13 +426,11 @@ export type CreateManualOrderParams = {
   deliveryDetails?: Json | null;
   /** Пакування — вільний опис. */
   packaging?: string | null;
-  /** Нанесення (друк). Порожній масив = без друку. */
-  printApplications?: ManualOrderPrintApplication[];
-  /** Вибір дизайну (враховується лише коли є друк). */
+  /** Вибір дизайну (враховується лише коли хоч один товар із нанесенням). */
   design?: ManualOrderDesignChoice;
 };
 
-/** Селектований елемент для «Обрати готовий дизайн». */
+/** Селектований елемент для «Дизайн вже готовий». */
 export type CustomerDesignTaskOption = {
   id: string;
   number: string | null;
@@ -425,6 +438,13 @@ export type CustomerDesignTaskOption = {
   status: DesignStatus;
   type: DesignTaskType | null;
   createdAt: string | null;
+  /** Дизайн реально «готовий» — затверджений. */
+  isApproved: boolean;
+  /**
+   * Товар, для якого робився цей дизайн. Дістається лише через прорахунок задачі
+   * (сама дизайн-задача товар НЕ зберігає), тому часто null — це нормально.
+   */
+  product: { name: string; catalogModelId: string | null; imageUrl: string | null } | null;
 };
 
 const normalizeLookupKey = (value?: string | null) =>
@@ -1655,13 +1675,36 @@ async function getNextManualOrderNumber(teamId: string) {
  */
 export async function createManualOrder(params: CreateManualOrderParams) {
   const items = params.items
-    .map((item) => ({
-      name: (item.name ?? "").trim(),
-      description: item.description?.trim() || null,
-      qty: Math.max(0, Number(item.qty) || 0),
-      unit: normalizeUnitLabel(item.unit || "шт."),
-      unitPrice: Math.max(0, Number(item.unitPrice) || 0),
-    }))
+    .map((item) => {
+      // Нанесення цього товару: тримаємо і id (для звʼязку з каталогом), і label (для рендеру).
+      const prints = (item.printApplications ?? [])
+        .map((app) => ({
+          method_id: app.methodId?.trim() || null,
+          print_position_id: app.positionId?.trim() || null,
+          print_width_mm: app.width?.trim() ? Number(app.width) || null : null,
+          print_height_mm: app.height?.trim() ? Number(app.height) || null : null,
+          label: [
+            app.methodLabel?.trim() || "Нанесення",
+            app.positionLabel?.trim() || "",
+            app.width?.trim() || app.height?.trim() ? `${app.width?.trim() || "?"}×${app.height?.trim() || "?"} мм` : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        }))
+        .filter((app) => app.method_id || app.print_position_id || app.print_width_mm || app.print_height_mm);
+
+      return {
+        name: (item.name ?? "").trim(),
+        description: item.description?.trim() || null,
+        qty: Math.max(0, Number(item.qty) || 0),
+        unit: normalizeUnitLabel(item.unit || "шт."),
+        unitPrice: Math.max(0, Number(item.unitPrice) || 0),
+        catalogModelId: item.catalogModelId?.trim() || null,
+        imageUrl: item.imageUrl?.trim() || null,
+        thumbUrl: item.thumbUrl?.trim() || null,
+        prints,
+      };
+    })
     .filter((item) => item.name.length > 0);
 
   if (!params.customerId?.trim()) {
@@ -1710,28 +1753,9 @@ export async function createManualOrder(params: CreateManualOrderParams) {
   const orderTotal = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
   const orderNumber = await getNextManualOrderNumber(params.teamId);
 
-  // Нанесення (друк) — вільні поля, як у прорахунку. Порожньо = без друку.
-  const printApplications = (params.printApplications ?? [])
-    .map((app) => ({
-      method: (app.method ?? "").trim(),
-      position: (app.position ?? "").trim(),
-      width: (app.width ?? "").trim(),
-      height: (app.height ?? "").trim(),
-    }))
-    .filter((app) => app.method || app.position || app.width || app.height);
-  const hasPrint = printApplications.length > 0;
-  const itemMethods = hasPrint
-    ? printApplications.map((app) => {
-        const size = app.width || app.height ? `${app.width || "?"}×${app.height || "?"} мм` : "";
-        const label = [app.method || "Нанесення", app.position, size].filter(Boolean).join(" · ");
-        return {
-          label,
-          method_id: null,
-          print_width_mm: app.width ? Number(app.width) || null : null,
-          print_height_mm: app.height ? Number(app.height) || null : null,
-        };
-      })
-    : null;
+  // «Є друк» = хоч один товар має нанесення (як у прорахунку — похідне, без окремого прапорця).
+  const printCount = items.reduce((sum, item) => sum + item.prints.length, 0);
+  const hasPrint = printCount > 0;
 
   const customerName = customer.name?.trim?.() || customer.legal_name?.trim?.() || "Контрагент без назви";
   const customerLogoUrl = customer.logo_url?.trim?.() ?? null;
@@ -1741,6 +1765,11 @@ export async function createManualOrder(params: CreateManualOrderParams) {
 
   // Дизайн враховується лише коли є друк.
   const designChoice: ManualOrderDesignChoice = hasPrint ? params.design ?? { mode: "none" } : { mode: "none" };
+
+  // Етап «Дизайн»: очікує лише тоді, коли ми щойно завели нову дизайн-задачу.
+  // Готовий дизайн (або відсутність друку) => етап пройдено, рухаємось до Виробництва.
+  const designPending = designChoice.mode === "create";
+  const designAlreadyApproved = designChoice.mode === "existing" && designChoice.designApproved === true;
 
   const orderPayload = {
     id: orderId,
@@ -1763,7 +1792,7 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     delivery_type: params.deliveryType?.trim() || null,
     delivery_details: params.deliveryDetails ?? null,
     packaging: params.packaging?.trim() || null,
-    order_status: "on_calculation",
+    order_status: designPending ? "in_progress" : "approved",
     payment_status: "awaiting_payment",
     delivery_status: "not_shipped",
     contact_email: contactEmail,
@@ -1779,9 +1808,9 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     documents: { contract: false, invoice: items.length > 0, specification: false, techCard: false },
     readiness_steps: [],
     blockers: [],
-    readiness_column: "ready",
-    has_approved_visualization: false,
-    has_approved_layout: false,
+    readiness_column: designPending ? "design" : "ready",
+    has_approved_visualization: designAlreadyApproved,
+    has_approved_layout: designAlreadyApproved,
     created_at: nowIso,
     updated_at: nowIso,
   };
@@ -1823,10 +1852,10 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     unit: item.unit,
     unit_price: item.unitPrice,
     line_total: item.qty * item.unitPrice,
-    methods: itemMethods,
-    catalog_model_id: null,
-    image_url: null,
-    thumb_url: null,
+    methods: item.prints.length > 0 ? item.prints : null,
+    catalog_model_id: item.catalogModelId,
+    image_url: item.imageUrl,
+    thumb_url: item.thumbUrl,
   }));
 
   const { error: insertItemsError } = await supabase.schema("tosho").from("order_items").insert(orderItemsPayload);
@@ -1854,9 +1883,12 @@ export async function createManualOrder(params: CreateManualOrderParams) {
       customerLogoUrl,
       designTaskType: designChoice.designTaskType,
       brief: designChoice.brief ?? null,
+      assigneeUserId: designChoice.assigneeUserId ?? null,
+      assigneeLabel: designChoice.assigneeLabel ?? null,
+      deadline: designChoice.deadline ?? null,
       subject: `Дизайн для ${orderNumber} · ${customerName}`,
       orderId,
-      methodsCount: printApplications.length,
+      methodsCount: printCount,
     });
   }
 
@@ -1897,43 +1929,111 @@ export async function listCustomerDesignTasks(teamId: string, customerId: string
       .filter(Boolean)
   );
 
-  const { data, error } = await supabase
-    .from("activity_log")
-    .select(
-      "id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,customer_id:metadata->>customer_id,quote_id:metadata->>quote_id"
-    )
-    .eq("team_id", teamId)
-    .eq("action", "design_task")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (error) throw error;
+  type DesignTaskRow = {
+    id: string;
+    title?: string | null;
+    created_at?: string | null;
+    status?: string | null;
+    design_task_number?: string | null;
+    design_task_type?: string | null;
+    customer_id?: string | null;
+    quote_id?: string | null;
+  };
+  const columns =
+    "id,title,created_at,status:metadata->>status,design_task_number:metadata->>design_task_number,design_task_type:metadata->>design_task_type,customer_id:metadata->>customer_id,quote_id:metadata->>quote_id";
+  const baseQuery = () =>
+    supabase
+      .from("activity_log")
+      .select(columns)
+      .eq("team_id", teamId)
+      .eq("action", "design_task")
+      .order("created_at", { ascending: false })
+      .limit(200);
 
-  const rows =
-    (((data ?? []) as unknown) as Array<{
-      id: string;
-      title?: string | null;
-      created_at?: string | null;
-      status?: string | null;
-      design_task_number?: string | null;
-      design_task_type?: string | null;
-      customer_id?: string | null;
-      quote_id?: string | null;
-    }>) ?? [];
+  // ВАЖЛИВО: фільтруємо на сервері. Раніше бралися 200 найновіших задач по всій
+  // команді й фільтрувались на клієнті — у замовника зі старшими задачами
+  // список виходив порожній.
+  const byCustomer = await baseQuery().eq("metadata->>customer_id", customerId);
+  if (byCustomer.error) throw byCustomer.error;
 
-  return rows
-    .filter((row) => row.customer_id === customerId || (row.quote_id ? customerQuoteIds.has(row.quote_id) : false))
-    .map((row) => {
-      const statusRaw = (row.status ?? "new").trim().toLowerCase();
-      const status = (statusRaw in DESIGN_STATUS_LABELS ? statusRaw : "new") as DesignStatus;
-      return {
-        id: row.id,
-        number: row.design_task_number?.trim() || null,
-        title: row.title?.trim() || "Дизайн-задача",
-        status,
-        type: parseDesignTaskType(row.design_task_type),
-        createdAt: row.created_at ?? null,
-      } satisfies CustomerDesignTaskOption;
-    });
+  const quoteIds = Array.from(customerQuoteIds);
+  let byQuoteRows: unknown[] = [];
+  if (quoteIds.length > 0) {
+    try {
+      const byQuote = await baseQuery().in("metadata->>quote_id", quoteIds);
+      if (!byQuote.error) byQuoteRows = byQuote.data ?? [];
+    } catch {
+      // Фільтр по JSON-полю може не підтримуватись — тоді лишаємось на вибірці за customer_id.
+      byQuoteRows = [];
+    }
+  }
+
+  const merged = new Map<string, DesignTaskRow>();
+  for (const row of ([...(byCustomer.data ?? []), ...byQuoteRows] as unknown) as DesignTaskRow[]) {
+    if (row?.id && !merged.has(row.id)) merged.set(row.id, row);
+  }
+
+  const rows = Array.from(merged.values()).sort((a, b) =>
+    (b.created_at ?? "").localeCompare(a.created_at ?? "")
+  );
+
+  // Товар дизайн-задачі дістається ТІЛЬКИ через її прорахунок — сама задача його не
+  // зберігає (перевірено: 0 із 501 задачі має metadata.product). Тож підказка «цей
+  // дизайн робили для…» доступна лише для quote-linked задач.
+  const isUuid = (value?: string | null) =>
+    !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const linkedQuoteIds = Array.from(new Set(rows.map((row) => row.quote_id).filter(isUuid))) as string[];
+
+  const productByQuoteId = new Map<string, { name: string; catalogModelId: string | null; imageUrl: string | null }>();
+  if (linkedQuoteIds.length > 0) {
+    try {
+      const itemsResult = await supabase
+        .schema("tosho")
+        .from("quote_items")
+        .select("quote_id,name,catalog_model_id,position")
+        .in("quote_id", linkedQuoteIds)
+        .order("position", { ascending: true });
+      if (!itemsResult.error) {
+        const itemRows =
+          (((itemsResult.data ?? []) as unknown) as Array<{
+            quote_id?: string | null;
+            name?: string | null;
+            catalog_model_id?: string | null;
+          }>) ?? [];
+        const modelIds = Array.from(
+          new Set(itemRows.map((item) => item.catalog_model_id ?? "").filter(Boolean))
+        );
+        const modelsById = modelIds.length > 0 ? await listCatalogModelsByIds(modelIds) : new Map();
+        for (const item of itemRows) {
+          const quoteId = item.quote_id ?? "";
+          if (!quoteId || productByQuoteId.has(quoteId)) continue; // перша позиція = репрезентативна
+          const model = item.catalog_model_id ? modelsById.get(item.catalog_model_id) ?? null : null;
+          productByQuoteId.set(quoteId, {
+            name: item.name?.trim() || model?.name?.trim() || "Товар",
+            catalogModelId: item.catalog_model_id ?? null,
+            imageUrl: model?.thumb_url ?? model?.image_url ?? null,
+          });
+        }
+      }
+    } catch {
+      // Підказка про товар — необовʼязкова; без неї вибір дизайну все одно працює.
+    }
+  }
+
+  return rows.map((row) => {
+    const statusRaw = (row.status ?? "new").trim().toLowerCase();
+    const status = (statusRaw in DESIGN_STATUS_LABELS ? statusRaw : "new") as DesignStatus;
+    return {
+      id: row.id,
+      number: row.design_task_number?.trim() || null,
+      title: row.title?.trim() || "Дизайн-задача",
+      status,
+      type: parseDesignTaskType(row.design_task_type),
+      createdAt: row.created_at ?? null,
+      isApproved: status === "approved",
+      product: isUuid(row.quote_id) ? productByQuoteId.get(row.quote_id as string) ?? null : null,
+    } satisfies CustomerDesignTaskOption;
+  });
 }
 
 /**
@@ -1950,6 +2050,9 @@ async function createStandaloneDesignTaskForOrder(params: {
   customerLogoUrl: string | null;
   designTaskType: DesignTaskType;
   brief: string | null;
+  assigneeUserId: string | null;
+  assigneeLabel: string | null;
+  deadline: string | null;
   subject: string;
   orderId: string;
   methodsCount: number;
@@ -1969,10 +2072,10 @@ async function createStandaloneDesignTaskForOrder(params: {
       design_task_number: number,
       quote_id: null,
       order_id: params.orderId,
-      assignee_user_id: null,
-      assignee_label: null,
+      assignee_user_id: params.assigneeUserId,
+      assignee_label: params.assigneeLabel,
       assignee_avatar_url: null,
-      assigned_at: null,
+      assigned_at: params.assigneeUserId ? createdAtIso : null,
       manager_user_id: params.managerUserId,
       manager_label: params.managerLabel?.trim() || actorName,
       customer_id: params.customerId,
@@ -1982,13 +2085,13 @@ async function createStandaloneDesignTaskForOrder(params: {
       design_task_type: params.designTaskType,
       design_brief: params.brief?.trim() || null,
       standalone_brief_files: [],
-      design_deadline: null,
-      deadline: null,
+      design_deadline: params.deadline,
+      deadline: params.deadline,
       methods_count: params.methodsCount,
       has_files: false,
     },
     [],
-    { assigneeUserId: null, resolveLabel: (id) => id, resolveAvatar: () => null }
+    { assigneeUserId: params.assigneeUserId, resolveLabel: (id) => id, resolveAvatar: () => null }
   );
 
   const { data, error } = await supabase
