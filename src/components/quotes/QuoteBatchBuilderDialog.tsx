@@ -41,6 +41,8 @@ import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/custom
 import {
   QuoteDeliveryFields,
   createEmptyQuoteDeliveryDetails,
+  getQuoteDeliveryIssues,
+  sanitizeQuoteDeliveryDetails,
   type QuoteDeliveryDetails,
 } from "@/components/quotes/QuoteDeliveryFields";
 import {
@@ -324,64 +326,9 @@ const parseDateTimeInput = (value: string) => {
 
 const createEmptyDeliveryDetails = createEmptyQuoteDeliveryDetails;
 
-const trimDelivery = (value?: string | null) => value?.trim() ?? "";
-
-const getDeliveryIssues = (deliveryType?: string | null, details?: DeliveryDetails | null) => {
-  const deliveryDetails = details ?? createEmptyDeliveryDetails();
-  const hasRegion = trimDelivery(deliveryDetails.region).length > 0;
-  const hasCity = trimDelivery(deliveryDetails.city).length > 0;
-  const hasAddress = trimDelivery(deliveryDetails.address).length > 0;
-  const hasStreet = trimDelivery(deliveryDetails.street).length > 0;
-  const hasNpDeliveryType = trimDelivery(deliveryDetails.npDeliveryType).length > 0;
-
-  if (deliveryType === "nova_poshta") {
-    if (!hasCity) return "для Нової пошти заповніть місто";
-    if (!hasNpDeliveryType) return "для Нової пошти оберіть тип доставки";
-    if (deliveryDetails.npDeliveryType === "address" && !hasStreet) return "для адресної доставки заповніть вулицю";
-    if (deliveryDetails.npDeliveryType !== "address" && !hasAddress) return "для Нової пошти оберіть відділення / поштомат";
-  }
-  if (deliveryType === "taxi") {
-    if (!hasCity) return "для таксі / Uklon заповніть місто";
-    if (!hasAddress) return "для таксі / Uklon заповніть адресу";
-  }
-  if (deliveryType === "cargo") {
-    if (!hasRegion) return "для вантажного перевезення заповніть область";
-    if (!hasCity) return "для вантажного перевезення заповніть місто";
-    if (!hasAddress) return "для вантажного перевезення заповніть адресу";
-  }
-  return null;
-};
-
-const sanitizeDeliveryDetails = (deliveryType?: string | null, details?: DeliveryDetails | null) => {
-  if (!deliveryType) return null;
-  const deliveryDetails = details ?? createEmptyDeliveryDetails();
-  const sanitizedDeliveryDetails: DeliveryDetails = createEmptyDeliveryDetails();
-  sanitizedDeliveryDetails.payer = trimDelivery(deliveryDetails.payer);
-  if (deliveryType === "nova_poshta") {
-    sanitizedDeliveryDetails.region = trimDelivery(deliveryDetails.region);
-    sanitizedDeliveryDetails.city = trimDelivery(deliveryDetails.city);
-    sanitizedDeliveryDetails.npDeliveryType = trimDelivery(deliveryDetails.npDeliveryType);
-    sanitizedDeliveryDetails.street =
-      sanitizedDeliveryDetails.npDeliveryType === "address" ? trimDelivery(deliveryDetails.street) : "";
-    sanitizedDeliveryDetails.address =
-      sanitizedDeliveryDetails.npDeliveryType === "address" ? "" : trimDelivery(deliveryDetails.address);
-    sanitizedDeliveryDetails.contactName = trimDelivery(deliveryDetails.contactName);
-    sanitizedDeliveryDetails.contactPhone = trimDelivery(deliveryDetails.contactPhone);
-    sanitizedDeliveryDetails.deliveryPointId = trimDelivery(deliveryDetails.deliveryPointId);
-    sanitizedDeliveryDetails.npCityRef = trimDelivery(deliveryDetails.npCityRef);
-    sanitizedDeliveryDetails.npWarehouseRef = trimDelivery(deliveryDetails.npWarehouseRef);
-  }
-  if (deliveryType === "taxi") {
-    sanitizedDeliveryDetails.city = trimDelivery(deliveryDetails.city);
-    sanitizedDeliveryDetails.address = trimDelivery(deliveryDetails.address);
-  }
-  if (deliveryType === "cargo") {
-    sanitizedDeliveryDetails.region = trimDelivery(deliveryDetails.region);
-    sanitizedDeliveryDetails.city = trimDelivery(deliveryDetails.city);
-    sanitizedDeliveryDetails.address = trimDelivery(deliveryDetails.address);
-  }
-  return sanitizedDeliveryDetails;
-};
+// Правила логістики живуть у QuoteDeliveryFields — спільні з формою замовлення.
+const getDeliveryIssues = getQuoteDeliveryIssues;
+const sanitizeDeliveryDetails = sanitizeQuoteDeliveryDetails;
 
 const sanitizeQuantity = (value: string) => value.replace(/[^\d]/g, "");
 

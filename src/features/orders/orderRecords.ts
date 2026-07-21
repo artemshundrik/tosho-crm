@@ -196,7 +196,20 @@ export type DerivedOrderRecord = {
   id: string;
   source: "stored" | "derived";
   quoteId: string;
+  /**
+   * Реальний привʼязаний прорахунок. null — замовлення створене без прорахунку
+   * (тоді quoteId вище дорівнює id самого замовлення, це лише fallback для ключів).
+   */
+  linkedQuoteId: string | null;
   quoteNumber: string;
+  /** Логістика: у ручних замовлень живе на самому замовленні, інакше — у прорахунку. */
+  deliveryType: string | null;
+  deliveryDetails: unknown | null;
+  /** Пакування — вільний опис (лише ручні замовлення). */
+  packaging: string | null;
+  /** Soft-link на дизайн-задачу, обрану/створену із замовлення. */
+  designTaskId: string | null;
+  designTaskNumber: string | null;
   customerId: string | null;
   customerName: string;
   customerLogoUrl: string | null;
@@ -318,6 +331,11 @@ type StoredOrderRow = {
   np_ttn_cost?: number | string | null;
   np_ttn_estimated_delivery?: string | null;
   np_ttn_created_at?: string | null;
+  delivery_type?: string | null;
+  delivery_details?: unknown;
+  packaging?: string | null;
+  design_task_id?: string | null;
+  design_task_number?: string | null;
   design_statuses?: string[] | null;
   documents?: {
     contract?: boolean;
@@ -625,7 +643,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1016,7 +1034,14 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       id: quote.id,
       source: "derived",
       quoteId: quote.id,
+      linkedQuoteId: quote.id,
       quoteNumber: quote.number ?? quote.id.slice(0, 8),
+      // Для derived-записів логістика приходить із самого прорахунку.
+      deliveryType: quote.delivery_type?.trim?.() || null,
+      deliveryDetails: quote.delivery_details ?? null,
+      packaging: null,
+      designTaskId: null,
+      designTaskNumber: null,
       customerId: quote.customer_id ?? null,
       customerName:
         customer?.name?.trim?.() ??
@@ -1385,7 +1410,13 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         id: order.id,
         source: "stored",
         quoteId: order.quote_id ?? order.id,
+        linkedQuoteId: order.quote_id ?? null,
         quoteNumber: order.quote_number?.trim() || order.quote_id?.slice(0, 8) || order.id.slice(0, 8),
+        deliveryType: order.delivery_type?.trim?.() || null,
+        deliveryDetails: order.delivery_details ?? null,
+        packaging: order.packaging?.trim?.() || null,
+        designTaskId: order.design_task_id?.trim?.() || null,
+        designTaskNumber: order.design_task_number?.trim?.() || null,
         customerId: order.customer_id?.trim?.() || null,
         customerName: order.customer_name?.trim() || "Контрагент без назви",
         customerLogoUrl:

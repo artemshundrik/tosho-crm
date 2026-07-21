@@ -52,6 +52,75 @@ export const createEmptyQuoteDeliveryDetails = (): QuoteDeliveryDetails => ({
   npWarehouseRef: "",
 });
 
+const trimDelivery = (value?: string | null) => value?.trim() ?? "";
+
+/**
+ * Обовʼязкові поля логістики за типом доставки. Спільне джерело правди для
+ * прорахунку і замовлення — щоб вимоги не розʼїхались між формами.
+ * Повертає текст проблеми або null, якщо все заповнено.
+ */
+export const getQuoteDeliveryIssues = (
+  deliveryType?: string | null,
+  details?: QuoteDeliveryDetails | null
+): string | null => {
+  const deliveryDetails = details ?? createEmptyQuoteDeliveryDetails();
+  const hasRegion = trimDelivery(deliveryDetails.region).length > 0;
+  const hasCity = trimDelivery(deliveryDetails.city).length > 0;
+  const hasAddress = trimDelivery(deliveryDetails.address).length > 0;
+  const hasStreet = trimDelivery(deliveryDetails.street).length > 0;
+  const hasNpDeliveryType = trimDelivery(deliveryDetails.npDeliveryType).length > 0;
+
+  if (deliveryType === "nova_poshta") {
+    if (!hasCity) return "для Нової пошти заповніть місто";
+    if (!hasNpDeliveryType) return "для Нової пошти оберіть тип доставки";
+    if (deliveryDetails.npDeliveryType === "address" && !hasStreet) return "для адресної доставки заповніть вулицю";
+    if (deliveryDetails.npDeliveryType !== "address" && !hasAddress) return "для Нової пошти оберіть відділення / поштомат";
+  }
+  if (deliveryType === "taxi") {
+    if (!hasCity) return "для таксі / Uklon заповніть місто";
+    if (!hasAddress) return "для таксі / Uklon заповніть адресу";
+  }
+  if (deliveryType === "cargo") {
+    if (!hasRegion) return "для вантажного перевезення заповніть область";
+    if (!hasCity) return "для вантажного перевезення заповніть місто";
+    if (!hasAddress) return "для вантажного перевезення заповніть адресу";
+  }
+  return null;
+};
+
+/** Лишає тільки релевантні для обраного типу доставки поля (решту чистить). */
+export const sanitizeQuoteDeliveryDetails = (
+  deliveryType?: string | null,
+  details?: QuoteDeliveryDetails | null
+): QuoteDeliveryDetails | null => {
+  if (!deliveryType) return null;
+  const deliveryDetails = details ?? createEmptyQuoteDeliveryDetails();
+  const sanitized: QuoteDeliveryDetails = createEmptyQuoteDeliveryDetails();
+  sanitized.payer = trimDelivery(deliveryDetails.payer);
+  if (deliveryType === "nova_poshta") {
+    sanitized.region = trimDelivery(deliveryDetails.region);
+    sanitized.city = trimDelivery(deliveryDetails.city);
+    sanitized.npDeliveryType = trimDelivery(deliveryDetails.npDeliveryType);
+    sanitized.street = sanitized.npDeliveryType === "address" ? trimDelivery(deliveryDetails.street) : "";
+    sanitized.address = sanitized.npDeliveryType === "address" ? "" : trimDelivery(deliveryDetails.address);
+    sanitized.contactName = trimDelivery(deliveryDetails.contactName);
+    sanitized.contactPhone = trimDelivery(deliveryDetails.contactPhone);
+    sanitized.deliveryPointId = trimDelivery(deliveryDetails.deliveryPointId);
+    sanitized.npCityRef = trimDelivery(deliveryDetails.npCityRef);
+    sanitized.npWarehouseRef = trimDelivery(deliveryDetails.npWarehouseRef);
+  }
+  if (deliveryType === "taxi") {
+    sanitized.city = trimDelivery(deliveryDetails.city);
+    sanitized.address = trimDelivery(deliveryDetails.address);
+  }
+  if (deliveryType === "cargo") {
+    sanitized.region = trimDelivery(deliveryDetails.region);
+    sanitized.city = trimDelivery(deliveryDetails.city);
+    sanitized.address = trimDelivery(deliveryDetails.address);
+  }
+  return sanitized;
+};
+
 export const NOVA_POSHTA_DELIVERY_TYPES = [
   { value: "branch", label: "Відділення" },
   { value: "locker", label: "Поштомат" },

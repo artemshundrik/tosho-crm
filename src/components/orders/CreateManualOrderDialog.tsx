@@ -33,6 +33,8 @@ import { useCatalogData } from "@/features/catalog/ProductCatalogPage/hooks/useC
 import {
   QuoteDeliveryFields,
   createEmptyQuoteDeliveryDetails,
+  getQuoteDeliveryIssues,
+  sanitizeQuoteDeliveryDetails,
   type QuoteDeliveryDetails,
 } from "@/components/quotes/QuoteDeliveryFields";
 import { ORDER_PAYMENT_METHOD_OPTIONS, ORDER_PAYMENT_TERMS_OPTIONS } from "@/features/orders/config";
@@ -499,6 +501,15 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
       return;
     }
 
+    // Логістика: ті самі обовʼязкові поля, що й у прорахунку.
+    if (deliveryType) {
+      const deliveryIssue = getQuoteDeliveryIssues(deliveryType, deliveryDetails);
+      if (deliveryIssue) {
+        setError(`Логістика: ${deliveryIssue}.`);
+        return;
+      }
+    }
+
     let design: ManualOrderDesignChoice = { mode: "none" };
     if (hasPrint) {
       if (designMode === "existing") {
@@ -540,7 +551,9 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         paymentTerms,
         incotermsCode: "FCA",
         deliveryType: deliveryType || null,
-        deliveryDetails: deliveryType ? (deliveryDetails as unknown as Json) : null,
+        deliveryDetails: deliveryType
+          ? (sanitizeQuoteDeliveryDetails(deliveryType, deliveryDetails) as unknown as Json)
+          : null,
         packaging: packaging.trim() || null,
         design,
         items: payloadItems,

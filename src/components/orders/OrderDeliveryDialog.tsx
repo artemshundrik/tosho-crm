@@ -32,6 +32,7 @@ import {
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { updateQuote } from "@/lib/toshoApi";
+import { supabase } from "@/lib/supabaseClient";
 
 export type OrderDeliverySnapshot = {
   deliveryType: string;
@@ -62,6 +63,12 @@ type OrderDeliveryDialogProps = {
   onOpenChange: (open: boolean) => void;
   teamId: string;
   quoteId: string;
+  /**
+   * Замовлення без прорахунку: логістика живе на самому замовленні, бо рядка
+   * в quotes для нього не існує. Тоді пишемо в tosho.orders за цим id.
+   */
+  orderId?: string | null;
+  storeOnOrder?: boolean;
   partyType: "customer" | "lead";
   /** null — сторону не резолвлено (старі ліди): пікер збережених адрес недоступний. */
   partyId: string | null;
@@ -80,6 +87,8 @@ export function OrderDeliveryDialog({
   onOpenChange,
   teamId,
   quoteId,
+  orderId = null,
+  storeOnOrder = false,
   partyType,
   partyId,
   initialDeliveryType,
@@ -200,12 +209,23 @@ export function OrderDeliveryDialog({
         }
       }
 
-      await updateQuote({
-        quoteId,
-        teamId,
-        deliveryType: deliveryType || null,
-        deliveryDetails: sanitized,
-      });
+      if (storeOnOrder && orderId) {
+        const deliveryPatch = { delivery_type: deliveryType || null, delivery_details: sanitized };
+        const { error: orderError } = await supabase
+          .schema("tosho")
+          .from("orders")
+          .update(deliveryPatch)
+          .eq("id", orderId)
+          .eq("team_id", teamId);
+        if (orderError) throw orderError;
+      } else {
+        await updateQuote({
+          quoteId,
+          teamId,
+          deliveryType: deliveryType || null,
+          deliveryDetails: sanitized,
+        });
+      }
       onSaved({ deliveryType, deliveryDetails: sanitized });
       onOpenChange(false);
       toast.success("Доставку оновлено");
@@ -223,7 +243,9 @@ export function OrderDeliveryDialog({
         <DialogHeader>
           <DialogTitle>Доставка замовлення</DialogTitle>
           <DialogDescription>
-            Змінюється і в прорахунку — замовлення та прорахунок показують одну адресу.
+            {storeOnOrder
+              ? "Зберігається в самому замовленні — воно створене без прорахунку."
+              : "Змінюється і в прорахунку — замовлення та прорахунок показують одну адресу."}
           </DialogDescription>
         </DialogHeader>
 

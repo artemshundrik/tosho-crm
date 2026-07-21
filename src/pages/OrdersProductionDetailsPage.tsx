@@ -1186,10 +1186,20 @@ export default function OrdersProductionDetailsPage() {
   }, [record?.npTtnNumber, record?.contactPhone]);
 
   useEffect(() => {
-    if (!teamId || !record?.quoteId) {
+    if (!teamId || !record) {
       setOrderDelivery(null);
       return;
     }
+    // Замовлення без прорахунку тримає логістику на самому замовленні —
+    // у quotes для нього рядка немає, тож туди ходити нема сенсу.
+    if (!record.linkedQuoteId) {
+      setOrderDelivery({
+        deliveryType: record.deliveryType ?? "",
+        deliveryDetails: parseQuoteDeliveryDetails(record.deliveryDetails),
+      });
+      return;
+    }
+    const linkedQuoteId = record.linkedQuoteId;
     let cancelled = false;
     const loadDelivery = async () => {
       const { data, error: deliveryError } = await supabase
@@ -1197,7 +1207,7 @@ export default function OrdersProductionDetailsPage() {
         .from("quotes")
         .select("delivery_type,delivery_details")
         .eq("team_id", teamId)
-        .eq("id", record.quoteId)
+        .eq("id", linkedQuoteId)
         .maybeSingle<{ delivery_type?: string | null; delivery_details?: unknown }>();
       if (cancelled) return;
       if (deliveryError) {
@@ -1214,7 +1224,7 @@ export default function OrdersProductionDetailsPage() {
     return () => {
       cancelled = true;
     };
-  }, [teamId, record?.quoteId]);
+  }, [teamId, record, record?.linkedQuoteId, record?.deliveryType, record?.deliveryDetails]);
 
   const refreshRecord = useCallback(async () => {
     if (!teamId || !id) return;
@@ -1797,6 +1807,20 @@ export default function OrdersProductionDetailsPage() {
           <div className="mt-2 text-sm text-muted-foreground">
             {record.designStatuses.join(", ") || "Задачі дизайну не знайдені"}
           </div>
+          {record.designTaskId ? (
+            <div className="mt-3 border-t border-border/50 pt-3">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Дизайн-задача</div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-sm"
+                onClick={() => navigate(`/design/${record.designTaskId}`)}
+              >
+                {record.designTaskNumber || "Відкрити дизайн-задачу"}
+              </Button>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="border-border/60 p-4">
@@ -1866,6 +1890,12 @@ export default function OrdersProductionDetailsPage() {
           ) : (
             <div className="mt-2 text-sm text-muted-foreground">Спосіб доставки не вказаний</div>
           )}
+          {record.packaging ? (
+            <div className="mt-3 border-t border-border/50 pt-3">
+              <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Пакування</div>
+              <div className="mt-1 text-sm text-foreground">{record.packaging}</div>
+            </div>
+          ) : null}
           {record.source === "stored" ? (
             <div className="mt-3 border-t border-border/50 pt-3">
               {record.npTtnNumber ? (
@@ -2642,6 +2672,8 @@ export default function OrdersProductionDetailsPage() {
           onOpenChange={setDeliveryDialogOpen}
           teamId={teamId}
           quoteId={record.quoteId}
+          orderId={record.id}
+          storeOnOrder={!record.linkedQuoteId}
           partyType={record.partyType}
           partyId={record.customerId}
           initialDeliveryType={orderDelivery?.deliveryType ?? ""}
