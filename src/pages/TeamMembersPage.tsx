@@ -16,7 +16,6 @@ import {
   AlertTriangle,
   Activity,
   Gift,
-  ChevronRight,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -2764,7 +2763,6 @@ export function TeamMembersPage() {
                             <span className="block truncate text-xs text-muted-foreground">{getJobRoleLabel(m.job_role ?? null)}</span>
                           </span>
                         </button>
-                        {isSelected ? <ChevronRight className="h-4 w-4 shrink-0 text-primary" /> : null}
                         <AppDropdown
                           align="end"
                           contentClassName="w-48"

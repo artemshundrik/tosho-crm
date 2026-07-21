@@ -11,6 +11,7 @@ import { normalizeTeamAvailabilityStatus, type TeamAvailabilityStatus } from "@/
 import { buildUserNameFromMetadata } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry, listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { callToshoRpc } from "@/lib/toshoRpc";
 
 type PresenceEntityContext = {
   entityType: "quote" | "design_task" | null;
@@ -523,34 +524,40 @@ export function useWorkspacePresenceState({
 
   // Team Pulse: record one "active minute" per visible minute. Idempotent per
   // minute server-side (record_activity_minute in scripts/user-activity.sql).
-  // The cast bridges the not-yet-regenerated Supabase types; the call no-ops
-  // server-side until that SQL is applied to the database.
   useEffect(() => {
     if (!teamId || !userId) return;
     let cancelled = false;
-    let workspaceId: string | null = null;
-    void resolveWorkspaceId(userId).then((id) => {
-      workspaceId = id;
-    });
-    const recordMinute = () => {
-      if (cancelled || !workspaceId || !isDocumentVisible()) return;
-      const rpc = supabase.schema("tosho").rpc as unknown as (
-        name: string,
-        args: { p_team_id: string; p_workspace_id: string; p_actor_name: string | null }
-      ) => PromiseLike<{ error: unknown }>;
-      void Promise.resolve(
-        rpc("record_activity_minute", {
+    let warned = false;
+
+    const start = async () => {
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (cancelled || !workspaceId) return;
+
+      const recordMinute = async () => {
+        if (cancelled || !isDocumentVisible()) return;
+        const { error } = await callToshoRpc("record_activity_minute", {
           p_team_id: teamId,
           p_workspace_id: workspaceId,
           p_actor_name: selfDisplayName ?? null,
-        })
-      ).then(undefined, () => {});
+        });
+        // Never spam, but never fail silently either: a broken heartbeat used to
+        // look exactly like "nobody was active".
+        if (error && !warned) {
+          warned = true;
+          console.warn("[pulse] record_activity_minute failed", error);
+        }
+      };
+
+      void recordMinute();
+      intervalId = window.setInterval(() => void recordMinute(), 60_000);
     };
-    recordMinute();
-    const id = window.setInterval(recordMinute, 60_000);
+
+    let intervalId: number | undefined;
+    void start();
+
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      if (intervalId) window.clearInterval(intervalId);
     };
   }, [teamId, userId, selfDisplayName]);
 

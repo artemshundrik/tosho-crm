@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
-  ChevronRight,
   Clock,
   Radio,
   TrendingUp,
@@ -17,6 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
+import { callToshoRpc } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
@@ -172,20 +172,17 @@ export function TeamPulsePanel({
     // the not-yet-regenerated Supabase types. Owner/SEO-gated server-side.
     const loadMinutes = async () => {
       try {
-        const rpc = supabase.schema("tosho").rpc as unknown as (
-          name: string,
-          args: { p_workspace_id: string; p_team_id: string | null; p_from: string; p_to: string }
-        ) => PromiseLike<{ data: unknown; error: unknown }>;
-        const { data } = await rpc("get_team_pulse_summary", {
+        const { data } = await callToshoRpc<{
+          activeMinutes?: number;
+          perPerson?: { userId: string; activeMinutes: number }[];
+        }>("get_team_pulse_summary", {
           p_workspace_id: workspaceId,
           p_team_id: null,
           p_from: toDateOnly(rangeStartMs(rangeMeta.days)),
           p_to: toDateOnly(Date.now() + 24 * 60 * 60 * 1000),
         });
         if (cancelled) return;
-        const summary = (data ?? null) as
-          | { activeMinutes?: number; perPerson?: { userId: string; activeMinutes: number }[] }
-          | null;
+        const summary = data;
         setTotalMinutes(summary?.activeMinutes ?? 0);
         const map = new Map<string, number>();
         for (const person of summary?.perPerson ?? []) {
@@ -405,7 +402,6 @@ export function TeamPulsePanel({
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
                     {group.total}
                   </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
               </button>
             );

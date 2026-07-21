@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, ChevronDown, Clock, History, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
 import {
@@ -282,17 +283,7 @@ export function PersonAccessHistorySection({
       try {
         // get_audit_log is defined in scripts/audit-log.sql; cast bridges the
         // not-yet-regenerated Supabase types.
-        const rpc = supabase.schema("tosho").rpc as unknown as (
-          name: string,
-          args: {
-            p_workspace_id: string;
-            p_entity_type: string | null;
-            p_entity_id: string | null;
-            p_actor_user_id: string | null;
-            p_limit: number;
-          }
-        ) => PromiseLike<{ data: unknown; error: unknown }>;
-        const { data } = await rpc("get_audit_log", {
+        const { data } = await callToshoRpc<AuditEntry[]>("get_audit_log", {
           p_workspace_id: workspaceId,
           p_entity_type: "team_member_profile",
           p_entity_id: userId,
@@ -393,16 +384,6 @@ export function formatMinutesLabel(min: number) {
 
 type MinutesRow = { day?: string | null; active_minutes?: number | null };
 
-// user_activity_daily (scripts/user-activity.sql) is not in the generated
-// Supabase types yet; this shim keeps the call typed until they are regenerated.
-type MinutesQuery = {
-  select: (columns: string) => {
-    eq: (column: string, value: string) => {
-      gte: (column: string, value: string) => PromiseLike<{ data: MinutesRow[] | null }>;
-    };
-  };
-};
-
 export function PersonTimeInCrm({ userId }: { userId: string }) {
   const [rows, setRows] = useState<MinutesRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -413,11 +394,12 @@ export function PersonTimeInCrm({ userId }: { userId: string }) {
     const load = async () => {
       setLoading(true);
       try {
-        const fromTosho = supabase.schema("tosho").from as unknown as (relation: string) => MinutesQuery;
-        const { data } = await fromTosho("user_activity_daily")
-          .select("day,active_minutes")
-          .eq("user_id", userId)
-          .gte("day", dayOffset(30));
+        const { data } = await selectToshoRows<MinutesRow>(
+          "user_activity_daily",
+          "day,active_minutes",
+          { column: "user_id", value: userId },
+          { column: "day", value: dayOffset(30) }
+        );
         if (!cancelled) setRows(data ?? []);
       } catch {
         if (!cancelled) setRows([]);
