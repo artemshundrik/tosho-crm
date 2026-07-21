@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
 import {
   buildEntityGroups,
+  collectDesignTaskLinks,
   collectEntityIds,
   formatGroupHeading,
   UNGROUPED_KEY,
@@ -40,7 +41,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
         const startIso = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         const { data } = await supabase
           .from("activity_log")
-          .select("title,action,entity_type,entity_id,href,created_at")
+          .select("title,action,entity_type,entity_id,href,created_at,metadata")
           .eq("user_id", userId)
           .gte("created_at", startIso)
           .order("created_at", { ascending: false })
@@ -52,14 +53,17 @@ export function PersonActivitySection({ userId }: { userId: string }) {
 
         // Resolve entity numbers/names so a group reads like
         // "Дизайн-задача TS-0726-0049 · Візуал шоперів" instead of a bare id.
-        const { designTaskIds, quoteIds } = collectEntityIds(activityRows);
+        const { quoteIds } = collectEntityIds(activityRows);
+        const taskLinks = collectDesignTaskLinks(activityRows);
+        const linkedQuoteIds = Array.from(new Set(taskLinks.map((link) => link.quoteId)));
+
         const [taskRes, quoteRes] = await Promise.all([
-          designTaskIds.length
+          linkedQuoteIds.length
             ? supabase
                 .from("activity_log")
                 .select("entity_id,title,metadata")
                 .eq("action", "design_task")
-                .in("entity_id", designTaskIds)
+                .in("entity_id", linkedQuoteIds)
             : Promise.resolve({ data: [] as unknown[] }),
           quoteIds.length
             ? supabase.schema("tosho").from("quotes").select("id,number").in("id", quoteIds)
@@ -67,19 +71,27 @@ export function PersonActivitySection({ userId }: { userId: string }) {
         ]);
         if (cancelled) return;
 
-        const info: Record<string, EntityInfo> = {};
+        // Header rows are keyed by quote_id, the events by the task uuid — map
+        // one onto the other so each group gets its number and name.
+        const byQuoteId: Record<string, EntityInfo> = {};
         for (const row of (taskRes.data ?? []) as Array<{
           entity_id?: string | null;
           title?: string | null;
           metadata?: Record<string, unknown> | null;
         }>) {
-          const id = (row.entity_id ?? "").trim();
-          if (!id) continue;
+          const quoteId = (row.entity_id ?? "").trim();
+          if (!quoteId) continue;
           const number = row.metadata?.design_task_number;
-          info[id] = {
+          byQuoteId[quoteId] = {
             number: typeof number === "string" ? number : null,
             name: row.title ?? null,
           };
+        }
+
+        const info: Record<string, EntityInfo> = {};
+        for (const link of taskLinks) {
+          const resolved = byQuoteId[link.quoteId];
+          if (resolved) info[link.taskId] = resolved;
         }
         for (const row of (quoteRes.data ?? []) as Array<{ id?: string | null; number?: string | null }>) {
           const id = (row.id ?? "").trim();

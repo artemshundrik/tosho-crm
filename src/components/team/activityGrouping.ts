@@ -17,6 +17,7 @@ export type ActivityRow = {
   entity_id?: string | null;
   href?: string | null;
   created_at?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 /** Display info resolved for an entity by a second lookup pass. */
@@ -99,6 +100,25 @@ export function formatGroupHeading(group: EntityGroup): string {
   const head = [group.entityTypeLabel, group.number].filter(Boolean).join(" ");
   if (head && group.name) return `${head} · ${group.name}`;
   return group.name || head || "Без назви";
+}
+
+/**
+ * Design-task events and the design-task "header" row are indexed differently:
+ * an event's entity_id is the task's own uuid, while the header row is keyed by
+ * metadata.quote_id. Joining on entity_id alone never matched, which is why
+ * tasks rendered without a name. This returns that linkage.
+ */
+export function collectDesignTaskLinks(rows: ActivityRow[]): { taskId: string; quoteId: string }[] {
+  const seen = new Map<string, string>();
+  for (const row of rows) {
+    const type = (row.entity_type ?? "").trim().toLowerCase();
+    if (!type.startsWith("design_task")) continue;
+    const taskId = (row.entity_id ?? "").trim();
+    const quoteId = typeof row.metadata?.quote_id === "string" ? row.metadata.quote_id.trim() : "";
+    if (!taskId || !quoteId || seen.has(taskId)) continue;
+    seen.set(taskId, quoteId);
+  }
+  return Array.from(seen, ([taskId, quoteId]) => ({ taskId, quoteId }));
 }
 
 /** Entity ids that still need a name/number lookup, split by entity kind. */

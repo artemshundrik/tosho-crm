@@ -89,6 +89,14 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
+import type { PulseRange } from "@/components/team/pulsePeriod";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   listWorkspaceMemberDirectory,
   upsertWorkspaceMemberProfile,
@@ -610,6 +618,12 @@ export function TeamMembersPage() {
 
   const [activeFilter, setActiveFilter] = useState<MemberFilterKey | null>(null);
   const [activeSection, setActiveSection] = useState<PersonSection>("overview");
+  const [pulseRange, setPulseRange] = useState<PulseRange>("day");
+  const [pulsePeriodOffset, setPulsePeriodOffset] = useState(0);
+  // Drilling into somebody from Пульс opens a peek beside the dashboard instead
+  // of navigating away, so the compare loop (глянула одного → другого) keeps its
+  // ranked list and period on screen.
+  const [pulsePeekUserId, setPulsePeekUserId] = useState<string | null>(null);
   // Two ways to look at the team: "panel" (master-detail card) for working with
   // one person, "rows" (comparison table) for scanning everyone side by side.
   const [viewMode, setViewMode] = useState<"panel" | "rows" | "pulse">(() => {
@@ -1354,11 +1368,13 @@ export function TeamMembersPage() {
   // Пульс drill-down: jump to the person's card in Учасники. Clears the active
   // filter/search first, otherwise the target could be filtered out of the list
   // and the panel would fall back to someone else.
-  const openPersonCard = (userId: string) => {
+  const openPersonCard = (userId: string, section: PersonSection = "overview") => {
     setActiveFilter(null);
     setSelectedMemberId(userId);
     setActiveTab("members");
     setViewMode("panel");
+    setActiveSection(section);
+    setPulsePeekUserId(null);
     setParams({ member: userId });
   };
 
@@ -3492,10 +3508,75 @@ export function TeamMembersPage() {
             workspaceId={workspaceId}
             people={pulsePeople}
             resolvePerson={resolvePulsePerson}
-            onSelectPerson={openPersonCard}
+            onSelectPerson={setPulsePeekUserId}
+            periodState={{
+              range: pulseRange,
+              setRange: setPulseRange,
+              periodOffset: pulsePeriodOffset,
+              setPeriodOffset: setPulsePeriodOffset,
+            }}
           />
         ) : null}
       </div>
+
+      {/* Пульс peek: activity detail without leaving the dashboard. Read-only on
+          purpose — managing a person stays in their card, one place as before. */}
+      <Sheet open={!!pulsePeekUserId} onOpenChange={(open) => { if (!open) setPulsePeekUserId(null); }}>
+        <SheetContent
+          side="right"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[640px]"
+        >
+          {pulsePeekUserId ? (() => {
+            const peekPerson = resolvePulsePerson(pulsePeekUserId);
+            const peekMember = members.find((m) => m.user_id === pulsePeekUserId) ?? null;
+            return (
+              <>
+                <div className="shrink-0 border-b border-border bg-muted/10 px-6 py-5">
+                  <SheetHeader>
+                    <SheetTitle className="flex items-center gap-3 text-left">
+                      <AvatarBase
+                        src={peekPerson.avatarSrc}
+                        name={peekPerson.displayName}
+                        fallback={peekPerson.initials}
+                        assetVariant="xs"
+                        size={40}
+                        shape="circle"
+                        className="border-border bg-muted/50"
+                        fallbackClassName="text-[11px] font-bold"
+                        presence={peekPerson.online ? "online" : "offline"}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-lg font-semibold text-foreground">
+                          {peekPerson.displayName}
+                        </span>
+                        <span className="block truncate text-sm font-normal text-muted-foreground">
+                          {getJobRoleLabel(peekMember?.job_role ?? null)}
+                        </span>
+                      </span>
+                    </SheetTitle>
+                    <SheetDescription className="sr-only">Активність учасника</SheetDescription>
+                  </SheetHeader>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <div className="flex flex-col gap-4 px-6 py-5">
+                    {canPulse ? <PersonTimeInCrm userId={pulsePeekUserId} /> : null}
+                    <PersonActivitySection userId={pulsePeekUserId} />
+                  </div>
+                </div>
+                <div className="shrink-0 border-t border-border bg-card px-6 py-4">
+                  <Button
+                    variant="outline"
+                    className="h-10 w-full"
+                    onClick={() => openPersonCard(pulsePeekUserId, "activity")}
+                  >
+                    Відкрити картку учасника
+                  </Button>
+                </div>
+              </>
+            );
+          })() : null}
+        </SheetContent>
+      </Sheet>
 
       <Dialog
         open={inviteOpen}

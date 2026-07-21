@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEntityGroups,
+  collectDesignTaskLinks,
   collectEntityIds,
   formatGroupHeading,
   UNGROUPED_KEY,
@@ -170,5 +171,48 @@ describe("collectEntityIds", () => {
     ]);
     expect(designTaskIds).toEqual([]);
     expect(quoteIds).toEqual([]);
+  });
+});
+
+describe("collectDesignTaskLinks", () => {
+  // Real shape: the event carries the task uuid in entity_id and the quote id in
+  // metadata, while the "design_task" header row is keyed by that quote id.
+  const events: ActivityRow[] = [
+    {
+      action: "design_task_status",
+      entity_type: "design_task",
+      entity_id: "e53ba190-3f13-4e7b-82c7-796e6104ab86",
+      metadata: { quote_id: "standalone-785dce1f" },
+      created_at: "2026-07-20T15:37:00.000Z",
+    },
+    {
+      action: "design_output_upload",
+      entity_type: "design_task",
+      entity_id: "e53ba190-3f13-4e7b-82c7-796e6104ab86",
+      metadata: { quote_id: "standalone-785dce1f" },
+      created_at: "2026-07-20T15:38:00.000Z",
+    },
+    {
+      action: "змінив статус",
+      entity_type: "quotes",
+      entity_id: "q-1",
+      metadata: { quote_id: "should-be-ignored" },
+      created_at: "2026-07-20T10:00:00.000Z",
+    },
+  ];
+
+  it("maps a task uuid to the quote id its header row is keyed by", () => {
+    expect(collectDesignTaskLinks(events)).toEqual([
+      { taskId: "e53ba190-3f13-4e7b-82c7-796e6104ab86", quoteId: "standalone-785dce1f" },
+    ]);
+  });
+
+  it("ignores non-design entities and rows without the link", () => {
+    expect(
+      collectDesignTaskLinks([
+        { action: "design_task_status", entity_type: "design_task", entity_id: "t1", metadata: null },
+        { action: "x", entity_type: "quotes", entity_id: "q", metadata: { quote_id: "z" } },
+      ])
+    ).toEqual([]);
   });
 });

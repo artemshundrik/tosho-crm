@@ -105,21 +105,30 @@ function formatRelative(iso: string) {
   return new Date(iso).toLocaleDateString("uk-UA", { dateStyle: "short" });
 }
 
+export type PulsePeriodState = {
+  range: PulseRange;
+  setRange: (next: PulseRange) => void;
+  periodOffset: number;
+  setPeriodOffset: (next: number | ((prev: number) => number)) => void;
+};
+
 export function TeamPulsePanel({
   workspaceId,
   people,
   resolvePerson,
   onSelectPerson,
+  periodState,
 }: {
   workspaceId: string | null;
+  /** Owned by the page so the chosen period outlives a trip into a person. */
+  periodState: PulsePeriodState;
   /** Пульс is an aggregate + entry point: drilling into a person opens their card. */
   onSelectPerson: (userId: string) => void;
   /** current online members, for the "online now" KPI */
   people: PulsePerson[];
   resolvePerson: (userId: string) => PulsePerson;
 }) {
-  const [range, setRange] = useState<PulseRange>("day");
-  const [periodOffset, setPeriodOffset] = useState(0);
+  const { range, setRange, periodOffset, setPeriodOffset } = periodState;
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalMinutes, setTotalMinutes] = useState(0);
