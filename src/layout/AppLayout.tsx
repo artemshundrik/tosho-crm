@@ -818,7 +818,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(ROUTES.contractors) ||
     location.pathname.startsWith(ROUTES.sampleStock) ||
     location.pathname.startsWith(ROUTES.notifications) ||
-    location.pathname.startsWith(ROUTES.membersAccess);
+    location.pathname.startsWith(ROUTES.membersAccess) ||
+    location.pathname.startsWith(ROUTES.finances);
 
   useEffect(() => {
     let cancelled = false;

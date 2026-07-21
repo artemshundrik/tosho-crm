@@ -70,7 +70,6 @@ import {
   type FinanceOrderRef,
 } from "./types";
 import { getExpenseCategoryIcon } from "./expenseCategoryIcons";
-import { useFinanceToolbarActions } from "./financeToolbar";
 import {
   getSubscriptionBrand,
   guessSubscriptionBrand,
@@ -292,29 +291,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     return map;
   }, [variable]);
 
-  const monthTotalFor = React.useCallback(
-    (key: string) =>
-      fixedBaseline +
-      (variableByMonth.get(key)?.reduce((sum, e) => sum + (expenseUahAmount(e, rates) ?? 0), 0) ?? 0),
-    [fixedBaseline, variableByMonth, rates]
-  );
-
-  // Continuous last 12 calendar months (ending at the current month) for the
-  // overview trend strip — independent of which months happen to have data.
-  const overview = React.useMemo(() => {
-    const months: { key: string; total: number }[] = [];
-    for (let i = 11; i >= 0; i -= 1) {
-      const key = shiftMonthKey(currentKey, -i);
-      months.push({ key, total: monthTotalFor(key) });
-    }
-    return months;
-  }, [currentKey, monthTotalFor]);
-
-  const maxOverviewTotal = React.useMemo(
-    () => overview.reduce((max, m) => Math.max(max, m.total), 0),
-    [overview]
-  );
-
   const selectedItems = React.useMemo(
     () =>
       (variableByMonth.get(selectedMonth) ?? [])
@@ -335,16 +311,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     setEditing(null);
     setDialogOpen(true);
   }, []);
-
-  // Кнопка живе в шапці сторінки поруч із «Фінанси» — не з'їдає рядок над списком.
-  useFinanceToolbarActions(
-    () => (
-      <Button type="button" size="sm" className="h-9 gap-1.5" onClick={openCreate}>
-        <Plus className="h-4 w-4" /> Додати витрату
-      </Button>
-    ),
-    [openCreate]
-  );
 
   const remove = async (expense: FinanceExpense) => {
     if (!teamId) return;
@@ -506,9 +472,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Навігатор місяця + тренд за 12 місяців одним рядком: окремий блок огляду
-              з'їдав ~110px висоти заради тієї ж інформації. Бар = клік на місяць. */}
-          <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/10 px-2 py-1.5">
+          {/* Степер місяця + кнопка додавання в одному рядку (як у «Виплати команді»). */}
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -519,7 +484,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="min-w-[132px] text-center text-sm font-semibold">{monthLabel(selectedMonth)}</div>
+            <div className="min-w-[140px] text-center text-sm font-medium">{monthLabel(selectedMonth)}</div>
             <Button
               type="button"
               variant="outline"
@@ -541,36 +506,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 Поточний
               </Button>
             ) : null}
-
-            {/* На вузьких екранах смуга ховається — там важливіші самі витрати. */}
-            <div className="ml-auto hidden items-end gap-1 sm:flex">
-              {overview.map((mo) => {
-                const active = mo.key === selectedMonth;
-                const height =
-                  maxOverviewTotal > 0 ? Math.max(3, Math.round((mo.total / maxOverviewTotal) * 24)) : 3;
-                return (
-                  <button
-                    key={mo.key}
-                    type="button"
-                    onClick={() => setSelectedMonth(mo.key)}
-                    aria-label={`${monthLabel(mo.key)} · ${formatOrderMoney(mo.total, "UAH")}`}
-                    title={`${monthLabel(mo.key)} · ${formatOrderMoney(mo.total, "UAH")}`}
-                    className="group flex h-8 w-5 shrink-0 cursor-pointer items-end justify-center rounded-sm pb-0.5 transition-colors hover:bg-muted/60"
-                  >
-                    <span
-                      style={{ height }}
-                      className={cn(
-                        "w-2.5 rounded-t transition-colors",
-                        active ? "bg-primary" : "bg-muted-foreground/30 group-hover:bg-muted-foreground/50"
-                      )}
-                    />
-                  </button>
-                );
-              })}
-              <span className="ml-1 self-center text-[10px] uppercase tracking-wide text-muted-foreground">
-                12 міс
-              </span>
-            </div>
+            <Button type="button" size="sm" className="ml-auto h-8 shrink-0 gap-1.5" onClick={openCreate}>
+              <Plus className="h-4 w-4" /> Додати витрату
+            </Button>
           </div>
 
           {/* KPI cells for the selected month */}

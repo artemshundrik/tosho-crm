@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Banknote,
@@ -68,6 +68,15 @@ const FINANCE_SECTIONS: FinanceSection[] = [
 const SECTION_IDS = FINANCE_SECTIONS.map((s) => s.id);
 const DEFAULT_SECTION: FinanceSectionId = "dashboard";
 
+// Групування для лівого сайдбара розділу. Порожня мітка = без заголовка групи.
+const SECTION_GROUPS: { label: string | null; ids: FinanceSectionId[] }[] = [
+  { label: null, ids: ["dashboard"] },
+  { label: "Гроші", ids: ["sales", "accounts", "calendar"] },
+  { label: "Витрати", ids: ["expenses", "payroll", "taxes"] },
+  { label: "Аналітика", ids: ["margin", "reconciliation", "reports"] },
+  { label: "Система", ids: ["settings"] },
+];
+
 const isSection = (value: string | null): value is FinanceSectionId =>
   Boolean(value) && (SECTION_IDS as string[]).includes(value!);
 
@@ -116,41 +125,23 @@ export default function FinancesPage() {
   // Дії активного розділу, які він публікує в шапку сторінки.
   const [sectionActions, setSectionActions] = useState<ReactNode>(null);
 
-  // Перемикач розділів — сегментована стрічка в нижньому ряду тулбара (там, де в
-  // інших сторінок фільтри). Загортається в кілька рядів замість горизонтального
-  // скролу: 11 розділів інакше обрізаються біля правого краю.
-  const sectionSwitcher = useMemo(
-    () => (
-      <div className="flex w-full flex-wrap gap-1.5">
-        {visibleSections.map((section) => {
-          const Icon = section.icon;
-          const active = activeSection === section.id;
-          return (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => handleSectionChange(section.id)}
-              aria-pressed={active}
-              title={section.description}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {section.label}
-            </button>
-          );
-        })}
-      </div>
-    ),
-    [activeSection, handleSectionChange, visibleSections]
-  );
+  // Два панелі (нав + контент) заповнюють простір під тулбаром рівно до низу вікна —
+  // висоту рахуємо від фактичного top контейнера, як у майстер-детейл Співробітників.
+  const panesRef = useRef<HTMLDivElement | null>(null);
+  const [panesTop, setPanesTop] = useState<number | null>(null);
+  useEffect(() => {
+    const el = panesRef.current;
+    if (!el) return;
+    const update = () => setPanesTop(Math.round(el.getBoundingClientRect().top));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [activeSection]);
 
   // Тулбар малюється слотом шапки AppLayout (usePageHeaderActions), як на всіх
   // list-сторінках — а не інлайном у боді. Конвенція: docs/CODEX_PROJECT_GUIDE.md.
+  // Перемикач розділів живе не тут, а у власному лівому сайдбарі (Фінанси — це
+  // «застосунок у застосунку» з 11 розділами, вертикальна навігація доречніша).
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
@@ -168,46 +159,133 @@ export default function FinancesPage() {
           </div>
         }
         topRight={sectionActions}
-        filters={sectionSwitcher}
       />
     ),
-    [sectionActions, sectionSwitcher]
+    [sectionActions]
   );
 
   usePageHeaderActions(headerActions, [headerActions]);
 
+  // Групи розділів для сайдбара — з фактично доступних розділів (маржа може бути прихована).
+  const sectionGroups = useMemo(() => {
+    const byId = new Map(visibleSections.map((s) => [s.id, s]));
+    return SECTION_GROUPS.map((group) => ({
+      label: group.label,
+      sections: group.ids.map((id) => byId.get(id)).filter(Boolean) as FinanceSection[],
+    })).filter((group) => group.sections.length > 0);
+  }, [visibleSections]);
+
   const activeSectionMeta = visibleSections.find((section) => section.id === activeSection);
 
+  const activeContent = (
+    <>
+      {activeSection === "settings" ? (
+        <FinanceSettings teamId={teamId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSection === "sales" ? (
+        <FinanceSales teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSection === "expenses" ? (
+        <FinanceExpenses teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSection === "margin" ? (
+        <FinanceMargin teamId={teamId} userId={userId} />
+      ) : activeSection === "payroll" ? (
+        <FinancePayroll teamId={teamId} userId={userId} />
+      ) : activeSection === "taxes" ? (
+        <FinanceTaxes teamId={teamId} />
+      ) : activeSection === "calendar" ? (
+        <FinanceCalendar teamId={teamId} userId={userId} />
+      ) : activeSection === "reports" ? (
+        <FinanceReports teamId={teamId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSection === "accounts" ? (
+        <FinanceAccountsView teamId={teamId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSection === "reconciliation" ? (
+        <FinanceReconciliation teamId={teamId} userId={userId} />
+      ) : activeSection === "dashboard" ? (
+        <FinanceDashboard teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+      ) : activeSectionMeta ? (
+        <PlaceholderSection section={activeSectionMeta} />
+      ) : null}
+    </>
+  );
+
   return (
-    // Корінь сторінки — pb-20 md:pb-0, тож на десктопі нижній відступ винен собі
-    // сам розділ, інакше останній рядок лягає впритул до краю вікна.
-    <div className="w-full pb-20 md:pb-8">
+    <div className="w-full">
       <FinanceToolbarProvider onActionsChange={setSectionActions}>
-        {activeSection === "settings" ? (
-          <FinanceSettings teamId={teamId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSection === "sales" ? (
-          <FinanceSales teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSection === "expenses" ? (
-          <FinanceExpenses teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSection === "margin" ? (
-          <FinanceMargin teamId={teamId} userId={userId} />
-        ) : activeSection === "payroll" ? (
-          <FinancePayroll teamId={teamId} userId={userId} />
-        ) : activeSection === "taxes" ? (
-          <FinanceTaxes teamId={teamId} />
-        ) : activeSection === "calendar" ? (
-          <FinanceCalendar teamId={teamId} userId={userId} />
-        ) : activeSection === "reports" ? (
-          <FinanceReports teamId={teamId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSection === "accounts" ? (
-          <FinanceAccountsView teamId={teamId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSection === "reconciliation" ? (
-          <FinanceReconciliation teamId={teamId} userId={userId} />
-        ) : activeSection === "dashboard" ? (
-          <FinanceDashboard teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-        ) : activeSectionMeta ? (
-          <PlaceholderSection section={activeSectionMeta} />
-        ) : null}
+        {/* Мобільний перемикач — горизонтальні пілюлі; сайдбар ховаємо на вузьких. */}
+        <div className="flex gap-1.5 overflow-x-auto border-b border-border/60 px-4 py-3 lg:hidden [scrollbar-width:thin]">
+          {visibleSections.map((section) => {
+            const Icon = section.icon;
+            const active = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => handleSectionChange(section.id)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Майстер-детейл впритул до країв: нав-рейка з роздільником + панель контенту,
+            обидві заповнюють висоту до низу вікна й скролять незалежно (як Співробітники). */}
+        <div
+          ref={panesRef}
+          className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)]"
+          style={panesTop != null ? ({ ["--fin-panes-h" as string]: `calc(100dvh - ${panesTop}px)` }) : undefined}
+        >
+          <aside className="hidden border-r border-border/60 lg:block lg:h-[var(--fin-panes-h,auto)] lg:overflow-y-auto">
+            <nav className="flex flex-col gap-0.5 p-3">
+              {sectionGroups.map((group) => (
+                <div key={group.label ?? "main"} className="flex flex-col gap-0.5">
+                  {group.label ? (
+                    <div className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      {group.label}
+                    </div>
+                  ) : null}
+                  {group.sections.map((section) => {
+                    const Icon = section.icon;
+                    const active = activeSection === section.id;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => handleSectionChange(section.id)}
+                        aria-current={active ? "page" : undefined}
+                        title={section.description}
+                        className={cn(
+                          "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                          active
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        <Icon
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            active ? "text-primary" : "text-muted-foreground/70 group-hover:text-foreground"
+                          )}
+                        />
+                        <span className="truncate">{section.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+          </aside>
+
+          <div className="min-w-0 px-4 pb-20 pt-4 md:pb-8 lg:h-[var(--fin-panes-h,auto)] lg:overflow-y-auto lg:p-6">
+            {activeContent}
+          </div>
+        </div>
       </FinanceToolbarProvider>
     </div>
   );
