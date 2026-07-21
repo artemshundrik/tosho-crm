@@ -272,6 +272,7 @@ export function TeamPulsePanel({
   }, [rows, rangeMeta.bucket]);
 
   const onlineNow = people.filter((person) => person.online).length;
+  const maxGroupTotal = groups[0]?.total ?? 0;
 
 
   return (
@@ -295,10 +296,10 @@ export function TeamPulsePanel({
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} />
-          <KpiTile icon={Users} label="Активних людей" value={activeUsers} />
-          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText />
-          <KpiTile icon={Activity} label="Всього дій" value={totalActions} />
+          <KpiTile icon={Radio} tone="success" label="Онлайн зараз" value={onlineNow} hint="просто зараз" />
+          <KpiTile icon={Users} label="Активних людей" value={activeUsers} hint={rangeMeta.label.toLowerCase()} />
+          <KpiTile icon={Clock} label="Активні хвилини" value={formatMinutes(totalMinutes)} isText hint={rangeMeta.label.toLowerCase()} />
+          <KpiTile icon={Activity} label="Всього дій" value={totalActions} hint={rangeMeta.label.toLowerCase()} />
         </div>
 
         {trend.length > 1 ? (
@@ -329,7 +330,8 @@ export function TeamPulsePanel({
                       color: "hsl(var(--popover-foreground))",
                     }}
                     labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                    formatter={(value) => [`${value}`, "дій"]}
+                    separator=""
+                    formatter={(value) => [`${value} дій`, ""]}
                   />
                   <Area
                     type="monotone"
@@ -354,7 +356,7 @@ export function TeamPulsePanel({
         <div className="mx-4 flex flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] border border-dashed border-border/70 py-12 text-center md:mx-5 lg:mx-6">
           <Activity className="h-6 w-6 text-muted-foreground/60" />
           <div className="text-sm font-medium text-foreground">Немає активності за цей період</div>
-          <div className="text-xs text-muted-foreground">Оберіть ширший діапазон або зачекайте на нові дії.</div>
+          <div className="text-xs text-muted-foreground">Оберіть ширший діапазон — дії зʼявляються тут одразу, а хвилини накопичуються поки люди працюють у CRM.</div>
         </div>
       ) : (
         <div className="flex flex-col border-t border-border/60">
@@ -397,7 +399,7 @@ export function TeamPulsePanel({
                     ) : null}
                   </div>
                 </div>
-                <CategoryBreakdown byCategory={group.byCategory} total={group.total} />
+                <CategoryBreakdown byCategory={group.byCategory} total={group.total} maxTotal={maxGroupTotal} />
                 <div className="ml-1 flex shrink-0 items-center gap-2">
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
                     {group.total}
@@ -418,12 +420,14 @@ function KpiTile({
   value,
   tone,
   isText,
+  hint,
 }: {
   icon: typeof Activity;
   label: string;
   value: number | string;
   tone?: "success";
   isText?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="rounded-[var(--radius-lg)] border border-border/70 bg-muted/[0.04] px-4 py-3">
@@ -434,6 +438,7 @@ function KpiTile({
       <div className={cn("mt-2 font-semibold text-foreground", isText ? "truncate text-base" : "text-2xl tabular-nums")}>
         {value}
       </div>
+      {hint ? <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -441,14 +446,20 @@ function KpiTile({
 function CategoryBreakdown({
   byCategory,
   total,
+  maxTotal,
 }: {
   byCategory: { key: string; label: string; color: string; count: number }[];
   total: number;
+  /** Busiest person in the range — the bar length is relative to them, so rows
+   *  are comparable. Scaling each bar to its own total made every row 100%. */
+  maxTotal: number;
 }) {
   if (total === 0) return null;
+  const fill = maxTotal > 0 ? Math.max((total / maxTotal) * 100, 4) : 0;
   return (
     <div className="hidden min-w-0 max-w-[280px] flex-1 flex-col gap-1.5 md:flex">
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div className="flex h-full overflow-hidden rounded-full" style={{ width: `${fill}%` }}>
         {byCategory.map((category) => (
           <span
             key={category.key}
@@ -457,6 +468,7 @@ function CategoryBreakdown({
             title={`${category.label}: ${category.count}`}
           />
         ))}
+      </div>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
         {byCategory.slice(0, 3).map((category) => (

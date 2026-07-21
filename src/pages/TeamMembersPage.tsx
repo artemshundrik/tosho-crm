@@ -1321,11 +1321,8 @@ export function TeamMembersPage() {
   }, [panelUserId, canOpenProfileCard]);
   const panelDisplayName = panelMember ? getMemberDisplayName(panelMember) : "";
   const panelInitials = panelMember ? getInitialsFromName(panelDisplayName, panelMember.email ?? null) : "";
-  const panelSeniority = (() => {
-    if (!panelMeta) return "—";
-    const summary = getEmploymentSummary(panelMeta);
-    return (typeof summary === "string" ? summary : summary?.primary) || "—";
-  })();
+  const panelSeniority = formatEmploymentDuration(panelMeta?.startDate) || "—";
+  const panelStartedOn = panelMeta?.startDate ? formatEmploymentDate(panelMeta.startDate) : "";
 
   const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
@@ -2346,6 +2343,7 @@ export function TeamMembersPage() {
                   aria-pressed={effectiveViewMode === "panel"}
                   onClick={() => setViewMode("panel")}
                   className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
+                  aria-label="Вигляд: панель"
                   title="Панель: список + картка людини"
                 >
                   <Columns2 className="h-4 w-4" />
@@ -2357,6 +2355,7 @@ export function TeamMembersPage() {
                   aria-pressed={effectiveViewMode === "rows"}
                   onClick={() => setViewMode("rows")}
                   className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
+                  aria-label="Вигляд: таблиця для порівняння"
                   title="Рядки: таблиця для порівняння"
                 >
                   <Rows3 className="h-4 w-4" />
@@ -2395,7 +2394,7 @@ export function TeamMembersPage() {
             />
             {needsAttentionCount > 0 ? (
               <FilterChip
-                label="Потребують уваги"
+                label="Неповні профілі"
                 count={needsAttentionCount}
                 tone="warning"
                 icon={AlertTriangle}
@@ -2840,6 +2839,9 @@ export function TeamMembersPage() {
                         <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Стаж</div>
                           <div className="mt-1 text-sm font-medium text-foreground">{panelSeniority}</div>
+                          {panelStartedOn ? (
+                            <div className="mt-0.5 text-xs text-muted-foreground">з {panelStartedOn}</div>
+                          ) : null}
                         </div>
                         <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
