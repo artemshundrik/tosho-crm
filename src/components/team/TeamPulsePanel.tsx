@@ -473,7 +473,7 @@ export function TeamPulsePanel({
                     <span className="truncate">
                       {entry.actions > 0
                         ? `Остання дія ${formatRelative(entry.lastActiveAt)}`
-                        : "Був у CRM, без дій"}
+                        : "Присутність без дій"}
                     </span>
                   </div>
                 </div>

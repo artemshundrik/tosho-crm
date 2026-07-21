@@ -216,3 +216,16 @@ describe("collectDesignTaskLinks", () => {
     ).toEqual([]);
   });
 });
+
+describe("entity info passthrough", () => {
+  it("carries the design task type so the UI can pick its icon", () => {
+    const group = buildEntityGroups(rows, {
+      [taskA]: { number: "TS-0726-0049", name: "Візуал", taskType: "visualization" },
+    }).find((g) => g.key === taskA);
+    expect(group?.taskType).toBe("visualization");
+  });
+
+  it("leaves taskType null when nothing was resolved", () => {
+    expect(buildEntityGroups(rows).find((g) => g.key === taskB)?.taskType).toBeNull();
+  });
+});

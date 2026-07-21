@@ -1,10 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, ChevronDown, Clock, History, Loader2 } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  Calculator,
+  ChevronDown,
+  Clock,
+  Dot,
+  History,
+  Loader2,
+  Package,
+  Palette,
+  type LucideIcon,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
+import {
+  DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_LABELS,
+  parseDesignTaskType,
+  type DesignTaskType,
+} from "@/lib/designTaskType";
 import {
   buildEntityGroups,
   collectDesignTaskLinks,
@@ -14,6 +32,19 @@ import {
   type ActivityRow,
   type EntityInfo,
 } from "@/components/team/activityGrouping";
+
+// An icon carries the kind at a glance and does not rely on colour alone.
+// Design tasks reuse the canonical per-type icons; other entities get their own.
+function groupIcon(entityType: string | null, taskType: string | null): LucideIcon {
+  const parsed = taskType ? (parseDesignTaskType(taskType) as DesignTaskType | null) : null;
+  if (parsed) return DESIGN_TASK_TYPE_ICONS[parsed];
+  const type = (entityType ?? "").trim().toLowerCase();
+  if (type.startsWith("design_task")) return Palette;
+  if (type.startsWith("quote")) return Calculator;
+  if (type.startsWith("order")) return Package;
+  if (type.startsWith("customer") || type.startsWith("lead")) return Building2;
+  return Dot;
+}
 
 function formatWhen(iso: string) {
   if (!iso) return "—";
@@ -85,6 +116,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
           byQuoteId[quoteId] = {
             number: typeof number === "string" ? number : null,
             name: row.title ?? null,
+            taskType: parseDesignTaskType(row.metadata?.design_task_type),
           };
         }
 
@@ -177,6 +209,9 @@ export function PersonActivitySection({ userId }: { userId: string }) {
             {groups.map((group) => {
               const isOpen = expanded.has(group.key);
               const heading = formatGroupHeading(group);
+              const GroupIcon = groupIcon(group.entityType, group.taskType);
+              const parsedType = group.taskType ? parseDesignTaskType(group.taskType) : null;
+              const typeLabel = parsedType ? DESIGN_TASK_TYPE_LABELS[parsedType] : null;
               return (
                 <div key={group.key} className="border-b border-border/50 last:border-0">
                   <button
@@ -188,11 +223,25 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       isOpen && "bg-muted/40"
                     )}
                   >
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: categoryColor(group.categoryKey) }}
+                    <GroupIcon
+                      className="h-4 w-4 shrink-0"
+                      style={{ color: categoryColor(group.categoryKey) }}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading}</span>
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      {group.number ? (
+                        <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                          {group.number}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 truncate text-sm text-foreground">
+                        {group.name || group.entityTypeLabel || "Без назви"}
+                      </span>
+                      {typeLabel ? (
+                        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                          · {typeLabel}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                       {group.events.length} · {formatWhen(group.lastAt)}
                     </span>

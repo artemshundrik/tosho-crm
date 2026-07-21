@@ -24,6 +24,8 @@ export type ActivityRow = {
 export type EntityInfo = {
   number?: string | null; // e.g. "TS-0726-0049"
   name?: string | null; // task / quote title
+  /** Canonical design-task type (see src/lib/designTaskType.ts), for its icon. */
+  taskType?: string | null;
 };
 
 export type EntityGroup = {
@@ -32,6 +34,7 @@ export type EntityGroup = {
   entityTypeLabel: string | null;
   number: string | null;
   name: string | null;
+  taskType: string | null;
   href: string | null;
   categoryKey: string;
   events: ActivityRow[];
@@ -77,6 +80,7 @@ export function buildEntityGroups(
       entityTypeLabel: key === UNGROUPED_KEY ? null : entityLabel(entityType),
       number: info.number?.trim() || null,
       name: info.name?.trim() || headerRow?.title?.trim() || null,
+      taskType: info.taskType?.trim() || null,
       href,
       categoryKey: categorizeAction(primary?.action ?? null, primary?.title ?? null, entityType),
       events: sorted,
