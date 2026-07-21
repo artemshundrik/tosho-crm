@@ -436,9 +436,14 @@ export default function SampleStockPage() {
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Package className="h-4 w-4" />
-          <span className="font-medium text-foreground">Склад</span>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+            <Package className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-foreground">Склад</div>
+            <div className="text-sm text-muted-foreground">Залишки товарів, резерви та складські рухи.</div>
+          </div>
         </div>
       }
       topRight={

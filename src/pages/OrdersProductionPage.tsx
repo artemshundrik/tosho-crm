@@ -44,6 +44,7 @@ import {
   AlertTriangle,
   Building2,
   CheckCircle2,
+  Factory,
   FileText,
   LayoutGrid,
   List,
@@ -673,6 +674,19 @@ export default function OrdersProductionPage() {
 
   const headerActions = (
     <UnifiedPageToolbar
+      topLeft={
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+            <Factory className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-foreground">Замовлення</div>
+            <div className="text-sm text-muted-foreground">
+              Черга оформлення, оплати, виробництва та відвантаження.
+            </div>
+          </div>
+        </div>
+      }
       topRight={
         <>
           {selectedSpecificationIds.length > 0 ? (
