@@ -92,9 +92,6 @@ import {
   uploadAttachmentWithVariants,
 } from "@/lib/attachmentPreview";
 import { 
-  Search,
-  X,
-  FilterX,
   Layers,
   MoreVertical,
   Copy,
@@ -122,6 +119,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import {
@@ -5714,32 +5712,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </>
         }
         search={
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={contentView === "sets" ? quoteSetSearch : search}
-              onChange={(e) =>
-                contentView === "sets" ? setQuoteSetSearch(e.target.value) : setSearch(e.target.value)
-              }
-              placeholder={contentView === "sets" ? "Пошук по КП та наборах..." : "Пошук за назвою..."}
-              className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-            />
-            {(contentView === "sets" ? quoteSetSearch : search) ? (
-              <Button
-                type="button"
-                variant="control"
-                size="iconSm"
-                aria-label="Очистити пошук"
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-                onClick={() => (contentView === "sets" ? setQuoteSetSearch("") : setSearch(""))}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-            {(loading || showRefreshIndicator) && contentView !== "sets" && search ? (
-              <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-            ) : null}
-          </div>
+          <ToolbarSearch
+            value={contentView === "sets" ? quoteSetSearch : search}
+            onChange={contentView === "sets" ? setQuoteSetSearch : setSearch}
+            placeholder={contentView === "sets" ? "Пошук по КП та наборах..." : "Пошук за назвою..."}
+            loading={(loading || showRefreshIndicator) && contentView !== "sets" && Boolean(search)}
+          />
         }
         filters={
           <>
@@ -5834,7 +5812,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     className={SEGMENTED_TRIGGER_SM}
                   >
                     Всі
-                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{filteredQuoteSets.length}</span>
+                    <CountBadge value={filteredQuoteSets.length} className="ml-1" />
                   </Button>
                   <Button
                     variant="segmented"
@@ -5844,7 +5822,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     className={SEGMENTED_TRIGGER_SM}
                   >
                     КП
-                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetKpCount}</span>
+                    <CountBadge value={quoteSetKpCount} className="ml-1" />
                   </Button>
                   <Button
                     variant="segmented"
@@ -5854,7 +5832,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     className={SEGMENTED_TRIGGER_SM}
                   >
                     Набори
-                    <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{quoteSetSetCount}</span>
+                    <CountBadge value={quoteSetSetCount} className="ml-1" />
                   </Button>
                 </div>
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
@@ -5863,24 +5841,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </>
         }
         meta={
-          <>
-            {hasActiveFilters ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearFilters}
-                className="h-8 w-8 shrink-0 text-muted-foreground"
-                title="Скинути фільтри"
-                aria-label="Скинути фільтри"
-              >
-                <FilterX className="h-4 w-4" />
-              </Button>
-            ) : null}
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <span className="tabular-nums">{loading && rows.length === 0 ? "…" : foundCount}</span>
-              {(loading || showRefreshIndicator) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-            </div>
-          </>
+          <ToolbarMeta
+            count={loading && rows.length === 0 ? "…" : foundCount}
+            onReset={clearFilters}
+            showReset={hasActiveFilters}
+            loading={loading || showRefreshIndicator}
+          />
         }
       />
   ), [

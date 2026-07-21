@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
-import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Button } from "@/components/ui/button";
 import {
   SEGMENTED_GROUP,
@@ -42,13 +42,10 @@ import {
 } from "@/lib/reminderDateTime";
 import {
   Building2,
-  FilterX,
   Loader2,
   MoreHorizontal,
   PlusCircle,
-  Search,
   Trash2,
-  X,
 } from "lucide-react";
 
 type ContractorRow = {
@@ -373,7 +370,7 @@ export default function ContractorsPage() {
           >
             <Building2 className="h-4 w-4" />
             Підрядники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{contractorsCount}</span>
+            <CountBadge value={contractorsCount} />
           </Button>
           <Button
             variant="segmented"
@@ -384,7 +381,7 @@ export default function ContractorsPage() {
           >
             <Building2 className="h-4 w-4" />
             Постачальники
-            <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{suppliersCount}</span>
+            <CountBadge value={suppliersCount} />
           </Button>
         </div>
       }
@@ -399,27 +396,11 @@ export default function ContractorsPage() {
         </Button>
       }
       search={
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={activeTab === "contractors" ? "Пошук підрядника..." : "Пошук постачальника..."}
-            className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-          />
-          {search ? (
-            <Button
-              type="button"
-              variant="control"
-              size="iconSm"
-              aria-label="Очистити пошук"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={() => setSearch("")}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
+        <ToolbarSearch
+          value={search}
+          onChange={setSearch}
+          placeholder={activeTab === "contractors" ? "Пошук підрядника..." : "Пошук постачальника..."}
+        />
       }
       filters={
         <Select value={serviceFilter} onValueChange={setServiceFilter}>
@@ -437,22 +418,12 @@ export default function ContractorsPage() {
         </Select>
       }
       meta={
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          {hasActiveFilters ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={clearFilters}
-              className="h-8 w-8 shrink-0 text-muted-foreground"
-              title="Скинути фільтри"
-              aria-label="Скинути фільтри"
-            >
-              <FilterX className="h-4 w-4" />
-            </Button>
-          ) : null}
-          <span className="tabular-nums">{activeTabCount}</span>
-          {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-        </div>
+        <ToolbarMeta
+          count={activeTabCount}
+          onReset={clearFilters}
+          showReset={hasActiveFilters}
+          loading={refreshing}
+        />
       }
       searchClassName="xl:max-w-[420px]"
     />

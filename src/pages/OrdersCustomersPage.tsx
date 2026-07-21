@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
@@ -81,7 +82,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, FilterX, Loader2, MoreHorizontal, PlusCircle, Search, Trash2, Unlink, Users, X } from "lucide-react";
+import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { toast } from "sonner";
@@ -3124,9 +3125,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Building2 className="h-4 w-4" />
             Замовники
-            <span className="ml-1.5 rounded-md bg-card px-2 py-0.5 text-[10px] font-semibold tabular-nums">
-              {customersTotal}
-            </span>
+            <CountBadge value={customersTotal} className="ml-1.5" />
           </Button>
           <Button
             type="button"
@@ -3138,9 +3137,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           >
             <Users className="h-4 w-4" />
             Ліди
-            <span className="ml-1.5 rounded-md bg-card px-2 py-0.5 text-[10px] font-semibold tabular-nums">
-              {leadsTotal}
-            </span>
+            <CountBadge value={leadsTotal} className="ml-1.5" />
           </Button>
         </div>
       }
@@ -3154,27 +3151,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </Button>
       }
       search={
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
-            className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-          />
-          {search ? (
-            <Button
-              type="button"
-              variant="control"
-              size="iconSm"
-              aria-label="Очистити пошук"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={() => setSearch("")}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
+        <ToolbarSearch
+          value={search}
+          onChange={setSearch}
+          placeholder={activeTab === "customers" ? "Пошук замовника..." : "Пошук ліда..."}
+        />
       }
       filters={
         <>
@@ -3224,24 +3205,16 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </>
       }
       meta={
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          {hasActiveFilters ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={clearFilters}
-              className="h-8 w-8 shrink-0 text-muted-foreground"
-              title="Скинути фільтри"
-              aria-label="Скинути фільтри"
-            >
-              <FilterX className="h-4 w-4" />
-            </Button>
-          ) : null}
-          <span className="tabular-nums">{activeTab === "customers" ? customersTotal : leadsTotal}</span>
-          {(activeTab === "customers" ? (customersLoading || customersRefreshing) : (leadsLoading || leadsRefreshing)) ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          ) : null}
-        </div>
+        <ToolbarMeta
+          count={activeTab === "customers" ? customersTotal : leadsTotal}
+          onReset={clearFilters}
+          showReset={hasActiveFilters}
+          loading={
+            activeTab === "customers"
+              ? customersLoading || customersRefreshing
+              : leadsLoading || leadsRefreshing
+          }
+        />
       }
       searchClassName="xl:max-w-[420px]"
     />

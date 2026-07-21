@@ -6,6 +6,7 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
@@ -20,7 +21,6 @@ import {
   TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
-import { Input } from "@/components/ui/input";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -47,12 +47,9 @@ import {
   FileText,
   LayoutGrid,
   List,
-  Loader2,
   Package,
   Palette,
   Plus,
-  X,
-  Search,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
@@ -723,30 +720,12 @@ export default function OrdersProductionPage() {
         </>
       }
       search={
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Пошук за назвою..."
-            className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-          />
-          {search ? (
-            <Button
-              type="button"
-              variant="control"
-              size="iconSm"
-              aria-label="Очистити пошук"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={() => setSearch("")}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-          {(loading || refreshing) && search ? (
-            <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-          ) : null}
-        </div>
+        <ToolbarSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Пошук за назвою..."
+          loading={(loading || refreshing) && Boolean(search)}
+        />
       }
       filters={
         <>
@@ -780,12 +759,7 @@ export default function OrdersProductionPage() {
           <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
         </>
       }
-      meta={
-          <div className="text-sm font-semibold text-foreground">
-            <span className="tabular-nums">{filteredRecords.length}</span>
-            <span className="ml-1 text-muted-foreground">знайдено</span>
-          </div>
-      }
+      meta={<ToolbarMeta count={filteredRecords.length} countLabel="знайдено" />}
     />
   );
 

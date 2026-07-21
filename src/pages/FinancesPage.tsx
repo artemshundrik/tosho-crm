@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { FinanceToolbarProvider } from "@/features/finances/financeToolbar";
 import { SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
@@ -117,10 +118,11 @@ export default function FinancesPage() {
   // Дії активного розділу, які він публікує в шапку сторінки.
   const [sectionActions, setSectionActions] = useState<ReactNode>(null);
 
-  return (
-    <div className="w-full pb-20 md:pb-0">
+  // Тулбар малюється слотом шапки AppLayout (usePageHeaderActions), як на всіх
+  // list-сторінках — а не інлайном у боді. Конвенція: docs/CODEX_PROJECT_GUIDE.md.
+  const headerActions = useMemo(
+    () => (
       <UnifiedPageToolbar
-        className="mb-4"
         topLeft={
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
@@ -136,7 +138,14 @@ export default function FinancesPage() {
         }
         topRight={sectionActions}
       />
+    ),
+    [sectionActions]
+  );
 
+  usePageHeaderActions(headerActions, [headerActions]);
+
+  return (
+    <div className="w-full pb-20 md:pb-0">
       <FinanceToolbarProvider onActionsChange={setSectionActions}>
       <Tabs value={activeSection} onValueChange={handleSectionChange}>
         <TabsList

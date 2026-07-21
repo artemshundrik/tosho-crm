@@ -55,6 +55,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
@@ -112,7 +113,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, ChevronRight, Clock3, ExternalLink, FileText, FilterX, Gauge, Image as ImageIcon, Info, LayoutGrid, Layers3, PencilLine, Search, Star, Target, Users, X } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChevronRight, Clock3, ExternalLink, FileText, Gauge, Image as ImageIcon, Info, LayoutGrid, Layers3, PencilLine, Star, Target, Users } from "lucide-react";
 
 type DesignTask = {
   id: string;
@@ -5123,7 +5124,7 @@ export default function DesignPage() {
               className={SEGMENTED_TRIGGER}
             >
               Всі
-              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{allTasksCount}</span>
+              <CountBadge value={allTasksCount} className="ml-1" />
             </Button>
             <Button
               variant="segmented"
@@ -5133,7 +5134,7 @@ export default function DesignPage() {
               className={SEGMENTED_TRIGGER}
             >
               З прорах.
-              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{linkedTasksCount}</span>
+              <CountBadge value={linkedTasksCount} className="ml-1" />
             </Button>
             <Button
               variant="segmented"
@@ -5143,7 +5144,7 @@ export default function DesignPage() {
               className={SEGMENTED_TRIGGER}
             >
               Окремі
-              <span className="ml-1 rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums">{standaloneTasksCount}</span>
+              <CountBadge value={standaloneTasksCount} className="ml-1" />
             </Button>
           </div>
         }
@@ -5191,36 +5192,18 @@ export default function DesignPage() {
           </>
         }
         search={
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={
-                contentView === "linked"
-                  ? "Пошук по задачах з прорахунку..."
-                  : contentView === "standalone"
-                    ? "Пошук по окремих задачах..."
-                    : "Пошук по всіх дизайн-задачах..."
-              }
-              className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-            />
-            {search ? (
-              <Button
-                type="button"
-                variant="control"
-                size="iconSm"
-                aria-label="Очистити пошук"
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-                onClick={() => setSearch("")}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : null}
-            {(loading || (refreshing && hasMoreTasks)) && search ? (
-              <Loader2 className="absolute right-10 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-            ) : null}
-          </div>
+          <ToolbarSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={
+              contentView === "linked"
+                ? "Пошук по задачах з прорахунку..."
+                : contentView === "standalone"
+                  ? "Пошук по окремих задачах..."
+                  : "Пошук по всіх дизайн-задачах..."
+            }
+            loading={(loading || (refreshing && hasMoreTasks)) && Boolean(search)}
+          />
         }
         filters={
           <>
@@ -5298,24 +5281,12 @@ export default function DesignPage() {
           </>
         }
         meta={
-          <>
-            {hasActiveFilters ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearFilters}
-                className="h-8 w-8 shrink-0 text-muted-foreground"
-                title="Скинути фільтри"
-                aria-label="Скинути фільтри"
-              >
-                <FilterX className="h-4 w-4" />
-              </Button>
-            ) : null}
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <span className="tabular-nums">{loading && tasks.length === 0 ? "…" : filteredTasks.length}</span>
-              {(loading || showRefreshIndicator) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-            </div>
-          </>
+          <ToolbarMeta
+            count={loading && tasks.length === 0 ? "…" : filteredTasks.length}
+            onReset={clearFilters}
+            showReset={hasActiveFilters}
+            loading={loading || showRefreshIndicator}
+          />
         }
       />
     ),

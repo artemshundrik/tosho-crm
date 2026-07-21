@@ -5,6 +5,7 @@ import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,16 +38,13 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
-  FilterX,
   Loader2,
   Lock,
   MoreHorizontal,
   Package,
   PlusCircle,
-  Search,
   Trash2,
   Unlock,
-  X,
 } from "lucide-react";
 
 type SampleStockItemRow = {
@@ -454,27 +452,7 @@ export default function SampleStockPage() {
         </Button>
       }
       search={
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Пошук товару, артикулу, кольору..."
-            className={cn(TOOLBAR_CONTROL, "pl-9 pr-9")}
-          />
-          {search ? (
-            <Button
-              type="button"
-              variant="control"
-              size="iconSm"
-              aria-label="Очистити пошук"
-              className="absolute right-2 top-1/2 -translate-y-1/2"
-              onClick={() => setSearch("")}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
+        <ToolbarSearch value={search} onChange={setSearch} placeholder="Пошук товару, артикулу, кольору..." />
       }
       filters={
         <div className="grid w-full gap-2 sm:flex sm:w-auto">
@@ -519,22 +497,12 @@ export default function SampleStockPage() {
         </div>
       }
       meta={
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          {hasActiveFilters ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={clearFilters}
-              className="h-8 w-8 shrink-0 text-muted-foreground"
-              title="Скинути фільтри"
-              aria-label="Скинути фільтри"
-            >
-              <FilterX className="h-4 w-4" />
-            </Button>
-          ) : null}
-          <span className="tabular-nums">{filteredRows.length}</span>
-          {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-        </div>
+        <ToolbarMeta
+          count={filteredRows.length}
+          onReset={clearFilters}
+          showReset={hasActiveFilters}
+          loading={refreshing}
+        />
       }
       searchClassName="xl:max-w-[420px]"
     />
