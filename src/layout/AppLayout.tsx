@@ -2196,46 +2196,57 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <main
           className={cn(
             "w-full overflow-x-hidden pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-0",
-            isCanvasMode ? "px-0 pt-14 md:px-0 lg:px-0" : "px-4 pt-[76px] md:px-5 lg:px-6"
+            isCanvasMode ? "px-0 pt-14 md:px-0 lg:px-0" : "pt-[76px]"
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}
         >
-          <div className={cn(isCanvasMode ? "min-w-0" : "mx-auto max-w-[1600px] space-y-6 min-w-0")}>
-            {/* Page header / page-level actions */}
-            {header.showPageHeader === false ? (
-              headerActions ? (
-                <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
-                  {/* Non-canvas сторінки не мають власних падінгів у смузі шапки,
-                      тож тулбар лягав впритул до роздільника — лишаємо нижній відступ. */}
-                  <div
-                    className={cn(
-                      "px-4 py-3 md:px-5 lg:px-6",
-                      !isCanvasMode && "px-0 pb-4 pt-0 md:px-0 lg:px-0"
-                    )}
-                  >
-                    {headerActions}
-                  </div>
-                </div>
-              ) : header.eyebrow ? (
-                <div className="hidden md:flex">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                    {header.eyebrow}
-                  </span>
-                </div>
-              ) : null
-            ) : (
-              <div className="hidden md:flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
-                  <p className="text-sm text-muted-foreground">{header.subtitle}</p>
-                </div>
-                {headerActions ? (
-                  <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div>
-                ) : null}
+          {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
+              до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
+              <main>, інакше роздільник обрізався б по краях max-width. */}
+          {header.showPageHeader === false && headerActions ? (
+            <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
+              <div
+                className={cn(
+                  "min-w-0",
+                  isCanvasMode
+                    ? "px-4 py-3 md:px-5 lg:px-6"
+                    : "mx-auto w-full max-w-[1600px] px-4 pb-4 md:px-5 lg:px-6"
+                )}
+              >
+                {headerActions}
               </div>
-            )}
+            </div>
+          ) : null}
 
-            <div>{pageContent}</div>
+          <div className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}>
+            <div
+              className={cn(
+                isCanvasMode ? "min-w-0" : "mx-auto max-w-[1600px] min-w-0 space-y-6 pt-6"
+              )}
+            >
+              {/* Заголовок у контентній колонці: тільки коли немає окремої смуги дій. */}
+              {header.showPageHeader === false ? (
+                headerActions ? null : header.eyebrow ? (
+                  <div className="hidden md:flex">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {header.eyebrow}
+                    </span>
+                  </div>
+                ) : null
+              ) : (
+                <div className="hidden md:flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
+                    <p className="text-sm text-muted-foreground">{header.subtitle}</p>
+                  </div>
+                  {headerActions ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div>
+                  ) : null}
+                </div>
+              )}
+
+              <div>{pageContent}</div>
+            </div>
           </div>
         </main>
         </div>

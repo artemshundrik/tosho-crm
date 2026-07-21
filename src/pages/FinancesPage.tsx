@@ -13,11 +13,9 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { FinanceToolbarProvider } from "@/features/finances/financeToolbar";
-import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";
@@ -123,21 +121,29 @@ export default function FinancesPage() {
   // скролу: 11 розділів інакше обрізаються біля правого краю.
   const sectionSwitcher = useMemo(
     () => (
-      <div className={cn(SEGMENTED_GROUP_SM, "h-auto w-full flex-wrap justify-start gap-0.5")}>
-        {visibleSections.map((section) => (
-          <Button
-            key={section.id}
-            type="button"
-            variant="segmented"
-            size="xs"
-            aria-pressed={activeSection === section.id}
-            onClick={() => handleSectionChange(section.id)}
-            title={section.description}
-            className={cn(SEGMENTED_TRIGGER_SM, "flex-none whitespace-nowrap px-2.5")}
-          >
-            {section.label}
-          </Button>
-        ))}
+      <div className="flex w-full flex-wrap gap-1.5">
+        {visibleSections.map((section) => {
+          const Icon = section.icon;
+          const active = activeSection === section.id;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => handleSectionChange(section.id)}
+              aria-pressed={active}
+              title={section.description}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {section.label}
+            </button>
+          );
+        })}
       </div>
     ),
     [activeSection, handleSectionChange, visibleSections]
