@@ -28,9 +28,6 @@ export type EntityInfo = {
   taskType?: string | null;
 };
 
-/** A stored image we can show as the group's thumbnail. */
-export type EntityPreview = { bucket: string; path: string };
-
 export type EntityGroup = {
   key: string;
   entityType: string | null;
@@ -38,7 +35,6 @@ export type EntityGroup = {
   number: string | null;
   name: string | null;
   taskType: string | null;
-  preview: EntityPreview | null;
   href: string | null;
   categoryKey: string;
   events: ActivityRow[];
@@ -46,29 +42,6 @@ export type EntityGroup = {
 };
 
 export const UNGROUPED_KEY = "__ungrouped__";
-
-/**
- * Newest image among a task's uploaded outputs — design_output_files entries
- * carry storage_path/storage_bucket/mime_type. Non-images (PDF layouts) are
- * skipped: a thumbnail is only useful when it actually shows the work.
- */
-export function pickEntityPreview(events: ActivityRow[]): EntityPreview | null {
-  let best: { at: string; preview: EntityPreview } | null = null;
-  for (const event of events) {
-    const files = event.metadata?.design_output_files;
-    if (!Array.isArray(files)) continue;
-    for (const raw of files) {
-      const file = raw as Record<string, unknown>;
-      const mime = typeof file.mime_type === "string" ? file.mime_type : "";
-      const path = typeof file.storage_path === "string" ? file.storage_path.trim() : "";
-      const bucket = typeof file.storage_bucket === "string" ? file.storage_bucket.trim() : "";
-      if (!mime.startsWith("image/") || !path || !bucket) continue;
-      const at = typeof file.created_at === "string" ? file.created_at : (event.created_at ?? "");
-      if (!best || at > best.at) best = { at, preview: { bucket, path } };
-    }
-  }
-  return best?.preview ?? null;
-}
 
 /** ISO-8601 strings compare correctly as plain strings; newest first. */
 function newestFirst(a: string, b: string) {
@@ -108,7 +81,6 @@ export function buildEntityGroups(
       number: info.number?.trim() || null,
       name: info.name?.trim() || headerRow?.title?.trim() || null,
       taskType: info.taskType?.trim() || null,
-      preview: pickEntityPreview(sorted),
       href,
       categoryKey: categorizeAction(primary?.action ?? null, primary?.title ?? null, entityType),
       events: sorted,

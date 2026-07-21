@@ -4,7 +4,6 @@ import {
   collectDesignTaskLinks,
   collectEntityIds,
   formatGroupHeading,
-  pickEntityPreview,
   UNGROUPED_KEY,
   type ActivityRow,
 } from "@/components/team/activityGrouping";
@@ -228,50 +227,5 @@ describe("entity info passthrough", () => {
 
   it("leaves taskType null when nothing was resolved", () => {
     expect(buildEntityGroups(rows).find((g) => g.key === taskB)?.taskType).toBeNull();
-  });
-});
-
-describe("pickEntityPreview", () => {
-  const file = (over: Record<string, unknown> = {}) => ({
-    mime_type: "image/webp",
-    storage_path: "teams/t/design-outputs/q/a.webp",
-    storage_bucket: "attachments",
-    created_at: "2026-07-20T13:00:00.000Z",
-    ...over,
-  });
-
-  it("returns the newest image output", () => {
-    expect(
-      pickEntityPreview([
-        { metadata: { design_output_files: [file()] } },
-        {
-          metadata: {
-            design_output_files: [
-              file({ storage_path: "teams/t/design-outputs/q/new.webp", created_at: "2026-07-21T09:00:00.000Z" }),
-            ],
-          },
-        },
-      ])
-    ).toEqual({ bucket: "attachments", path: "teams/t/design-outputs/q/new.webp" });
-  });
-
-  it("skips non-image outputs — a PDF thumbnail shows nothing useful", () => {
-    expect(
-      pickEntityPreview([
-        { metadata: { design_output_files: [file({ mime_type: "application/pdf" })] } },
-      ])
-    ).toBeNull();
-  });
-
-  it("ignores entries missing a path or bucket", () => {
-    expect(
-      pickEntityPreview([
-        { metadata: { design_output_files: [file({ storage_path: "" }), file({ storage_bucket: "" })] } },
-      ])
-    ).toBeNull();
-  });
-
-  it("returns null when there is no output metadata at all", () => {
-    expect(pickEntityPreview([{ action: "design_task_status", metadata: null }])).toBeNull();
   });
 });

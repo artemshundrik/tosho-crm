@@ -14,7 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { callToshoRpc, selectToshoRows } from "@/lib/toshoRpc";
 import { cn } from "@/lib/utils";
 import { categoryColor, categoryLabel } from "@/components/team/activityCategories";
@@ -162,33 +161,6 @@ export function PersonActivitySection({ userId }: { userId: string }) {
     return { groups: built, byCategory: cats, total: events };
   }, [rows, entityInfo]);
 
-  // Signed thumb URLs, resolved once per group. getSignedAttachmentUrl caches
-  // per path, so re-renders and repeat visits do not re-sign.
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  useEffect(() => {
-    let cancelled = false;
-    const withPreview = groups.filter((group) => group.preview);
-    if (withPreview.length === 0) return;
-    void (async () => {
-      const resolved: Record<string, string> = {};
-      await Promise.all(
-        withPreview.map(async (group) => {
-          const url = await getSignedAttachmentUrl(
-            group.preview!.bucket,
-            group.preview!.path,
-            "thumb",
-            60 * 60
-          );
-          if (url) resolved[group.key] = url;
-        })
-      );
-      if (!cancelled) setPreviewUrls((prev) => ({ ...prev, ...resolved }));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [groups]);
-
   const toggle = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -243,7 +215,6 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               // The visible type suffix is hidden on narrow screens, so the icon
               // itself must carry the name — for hover and for screen readers.
               const kindLabel = typeLabel ?? group.entityTypeLabel ?? "Дія в CRM";
-              const previewUrl = previewUrls[group.key];
               return (
                 <div key={group.key} className="border-b border-border/50 last:border-0">
                   <button
@@ -255,28 +226,18 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       isOpen && "bg-muted/40"
                     )}
                   >
-                    {previewUrl ? (
-                      <img
-                        src={previewUrl}
-                        alt={kindLabel}
-                        title={kindLabel}
-                        loading="lazy"
-                        className="h-8 w-8 shrink-0 rounded-[var(--radius-md)] border border-border/60 object-cover"
+                    <span
+                      role="img"
+                      title={kindLabel}
+                      aria-label={kindLabel}
+                      className="inline-flex shrink-0"
+                    >
+                      <GroupIcon
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                        style={{ color: categoryColor(group.categoryKey) }}
                       />
-                    ) : (
-                      <span
-                        role="img"
-                        title={kindLabel}
-                        aria-label={kindLabel}
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border/50 bg-muted/40"
-                      >
-                        <GroupIcon
-                          aria-hidden="true"
-                          className="h-4 w-4"
-                          style={{ color: categoryColor(group.categoryKey) }}
-                        />
-                      </span>
-                    )}
+                    </span>
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {group.number ? (
                         <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
