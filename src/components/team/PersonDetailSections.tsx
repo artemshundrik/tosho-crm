@@ -212,6 +212,9 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               const GroupIcon = groupIcon(group.entityType, group.taskType);
               const parsedType = group.taskType ? parseDesignTaskType(group.taskType) : null;
               const typeLabel = parsedType ? DESIGN_TASK_TYPE_LABELS[parsedType] : null;
+              // The visible type suffix is hidden on narrow screens, so the icon
+              // itself must carry the name — for hover and for screen readers.
+              const kindLabel = typeLabel ?? group.entityTypeLabel ?? "Дія в CRM";
               return (
                 <div key={group.key} className="border-b border-border/50 last:border-0">
                   <button
@@ -223,10 +226,18 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       isOpen && "bg-muted/40"
                     )}
                   >
-                    <GroupIcon
-                      className="h-4 w-4 shrink-0"
-                      style={{ color: categoryColor(group.categoryKey) }}
-                    />
+                    <span
+                      role="img"
+                      title={kindLabel}
+                      aria-label={kindLabel}
+                      className="inline-flex shrink-0"
+                    >
+                      <GroupIcon
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                        style={{ color: categoryColor(group.categoryKey) }}
+                      />
+                    </span>
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {group.number ? (
                         <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
