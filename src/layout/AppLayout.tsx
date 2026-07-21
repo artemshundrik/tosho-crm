@@ -609,6 +609,8 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Останні дії команди та зміни в системі.",
       breadcrumbLabel: "Активність",
       breadcrumbTo: ROUTES.activity,
+      // Сторінка малює власний UnifiedPageToolbar — типовий заголовок задвоївся б.
+      showPageHeader: false,
     };
   if (pathname.startsWith(ROUTES.observability))
     return {
@@ -2203,7 +2205,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             {header.showPageHeader === false ? (
               headerActions ? (
                 <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
-                  <div className={cn("px-4 py-3 md:px-5 lg:px-6", !isCanvasMode && "px-0 py-0 md:px-0 lg:px-0")}>
+                  {/* Non-canvas сторінки не мають власних падінгів у смузі шапки,
+                      тож тулбар лягав впритул до роздільника — лишаємо нижній відступ. */}
+                  <div
+                    className={cn(
+                      "px-4 py-3 md:px-5 lg:px-6",
+                      !isCanvasMode && "px-0 pb-4 pt-0 md:px-0 lg:px-0"
+                    )}
+                  >
                     {headerActions}
                   </div>
                 </div>

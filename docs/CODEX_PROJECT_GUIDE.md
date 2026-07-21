@@ -249,6 +249,26 @@ Current UI contract:
 - For badges, chips, avatar markers, and similar status surfaces, implement light/dark-safe token classes on the first pass.
 - If a visual pattern repeats, treat it as a component or reusable style contract, not a one-off page patch.
 
+### Page Toolbars (mandatory for every list page)
+
+Every list-type page renders its title, filters, and primary action through one shared contract. Do not hand-roll a page header or a filter row.
+
+- **Component:** [src/components/app/headers/UnifiedPageToolbar.tsx](/Users/artem/Projects/tosho-crm/src/components/app/headers/UnifiedPageToolbar.tsx) — slots `topLeft` / `topRight` / `search` / `filters` / `meta`.
+- **Mounting:** build it in a `useMemo` and register with `usePageHeaderActions(headerActions, [headerActions])`
+  ([src/components/app/page-header-actions.tsx](/Users/artem/Projects/tosho-crm/src/components/app/page-header-actions.tsx)).
+  AppLayout paints it in the page-header band (`max-w-[1600px]`, blur, bottom border). Never render the toolbar inline in the page body.
+  The hook must be called before any early `return` (rules of hooks).
+- **Primitives** — [src/components/app/headers/toolbarPrimitives.tsx](/Users/artem/Projects/tosho-crm/src/components/app/headers/toolbarPrimitives.tsx):
+  - `ToolbarSearch` — search input (icon, clear button, optional spinner). Never rebuild `Search + Input + X` by hand.
+  - `CountBadge` — count pill inside segmented tabs.
+  - `ToolbarMeta` — right-hand `[reset filters] N [label] [spinner]` cluster.
+- **Slot conventions:** segmented tabs → `topLeft`; view switcher + primary action → `topRight`; selects → `filters`; counts → `meta`.
+  Controls use `TOOLBAR_CONTROL` / `TOOLBAR_ACTION_BUTTON` / `SEGMENTED_GROUP` / `SEGMENTED_TRIGGER` from
+  [src/components/ui/controlStyles.ts](/Users/artem/Projects/tosho-crm/src/components/ui/controlStyles.ts) without height overrides.
+- **Section switchers with many tabs** (e.g. Finances, 11 sections) go into `filters` as a wrapping `SEGMENTED_GROUP` (`h-auto flex-wrap`), not a horizontally scrolling strip that clips at the right edge.
+- **Bottom inset:** the app root is `pb-20 md:pb-0`, so on desktop each page owes itself `pb-8`, otherwise the last row sits flush against the viewport bottom.
+- **Exception:** hero/dashboard pages (Overview, Admin Observability) intentionally use their own gradient hero and are not required to follow this contract.
+
 ### Avatar And Logo Sources
 
 - Team/user avatars should go through the canonical path:

@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
@@ -23,6 +24,14 @@ import { listTeamMembers } from "@/lib/toshoApi";
 import { Activity, FileText, Palette, Users } from "lucide-react";
 
 type FilterMode = "all" | "quotes" | "design" | "team" | "other";
+
+const FILTER_TABS: { value: FilterMode; label: string }[] = [
+  { value: "all", label: "Всі" },
+  { value: "quotes", label: "Прорахунки" },
+  { value: "design", label: "Дизайн" },
+  { value: "team", label: "Команда" },
+  { value: "other", label: "Інше" },
+];
 type ActivityPageCache = {
   items: ActivityItem[];
 };
@@ -144,14 +153,47 @@ export default function ActivityPage() {
 
   const headerActions = useMemo(
     () => (
-      <Button variant="secondary" onClick={() => navigate("/notifications")}>
-        Сповіщення
-      </Button>
+      <UnifiedPageToolbar
+        topLeft={
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+              <Activity className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-foreground">Активність команди</div>
+              <div className="text-sm text-muted-foreground">Усі події та зміни в одному місці</div>
+            </div>
+          </div>
+        }
+        topRight={
+          <Button variant="secondary" onClick={() => navigate("/notifications")}>
+            Сповіщення
+          </Button>
+        }
+        filters={
+          <div className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
+            {FILTER_TABS.map((tab) => (
+              <Button
+                key={tab.value}
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={filter === tab.value}
+                onClick={() => setFilter(tab.value)}
+                className={cn(SEGMENTED_TRIGGER, "flex-none px-4")}
+              >
+                {tab.label}
+              </Button>
+            ))}
+          </div>
+        }
+        meta={<ToolbarMeta count={filtered.length} countLabel="подій" />}
+      />
     ),
-    [navigate]
+    [filter, filtered.length, navigate]
   );
 
-  usePageHeaderActions(headerActions, [navigate]);
+  usePageHeaderActions(headerActions, [headerActions]);
 
   const showSkeleton = useMinimumLoading(loading);
 
@@ -181,86 +223,9 @@ export default function ActivityPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-5">
-        <div className="flex items-center gap-3 border-b border-border pb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-lg)] border border-primary/40 bg-primary/5 text-primary">
-            <Activity className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-foreground">Активність команди</div>
-            <div className="mt-0.5 text-sm text-muted-foreground">Усі події та зміни в одному місці</div>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterMode)}>
-            <TabsList
-              className={cn(
-                SEGMENTED_GROUP,
-                "shadow-inner"
-              )}
-            >
-              <TabsTrigger
-                value="all"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Всі
-              </TabsTrigger>
-              <TabsTrigger
-                value="quotes"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Прорахунки
-              </TabsTrigger>
-              <TabsTrigger
-                value="design"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Дизайн
-              </TabsTrigger>
-              <TabsTrigger
-                value="team"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Команда
-              </TabsTrigger>
-              <TabsTrigger
-                value="other"
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                Інше
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        <div className="mt-6">
+        <div>
           {filtered.length === 0 ? (
             <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
               Поки немає дій.

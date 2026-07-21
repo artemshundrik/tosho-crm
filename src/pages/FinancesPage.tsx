@@ -13,11 +13,11 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { FinanceToolbarProvider } from "@/features/finances/financeToolbar";
-import { SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";
@@ -118,6 +118,31 @@ export default function FinancesPage() {
   // Дії активного розділу, які він публікує в шапку сторінки.
   const [sectionActions, setSectionActions] = useState<ReactNode>(null);
 
+  // Перемикач розділів — сегментована стрічка в нижньому ряду тулбара (там, де в
+  // інших сторінок фільтри). Загортається в кілька рядів замість горизонтального
+  // скролу: 11 розділів інакше обрізаються біля правого краю.
+  const sectionSwitcher = useMemo(
+    () => (
+      <div className={cn(SEGMENTED_GROUP_SM, "h-auto w-full flex-wrap justify-start gap-0.5")}>
+        {visibleSections.map((section) => (
+          <Button
+            key={section.id}
+            type="button"
+            variant="segmented"
+            size="xs"
+            aria-pressed={activeSection === section.id}
+            onClick={() => handleSectionChange(section.id)}
+            title={section.description}
+            className={cn(SEGMENTED_TRIGGER_SM, "flex-none whitespace-nowrap px-2.5")}
+          >
+            {section.label}
+          </Button>
+        ))}
+      </div>
+    ),
+    [activeSection, handleSectionChange, visibleSections]
+  );
+
   // Тулбар малюється слотом шапки AppLayout (usePageHeaderActions), як на всіх
   // list-сторінках — а не інлайном у боді. Конвенція: docs/CODEX_PROJECT_GUIDE.md.
   const headerActions = useMemo(
@@ -137,77 +162,46 @@ export default function FinancesPage() {
           </div>
         }
         topRight={sectionActions}
+        filters={sectionSwitcher}
       />
     ),
-    [sectionActions]
+    [sectionActions, sectionSwitcher]
   );
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  return (
-    <div className="w-full pb-20 md:pb-0">
-      <FinanceToolbarProvider onActionsChange={setSectionActions}>
-      <Tabs value={activeSection} onValueChange={handleSectionChange}>
-        <TabsList
-          className={cn(
-            "mb-5 flex h-auto w-full items-center justify-start gap-1 overflow-x-auto rounded-xl",
-            "border border-border/50 bg-muted/40 p-1 shadow-inner",
-            "[scrollbar-width:thin]"
-          )}
-        >
-          {visibleSections.map((section) => {
-            const Icon = section.icon;
-            return (
-              <TabsTrigger
-                key={section.id}
-                value={section.id}
-                className={cn(
-                  SEGMENTED_TRIGGER,
-                  "h-9 flex-none shrink-0 gap-2 whitespace-nowrap px-3",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                  "data-[state=active]:shadow-md",
-                  "data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{section.label}</span>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+  const activeSectionMeta = visibleSections.find((section) => section.id === activeSection);
 
-        {/* Корінь сторінки — pb-20 md:pb-0, тож на десктопі відступ знизу
-            винен собі кожен розділ сам, інакше останній рядок лягає впритул. */}
-        {visibleSections.map((section) => (
-          <TabsContent key={section.id} value={section.id} className="mt-0 pb-8">
-            {section.id === "settings" ? (
-              <FinanceSettings teamId={teamId} canSeeSensitive={canSeeSensitive} />
-            ) : section.id === "sales" ? (
-              <FinanceSales teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-            ) : section.id === "expenses" ? (
-              <FinanceExpenses teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-            ) : section.id === "margin" ? (
-              <FinanceMargin teamId={teamId} userId={userId} />
-            ) : section.id === "payroll" ? (
-              <FinancePayroll teamId={teamId} userId={userId} />
-            ) : section.id === "taxes" ? (
-              <FinanceTaxes teamId={teamId} />
-            ) : section.id === "calendar" ? (
-              <FinanceCalendar teamId={teamId} userId={userId} />
-            ) : section.id === "reports" ? (
-              <FinanceReports teamId={teamId} canSeeSensitive={canSeeSensitive} />
-            ) : section.id === "accounts" ? (
-              <FinanceAccountsView teamId={teamId} canSeeSensitive={canSeeSensitive} />
-            ) : section.id === "reconciliation" ? (
-              <FinanceReconciliation teamId={teamId} userId={userId} />
-            ) : section.id === "dashboard" ? (
-              <FinanceDashboard teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
-            ) : (
-              <PlaceholderSection section={section} />
-            )}
-          </TabsContent>
-        ))}
-      </Tabs>
+  return (
+    // Корінь сторінки — pb-20 md:pb-0, тож на десктопі нижній відступ винен собі
+    // сам розділ, інакше останній рядок лягає впритул до краю вікна.
+    <div className="w-full pb-20 md:pb-8">
+      <FinanceToolbarProvider onActionsChange={setSectionActions}>
+        {activeSection === "settings" ? (
+          <FinanceSettings teamId={teamId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSection === "sales" ? (
+          <FinanceSales teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSection === "expenses" ? (
+          <FinanceExpenses teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSection === "margin" ? (
+          <FinanceMargin teamId={teamId} userId={userId} />
+        ) : activeSection === "payroll" ? (
+          <FinancePayroll teamId={teamId} userId={userId} />
+        ) : activeSection === "taxes" ? (
+          <FinanceTaxes teamId={teamId} />
+        ) : activeSection === "calendar" ? (
+          <FinanceCalendar teamId={teamId} userId={userId} />
+        ) : activeSection === "reports" ? (
+          <FinanceReports teamId={teamId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSection === "accounts" ? (
+          <FinanceAccountsView teamId={teamId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSection === "reconciliation" ? (
+          <FinanceReconciliation teamId={teamId} userId={userId} />
+        ) : activeSection === "dashboard" ? (
+          <FinanceDashboard teamId={teamId} userId={userId} canSeeSensitive={canSeeSensitive} />
+        ) : activeSectionMeta ? (
+          <PlaceholderSection section={activeSectionMeta} />
+        ) : null}
       </FinanceToolbarProvider>
     </div>
   );

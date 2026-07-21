@@ -7,7 +7,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
   UserMinus,
   Users,
@@ -17,6 +16,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -559,42 +562,91 @@ export function TeamPage() {
   const draftRangeValid = Boolean(absenceDraftStart) && draftEndEffective >= absenceDraftStart;
   const draftDurationDays = draftRangeValid ? getAbsenceDurationDays(absenceDraftStart, draftEndEffective) : 0;
 
+  const headerActions = useMemo(
+    () => (
+      <UnifiedPageToolbar
+        topLeft={
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+              <Users className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-foreground">Команда</div>
+              <div className="text-sm text-muted-foreground">
+                Присутність, журнал відсутностей та найближчі події.
+              </div>
+            </div>
+          </div>
+        }
+        topRight={
+          <>
+            <Button type="button" variant="outline" className="gap-2" onClick={() => setCalendarOpen(true)}>
+              <CalendarDays className="h-4 w-4" />
+              Календар
+            </Button>
+            {canManageAbsences ? (
+              <Button type="button" className="gap-2" onClick={openCreateAbsenceDialog}>
+                <Plus className="h-4 w-4" />
+                Відсутність
+              </Button>
+            ) : null}
+          </>
+        }
+        search={<ToolbarSearch value={search} onChange={setSearch} placeholder="Пошук по команді..." />}
+        filters={
+          <>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
+                <SelectValue placeholder="Усі ролі" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Усі ролі</SelectItem>
+                {roleOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
+                <SelectValue placeholder="Усі статуси" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Усі статуси</SelectItem>
+                <SelectItem value="available">Доступний</SelectItem>
+                <SelectItem value="vacation">Відпустка</SelectItem>
+                <SelectItem value="sick_leave">Лікарняний</SelectItem>
+                <SelectItem value="offline">Поза офісом</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+        meta={<ToolbarMeta count={filteredMembers.length} />}
+      />
+    ),
+    [
+      availabilityFilter,
+      canManageAbsences,
+      filteredMembers.length,
+      openCreateAbsenceDialog,
+      roleFilter,
+      roleOptions,
+      search,
+    ]
+  );
+
+  usePageHeaderActions(headerActions, [headerActions]);
+
   if (loading || showSkeleton) {
     return <AppPageLoader title="Завантаження" subtitle="Готуємо сторінку команди." />;
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-20 md:pb-0">
+    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-20 md:pb-8">
       <Card className="border-border/60 bg-card/80">
         <CardContent className="p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1 text-xs font-medium text-primary">
-                <Users className="h-3.5 w-3.5" />
-                Команда
-              </div>
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                Хто в роботі, хто відсутній і що попереду
-              </h1>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                Присутність, журнал відсутностей та найближчі події — на одному екрані.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" className="gap-2" onClick={() => setCalendarOpen(true)}>
-                <CalendarDays className="h-4 w-4" />
-                Календар
-              </Button>
-              {canManageAbsences ? (
-                <Button type="button" className="gap-2" onClick={openCreateAbsenceDialog}>
-                  <Plus className="h-4 w-4" />
-                  Відсутність
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Всього</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{enrichedMembers.length}</div>
@@ -618,44 +670,13 @@ export function TeamPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_360px]">
         <Card className="order-2 border-border/60 bg-card/80 xl:order-1">
           <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                Люди в команді
-                <span className="text-sm font-normal text-muted-foreground">{filteredMembers.length}</span>
-              </CardTitle>
-              <div className="flex flex-col gap-3 md:flex-row">
-                <div className="relative md:min-w-[220px]">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-10" placeholder="Пошук по команді..." />
-                </div>
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="md:min-w-[160px]">
-                    <SelectValue placeholder="Усі ролі" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Усі ролі</SelectItem>
-                    {roleOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
-                  <SelectTrigger className="md:min-w-[160px]">
-                    <SelectValue placeholder="Усі статуси" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Усі статуси</SelectItem>
-                    <SelectItem value="available">Доступний</SelectItem>
-                    <SelectItem value="vacation">Відпустка</SelectItem>
-                    <SelectItem value="sick_leave">Лікарняний</SelectItem>
-                    <SelectItem value="offline">Поза офісом</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            {/* Пошук і фільтри переїхали в тулбар сторінки (usePageHeaderActions) —
+                тут лишається тільки заголовок картки. */}
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              Люди в команді
+              <span className="text-sm font-normal text-muted-foreground">{filteredMembers.length}</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {filteredMembers.length === 0 ? (

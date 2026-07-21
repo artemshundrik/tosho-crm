@@ -87,6 +87,7 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
 import type { PulseRange } from "@/components/team/pulsePeriod";
@@ -2318,18 +2319,16 @@ export function TeamMembersPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center gap-2.5">
               <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-                {members.length}
-              </span>
+              <CountBadge value={members.length} />
             </div>
-            <div className={cn(SEGMENTED_GROUP, "h-10")}>
+            <div className={SEGMENTED_GROUP}>
                 <Button
                   type="button"
                   variant="segmented"
                   size="xs"
                   aria-pressed={activeTab === "members"}
                   onClick={() => handleTabChange("members")}
-                  className={cn(SEGMENTED_TRIGGER, "h-8")}
+                  className={SEGMENTED_TRIGGER}
                 >
                   Учасники ({members.length})
                 </Button>
@@ -2340,7 +2339,7 @@ export function TeamMembersPage() {
                     size="xs"
                     aria-pressed={activeTab === "invites"}
                     onClick={() => handleTabChange("invites")}
-                    className={cn(SEGMENTED_TRIGGER, "h-8")}
+                    className={SEGMENTED_TRIGGER}
                   >
                     Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                   </Button>
@@ -2351,14 +2350,14 @@ export function TeamMembersPage() {
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
             {activeTab === "members" ? (
-              <div className={cn(SEGMENTED_GROUP, "h-10")}>
+              <div className={SEGMENTED_GROUP}>
                 <Button
                   type="button"
                   variant="segmented"
                   size="xs"
                   aria-pressed={effectiveViewMode === "panel"}
                   onClick={() => setViewMode("panel")}
-                  className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
+                  className={cn(SEGMENTED_TRIGGER, "px-3")}
                   aria-label="Вигляд: панель"
                   title="Панель: список + картка людини"
                 >
@@ -2370,7 +2369,7 @@ export function TeamMembersPage() {
                   size="xs"
                   aria-pressed={effectiveViewMode === "rows"}
                   onClick={() => setViewMode("rows")}
-                  className={cn(SEGMENTED_TRIGGER, "h-8 px-3")}
+                  className={cn(SEGMENTED_TRIGGER, "px-3")}
                   aria-label="Вигляд: таблиця для порівняння"
                   title="Рядки: таблиця для порівняння"
                 >
@@ -2383,7 +2382,7 @@ export function TeamMembersPage() {
                     size="xs"
                     aria-pressed={effectiveViewMode === "pulse"}
                     onClick={() => setViewMode("pulse")}
-                    className={cn(SEGMENTED_TRIGGER, "h-8 gap-1.5 px-3")}
+                    className={cn(SEGMENTED_TRIGGER, "gap-1.5 px-3")}
                     title="Пульс: аналітика активності команди"
                   >
                     <Activity className="h-4 w-4" />
@@ -2834,7 +2833,7 @@ export function TeamMembersPage() {
                     </div>
                   </div>
 
-                  <div className={cn(SEGMENTED_GROUP_SM, "flex-wrap")}>
+                  <div className={cn(SEGMENTED_GROUP_SM, "h-auto flex-wrap")}>
                     {visiblePersonSections.map((section) => (
                       <Button key={section.key} type="button" variant="segmented" size="xs"
                         aria-pressed={activeSection === section.key}

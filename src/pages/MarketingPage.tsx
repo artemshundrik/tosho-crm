@@ -20,7 +20,6 @@ import {
   Palette,
   Phone,
   Plus,
-  Search,
   Sparkles,
   Star,
   Tags,
@@ -48,6 +47,9 @@ import {
   isServerPreviewableStoragePath,
 } from "@/lib/attachmentPreview";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StackHoverPreview } from "@/components/app/StackHoverPreview";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -57,7 +59,6 @@ import { Chip } from "@/components/ui/chip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
-import { IconInput } from "@/components/ui/icon-input";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -1143,79 +1144,98 @@ export default function MarketingPage() {
 
   const isEmpty = !loading && groups.length === 0;
 
-  return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 pb-24 pt-4 sm:px-6 md:pb-10">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-surface)]">
-            <Megaphone className="h-5 w-5 text-primary" />
+  const headerActions = useMemo(
+    () => (
+      <UnifiedPageToolbar
+        topLeft={
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+              <Megaphone className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-foreground">Маркетинг</div>
+              <div className="text-sm text-muted-foreground">
+                Галерея дизайн-візуалів: що зняти на виробництві та використати у промо.
+              </div>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Маркетинг</h1>
-            <p className="text-sm text-muted-foreground">
-              Галерея дизайн-візуалів: що зняти на виробництві та використати у промо.
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <IconInput
-            icon={Search}
-            iconLabel="Пошук"
-            placeholder="Пошук: замовник, задача, тег, номер прорахунку…"
+        }
+        search={
+          <ToolbarSearch
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            wrapperClassName="w-full sm:max-w-[360px]"
-            className={cn(TOOLBAR_CONTROL, "pl-9")}
+            onChange={setSearch}
+            placeholder="Пошук: замовник, задача, тег, номер…"
+            loading={loading}
           />
-          <Select value={designerFilter} onValueChange={setDesignerFilter}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")} aria-label="Автор дизайну">
-              <SelectValue placeholder="Всі дизайнери" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Всі дизайнери</SelectItem>
-              {designerOptions.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
-                    <span className="truncate">{option.label}</span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={managerFilter} onValueChange={setManagerFilter}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[180px]")} aria-label="Менеджер">
-              <SelectValue placeholder="Всі менеджери" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Всі менеджери</SelectItem>
-              {managerOptions.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
-                    <span className="truncate">{option.label}</span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-[160px]")} aria-label="Сортування">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Спочатку нові</SelectItem>
-              <SelectItem value="oldest">Спочатку давні</SelectItem>
-              <SelectItem value="customer">За замовником</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        }
+        filters={
+          <>
+            <Select value={designerFilter} onValueChange={setDesignerFilter}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")} aria-label="Автор дизайну">
+                <SelectValue placeholder="Всі дизайнери" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Всі дизайнери</SelectItem>
+                {designerOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
+                      <span className="truncate">{option.label}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={managerFilter} onValueChange={setManagerFilter}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")} aria-label="Менеджер">
+                <SelectValue placeholder="Всі менеджери" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Всі менеджери</SelectItem>
+                {managerOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
+                      <span className="truncate">{option.label}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
+              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[160px]")} aria-label="Сортування">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Спочатку нові</SelectItem>
+                <SelectItem value="oldest">Спочатку давні</SelectItem>
+                <SelectItem value="customer">За замовником</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+        meta={<ToolbarMeta count={groups.length} countLabel="візуалів" loading={loading} />}
+      />
+    ),
+    [
+      designerFilter,
+      designerOptions,
+      groups.length,
+      loading,
+      managerFilter,
+      managerOptions,
+      search,
+      sortMode,
+    ]
+  );
 
+  usePageHeaderActions(headerActions, [headerActions]);
+
+  return (
+    <div className="flex w-full flex-col gap-5 pb-24 md:pb-10">
+      {/* Чипи статусів і тегів лишаються в тілі: їх багато й вони ростуть разом
+          із тегами — у шапці вони б розпирали тулбар на пів екрана. */}
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Chip size="sm" active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
             Всі
