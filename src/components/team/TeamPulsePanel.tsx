@@ -308,9 +308,9 @@ export function TeamPulsePanel({
 
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col">
       {/* Range + KPIs */}
-      <div className="flex flex-col gap-4 px-4 pt-4 md:px-5 lg:px-6">
+      <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 px-4 pt-4 md:px-5 lg:px-6">
         <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
           {RANGE_OPTIONS.map((option) => (
             <Button
@@ -377,21 +377,25 @@ export function TeamPulsePanel({
             </div>
           </Card>
         ) : null}
-      </div>
 
-      {/* Grouped-by-user activity */}
+      {/* People — same card rhythm as the chart above, so the right-aligned
+          metrics keep their inset instead of running into the viewport edge. */}
       {loading && rows.length === 0 ? (
-        <div className="px-4 md:px-5 lg:px-6">
-          <AppSectionLoader label="Завантаження активності..." compact />
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="mx-4 flex flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] border border-dashed border-border/70 py-12 text-center md:mx-5 lg:mx-6">
+        <AppSectionLoader label="Завантаження активності..." compact />
+      ) : rankedPeople.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] border border-dashed border-border/70 py-12 text-center">
           <Activity className="h-6 w-6 text-muted-foreground/60" />
           <div className="text-sm font-medium text-foreground">Немає активності за цей період</div>
           <div className="text-xs text-muted-foreground">Оберіть ширший діапазон — дії зʼявляються тут одразу, а хвилини накопичуються поки люди працюють у CRM.</div>
         </div>
       ) : (
-        <div className="flex flex-col border-t border-border/60">
+        <Card className="overflow-hidden border-border/60 p-0">
+          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Люди
+            <span className="ml-auto normal-case tabular-nums">{rankedPeople.length}</span>
+          </div>
+          <div className="flex flex-col">
           {rankedPeople.map((entry) => {
             const person = resolvePerson(entry.userId);
             return (
@@ -400,7 +404,7 @@ export function TeamPulsePanel({
                 type="button"
                 onClick={() => onSelectPerson(entry.userId)}
                 title={`Відкрити картку: ${person.displayName}`}
-                className="flex w-full cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40 md:px-5 lg:px-6"
+                className="flex w-full cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40"
               >
                 <div className="relative shrink-0">
                   <AvatarBase
@@ -442,8 +446,10 @@ export function TeamPulsePanel({
               </button>
             );
           })}
-        </div>
+          </div>
+        </Card>
       )}
+      </div>
     </div>
   );
 }
