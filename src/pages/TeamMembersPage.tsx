@@ -3177,7 +3177,7 @@ export function TeamMembersPage() {
           </div>
 
           {effectiveViewMode === "rows" ? (
-            <div className="hidden border-t border-border/60 lg:block">
+            <div className="hidden border-t border-border/60 pb-8 lg:block">
               <Table variant="list" size="md" className="[&_td]:px-4 [&_th]:px-4">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
