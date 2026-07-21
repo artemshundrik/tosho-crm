@@ -78,6 +78,7 @@ import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKan
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
+import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
 import { isQuoteManagerJobRole } from "@/lib/permissions";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { formatDesignTaskNumber, getDesignTaskMonthCode, getNextDesignTaskNumber } from "@/lib/designTaskNumber";
@@ -1533,21 +1534,13 @@ export default function DesignPage() {
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!userId || !effectiveTeamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
-    // directly (pagination-proof) whether this user manages any design task.
+    // directly (pagination-proof) whether this user manages any work at all —
+    // design tasks OR quotes, so SEO who manage only quotes still land on себе.
     setDefaultManagerFilterApplied(true);
     let cancelled = false;
     void (async () => {
-      try {
-        const { count } = await supabase
-          .from("activity_log")
-          .select("id", { count: "exact", head: true })
-          .eq("team_id", effectiveTeamId)
-          .eq("action", "design_task")
-          .eq("metadata->>manager_user_id", userId);
-        if (!cancelled && (count ?? 0) > 0) setManagerFilter(userId);
-      } catch {
-        // Probe failed — leave the filter on "all".
-      }
+      const ownsWork = await hasOwnManagedWork({ userId, teamId: effectiveTeamId });
+      if (!cancelled && ownsWork) setManagerFilter(userId);
     })();
     return () => {
       cancelled = true;

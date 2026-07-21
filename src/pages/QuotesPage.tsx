@@ -19,6 +19,7 @@ import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
+import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
 import {
@@ -793,21 +794,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (managerFilter !== ALL_MANAGERS_FILTER) return;
     if (!currentUserId || !teamId) return;
     // Mark applied up-front so this probe runs exactly once; then ask the DB
-    // directly (pagination-proof) whether this user manages any quote at all.
+    // directly (pagination-proof) whether this user manages any work at all —
+    // quotes OR design tasks, so SEO who manage only designs still land on себе.
     setDefaultManagerFilterApplied(true);
     let cancelled = false;
     void (async () => {
-      try {
-        const { count } = await supabase
-          .schema("tosho")
-          .from("quotes")
-          .select("id", { count: "exact", head: true })
-          .eq("team_id", teamId)
-          .eq("assigned_to", currentUserId);
-        if (!cancelled && (count ?? 0) > 0) setManagerFilter(currentUserId);
-      } catch {
-        // Probe failed — leave the filter on "all".
-      }
+      const ownsWork = await hasOwnManagedWork({ userId: currentUserId, teamId });
+      if (!cancelled && ownsWork) setManagerFilter(currentUserId);
     })();
     return () => {
       cancelled = true;
