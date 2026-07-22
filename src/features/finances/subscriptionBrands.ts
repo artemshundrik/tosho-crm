@@ -25,6 +25,7 @@ export const SUBSCRIPTION_BRANDS: SubscriptionBrand[] = [
   { key: "magnific", label: "Magnific", domain: "magnific.com", currency: "USD", match: ["magnific", "магніфік"] },
   { key: "vchasno", label: "Вчасно", domain: "vchasno.ua", currency: "UAH", match: ["вчасно", "vchasno"] },
   { key: "medoc", label: "М.Е.Doc (Медок)", domain: "medoc.ua", currency: "UAH", match: ["медок", "medoc", "m.e.doc", "медок"] },
+  { key: "bas", label: "BAS Бухгалтерія", domain: "bas-soft.eu", currency: "UAH", match: ["bas", "бас", "баз", "бухгалтерія bas"] },
   { key: "tucha", label: "Tucha", domain: "tucha.ua", currency: "UAH", match: ["tucha", "туча"] },
   { key: "crm", label: "CRM-система", domain: null, currency: "UAH", match: ["crm", "срм", "црм"] },
   { key: "anthropic", label: "Claude (Anthropic)", domain: "anthropic.com", currency: "USD", match: ["anthropic", "claude", "клод"] },
