@@ -2318,7 +2318,7 @@ export function TeamMembersPage() {
         topLeft={
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center gap-2.5">
-              <h1 className="text-lg font-semibold tracking-tight text-foreground">Співробітники</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">Ролі та доступи</h1>
               <CountBadge value={members.length} />
             </div>
             <div className={SEGMENTED_GROUP}>

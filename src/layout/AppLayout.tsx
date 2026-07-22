@@ -484,7 +484,7 @@ const baseSidebarLinks: SidebarLink[] = [
   // Акаунт
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users },
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
-  { label: "Доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
+  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
   { label: "Нова Пошта", to: ROUTES.novaPoshta, group: "account", icon: Truck, moduleKey: "team" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
 ];
@@ -622,9 +622,9 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
-      title: "Управління командою",
+      title: "Ролі та доступи",
       subtitle: "Учасники, ролі, доступи та керування профілями команди.",
-      breadcrumbLabel: "Управління командою",
+      breadcrumbLabel: "Ролі та доступи",
       breadcrumbTo: ROUTES.membersAccess,
       showPageHeader: false,
     };
