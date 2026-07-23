@@ -55,7 +55,7 @@ export default function UpdatePasswordPage() {
   if (hasSession === false) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-6 text-card-foreground text-center">
+        <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-6 text-card-foreground text-center">
           <div className="text-xl font-extrabold text-foreground">Посилання недійсне</div>
           <div className="text-sm text-muted-foreground mt-2">
             Спробуй надіслати новий лист для встановлення пароля.
@@ -72,7 +72,7 @@ export default function UpdatePasswordPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">Встановити новий пароль</div>
           <div className="text-sm text-muted-foreground mt-1">Введи новий пароль для свого акаунта.</div>
@@ -80,7 +80,7 @@ export default function UpdatePasswordPage() {
 
         {(error || msg) && (
           <div
-            className={`mb-4 rounded-[var(--radius-inner)] border p-3 text-sm font-medium ${
+            className={`mb-4 rounded-inner border p-3 text-sm font-medium ${
               error
                 ? "bg-danger-soft border-danger-soft-border text-danger-foreground"
                 : "bg-success-soft border-success-soft-border text-success-foreground"

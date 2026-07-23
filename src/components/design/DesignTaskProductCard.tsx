@@ -62,7 +62,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             {product.productKind === "print" ? "Поліграфія" : "Товар"}
           </div>
           <div className="mt-1 truncate text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl">
@@ -94,7 +94,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
       {/* Друк (сторони) — поліграфія only */}
       {product.productKind === "print" && product.printSides ? (
         <div className="border-t border-border/50 bg-muted/10 px-4 py-3.5 sm:px-5">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Друк
           </div>
           <span className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1.5 text-sm font-medium text-foreground">
@@ -106,7 +106,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
       {/* Surfaces (нанесення) */}
       {product.surfaces.length > 0 ? (
         <div className="border-t border-border/50 bg-muted/10 px-4 py-3.5 sm:px-5">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Нанесення
           </div>
           <div className="flex flex-wrap gap-2">

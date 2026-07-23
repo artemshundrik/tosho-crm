@@ -938,7 +938,7 @@ export default function AdminObservabilityPage() {
         <section className="overflow-hidden rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_34%),radial-gradient(circle_at_top_right,hsl(var(--success-foreground)/0.12),transparent_28%),linear-gradient(180deg,hsl(var(--card)/0.98),hsl(var(--muted)/0.45))] p-5 shadow-sm">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-caps text-primary">
                 <Sparkles className="h-3.5 w-3.5" />
                 Admin Access
               </div>
@@ -967,11 +967,11 @@ export default function AdminObservabilityPage() {
         </section>
 
         {loading ? (
-          <section className="rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+          <section className="rounded-4xl border border-border/60 bg-card/95 shadow-sm">
             <AppSectionLoader label="Завантаження observability snapshots..." className="border-none bg-transparent py-12" />
           </section>
         ) : error && !latest ? (
-          <section className="rounded-[24px] border border-destructive/30 bg-destructive/5 p-5 shadow-sm">
+          <section className="rounded-4xl border border-destructive/30 bg-destructive/5 p-5 shadow-sm">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 text-destructive" />
               <div className="space-y-2">
@@ -986,7 +986,7 @@ export default function AdminObservabilityPage() {
             </div>
           </section>
         ) : !latest ? (
-          <section className="rounded-[24px] border border-border/60 bg-card/95 p-8 shadow-sm">
+          <section className="rounded-4xl border border-border/60 bg-card/95 p-8 shadow-sm">
             <div className="mx-auto max-w-2xl text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border/70 bg-muted/40">
                 <Activity className="h-6 w-6 text-primary" />
@@ -1001,7 +1001,7 @@ export default function AdminObservabilityPage() {
         ) : (
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups" | "telegram" | "ai-usage")} className="w-full">
             {refreshError ? (
-              <section className="mb-6 rounded-[24px] border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
+              <section className="mb-6 rounded-4xl border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="mt-0.5 h-5 w-5 text-warning-foreground" />
                   <div className="space-y-1">
@@ -1011,35 +1011,35 @@ export default function AdminObservabilityPage() {
                 </div>
               </section>
             ) : null}
-            <div className="rounded-[24px] border border-border/60 bg-card/95 p-3 shadow-sm">
-              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 rounded-[18px] border border-border/60 bg-muted/30 p-1 shadow-none">
+            <div className="rounded-4xl border border-border/60 bg-card/95 p-3 shadow-sm">
+              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 rounded-2xl border border-border/60 bg-muted/30 p-1 shadow-none">
                 <TabsTrigger
                   value="overview"
-                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Огляд
                 </TabsTrigger>
                 <TabsTrigger
                   value="backups"
-                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Backups
                 </TabsTrigger>
                 <TabsTrigger
                   value="attachments"
-                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Orphan files review
                 </TabsTrigger>
                 <TabsTrigger
                   value="telegram"
-                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Telegram
                 </TabsTrigger>
                 <TabsTrigger
                   value="ai-usage"
-                  className="h-10 rounded-[14px] border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   AI-кости
                 </TabsTrigger>
@@ -1048,7 +1048,7 @@ export default function AdminObservabilityPage() {
 
             <Suspense
               fallback={
-                <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
                   <AppSectionLoader label="Завантаження overview..." className="border-none bg-transparent py-12" />
                 </section>
               }
@@ -1197,7 +1197,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "backups" ? (
-                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                  <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
                     <AppSectionLoader label="Завантаження backup monitor..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1213,7 +1213,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "attachments" ? (
-                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                  <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
                     <AppSectionLoader label="Завантаження attachments review..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1244,7 +1244,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "telegram" ? (
-                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                  <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
                     <AppSectionLoader label="Завантаження статистики Telegram..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1256,7 +1256,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "ai-usage" ? (
-                  <section className="mt-6 rounded-[24px] border border-border/60 bg-card/95 shadow-sm">
+                  <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
                     <AppSectionLoader label="Завантаження витрат на AI..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null

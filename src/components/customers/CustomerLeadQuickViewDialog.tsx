@@ -892,7 +892,7 @@ export function CustomerLeadQuickViewDialog({
                                 {[point.city, point.address].filter(Boolean).join(", ") ||
                                   DELIVERY_POINT_TYPE_LABELS[point.type]}
                                 {point.isDefault ? (
-                                  <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-3xs font-medium text-muted-foreground">
                                     основна
                                   </span>
                                 ) : null}

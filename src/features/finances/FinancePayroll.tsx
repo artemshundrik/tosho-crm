@@ -392,7 +392,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                             {shortenName(person.name)}
                           </div>
                           {person.jobRole ? (
-                            <div className="truncate text-[11px] text-muted-foreground">
+                            <div className="truncate text-2xs text-muted-foreground">
                               {formatJobRole(person.jobRole)}
                             </div>
                           ) : null}

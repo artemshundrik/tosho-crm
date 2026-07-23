@@ -727,7 +727,7 @@ function toDraft(item?: ToShoAiKnowledgeItem | null): KnowledgeDraft {
 export function ToShoAiWordmark() {
   return (
     <div className="inline-flex items-center gap-2.5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E6007E]/12 text-[#E6007E] ring-1 ring-[#E6007E]/18">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-ai-accent/12 text-ai-accent ring-1 ring-ai-accent/18">
         <svg
           viewBox="0 0 33 33"
           className="h-[18px] w-[18px]"
@@ -745,7 +745,7 @@ export function ToShoAiWordmark() {
           />
         </svg>
       </div>
-      <span className="text-[18px] font-semibold tracking-[-0.03em] text-[#E6007E] md:text-[20px]">ToSho AI</span>
+      <span className="text-[18px] font-semibold tracking-[-0.03em] text-ai-accent md:text-[20px]">ToSho AI</span>
     </div>
   );
 }
@@ -766,7 +766,7 @@ function ThreadCard({
       className={cn(
         "group w-full rounded-[22px] border px-4 py-4 text-left transition-colors",
         active
-          ? "border-foreground/20 bg-foreground/5 text-foreground shadow-[var(--shadow-elevated-sm)]"
+          ? "border-foreground/20 bg-foreground/5 text-foreground shadow-elevated-sm"
           : "border-border/60 bg-card/60 text-foreground hover:bg-muted/35"
       )}
     >
@@ -856,7 +856,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
               name={analytics.title}
               size={34}
               className="ring-1 ring-border/60"
-              fallbackClassName="text-[11px] font-semibold"
+              fallbackClassName="text-2xs font-semibold"
             />
           ) : null}
           <div className="min-w-0">
@@ -864,7 +864,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
             {analytics.caption ? <div className="mt-0.5 text-xs text-muted-foreground">{analytics.caption}</div> : null}
           </div>
         </div>
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
           {analytics.metricLabel}
         </div>
       </div>
@@ -891,7 +891,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                         name={displayLabel}
                         size={38}
                         className="mt-0.5 shrink-0 ring-1 ring-border/60"
-                        fallbackClassName="text-[11px] font-semibold"
+                        fallbackClassName="text-2xs font-semibold"
                       />
                     ) : row.avatarUrl ? (
                       isQuoteDraft ? (
@@ -907,7 +907,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                           name={displayLabel}
                           size={38}
                           className="mt-0.5 ring-1 ring-border/60"
-                          fallbackClassName="text-[11px] font-semibold"
+                          fallbackClassName="text-2xs font-semibold"
                         />
                       )
                     ) : (
@@ -1107,7 +1107,7 @@ function MagicThinkingCard({ message }: { message: string }) {
     <div className="flex w-full min-w-0 justify-start overflow-hidden px-0.5">
       <div className="max-w-[calc(100%-0.25rem)] min-w-0 sm:max-w-[88%]">
         <div className="flex min-w-0 items-center gap-2 text-xs">
-          <div className="tosho-ai-thinking-orb flex h-8 w-8 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
+          <div className="tosho-ai-thinking-orb flex h-8 w-8 items-center justify-center rounded-full border border-ai-accent/18 bg-ai-accent/10 text-ai-accent">
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="tosho-ai-thinking-line min-w-0 text-sm font-medium leading-6">
@@ -1136,9 +1136,9 @@ function EmptyChatSuggestions({
   }
 
   return (
-    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-[var(--shadow-elevated-sm)]">
+    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-elevated-sm">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-ai-accent/18 bg-ai-accent/10 text-ai-accent">
           <Sparkles className="h-4 w-4" />
         </div>
         <div className="min-w-0">
@@ -1154,10 +1154,10 @@ function EmptyChatSuggestions({
               key={`${activeGroup.id}:${suggestion.label}:${suggestion.text}`}
               type="button"
               onClick={() => onSelect(suggestion.text)}
-              className="group flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#E6007E]/16 bg-[#E6007E]/5 px-3.5 py-2.5 text-left transition-colors hover:border-[#E6007E]/28 hover:bg-[#E6007E]/10"
+              className="group flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-ai-accent/16 bg-ai-accent/5 px-3.5 py-2.5 text-left transition-colors hover:border-ai-accent/28 hover:bg-ai-accent/10"
             >
               <span className="min-w-0 text-sm font-semibold text-foreground">{suggestion.label}</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-[#E6007E] transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-ai-accent transition-transform group-hover:translate-x-0.5" />
             </button>
           ))}
         </div>
@@ -1175,8 +1175,8 @@ function EmptyChatSuggestions({
               className={cn(
                 "inline-flex min-h-8 items-center rounded-full border px-3 py-1.5 text-left text-xs font-semibold transition-colors",
                 isActive || isDefault
-                  ? "border-[#E6007E]/24 bg-[#E6007E]/10 text-[#E6007E]"
-                  : "border-border/60 bg-card/60 text-muted-foreground hover:border-[#E6007E]/20 hover:text-foreground"
+                  ? "border-ai-accent/24 bg-ai-accent/10 text-ai-accent"
+                  : "border-border/60 bg-card/60 text-muted-foreground hover:border-ai-accent/20 hover:text-foreground"
               )}
             >
               {group.label}
@@ -1215,7 +1215,7 @@ function MessageCard({
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full border",
                 isAssistant
-                  ? "border-[#E6007E]/18 bg-[#E6007E]/10 text-[#E6007E]"
+                  ? "border-ai-accent/18 bg-ai-accent/10 text-ai-accent"
                   : "border-border/60 bg-background/80 text-foreground"
               )}
             >
@@ -1231,9 +1231,9 @@ function MessageCard({
         </div>
         <div
           className={cn(
-            "rounded-[24px] border px-3.5 py-3 text-[15px] shadow-[var(--shadow-elevated-sm)] sm:rounded-[28px] sm:px-4 sm:py-3.5",
+            "rounded-4xl border px-3.5 py-3 text-[15px] shadow-elevated-sm sm:rounded-[28px] sm:px-4 sm:py-3.5",
             isUser
-              ? "border-[#E6007E]/18 bg-[#E6007E]/12"
+              ? "border-ai-accent/18 bg-ai-accent/12"
               : "border-border/60 bg-card/88"
           )}
         >
@@ -1243,7 +1243,7 @@ function MessageCard({
 
           {message.attachments.length > 0 ? (
             <div className="mt-4 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Вкладення</div>
+              <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">Вкладення</div>
               <div className="grid gap-2">
                 {message.attachments.map((attachment) => (
                   <a
@@ -1286,7 +1286,7 @@ function MessageCard({
 
           {message.sources.length > 0 ? (
             <div className="mt-4 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Джерела</div>
+              <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">Джерела</div>
               <div className="grid gap-2">
                 {message.sources.map((source) => (
                   <div
@@ -2128,7 +2128,7 @@ export function ToShoAiConsole({
             </div>
 
             {showRequestList ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-[var(--shadow-elevated-sm)]">
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-elevated-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Попередні чати</div>
@@ -2173,7 +2173,7 @@ export function ToShoAiConsole({
             ) : null}
 
             {knowledgeExpanded ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-[var(--shadow-elevated-sm)]">
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-elevated-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">База знань</div>
@@ -2275,7 +2275,7 @@ export function ToShoAiConsole({
             ) : null}
 
             {!snapshot && !loading && loadError ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4 shadow-[var(--shadow-elevated-sm)]">
+              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4 shadow-elevated-sm">
                 <EmptyPanel
                   icon={<Bot className="h-5 w-5" />}
                   title="ToSho AI тимчасово недоступний"
@@ -2401,7 +2401,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 shadow-inner [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-[24px] sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-[22px] border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 shadow-inner [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"
@@ -2536,7 +2536,7 @@ function EmptyPanel({
   description: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-border/70 bg-background/45 px-4 py-5 text-center">
+    <div className="rounded-4xl border border-dashed border-border/70 bg-background/45 px-4 py-5 text-center">
       <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground">
         {icon}
       </div>
@@ -2559,8 +2559,8 @@ function MentionSuggestionPanel({
 }) {
   const title = `Підставити ${getMentionKindLabel(activeMention.kind)}`;
   return (
-    <div className="rounded-[20px] border border-border/60 bg-card/95 p-2 shadow-[var(--shadow-elevated-sm)]">
-      <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="rounded-[20px] border border-border/60 bg-card/95 p-2 shadow-elevated-sm">
+      <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         {title}
       </div>
       <div className="max-h-[220px] space-y-1 overflow-y-auto">
@@ -2590,7 +2590,7 @@ function MentionSuggestionPanel({
                     name={suggestion.label}
                     size={32}
                     className="shrink-0 ring-1 ring-border/60"
-                    fallbackClassName="text-[11px] font-semibold"
+                    fallbackClassName="text-2xs font-semibold"
                   />
                 ) : (
                   <EntityAvatar
@@ -2598,7 +2598,7 @@ function MentionSuggestionPanel({
                     name={suggestion.label}
                     size={32}
                     className="shrink-0 ring-1 ring-border/60"
-                    fallbackClassName="text-[11px] font-semibold"
+                    fallbackClassName="text-2xs font-semibold"
                   />
                 )}
                 <div className="min-w-0 flex-1">

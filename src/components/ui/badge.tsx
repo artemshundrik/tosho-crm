@@ -44,7 +44,9 @@ const badgeVariants = cva(
       },
 
       size: {
-        sm: "text-[11px] px-2.5 py-0.5",
+        // Дві канонічні висоти. sm — робоча (ДЕФОЛТ): списки, таблиці, канбан,
+        // inline-статуси. md — акцентна: тулбари, шапки, standalone-бейджі.
+        sm: "text-2xs px-2.5 py-0.5",
         md: "text-xs px-3 py-1",
       },
 
@@ -75,7 +77,7 @@ const badgeVariants = cva(
 
     defaultVariants: {
       variant: "default",
-      size: "md",
+      size: "sm",
       pill: false,
     },
   }

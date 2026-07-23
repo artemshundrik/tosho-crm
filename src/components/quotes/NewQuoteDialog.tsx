@@ -219,7 +219,7 @@ const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string }
   value,
 }) => (
   <div className="rounded-[16px] border border-border/50 bg-muted/20 px-3 py-2.5">
-    <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+    <div className="flex items-center gap-2 text-2xs uppercase tracking-caps text-muted-foreground">
       {icon}
       <span>{label}</span>
     </div>
@@ -265,7 +265,7 @@ const RunsEditor: React.FC<{
           <div key={run.id} className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Тираж</span>
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border/40 bg-background/60 px-1.5 text-[11px] font-medium text-foreground">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border/40 bg-background/60 px-1.5 text-2xs font-medium text-foreground">
                 {index + 1}
               </span>
             </div>
@@ -1760,7 +1760,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       }
                       size={20}
                       className="border-border/60"
-                      fallbackClassName="text-[10px] font-semibold"
+                      fallbackClassName="text-3xs font-semibold"
                     />
                   ) : (
                     <User />
@@ -1794,7 +1794,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                         fallback={member.label.slice(0, 2).toUpperCase()}
                         size={20}
                         className="border-border/60 shrink-0"
-                        fallbackClassName="text-[10px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                       />
                       <span className="text-sm truncate max-w-[220px]">{member.label}</span>
                     </Button>
@@ -1830,7 +1830,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 initialFocus
               />
               <div className="border-t border-border/50 px-3 py-3">
-                <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="text-xs uppercase tracking-caps text-muted-foreground">
                   Час дедлайну
                 </div>
                 <Input
@@ -1997,10 +1997,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <SectionHeader>Продукція</SectionHeader>
 
           <div className="space-y-4">
-            <div className="rounded-[24px] border border-border/40 bg-background/30 p-4 md:p-5">
+            <div className="rounded-4xl border border-border/40 bg-background/30 p-4 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
                     Вибір продукту
                   </div>
                   <div className="text-lg font-semibold text-foreground">Виберіть напрямок і продукт</div>
@@ -2125,7 +2125,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-xs text-muted-foreground">Модель</div>
                             {kindId && onCreateCatalogModel ? (
-                              <span className="text-[11px] text-muted-foreground">Немає в списку?</span>
+                              <span className="text-2xs text-muted-foreground">Немає в списку?</span>
                             ) : null}
                           </div>
                           <ChipDropdown
@@ -2250,7 +2250,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {!isPrintPackageMode ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Нанесення</SectionHeader>
-          <div className="rounded-[24px] border border-border/40 bg-background/30 p-4 md:p-5">
+          <div className="rounded-4xl border border-border/40 bg-background/30 p-4 md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="text-lg font-semibold text-foreground">Нанесення</div>
@@ -2261,7 +2261,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   variant={printApplications.length > 0 ? "outline" : "primary"}
                   size="sm"
                   onClick={handleAddPrintApplication}
-                  className="h-10 gap-1.5 rounded-[14px] px-4 text-sm"
+                  className="h-10 gap-1.5 rounded-xl px-4 text-sm"
                 >
                   <Plus className="h-4 w-4" />
                   {printApplications.length > 0 ? "Додати ще нанесення" : "Додати нанесення"}
@@ -2358,7 +2358,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             ))}
 
             {printApplications.length === 0 ? (
-              <div className="rounded-[18px] border border-dashed border-border/60 bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-border/60 bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
                 Для цього прорахунку друк не потрібен. Дизайн-блок і файли теж будуть приховані.
               </div>
             ) : null}
@@ -2400,7 +2400,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             <div className="grid gap-5">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                     Задача на дизайн
                   </div>
                   <button
@@ -2427,7 +2427,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                     Виконавець
                   </div>
                   <ChipDropdown
@@ -2467,7 +2467,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                     Співвиконавці
                   </div>
                   <MultiChipDropdown
@@ -2487,7 +2487,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                     Тип задачі
                   </div>
                   <ChipDropdown
@@ -2533,7 +2533,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     }}
                     onDragLeave={() => setFilesDragActive(false)}
                     className={cn(
-                      "relative flex min-h-[180px] items-center justify-center border-2 border-dashed rounded-[18px] p-6 text-center transition-colors cursor-pointer",
+                      "relative flex min-h-[180px] items-center justify-center border-2 border-dashed rounded-2xl p-6 text-center transition-colors cursor-pointer",
                       filesDragActive
                         ? "border-primary/70 bg-primary/10"
                         : "border-border/40 hover:border-border/60"

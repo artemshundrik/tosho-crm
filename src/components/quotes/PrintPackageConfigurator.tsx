@@ -294,7 +294,7 @@ const ConfigField: React.FC<{
   children: React.ReactNode;
 }> = ({ label, children }) => (
   <div className="space-y-1.5">
-    <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+    <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">{label}</div>
     {children}
   </div>
 );

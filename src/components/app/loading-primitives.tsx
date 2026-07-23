@@ -51,7 +51,7 @@ export function SurfaceSkeleton({
         aria-busy="true"
         className={cn("w-full", className)}
       >
-        <div className="flex items-center gap-2 px-5 py-4 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <div className="flex items-center gap-2 px-5 py-4 text-xs font-medium uppercase tracking-caps text-muted-foreground">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inset-0 animate-ping rounded-full bg-primary/25" />
             <span className="relative h-2.5 w-2.5 rounded-full bg-primary/70" />
@@ -99,12 +99,12 @@ export function SurfaceSkeleton({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        "rounded-[24px] border border-border/60 bg-card/82 p-4 shadow-[var(--shadow-elevated-sm)]",
+        "rounded-4xl border border-border/60 bg-card/82 p-4 shadow-elevated-sm",
         compact ? "space-y-3" : "space-y-4",
         className
       )}
     >
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-caps text-muted-foreground">
         <span className="relative flex h-2.5 w-2.5">
           <span className="absolute inset-0 animate-ping rounded-full bg-primary/25" />
           <span className="relative rounded-full bg-primary/70 h-2.5 w-2.5" />
@@ -117,7 +117,7 @@ export function SurfaceSkeleton({
           <div
             key={index}
             className={cn(
-              "flex items-center gap-3 rounded-[18px] border border-border/40 bg-background/60 px-3 py-3",
+              "flex items-center gap-3 rounded-2xl border border-border/40 bg-background/60 px-3 py-3",
               compact && "rounded-[16px] py-2.5"
             )}
           >
@@ -157,7 +157,7 @@ export function MenuSkeleton({
       </div>
 
       {Array.from({ length: rows }).map((_, index) => (
-        <div key={index} className="flex min-h-12 items-center gap-3 rounded-[14px] px-2 py-2">
+        <div key={index} className="flex min-h-12 items-center gap-3 rounded-xl px-2 py-2">
           <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
           <div className="min-w-0 flex-1 space-y-2">
             <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[52%]" : "w-[64%]")} />

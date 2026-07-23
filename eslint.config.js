@@ -27,6 +27,26 @@ export default defineConfig([
       'react-hooks/purity': 'off',
       'react-hooks/immutability': 'off',
       'react-hooks/exhaustive-deps': 'error',
+
+      // --- ГЕЙТ ДИЗАЙН-СИСТЕМИ ---
+      // Обидва патерни були вичищені до нуля; правила існують, щоб вони не
+      // повернулись. Селектор ловить і прямий рядок у className, і рядки
+      // всередині cn(...)/умовних виразів, бо працює по нащадках атрибута.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            'JSXAttribute[name.name="className"] Literal[value=/-\\[#[0-9a-fA-F]{3,8}\\]/]',
+          message:
+            'Хардкод кольору в className. Візьми семантичний токен (bg-warning-soft, text-info-foreground, bg-ai-accent…) або заведи новий у index.css + tailwind.config.js — інакше колір не адаптується до темної теми.',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name="className"] Literal[value=/text-\\[(9|10|11)px\\]/]',
+          message:
+            'Для мікро-типографіки є токени: text-3xs (10px) і text-2xs (11px). Розмір у пікселях повертає нас до п’яти різних «майже однакових» кеглів.',
+        },
+      ],
     },
   },
 ])

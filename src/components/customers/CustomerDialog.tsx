@@ -170,7 +170,7 @@ export type CustomerDialogProps = {
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+  <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
     {children}
   </h4>
 );
@@ -382,7 +382,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             </div>
             <div
               className={cn(
-                "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                "shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium",
                 kind === "quote" ? (quoteStatusClasses[quoteStatusKey] ?? "border-border bg-muted/30 text-muted-foreground") : "border-border bg-muted/30 text-muted-foreground"
               )}
             >
@@ -714,7 +714,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, paymentType: "invoice" }))}
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    "rounded-full px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-wide transition-colors",
                     form.paymentType === "invoice"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -726,7 +726,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, paymentType: "cash" }))}
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    "rounded-full px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-wide transition-colors",
                     form.paymentType === "cash"
                       ? "bg-[hsl(var(--accent-tone-foreground)/0.15)] text-[hsl(var(--accent-tone-foreground))]"
                       : "text-muted-foreground hover:text-foreground"
@@ -737,7 +737,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               </div>
             </div>
             {form.paymentType === "cash" ? (
-              <div className="mt-1 text-[11px] text-[hsl(var(--accent-tone-foreground))]">
+              <div className="mt-1 text-2xs text-[hsl(var(--accent-tone-foreground))]">
                 Готівка — email і реквізити необовʼязкові
               </div>
             ) : null}
@@ -755,7 +755,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       fallback={selectedManager.label.slice(0, 2).toUpperCase()}
                       size={18}
                       className="border-border/60 shrink-0"
-                      fallbackClassName="text-[9px] font-semibold"
+                      fallbackClassName="text-3xs font-semibold"
                     />
                   ) : (
                     <User className="h-3.5 w-3.5 shrink-0" />
@@ -786,7 +786,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           fallback={member.label.slice(0, 2).toUpperCase()}
                           size={20}
                           className="border-border/60 shrink-0"
-                          fallbackClassName="text-[10px] font-semibold"
+                          fallbackClassName="text-3xs font-semibold"
                         />
                         <span className="truncate">{member.label}</span>
                       </Button>
@@ -932,7 +932,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       {form.paymentType === "invoice" ? (
                         <span className="text-destructive">*</span>
                       ) : (
-                        <span className="text-[10px] font-normal text-muted-foreground">необовʼязково</span>
+                        <span className="text-3xs font-normal text-muted-foreground">необовʼязково</span>
                       )}
                     </Label>
                     <EmailInput
@@ -983,7 +983,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
                 Логістика
                 {form.deliveryPoints.length > 0 ? (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                     {form.deliveryPoints.length}
                   </span>
                 ) : null}
@@ -991,7 +991,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <TabsTrigger value="accountant" className={UNDERLINE_TAB}>Бухгалтер</TabsTrigger>
               <TabsTrigger value="related" className={UNDERLINE_TAB}>
                 Пов'язане
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                   {relatedTotalCount}
                 </span>
               </TabsTrigger>
@@ -1182,7 +1182,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                 {index === 0 ? "Основна" : `Юр. особа ${index + 1}`}
                             </span>
                             {entity.ownershipType.trim() ? (
-                              <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                              <span className="rounded-full border border-border/70 px-2 py-0.5 text-2xs text-muted-foreground">
                                 {ownershipLabel}
                               </span>
                             ) : null}
@@ -1285,7 +1285,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                               <React.Fragment key={groupName}>
                                 {groupIndex > 0 ? <SelectSeparator /> : null}
                                 <SelectGroup>
-                                  <SelectLabel className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                                  <SelectLabel className="px-2 py-1 text-2xs uppercase tracking-wide text-muted-foreground">
                                     {groupName}
                                   </SelectLabel>
                                   {options.map((option) => (
@@ -1394,7 +1394,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         </div>
                       ) : null}
                       <div className="grid gap-2">
-                        <Label>IBAN <span className="text-[10px] font-normal text-muted-foreground">не обовʼязково</span></Label>
+                        <Label>IBAN <span className="text-3xs font-normal text-muted-foreground">не обовʼязково</span></Label>
                         <IbanInput
                           value={activeLegalEntity.iban}
                           onChange={(iban) => updateLegalEntity(activeLegalEntityIndex, { iban })}
@@ -1681,14 +1681,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="related" className="space-y-3 mt-3">
               {/* LTV (MVP): summary card. Only renders when caller supplies ltvEntry. */}
               {ltvEntry ? (
-                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-muted/20 p-4">
+                <div className="rounded-inner border border-border/60 bg-muted/20 p-4">
                   <div className="flex items-center justify-between gap-2">
                     <SectionHeader>Lifetime value</SectionHeader>
                     {ltvSegment && ltvSegment !== "none" ? (
                       <Badge
                         tone={RFM_SEGMENT_TONE[ltvSegment]}
                         variant="outline"
-                        className="rounded-full px-2 py-0 text-[10px] font-medium normal-case tracking-normal"
+                        className="rounded-full px-2 py-0 text-3xs font-medium normal-case tracking-normal"
                       >
                         {RFM_SEGMENT_LABELS[ltvSegment]}
                       </Badge>
@@ -1713,11 +1713,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide">Замовлень</div>
+                      <div className="text-3xs uppercase tracking-wide">Замовлень</div>
                       <div className="text-sm text-foreground">{ltvEntry.ordersCount}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide">Сер. чек</div>
+                      <div className="text-3xs uppercase tracking-wide">Сер. чек</div>
                       <div className="text-sm text-foreground">
                         {new Intl.NumberFormat("uk-UA", {
                           style: "currency",
@@ -1727,7 +1727,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide">Останнє</div>
+                      <div className="text-3xs uppercase tracking-wide">Останнє</div>
                       <div className="text-sm text-foreground">
                         {ltvEntry.lastOrderAt
                           ? format(new Date(ltvEntry.lastOrderAt), "dd.MM.yyyy", { locale: uk })
@@ -1735,7 +1735,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide">Тиша</div>
+                      <div className="text-3xs uppercase tracking-wide">Тиша</div>
                       <div className="text-sm text-foreground">
                         {ltvEntry.lastOrderAt
                           ? `${Math.floor((Date.now() - new Date(ltvEntry.lastOrderAt).getTime()) / 86400000)} дн`
@@ -1743,7 +1743,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2 text-[10px] text-muted-foreground">
+                  <div className="mt-2 text-3xs text-muted-foreground">
                     Сума по всіх замовленнях клієнта. Без врахування собівартості та повернень.
                   </div>
                 </div>
@@ -1753,19 +1753,19 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
                   <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                     Прорахунки
-                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                       {calculations.length}
                     </span>
                   </TabsTrigger>
                   <TabsTrigger value="orders" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                     Замовлення
-                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                       {orders.length}
                     </span>
                   </TabsTrigger>
                   <TabsTrigger value="design" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                     Дизайн
-                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                       {designTasks.length}
                     </span>
                   </TabsTrigger>

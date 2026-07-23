@@ -114,7 +114,7 @@ export type LeadDialogProps = {
 };
 
 const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</h4>
+  <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{children}</h4>
 );
 
 /** Elevated section surface: a titled card on the dark canvas for depth + grouping. */
@@ -381,7 +381,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </div>
             <div
               className={cn(
-                "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                "shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium",
                 kind === "quote" ? (quoteStatusClasses[quoteStatusKey] ?? "border-border bg-muted/30 text-muted-foreground") : "border-border bg-muted/30 text-muted-foreground"
               )}
             >
@@ -547,7 +547,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, paymentType: "invoice" }))}
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    "rounded-full px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-wide transition-colors",
                     form.paymentType === "invoice"
                       ? "bg-primary/15 text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -559,7 +559,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   type="button"
                   onClick={() => setForm((prev) => ({ ...prev, paymentType: "cash" }))}
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    "rounded-full px-2.5 py-0.5 text-3xs font-semibold uppercase tracking-wide transition-colors",
                     form.paymentType === "cash"
                       ? "bg-[hsl(var(--accent-tone-foreground)/0.15)] text-[hsl(var(--accent-tone-foreground))]"
                       : "text-muted-foreground hover:text-foreground"
@@ -570,7 +570,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               </div>
             </div>
             {form.paymentType === "cash" ? (
-              <div className="mt-1 text-[11px] text-[hsl(var(--accent-tone-foreground))]">
+              <div className="mt-1 text-2xs text-[hsl(var(--accent-tone-foreground))]">
                 Готівка — реквізити необовʼязкові
               </div>
             ) : null}
@@ -589,7 +589,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         fallback={selectedManager.label.slice(0, 2).toUpperCase()}
                         size={18}
                         className="border-border/60 shrink-0"
-                        fallbackClassName="text-[9px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                       />
                     ) : (
                       <User className="h-3.5 w-3.5 shrink-0" />
@@ -614,7 +614,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       fallback={form.manager.slice(0, 2).toUpperCase()}
                       size={20}
                       className="border-border/60 shrink-0"
-                      fallbackClassName="text-[10px] font-semibold"
+                      fallbackClassName="text-3xs font-semibold"
                     />
                     <span className="truncate">{form.manager}</span>
                   </Button>
@@ -638,7 +638,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                         fallback={member.label.slice(0, 2).toUpperCase()}
                         size={20}
                         className="border-border/60 shrink-0"
-                        fallbackClassName="text-[10px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                       />
                       <span className="truncate">{member.label}</span>
                       <Check
@@ -683,7 +683,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   <div className="space-y-2">
                     {groupedOwnershipOptions.map(([groupName, options]) => (
                       <div key={groupName} className="space-y-1">
-                        <div className="px-2 pt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <div className="px-2 pt-1 text-2xs uppercase tracking-wide text-muted-foreground">
                           {groupName}
                         </div>
                         {options.map((option) => (
@@ -852,14 +852,14 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <TabsTrigger value="logistics" className={UNDERLINE_TAB}>
                   Логістика
                   {form.deliveryPoints.length > 0 ? (
-                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                       {form.deliveryPoints.length}
                     </span>
                   ) : null}
                 </TabsTrigger>
                 <TabsTrigger value="related" className={UNDERLINE_TAB}>
                   Пов'язане
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                     {relatedTotalCount}
                   </span>
                 </TabsTrigger>
@@ -993,7 +993,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label>IBAN <span className="text-[10px] font-normal text-muted-foreground">не обовʼязково</span></Label>
+                      <Label>IBAN <span className="text-3xs font-normal text-muted-foreground">не обовʼязково</span></Label>
                       <IbanInput value={form.iban} onChange={(iban) => setForm((prev) => ({ ...prev, iban }))} />
                     </div>
                   </div>
@@ -1206,19 +1206,19 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
               <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                 Прорахунки
-                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                   {calculations.length}
                 </span>
               </TabsTrigger>
               <TabsTrigger value="orders" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                 Замовлення
-                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                   {orders.length}
                 </span>
               </TabsTrigger>
               <TabsTrigger value="design" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                 Дизайн
-                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
                   {designTasks.length}
                 </span>
               </TabsTrigger>

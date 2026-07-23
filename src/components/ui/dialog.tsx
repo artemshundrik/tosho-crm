@@ -43,7 +43,7 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-20px)] max-w-lg translate-x-[-50%] translate-y-[-50%] notranslate",
         "max-h-[calc(100dvh-1.5rem)]",
-        "rounded-[24px] border border-border/40 bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5 outline-none",
+        "rounded-4xl border border-border/40 bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5 outline-none",
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",

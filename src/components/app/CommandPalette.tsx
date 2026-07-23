@@ -1075,7 +1075,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             name={result.avatarName ?? result.label}
             size={28}
             className="mr-2"
-            fallbackClassName="text-[10px] font-semibold"
+            fallbackClassName="text-3xs font-semibold"
           />
         ) : (
           <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
@@ -1086,7 +1086,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <div className="flex items-center gap-2">
             {renderHighlightedText(result.label, query, "truncate")}
             <span
-              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getKindBadgeClass(result.kindLabel)}`}
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide ${getKindBadgeClass(result.kindLabel)}`}
             >
               {result.kindLabel}
             </span>
@@ -1145,8 +1145,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               </Button>
             )}
 
-            <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
-              <span className="text-[11px]">⌘</span>K
+            <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
+              <span className="text-2xs">⌘</span>K
               <span className="opacity-60">/</span>
               <span>Shift+K</span>
             </kbd>
@@ -1241,7 +1241,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     <div className="flex items-center gap-2">
                       <span className="truncate">{r.label}</span>
                       {r.kindLabel ? (
-                        <span className="shrink-0 rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {r.kindLabel}
                         </span>
                       ) : null}

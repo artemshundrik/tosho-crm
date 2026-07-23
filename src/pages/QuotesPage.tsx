@@ -959,7 +959,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           fallback={getInitials(label)}
           size={18}
           className="border-border/60 shrink-0"
-          fallbackClassName="text-[9px] font-semibold"
+          fallbackClassName="text-3xs font-semibold"
           availability={member?.availabilityStatus ?? null}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
           inactive={isManagerInactive(value)}
@@ -5752,7 +5752,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         fallback={getInitials(currentUserManagerLabel || "Менеджер")}
                         size={20}
                         className="border-border/60 shrink-0"
-                        fallbackClassName="text-[10px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                         inactive={isManagerInactive(currentUserId ?? null)}
                       />
                       <span className="truncate leading-none">
@@ -5889,7 +5889,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-                <Badge variant="outline" className="font-semibold h-8 px-2.5">
+                <Badge variant="outline" size="md" className="font-semibold">
                   Вибрано: {selectedIds.size}
                 </Badge>
                 {bulkValidationMessage ? (
@@ -5903,16 +5903,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="outline" className="h-7 quote-neutral-badge">
+                <Badge variant="outline" size="md" className="quote-neutral-badge">
                   Звичайні: {selectionContext.plainCount}
                 </Badge>
                 {selectionContext.withKpCount > 0 ? (
-                  <Badge variant="outline" className="h-7 quote-kind-badge-kp">
+                  <Badge variant="outline" size="md" className="quote-kind-badge-kp">
                     У КП: {selectionContext.withKpCount}
                   </Badge>
                 ) : null}
                 {selectionContext.withSetCount > 0 ? (
-                  <Badge variant="outline" className="h-7 quote-kind-badge-set">
+                  <Badge variant="outline" size="md" className="quote-kind-badge-set">
                     У наборах: {selectionContext.withSetCount}
                   </Badge>
                 ) : null}
@@ -5920,7 +5920,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <Badge
                     key={ref.id}
                     variant="outline"
-                    className={cn("h-7", ref.kind === "kp" ? "quote-kind-badge-kp" : "quote-kind-badge-set")}
+                    size="md"
+                    className={cn(ref.kind === "kp" ? "quote-kind-badge-kp" : "quote-kind-badge-set")}
                     title={`${ref.name} · вибрано ${ref.selectedCount}`}
                   >
                     {ref.kind === "kp" ? "КП" : "Набір"}: {ref.name} ({ref.selectedCount})
@@ -6041,7 +6042,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             {filteredQuoteSets.map((set) => (
               <div
                 key={set.id}
-                className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                className="rounded-inner border border-border bg-card p-4"
                 onClick={() => openQuoteSetDetails(set)}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -6097,7 +6098,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   ) : null}
                 </div>
                 {set.preview_quote_numbers && set.preview_quote_numbers.length > 0 ? (
-                  <div className="mt-3 text-[11px] text-muted-foreground">
+                  <div className="mt-3 text-2xs text-muted-foreground">
                     {set.preview_quote_numbers.join(" · ")}
                     {set.item_count > set.preview_quote_numbers.length ? " · ..." : ""}
                   </div>
@@ -6106,7 +6107,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <div className="mt-2">
                     <Badge
                       variant="outline"
-                      className="h-5 px-1.5 text-[10px] quote-warning-badge"
+                      className="h-5 px-1.5 text-3xs quote-warning-badge"
                       title="Є ще КП/набір з таким самим складом прорахунків"
                     >
                       Той самий склад
@@ -6160,7 +6161,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <span className="truncate">{set.name}</span>
                       </div>
                       {set.preview_quote_numbers && set.preview_quote_numbers.length > 0 ? (
-                        <div className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="mt-1 text-2xs text-muted-foreground">
                           {set.preview_quote_numbers.join(" · ")}
                           {set.item_count > set.preview_quote_numbers.length ? " · ..." : ""}
                         </div>
@@ -6169,7 +6170,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <div className="mt-1">
                           <Badge
                             variant="outline"
-                            className="h-5 px-1.5 text-[10px] quote-warning-badge"
+                            className="h-5 px-1.5 text-3xs quote-warning-badge"
                             title="Є ще КП/набір з таким самим складом прорахунків"
                           >
                             Той самий склад
@@ -6388,7 +6389,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <div
                     key={row.id}
                     className={cn(
-                      "rounded-[var(--radius-inner)] border border-border bg-card p-4",
+                      "rounded-inner border border-border bg-card p-4",
                       canOpen ? "cursor-pointer" : "cursor-not-allowed opacity-70"
                     )}
                     onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
@@ -6487,7 +6488,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             name={managerLabel}
                             fallback={row.assigned_to ? getInitials(managerLabel) : "НВ"}
                             size={20}
-                            className="text-[9px] font-semibold"
+                            className="text-3xs font-semibold"
                             availability={manager?.availabilityStatus ?? null}
                             presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                             inactive={isManagerInactive(row.assigned_to)}
@@ -6510,7 +6511,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <Badge
                           variant="outline"
                           title={membership.kp_names.join(", ")}
-                          className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                          className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
                         >
                           <FileText className="h-3 w-3" />
                           КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
@@ -6520,7 +6521,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         <Badge
                           variant="outline"
                           title={membership.set_names.join(", ")}
-                          className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                          className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
                         >
                           <Layers className="h-3 w-3" />
                           Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
@@ -6551,7 +6552,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[140px] min-w-[140px]">
                       <button
                         onClick={() => handleSort("number")}
-                        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] hover:text-foreground transition-colors"
+                        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
                       >
                         Номер
                         {sortBy === "number" && (
@@ -6562,7 +6563,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <TableHead className="w-[160px]">
                       <button
                         onClick={() => handleSort("date")}
-                        className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] hover:text-foreground transition-colors"
+                        className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
                       >
                         Дата
                         {sortBy === "date" && (
@@ -6701,7 +6702,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       row.assigned_to ? getInitials(managerLabel) : "Не вказано"
                                     }
                                     size={28}
-                                    className="text-[10px] font-semibold"
+                                    className="text-3xs font-semibold"
                                     availability={manager?.availabilityStatus ?? null}
                                     presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                     inactive={isManagerInactive(row.assigned_to)}
@@ -6763,7 +6764,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <Badge
                                     variant="outline"
                                     title={membership.kp_names.join(", ")}
-                                    className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                    className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
                                   >
                                     <FileText className="h-3 w-3" />
                                     КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
@@ -6773,7 +6774,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <Badge
                                     variant="outline"
                                     title={membership.set_names.join(", ")}
-                                    className="h-6 px-2 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                    className="h-6 px-2 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
                                   >
                                     <Layers className="h-3 w-3" />
                                     Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
@@ -6923,11 +6924,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               const Icon = statusIcons[column.id] ?? Clock;
                               return <Icon className={cn("h-3.5 w-3.5 shrink-0", statusColorClass[column.id] ?? "text-muted-foreground")} />;
                             })()}
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground truncate">
                               {column.label}
                             </span>
                           </div>
-                          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                          <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">
                             {items.length}
                           </span>
                         </div>
@@ -6987,7 +6988,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           draggingId && dragPlaceholder?.columnId === column.id ? (
                             <div className="kanban-drop-placeholder rounded-[var(--radius-md)] border-2 border-dashed px-3 py-5" />
                           ) : (
-                            <div className="kanban-empty-state rounded-md border border-dashed border-border/50 text-muted-foreground/70 text-[11px] py-6 px-3 text-center">
+                            <div className="kanban-empty-state rounded-md border border-dashed border-border/50 text-muted-foreground/70 text-2xs py-6 px-3 text-center">
                               <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-border/50 bg-muted/20">
                                 {(() => {
                                   const Icon = statusIcons[column.id] ?? Clock;
@@ -6996,8 +6997,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   );
                                 })()}
                               </div>
-                              <p className="text-[11px] font-medium">Немає прорахунків</p>
-                              <p className="mt-1 text-[10px] text-muted-foreground/60">Перетягніть картку сюди</p>
+                              <p className="text-2xs font-medium">Немає прорахунків</p>
+                              <p className="mt-1 text-3xs text-muted-foreground/60">Перетягніть картку сюди</p>
                             </div>
                           )
                         ) : (
@@ -7025,7 +7026,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   }}
                                   onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
                                   className={cn(
-                                    "kanban-estimate-card rounded-[18px] border border-border/60 bg-card p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
+                                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
                                     canOpen ? "cursor-pointer hover:border-foreground/24" : "cursor-not-allowed opacity-70",
                                     draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                   )}
@@ -7048,7 +7049,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </HoverCopyText>
                                     </div>
                                     <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
-                                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold">
+                                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
                                         {Icon ? <Icon className="h-3 w-3" /> : null}
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
@@ -7056,7 +7057,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         <Badge
                                           variant="outline"
                                           title={membership.kp_names.join(", ")}
-                                          className="h-6 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-kp"
+                                          className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
                                         >
                                           <FileText className="h-3 w-3" />
                                           КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
@@ -7066,7 +7067,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         <Badge
                                           variant="outline"
                                           title={membership.set_names.join(", ")}
-                                          className="h-6 px-1.5 text-[10px] inline-flex items-center gap-1 quote-kind-badge-set"
+                                          className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
                                         >
                                           <Layers className="h-3 w-3" />
                                           Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
@@ -7074,7 +7075,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       ) : null}
                                       {!canOpen ? (
                                         <div
-                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-[10px] font-semibold text-muted-foreground"
+                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
                                           title="Лише свої"
                                           aria-label="Лише свої"
                                         >
@@ -7092,7 +7093,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         size={32}
                                       />
                                       <div className="min-w-0">
-                                        <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                                        <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
                                           {getPartyLabel(row)}
                                         </div>
                                         <div className="truncate text-[14px] font-semibold">
@@ -7103,8 +7104,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   </div>
 
                                   {productPreview || kanbanPreviewsLoading ? (
-                                    <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-secondary px-3 py-2.5">
-                                      <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                    <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
+                                      <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
                                         <Package className="h-3.5 w-3.5" />
                                         {productPreview && productPreview.itemCount > 1 ? "Товари" : "Товар"}
                                       </div>
@@ -7170,7 +7171,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                     <span
                                                       key={runLabel.id}
                                                       className={cn(
-                                                        "inline-flex h-5 items-center rounded-full border px-2 text-[11px] leading-none",
+                                                        "inline-flex h-5 items-center rounded-full border px-2 text-2xs leading-none",
                                                         runLabel.active
                                                           ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
                                                           : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
@@ -7200,7 +7201,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         name={managerLabel}
                                         fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
                                         size={26}
-                                        className="text-[10px] font-semibold"
+                                        className="text-3xs font-semibold"
                                         availability={manager?.availabilityStatus ?? null}
                                         presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                         inactive={isManagerInactive(row.assigned_to)}
@@ -7320,7 +7321,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </span>
               <Badge
                 variant="outline"
-                className="border-border/60 text-[11px] font-normal text-muted-foreground"
+                className="border-border/60 text-2xs font-normal text-muted-foreground"
               >
                 {quoteSetDetailsTarget?.customer_id ? "Замовник" : "Лід"}
               </Badge>
@@ -7342,7 +7343,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Позиції
                 </div>
                 <div className="mt-1 text-xl font-semibold tabular-nums">
@@ -7352,7 +7353,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </div>
               </div>
               <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Середня сума
                 </div>
                 <div className="mt-1 flex h-7 items-center text-xl font-semibold tabular-nums">
@@ -7364,7 +7365,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </div>
               </div>
               <div className="col-span-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 sm:col-span-1">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Разом
                 </div>
                 <div className="mt-1 flex h-7 items-center text-xl font-bold tabular-nums">
@@ -7386,7 +7387,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 <div className="space-y-1.5">
                   <label
                     htmlFor="quote-set-name"
-                    className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                    className="text-2xs font-medium uppercase tracking-wide text-muted-foreground"
                   >
                     Назва
                   </label>
@@ -7409,7 +7410,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <label className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                     Додати один прорахунок
                   </label>
                   <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -7454,7 +7455,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                   {selectedQuoteCandidate ? (
                     <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
-                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <div className="text-2xs uppercase tracking-wide text-muted-foreground">
                         Попередній перегляд
                       </div>
                       <div className="mt-1 text-sm font-medium">

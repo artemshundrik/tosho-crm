@@ -378,13 +378,13 @@ export function NovaPoshtaTtnDialog({
             </div>
           </div>
         ) : notConfigured ? (
-          <div className="flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm dark:bg-amber-500/5">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-4 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
             <div>Ключ API Нової Пошти не налаштований на сервері. Додайте його в env Netlify й задеплойте функції.</div>
           </div>
         ) : !senderReady ? (
-          <div className="flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50/50 p-4 text-sm dark:bg-amber-500/5">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-4 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
             <div>
               Спершу заповни відправника в{" "}
               <Link to="/settings/nova-poshta" className="font-medium underline">

@@ -88,7 +88,7 @@ export function SearchBar({
           </PopoverTrigger>
           <PopoverContent align="end" className="w-64">
             <div className="space-y-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Фільтри
               </div>
               <label className="flex cursor-pointer items-center gap-2.5">

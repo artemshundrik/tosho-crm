@@ -428,7 +428,7 @@ export function TeamPulsePanel({
       {loading && rows.length === 0 ? (
         <AppSectionLoader label="Завантаження активності..." compact />
       ) : rankedPeople.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-[var(--radius-inner)] border border-dashed border-border/70 py-12 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-inner border border-dashed border-border/70 py-12 text-center">
           <Activity className="h-6 w-6 text-muted-foreground/60" />
           <div className="text-sm font-medium text-foreground">Немає активності за цей період</div>
           <div className="text-xs text-muted-foreground">Оберіть ширший діапазон — дії зʼявляються тут одразу, а хвилини накопичуються поки люди працюють у CRM.</div>
@@ -460,14 +460,14 @@ export function TeamPulsePanel({
                     size={38}
                     shape="circle"
                     className="border-border bg-muted/50"
-                    fallbackClassName="text-[11px] font-bold"
+                    fallbackClassName="text-2xs font-bold"
                     presence={person.online ? "online" : "offline"}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold text-foreground">{person.displayName}</span>
-                    {person.online ? <span className="tone-text-success text-[11px] font-medium">онлайн</span> : null}
+                    {person.online ? <span className="tone-text-success text-2xs font-medium">онлайн</span> : null}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     <span className="truncate">
@@ -523,7 +523,7 @@ function KpiTile({
       <div className={cn("mt-2 font-semibold text-foreground", isText ? "truncate text-base" : "text-2xl tabular-nums")}>
         {value}
       </div>
-      {hint ? <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div> : null}
+      {hint ? <div className="mt-0.5 text-2xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -557,7 +557,7 @@ function CategoryBreakdown({
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
         {byCategory.slice(0, 3).map((category) => (
-          <span key={category.key} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span key={category.key} className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
             <span className="h-2 w-2 rounded-full" style={{ background: category.color }} />
             {category.label}
             <span className="tabular-nums text-foreground">{category.count}</span>

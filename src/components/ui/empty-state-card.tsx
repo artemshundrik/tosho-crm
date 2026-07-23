@@ -39,10 +39,10 @@ export function EmptyStateCard({
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40",
+        "rounded-inner border border-dashed border-border bg-card/40",
         padding,
         "text-center",
-        "shadow-[var(--shadow-surface)]",
+        "shadow-surface",
         className
       )}
     >

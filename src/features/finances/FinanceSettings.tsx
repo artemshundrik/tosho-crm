@@ -285,20 +285,20 @@ function LegalEntitiesPanel({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{entity.name}</span>
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-3xs">
                     {LEGAL_ENTITY_KIND_LABELS[entity.kind]}
                   </Badge>
                   <Badge
                     variant="outline"
                     className={cn(
-                      "text-[10px]",
+                      "text-3xs",
                       entity.vatPayer ? "border-info/40 bg-info/10 text-info-foreground" : "text-muted-foreground"
                     )}
                   >
                     {entity.vatPayer ? "Платник ПДВ" : "Без ПДВ"}
                   </Badge>
                   {!entity.isActive ? (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    <Badge variant="outline" className="text-3xs text-muted-foreground">
                       Неактивна
                     </Badge>
                   ) : null}
@@ -529,14 +529,14 @@ function AccountsPanel({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{account.name}</span>
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-3xs">
                     {ACCOUNT_KIND_LABELS[account.kind]}
                   </Badge>
-                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  <Badge variant="outline" className="text-3xs text-muted-foreground">
                     {account.currency}
                   </Badge>
                   {account.isSensitive ? (
-                    <Badge variant="outline" className="gap-1 text-[10px] border-warning/40 bg-warning/10 text-warning-foreground">
+                    <Badge variant="outline" className="gap-1 text-3xs border-warning/40 bg-warning/10 text-warning-foreground">
                       <ShieldAlert className="h-3 w-3" /> Лише топ-ролі
                     </Badge>
                   ) : null}
@@ -859,7 +859,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
             <div key={entity.id} className="rounded-xl border border-border/40 bg-card p-4 shadow-card">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-3xs">
                     {LEGAL_ENTITY_KIND_LABELS[entity.kind]}
                   </Badge>
                   <span className="text-sm font-medium text-foreground">{entity.name}</span>

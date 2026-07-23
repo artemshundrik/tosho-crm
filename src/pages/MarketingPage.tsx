@@ -330,7 +330,7 @@ function CountPill({ value, active }: { value: number; active?: boolean }) {
   return (
     <span
       className={cn(
-        "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-px text-[10px] font-semibold leading-none tabular-nums",
+        "ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-px text-3xs font-semibold leading-none tabular-nums",
         active ? "bg-primary/20 text-primary" : "bg-foreground/10 text-muted-foreground"
       )}
     >
@@ -972,7 +972,7 @@ export default function MarketingPage() {
     if (!record.checklist.length) return null;
     const done = record.checklist.filter((item) => item.done).length;
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-2xs font-medium text-muted-foreground">
         <ListChecks className="h-3.5 w-3.5" />
         {done}/{record.checklist.length}
       </span>
@@ -995,8 +995,8 @@ export default function MarketingPage() {
           key={group.key}
           className={cn(
             "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-            "shadow-[var(--shadow-surface)] transition-[border-color,box-shadow] duration-200 ease-out",
-            "hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
+            "shadow-surface transition-[border-color,box-shadow] duration-200 ease-out",
+            "hover:border-border hover:shadow-elevated-sm",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
             record.isHidden && "opacity-70",
             options?.className
@@ -1065,7 +1065,7 @@ export default function MarketingPage() {
                 />
               </button>
               {isStack ? (
-                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+                <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-2xs font-semibold text-white backdrop-blur-sm">
                   <Layers className="h-3 w-3" />
                   {stackCount}
                 </span>
@@ -1090,20 +1090,20 @@ export default function MarketingPage() {
                   {record.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
                     >
                       {tag}
                     </span>
                   ))}
                   {record.tags.length > 3 ? (
-                    <span className="px-1 text-[10px] font-medium text-muted-foreground/70">
+                    <span className="px-1 text-3xs font-medium text-muted-foreground/70">
                       +{record.tags.length - 3}
                     </span>
                   ) : null}
                 </div>
               ) : null}
               <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-                <span className="inline-flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 truncate text-2xs text-muted-foreground">
                   {designerLabel ? (
                     <>
                       <AvatarBase src={designerAvatar} name={designerLabel} size={18} shape="circle" />
@@ -1114,13 +1114,13 @@ export default function MarketingPage() {
                   )}
                 </span>
                 {isStack ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                  <span className="inline-flex shrink-0 items-center gap-1 text-2xs font-medium text-muted-foreground">
                     <Layers className="h-3.5 w-3.5" />
                     {stackCount} візуали
                   </span>
                 ) : (
                   renderChecklistProgress(record) ?? (
-                    <span className="text-[11px] text-muted-foreground/70">{formatDate(visual.createdAt)}</span>
+                    <span className="text-2xs text-muted-foreground/70">{formatDate(visual.createdAt)}</span>
                   )
                 )}
               </div>
@@ -1410,7 +1410,7 @@ export default function MarketingPage() {
                     </Button>
                   </div>
                   {activeGroupItems.length > 1 && activeGroupIndex !== -1 ? (
-                    <span className="absolute bottom-3 right-3 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                    <span className="absolute bottom-3 right-3 rounded-full bg-black/35 px-2.5 py-1 text-2xs font-medium text-white backdrop-blur-sm">
                       {activeGroupIndex + 1} / {activeGroupItems.length}
                     </span>
                   ) : null}
@@ -1435,7 +1435,7 @@ export default function MarketingPage() {
                             "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-150",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                             isActive
-                              ? "border-primary shadow-[var(--shadow-elevated-sm)]"
+                              ? "border-primary shadow-elevated-sm"
                               : "border-transparent opacity-60 hover:opacity-100"
                           )}
                         >
@@ -1772,7 +1772,7 @@ export default function MarketingPage() {
 
                   {/* Footer actions */}
                   <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
-                    <span className="truncate text-[11px] text-muted-foreground/80">{selected.fileName}</span>
+                    <span className="truncate text-2xs text-muted-foreground/80">{selected.fileName}</span>
                     <Button
                       variant="ghost"
                       size="sm"

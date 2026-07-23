@@ -607,7 +607,7 @@ const TeamMemberChipDropdown: React.FC<{
               size={18}
               inactive={isInactiveEmployment(selected.employmentStatus)}
               className="mr-2 shrink-0 border-border/60"
-              fallbackClassName="text-[9px] font-semibold"
+              fallbackClassName="text-3xs font-semibold"
             />
           ) : (
             <User className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -661,7 +661,7 @@ const TeamMemberChipDropdown: React.FC<{
                     size={20}
                     inactive={isInactiveEmployment(member.employmentStatus)}
                     className="shrink-0 border-border/60"
-                    fallbackClassName="text-[10px] font-semibold"
+                    fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate">{member.label}</span>
                 </span>
@@ -706,7 +706,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
               size={18}
               inactive={isInactiveEmployment(selected[0].employmentStatus)}
               className="mr-2 shrink-0 border-border/60"
-              fallbackClassName="text-[9px] font-semibold"
+              fallbackClassName="text-3xs font-semibold"
             />
           ) : (
             <Users className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -744,7 +744,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
                     size={20}
                     inactive={isInactiveEmployment(member.employmentStatus)}
                     className="shrink-0 border-border/60"
-                    fallbackClassName="text-[10px] font-semibold"
+                    fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate">{member.label}</span>
                 </span>
@@ -1788,7 +1788,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                           fallback={getInitials(selectedManager.label).toUpperCase()}
                           size={20}
                           className="shrink-0 border-border/60"
-                          fallbackClassName="text-[10px] font-semibold"
+                          fallbackClassName="text-3xs font-semibold"
                         />
                         <span className="truncate">{selectedManager.label}</span>
                       </div>
@@ -1812,7 +1812,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             fallback={getInitials(member.label).toUpperCase()}
                             size={20}
                             className="shrink-0 border-border/60"
-                            fallbackClassName="text-[10px] font-semibold"
+                            fallbackClassName="text-3xs font-semibold"
                           />
                           <span className="truncate">{member.label}</span>
                         </div>
@@ -1837,7 +1837,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       initialFocus
                     />
                     <div className="border-t border-border/50 px-3 py-3">
-                      <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                      <div className="text-xs uppercase tracking-caps text-muted-foreground">
                         Час дедлайну
                       </div>
                       <Input
@@ -1927,7 +1927,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                              <div className="text-2xs uppercase tracking-caps text-muted-foreground">
                                 Товар {index + 1}
                               </div>
                               <div className="mt-0.5 truncate text-sm font-semibold text-foreground">
@@ -1937,7 +1937,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             <Badge
                               variant="outline"
                               className={cn(
-                                "shrink-0 rounded-full px-2 text-[11px]",
+                                "shrink-0 rounded-full px-2 text-2xs",
                                 issues.length === 0
                                   ? "border-success-soft-border bg-success-soft text-success-foreground"
                                   : "border-warning-soft-border bg-warning-soft text-warning-foreground"
@@ -1947,10 +1947,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             </Badge>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
                               {runs.length > 0 ? runs.map((run) => run.quantity).join(" / ") : "Без тиражів"}
                             </span>
-                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
                               {product.quoteType === "print" && productConfiguratorPreset
                                 ? "Поліграфія"
                                 : printCount > 0
@@ -1992,7 +1992,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
               {activeProduct ? (
                 <div className="mx-auto max-w-6xl space-y-5">
                   {shouldShowIssues ? (
-                    <div className="rounded-lg border border-warning-soft-border bg-warning-soft p-4">
+                    <div className="rounded-lg border tone-warning-subtle p-4">
                       <div className="text-sm font-semibold text-warning-foreground">Потрібно перевірити</div>
                       {localError || submitError ? (
                         <div className="mt-2 text-xs text-warning-foreground">{localError ?? submitError}</div>
@@ -2171,7 +2171,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                     ) : null}
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-[112px_minmax(0,1fr)]">
-                                    <div className="aspect-square overflow-hidden rounded-[14px] border border-border/60 bg-muted/20">
+                                    <div className="aspect-square overflow-hidden rounded-xl border border-border/60 bg-muted/20">
                                       {quickModelImageUrl.trim() && !quickModelImageErrored ? (
                                         <img
                                           src={quickModelImageUrl.trim()}
@@ -2183,7 +2183,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                         <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                                           <div className="text-center">
                                             <Package className="mx-auto h-5 w-5" />
-                                            <div className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em]">
+                                            <div className="mt-1 text-3xs font-medium uppercase tracking-caps">
                                               Прев'ю
                                             </div>
                                           </div>
@@ -2399,7 +2399,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       {activeProduct.createDesignTask ? (
                         <div className="grid gap-3 md:grid-cols-3">
                           <div className="space-y-1.5">
-                            <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                               Тип задачі
                             </div>
                             <DesignTaskTypeChip
@@ -2408,7 +2408,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                               Виконавець
                             </div>
                             <TeamMemberChipDropdown
@@ -2424,7 +2424,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">
                               Співвиконавці
                             </div>
                             <TeamMemberMultiChipDropdown

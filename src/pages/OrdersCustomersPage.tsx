@@ -1297,7 +1297,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           fallback={managerLabel.slice(0, 2).toUpperCase()}
           size={20}
           className="border-border/60 shrink-0"
-          fallbackClassName="text-[10px] font-semibold"
+          fallbackClassName="text-3xs font-semibold"
           inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
         />
         <span className="truncate">{managerLabel}</span>
@@ -1317,7 +1317,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             fallback={value.slice(0, 2).toUpperCase()}
             size={18}
             className="border-border/60 shrink-0"
-            fallbackClassName="text-[9px] font-semibold"
+            fallbackClassName="text-3xs font-semibold"
             inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
           />
           <span className="truncate">{value}</span>
@@ -3174,7 +3174,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               fallback={(currentManagerLabel || defaultManagerName || "ME").slice(0, 2).toUpperCase()}
               size={20}
               className="shrink-0 border-border/60"
-              fallbackClassName="text-[10px] font-semibold"
+              fallbackClassName="text-3xs font-semibold"
               inactive={isInactiveEmployment(memberById.get(userId ?? "")?.employmentStatus)}
             />
             <span className="truncate">{currentManagerLabel || defaultManagerName || "Менеджер"}</span>
@@ -3274,7 +3274,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       <div className="flex items-center gap-2">
                         <Badge
                           tone="warning"
-                          className="text-[10px] uppercase tracking-wide"
+                          className="text-3xs uppercase tracking-wide"
                         >
                           {match.entityType === "lead" ? "Лід" : "Замовник"}
                         </Badge>
@@ -3296,7 +3296,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               {hasAnyLtv ? (
                 <div className="flex flex-wrap items-center gap-1.5 px-4 pt-4 pb-3 md:px-6">
                   {ltvNeedsFullFetch && (customersRefreshing || customersHasMore) ? (
-                    <span className="mr-1 text-[11px] text-muted-foreground" title="Для коректного сорту/сегментації треба всі замовники, не тільки перші 50">
+                    <span className="mr-1 text-2xs text-muted-foreground" title="Для коректного сорту/сегментації треба всі замовники, не тільки перші 50">
                       Завантажую всіх клієнтів…
                     </span>
                   ) : null}
@@ -3312,7 +3312,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         tone={tone}
                         variant={active ? "default" : "outline"}
                         className={cn(
-                          "cursor-pointer select-none rounded-full px-2.5 py-0.5 text-[11px] font-medium normal-case tracking-normal",
+                          "cursor-pointer select-none rounded-full px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal",
                           active ? "ring-1 ring-foreground/20" : "hover:bg-muted/40"
                         )}
                         onClick={() => setSegmentFilter(seg)}
@@ -3360,7 +3360,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                         <div
                           key={row.id}
                           className={cn(
-                            "rounded-[var(--radius-inner)] border bg-card p-4",
+                            "rounded-inner border bg-card p-4",
                             missingRequisites ? "border-warning-soft-border/80" : "border-border"
                           )}
                           onClick={() => openEdit(row)}
@@ -3396,7 +3396,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                         <Badge
                                           tone={RFM_SEGMENT_TONE[segment]}
                                           variant="outline"
-                                          className="rounded-full px-1.5 py-0 text-[10px] font-medium normal-case tracking-normal"
+                                          className="rounded-full px-1.5 py-0 text-3xs font-medium normal-case tracking-normal"
                                         >
                                           {RFM_SEGMENT_LABELS[segment]}
                                         </Badge>
@@ -3467,7 +3467,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                 <Badge
                                   tone="warning"
                                   variant="outline"
-                                  className="rounded-full px-2.5 py-1 text-[11px] font-medium normal-case tracking-normal"
+                                  className="rounded-full px-2.5 py-1 text-2xs font-medium normal-case tracking-normal"
                                   title={missingRequisitesTooltip}
                                 >
                                   Реквізити не заповнені
@@ -3522,7 +3522,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             type="button"
                             onClick={cycleLtvSort}
                             className={cn(
-                              "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-[11px] tracking-wide transition-colors",
+                              "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium uppercase text-2xs tracking-wide transition-colors",
                               "hover:bg-muted/60 cursor-pointer",
                               ltvSortDirection !== "default" ? "text-foreground bg-muted/40" : "text-muted-foreground hover:text-foreground"
                             )}
@@ -3585,7 +3585,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                               {primaryEntityType ? (
                                 <Badge
                                   variant="outline"
-                                  className="rounded-full px-2.5 py-0.5 text-[11px]"
+                                  className="rounded-full px-2.5 py-0.5 text-2xs"
                                 >
                                   {primaryEntityType}
                                 </Badge>
@@ -3601,7 +3601,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                     <Badge
                                       tone="warning"
                                       variant="outline"
-                                      className="rounded-full px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal"
+                                      className="rounded-full px-2 py-0.5 text-2xs font-medium normal-case tracking-normal"
                                       title={missingRequisitesTooltip}
                                     >
                                       Реквізити не заповнені
@@ -3657,7 +3657,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                       <Badge
                                         tone={RFM_SEGMENT_TONE[segment]}
                                         variant="outline"
-                                        className="rounded-full px-2 py-0 text-[10px] font-medium normal-case tracking-normal"
+                                        className="rounded-full px-2 py-0 text-3xs font-medium normal-case tracking-normal"
                                       >
                                         {RFM_SEGMENT_LABELS[segment]}
                                       </Badge>
@@ -3757,7 +3757,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   {filteredLeads.map((lead) => (
                     <div
                       key={lead.id}
-                      className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                      className="rounded-inner border border-border bg-card p-4"
                       onClick={() => openEditLead(lead)}
                     >
                       <div className="flex items-start justify-between gap-3">

@@ -32,7 +32,7 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
               fallback={entry.displayName.slice(0, 2).toUpperCase()}
               size={size}
               className="border-background shadow-sm"
-              fallbackClassName="text-[10px] font-semibold"
+              fallbackClassName="text-3xs font-semibold"
               showStatusIndicator={false}
             />
           </div>
@@ -179,7 +179,7 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
                       fallback={entry.displayName.slice(0, 2).toUpperCase()}
                       size={28}
                       className="border-border"
-                      fallbackClassName="text-[10px] font-semibold"
+                      fallbackClassName="text-3xs font-semibold"
                       availability={entry.availabilityStatus}
                       presence={entry.online ? "online" : "offline"}
                     />

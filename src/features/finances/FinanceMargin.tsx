@@ -175,7 +175,7 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border/60">
-          <div className="hidden grid-cols-[1.5fr_repeat(4,minmax(0,1fr))] gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+          <div className="hidden grid-cols-[1.5fr_repeat(4,minmax(0,1fr))] gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
             <span>Замовлення</span>
             <span className="text-right">Виставлено</span>
             <span className="text-right">Отримано</span>
@@ -192,7 +192,7 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{row.number}</span>
                     {row.orderType ? (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      <Badge variant="outline" className="text-3xs text-muted-foreground">
                         {ORDER_TYPE_LABELS[row.orderType]}
                       </Badge>
                     ) : null}
@@ -222,7 +222,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "su
       className={cn(
         "rounded-2xl border border-border/40 bg-card p-4 shadow-card",
         tone === "danger" && "border-destructive/40 bg-destructive/5",
-        tone === "success" && "border-success/40 bg-success/5"
+        tone === "success" && "flag-success"
       )}
     >
       <div className="text-xs text-muted-foreground">{label}</div>

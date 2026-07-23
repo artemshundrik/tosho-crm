@@ -18,18 +18,18 @@ const Table = React.forwardRef<
   const variantClasses = {
     list: [
       "[&_thead]:bg-muted/45",
-      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
+      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
       "[&_tbody_tr]:border-border/35 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/20",
     ].join(" "),
     analytics: [
       "[&_thead]:bg-background/80",
-      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
+      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
       "[&_tbody_tr:hover]:bg-background/75",
       "[&_tbody_td]:tabular-nums",
     ].join(" "),
     compact: [
       "[&_thead]:bg-muted/38",
-      "[&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground",
+      "[&_th]:text-2xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-caps-tight [&_th]:text-muted-foreground",
       "[&_tbody_tr]:border-border/35 [&_tbody_tr:hover]:bg-muted/16",
     ].join(" "),
   };
@@ -110,7 +110,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 px-6 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-11 px-6 text-left align-middle text-2xs font-semibold uppercase tracking-caps-tight text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

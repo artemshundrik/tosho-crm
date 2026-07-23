@@ -121,7 +121,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 name={chipLabelText}
                 size={22}
                 className="border-border/50"
-                fallbackClassName="text-[9px] font-semibold"
+                fallbackClassName="text-3xs font-semibold"
               />
             ) : (
               <Building2 className="h-4 w-4" />
@@ -178,19 +178,19 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                         name={option.label}
                         size={36}
                         className="shrink-0 border-border/50"
-                        fallbackClassName="text-[10px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                       />
                       <span className="min-w-0 flex-1 leading-tight">
                         <span className="block truncate text-sm font-medium leading-5 text-foreground">{option.label}</span>
                         {option.managerLabel ? (
-                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          <span className="mt-0.5 block truncate text-2xs text-muted-foreground">
                             Менеджер: {option.managerLabel}
                           </span>
                         ) : null}
                         <span className="mt-0.5 flex items-center gap-1.5">
                           <span
                             className={cn(
-                              "inline-flex h-4.5 items-center justify-center rounded-full border px-2 text-[9px] font-semibold uppercase leading-none tracking-wide",
+                              "inline-flex h-4.5 items-center justify-center rounded-full border px-2 text-3xs font-semibold uppercase leading-none tracking-wide",
                               option.entityType === "lead"
                                 ? "cmd-kind-lead"
                                 : "cmd-kind-customer"
@@ -199,7 +199,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                             {option.entityType === "lead" ? "Лід" : "Замовник"}
                           </span>
                           {option.disabled ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
+                            <span className="inline-flex items-center gap-1 text-3xs font-medium text-muted-foreground">
                               <Lock className="h-3 w-3" />
                               Недоступно
                             </span>

@@ -268,7 +268,7 @@ export function AvatarBase({
         ) : null}
         <AvatarFallback
           className={cn(
-            "text-[10px] font-semibold uppercase text-muted-foreground",
+            "text-3xs font-semibold uppercase text-muted-foreground",
             shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
             fallbackClassName
           )}
@@ -280,7 +280,7 @@ export function AvatarBase({
         <span
           aria-hidden
           className={cn(
-            "absolute z-[1] flex items-center justify-center rounded-full border border-background bg-muted text-muted-foreground",
+            "absolute z-base flex items-center justify-center rounded-full border border-background bg-muted text-muted-foreground",
             statusIndicatorSizeClass,
             statusIndicatorEdgeClass
           )}
@@ -293,7 +293,7 @@ export function AvatarBase({
       ) : showStatusIndicator && statusIndicatorClass ? (
         <span
           className={cn(
-            "absolute z-[1] rounded-full border-background",
+            "absolute z-base rounded-full border-background",
             statusIndicatorSizeClass,
             statusIndicatorEdgeClass,
             statusIndicatorClass

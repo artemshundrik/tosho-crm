@@ -45,7 +45,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">Відновлення пароля</div>
           <div className="text-sm text-muted-foreground mt-1">Введи email, і ми надішлемо лист для встановлення нового пароля.</div>
@@ -53,7 +53,7 @@ export default function ResetPasswordPage() {
 
         {(error || msg) && (
           <div
-            className={`mb-4 rounded-[var(--radius-inner)] border p-3 text-sm font-medium ${
+            className={`mb-4 rounded-inner border p-3 text-sm font-medium ${
               error
                 ? "bg-danger-soft border-danger-soft-border text-danger-foreground"
                 : "bg-success-soft border-success-soft-border text-success-foreground"

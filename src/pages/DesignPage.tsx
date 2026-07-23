@@ -36,6 +36,7 @@ import {
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
+import { designStatusBadgeClass } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
@@ -354,15 +355,7 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
   { id: "approved", label: DESIGN_STATUS_LABELS.approved },
   { id: "cancelled", label: DESIGN_STATUS_LABELS.cancelled },
 ];
-const STATUS_BADGE_CLASS_BY_STATUS: Record<DesignStatus, string> = {
-  new: "design-status-badge-new",
-  changes: "design-status-badge-changes",
-  in_progress: "design-status-badge-in-progress",
-  pm_review: "design-status-badge-pm-review",
-  client_review: "design-status-badge-client-review",
-  approved: "design-status-badge-approved",
-  cancelled: "design-status-badge-cancelled",
-};
+const STATUS_BADGE_CLASS_BY_STATUS = designStatusBadgeClass;
 const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
   new: "design-timeline-bar-new",
   changes: "design-timeline-bar-changes",
@@ -2601,7 +2594,7 @@ export default function DesignPage() {
           fallback={getInitials(label)}
           size={18}
           className="shrink-0 border-border/60"
-          fallbackClassName="text-[9px] font-semibold"
+          fallbackClassName="text-3xs font-semibold"
           availability={getMemberAvailability(value)}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
           inactive={memberInactiveById[value] ?? false}
@@ -2655,7 +2648,7 @@ export default function DesignPage() {
           fallback={getInitials(label)}
           size={18}
           className="shrink-0 border-border/60"
-          fallbackClassName="text-[9px] font-semibold"
+          fallbackClassName="text-3xs font-semibold"
           inactive={memberInactiveById[value] ?? false}
         />
         <span className="truncate">{label}</span>
@@ -4810,7 +4803,7 @@ export default function DesignPage() {
           }
         }}
         className={cn(
-          "kanban-estimate-card rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+          "kanban-estimate-card rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
           draggingId === task.id && "ring-2 ring-primary/40"
         )}
       >
@@ -4839,7 +4832,7 @@ export default function DesignPage() {
                 />
               )}
               {isAttachedFromStandalone ? (
-                <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                <Badge variant="outline" className="h-5 px-2 text-3xs">
                   Привʼязано
                 </Badge>
               ) : null}
@@ -4978,7 +4971,7 @@ export default function DesignPage() {
           <div className="mt-2 text-sm font-medium line-clamp-2">{task.title}</div>
         ) : null}
         {isAttachedFromStandalone ? (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/6 px-2.5 py-1 text-[11px] text-muted-foreground">
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/6 px-2.5 py-1 text-2xs text-muted-foreground">
             <Link2 className="h-3.5 w-3.5 text-primary" />
             <span>Окрема задача привʼязана до прорахунку</span>
           </div>
@@ -4988,7 +4981,7 @@ export default function DesignPage() {
              а не brand-синій: таксономія не має носити колір дій/кнопок. */
           <Badge
             tone="accent"
-            className="mt-2 gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium normal-case tracking-normal"
+            className="mt-2 gap-1.5 rounded-full px-2.5 py-1 text-2xs font-medium normal-case tracking-normal"
           >
             {(() => {
               const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
@@ -5006,7 +4999,7 @@ export default function DesignPage() {
               size={32}
             />
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+              <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
                 {partyLabel}
               </div>
               <div className="truncate text-[14px] font-semibold" title={task.customerName ?? "Не вказано"}>
@@ -5016,8 +5009,8 @@ export default function DesignPage() {
           </div>
         </div>
         {task.productName ? (
-          <div className="mt-3 rounded-[var(--radius-inner)] border border-border/60 bg-background/35 px-3 py-2.5">
-            <div className="mb-2 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="mt-3 rounded-inner border border-border/60 bg-background/35 px-3 py-2.5">
+            <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
               <Package className="h-3.5 w-3.5" />
               Товар
             </div>
@@ -5056,7 +5049,7 @@ export default function DesignPage() {
                   name={assigneeLabel}
                   fallback={getInitials(assigneeLabel)}
                   size={26}
-                  className="text-[10px] font-semibold ring-2 ring-background"
+                  className="text-3xs font-semibold ring-2 ring-background"
                   availability={getMemberAvailability(task.assigneeUserId)}
                   presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
                   inactive={memberInactiveById[task.assigneeUserId] ?? false}
@@ -5073,7 +5066,7 @@ export default function DesignPage() {
                   name={entry.label}
                   fallback={getInitials(entry.label)}
                   size={22}
-                  className="text-[9px] font-semibold ring-2 ring-background"
+                  className="text-3xs font-semibold ring-2 ring-background"
                   availability={getMemberAvailability(entry.userId)}
                   presence={onlineMemberIds.has(entry.userId) ? "online" : "offline"}
                   inactive={memberInactiveById[entry.userId] ?? false}
@@ -5083,7 +5076,7 @@ export default function DesignPage() {
             <div className="flex min-w-0 items-center gap-1.5">
               <span className="truncate font-medium text-foreground/90">{assigneeLabel}</span>
               {collaboratorEntries.length > 0 ? (
-                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
+                <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-3xs">
                   {collaboratorEntries.length > 1 ? `Спільна +${collaboratorEntries.length}` : "Спільна"}
                 </Badge>
               ) : null}
@@ -5259,7 +5252,7 @@ export default function DesignPage() {
                     fallback={getInitials(currentUserDisplayName || "Менеджер")}
                     size={20}
                     className="border-border/60 shrink-0"
-                    fallbackClassName="text-[10px] font-semibold"
+                    fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate leading-none">
                     {currentUserDisplayName || "Менеджер"}
@@ -5343,11 +5336,11 @@ export default function DesignPage() {
                 {DESIGN_COLUMNS.map((col) => {
                   const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
                   return (
-                    <section key={col.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60">
+                    <section key={col.id} className="rounded-inner border border-border/60 bg-card/60">
                       <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
                         <div className="flex min-w-0 items-center gap-2">
                           <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
-                          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                          <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                             {col.label}
                           </span>
                         </div>
@@ -5396,15 +5389,15 @@ export default function DesignPage() {
               const items = grouped[col.id] ?? [];
               const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
               return (
-                <section key={col.id} className="rounded-[var(--radius-inner)] border border-border/60 bg-card/60">
+                <section key={col.id} className="rounded-inner border border-border/60 bg-card/60">
                   <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
-                      <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                         {col.label}
                       </span>
                     </div>
-                    <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">{items.length}</span>
+                    <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">{items.length}</span>
                   </div>
                   <div className="space-y-2 p-2.5">
                     {items.length === 0 ? (
@@ -5447,11 +5440,11 @@ export default function DesignPage() {
                             const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
                             return <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />;
                           })()}
-                          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground truncate">
                             {col.label}
                           </span>
                         </div>
-                        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                        <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">
                           {items.length}
                         </span>
                       </div>
@@ -5498,10 +5491,10 @@ export default function DesignPage() {
       {viewMode === "timeline" ? (
         <div className="space-y-3">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
-            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/80 p-4 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-2xs font-semibold uppercase tracking-caps text-primary">
                     <CalendarRange className="h-3.5 w-3.5" />
                     Production Timeline
                   </div>
@@ -5525,10 +5518,10 @@ export default function DesignPage() {
                 </div>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[var(--radius-inner)] border border-border/60 bg-background/85 p-3">
+                <div className="rounded-inner border border-border/60 bg-background/85 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">В графіку</div>
+                      <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">В графіку</div>
                       <div className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{timelineSummary.scheduled}</div>
                     </div>
                     <Layers3 className="h-4 w-4 text-muted-foreground" />
@@ -5537,30 +5530,30 @@ export default function DesignPage() {
                     {timelineSummary.noDeadline > 0 ? `${timelineSummary.noDeadline} задач без дедлайну винесено окремо` : "Усі задачі мають дедлайн"}
                   </div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-danger-soft-border bg-danger-soft/60 p-3">
+                <div className="rounded-inner border border-danger-soft-border bg-danger-soft/60 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-danger-foreground/80">Ризик зриву</div>
+                      <div className="text-2xs font-medium uppercase tracking-caps text-danger-foreground/80">Ризик зриву</div>
                       <div className="mt-2 text-2xl font-semibold tabular-nums text-danger-foreground">{timelineSummary.overdue}</div>
                     </div>
                     <AlertTriangle className="h-4 w-4 text-danger-foreground" />
                   </div>
                   <div className="mt-2 text-xs text-danger-foreground/80">{timelineSummary.startRisk} задач мають вузький запас часу на старт</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 p-3">
+                <div className="rounded-inner border border-warning-soft-border bg-warning-soft/60 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning-foreground/90">Фокус сьогодні</div>
+                      <div className="text-2xs font-medium uppercase tracking-caps text-warning-foreground/90">Фокус сьогодні</div>
                       <div className="mt-2 text-2xl font-semibold tabular-nums text-warning-foreground">{timelineSummary.dueToday}</div>
                     </div>
                     <Target className="h-4 w-4 text-warning-foreground" />
                   </div>
                   <div className="mt-2 text-xs text-warning-foreground/90">{timelineSummary.dueThisWeek} задач треба закрити протягом 7 днів</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-info-soft-border bg-info-soft/60 p-3">
+                <div className="rounded-inner border border-info-soft-border bg-info-soft/60 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-info-foreground/90">Без естімейту</div>
+                      <div className="text-2xs font-medium uppercase tracking-caps text-info-foreground/90">Без естімейту</div>
                       <div className="mt-2 text-2xl font-semibold tabular-nums text-info-foreground">{timelineSummary.noEstimate}</div>
                     </div>
                     <Clock3 className="h-4 w-4 text-info-foreground" />
@@ -5570,10 +5563,10 @@ export default function DesignPage() {
               </div>
             </div>
 
-            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/80 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/80 p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Орієнтири</div>
+                  <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Орієнтири</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">Що означає графік</div>
                 </div>
                 <Gauge className="h-4 w-4 text-muted-foreground" />
@@ -5599,7 +5592,7 @@ export default function DesignPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-muted-foreground">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
                 <span className="h-2 w-2 rounded-full bg-danger-foreground" />
@@ -5631,7 +5624,7 @@ export default function DesignPage() {
                   return (
                     <button
                       key={row.task.id}
-                      className="rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 text-left shadow-sm transition-colors hover:bg-card"
+                      className="rounded-section border border-border/60 bg-card/70 p-4 text-left shadow-sm transition-colors hover:bg-card"
                       onClick={() => openTask(row.task.id)}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -5639,21 +5632,21 @@ export default function DesignPage() {
                           <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(row.task)}</div>
                           <div className="mt-1 truncate text-xs text-muted-foreground">{row.task.customerName ?? "Не вказано"}</div>
                         </div>
-                        <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
+                        <Badge variant="outline" className={cn("text-2xs", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
                           {statusLabel}
                         </Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="text-[11px]">
+                        <Badge variant="secondary" className="text-2xs">
                           До {row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
                         </Badge>
-                        <Badge variant="outline" className="text-[11px]">
+                        <Badge variant="outline" className="text-2xs">
                           {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
                         </Badge>
                         <Badge
                           variant="outline"
                           className={cn(
-                            "text-[11px]",
+                            "text-2xs",
                             row.isOverdue
                               ? "border-danger-soft-border bg-danger-soft text-danger-foreground"
                               : row.isStartRisk
@@ -5698,7 +5691,7 @@ export default function DesignPage() {
                 })}
               </div>
 
-              <div className="hidden overflow-hidden rounded-[var(--radius-section)] border border-border/60 bg-card/70 shadow-sm md:block">
+              <div className="hidden overflow-hidden rounded-section border border-border/60 bg-card/70 shadow-sm md:block">
                 <div
                   className="grid min-w-[1120px]"
                   style={{
@@ -5708,13 +5701,13 @@ export default function DesignPage() {
                   }}
                 >
                   <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-4 py-3">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Черга задач</div>
+                    <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Черга задач</div>
                     <div className="mt-1 text-sm font-semibold text-foreground">Дедлайн, виконавець, естімейт, прогрес</div>
                   </div>
                   {timelineAxis.columns.map((column, index) => (
                     <div
                       key={`timeline-head-${column.start.toISOString()}-${index}`}
-                      className="border-b border-r border-border/40 bg-background/65 px-1 py-3 text-center text-[11px] text-muted-foreground"
+                      className="border-b border-r border-border/40 bg-background/65 px-1 py-3 text-center text-2xs text-muted-foreground"
                     >
                       <div className="font-medium text-foreground">
                         {timelineZoom === "month"
@@ -5789,7 +5782,7 @@ export default function DesignPage() {
                                 ) : null}
                               </div>
                             </div>
-                            <Badge variant="outline" className={cn("text-[11px]", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
+                            <Badge variant="outline" className={cn("text-2xs", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
                               {statusLabel}
                             </Badge>
                           </div>
@@ -5850,7 +5843,7 @@ export default function DesignPage() {
                                 />
                               ) : null}
                               <div
-                                className="absolute top-1/2 flex h-11 -translate-y-1/2 items-center justify-between gap-3 px-3 text-[11px] font-medium text-foreground/95 pointer-events-none"
+                                className="absolute top-1/2 flex h-11 -translate-y-1/2 items-center justify-between gap-3 px-3 text-2xs font-medium text-foreground/95 pointer-events-none"
                                 style={{
                                   left: barLeft,
                                   width: barWidth,
@@ -5871,10 +5864,10 @@ export default function DesignPage() {
           )}
 
           {timelineData.noDeadlineTasks.length > 0 ? (
-            <div className="rounded-[var(--radius-section)] border border-border/60 bg-card/70 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/70 p-4 shadow-sm">
               <div className="flex flex-col gap-3 border-b border-border/50 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Backlog</div>
+                  <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Backlog</div>
                   <div className="mt-1 text-sm font-semibold text-foreground">Задачі без дедлайну</div>
                 </div>
                 <Badge variant="secondary">{timelineData.noDeadlineTasks.length}</Badge>
@@ -5889,7 +5882,7 @@ export default function DesignPage() {
 
       {viewMode === "assignee" ? (
         <div className="space-y-4 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
-          <section className="rounded-[18px] border border-border/60 bg-background/70 p-4">
+          <section className="rounded-2xl border border-border/60 bg-background/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-primary" />
@@ -5920,7 +5913,7 @@ export default function DesignPage() {
                             <div className="flex items-center gap-2">
                               <span className="truncate text-sm font-semibold text-foreground">{group.label}</span>
                               {index === 0 ? (
-                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
                                   <Star className="h-3 w-3" />
                                   Рекомендуємо
                                 </span>
@@ -5936,7 +5929,7 @@ export default function DesignPage() {
                           >
                             {workload.activeTaskCount}
                           </span>
-                          <Badge variant="outline" className={cn("px-2.5 py-1 text-[11px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                          <Badge variant="outline" className={cn("px-2.5 py-1 text-2xs", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
                             {CAPACITY_LABEL_BY_LEVEL[workload.level]}
                           </Badge>
                         </div>
@@ -5947,10 +5940,10 @@ export default function DesignPage() {
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-border/60 bg-background/70 p-5">
+          <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1.5">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-2xs font-semibold uppercase tracking-caps text-primary">
                   <FileText className="h-3.5 w-3.5" />
                   Файли за період
                 </div>
@@ -5958,7 +5951,7 @@ export default function DesignPage() {
                   <h3 className="text-lg font-semibold tracking-tight text-foreground">Скільки файлів залив кожен дизайнер</h3>
                   <span className="group/info relative inline-flex">
                     <Info className="h-4 w-4 cursor-help text-muted-foreground/70" />
-                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] leading-relaxed text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/info:opacity-100">
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs leading-relaxed text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover/info:opacity-100">
                       Усі завантаження за місяць (візуали, макети, файли задач) із розбивкою за типами — включно з файлами, які згодом видалили.
                     </span>
                   </span>
@@ -6000,7 +5993,7 @@ export default function DesignPage() {
                     >
                       <tab.Icon className="h-3.5 w-3.5" />
                       <span>{tab.label}</span>
-                      <span className="ml-0.5 rounded-md bg-card px-1.5 py-0.5 text-[10px] tabular-nums">{tab.count}</span>
+                      <span className="ml-0.5 rounded-md bg-card px-1.5 py-0.5 text-3xs tabular-nums">{tab.count}</span>
                     </Button>
                   ))}
                 </div>
@@ -6015,7 +6008,7 @@ export default function DesignPage() {
                   За цей місяць ще немає завантажених файлів.
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-[18px] border border-border/60 bg-background/85">
+                <div className="overflow-hidden rounded-2xl border border-border/60 bg-background/85">
                   <div className="divide-y divide-border/50">
                     {filesReport.rows.map((row) => {
                       const label = row.userId ? getMemberLabel(row.userId) : (row.actorName ?? "Невідомий");
@@ -6193,7 +6186,7 @@ export default function DesignPage() {
                       className="h-11 w-11 shrink-0 rounded-md border border-border/60 bg-muted/30"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-[10px] font-semibold uppercase text-muted-foreground">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-3xs font-semibold uppercase text-muted-foreground">
                       {file.ext}
                     </div>
                   )}
@@ -6205,9 +6198,9 @@ export default function DesignPage() {
                       {file.fileName}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-[10px] uppercase text-muted-foreground">{file.ext}</span>
+                      <span className="text-3xs uppercase text-muted-foreground">{file.ext}</span>
                       {file.deleted ? (
-                        <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-destructive">
+                        <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-3xs font-medium uppercase tracking-wide text-destructive">
                           Видалено
                         </span>
                       ) : null}
@@ -6319,7 +6312,7 @@ export default function DesignPage() {
 
                             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                               {TypeIcon && group.designTaskType ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 py-0.5 text-3xs text-muted-foreground">
                                   <TypeIcon className="h-3 w-3" />
                                   {DESIGN_TASK_TYPE_LABELS[group.designTaskType]}
                                 </span>
@@ -6345,7 +6338,7 @@ export default function DesignPage() {
                                 )
                                 .map((section) => (
                                   <div key={section.kind}>
-                                    <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <div className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                                       <section.Icon className={cn("h-3.5 w-3.5", section.iconCls)} />
                                       <span>{section.label}</span>
                                       <span className="tabular-nums opacity-70">{group.byKind[section.kind].length}</span>
@@ -6605,7 +6598,7 @@ export default function DesignPage() {
                     initialFocus
                   />
                   <div className="border-t border-border/50 px-3 py-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                    <div className="text-xs uppercase tracking-caps text-muted-foreground">
                       Час дедлайну
                     </div>
                     <Input
@@ -6635,7 +6628,7 @@ export default function DesignPage() {
                           fallback={getInitials(selectedManager.label)}
                           size={20}
                           className="border-border/60"
-                          fallbackClassName="text-[10px] font-semibold"
+                          fallbackClassName="text-3xs font-semibold"
                           inactive={memberInactiveById[selectedManager.id] ?? false}
                         />
                       ) : (
@@ -6669,7 +6662,7 @@ export default function DesignPage() {
                             fallback={getInitials(member.label)}
                             size={20}
                             className="border-border/60 shrink-0"
-                            fallbackClassName="text-[10px] font-semibold"
+                            fallbackClassName="text-3xs font-semibold"
                           />
                           <span className="truncate">{member.label}</span>
                           <Check
@@ -6698,7 +6691,7 @@ export default function DesignPage() {
                         fallback={getInitials(getMemberLabel(userId))}
                         size={20}
                         className="border-border/60"
-                        fallbackClassName="text-[10px] font-semibold"
+                        fallbackClassName="text-3xs font-semibold"
                       />
                     ) : (
                       <User className="h-4 w-4" />
@@ -6721,7 +6714,7 @@ export default function DesignPage() {
                             fallback={getInitials(selectedAssignee.label)}
                             size={20}
                             className="border-border/60"
-                            fallbackClassName="text-[10px] font-semibold"
+                            fallbackClassName="text-3xs font-semibold"
                             inactive={memberInactiveById[selectedAssignee.id] ?? false}
                           />
                         ) : (
@@ -6737,7 +6730,7 @@ export default function DesignPage() {
                     <div className="space-y-1">
                       {recommendedAssigneeGroup?.id ? (
                         <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2">
-                          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-primary">Рекомендуємо</div>
+                          <div className="text-2xs font-medium uppercase tracking-caps text-primary">Рекомендуємо</div>
                           <div className="mt-1 text-sm font-semibold text-foreground">{recommendedAssigneeGroup.label}</div>
                           <div className="mt-1 text-xs text-muted-foreground">
                             {recommendedAssigneeGroup.workload?.recommendation ?? "Найменше навантаження в команді"}
@@ -6787,12 +6780,12 @@ export default function DesignPage() {
                               fallback={getInitials(member.label)}
                               size={20}
                               className="border-border/60 shrink-0"
-                              fallbackClassName="text-[10px] font-semibold"
+                              fallbackClassName="text-3xs font-semibold"
                             />
                             <div className="min-w-0 flex-1 text-left">
                               <div className="truncate">{member.label}</div>
                               {workload ? (
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
                                   <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
                                   <span>·</span>
                                   <span>{workload.activeTaskCount} задач</span>
@@ -6862,12 +6855,12 @@ export default function DesignPage() {
                               fallback={getInitials(member.label)}
                               size={20}
                               className="border-border/60 shrink-0"
-                              fallbackClassName="text-[10px] font-semibold"
+                              fallbackClassName="text-3xs font-semibold"
                             />
                             <div className="min-w-0 flex-1 text-left">
                               <div className="truncate">{member.label}</div>
                               {workload ? (
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
                                   <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
                                   <span>·</span>
                                   <span>{workload.activeTaskCount} задач</span>

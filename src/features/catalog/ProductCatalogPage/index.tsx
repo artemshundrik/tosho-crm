@@ -363,7 +363,7 @@ export default function ProductCatalogPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
-      <div className="min-h-0 flex-1 overflow-hidden rounded-[var(--radius-section)] border border-border bg-card/60">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-section border border-border bg-card/60">
         {/* Main Layout: Sidebar + Content */}
         <div className="flex h-full min-h-0">
           {/* Compact Sidebar */}

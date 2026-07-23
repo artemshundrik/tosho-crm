@@ -22,7 +22,7 @@ export function DateQuickActions({
   const monthEnd = endOfMonth(today);
 
   const actionButtonClass = cn(
-    "h-6.5 rounded-full border border-border/60 px-2 text-[11px] font-medium",
+    "h-6.5 rounded-full border border-border/60 px-2 text-2xs font-medium",
     fullWidth ? "w-full justify-center" : ""
   );
 
@@ -79,7 +79,7 @@ export function DateQuickActions({
           size="sm"
           variant="ghost"
           className={cn(
-            "h-6.5 rounded-full border border-transparent px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground min-w-0",
+            "h-6.5 rounded-full border border-transparent px-2 text-2xs font-medium text-muted-foreground hover:text-foreground min-w-0",
             fullWidth ? "w-full justify-center" : ""
           )}
           onClick={() => void onSelect(null)}

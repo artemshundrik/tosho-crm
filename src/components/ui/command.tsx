@@ -12,7 +12,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-[var(--radius-inner)] bg-popover text-popover-foreground",
+      "flex h-full w-full flex-col overflow-hidden rounded-inner bg-popover text-popover-foreground",
       className
     )}
     {...props}
@@ -39,7 +39,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
             "[&_[cmdk-group-heading]]:py-2",
             "[&_[cmdk-group-heading]]:font-semibold",
             "[&_[cmdk-group-heading]]:text-muted-foreground",
-            "[&_[cmdk-group-heading]]:text-[10px]",
+            "[&_[cmdk-group-heading]]:text-3xs",
             "[&_[cmdk-group-heading]]:uppercase",
             "[&_[cmdk-group-heading]]:tracking-wider"
           )}

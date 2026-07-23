@@ -115,7 +115,7 @@ type DesignMode = "existing" | "create" | "none";
 
 function SectionHeader({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
       {icon}
       <span>{children}</span>
     </div>
@@ -144,7 +144,7 @@ function StageStrip({ hasPrint, designMode }: { hasPrint: boolean; designMode: D
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+    <div className="flex flex-wrap items-center gap-1.5 text-2xs">
       {stages.map((stage, index) => (
         <span key={stage.label} className="flex items-center gap-1.5">
           {index > 0 ? <span className="text-muted-foreground/50">→</span> : null}
@@ -654,7 +654,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                     {members.map((member) => (
                       <SelectItem key={member.userId} value={member.userId}>
                         <span className="flex items-center gap-2">
-                          <AvatarBase src={member.avatarUrl} name={member.label} fallback={member.label.slice(0, 1).toUpperCase()} size={18} className="border-border/60" fallbackClassName="text-[9px] font-semibold" />
+                          <AvatarBase src={member.avatarUrl} name={member.label} fallback={member.label.slice(0, 1).toUpperCase()} size={18} className="border-border/60" fallbackClassName="text-3xs font-semibold" />
                           <span className="truncate">{member.label}</span>
                         </span>
                       </SelectItem>
@@ -744,7 +744,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                         </div>
                       )}
                       <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Товар {index + 1}</div>
+                        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">Товар {index + 1}</div>
                         <div className="truncate text-sm font-medium text-foreground">{item.name || "Модель не обрана"}</div>
                       </div>
                     </div>
@@ -1022,7 +1022,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                             {members.map((member) => (
                               <SelectItem key={member.userId} value={member.userId}>
                                 <span className="flex items-center gap-2">
-                                  <AvatarBase src={member.avatarUrl} name={member.label} fallback={member.label.slice(0, 1).toUpperCase()} size={18} className="border-border/60" fallbackClassName="text-[9px] font-semibold" />
+                                  <AvatarBase src={member.avatarUrl} name={member.label} fallback={member.label.slice(0, 1).toUpperCase()} size={18} className="border-border/60" fallbackClassName="text-3xs font-semibold" />
                                   <span className="truncate">{member.label}</span>
                                 </span>
                               </SelectItem>

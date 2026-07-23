@@ -29,7 +29,7 @@ const buttonVariants = cva(
         primary: [
           "!font-medium",
           "bg-foreground text-background",
-          "shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]",
+          "shadow-elevated-sm ring-1 ring-[hsl(var(--soft-ring))]",
           "hover:opacity-85",
           "active:scale-[0.98]",
         ].join(" "),
@@ -63,7 +63,7 @@ const buttonVariants = cva(
         destructiveSolid: [
           "!font-medium",
           "bg-destructive text-destructive-foreground",
-          "shadow-[var(--shadow-elevated-sm)]",
+          "shadow-elevated-sm",
           "hover:opacity-85",
           "active:scale-[0.98]",
         ].join(" "),
@@ -164,7 +164,7 @@ const buttonVariants = cva(
       // ≤h-8 → rounded-md (8px), h-9 → rounded-lg (10px), h-10 → базовий rounded-xl,
       // у парі з інпутами тієї ж висоти.
       size: {
-        xxs: "h-6 rounded-md px-2 text-[10px] leading-none",
+        xxs: "h-6 rounded-md px-2 text-3xs leading-none",
         xs: "h-7 rounded-md px-2.5 text-xs",
         sm: "h-8 rounded-md px-3 text-xs",
         md: "h-9 rounded-lg px-4 text-sm",

@@ -250,7 +250,7 @@ function FxCurrencyBadge({
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold leading-none",
+        "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-3xs font-semibold leading-none",
         accentClassName,
         className
       )}
@@ -315,7 +315,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-[var(--shadow-elevated-lg)]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-elevated-lg">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -1837,8 +1837,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               onClick={() => setCmdkOpen(true)}
                             />
                             <div className="absolute inset-y-0 right-2 flex items-center">
-                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-[10px] font-medium text-muted-foreground">
-                                <span className="text-[11px]">⌘</span>K
+                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
+                                <span className="text-2xs">⌘</span>K
                               </kbd>
                             </div>
                           </div>
@@ -1920,7 +1920,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="flex-1 text-left">Пошук...</span>
-                <kbd className="inline-flex h-6 select-none items-center rounded-md border border-border bg-background/60 px-2 font-mono text-[10px] font-medium opacity-80">
+                <kbd className="inline-flex h-6 select-none items-center rounded-md border border-border bg-background/60 px-2 font-mono text-3xs font-medium opacity-80">
                   ⌘K
                 </kbd>
               </button>
@@ -1975,20 +1975,20 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger-foreground">
                           <div className="font-semibold">Курс не оновився</div>
                           <div className="mt-1">{fxError}</div>
-                          <div className="mt-1 text-[11px] opacity-90">
+                          <div className="mt-1 text-2xs opacity-90">
                             Перевір `/.netlify/functions/fx-rates`, доступність Мінфіну або парсинг HTML.
                           </div>
                         </div>
                       ) : null}
                       {!fxError && fxStaleWarning ? (
-                        <div className="rounded-md border border-warning-soft-border bg-warning-soft px-3 py-2 text-xs text-warning-foreground">
+                        <div className="rounded-md tone-warning-subtle border px-3 py-2 text-xs">
                           <div className="font-semibold">Потрібна перевірка джерела</div>
                           <div className="mt-1">{fxStaleWarning}</div>
                         </div>
                       ) : null}
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                          <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
                             <FxCurrencyBadge code="USD" className="h-4 w-7" />
                             Долар США
                           </div>
@@ -2009,7 +2009,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           </div>
                         </div>
                         <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                          <div className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
                             <FxCurrencyBadge code="EUR" className="h-4 w-7" />
                             Євро
                           </div>
@@ -2088,7 +2088,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   >
                     <Bell className="h-4.5 w-4.5" />
                     {unreadCount > 0 ? (
-                      <span className="pointer-events-none absolute right-0 top-0 inline-flex h-5 min-w-5 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground">
+                      <span className="pointer-events-none absolute right-0 top-0 inline-flex h-5 min-w-5 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-none text-primary-foreground">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     ) : null}
@@ -2165,7 +2165,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
                               <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.description}</div>
-                              <div className="mt-1 text-[10px] text-muted-foreground/70">{n.time}</div>
+                              <div className="mt-1 text-3xs text-muted-foreground/70">{n.time}</div>
                             </div>
                           </Button>
                         ))
@@ -2229,7 +2229,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               {header.showPageHeader === false ? (
                 headerActions ? null : header.eyebrow ? (
                   <div className="hidden md:flex">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                       {header.eyebrow}
                     </span>
                   </div>
@@ -2258,7 +2258,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <SheetContent
           side="right"
           hideClose
-          className="inset-0 z-[80] h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-[620px]"
+          className="inset-0 z-overlay h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-[620px]"
         >
           <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
             <div className="shrink-0 border-b border-border/70 bg-background/82 px-3 py-3 backdrop-blur-xl sm:px-4 sm:py-4 md:px-5">
@@ -2292,7 +2292,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       </Sheet>
 
       {!hideToShoAiLauncher ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[55] flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-docked flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
           <div className="flex flex-col items-end gap-2">
             <ToShoAiLauncherButton
               variant="nova"
@@ -2370,7 +2370,7 @@ function SidebarGroup({
       {!collapsed && !hideLabel ? (
         <h4
           className={cn(
-            "px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/65",
+            "px-3 text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
             isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
           )}
         >
@@ -2398,7 +2398,7 @@ function SidebarGroup({
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 collapsed
-                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-[14px] px-0 py-0"
+                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-xl px-0 py-0"
                   : isMobileDrawer
                     ? "min-h-11 rounded-[16px] px-4 py-2.5"
                     : "h-9 rounded-[10px]",
@@ -2432,7 +2432,7 @@ function SidebarGroup({
                 ) : (
                   <span
                     className={cn(
-                      "ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold leading-none text-primary-foreground",
+                      "ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-none text-primary-foreground",
                       isMobileDrawer ? "h-6 px-1.5" : "h-5"
                     )}
                   >

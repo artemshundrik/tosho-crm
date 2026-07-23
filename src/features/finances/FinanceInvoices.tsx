@@ -341,26 +341,26 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                       {formatOrderMoney(invoice.amount, "UAH")}
                     </span>
                     {invoice.number ? (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-3xs">
                         № {invoice.number}
                       </Badge>
                     ) : null}
                     <Badge
                       tone={INVOICE_STATUS_BADGE_TONE[invoice.status]}
                       size="sm"
-                      className={cn("text-[10px]", invoice.status === "cancelled" && "line-through")}
+                      className={cn("text-3xs", invoice.status === "cancelled" && "line-through")}
                     >
                       {INVOICE_STATUS_LABELS[invoice.status]}
                     </Badge>
                     {invoice.vatRate ? (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      <Badge variant="outline" className="text-3xs text-muted-foreground">
                         ПДВ {invoice.vatRate}%
                       </Badge>
                     ) : null}
                     {vBadge ? (
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-3xs font-medium",
                           vBadge.className
                         )}
                       >

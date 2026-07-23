@@ -72,13 +72,13 @@ export function FinanceBentoSummary({
 }) {
   const deltaBadge =
     deltaPct === null || deltaPct === undefined || !deltaVs ? null : Math.abs(deltaPct) < 0.5 ? (
-      <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-2xs font-medium text-muted-foreground">
         ≈ рівень {deltaVs}
       </span>
     ) : (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums",
+          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-2xs font-medium tabular-nums",
           (deltaPct > 0) === increaseIsGood
             ? "border-success-soft-border bg-success-soft text-success-foreground"
             : "border-destructive/25 bg-destructive/5 text-destructive"
@@ -102,7 +102,7 @@ export function FinanceBentoSummary({
     <div className="rounded-2xl border border-border/40 bg-card p-4 shadow-card sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
+          <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
           <div className="figure mt-1.5 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
             {totalText}
           </div>
@@ -146,7 +146,7 @@ export function FinanceBentoSummary({
       ) : null}
 
       {footnote ? (
-        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-[11px] text-muted-foreground">
+        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
           {footnote}
         </div>
       ) : null}

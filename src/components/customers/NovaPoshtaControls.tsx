@@ -42,7 +42,7 @@ function Dropdown({
   if (!loading && empty) return null;
   return (
     <div
-      className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1 shadow-[var(--shadow-overlay)]"
+      className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1 shadow-overlay"
       role="listbox"
     >
       {loading ? (

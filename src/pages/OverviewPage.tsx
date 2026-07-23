@@ -563,10 +563,10 @@ function OverviewMetricCard({
   icon: typeof FileText;
 }) {
   return (
-    <div className="rounded-[24px] border border-border/60 bg-background/85 p-4 shadow-[var(--shadow-elevated-sm)]">
+    <div className="rounded-4xl border border-border/60 bg-background/85 p-4 shadow-elevated-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
+          <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">{label}</div>
           <div className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{value}</div>
         </div>
         <div
@@ -629,7 +629,7 @@ function OverviewSignalCard({
     <Link
       to={to}
       className={cn(
-        "group rounded-[24px] border p-4 transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated-sm)]",
+        "group rounded-4xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-elevated-sm",
         signalAccentClassByTone[tone]
       )}
     >
@@ -676,7 +676,7 @@ function OverviewQueueRow({
   return (
     <Link
       to={to}
-      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-[var(--shadow-elevated-sm)]"
+      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
     >
       <EntityAvatar
         src={entityLogoUrl ?? null}
@@ -1115,7 +1115,7 @@ export function OverviewPage() {
   return (
     <PageCanvas>
       <PageCanvasBody className="min-w-0 space-y-5 px-3 py-3 pb-20 md:space-y-6 md:pb-6">
-        <section className="relative min-w-0 max-w-full overflow-hidden rounded-[30px] border border-border/60 bg-card/90 shadow-[var(--shadow-elevated-sm)]">
+        <section className="relative min-w-0 max-w-full overflow-hidden rounded-[30px] border border-border/60 bg-card/90 shadow-elevated-sm">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.10),transparent_32%)]" />
           <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-info-soft/60 blur-3xl" />
           <div className="absolute -right-10 bottom-0 h-40 w-40 rounded-full bg-success-soft/50 blur-3xl" />
@@ -1180,7 +1180,7 @@ export function OverviewPage() {
             </div>
 
             <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <div className="min-w-0 rounded-[26px] border border-border/60 bg-background/80 p-4 shadow-[var(--shadow-elevated-sm)]">
+              <div className="min-w-0 rounded-[26px] border border-border/60 bg-background/80 p-4 shadow-elevated-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Потрібна увага зараз</div>
@@ -1208,7 +1208,7 @@ export function OverviewPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-[26px] border border-border/60 bg-background/80 p-4 shadow-[var(--shadow-elevated-sm)]">
+              <div className="min-w-0 rounded-[26px] border border-border/60 bg-background/80 p-4 shadow-elevated-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Ритм команди</div>
@@ -1223,12 +1223,12 @@ export function OverviewPage() {
 
                 <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-3 xl:grid-cols-1">
                   <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Прорахунки</div>
+                    <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Прорахунки</div>
                     <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{activeQuoteCount}</div>
                     <div className="mt-1 text-xs text-muted-foreground">активних зараз</div>
                   </div>
                   <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Дизайн</div>
+                    <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Дизайн</div>
                     <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
                       {isManagerView ? activeDesignCount : myActiveDesignCount}
                     </div>
@@ -1237,7 +1237,7 @@ export function OverviewPage() {
                     </div>
                   </div>
                   <div className="rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Стрічка</div>
+                    <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Стрічка</div>
                     <div className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{safeData.activity.length}</div>
                     <div className="mt-1 text-xs text-muted-foreground">останніх подій на екрані</div>
                   </div>
@@ -1248,7 +1248,7 @@ export function OverviewPage() {
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-[var(--shadow-elevated-sm)] sm:p-5">
+          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-elevated-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-lg font-semibold tracking-tight text-foreground">Прорахунки</div>
@@ -1277,7 +1277,7 @@ export function OverviewPage() {
 
             <div className="mt-5 space-y-3">
               {safeData.recentQuotes.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+                <div className="rounded-4xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
                   Ще немає прорахунків.
                 </div>
               ) : (
@@ -1302,7 +1302,7 @@ export function OverviewPage() {
             </div>
           </div>
 
-          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-[var(--shadow-elevated-sm)] sm:p-5">
+          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-elevated-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-lg font-semibold tracking-tight text-foreground">
@@ -1333,7 +1333,7 @@ export function OverviewPage() {
 
             <div className="mt-5 space-y-3">
               {designQueue.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+                <div className="rounded-4xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
                   {isManagerView ? "У черзі немає задач, що потребують уваги." : "У вас немає активних дизайн-задач."}
                 </div>
               ) : (
@@ -1357,7 +1357,7 @@ export function OverviewPage() {
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-[var(--shadow-elevated-sm)] sm:p-5">
+          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-elevated-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-lg font-semibold tracking-tight text-foreground">Сигнали по роботі</div>
@@ -1385,7 +1385,7 @@ export function OverviewPage() {
             </div>
           </div>
 
-          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-[var(--shadow-elevated-sm)] sm:p-5">
+          <div className="min-w-0 rounded-[28px] border border-border/60 bg-card/90 p-4 shadow-elevated-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-lg font-semibold tracking-tight text-foreground">Останні дії</div>
@@ -1415,7 +1415,7 @@ export function OverviewPage() {
 
             <div className="mt-5 space-y-3">
               {safeData.activity.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
+                <div className="rounded-4xl border border-dashed border-border/60 bg-background/70 px-4 py-6 text-sm text-muted-foreground">
                   Подій поки немає.
                 </div>
               ) : (
@@ -1429,7 +1429,7 @@ export function OverviewPage() {
                     <Link
                       key={row.id}
                       to={destination}
-                      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-[var(--shadow-elevated-sm)]"
+                      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
                     >
                       <AvatarBase
                         src={row.avatar_url ?? null}

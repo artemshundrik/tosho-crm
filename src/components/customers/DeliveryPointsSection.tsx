@@ -52,7 +52,7 @@ export function DeliveryPointsSection({
   return (
     <section className="rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Адреси доставки
         </h4>
         <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={onAdd}>

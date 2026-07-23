@@ -683,7 +683,7 @@ export function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-6xl py-6">
-      <div className="overflow-hidden rounded-[var(--radius-section)] border border-border bg-card shadow-surface">
+      <div className="overflow-hidden rounded-section border border-border bg-card shadow-surface">
         <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-8 pt-6 md:px-10">
           <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,hsl(var(--surface-sheen))_18%,transparent_36%)] opacity-60 dark:opacity-20" />
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
@@ -754,17 +754,17 @@ export function ProfilePage() {
 
                 <div className="grid gap-2 sm:grid-cols-3">
                   <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Старт</div>
+                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Старт</div>
                     <div className="mt-1 text-sm font-semibold text-foreground">
                       {startDate ? formatEmploymentDate(startDate) : "Не вказано"}
                     </div>
                   </div>
                   <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Стаж</div>
+                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Стаж</div>
                     <div className="mt-1 text-sm font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
                   </div>
                   <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Статус</div>
+                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Статус</div>
                     <div className="mt-1">
                       <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", employmentStatusTone)}>
                         {getEmploymentStatusLabel(resolvedEmploymentStatus)}
@@ -784,7 +784,7 @@ export function ProfilePage() {
 
         <div className="px-6 py-6 md:px-10">
           {avatarDraftUrl ? (
-            <div className="mb-6 rounded-[var(--radius-inner)] border border-border bg-muted/20 p-4">
+            <div className="mb-6 rounded-inner border border-border bg-muted/20 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div className="relative h-40 w-40 overflow-hidden rounded-full border border-border bg-background">
                   <Cropper
@@ -805,7 +805,7 @@ export function ProfilePage() {
                     <div className="mt-1 text-sm text-muted-foreground">Піджени кадрування і збережи новий аватар.</div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Zoom</label>
+                    <label className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">Zoom</label>
                     <input
                       type="range"
                       min={1}
@@ -831,7 +831,7 @@ export function ProfilePage() {
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
             <div className="space-y-6">
-              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+              <div className="rounded-inner border border-border bg-background/70 p-5">
                 <div className="mb-5">
                   <div className="text-lg font-semibold text-foreground">Особисті дані</div>
                   <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
@@ -861,7 +861,7 @@ export function ProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+              <div className="rounded-inner border border-border bg-background/70 p-5">
                 <div className="mb-5">
                   <div className="text-lg font-semibold text-foreground">Безпека</div>
                   <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
@@ -877,7 +877,7 @@ export function ProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+              <div className="rounded-inner border border-border bg-background/70 p-5">
                 <div className="mb-5">
                   <div className="text-lg font-semibold text-foreground">Сповіщення</div>
                   <div className="mt-1 text-sm text-muted-foreground">
@@ -900,7 +900,7 @@ export function ProfilePage() {
                 </div>
               </div>
 
-              <div className="rounded-[var(--radius-inner)] border border-border bg-background/70 p-5">
+              <div className="rounded-inner border border-border bg-background/70 p-5">
                 <div className="mb-5">
                   <div className="text-lg font-semibold text-foreground">Telegram-сповіщення</div>
                   <div className="mt-1 text-sm text-muted-foreground">
@@ -962,7 +962,7 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-[var(--radius-inner)] border border-border bg-muted/20 p-5">
+              <div className="rounded-inner border border-border bg-muted/20 p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-lg font-semibold text-foreground">Робота в компанії</div>
@@ -976,13 +976,13 @@ export function ProfilePage() {
                 <div className="mt-5 space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Дата старту</div>
+                      <div className="text-2xs uppercase tracking-caps text-muted-foreground">Дата старту</div>
                       <div className="mt-1.5 text-base font-semibold text-foreground">
                         {startDate ? formatEmploymentDate(startDate) : "Поки не вказано"}
                       </div>
                     </div>
                     <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Стаж</div>
+                      <div className="text-2xs uppercase tracking-caps text-muted-foreground">Стаж</div>
                       <div className="mt-1.5 text-base font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {employmentDays !== null && employmentDays >= 0 ? `${employmentDays} днів у компанії` : "Потрібна дата початку"}

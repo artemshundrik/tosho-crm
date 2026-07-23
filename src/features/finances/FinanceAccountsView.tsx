@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { Loader2, ShieldAlert, Wallet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { useFxRates } from "@/lib/fxRates";
@@ -139,22 +140,21 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
             return (
               <div
                 key={account.id}
-                className={cn(
-                  "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3",
-                  account.isSensitive && "border-warning/30 bg-warning/5"
-                )}
+                /* Чутливість НЕ фарбує весь ряд (жовта заливка на широкій площі —
+                   бруд): сигнал несе бейдж «Топ-ролі». */
+                className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{account.name}</span>
-                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-3xs text-muted-foreground">
                       {ACCOUNT_KIND_LABELS[account.kind]}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">{account.currency}</span>
+                    <span className="text-3xs text-muted-foreground">{account.currency}</span>
                     {account.isSensitive ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] text-warning-foreground">
+                      <Badge tone="warning" className="gap-1 text-3xs">
                         <ShieldAlert className="h-3 w-3" /> Топ-ролі
-                      </span>
+                      </Badge>
                     ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">

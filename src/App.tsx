@@ -383,7 +383,7 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
     if (!this.state.hasError) return this.props.children;
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-lg rounded-[var(--radius-inner)] border border-border bg-card p-5">
+        <div className="w-full max-w-lg rounded-inner border border-border bg-card p-5">
           <div className="text-base font-semibold">Сталася помилка інтерфейсу</div>
           <div className="mt-2 text-sm text-muted-foreground">{this.state.message}</div>
           <div className="mt-4 flex gap-2">

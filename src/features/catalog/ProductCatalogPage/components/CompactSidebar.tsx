@@ -12,12 +12,19 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle, ChevronDown, ChevronRight, Edit2, Package, Plus, Printer, Shirt } from "lucide-react";
 import type { CatalogType, QuoteType } from "@/types/catalog";
 
-/** Small amber pill showing how many models in a category/kind are incomplete. */
+/**
+ * Фокус-рінг для кнопок дерева. Раніше в цьому файлі не було жодного
+ * focus-visible на вісім кнопок — обхід сайдбару з клавіатури був сліпим.
+ */
+const TREE_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25";
+const TREE_ICON_BUTTON = cn("rounded transition-colors hover:bg-muted", TREE_FOCUS);
+
+/** Small warning pill showing how many models in a category/kind are incomplete. */
 function IncompleteBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <span
-      className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 text-[10px] font-semibold leading-none text-amber-500"
+      className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full bg-warning-soft px-1.5 text-3xs font-semibold leading-none text-warning-foreground"
       title={`${count} незавершених`}
     >
       <AlertTriangle className="h-2.5 w-2.5" />
@@ -138,8 +145,11 @@ export function CompactSidebar({
               <div key={group.key} className="rounded-lg border border-border/50 bg-background/70">
                 <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border/40">
                   <button
+                    type="button"
                     onClick={() => toggleGroup(group.key)}
-                    className="p-0.5 hover:bg-muted rounded transition-colors"
+                    className={cn("p-0.5", TREE_ICON_BUTTON)}
+                    aria-expanded={isGroupExpanded}
+                    aria-label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}
                     title={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}
                   >
                     {isGroupExpanded ? (
@@ -154,13 +164,15 @@ export function CompactSidebar({
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
                         {group.label}
                       </span>
-                      <Badge variant="secondary" className="h-5 px-2 text-[10px] font-semibold">
+                      <Badge variant="secondary" className="h-5 px-2 text-3xs font-semibold">
                         {types.length}
                       </Badge>
                     </div>
                     <button
+                      type="button"
                       onClick={() => onAddType(group.key)}
-                      className="p-1 rounded hover:bg-muted transition-colors text-primary"
+                      className={cn("p-1 text-primary", TREE_ICON_BUTTON)}
+                      aria-label={`Додати категорію в "${group.label}"`}
                       title={`Додати категорію в "${group.label}"`}
                     >
                       <Plus className="h-3.5 w-3.5" />
@@ -189,8 +201,12 @@ export function CompactSidebar({
                               )}
                             >
                               <button
+                                type="button"
                                 onClick={() => toggleType(type.id)}
-                                className="p-0.5 hover:bg-muted rounded transition-colors"
+                                className={cn("p-0.5", TREE_ICON_BUTTON)}
+                                aria-expanded={isExpanded}
+                                aria-label={isExpanded ? `Згорнути "${type.name}"` : `Розгорнути "${type.name}"`}
+                                title={isExpanded ? "Згорнути" : "Розгорнути"}
                               >
                                 {isExpanded ? (
                                   <ChevronDown className="h-4 w-4" />
@@ -199,27 +215,31 @@ export function CompactSidebar({
                                 )}
                               </button>
                               <button
+                                type="button"
                                 onClick={() => {
                                   onSelectType(type.id);
                                   if (!isExpanded) {
                                     setExpandedTypes((prev) => new Set([...prev, type.id]));
                                   }
                                 }}
-                                className="flex-1 flex items-center gap-2 text-left min-w-0"
+                                className={cn("flex-1 flex items-center gap-2 text-left min-w-0 rounded", TREE_FOCUS)}
                               >
                                 <span className="font-medium truncate">{type.name}</span>
                                 <IncompleteBadge count={incompleteByType?.get(type.id) ?? 0} />
                               </button>
                               {onEditType && (
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onEditType(type.id);
                                   }}
                                   className={cn(
-                                    "p-1 rounded hover:bg-muted transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+                                    "p-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+                                    TREE_ICON_BUTTON,
                                     isSelected && "opacity-100"
                                   )}
+                                  aria-label={`Редагувати категорію "${type.name}"`}
                                   title="Редагувати категорію"
                                 >
                                   <Edit2 className="h-3.5 w-3.5" />
@@ -243,11 +263,15 @@ export function CompactSidebar({
                                       )}
                                     >
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           onSelectType(type.id);
                                           onSelectKind(kind.id);
                                         }}
-                                        className="flex-1 flex items-center justify-between gap-2 text-left min-w-0"
+                                        className={cn(
+                                          "flex-1 flex items-center justify-between gap-2 text-left min-w-0 rounded",
+                                          TREE_FOCUS
+                                        )}
                                       >
                                         <span className="truncate">{kind.name}</span>
                                         <span className="flex shrink-0 items-center gap-1.5">
@@ -264,14 +288,17 @@ export function CompactSidebar({
                                       </button>
                                       {onEditKind && (
                                         <button
+                                          type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             onEditKind(kind.id);
                                           }}
                                           className={cn(
-                                            "p-1 rounded hover:bg-muted/60 transition-colors opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:group-focus-within/kind:opacity-100",
+                                            "p-1 opacity-100 md:opacity-0 md:group-hover/kind:opacity-100 md:group-focus-within/kind:opacity-100",
+                                            TREE_ICON_BUTTON,
                                             isKindSelected && "opacity-100"
                                           )}
+                                          aria-label={`Редагувати вид "${kind.name}"`}
                                           title="Редагувати вид"
                                         >
                                           <Edit2 className="h-3 w-3" />
@@ -286,8 +313,12 @@ export function CompactSidebar({
                             {/* Add Kind Button */}
                             {isExpanded && (
                               <button
+                                type="button"
                                 onClick={() => onAddKind(type.id)}
-                                className="ml-5 w-[calc(100%-1.25rem)] flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-all"
+                                className={cn(
+                                  "ml-5 w-[calc(100%-1.25rem)] flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors",
+                                  TREE_FOCUS
+                                )}
                               >
                                 <Plus className="h-3.5 w-3.5" />
                                 <span>Додати вид</span>

@@ -265,7 +265,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                     key={item.id}
                     className={cn(
                       "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3",
-                      bucket.tone === "danger" && "border-destructive/40 bg-destructive/5"
+                      bucket.tone === "danger" && "flag-danger"
                     )}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -286,7 +286,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                     <span className="shrink-0 text-right text-sm font-semibold text-foreground">
                       {item.nativeAmountLabel ?? formatOrderMoney(item.amount, "UAH")}
                       {item.nativeAmountLabel ? (
-                        <span className="block text-[11px] font-normal text-muted-foreground">
+                        <span className="block text-2xs font-normal text-muted-foreground">
                           ≈ {formatOrderMoney(item.amount, "UAH")}
                         </span>
                       ) : null}

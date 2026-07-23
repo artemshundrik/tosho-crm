@@ -184,7 +184,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           />
           <div className="min-w-0 flex-1 text-left">
             <div className="truncate text-sm font-semibold">{userData.name}</div>
-            <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+            <div className="mt-0.5 flex items-center gap-1 text-2xs">
               <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
                 {userData.accessRole}
               </span>
@@ -319,7 +319,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-sm font-semibold">{userData.name}</div>
-              <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+              <div className="mt-0.5 flex items-center gap-1 text-2xs">
                 <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
                   {userData.accessRole}
                 </span>

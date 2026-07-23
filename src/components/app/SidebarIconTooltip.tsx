@@ -43,9 +43,9 @@ export function SidebarIconTooltip({ label, collapsed, children }: SidebarIconTo
               role="tooltip"
               style={{ top: coords.top, left: coords.left }}
               className={cn(
-                "pointer-events-none fixed z-[100] -translate-y-1/2 whitespace-nowrap",
+                "pointer-events-none fixed z-tooltip -translate-y-1/2 whitespace-nowrap",
                 "rounded-[10px] border border-border/70 bg-card/95 px-2.5 py-1 text-[12px] font-medium text-foreground",
-                "shadow-[var(--shadow-overlay)] backdrop-blur-md",
+                "shadow-overlay backdrop-blur-md",
                 "animate-in fade-in-0 slide-in-from-left-1 duration-150 ease-out"
               )}
             >

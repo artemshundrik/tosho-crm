@@ -82,7 +82,7 @@ export default function InvitePage() {
   if (!token) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
+        <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
           <div className="mx-auto bg-danger-soft w-16 h-16 rounded-full flex items-center justify-center mb-6 text-danger-foreground border border-danger-soft-border">
             <ShieldAlert className="w-8 h-8" />
           </div>
@@ -156,7 +156,7 @@ export default function InvitePage() {
   if (!session) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
           <div className="mx-auto bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mb-6 text-primary border border-primary/20">
             <User className="w-10 h-10" />
           </div>
@@ -166,7 +166,7 @@ export default function InvitePage() {
             Щоб прийняти запрошення, увійдіть у свій обліковий запис або зареєструйтеся.
           </p>
 
-          <div className="mt-6 bg-muted/50 rounded-[var(--radius-inner)] p-4 border border-border text-sm text-muted-foreground">
+          <div className="mt-6 bg-muted/50 rounded-inner p-4 border border-border text-sm text-muted-foreground">
             Це запрошення буде прив’язано до вашого акаунту після входу.
           </div>
 
@@ -188,7 +188,7 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[var(--radius-section)] border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
+      <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
         <Button
           variant="ghost"
           size="sm"
@@ -227,24 +227,24 @@ export default function InvitePage() {
             <h1 className="text-2xl font-extrabold text-foreground mt-1">Прийняти запрошення?</h1>
 
             {emailMismatch ? (
-              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+              <div className="mt-4 p-3 rounded-inner bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
                 Ви увійшли як {email}, але інвайт для {inviteEmail}. Увійдіть правильним email.
               </div>
             ) : null}
 
             {inviteAccepted ? (
-              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-muted/40 text-muted-foreground text-sm font-medium border border-border">
+              <div className="mt-4 p-3 rounded-inner bg-muted/40 text-muted-foreground text-sm font-medium border border-border">
                 Інвайт уже використано.
               </div>
             ) : null}
 
             {isInviteExpired ? (
-              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+              <div className="mt-4 p-3 rounded-inner bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
                 Термін дії інвайту минув.
               </div>
             ) : null}
 
-            <div className="mt-6 bg-muted/30 border border-border rounded-[var(--radius-inner)] p-4 text-left flex items-start gap-3">
+            <div className="mt-6 bg-muted/30 border border-border rounded-inner p-4 text-left flex items-start gap-3">
               <div className="bg-background p-1.5 rounded-[var(--radius)] shadow-sm text-primary border border-border shrink-0">
                 <User className="w-5 h-5" />
               </div>
@@ -277,7 +277,7 @@ export default function InvitePage() {
             </div>
 
             {error && (
-              <div className="mt-4 p-3 rounded-[var(--radius-inner)] bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
+              <div className="mt-4 p-3 rounded-inner bg-danger-soft text-danger-foreground text-sm font-medium border border-danger-soft-border">
                 {error}
               </div>
             )}

@@ -126,7 +126,7 @@ const renderDocBadge = (label: string, ready: boolean) => (
   <Badge
     variant="outline"
     className={cn(
-      "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+      "rounded-full px-2.5 py-0.5 text-2xs font-medium",
       ready ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
     )}
   >
@@ -557,7 +557,7 @@ export default function OrdersProductionPage() {
           fallback={getInitials(label)}
           size={18}
           className="shrink-0 border-border/60"
-          fallbackClassName="text-[9px] font-semibold"
+          fallbackClassName="text-3xs font-semibold"
         />
         <span className="truncate">{label}</span>
       </span>
@@ -979,7 +979,7 @@ export default function OrdersProductionPage() {
                             <Badge
                               variant="outline"
                               className={cn(
-                                "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                                "rounded-full px-2.5 py-0.5 text-2xs font-medium",
                                 record.source === "stored"
                                   ? "tone-success"
                                   : "border-border/70 bg-muted/20 text-muted-foreground"
@@ -1020,7 +1020,7 @@ export default function OrdersProductionPage() {
                             <Badge
                               variant="outline"
                               className={cn(
-                                "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                                "rounded-full px-2.5 py-0.5 text-2xs font-medium",
                                 record.readinessColumn === "ready"
                                   ? "tone-success"
                                   : record.readinessColumn === "design"
@@ -1100,25 +1100,25 @@ export default function OrdersProductionPage() {
                           <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", column.dotClass)} />
-                              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+                              <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground truncate">
                                 {column.label}
                               </span>
                             </div>
-                            <span className="text-[11px] font-semibold tabular-nums text-muted-foreground/80">
+                            <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">
                               {columnRecords.length}
                             </span>
                           </div>
                         }
                       >
                         {columnRecords.length === 0 ? (
-                          <div className="kanban-empty-state rounded-md border border-dashed border-border/50 px-3 py-6 text-center text-[11px] text-muted-foreground/70">
+                          <div className="kanban-empty-state rounded-md border border-dashed border-border/50 px-3 py-6 text-center text-2xs text-muted-foreground/70">
                             {column.description}
                           </div>
                         ) : (
                           columnRecords.map((record) => (
                             <KanbanCard
                               key={record.id}
-                              className="kanban-estimate-card cursor-pointer overflow-hidden rounded-[18px] border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-4 transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22"
+                              className="kanban-estimate-card cursor-pointer overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-4 transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22"
                               onClick={() => openRecord(record)}
                             >
                               <div className="flex items-start justify-between gap-3">
@@ -1149,7 +1149,7 @@ export default function OrdersProductionPage() {
                                 <Badge
                                   variant="outline"
                                   className={cn(
-                                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                    "shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold",
                                     record.readinessColumn === "ready"
                                       ? "tone-success"
                                       : record.readinessColumn === "design"
@@ -1169,7 +1169,7 @@ export default function OrdersProductionPage() {
                                     fallback={getInitials(record.managerLabel)}
                                     size={20}
                                     className="border-border/60 shrink-0"
-                                    fallbackClassName="text-[9px] font-semibold"
+                                    fallbackClassName="text-3xs font-semibold"
                                   />
                                   <span className="truncate">{record.managerLabel.trim() || "Менеджер не призначений"}</span>
                                 </div>

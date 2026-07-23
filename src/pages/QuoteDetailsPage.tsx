@@ -263,7 +263,7 @@ function sanitizeQuoteSummaryForCache(quote: QuoteSummaryRow): QuoteSummaryRow {
 
 const DEFAULT_DEADLINE_TIME = "09:00";
 const DEADLINE_FIELD_LABEL_CLASS =
-  "text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
+  "text-2xs font-medium uppercase tracking-wide text-muted-foreground";
 const DEFAULT_MANAGER_RATE = 10;
 const DEFAULT_FIXED_COST_RATE = 30;
 const DEFAULT_VAT_RATE = 20;
@@ -5722,7 +5722,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   {(() => {
                     const Icon = quoteTypeIcon(quote.quote_type);
                     return (
-                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold">
+                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
                         {Icon ? <Icon className="h-3 w-3" /> : null}
                         {quoteTypeLabel(quote.quote_type)}
                       </div>
@@ -5753,12 +5753,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             fallback={viewer.displayName.slice(0, 2).toUpperCase()}
                             size={20}
                             className="border-2 border-background"
-                            fallbackClassName="text-[9px] font-semibold"
+                            fallbackClassName="text-3xs font-semibold"
                           />
                         ))}
                       </div>
                       {quoteViewers.length > 4 ? (
-                        <span className="text-[11px] font-medium text-muted-foreground">
+                        <span className="text-2xs font-medium text-muted-foreground">
                           +{quoteViewers.length - 4}
                         </span>
                       ) : null}
@@ -5889,7 +5889,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     {tab.badge ? (
                       <span
                         className={cn(
-                          "max-w-[96px] truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none",
+                          "max-w-[96px] truncate rounded-md px-1.5 py-0.5 text-2xs font-semibold leading-none",
                           isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                         )}
                       >
@@ -6185,7 +6185,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     <div className="text-sm text-muted-foreground">{metaLine}</div>
                                   ) : null}
                                   {packageSizeHint ? (
-                                    <span className="rounded-md border border-border/50 bg-muted/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    <span className="rounded-md border border-border/50 bg-muted/20 px-2 py-0.5 text-3xs font-medium uppercase tracking-caps text-muted-foreground">
                                       {packageSizeHint}
                                     </span>
                                   ) : null}
@@ -6271,7 +6271,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
                                         title={`${field.label}: ${field.value}`}
                                       >
-                                        <span className="text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-muted-foreground">
+                                        <span className="text-3xs font-semibold uppercase leading-none tracking-caps text-muted-foreground">
                                           {field.label === "Розмір (Ш × В × Г)" ? "Розмір" : field.label}
                                         </span>
                                         <span className="max-w-full truncate text-base font-semibold leading-none text-foreground/90">
@@ -6298,7 +6298,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         key={section.title}
                                         className="rounded-lg border border-border/40 bg-background/60 p-3"
                                       >
-                                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                                           {section.title}
                                         </div>
                                         <div className="space-y-2">
@@ -6332,7 +6332,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         className="inline-flex min-h-14 min-w-[112px] max-w-full flex-col justify-center gap-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2"
                                         title={field.value ? `${field.label}: ${field.value}` : field.label}
                                       >
-                                        <span className="text-[10px] font-semibold uppercase leading-none tracking-[0.12em] text-muted-foreground">
+                                        <span className="text-3xs font-semibold uppercase leading-none tracking-caps text-muted-foreground">
                                           {field.label}
                                         </span>
                                         {field.value ? (
@@ -6378,7 +6378,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 return (
                                   <div className="space-y-4">
                                     <div className="flex flex-wrap items-center gap-2.5">
-                                      <div className="mr-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                                      <div className="mr-1 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
                                         Тиражі
                                       </div>
                                       {itemRuns.map((run, runIndex) => {
@@ -6459,7 +6459,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                           <div className="space-y-2">
-                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                                               Собівартість / од.
                                             </Label>
                                             <div className="relative">
@@ -6481,7 +6481,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                                               В-ть нанесення
                                             </Label>
                                             <div className="relative">
@@ -6503,7 +6503,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
                                               Логістика
                                             </Label>
                                             <div className="relative">
@@ -6525,7 +6525,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="block text-[11px] uppercase leading-tight tracking-wide text-muted-foreground">
+                                            <Label className="block text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               Бажаний особистий заробіток
                                             </Label>
                                             <Input
@@ -6547,7 +6547,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                         <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_1.2fr]">
                                           <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                                               Собівартість
                                             </div>
                                             <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-foreground">
@@ -6555,7 +6555,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+                                            <div className="text-2xs font-semibold uppercase tracking-wide text-primary/80">
                                               Ціна продажу / од.
                                             </div>
                                             <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
@@ -6565,7 +6565,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             </div>
                                           </div>
                                           <div className="rounded-xl border border-primary/20 bg-primary/10 p-4">
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+                                            <div className="text-2xs font-semibold uppercase tracking-wide text-primary/80">
                                               Сума продажу
                                             </div>
                                             <div className="mt-2 whitespace-nowrap font-mono text-xl font-semibold tabular-nums text-primary">
@@ -6586,7 +6586,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                           </summary>
                                           <div className="mt-3 grid gap-2 border-t border-border/50 pt-3 sm:grid-cols-2 xl:grid-cols-4">
                                             <div>
-                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                 Потрібний ВП
                                               </div>
                                               <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
@@ -6594,7 +6594,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               </div>
                                             </div>
                                             <div>
-                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                 Сталі витрати
                                               </div>
                                               <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
@@ -6602,7 +6602,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               </div>
                                             </div>
                                             <div>
-                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                 ПДВ
                                               </div>
                                               <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
@@ -6610,7 +6610,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               </div>
                                             </div>
                                             <div>
-                                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                              <div className="text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                 Надцінка
                                               </div>
                                               <div className="mt-1 whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-foreground">
@@ -6655,7 +6655,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Тиражі для розрахунку цін і підсумкової суми по прорахунку.
                     </div>
                   </div>
@@ -6749,7 +6749,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         ) : (
                           <div className="space-y-2">
                             <div className="hidden xl:block">
-                              <div className="flex items-center gap-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                              <div className="flex items-center gap-3 px-3 pb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                                 <div className="grid min-w-0 flex-1 items-center gap-2 xl:grid-cols-[132px_76px_96px_112px_96px] 2xl:gap-3 2xl:grid-cols-[132px_minmax(84px,98px)_minmax(104px,122px)_minmax(126px,148px)_minmax(96px,116px)]">
                                   <div>Тираж</div>
                                   <div className="whitespace-nowrap">Кількість</div>
@@ -6795,7 +6795,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="min-w-0">
                                   <div className="text-base font-semibold text-foreground">{`Тираж ${sectionRunIndex + 1}`}</div>
                                   {isSelected ? (
-                                    <div className="mt-0.5 text-[11px] font-medium text-primary">Активний</div>
+                                    <div className="mt-0.5 text-2xs font-medium text-primary">Активний</div>
                                   ) : null}
                                 </div>
                               </div>
@@ -6803,7 +6803,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="font-mono text-lg font-semibold tabular-nums text-foreground">
                                   {formatCurrency(total, quote.currency)}
                                 </div>
-                                <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                <div className="mt-0.5 text-2xs text-muted-foreground">
                                   ({formatCurrencyCompact(modelPrice, quote.currency)} + {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
                                 </div>
                               </div>
@@ -6811,7 +6811,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                             <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
-                                <div className="text-[11px] font-medium text-muted-foreground">Кількість</div>
+                                <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
                                 <Input
                                   type="number"
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
@@ -6826,7 +6826,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <div className="text-[11px] font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
+                                <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <Input
                                   type="number"
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
@@ -6841,7 +6841,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <div className="text-[11px] font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
+                                <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
                                 <Input
                                   type="number"
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
@@ -6856,7 +6856,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <div className="text-[11px] font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
+                                <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <Input
                                   type="number"
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
@@ -6908,7 +6908,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       {`Тираж ${sectionRunIndex + 1}`}
                                     </div>
                                     {isSelected ? (
-                                      <div className="mt-0.5 text-[11px] font-medium text-primary">
+                                      <div className="mt-0.5 text-2xs font-medium text-primary">
                                         Активний
                                       </div>
                                     ) : null}
@@ -6980,7 +6980,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
                                   {formatCurrency(total, quote.currency)}
                                 </div>
-                                <div className="mt-0.5 hidden truncate text-[11px] text-muted-foreground 2xl:block">
+                                <div className="mt-0.5 hidden truncate text-2xs text-muted-foreground 2xl:block">
                                   ({formatCurrencyCompact(modelPrice, quote.currency)} +{" "}
                                   {formatCurrencyCompact(printPrice, quote.currency)}) × {qty}
                                 </div>
@@ -7063,7 +7063,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Ключові дати прорахунку, нагадування і постановка задачі для дизайну.
                     </div>
                   </div>
@@ -7083,7 +7083,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
                           Готовність до відвантаження.
                         </div>
                       </div>
@@ -7111,7 +7111,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             );
                           })()
                         ) : (
-                          <Badge variant="outline" className="h-6 px-2 text-[11px] quote-neutral-badge">
+                          <Badge variant="outline" className="h-6 px-2 text-2xs quote-neutral-badge">
                             Не вказано
                           </Badge>
                         )}
@@ -7127,7 +7127,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
                           Відповідь замовнику.
                         </div>
                       </div>
@@ -7157,7 +7157,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
                           Погодити макет.
                         </div>
                       </div>
@@ -7185,7 +7185,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             );
                           })()
                         ) : (
-                          <Badge variant="outline" className="h-6 px-2 text-[11px] quote-neutral-badge">
+                          <Badge variant="outline" className="h-6 px-2 text-2xs quote-neutral-badge">
                             Не вказано
                           </Badge>
                         )}
@@ -7464,7 +7464,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       ТЗ для дизайнера і готові візуалізації в одному місці.
                     </div>
                   </div>
@@ -7646,7 +7646,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               ) : (
                                 <div className="flex flex-col items-center gap-2 text-muted-foreground/70">
                                   <FileText className="h-8 w-8" />
-                                  <span className="text-[11px] font-semibold uppercase tracking-wide">
+                                  <span className="text-2xs font-semibold uppercase tracking-wide">
                                     {extension ?? "Файл"}
                                   </span>
                                 </div>
@@ -7662,7 +7662,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               {isSelectedVisualization ? (
                                 <Badge
                                   variant="outline"
-                                  className="tone-success h-5 px-2 text-[10px]"
+                                  className="tone-success h-5 px-2 text-3xs"
                                 >
                                   Обрано
                                 </Badge>
@@ -7733,7 +7733,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                                     size={20}
                                     inactive={memberInactiveById[designAssigneeId] ?? false}
-                                    className="text-[9px] font-semibold"
+                                    className="text-3xs font-semibold"
                                   />
                                   <span className="truncate">
                                     {memberById.get(designAssigneeId) ?? designAssigneeId}
@@ -7755,7 +7755,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         fallback={getInitials(member.label)}
                                         size={20}
                                         inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-[9px] font-semibold"
+                                        className="text-3xs font-semibold"
                                       />
                                       <span>{member.label}</span>
                                     </div>
@@ -7845,7 +7845,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                                     size={20}
                                     inactive={memberInactiveById[designAssigneeId] ?? false}
-                                    className="text-[9px] font-semibold"
+                                    className="text-3xs font-semibold"
                                   />
                                   <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
                                 </div>
@@ -7865,7 +7865,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         fallback={getInitials(member.label)}
                                         size={20}
                                         inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-[9px] font-semibold"
+                                        className="text-3xs font-semibold"
                                       />
                                       <span>{member.label}</span>
                                     </div>
@@ -7924,7 +7924,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                         fallback={getInitials(member.label)}
                                         size={20}
                                         inactive={memberInactiveById[member.id] ?? false}
-                                        className="text-[9px] font-semibold"
+                                        className="text-3xs font-semibold"
                                       />
                                       <span>{member.label}</span>
                                     </div>
@@ -7978,7 +7978,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Загальні коментарі, вкладення від замовника і журнал активності по прорахунку.
                     </div>
                   </div>
@@ -8059,7 +8059,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       name={member.label}
                                       fallback={getInitials(member.label)}
                                       size={24}
-                                      className="text-[10px] font-semibold"
+                                      className="text-3xs font-semibold"
                                     />
                                     <div className="min-w-0 flex-1">
                                       <div className="truncate text-sm font-medium">{member.label}</div>
@@ -8134,7 +8134,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     : "Не вказано"
                                 }
                                 size={32}
-                                className="text-[10px] font-semibold"
+                                className="text-3xs font-semibold"
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-baseline justify-between gap-2">
@@ -8198,7 +8198,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="flex items-center gap-2 text-sm font-semibold">
                           Від замовника
                           {attachments.length > 0 && (
-                            <Badge variant="secondary" className="text-[11px]">
+                            <Badge variant="secondary" className="text-2xs">
                               {attachments.length}
                             </Badge>
                           )}
@@ -8275,7 +8275,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             {displayName}
                                           </div>
                                           {extension && (
-                                            <Badge variant="secondary" className="text-[10px] uppercase">
+                                            <Badge variant="secondary" className="text-3xs uppercase">
                                               {extension}
                                             </Badge>
                                           )}
@@ -8947,7 +8947,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         {candidate.designTaskNumber ?? "Дизайн-задача"}
                       </div>
                       {candidate.status ? (
-                        <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                        <Badge variant="outline" className="h-5 px-2 text-3xs">
                           {candidate.status}
                         </Badge>
                       ) : null}
@@ -8967,7 +8967,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       {candidate.selectedFile ? (
                         <Badge
                           variant="outline"
-                          className="tone-success h-5 px-2 text-[10px]"
+                          className="tone-success h-5 px-2 text-3xs"
                         >
                           Обрано: {candidate.selectedFile.file_name}
                         </Badge>
@@ -9290,7 +9290,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           fallback={getInitials(memberById.get(designAssigneeId) ?? designAssigneeId)}
                           size={20}
                           inactive={memberInactiveById[designAssigneeId] ?? false}
-                          className="text-[9px] font-semibold"
+                          className="text-3xs font-semibold"
                         />
                         <span className="truncate">{memberById.get(designAssigneeId) ?? designAssigneeId}</span>
                       </div>
@@ -9310,7 +9310,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               fallback={getInitials(member.label)}
                               size={20}
                               inactive={memberInactiveById[member.id] ?? false}
-                              className="text-[9px] font-semibold"
+                              className="text-3xs font-semibold"
                             />
                             <span>{member.label}</span>
                           </div>
@@ -9369,7 +9369,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               fallback={getInitials(member.label)}
                               size={20}
                               inactive={memberInactiveById[member.id] ?? false}
-                              className="text-[9px] font-semibold"
+                              className="text-3xs font-semibold"
                             />
                             <span>{member.label}</span>
                           </div>

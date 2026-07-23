@@ -240,7 +240,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                     </span>
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       {group.number ? (
-                        <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                        <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
                           {group.number}
                         </span>
                       ) : null}
@@ -507,7 +507,7 @@ export function PersonTimeInCrm({ userId }: { userId: string }) {
             { label: "30 днів", value: month },
           ].map((cell) => (
             <div key={cell.label}>
-              <div className="text-[11px] text-muted-foreground">{cell.label}</div>
+              <div className="text-2xs text-muted-foreground">{cell.label}</div>
               <div className="text-sm font-semibold tabular-nums text-foreground">{formatMinutesLabel(cell.value)}</div>
             </div>
           ))}

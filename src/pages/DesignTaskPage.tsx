@@ -128,6 +128,7 @@ import {
   getDesignStatusActionLabel,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
+import { designStatusBadgeClass } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import {
   notifyDesignTaskCollaboratorsChanged,
@@ -856,15 +857,7 @@ function buildDesignTaskPageCachePayload(params: {
 
 const statusLabels = DESIGN_STATUS_LABELS;
 
-const statusColors: Record<DesignStatus, string> = {
-  new: "design-status-badge-new",
-  changes: "design-status-badge-changes",
-  in_progress: "design-status-badge-in-progress",
-  pm_review: "design-status-badge-pm-review",
-  client_review: "design-status-badge-client-review",
-  approved: "design-status-badge-approved",
-  cancelled: "design-status-badge-cancelled",
-};
+const statusColors = designStatusBadgeClass;
 
 const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
@@ -8010,7 +8003,7 @@ export default function DesignTaskPage() {
           <button
             type="button"
             onClick={() => jumpToChangeRequest(linkedRequest.id)}
-            className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+            className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-2xs font-medium text-primary transition-colors hover:bg-primary/20"
             title="Перейти до правки"
           >
             <CornerUpLeft className="h-3 w-3 shrink-0" />
@@ -8020,13 +8013,13 @@ export default function DesignTaskPage() {
         {canManageLink && hasChangeRequests ? (
           <Popover open={pickerOpen} onOpenChange={(open) => setOutputLinkPickerId(open ? target.id : null)}>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 rounded-full px-2 text-[11px] text-muted-foreground">
+              <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 rounded-full px-2 text-2xs text-muted-foreground">
                 <Link2 className="h-3 w-3" />
                 {linkedRequest ? "Змінити" : "Привʼязати до правки"}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-72 p-2">
-              <div className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1.5 px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                 Привʼязати до правки
               </div>
               <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -8050,7 +8043,7 @@ export default function DesignTaskPage() {
                         <span className="block truncate font-medium text-foreground">
                           {changeRequestSnippet(request.request_text, 44)}
                         </span>
-                        <span className="block truncate text-[10px] text-muted-foreground">
+                        <span className="block truncate text-3xs text-muted-foreground">
                           {request.requested_by_label ?? "Користувач"} · {formatDate(request.requested_at, true)}
                         </span>
                       </span>
@@ -8174,11 +8167,11 @@ export default function DesignTaskPage() {
     return (
       <div className="mt-3 rounded-lg border border-border/40 bg-muted/10 p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             <ImageIcon className="h-3.5 w-3.5" />
             Результати по цій правці
             {linkedCount > 0 ? (
-              <span className="rounded-full bg-muted px-1.5 text-[10px] text-foreground">{linkedCount}</span>
+              <span className="rounded-full bg-muted px-1.5 text-3xs text-foreground">{linkedCount}</span>
             ) : null}
           </div>
           {canManageLink && hasAttachable ? (
@@ -8187,13 +8180,13 @@ export default function DesignTaskPage() {
               onOpenChange={(open) => setChangeRequestAttachPickerId(open ? request.id : null)}
             >
               <PopoverTrigger asChild>
-                <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 px-2 text-[11px] text-muted-foreground">
+                <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 px-2 text-2xs text-muted-foreground">
                   <Link2 className="h-3 w-3" />
                   Привʼязати результат
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 p-2">
-                <div className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="mb-1.5 px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Привʼязати результат до правки
                 </div>
                 <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -8212,7 +8205,7 @@ export default function DesignTaskPage() {
                         <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 flex-1 truncate text-foreground">{displayName}</span>
                         {file.change_request_id ? (
-                          <span className="shrink-0 text-[10px] text-warning-foreground">перепривʼязати</span>
+                          <span className="shrink-0 text-3xs text-warning-foreground">перепривʼязати</span>
                         ) : null}
                       </button>
                     );
@@ -8262,7 +8255,7 @@ export default function DesignTaskPage() {
                     ) : isVideoFile ? (
                       <StorageObjectVideo bucket={file.storage_bucket} path={file.storage_path} label={displayName} className="h-full w-full" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase text-muted-foreground">
+                      <div className="flex h-full w-full items-center justify-center text-3xs font-semibold uppercase text-muted-foreground">
                         {ext}
                       </div>
                     )}
@@ -8270,7 +8263,7 @@ export default function DesignTaskPage() {
                   <button
                     type="button"
                     onClick={() => jumpToDesignOutput(file.id)}
-                    className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/85 py-0.5 text-[9px] text-foreground opacity-0 transition-opacity group-hover/thumb:opacity-100"
+                    className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/85 py-0.5 text-3xs text-foreground opacity-0 transition-opacity group-hover/thumb:opacity-100"
                     title="Перейти до результату"
                   >
                     <ExternalLink className="h-2.5 w-2.5" /> до результату
@@ -8318,7 +8311,7 @@ export default function DesignTaskPage() {
             ))}
           </div>
         ) : (
-          <div className="text-[11px] text-muted-foreground">Ще немає привʼязаних результатів.</div>
+          <div className="text-2xs text-muted-foreground">Ще немає привʼязаних результатів.</div>
         )}
       </div>
     );
@@ -8352,11 +8345,11 @@ export default function DesignTaskPage() {
             <div className="flex flex-wrap items-center gap-2">
               {kindIcon}
               <div className="text-sm font-semibold text-foreground">{kindLabel}</div>
-              <Badge variant={requiresThisKind ? "default" : "outline"} className="text-[10px]">
+              <Badge variant={requiresThisKind ? "default" : "outline"} className="text-3xs">
                 {requiresThisKind ? "Обов'язково для погодження" : "Опціонально"}
               </Badge>
               {selectedIds.length > 0 ? (
-                <Badge variant="outline" className="text-[10px] border-success/40 bg-success/10 text-success-foreground">
+                <Badge variant="outline" className="text-3xs border-success/40 bg-success/10 text-success-foreground">
                   Погоджено: {selectedIds.length}
                 </Badge>
               ) : null}
@@ -8375,7 +8368,7 @@ export default function DesignTaskPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <Send className="h-4 w-4 text-muted-foreground" />
                 <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-3xs">
                   Вибрано: {selectedShareIds.length}
                 </Badge>
               </div>
@@ -8385,7 +8378,7 @@ export default function DesignTaskPage() {
                   : `Познач матеріали чекбоксом «Клієнту». Це окремий список для відправки і він не впливає на «Погоджено».`}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
               <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2 py-1">
                 <Mail className="h-3 w-3 shrink-0" />
                 {clientContact.email ?? "—"}
@@ -8403,7 +8396,7 @@ export default function DesignTaskPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 rounded-full px-3 text-[11px]"
+                  className="h-7 rounded-full px-3 text-2xs"
                   disabled={sendingToClientKind !== null}
                   onClick={() =>
                     setClientShareSelectionIds((prev) =>
@@ -8507,7 +8500,7 @@ export default function DesignTaskPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-semibold text-foreground">{group.label}</div>
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-3xs">
                         {group.files.length + group.links.length} матеріалів
                       </Badge>
                     </div>
@@ -8573,7 +8566,7 @@ export default function DesignTaskPage() {
                                 className="h-16 w-16 shrink-0 rounded-lg border border-border/60 bg-muted/30"
                               />
                             ) : (
-                              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-[11px] font-semibold uppercase text-muted-foreground">
+                              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-2xs font-semibold uppercase text-muted-foreground">
                                 {ext}
                               </div>
                             )}
@@ -8656,14 +8649,14 @@ export default function DesignTaskPage() {
                               {selectedShareIdSet.has(`file:${file.id}`) || selectedIdSet.has(file.id) ? (
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {selectedShareIdSet.has(`file:${file.id}`) ? (
-                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[10px] text-primary">
+                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-3xs text-primary">
                                       У добірці для клієнта
                                     </Badge>
                                   ) : null}
                                   {selectedIdSet.has(file.id) ? (
                                     <Badge
                                       variant="outline"
-                                      className="h-5 border-success/40 bg-success/10 text-[10px] text-success-foreground"
+                                      className="h-5 border-success/40 bg-success/10 text-3xs text-success-foreground"
                                     >
                                       Погоджено замовником
                                     </Badge>
@@ -8678,7 +8671,7 @@ export default function DesignTaskPage() {
                               })}
 
                               <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
                                   <Checkbox
                                     checked={groupingSelectionIds.includes(`file:${file.id}`)}
                                     disabled={outputSaving}
@@ -8687,7 +8680,7 @@ export default function DesignTaskPage() {
                                   />
                                   <span>До групи</span>
                                 </label>
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
                                   <Checkbox
                                     checked={selectedShareIdSet.has(`file:${file.id}`)}
                                     disabled={outputSaving}
@@ -8696,7 +8689,7 @@ export default function DesignTaskPage() {
                                   />
                                   <span>Клієнту</span>
                                 </label>
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
                                   <Checkbox
                                     checked={selectedIdSet.has(file.id)}
                                     disabled={outputSaving || !canManageAssignments}
@@ -8786,7 +8779,7 @@ export default function DesignTaskPage() {
 
                             {selectedShareIdSet.has(`link:${link.id}`) ? (
                               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-[10px] text-primary">
+                                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-3xs text-primary">
                                   У добірці для клієнта
                                 </Badge>
                               </div>
@@ -8799,7 +8792,7 @@ export default function DesignTaskPage() {
                             })}
 
                             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
-                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
                                 <Checkbox
                                   checked={groupingSelectionIds.includes(`link:${link.id}`)}
                                   disabled={outputSaving}
@@ -8808,7 +8801,7 @@ export default function DesignTaskPage() {
                                 />
                                 <span>До групи</span>
                               </label>
-                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
                                 <Checkbox
                                   checked={selectedShareIdSet.has(`link:${link.id}`)}
                                   disabled={outputSaving}
@@ -9231,7 +9224,7 @@ export default function DesignTaskPage() {
                 {tab.badge ? (
                   <span
                     className={cn(
-                      "max-w-[120px] truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none",
+                      "max-w-[120px] truncate rounded-md px-1.5 py-0.5 text-2xs font-semibold leading-none",
                       isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     )}
                   >
@@ -9264,7 +9257,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Опис задачі для дизайнера, версії ТЗ і правки від менеджера.
                   </div>
                 </div>
@@ -9281,11 +9274,11 @@ export default function DesignTaskPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">ТЗ для дизайнера</span>
-                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                      <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
                         v{activeBriefVersion?.version ?? 1}
                       </Badge>
                       {isLinkedQuote && quantityLabel !== "Не вказано" ? (
-                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                        <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
                           {quantityLabel}
                         </Badge>
                       ) : null}
@@ -9407,7 +9400,7 @@ export default function DesignTaskPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">Правки та обговорення</span>
-                      <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                      <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
                         {briefChangeRequests.length}
                       </Badge>
                     </div>
@@ -9487,11 +9480,11 @@ export default function DesignTaskPage() {
                                   ) : (
                                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
                                       <FileText className="h-6 w-6" />
-                                      <span className="text-[10px] uppercase">{extension}</span>
+                                      <span className="text-3xs uppercase">{extension}</span>
                                     </div>
                                   )}
                                 </button>
-                                <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-[10px] text-foreground">
+                                <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-3xs text-foreground">
                                   {attachment.file_name}
                                 </div>
                                 <Button
@@ -9638,7 +9631,7 @@ export default function DesignTaskPage() {
                           >
                             {isNewestChangeRequest && briefChangeRequests.length > 1 ? (
                               <div className="mb-2.5 flex items-center gap-1.5">
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-3xs font-medium text-primary">
                                   <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                                   Активна правка
                                 </span>
@@ -9651,7 +9644,7 @@ export default function DesignTaskPage() {
                                   name={request.requested_by_label ?? "Користувач"}
                                   fallback={getInitials(request.requested_by_label ?? "Користувач")}
                                   size={28}
-                                  className="text-[10px] font-semibold"
+                                  className="text-3xs font-semibold"
                                 />
                                 <div className="min-w-0">
                                   <div className="truncate text-sm font-medium">
@@ -9727,10 +9720,10 @@ export default function DesignTaskPage() {
                                       ) : (
                                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
                                           <FileText className="h-6 w-6" />
-                                          <span className="text-[10px] uppercase">{extension}</span>
+                                          <span className="text-3xs uppercase">{extension}</span>
                                         </div>
                                       )}
-                                      <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-[10px] text-foreground">
+                                      <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background/85 px-1.5 py-0.5 text-3xs text-foreground">
                                         {attachment.file_name}
                                       </div>
                                     </button>
@@ -9792,7 +9785,7 @@ export default function DesignTaskPage() {
                                           <span className="font-medium">{entries.length}</span>
                                         </button>
                                         <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[220px] -translate-x-1/2 rounded-md border border-border/60 bg-popover px-2.5 py-2 opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                                          <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                          <div className="mb-1 flex items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground">
                                             <span className="text-sm leading-none">{emoji}</span>
                                             <span>
                                               {entries.length}{" "}
@@ -9929,7 +9922,7 @@ export default function DesignTaskPage() {
                       <div className="flex items-center gap-2">
                         <History className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-semibold text-foreground">Історія версій</span>
-                        <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+                        <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
                           {briefVersions.length}
                         </Badge>
                       </div>
@@ -9953,7 +9946,7 @@ export default function DesignTaskPage() {
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
+                                  <Badge variant="outline" className="h-5 px-1.5 text-3xs font-medium">
                                     v{version.version}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground">
@@ -10006,7 +9999,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Коментарі дизайн-задачі та згадки з відповідного прорахунку.
                   </div>
                 </div>
@@ -10014,7 +10007,7 @@ export default function DesignTaskPage() {
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
             <div className="pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
+              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
             </div>
             <div className="space-y-4">
               <div className="space-y-3">
@@ -10083,7 +10076,7 @@ export default function DesignTaskPage() {
                                 name={member.label}
                                 fallback={getInitials(member.label)}
                                 size={24}
-                                className="text-[10px] font-semibold"
+                                className="text-3xs font-semibold"
                               />
                               <div className="min-w-0 flex-1">
                                 <div className="truncate text-sm font-medium">{member.label}</div>
@@ -10199,7 +10192,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Вкладення замовника або файли до ТЗ для роботи дизайнера.
                   </div>
                 </div>
@@ -10207,7 +10200,7 @@ export default function DesignTaskPage() {
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
             <div className="flex items-center justify-between gap-3 pb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                 {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
               </span>
               <div className="flex items-center gap-2">
@@ -10301,7 +10294,7 @@ export default function DesignTaskPage() {
                                 className="h-11 w-11 shrink-0 rounded-md border border-border/60"
                               />
                             ) : (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-[10px] font-semibold text-muted-foreground">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-3xs font-semibold text-muted-foreground">
                                 {extension}
                               </div>
                             )}
@@ -10397,7 +10390,7 @@ export default function DesignTaskPage() {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Методи нанесення, позиції та розміри з привʼязаного прорахунку.
                     </div>
                   </div>
@@ -10405,7 +10398,7 @@ export default function DesignTaskPage() {
                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
               <div className="flex items-center justify-between pb-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">Нанесення</span>
+                <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">Нанесення</span>
                 {task.methodsCount ? <Badge variant="outline" className="text-xs font-normal">{task.methodsCount} нанес.</Badge> : null}
               </div>
               <div className="space-y-2">
@@ -10443,7 +10436,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-[11px] text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Готові візуалізації, макети та посилання від дизайнера.
                   </div>
                 </div>
@@ -10479,11 +10472,11 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="visualization" className="gap-2">
                     <ImageIcon className="h-4 w-4" />
                     <span>Візуал</span>
-                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
                       {designOutputCountByKind.visualization}
                     </span>
                     {selectedVisualizationOutputFileIds.length > 0 ? (
-                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-3xs text-success-foreground">
                         {selectedVisualizationOutputFileIds.length}
                       </span>
                     ) : null}
@@ -10491,11 +10484,11 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="layout" className="gap-2">
                     <PencilLine className="h-4 w-4" />
                     <span>Макет</span>
-                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+                    <span className="rounded-full border border-border/60 bg-muted/60 px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
                       {designOutputCountByKind.layout}
                     </span>
                     {selectedLayoutOutputFileIds.length > 0 ? (
-                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success-foreground">
+                      <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-3xs text-success-foreground">
                         {selectedLayoutOutputFileIds.length}
                       </span>
                     ) : null}
@@ -10577,7 +10570,7 @@ export default function DesignTaskPage() {
                     <div className="flex items-start gap-3">
                       <DropboxIcon className="h-10 w-10 shrink-0" />
                       <div className="space-y-1">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
                           Dropbox Export
                         </div>
                         <div className="text-lg font-semibold text-foreground">
@@ -10606,13 +10599,13 @@ export default function DesignTaskPage() {
                                 )}
                                 {DESIGN_OUTPUT_KIND_LABELS[kind]}
                               </div>
-                              <Badge variant="outline" className="border-border/60 bg-transparent text-[10px]">
+                              <Badge variant="outline" className="border-border/60 bg-transparent text-3xs">
                                 Архів: {plan.archiveFiles.length}
                               </Badge>
                             </div>
                             {plan.finalFiles.length > 0 ? (
                               <div className="rounded-lg border border-success/20 bg-success/5 p-3">
-                                <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-success-foreground">
+                                <div className="mb-1 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-caps text-success-foreground">
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                   Фінал: {plan.finalFiles.length}
                                 </div>
@@ -10653,7 +10646,7 @@ export default function DesignTaskPage() {
                   <div className="flex flex-col justify-between gap-4 border-t border-border/50 bg-muted/10 p-5 lg:border-l lg:border-t-0">
                     <div className="space-y-4">
                       <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        <div className="mb-2 text-xs font-medium uppercase tracking-caps text-muted-foreground">
                           Папка замовлення
                         </div>
                         <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
@@ -10668,13 +10661,13 @@ export default function DesignTaskPage() {
 
                       <div className="grid grid-cols-2 gap-3">
                         <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">У фінал</div>
+                          <div className="text-2xs uppercase tracking-caps text-muted-foreground">У фінал</div>
                           <div className="mt-2 text-2xl font-semibold text-foreground">
                             {dropboxExportPlan.filter((entry) => entry.role === "final").length}
                           </div>
                         </div>
                         <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                          <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">В архів</div>
+                          <div className="text-2xs uppercase tracking-caps text-muted-foreground">В архів</div>
                           <div className="mt-2 text-2xl font-semibold text-foreground">
                             {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
                           </div>
@@ -10816,7 +10809,7 @@ export default function DesignTaskPage() {
                       <DropdownMenuLabel>{`Відповідальний ${taskRoleLabelLower}`}</DropdownMenuLabel>
                       {managerMembers.map((member) => (
                         <DropdownMenuItem key={member.id} onClick={() => void applyManager(member.id)} disabled={taskManagerUserId === member.id || managerSaving} className="gap-2">
-                          <AvatarBase src={getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-[10px] font-semibold" />
+                          <AvatarBase src={getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-3xs font-semibold" />
                           <span className="truncate">{member.label}</span>
                           <Check className={cn("ml-auto h-3.5 w-3.5 text-primary", taskManagerUserId === member.id ? "opacity-100" : "opacity-0")} />
                         </DropdownMenuItem>
@@ -10861,11 +10854,11 @@ export default function DesignTaskPage() {
                           const workload = designerWorkloadById.get(member.id);
                           return (
                             <DropdownMenuItem key={member.id} onClick={() => void applyAssignee(member.id)} disabled={task.assigneeUserId === member.id} className="gap-2 py-2">
-                              <AvatarBase src={member.avatarUrl ?? getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-[10px] font-semibold" />
+                              <AvatarBase src={member.avatarUrl ?? getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-3xs font-semibold" />
                               <div className="min-w-0 flex-1">
                                 <div className="truncate">{member.label}</div>
                                 {workload ? (
-                                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <div className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
                                     <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
                                     <span>·</span>
                                     <span>{workload.activeTaskCount} задач</span>
@@ -10873,7 +10866,7 @@ export default function DesignTaskPage() {
                                 ) : null}
                               </div>
                               {workload ? (
-                                <Badge variant="outline" className={cn("ml-auto text-[10px]", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                                <Badge variant="outline" className={cn("ml-auto text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
                                   {workload.score}
                                 </Badge>
                               ) : null}
@@ -10966,10 +10959,10 @@ export default function DesignTaskPage() {
                                 fallback={getInitials(member.label)}
                                 size={18}
                                 className="shrink-0 border-border/70"
-                                fallbackClassName="text-[10px] font-semibold"
+                                fallbackClassName="text-3xs font-semibold"
                               />
                               <span className="truncate">{member.label}</span>
-                              {disabled ? <span className="ml-auto text-[10px] text-muted-foreground">Основний</span> : null}
+                              {disabled ? <span className="ml-auto text-3xs text-muted-foreground">Основний</span> : null}
                             </DropdownMenuCheckboxItem>
                           );
                         })
@@ -11063,7 +11056,7 @@ export default function DesignTaskPage() {
                       <Timer className="h-3.5 w-3.5" />
                       Таймер
                       {isTimerPaused ? (
-                        <span className="rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-warning-foreground">
+                        <span className="rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-3xs font-semibold uppercase text-warning-foreground">
                           На паузі
                         </span>
                       ) : null}
@@ -11228,7 +11221,7 @@ export default function DesignTaskPage() {
                     {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
                     {historyGroups.map((group) => (
                       <div key={group.label} className="space-y-2.5">
-                        <div className="inline-flex rounded-full border border-border/50 bg-muted/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                        <div className="inline-flex rounded-full border border-border/50 bg-muted/20 px-2.5 py-1 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
                           {group.label}
                         </div>
                         <div className="space-y-4">
@@ -11305,7 +11298,7 @@ export default function DesignTaskPage() {
           <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border/40 px-5 py-3 space-y-0">
             <div className="flex items-center gap-2">
               <DialogTitle className="text-base">Редактор ТЗ</DialogTitle>
-              <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+              <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
                 v{activeBriefVersion?.version ?? 1}
               </Badge>
             </div>
@@ -11442,7 +11435,7 @@ export default function DesignTaskPage() {
               <span>·</span>
               <span>{briefDraft.split(/\s+/).filter(Boolean).length} слів</span>
               {briefDirty ? (
-                <Badge variant="outline" className="h-5 border-warning-soft-border bg-warning-soft px-1.5 text-[10px] text-warning-foreground">
+                <Badge variant="outline" className="h-5 border-warning-soft-border bg-warning-soft px-1.5 text-3xs text-warning-foreground">
                   Незбережено
                 </Badge>
               ) : null}
@@ -11595,7 +11588,7 @@ export default function DesignTaskPage() {
 
                     <div className="space-y-2">
                       <div className="rounded-xl border border-success/20 bg-success/5 p-3">
-                        <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.16em] text-success-foreground">
+                        <div className="mb-1 text-2xs font-medium uppercase tracking-caps text-success-foreground">
                           Фінал
                         </div>
                         {plan.finalFiles.length > 0 ? (
@@ -11622,7 +11615,7 @@ export default function DesignTaskPage() {
                                         : "Напр. лицьова або back"
                                     }
                                   />
-                                  <div className="text-[11px] leading-5 text-muted-foreground">
+                                  <div className="text-2xs leading-5 text-muted-foreground">
                                     {plan.finalFiles.length > 1
                                       ? "Для кількох фінальних файлів мітка допомагає дати їм різні й читабельні назви в Dropbox."
                                       : "Якщо поле порожнє, файл піде в Dropbox без додаткового суфікса."}
@@ -11637,7 +11630,7 @@ export default function DesignTaskPage() {
                       </div>
 
                       <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-                        <div className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        <div className="mb-1 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-caps text-muted-foreground">
                           <Archive className="h-3.5 w-3.5" />
                           Архів
                         </div>
@@ -11947,7 +11940,7 @@ export default function DesignTaskPage() {
                           {candidate.number ?? candidate.id.slice(0, 8)}
                         </HoverCopyText>
                         {candidate.status ? (
-                          <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                          <Badge variant="outline" className="h-5 px-2 text-3xs">
                             {candidate.status}
                           </Badge>
                         ) : null}

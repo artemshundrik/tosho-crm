@@ -62,10 +62,14 @@
     --shadow-surface: none;
     --shadow-floating: none;
     --shadow-overlay: 0 8px 18px rgba(21, 31, 56, 0.1);
-    --shadow-pressed: none;
-    --shadow-primary-glow: none;
-    --shadow-success-glow: none;
-    --shadow-danger-glow: none;
+    /* Кольорові гало для суцільних семантичних кнопок. Беруть той самий токен,
+       що й заливка кнопки, тому гало ніколи не «роз'їжджається» з фоном і
+       адаптується до теми само. */
+    --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
+    --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
+    /* Плаваюча інвертована панель (таймер): темна тінь у ОБОХ темах — панель
+       завжди контрастна до полотна, тому тінь не інвертується разом з нею. */
+    --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.46);
     --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.12), 0 1px 2px -1px hsl(var(--foreground) / 0.08);
     --shadow-elevated-md: 0 18px 40px -20px hsl(var(--foreground) / 0.18);
     --shadow-elevated-lg: 0 42px 120px -40px hsl(var(--foreground) / 0.22), 0 22px 54px -34px hsl(var(--foreground) / 0.14);
@@ -107,6 +111,11 @@
     --danger-soft: 356 100% 92%;
     --danger-soft-border: 356 90% 78%;
     --danger-foreground: 356 80% 46%;
+
+    /* --- TOSHO AI ACCENT --- */
+    /* Власний бренд-колір модуля ToSho AI (був #E6007E, розсипаний по коду).
+       Окремий від --brand-h навмисно: AI — це підбренд, а не тема застосунку. */
+    --ai-accent: 327 100% 45%;
 
     /* --- COMMAND SEARCH TOKENS (LIGHT) --- */
     --cmd-highlight-bg: 214 100% 89%;
@@ -265,10 +274,9 @@
     --shadow-surface: none;
     --shadow-floating: none;
     --shadow-overlay: 0 10px 24px rgba(2, 6, 23, 0.38);
-    --shadow-pressed: none;
-    --shadow-primary-glow: none;
-    --shadow-success-glow: none;
-    --shadow-danger-glow: none;
+    --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
+    --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
+    --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.62);
     --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.1), 0 1px 2px -1px hsl(var(--foreground) / 0.06);
     --shadow-elevated-md: 0 18px 40px -20px hsl(0 0% 2% / 0.42);
     --shadow-elevated-lg: 0 52px 140px -42px hsl(0 0% 2% / 0.85), 0 26px 60px -36px hsl(0 0% 2% / 0.62);
@@ -314,6 +322,10 @@
     --danger-soft: 356 34% 16%;
     --danger-soft-border: 356 42% 32%;
     --danger-foreground: 356 100% 70%;
+
+    /* Той самий рожевий, піднятий по світлості: #E6007E на темному тлі
+       провалюється (контраст ~2.9:1 до card). 66% дає читабельний акцент. */
+    --ai-accent: 327 100% 66%;
 
     /* --- COMMAND SEARCH TOKENS (DARK) --- */
     --cmd-highlight-bg: 216 52% 28%;
@@ -512,7 +524,7 @@
   }
 
   .design-task-side-heading {
-    @apply text-[11px] font-semibold uppercase text-muted-foreground/70;
+    @apply text-2xs font-semibold uppercase text-muted-foreground/70;
     letter-spacing: 0.14em;
   }
 
@@ -534,7 +546,7 @@
   }
 
   .design-task-panel-card {
-    @apply rounded-[var(--radius-section)] border px-4 py-4;
+    @apply rounded-section border px-4 py-4;
     background-color: hsl(var(--design-task-panel-card-bg));
     border-color: hsl(var(--design-task-panel-card-border));
   }
@@ -570,7 +582,7 @@
   }
 
   .design-task-side-action {
-    @apply h-auto min-h-0 w-full items-start justify-start gap-3 whitespace-normal rounded-[var(--radius-section)] border px-3.5 py-3 text-left shadow-none;
+    @apply h-auto min-h-0 w-full items-start justify-start gap-3 whitespace-normal rounded-section border px-3.5 py-3 text-left shadow-none;
     background-color: hsl(var(--design-task-panel-card-bg));
     border-color: hsl(var(--design-task-panel-card-border));
   }
@@ -604,7 +616,7 @@
   }
 
   .design-task-side-action-plain {
-    @apply h-11 w-full justify-start gap-3 rounded-[var(--radius-section)] border px-4 text-left shadow-none;
+    @apply h-11 w-full justify-start gap-3 rounded-section border px-4 text-left shadow-none;
     background-color: transparent;
     border-color: hsl(var(--design-task-panel-card-border));
   }
@@ -643,111 +655,27 @@
     letter-spacing: -0.01em;
   }
 
-  .bg-neutral-soft {
-    background-color: hsl(var(--neutral-soft));
-  }
-  .border-neutral-soft-border {
-    border-color: hsl(var(--neutral-soft-border));
-  }
-  .text-neutral-foreground {
-    color: hsl(var(--neutral-foreground));
-  }
+  /* bg-*-soft / border-*-soft-border / text-*-foreground та всі їхні кроки
+     непрозорості раніше жили тут як ~106 рядків рукописних правил — по одному
+     на кожен використаний /10 /15 /40… крок. Тепер тони зареєстровані як
+     повноцінні кольори в tailwind.config.js, тож Tailwind генерує їх сам разом
+     з будь-якою непрозорістю. Додавати сюди нові — НЕ треба. */
 
-  .bg-info-soft {
-    background-color: hsl(var(--info-soft));
+  /* Великі семантичні поверхні (банери, ряди, stat-картки): колір «на ручці» —
+     лівий кант 3px + іконка/бейдж, а НЕ заливка всієї площі. Насиченість має
+     падати з площею: жовта/червона заливка на широкому елементі читається як
+     бруд, особливо на світлій темі. Кант бере *-soft-border → працює в обох темах. */
+  .flag-warning {
+    border-left: 3px solid hsl(var(--warning-soft-border));
   }
-  .border-info-soft-border {
-    border-color: hsl(var(--info-soft-border));
+  .flag-danger {
+    border-left: 3px solid hsl(var(--danger-soft-border));
   }
-  .text-info-foreground {
-    color: hsl(var(--info-foreground));
+  .flag-success {
+    border-left: 3px solid hsl(var(--success-soft-border));
   }
-  .bg-info-foreground {
-    background-color: hsl(var(--info-foreground));
-  }
-  .bg-info-foreground\/75 {
-    background-color: hsl(var(--info-foreground) / 0.75);
-  }
-  .bg-info-foreground\/80 {
-    background-color: hsl(var(--info-foreground) / 0.8);
-  }
-
-  .bg-success-soft {
-    background-color: hsl(var(--success-soft));
-  }
-  .border-success-soft-border {
-    border-color: hsl(var(--success-soft-border));
-  }
-  .text-success-foreground {
-    color: hsl(var(--success-foreground));
-  }
-  .bg-success-foreground {
-    background-color: hsl(var(--success-foreground));
-  }
-  .bg-success-foreground\/80 {
-    background-color: hsl(var(--success-foreground) / 0.8);
-  }
-
-  .bg-warning-soft {
-    background-color: hsl(var(--warning-soft));
-  }
-  .bg-warning-soft\/10 {
-    background-color: hsl(var(--warning-soft) / 0.1);
-  }
-  .bg-warning-soft\/15 {
-    background-color: hsl(var(--warning-soft) / 0.15);
-  }
-  .bg-warning-soft\/40 {
-    background-color: hsl(var(--warning-soft) / 0.4);
-  }
-  .bg-warning-soft\/50 {
-    background-color: hsl(var(--warning-soft) / 0.5);
-  }
-  .bg-warning-soft\/60 {
-    background-color: hsl(var(--warning-soft) / 0.6);
-  }
-  .bg-warning-soft\/70 {
-    background-color: hsl(var(--warning-soft) / 0.7);
-  }
-  .bg-warning-soft\/80 {
-    background-color: hsl(var(--warning-soft) / 0.8);
-  }
-  .border-warning-soft-border {
-    border-color: hsl(var(--warning-soft-border));
-  }
-  .border-warning-soft-border\/80 {
-    border-color: hsl(var(--warning-soft-border) / 0.8);
-  }
-  .text-warning-foreground {
-    color: hsl(var(--warning-foreground));
-  }
-  .text-warning-foreground\/80 {
-    color: hsl(var(--warning-foreground) / 0.8);
-  }
-  .text-warning-foreground\/90 {
-    color: hsl(var(--warning-foreground) / 0.9);
-  }
-  .bg-warning-foreground {
-    background-color: hsl(var(--warning-foreground));
-  }
-  .bg-warning-foreground\/80 {
-    background-color: hsl(var(--warning-foreground) / 0.8);
-  }
-
-  .bg-danger-soft {
-    background-color: hsl(var(--danger-soft));
-  }
-  .border-danger-soft-border {
-    border-color: hsl(var(--danger-soft-border));
-  }
-  .text-danger-foreground {
-    color: hsl(var(--danger-foreground));
-  }
-  .bg-danger-foreground {
-    background-color: hsl(var(--danger-foreground));
-  }
-  .bg-danger-foreground\/80 {
-    background-color: hsl(var(--danger-foreground) / 0.8);
+  .flag-info {
+    border-left: 3px solid hsl(var(--info-soft-border));
   }
 
   .tone-neutral {
@@ -825,16 +753,16 @@
     background-color: hsl(var(--accent-tone-soft) / 0.72);
     border-color: hsl(var(--accent-tone-soft-border));
   }
+  /* Subtle-банери (широкі повідомлення): чиста СВІТЛА заливка + м'яка межа, БЕЗ
+     градієнтів/inset-тіней. Насичена заливка на широкій площі = бруд, надто на
+     світлій темі — тому низька непрозорість. Родина однакова для всіх тонів. */
   .tone-success-subtle {
-    background-color: hsl(var(--success-soft) / 0.72);
-    border-color: hsl(var(--success-soft-border));
+    background-color: hsl(var(--success-soft) / 0.5);
+    border-color: hsl(var(--success-soft-border) / 0.7);
   }
   .tone-warning-subtle {
-    background:
-      linear-gradient(135deg, hsl(var(--warning-foreground) / 0.1), transparent 44%),
-      hsl(var(--warning-soft) / 0.82);
-    border-color: hsl(var(--warning-soft-border) / 0.72);
-    box-shadow: inset 0 1px 0 hsl(var(--warning-foreground) / 0.08);
+    background-color: hsl(var(--warning-soft) / 0.45);
+    border-color: hsl(var(--warning-soft-border) / 0.7);
     color: hsl(var(--warning-copy-foreground));
   }
   .tone-warning-subtle :where(.text-muted-foreground) {
@@ -844,8 +772,8 @@
     color: hsl(var(--warning-foreground));
   }
   .tone-danger-subtle {
-    background-color: hsl(var(--danger-soft) / 0.72);
-    border-color: hsl(var(--danger-soft-border));
+    background-color: hsl(var(--danger-soft) / 0.5);
+    border-color: hsl(var(--danger-soft-border) / 0.7);
   }
 
   .tone-text-neutral {
@@ -976,7 +904,7 @@
     box-shadow: none;
   }
   .quote-details-page-canvas {
-    @apply w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-[var(--radius-section)];
+    @apply w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-section;
   }
   .quote-section {
     @apply overflow-hidden;
@@ -1037,65 +965,12 @@
     background-color: hsl(var(--success-foreground));
   }
 
-  .design-status-badge-new {
-    background-color: hsl(var(--neutral-soft));
-    border-color: hsl(var(--neutral-soft-border));
-    color: hsl(var(--neutral-foreground));
-  }
-  .design-status-badge-changes {
-    background-color: hsl(var(--warning-soft));
-    border-color: hsl(var(--warning-soft-border));
-    color: hsl(var(--warning-foreground));
-  }
-  .design-status-badge-in-progress {
-    background-color: hsl(var(--info-soft));
-    border-color: hsl(var(--info-soft-border));
-    color: hsl(var(--info-foreground));
-  }
-  /* «Дизайн готовий» — фіолетовий accent-tone («дизайн»-колір апки), щоб не
-     зливався з синім «В роботі»: різні етапи воркфлоу = різні кольори. */
-  .design-status-badge-pm-review {
-    background-color: hsl(var(--accent-tone-soft));
-    border-color: hsl(var(--accent-tone-soft-border));
-    color: hsl(var(--accent-tone-foreground));
-  }
-  .design-status-badge-client-review {
-    background-color: hsl(var(--warning-soft));
-    border-color: hsl(var(--warning-soft-border));
-    color: hsl(var(--warning-foreground));
-  }
-  .design-status-badge-approved {
-    background-color: hsl(var(--success-soft));
-    border-color: hsl(var(--success-soft-border));
-    color: hsl(var(--success-foreground));
-  }
-  .design-status-badge-cancelled {
-    background-color: hsl(var(--danger-soft));
-    border-color: hsl(var(--danger-soft-border));
-    color: hsl(var(--danger-foreground));
-  }
-
-  .design-status-dot-new {
-    background-color: hsl(var(--neutral-foreground));
-  }
-  .design-status-dot-changes {
-    background-color: hsl(var(--warning-foreground));
-  }
-  .design-status-dot-in-progress {
-    background-color: hsl(var(--info-foreground));
-  }
-  .design-status-dot-pm-review {
-    background-color: hsl(var(--info-foreground));
-  }
-  .design-status-dot-client-review {
-    background-color: hsl(var(--warning-foreground));
-  }
-  .design-status-dot-approved {
-    background-color: hsl(var(--success-foreground));
-  }
-  .design-status-dot-cancelled {
-    background-color: hsl(var(--danger-foreground));
-  }
+  /* .design-status-badge-* видалено: це була дослівна копія родини .tone-*
+     (ті самі токени, ті самі три властивості). Дизайн-статуси тепер беруть
+     клас з DESIGN_STATUS_TONE у @/lib/statusTones.
+     .design-status-dot-* видалено як мертвий код — на них не було жодного
+     посилання, і саме тому крапка pm_review встигла розійтись із бейджем
+     (синя проти фіолетової), поки ніхто цього не бачив. */
 
   .design-timeline-bar-new {
     background-color: hsl(var(--neutral-soft) / 0.75);

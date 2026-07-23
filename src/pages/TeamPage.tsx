@@ -802,7 +802,7 @@ export function TeamPage() {
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-foreground">{label}</div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <Badge variant="outline" className={cn("text-[11px]", TEAM_ABSENCE_KIND_BADGE_CLASSES[entry.kind])}>
+                            <Badge variant="outline" className={cn("text-2xs", TEAM_ABSENCE_KIND_BADGE_CLASSES[entry.kind])}>
                               {TEAM_ABSENCE_KIND_LABELS[entry.kind]}
                             </Badge>
                             <span className="text-xs text-muted-foreground">{formatAbsenceRange(entry.startDate, entry.endDate)}</span>
@@ -875,7 +875,7 @@ export function TeamPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-foreground">{member.label}</div>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        <Badge variant="outline" className={cn("text-[11px]", getTeamAvailabilityBadgeClass(member.availabilityStatus))}>
+                        <Badge variant="outline" className={cn("text-2xs", getTeamAvailabilityBadgeClass(member.availabilityStatus))}>
                           {getTeamAvailabilityLabel(member.availabilityStatus)}
                         </Badge>
                         {formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate) ? (
@@ -960,7 +960,7 @@ export function TeamPage() {
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {CALENDAR_LEGEND.map((legend) => (
-                <span key={legend.label} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span key={legend.label} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
                   <span className={cn("h-2.5 w-2.5 rounded-full border", legend.toneClass)} />
                   {legend.label}
                 </span>
@@ -972,7 +972,7 @@ export function TeamPage() {
             <div className="hidden md:block">
               <div className="grid grid-cols-7 gap-1.5">
                 {WEEKDAY_LABELS.map((label) => (
-                  <div key={label} className="px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div key={label} className="px-2 py-1 text-center text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {label}
                   </div>
                 ))}
@@ -995,14 +995,14 @@ export function TeamPage() {
                         {day.date.getDate()}
                       </div>
                       {day.items.length > 3 ? (
-                        <span className="text-[10px] font-medium text-muted-foreground">+{day.items.length - 3}</span>
+                        <span className="text-3xs font-medium text-muted-foreground">+{day.items.length - 3}</span>
                       ) : null}
                     </div>
                     <div className="mt-1.5 space-y-1">
                       {day.items.slice(0, 3).map((item) => (
                         <div
                           key={item.id}
-                          className={cn("truncate rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-4", item.toneClass)}
+                          className={cn("truncate rounded-md border px-1.5 py-0.5 text-3xs font-medium leading-4", item.toneClass)}
                           title={item.label}
                         >
                           {item.label}
@@ -1029,14 +1029,14 @@ export function TeamPage() {
                     )}
                   >
                     <div className="w-11 shrink-0 text-center">
-                      <div className="text-[11px] uppercase text-muted-foreground">{formatWeekdayShort(day.date)}</div>
+                      <div className="text-2xs uppercase text-muted-foreground">{formatWeekdayShort(day.date)}</div>
                       <div className="text-lg font-semibold leading-tight text-foreground">{day.date.getDate()}</div>
                     </div>
                     <div className="flex min-w-0 flex-1 flex-wrap gap-1.5 pt-0.5">
                       {day.items.map((item) => (
                         <span
                           key={item.id}
-                          className={cn("rounded-md border px-2 py-0.5 text-[11px] font-medium", item.toneClass)}
+                          className={cn("rounded-md border px-2 py-0.5 text-2xs font-medium", item.toneClass)}
                         >
                           {item.label}
                         </span>

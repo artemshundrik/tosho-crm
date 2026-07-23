@@ -534,7 +534,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -544,7 +544,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 {rows.length === 0
                   ? "Підрядників ще немає. Додайте першого або залийте seed у Supabase."
                   : "За цими фільтрами нічого не знайдено."}
@@ -555,7 +555,7 @@ export default function ContractorsPage() {
                   {filteredRows.map((row) => (
                     <div
                       key={row.id}
-                      className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                      className="rounded-inner border border-border bg-card p-4"
                       onClick={() => openEdit(row)}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -587,26 +587,26 @@ export default function ContractorsPage() {
 
                       <div className="mt-3 grid gap-3 text-sm">
                         <div>
-                          <div className="mb-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">Контакт</div>
+                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Контакт</div>
                           {renderLinkedLines(row.contact_name)}
                         </div>
                         <div>
-                          <div className="mb-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">Телефон / реквізити</div>
+                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Телефон / реквізити</div>
                           {renderLinkedLines(row.phone)}
                         </div>
                         <div>
-                          <div className="mb-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">Адреса / сайт</div>
+                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Адреса / сайт</div>
                           {renderLinkedLines(row.address)}
                         </div>
                         {splitIntoLines(row.delivery_info).length > 0 ? (
                           <div>
-                            <div className="mb-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">Нова Пошта / доставка</div>
+                            <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Нова Пошта / доставка</div>
                             {renderLinkedLines(row.delivery_info)}
                           </div>
                         ) : null}
                         {splitIntoLines(row.notes).length > 0 ? (
                           <div>
-                            <div className="mb-1 text-xs uppercase tracking-[0.08em] text-muted-foreground">Нотатки</div>
+                            <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Нотатки</div>
                             {renderLinkedLines(row.notes)}
                           </div>
                         ) : null}
@@ -687,7 +687,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -697,7 +697,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
                 За цими фільтрами нічого не знайдено.
               </div>
             ) : (

@@ -215,7 +215,7 @@ export default function FinancesPage() {
               {sectionGroups.map((group) => (
                 <div key={group.label ?? "main"} className="flex flex-col gap-0.5">
                   {group.label ? (
-                    <div className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <div className="px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/60">
                       {group.label}
                     </div>
                   ) : null}

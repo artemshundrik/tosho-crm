@@ -665,15 +665,15 @@ export default function SampleStockPage() {
     <div className="w-full space-y-5 pb-20 md:pb-0">
       <div className="overflow-hidden">
         {error ? (
-          <div className="rounded-[var(--radius-inner)] border border-destructive/20 bg-destructive/5 p-6 text-sm text-destructive">{error}</div>
+          <div className="rounded-inner border border-destructive/20 bg-destructive/5 p-6 text-sm text-destructive">{error}</div>
         ) : schemaMissing ? (
-          <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+          <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
             Таблиця складу ще не створена в Supabase. Потрібно застосувати{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-schema.sql</span>, а стартові дані лежать у{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-seed-from-numbers.sql</span>.
           </div>
         ) : filteredRows.length === 0 ? (
-          <div className="rounded-[var(--radius-inner)] border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+          <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
             {rows.length === 0 ? "Склад ще порожній. Додайте перший товар або застосуйте seed із таблиці." : "За цими фільтрами нічого не знайдено."}
           </div>
         ) : (
@@ -682,7 +682,7 @@ export default function SampleStockPage() {
               {filteredRows.map((row) => (
                 <div
                   key={row.id}
-                  className="rounded-[var(--radius-inner)] border border-border bg-card p-4"
+                  className="rounded-inner border border-border bg-card p-4"
                   onClick={() => openEdit(row)}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -727,20 +727,20 @@ export default function SampleStockPage() {
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Залишок</div>
+                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Залишок</div>
                       <QuantityCell row={row} />
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Ціна / сума</div>
+                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Ціна / сума</div>
                       <div className="font-medium">{formatMoney(toNumber(row.unit_price))}</div>
                       <div className="text-xs text-muted-foreground">{formatMoney(getTotalValue(row))}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Колір</div>
+                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Колір</div>
                       <div>{row.color?.trim() || "—"}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Місце</div>
+                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Місце</div>
                       <div>{row.location?.trim() || "—"}</div>
                     </div>
                   </div>
@@ -960,7 +960,7 @@ export default function SampleStockPage() {
                 />
               </div>
 
-              <label className="flex items-center gap-3 rounded-[var(--radius-inner)] border border-border bg-muted/25 px-3 py-3 text-sm sm:col-span-2">
+              <label className="flex items-center gap-3 rounded-inner border border-border bg-muted/25 px-3 py-3 text-sm sm:col-span-2">
                 <Checkbox
                   checked={form.isArchived}
                   onCheckedChange={(checked) => setForm((current) => ({ ...current, isArchived: checked === true }))}
@@ -1008,15 +1008,15 @@ export default function SampleStockPage() {
           <div className="space-y-5 px-6 py-6">
             {movementTarget ? (
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="rounded-[var(--radius-inner)] border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Залишок</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Резерв</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getReservedQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-[var(--radius-inner)] border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Доступно</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getAvailableQuantity(movementTarget))}</div>
                 </div>

@@ -185,7 +185,7 @@ export function DuplicateDesignTaskDialog({
                   </div>
                 </div>
               </div>
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1 text-2xs text-muted-foreground">
                 <Lock className="h-3 w-3" />
                 завжди
               </span>
@@ -356,7 +356,7 @@ export function DuplicateDesignTaskDialog({
         ) : null}
 
         <DialogFooter className="items-center sm:justify-between">
-          <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
+          <span className="hidden items-center gap-1.5 text-2xs text-muted-foreground sm:flex">
             <Files className="h-3.5 w-3.5" />
             файли копіюються, не посилання
           </span>

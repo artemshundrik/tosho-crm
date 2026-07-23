@@ -123,7 +123,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-[24px] border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-[var(--shadow-elevated-lg)]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-elevated-lg">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -1069,7 +1069,7 @@ export default function NotificationsPage() {
           </DialogHeader>
 
           <div className="space-y-2.5 sm:space-y-3">
-            <section className="rounded-[var(--radius-inner)] border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1084,7 +1084,7 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                   <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold md:hidden",
+                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                     pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                     pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
                     pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
@@ -1095,7 +1095,7 @@ export default function NotificationsPage() {
                 <div className="flex w-full flex-col gap-3 md:min-w-[320px] md:max-w-[320px]">
                   <div className="hidden items-center justify-end gap-3 md:flex">
                     <span className={cn(
-                      "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                      "inline-flex rounded-full border px-2.5 py-1 text-2xs font-semibold",
                       pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                       pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
                       pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
@@ -1136,7 +1136,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-[var(--radius-inner)] border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1151,7 +1151,7 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                   <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold md:hidden",
+                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                     inAppStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                     inAppStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground"
                   )}>
@@ -1160,7 +1160,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex flex-col items-start gap-3 md:min-w-[280px] md:items-end">
                   <span className={cn(
-                    "hidden rounded-full border px-2.5 py-1 text-[11px] font-semibold md:inline-flex",
+                    "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
                     inAppStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                     inAppStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground"
                   )}>
@@ -1180,7 +1180,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-[var(--radius-inner)] border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1195,7 +1195,7 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                   <span className={cn(
-                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold md:hidden",
+                    "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                     soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                     soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
                     soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
@@ -1205,7 +1205,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex flex-col items-start gap-3 md:min-w-[320px] md:items-end">
                   <span className={cn(
-                    "hidden rounded-full border px-2.5 py-1 text-[11px] font-semibold md:inline-flex",
+                    "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
                     soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                     soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
                     soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
@@ -1259,7 +1259,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-[var(--radius-inner)] border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
                   <Send className="h-4 w-4" />
@@ -1273,7 +1273,7 @@ export default function NotificationsPage() {
                 </div>
               </div>
               <div className="overflow-hidden rounded-[var(--radius)] border border-border/60">
-                <div className="flex items-center justify-end gap-6 border-b border-border/60 bg-muted/30 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="flex items-center justify-end gap-6 border-b border-border/60 bg-muted/30 px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span className="w-12 text-center">Push</span>
                   <span className="w-16 text-center">Telegram</span>
                 </div>
@@ -1310,7 +1310,7 @@ export default function NotificationsPage() {
             </section>
           </div>
 
-          <div className="rounded-[var(--radius-inner)] border border-border/70 bg-background/68 p-3 sm:p-4">
+          <div className="rounded-inner border border-border/70 bg-background/68 p-3 sm:p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-foreground sm:text-base">Тест in-app popup</div>
@@ -1336,7 +1336,7 @@ export default function NotificationsPage() {
       </Dialog>
 
       {filtered.length === 0 ? (
-        <div className="flex min-h-[320px] items-center justify-center rounded-[24px] border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+        <div className="flex min-h-[320px] items-center justify-center rounded-4xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
           Поки немає сповіщень.
         </div>
       ) : (
@@ -1389,15 +1389,15 @@ export default function NotificationsPage() {
               size="md"
               onClick={() => openNotification(n)}
               className={cn(
-                "group h-auto w-full justify-start rounded-[24px] p-0 text-left shadow-none hover:bg-transparent",
+                "group h-auto w-full justify-start rounded-4xl p-0 text-left shadow-none hover:bg-transparent",
                 !n.read && "data-[state=active]:ring-0"
               )}
             >
               <div
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-[24px] border border-border/60 p-3 transition-colors duration-200 ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
+                  "flex w-full items-start gap-3 rounded-4xl border border-border/60 p-3 transition-colors duration-200 ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
                   notificationCardToneClass(n),
-                  !n.read && "shadow-[var(--shadow-surface)]"
+                  !n.read && "shadow-surface"
                 )}
               >
                 {member?.avatarDisplayUrl ? (

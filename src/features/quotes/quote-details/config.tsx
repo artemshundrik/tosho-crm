@@ -8,6 +8,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { renderInlineRichText } from "@/components/ui/rich-text-links";
+import { quoteStatusBadgeClass } from "@/lib/statusTones";
 
 export const ITEM_VISUAL_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
@@ -137,14 +138,9 @@ export const statusLabels: Record<string, string> = {
   completed: "Затверджено",
 };
 
-export const statusClasses: Record<string, string> = {
-  new: "tone-neutral",
-  estimating: "tone-info",
-  estimated: "tone-accent",
-  awaiting_approval: "tone-warning",
-  approved: "tone-success",
-  cancelled: "tone-danger",
-};
+// Був дослівний дублікат мапи з quotes-page/config. Тепер обидва конфіги
+// дивляться в один реєстр — @/lib/statusTones.
+export const statusClasses = quoteStatusBadgeClass;
 
 export const statusIcons: Record<string, LucideIcon> = {
   new: PlusCircle,

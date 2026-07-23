@@ -26,12 +26,12 @@ import {
   loadContractRevisions,
   markRevisionAsSent,
   STATUS_LABEL,
-  STATUS_TONE,
   submitRevisionForCeoApproval,
   updateDraftRevision,
   type ContractRevision,
   type ContractRevisionStatus,
 } from "@/features/contractRevisions/contractRevisions";
+import { contractRevisionStatusTone, toneSubtleClass } from "@/lib/statusTones";
 import type { ContractSection } from "@/features/contractRevisions/contractSections";
 import {
   notifyContractRevisionDecided,
@@ -55,14 +55,12 @@ type Props = {
   onRevisionSent?: (revision: ContractRevision) => void;
 };
 
-const TONE_CLASS: Record<ReturnType<typeof STATUS_TONE.draft extends infer T ? () => T : never> | string, string> = {
-  info: "tone-info-subtle",
-  warning: "tone-warning-subtle",
-  success: "tone-success-subtle",
-  muted: "border-border/60 bg-muted/20 text-muted-foreground",
-};
-
-const statusBadgeClass = (status: ContractRevisionStatus) => TONE_CLASS[STATUS_TONE[status]] ?? "border-border/60 bg-muted/20";
+// Був `Record<ReturnType<typeof STATUS_TONE.draft extends infer T ? () => T : never> | string, string>`
+// — умовний тип, який після розгортання давав просто `Record<string, string>`,
+// тобто нульову типобезпеку при вигляді складного. Тон тепер приходить з
+// реєстру і звужений до `Tone`, тож пропущений статус ловить компілятор.
+const statusBadgeClass = (status: ContractRevisionStatus) =>
+  toneSubtleClass[contractRevisionStatusTone(status)];
 
 const formatTime = (iso: string | null) => {
   if (!iso) return "—";
@@ -309,7 +307,7 @@ export const ContractRevisionsPanel = ({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-sm font-semibold text-foreground">Версія v{revision.revisionNumber}</div>
-              <Badge variant="outline" className={cn("rounded-full px-2 py-0 text-[10px]", statusBadgeClass(revision.status))}>
+              <Badge variant="outline" className={cn("rounded-full px-2 py-0 text-3xs", statusBadgeClass(revision.status))}>
                 {STATUS_LABEL[revision.status]}
               </Badge>
             </div>
@@ -410,7 +408,7 @@ export const ContractRevisionsPanel = ({
               </Button>
             </div>
             {!ceoCommentDraft[revision.id]?.trim() ? (
-              <div className="mt-2 text-[11px] text-muted-foreground">
+              <div className="mt-2 text-2xs text-muted-foreground">
                 Коментар обов’язковий для повернення на правки; для схвалення — за бажанням.
               </div>
             ) : null}
@@ -425,7 +423,7 @@ export const ContractRevisionsPanel = ({
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Зміст</div>
                   {previousMap ? (
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-2xs text-muted-foreground">
                       Жовтим виділено пункти, які відрізняються від попередньої схваленої версії.
                     </div>
                   ) : null}
@@ -448,7 +446,7 @@ export const ContractRevisionsPanel = ({
                             {index + 1}. {section.title}
                           </span>
                           {changed ? (
-                            <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] tone-warning-subtle">
+                            <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs tone-warning-subtle">
                               {isNewSection ? "Новий пункт" : "Змінено"}
                             </Badge>
                           ) : null}

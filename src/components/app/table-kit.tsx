@@ -18,7 +18,7 @@ export function TableHeaderCell({
   return (
     <TableHead
       className={cn(
-        "text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em]",
+        "text-2xs font-semibold text-muted-foreground uppercase tracking-caps-tight",
         align === "center" && "text-center",
         align === "right" && "text-right",
         widthClass,

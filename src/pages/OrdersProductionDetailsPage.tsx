@@ -456,7 +456,7 @@ const renderDesignAssetList = (
   <div className="rounded-lg border border-border/60 bg-muted/[0.04] p-3">
     <div className="flex items-center justify-between gap-2">
       <div className="text-sm font-semibold text-foreground">{title}</div>
-      <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
+      <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs">
         {assets.length}
       </Badge>
     </div>
@@ -1632,13 +1632,13 @@ export default function OrdersProductionDetailsPage() {
                 >
                   {record.quoteNumber}
                 </HoverCopyText>
-                <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+                <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
                   {record.partyType === "customer" ? "Замовник" : "Лід"}
                 </Badge>
                 <Badge
                   variant="outline"
                   className={cn(
-                    "rounded-full px-2.5 py-0.5 text-[11px]",
+                    "rounded-full px-2.5 py-0.5 text-2xs",
                     record.readinessColumn === "ready"
                       ? "tone-success"
                       : record.readinessColumn === "design"
@@ -1651,7 +1651,7 @@ export default function OrdersProductionDetailsPage() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    "gap-1 rounded-full px-2.5 py-0.5 text-[11px]",
+                    "gap-1 rounded-full px-2.5 py-0.5 text-2xs",
                     documentsReadyCount === documentsTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
                   )}
                   title="Готовність документів"
@@ -1662,7 +1662,7 @@ export default function OrdersProductionDetailsPage() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    "gap-1 rounded-full px-2.5 py-0.5 text-[11px]",
+                    "gap-1 rounded-full px-2.5 py-0.5 text-2xs",
                     doneSteps === checklistTotalCount ? "tone-success" : "border-border/70 bg-muted/20 text-muted-foreground"
                   )}
                   title="Чекліст переходу в замовлення"
@@ -1694,7 +1694,7 @@ export default function OrdersProductionDetailsPage() {
 
         <div className="grid w-full gap-3 sm:grid-cols-3 xl:w-auto xl:min-w-[520px]">
           <div className="space-y-1.5">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус замовлення</div>
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус замовлення</div>
             {record.source === "stored" ? (
               <Select
                 value={record.orderStatus}
@@ -1719,7 +1719,7 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-1.5">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус оплати</div>
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус оплати</div>
             {record.source === "stored" ? (
               <Select
                 value={record.paymentStatus}
@@ -1742,7 +1742,7 @@ export default function OrdersProductionDetailsPage() {
             )}
           </div>
           <div className="space-y-1.5">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Статус доставки</div>
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Статус доставки</div>
             {record.source === "stored" ? (
               <Select
                 value={record.deliveryStatus}
@@ -1772,7 +1772,7 @@ export default function OrdersProductionDetailsPage() {
         <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card className="border-border/60 p-4">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
             <Building2 className="h-3.5 w-3.5" />
             Контрагент
           </div>
@@ -1780,7 +1780,7 @@ export default function OrdersProductionDetailsPage() {
             {record.legalEntityLabel || "Потрібно заповнити реквізити"}
           </div>
           <div className="mt-3 border-t border-border/60 pt-3">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Підписант</div>
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Підписант</div>
             {record.customerSignatoryName ? (
               <div className="mt-1 text-sm text-foreground">
                 <span className="font-medium">{toSignatureInitials(record.customerSignatoryName)}</span>
@@ -1795,7 +1795,7 @@ export default function OrdersProductionDetailsPage() {
         </Card>
 
         <Card className="border-border/60 p-4">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
             <Palette className="h-3.5 w-3.5" />
             Погодження дизайну
           </div>
@@ -1809,7 +1809,7 @@ export default function OrdersProductionDetailsPage() {
           </div>
           {record.designTaskId ? (
             <div className="mt-3 border-t border-border/50 pt-3">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Дизайн-задача</div>
+              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Дизайн-задача</div>
               <Button
                 type="button"
                 variant="link"
@@ -1824,7 +1824,7 @@ export default function OrdersProductionDetailsPage() {
         </Card>
 
         <Card className="border-border/60 p-4">
-          <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Менеджер замовлення</div>
+          <div className="text-xs uppercase tracking-caps text-muted-foreground">Менеджер замовлення</div>
           <div className="mt-2 flex items-center gap-3">
             <AvatarBase
               src={record.managerAvatarUrl ?? null}
@@ -1832,7 +1832,7 @@ export default function OrdersProductionDetailsPage() {
               fallback={getInitials(record.managerLabel)}
               size={36}
               className="border-border/60"
-              fallbackClassName="text-[11px] font-semibold"
+              fallbackClassName="text-2xs font-semibold"
             />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-foreground">
@@ -1845,7 +1845,7 @@ export default function OrdersProductionDetailsPage() {
 
         <Card className="border-border/60 p-4">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-caps text-muted-foreground">
               <Truck className="h-3.5 w-3.5" />
               Доставка
             </div>
@@ -1892,7 +1892,7 @@ export default function OrdersProductionDetailsPage() {
           )}
           {record.packaging ? (
             <div className="mt-3 border-t border-border/50 pt-3">
-              <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Пакування</div>
+              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Пакування</div>
               <div className="mt-1 text-sm text-foreground">{record.packaging}</div>
             </div>
           ) : null}
@@ -1901,7 +1901,7 @@ export default function OrdersProductionDetailsPage() {
               {record.npTtnNumber ? (
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">ТТН Нової Пошти</div>
+                    <div className="text-2xs uppercase tracking-wide text-muted-foreground">ТТН Нової Пошти</div>
                     <div className="font-mono text-sm font-semibold">{record.npTtnNumber}</div>
                     {record.npTtnEstimatedDelivery ? (
                       <div className="text-xs text-muted-foreground">Орієнтовно: {record.npTtnEstimatedDelivery}</div>
@@ -1950,7 +1950,7 @@ export default function OrdersProductionDetailsPage() {
             </div>
           </div>
           {documentSettingsSaving ? (
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
               Зберігаємо...
             </Badge>
           ) : null}
@@ -2029,7 +2029,7 @@ export default function OrdersProductionDetailsPage() {
                       <li>у договорі або СП це чітко зазначено — претензії по транспортуванню вирішуються через Перевізника.</li>
                     </ul>
                     <div className="mt-2 font-medium text-foreground">У Специфікації, пункт 3.2:</div>
-                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-[11px] leading-4 text-foreground">
+                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
                       3.2 Умови доставки: CPT, адресна доставка Нова Пошта: &lt;адреса Замовника з картки клієнта&gt;, Incoterms® 2020
                     </div>
                   </div>
@@ -2046,7 +2046,7 @@ export default function OrdersProductionDetailsPage() {
                       </li>
                     </ul>
                     <div className="mt-2 font-medium text-foreground">У Специфікації:</div>
-                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-[11px] leading-4 text-foreground">
+                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
                       Умови поставки: CIP, &lt;місце доставки&gt;, згідно Incoterms® 2020. Доставка товару
                       здійснюється за рахунок Постачальника через службу доставки Нова Пошта (або Укрпошта /
                       Meest Express) із оформленням страхування (оголошеної вартості відправлення) за наш
@@ -2245,7 +2245,7 @@ export default function OrdersProductionDetailsPage() {
                 Тут показані саме умови для PDF-документів. Це окремо від чекліста переходу в замовлення.
               </div>
             </div>
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
               {documentsReadyCount} / {documentsTotalCount}
             </Badge>
           </div>
@@ -2287,7 +2287,7 @@ export default function OrdersProductionDetailsPage() {
                       </InfoHint>
                     </div>
                     {document.actionMode === "blocked" ? (
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs leading-4 text-muted-foreground">
                         <span>{document.blockedLabel}</span>
                         {document.isRequisitesBlocker && document.kind === "contract" && record.customerId ? (
                           <button
@@ -2301,7 +2301,7 @@ export default function OrdersProductionDetailsPage() {
                         ) : null}
                       </div>
                     ) : secondaryText ? (
-                      <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{secondaryText}</div>
+                      <div className="mt-0.5 text-2xs leading-4 text-muted-foreground">{secondaryText}</div>
                     ) : null}
                   </div>
 
@@ -2358,7 +2358,7 @@ export default function OrdersProductionDetailsPage() {
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
               {record.contactTelegram ? (
-                <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
+                <span className="rounded-full border border-border/60 bg-muted/30 px-2 py-0.5 text-2xs text-muted-foreground">
                   Telegram: {formatTelegramHandle(record.contactTelegram)}
                 </span>
               ) : null}
@@ -2394,7 +2394,7 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <div className="mt-1 text-xs text-muted-foreground">Не плутати з готовністю Договору та СП.</div>
             </div>
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px]">
+            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
               {doneSteps} / {checklistTotalCount}
             </Badge>
           </div>
@@ -2441,7 +2441,7 @@ export default function OrdersProductionDetailsPage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">Номер і дата договору</div>
                 {!isCeo ? (
-                  <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs font-medium text-muted-foreground">
                     Тільки СЕО / власник
                   </span>
                 ) : null}

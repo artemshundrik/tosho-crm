@@ -253,13 +253,9 @@ export const STATUS_LABEL: Record<ContractRevisionStatus, string> = {
   sent: "Відправлено замовнику",
 };
 
-export const STATUS_TONE: Record<ContractRevisionStatus, "info" | "warning" | "success" | "muted"> = {
-  draft: "muted",
-  pending_ceo: "warning",
-  approved: "info",
-  rejected: "warning",
-  sent: "success",
-};
+// STATUS_TONE переїхав у @/lib/statusTones як CONTRACT_REVISION_STATUS_TONE —
+// разом з тонами прорахунків і дизайн-задач, щоб мапи статус→тон жили в одному
+// місці, а не по одній на домен.
 
 export const getLatestRevision = (revisions: ContractRevision[]): ContractRevision | null => {
   if (revisions.length === 0) return null;

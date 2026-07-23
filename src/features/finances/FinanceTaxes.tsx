@@ -224,12 +224,12 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{formatOrderMoney(tax.amount, "UAH")}</span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-3xs">
                       {TAX_TYPE_LABELS[tax.taxType]}
                     </Badge>
                     {/* Семантичний tone бейджа (старі ручні класи bg-success/10 були
                         мертві — таких кольорів нема в tailwind.config). */}
-                    <Badge tone={isPaid ? "success" : "warning"} size="sm" className="text-[10px]">
+                    <Badge tone={isPaid ? "success" : "warning"} size="sm" className="text-3xs">
                       {TAX_STATUS_LABELS[tax.status]}
                     </Badge>
                   </div>

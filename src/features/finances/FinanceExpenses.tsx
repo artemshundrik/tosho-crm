@@ -372,7 +372,7 @@ function JournalEntryRow({
         {entryAmountLabel(entry.amount, currency)}
       </span>
       {uah !== null ? (
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">≈ {formatOrderMoney(uah, "UAH")}</span>
+        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">≈ {formatOrderMoney(uah, "UAH")}</span>
       ) : null}
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{entry.note || "—"}</span>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -442,11 +442,11 @@ function ExpenseJournalPanel({
   return (
     <div className="border-t border-border/60 bg-muted/20 px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           Журнал · {monthText}
         </span>
         {ordered.length > 0 ? (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {ordered.length} {pluralEntries(ordered.length)}
           </span>
         ) : null}
@@ -994,12 +994,12 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
               <span className="text-sm font-semibold text-foreground">{nativeAmountLabel(expense)}</span>
               {uah ? <span className="text-xs text-muted-foreground">{uah}</span> : null}
               {category ? (
-                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                <Badge variant="outline" className="text-3xs text-muted-foreground">
                   {category.name}
                 </Badge>
               ) : null}
               {expense.allocations.length > 0 ? (
-                <Badge variant="outline" className="text-[10px] border-info/40 bg-info/10 text-info-foreground">
+                <Badge variant="outline" className="text-3xs border-info/40 bg-info/10 text-info-foreground">
                   На {expense.allocations.length} замовл. · {formatOrderMoney(allocatedTotal, "UAH")}
                 </Badge>
               ) : null}
@@ -1047,17 +1047,17 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="truncate text-sm font-semibold text-foreground">{title}</span>
-                <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+                <Badge variant="outline" className="gap-1 text-3xs text-muted-foreground">
                   {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
                   {BILLING_PERIOD_LABELS[period]}
                 </Badge>
                 {expense.amountVaries ? (
-                  <Badge tone="info" size="sm" className="gap-1 text-[10px]">
+                  <Badge tone="info" size="sm" className="gap-1 text-3xs">
                     журнал по датах
                   </Badge>
                 ) : null}
                 {category ? (
-                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  <Badge variant="outline" className="text-3xs text-muted-foreground">
                     {category.name}
                   </Badge>
                 ) : null}
@@ -1092,7 +1092,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   <div className="text-sm font-semibold tabular-nums text-foreground">
                     {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-3xs text-muted-foreground">
                     {hasEntries ? `${monthEntries.length} ${pluralEntries(monthEntries.length)} · факт` : "орієнтир — додай"}
                   </div>
                 </div>
@@ -1105,7 +1105,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 <div className="text-sm font-semibold tabular-nums text-foreground">
                   {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
                 </div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-3xs text-muted-foreground">
                   {monthly === null ? "курс невідомий" : "на місяць"}
                 </div>
               </div>
@@ -1808,7 +1808,7 @@ function ExpenseDialog({
             <div className="mt-5 space-y-4">
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Платежі
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -1823,7 +1823,7 @@ function ExpenseDialog({
                     <div key={row.id} className="space-y-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="grid gap-1.5">
-                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                          <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
                             Вид
                           </Label>
                           <CategoryPicker
@@ -1835,7 +1835,7 @@ function ExpenseDialog({
                         </div>
                         <div className="grid gap-1.5">
                           <div className="flex items-center justify-between">
-                            <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                            <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
                               Назва
                             </Label>
                             {recurRows.length > 1 ? (
@@ -1843,7 +1843,7 @@ function ExpenseDialog({
                                 type="button"
                                 aria-label="Видалити платіж"
                                 onClick={() => removeRow(row.id)}
-                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-destructive"
+                                className="inline-flex items-center gap-1 text-2xs text-muted-foreground transition-colors hover:text-destructive"
                               >
                                 <Trash2 className="h-3.5 w-3.5" /> прибрати
                               </button>
@@ -1860,7 +1860,7 @@ function ExpenseDialog({
                       </div>
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="grid gap-1.5">
-                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                          <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
                             {row.amountVaries ? "Орієнтир" : "Сума"}
                           </Label>
                           <div className="flex gap-1.5">
@@ -1888,7 +1888,7 @@ function ExpenseDialog({
                           </div>
                         </div>
                         <div className="grid gap-1.5">
-                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                          <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
                             Періодичність
                           </Label>
                           <Select
@@ -1926,7 +1926,7 @@ function ExpenseDialog({
 
               {/* Спільні поля — застосуються до всіх платежів у списку */}
               <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Спільне для всіх
                 </div>
                 <div className="mb-3 grid gap-2">
@@ -2020,7 +2020,7 @@ function ExpenseDialog({
               </div>
 
               {/* FX — на всю ширину, тому наступні рядки не зсуваються */}
-              <p className="-mt-2 min-h-[16px] text-[11px] leading-4 text-muted-foreground sm:col-span-2">
+              <p className="-mt-2 min-h-[16px] text-2xs leading-4 text-muted-foreground sm:col-span-2">
                 {currency !== "UAH"
                   ? currentRate
                     ? `≈ ${formatOrderMoney(uahValue ?? 0, "UAH")} за курсом ${currentRate.toFixed(2)}`
@@ -2136,7 +2136,7 @@ function ExpenseDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-2xs text-muted-foreground">
                     Підтягне лого й типову валюту. Немає в списку — впишіть домен у назву (напр. vercel.com).
                   </p>
                 </div>

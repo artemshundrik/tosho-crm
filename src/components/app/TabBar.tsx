@@ -49,7 +49,7 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
   const content = (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] flex justify-center md:hidden pointer-events-none transform-gpu",
+        "fixed inset-x-0 bottom-0 z-floating flex justify-center md:hidden pointer-events-none transform-gpu",
         "transition-[opacity,transform] duration-150 ease-out",
         hidden ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}
@@ -90,7 +90,7 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
                 onTouchStart={() => preloadRoute(tab.to)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-[11px] font-medium",
+                  "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-2xs font-medium",
                   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[var(--tabbar-transition)] ease-out",
                   active
                     ? "border border-[hsl(var(--tabbar-active-border)/var(--tabbar-active-border-alpha))] bg-[hsl(var(--tabbar-active-bg)/var(--tabbar-active-bg-alpha))] text-[hsl(var(--tabbar-label-active))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_8px_24px_hsl(0_0%_0%/0.12)] backdrop-blur-xl"
@@ -108,13 +108,13 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
                 ) : null}
                 <Icon
                   className={cn(
-                    "relative z-[1] h-5 w-5",
+                    "relative z-base h-5 w-5",
                     active ? "text-[hsl(var(--tabbar-icon-active))]" : "text-[hsl(var(--tabbar-icon))]"
                   )}
                 />
                 <span
                   className={cn(
-                    "relative z-[1] h-4 leading-4 transition-opacity duration-[var(--tabbar-transition)]",
+                    "relative z-base h-4 leading-4 transition-opacity duration-[var(--tabbar-transition)]",
                     active
                       ? "opacity-100 text-[hsl(var(--tabbar-label-active))]"
                       : "opacity-70 text-[hsl(var(--tabbar-label))]"

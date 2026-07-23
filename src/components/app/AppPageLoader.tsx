@@ -12,8 +12,8 @@ export function AppPageLoader({
 }: AppPageLoaderProps) {
   return (
     <div className="flex min-h-[400px] items-center justify-center p-6">
-      <div className="w-full max-w-[28rem] rounded-[32px] border border-border/60 bg-card/88 p-6 shadow-[var(--shadow-elevated-md)] backdrop-blur">
-        <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="w-full max-w-[28rem] rounded-[32px] border border-border/60 bg-card/88 p-6 shadow-elevated-md backdrop-blur">
+        <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium uppercase tracking-caps text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
           <span>Loading</span>
         </div>

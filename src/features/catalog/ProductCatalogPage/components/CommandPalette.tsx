@@ -228,7 +228,7 @@ export function CommandPalette({
                               {hasTiers && (
                                 <Badge
                                   variant="secondary"
-                                  className="tone-info h-4 px-1.5 text-[10px]"
+                                  className="tone-info h-4 px-1.5 text-3xs"
                                 >
                                   {model.priceTiers?.length} тиражі
                                 </Badge>

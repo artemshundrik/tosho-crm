@@ -272,7 +272,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
                         ) : null}
                       </span>
                       {hasVariants ? (
-                        <Badge variant="outline" className="shrink-0 rounded-full border-border/60 px-2 text-[11px]">
+                        <Badge variant="outline" className="shrink-0 rounded-full border-border/60 px-2 text-2xs">
                           {group.variants.length} модиф.
                         </Badge>
                       ) : null}

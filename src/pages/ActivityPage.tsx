@@ -224,10 +224,10 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="rounded-[var(--radius-section)] border border-border bg-card/60 p-5">
+      <div className="rounded-section border border-border bg-card/60 p-5">
         <div>
           {filtered.length === 0 ? (
-            <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-inner border border-border bg-card/60 p-6 text-center text-sm text-muted-foreground">
               Поки немає дій.
             </div>
           ) : (
@@ -250,7 +250,7 @@ export default function ActivityPage() {
                           onClick={() => item.href && navigate(item.href)}
                           className={cn(
                             "h-auto p-5",
-                            "hover:shadow-[var(--shadow-floating)]"
+                            "hover:shadow-floating"
                           )}
                         >
                           <div className="flex items-start gap-4">

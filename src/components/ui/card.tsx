@@ -10,7 +10,7 @@ const Card = React.forwardRef<
     ref={ref}
     className={cn(
       // Тихша межа + ледь помітна тінь: обʼєм замість жорсткого контуру.
-      "rounded-[var(--radius-inner)] border border-border/40 bg-card text-card-foreground shadow-card",
+      "rounded-inner border border-border/40 bg-card text-card-foreground shadow-card",
       className
     )}
     {...props}

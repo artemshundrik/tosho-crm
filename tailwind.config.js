@@ -51,18 +51,66 @@ export default {
             DEFAULT: "hsl(var(--card))",
             foreground: "hsl(var(--card-foreground))",
           },
-          // Семантичні тони як повноцінні кольори: вмикають bg-success/5,
-          // border-warning/40 тощо (раніше «мертві» — success/warning/info/danger
-          // не були оголошені, тому рендерились прозорими). DEFAULT = насичений
-          // «foreground»-відтінок; *-foreground-утиліти лишаються рукописними в index.css.
-          success: "hsl(var(--success-foreground))",
-          warning: "hsl(var(--warning-foreground))",
-          info: "hsl(var(--info-foreground))",
-          danger: "hsl(var(--danger-foreground))",
+          // Семантичні тони як повноцінні кольори. DEFAULT = насичений
+          // «foreground»-відтінок (bg-success/5, border-warning/40), а soft /
+          // soft-border / foreground закривають повний набір бейджів і банерів.
+          // Раніше ці три рівні були рукописними утилітами в index.css — разом з
+          // ручною генерацією кожного /10 /15 /40… кроку непрозорості. Тепер їх
+          // видає сам Tailwind, тож будь-яка непрозорість доступна безкоштовно.
+          neutral: {
+            soft: "hsl(var(--neutral-soft))",
+            "soft-border": "hsl(var(--neutral-soft-border))",
+            foreground: "hsl(var(--neutral-foreground))",
+          },
+          success: {
+            DEFAULT: "hsl(var(--success-foreground))",
+            soft: "hsl(var(--success-soft))",
+            "soft-border": "hsl(var(--success-soft-border))",
+            foreground: "hsl(var(--success-foreground))",
+          },
+          warning: {
+            DEFAULT: "hsl(var(--warning-foreground))",
+            soft: "hsl(var(--warning-soft))",
+            "soft-border": "hsl(var(--warning-soft-border))",
+            foreground: "hsl(var(--warning-foreground))",
+            copy: "hsl(var(--warning-copy-foreground))",
+          },
+          info: {
+            DEFAULT: "hsl(var(--info-foreground))",
+            soft: "hsl(var(--info-soft))",
+            "soft-border": "hsl(var(--info-soft-border))",
+            foreground: "hsl(var(--info-foreground))",
+          },
+          danger: {
+            DEFAULT: "hsl(var(--danger-foreground))",
+            soft: "hsl(var(--danger-soft))",
+            "soft-border": "hsl(var(--danger-soft-border))",
+            foreground: "hsl(var(--danger-foreground))",
+          },
+          "accent-tone": {
+            DEFAULT: "hsl(var(--accent-tone-foreground))",
+            soft: "hsl(var(--accent-tone-soft))",
+            "soft-border": "hsl(var(--accent-tone-soft-border))",
+            foreground: "hsl(var(--accent-tone-foreground))",
+          },
+          // Акцент ToSho AI — власний бренд-колір модуля, окремий від --brand-h.
+          "ai-accent": "hsl(var(--ai-accent))",
         },
         boxShadow: {
-          // Глибина in-flow карток — див. --shadow-card в index.css (світла/темна).
+          // Уся шкала глибини — з токенів index.css (світла/темна теми).
+          // Без цієї реєстрації код був змушений писати shadow-[var(--shadow-*)].
           card: "var(--shadow-card)",
+          surface: "var(--shadow-surface)",
+          floating: "var(--shadow-floating)",
+          overlay: "var(--shadow-overlay)",
+          menu: "var(--shadow-menu)",
+          "elevated-sm": "var(--shadow-elevated-sm)",
+          "elevated-md": "var(--shadow-elevated-md)",
+          "elevated-lg": "var(--shadow-elevated-lg)",
+          "elevated-preview": "var(--shadow-elevated-preview)",
+          "elevated-panel": "var(--shadow-elevated-panel)",
+          "success-glow": "var(--shadow-success-glow)",
+          "warning-glow": "var(--shadow-warning-glow)",
         },
         borderRadius: {
           lg: "var(--radius)",
@@ -71,6 +119,33 @@ export default {
           xl: "calc(var(--radius) + 4px)",
           "2xl": "calc(var(--radius) + 8px)",
           "3xl": "calc(var(--radius) + 12px)",
+          "4xl": "calc(var(--radius) + 14px)",
+          // Композитні радіуси секцій/вкладених блоків — теж на ручці --radius.
+          section: "var(--radius-section)",
+          inner: "var(--radius-inner)",
+        },
+        fontSize: {
+          // Мікро-типографіка. НАВМИСНО без line-height: ці розміри проставлялись
+          // як text-[11px]/text-[10px] (arbitrary — не задає leading), і сотні
+          // місць покладаються на успадкований інтерліньяж. Токен = чиста заміна.
+          "2xs": "0.6875rem", // 11px — допоміжний текст, мета, бейджі
+          "3xs": "0.625rem", // 10px — щільні підписи, лічильники
+        },
+        letterSpacing: {
+          // Дві канонічні щільності caps-ярликів замість п'яти arbitrary-значень.
+          caps: "0.14em",
+          "caps-tight": "0.08em",
+        },
+        zIndex: {
+          // Шкала шарів. Значення = ті ж числа, що вже стояли в z-[NN],
+          // тільки з іменами — щоб новий шар не додавали «на око».
+          base: "1", // локальний підйом усередині компонента
+          dropdown: "50", // радікс-меню, селекти, поповери
+          docked: "55", // плаваючі дії, що мусять лишатись ПІД таб-баром
+          floating: "60", // таб-бар, віджет таймера
+          overlay: "80", // повноекранні sheet/шторки
+          preview: "90", // hover-прев'ю зображень
+          tooltip: "100", // підказки сайдбару — завжди зверху
         },
         keyframes: {
           "accordion-down": {

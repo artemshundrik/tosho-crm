@@ -65,7 +65,7 @@ export function ToolbarSearch({
 /** Бейдж кількості в segmented-табі: «Замовники [128]». Один стиль на всі сторінки. */
 export function CountBadge({ value, className }: { value: number | string; className?: string }) {
   return (
-    <span className={cn("rounded-md bg-card px-1.5 py-0.5 text-[11px] tabular-nums", className)}>
+    <span className={cn("rounded-md bg-card px-1.5 py-0.5 text-2xs tabular-nums", className)}>
       {value}
     </span>
   );

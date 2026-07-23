@@ -1,5 +1,10 @@
 import type { ComponentType } from "react";
 import {
+  quoteStatusBadgeClass,
+  quoteStatusDotClass,
+  quoteStatusTextClass,
+} from "@/lib/statusTones";
+import {
   Check,
   CheckCircle2,
   Hourglass,
@@ -43,32 +48,16 @@ export const statusIcons: Record<string, ComponentType<{ className?: string }>> 
   cancelled: XCircle,
 };
 
-export const statusClasses: Record<string, string> = {
-  new: "tone-neutral",
-  estimating: "tone-info",
-  estimated: "tone-accent",
-  awaiting_approval: "tone-warning",
-  approved: "tone-success",
-  cancelled: "tone-danger",
-};
+// Джерело правди для тонів статусів — @/lib/statusTones. Тут лише проєкція
+// в класи, щоб наявні місця виклику не переписувати на `<Badge tone>` одразу.
+export const statusClasses = quoteStatusBadgeClass;
+export const statusColorClass = quoteStatusTextClass;
 
-export const statusColorClass: Record<string, string> = {
-  new: "text-muted-foreground",
-  estimating: "tone-text-info",
-  estimated: "tone-text-accent",
-  awaiting_approval: "tone-text-warning",
-  approved: "tone-text-success",
-  cancelled: "tone-text-danger",
-};
-
-export const KANBAN_COLUMNS = [
-  { id: "new", label: statusLabels.new, dotClass: "bg-muted-foreground/60" },
-  { id: "estimating", label: statusLabels.estimating, dotClass: "tone-dot-info" },
-  { id: "estimated", label: statusLabels.estimated, dotClass: "tone-dot-accent" },
-  { id: "awaiting_approval", label: statusLabels.awaiting_approval, dotClass: "tone-dot-warning" },
-  { id: "approved", label: statusLabels.approved, dotClass: "tone-dot-success" },
-  { id: "cancelled", label: statusLabels.cancelled, dotClass: "tone-dot-danger" },
-];
+export const KANBAN_COLUMNS = STATUS_OPTIONS.map((id) => ({
+  id,
+  label: statusLabels[id],
+  dotClass: quoteStatusDotClass[id],
+}));
 
 export type OwnershipOption = {
   value: string;

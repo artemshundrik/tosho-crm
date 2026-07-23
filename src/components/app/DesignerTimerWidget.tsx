@@ -327,20 +327,20 @@ function TimerTaskRow({
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">
+            <span className="shrink-0 text-2xs font-semibold text-muted-foreground">
               #{getTaskNumber(task)}
             </span>
             {running ? (
-              <span className="shrink-0 rounded-full border border-success-soft-border bg-success-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-success-foreground">
+              <span className="shrink-0 rounded-full border border-success-soft-border bg-success-soft px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-normal text-success-foreground">
                 активний
               </span>
             ) : hasTimerProgress(task) ? (
               paused ? (
-                <span className="shrink-0 rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-warning-foreground">
+                <span className="shrink-0 rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-normal text-warning-foreground">
                 пауза
                 </span>
               ) : statusLabel ? (
-                <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-muted-foreground">
+                <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-normal text-muted-foreground">
                   {statusLabel}
                 </span>
               ) : null
@@ -352,7 +352,7 @@ function TimerTaskRow({
           {!compact && task.customerName ? (
             <div className="truncate text-xs text-muted-foreground">{task.customerName}</div>
           ) : null}
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
             <span className="font-mono tabular-nums text-foreground">{elapsedLabel}</span>
             <span>{running ? "запущено" : "останній запуск"} {formatShortDateTime(task.latestStartedAt)}</span>
           </div>
@@ -631,7 +631,7 @@ export function DesignerFloatingTimerWidget({
   return (
     <div
       className={cn(
-        "fixed z-[60] w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background shadow-[0_28px_90px_rgba(0,0,0,0.46)] backdrop-blur cursor-grab active:cursor-grabbing",
+        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background shadow-elevated-panel backdrop-blur cursor-grab active:cursor-grabbing",
         currentRunning
           ? "border-success-soft-border/55 ring-1 ring-success-soft-border/25"
           : currentPaused
@@ -705,7 +705,7 @@ export function DesignerFloatingTimerWidget({
                 className={cn(
                   "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all disabled:opacity-100 [&_svg]:size-4",
                   startableTask && !currentRunning
-                    ? "border-transparent bg-success-foreground text-white shadow-[0_10px_24px_rgba(34,197,94,0.22)] hover:border-transparent hover:bg-success-foreground/90 hover:text-white"
+                    ? "border-transparent bg-success-foreground text-white shadow-success-glow hover:border-transparent hover:bg-success-foreground/90 hover:text-white"
                     : "border-background/20 bg-background/[0.08] text-background/40 shadow-inner hover:bg-background/[0.08] hover:text-background/40"
                 )}
                 disabled={!startableTask || currentRunning || startBusy}
@@ -730,7 +730,7 @@ export function DesignerFloatingTimerWidget({
                 className={cn(
                   "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all disabled:opacity-100 [&_svg]:size-4",
                   currentRunning
-                    ? "border-transparent bg-warning-foreground text-background shadow-[0_10px_24px_rgba(245,158,11,0.18)] hover:border-transparent hover:bg-warning-foreground/80 hover:text-background"
+                    ? "border-transparent bg-warning-foreground text-background shadow-warning-glow hover:border-transparent hover:bg-warning-foreground/80 hover:text-background"
                     : "border-background/20 bg-background/[0.08] text-background/50 shadow-inner hover:bg-background/[0.08] hover:text-background/50"
                 )}
                 disabled={!currentRunning || !currentTask || controller.busyTaskId === currentTask.taskId}

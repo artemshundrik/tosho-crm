@@ -230,7 +230,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border/60">
-              <div className="grid grid-cols-4 gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-4 gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Дата</span>
                 <span>Документ</span>
                 <span className="text-right">Нараховано</span>
@@ -266,7 +266,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
     <div
       className={
         "rounded-2xl border border-border/40 bg-card p-4 shadow-card" +
-        (tone === "warning" ? " border-warning/40 bg-warning/5" : tone === "info" ? " border-info/40 bg-info/5" : "")
+        (tone === "warning" ? " flag-warning" : tone === "info" ? " flag-info" : "")
       }
     >
       <div className="text-xs text-muted-foreground">{label}</div>

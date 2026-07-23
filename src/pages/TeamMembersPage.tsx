@@ -2555,7 +2555,7 @@ export function TeamMembersPage() {
                             {isInactive ? (
                               <Badge
                                 variant="outline"
-                                className="shrink-0 px-1.5 py-0 text-[10px] font-medium border-destructive/40 bg-destructive/10 text-destructive"
+                                className="shrink-0 px-1.5 py-0 text-3xs font-medium border-destructive/40 bg-destructive/10 text-destructive"
                               >
                                 Завершено
                               </Badge>
@@ -2686,14 +2686,14 @@ export function TeamMembersPage() {
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
-                                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                                "inline-flex rounded-full border px-2 py-0.5 text-2xs font-medium",
                                 getProbationBadgeClass(probation.status)
                               )}
                             >
                               Випробувальний: {probation.statusLabel}
                             </span>
                             {probation.status !== "completed" ? (
-                              <span className="text-[11px] text-muted-foreground">{probation.progress}%</span>
+                              <span className="text-2xs text-muted-foreground">{probation.progress}%</span>
                             ) : null}
                           </div>
                           {probation.status !== "completed" ? (
@@ -2709,7 +2709,7 @@ export function TeamMembersPage() {
                               />
                             </div>
                           ) : null}
-                          <div className="mt-2 text-[11px] text-muted-foreground">{probation.caption}</div>
+                          <div className="mt-2 text-2xs text-muted-foreground">{probation.caption}</div>
                         </div>
                       ) : null}
                       <div>{presence?.online ? "Зараз онлайн" : formatRelativeTime(presence?.lastSeenAt)}</div>
@@ -2765,7 +2765,7 @@ export function TeamMembersPage() {
                             size={36}
                             shape="circle"
                             className="border-border bg-muted/50"
-                            fallbackClassName="text-[10px] font-bold"
+                            fallbackClassName="text-3xs font-bold"
                             availability={listAvailability}
                             presence={listPresence?.online ? "online" : "offline"}
                             inactive={listInactive}
@@ -3240,7 +3240,7 @@ export function TeamMembersPage() {
                                 size={34}
                                 shape="circle"
                                 className="border-border bg-muted/50"
-                                fallbackClassName="text-[10px] font-bold"
+                                fallbackClassName="text-3xs font-bold"
                                 availability={rowAvailability}
                                 presence={rowPresence?.online ? "online" : "offline"}
                                 inactive={rowInactive}
@@ -3291,7 +3291,7 @@ export function TeamMembersPage() {
                                   <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
                                     <div className="h-full rounded-full bg-primary" style={{ width: `${rowProbation.progress}%` }} />
                                   </div>
-                                  <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">{rowProbation.statusLabel}</span>
+                                  <span className="whitespace-nowrap text-2xs tabular-nums text-muted-foreground">{rowProbation.statusLabel}</span>
                                 </div>
                               ) : null}
                             </div>
@@ -3541,7 +3541,7 @@ export function TeamMembersPage() {
                         size={40}
                         shape="circle"
                         className="border-border bg-muted/50"
-                        fallbackClassName="text-[11px] font-bold"
+                        fallbackClassName="text-2xs font-bold"
                         presence={peekPerson.online ? "online" : "offline"}
                       />
                       <span className="min-w-0">
@@ -3641,7 +3641,7 @@ export function TeamMembersPage() {
               </div>
             ) : (
               <div className="space-y-6">
-              <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-[var(--radius-inner)] border p-6">
+              <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
                   <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
                     <ShieldAlert className="w-6 h-6" />
                   </div>
@@ -3680,7 +3680,7 @@ export function TeamMembersPage() {
 
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[var(--radius-inner)]">
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -3711,7 +3711,7 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[var(--radius-inner)]">
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />

@@ -60,7 +60,7 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
         <Card key={section.id} className="border-border/60 p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px]">
+              <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs">
                 {index + 1}
               </Badge>
               {section.isCore ? (
@@ -74,7 +74,7 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
                 />
               )}
               {!section.isCore ? (
-                <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] text-muted-foreground">
+                <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs text-muted-foreground">
                   Власний пункт
                 </Badge>
               ) : null}

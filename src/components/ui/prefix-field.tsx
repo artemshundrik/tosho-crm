@@ -19,7 +19,7 @@ export function PrefixField({
     <div
       className={cn(
         "flex h-9 w-full items-center overflow-hidden rounded-xl border border-border/50 bg-muted/40 text-sm shadow-inner transition-all duration-200 ease-out",
-        "focus-within:bg-background focus-within:shadow-[var(--shadow-elevated-sm)] focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
+        "focus-within:bg-background focus-within:shadow-elevated-sm focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
         className
       )}
     >

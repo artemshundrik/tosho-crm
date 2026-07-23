@@ -188,16 +188,16 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
                       {formatOrderMoney(payment.amount, payment.currency)}
                     </span>
                     {order ? (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-3xs">
                         {order.number}
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                      <Badge variant="outline" className="text-3xs text-muted-foreground">
                         замовлення не знайдено
                       </Badge>
                     )}
                     {account?.isSensitive ? (
-                      <Badge variant="outline" className="text-[10px] border-warning/40 bg-warning/10 text-warning-foreground">
+                      <Badge variant="outline" className="text-3xs border-warning/40 bg-warning/10 text-warning-foreground">
                         {ACCOUNT_KIND_LABELS[account.kind]}
                       </Badge>
                     ) : null}

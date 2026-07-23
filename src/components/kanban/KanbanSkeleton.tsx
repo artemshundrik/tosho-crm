@@ -44,7 +44,7 @@ export function KanbanSkeleton({
               <div className="kanban-column-header flex shrink-0 items-center justify-between gap-2 px-3.5 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full" />
-                  <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                     {column.label}
                   </span>
                 </div>
@@ -55,7 +55,7 @@ export function KanbanSkeleton({
             {Array.from({ length: cardsPerColumn }).map((_, cardIndex) => (
               <div
                 key={`${column.id}:skeleton:${cardIndex}`}
-                className="rounded-[18px] border border-border/50 bg-card/82 p-3"
+                className="rounded-2xl border border-border/50 bg-card/82 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
