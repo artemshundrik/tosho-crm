@@ -9,6 +9,7 @@ import { formatCurrencyAmount, useFxRates } from "@/lib/fxRates";
 import { getSubscriptionBrand, resolveSubscriptionLogo } from "./subscriptionBrands";
 import { SubscriptionLogo } from "./SubscriptionLogo";
 import { listExpenses, listLegalEntities, listPayoutMeta, listTaxes } from "./api";
+import { FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   BILLING_PERIOD_LABELS,
   billingPeriodOf,
@@ -21,6 +22,15 @@ import {
 } from "./types";
 
 type FinanceCalendarProps = { teamId: string | null; userId: string | null };
+
+// Статусні кольори кошиків терміновості (bento-смуга «до сплати»).
+const DUE_BUCKET_COLORS: Record<string, string> = {
+  overdue: "bg-rose-500",
+  week: "bg-amber-500",
+  month: "bg-sky-500",
+  later: "bg-slate-400",
+  nodate: "bg-slate-300",
+};
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
@@ -186,6 +196,21 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
     [buckets]
   );
 
+  // Кошики bento: терміновість → СТАТУСНІ кольори (прострочено червоний, тиждень
+  // жовтий), а не категоріальні, як у Витратах — тут колір несе тривогу.
+  const dueBuckets = React.useMemo(
+    () =>
+      buckets
+        .map((b) => ({
+          key: b.key,
+          label: b.label,
+          amount: b.items.reduce((s, i) => s + i.amount, 0),
+          color: DUE_BUCKET_COLORS[b.key] ?? "bg-slate-400",
+        }))
+        .filter((b) => b.amount > 0),
+    [buckets]
+  );
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
@@ -196,12 +221,15 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border/60 bg-card p-4">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <CalendarClock className="h-3.5 w-3.5" /> Загалом до сплати
-        </div>
-        <div className="mt-1.5 text-xl font-semibold text-foreground">{formatOrderMoney(total, "UAH")}</div>
-      </div>
+      {/* Bento-підсумок (спільний із Витратами), але кольори статусні — за терміновістю. */}
+      <FinanceBentoSummary
+        title="Загалом до сплати"
+        totalText={formatOrderMoney(total, "UAH")}
+        buckets={dueBuckets}
+        footnote={
+          <span>Несплачені податки, невиплачені зарплати та підписки з датою наступного списання.</span>
+        }
+      />
 
       {buckets.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">

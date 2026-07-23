@@ -1,7 +1,9 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, ChevronLeft, ChevronRight, Loader2, StickyNote } from "lucide-react";
+import { Check, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FinanceBentoSummary } from "./FinanceBentoSummary";
+import { FinanceMonthBar } from "./FinanceMonthBar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -279,29 +281,46 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Ставка, бонус, офіційна ЗП та статус виплати по кожному за місяць. Дані спільні зі сторінкою зарплат.
-        </p>
-        <div className="flex items-center gap-1">
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftMonth(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-[140px] text-center text-sm font-medium">
-            {PAYROLL_MONTHS[month - 1]} {year}
-          </div>
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftMonth(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      {/* Липкий бар місяця — спільний із Витратами: місяць видно і під час скролу таблиці. */}
+      <FinanceMonthBar
+        label={`${PAYROLL_MONTHS[month - 1]} ${year}`}
+        onPrev={() => shiftMonth(-1)}
+        onNext={() => shiftMonth(1)}
+        onReset={() => {
+          setYear(now.getFullYear());
+          setMonth(now.getMonth() + 1);
+        }}
+        showReset={year !== now.getFullYear() || month !== now.getMonth() + 1}
+      />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Ставки" value={formatUAH(totals.base)} />
-        <Kpi label="Бонуси" value={formatUAH(totals.bonus)} />
-        <Kpi label="До виплати" value={formatUAH(totals.total)} accent />
-        <Kpi label="Виплачено" value={formatUAH(totals.paid)} tone="success" />
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Ставка, бонус, офіційна ЗП та статус виплати по кожному за місяць. Дані спільні зі сторінкою зарплат.
+      </p>
+
+      {/* Bento-підсумок місяця (спільний із Витратами): скільки платимо, прогрес
+          виплат смугою (виплачено/лишилось) і склад суми у виносці. */}
+      <FinanceBentoSummary
+        title={`До виплати за ${PAYROLL_MONTHS[month - 1].toLowerCase()} ${year}`}
+        totalText={formatUAH(totals.total)}
+        buckets={
+          totals.total > 0
+            ? [
+                { key: "paid", label: "Виплачено", amount: totals.paid, color: "bg-emerald-500" },
+                { key: "remaining", label: "Лишилось", amount: Math.max(0, totals.total - totals.paid), color: "bg-amber-500" },
+              ].filter((b) => b.amount > 0)
+            : []
+        }
+        footnote={
+          <>
+            <span>
+              Ставки: <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.base)}</span>
+            </span>
+            <span>
+              Бонуси: <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.bonus)}</span>
+            </span>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
@@ -412,31 +431,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           </Table>
         </div>
       )}
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  accent,
-  tone,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  tone?: "success";
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-border/60 bg-card p-4",
-        accent && "border-primary/40 bg-primary/5",
-        tone === "success" && "border-success/40 bg-success/5"
-      )}
-    >
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );
 }

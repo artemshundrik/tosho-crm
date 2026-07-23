@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Banknote,
@@ -13,9 +13,6 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { FinanceToolbarProvider } from "@/features/finances/financeToolbar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { normalizeJobRole } from "@/lib/permissions";
@@ -122,9 +119,6 @@ export default function FinancesPage() {
     [setSearchParams]
   );
 
-  // Дії активного розділу, які він публікує в шапку сторінки.
-  const [sectionActions, setSectionActions] = useState<ReactNode>(null);
-
   // Два панелі (нав + контент) заповнюють простір під тулбаром рівно до низу вікна —
   // висоту рахуємо від фактичного top контейнера, як у майстер-детейл Співробітників.
   const panesRef = useRef<HTMLDivElement | null>(null);
@@ -138,33 +132,9 @@ export default function FinancesPage() {
     return () => window.removeEventListener("resize", update);
   }, [activeSection]);
 
-  // Тулбар малюється слотом шапки AppLayout (usePageHeaderActions), як на всіх
-  // list-сторінках — а не інлайном у боді. Конвенція: docs/CODEX_PROJECT_GUIDE.md.
-  // Перемикач розділів живе не тут, а у власному лівому сайдбарі (Фінанси — це
-  // «застосунок у застосунку» з 11 розділами, вертикальна навігація доречніша).
-  const headerActions = useMemo(
-    () => (
-      <UnifiedPageToolbar
-        topLeft={
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-              <Banknote className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <div className="text-lg font-semibold text-foreground">Фінанси</div>
-              <div className="text-sm text-muted-foreground">
-                Облік коштів по контурах: ТОВ, ФОПи, готівка, крипта.
-              </div>
-            </div>
-          </div>
-        }
-        topRight={sectionActions}
-      />
-    ),
-    [sectionActions]
-  );
-
-  usePageHeaderActions(headerActions, [headerActions]);
+  // Шапки «Фінанси / Облік коштів…» тут свідомо НЕМАЄ: розділ уже названий у
+  // бредкрамбі топбара й у лівому сайдбарі, а смуга з описом лише з'їдала ~90px
+  // висоти. Контент (липкий бар місяця + bento) починається одразу під топбаром.
 
   // Групи розділів для сайдбара — з фактично доступних розділів (маржа може бути прихована).
   const sectionGroups = useMemo(() => {
@@ -209,7 +179,6 @@ export default function FinancesPage() {
 
   return (
     <div className="w-full">
-      <FinanceToolbarProvider onActionsChange={setSectionActions}>
         {/* Мобільний перемикач — горизонтальні пілюлі; сайдбар ховаємо на вузьких. */}
         <div className="flex gap-1.5 overflow-x-auto border-b border-border/60 px-4 py-3 lg:hidden [scrollbar-width:thin]">
           {visibleSections.map((section) => {
@@ -286,7 +255,6 @@ export default function FinancesPage() {
             {activeContent}
           </div>
         </div>
-      </FinanceToolbarProvider>
     </div>
   );
 }

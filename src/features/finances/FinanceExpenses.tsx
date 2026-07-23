@@ -1,16 +1,12 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
-  Building2,
   CalendarClock,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ChevronsUpDown,
   Cloud,
   Loader2,
-  MapPin,
   Pencil,
   PiggyBank,
   Pin,
@@ -18,8 +14,6 @@ import {
   Receipt,
   RefreshCw,
   Trash2,
-  TrendingDown,
-  TrendingUp,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -59,6 +53,8 @@ import {
   type FxCurrency,
   type FxRates,
 } from "@/lib/fxRates";
+import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
+import { FinanceMonthBar } from "./FinanceMonthBar";
 import { OrderPickerInline } from "./OrderPickerInline";
 import {
   createExpense,
@@ -145,20 +141,17 @@ const monthGenitive = (key: string, vsKey: string) => {
   return year === vsYear ? name : `${name} ${year}`;
 };
 
-// «3» або «0,8» — модуль відсотка дельти: цілим від 10%, інакше з одним знаком.
-const formatDeltaPct = (abs: number) => (abs >= 9.95 ? String(Math.round(abs)) : abs.toFixed(1).replace(".", ","));
-
-// Кольори кошиків смуги розподілу (сервіси → обʼєкти → змінні) — стабільні за порядком.
-const BUCKET_COLORS = [
-  "bg-sky-500",
-  "bg-violet-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-  "bg-rose-500",
-  "bg-cyan-500",
-  "bg-indigo-400",
-  "bg-slate-400",
-];
+// Секція реєстру витрат — вона ж кошик bento-смуги (спільний ключ, порядок і колір).
+type MonthSection = {
+  key: string;
+  label: string;
+  /** Коротка назва для легенди смуги (напр. «Змінні» замість повної). */
+  legend: string;
+  items: FinanceExpense[];
+  total: number;
+  /** true — сума «/ міс» (регулярні); false — сума за вибраний місяць (змінні). */
+  perMonth: boolean;
+};
 
 // Shift a «YYYY-MM» key by a number of months.
 const shiftMonthKey = (key: string, delta: number) => {
@@ -682,7 +675,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [monthlyForSelected]
   );
   const servicesBaseline = React.useMemo(() => sumMonthly(services), [services, sumMonthly]);
-  const otherBaseline = React.useMemo(() => sumMonthly(recurringOther), [recurringOther, sumMonthly]);
 
   // «Інші регулярні» під-групуємо за обʼєктом/адресою: оренда+комуналка+інтернет
   // одного офісу разом, з підсумком. Без обʼєкта — окремим блоком у кінці.
@@ -717,8 +709,6 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     () => fixed.filter((e) => monthlyForSelected(e) === null).length,
     [fixed, monthlyForSelected]
   );
-
-  const [fixedOpen, setFixedOpen] = React.useState(true);
 
   // Variable expenses bucketed by month key («YYYY-MM»; «» = no date).
   const variableByMonth = React.useMemo(() => {
@@ -763,22 +753,83 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   // Δ% до попереднього місяця; null — якщо порівнювати нема з чим.
   const monthDeltaPct = prevMonthTotal > 0 ? ((monthTotal - prevMonthTotal) / prevMonthTotal) * 100 : null;
 
-  // Кошики смуги «куди йдуть гроші»: сервіси → обʼєкти → без обʼєкта → змінні.
-  const monthBuckets = React.useMemo(() => {
-    const buckets: { key: string; label: string; amount: number }[] = [];
-    if (servicesBaseline > 0) buckets.push({ key: "services", label: "Сервіси та підписки", amount: servicesBaseline });
+  // Секції сторінки й кошики bento — ОДИН список: той самий порядок (сервіси →
+  // обʼєкти → без обʼєкта → змінні) і ті самі кольори. Смуга зверху = мапа сторінки.
+  const { monthSections, monthBuckets, sectionColor } = React.useMemo(() => {
+    const sections: MonthSection[] = [];
+    if (services.length > 0) {
+      sections.push({
+        key: "services",
+        label: "Сервіси та підписки",
+        legend: "Сервіси та підписки",
+        items: services,
+        total: servicesBaseline,
+        perMonth: true,
+      });
+    }
     for (const group of otherByObject) {
-      if (group.total > 0) {
-        buckets.push({
-          key: `obj:${group.label ?? "__untagged"}`,
-          label: group.label ?? "Без обʼєкта",
-          amount: group.total,
-        });
+      sections.push(
+        group.label
+          ? { key: `obj:${group.label}`, label: group.label, legend: group.label, items: group.items, total: group.total, perMonth: true }
+          : { key: "untagged", label: "Без обʼєкта", legend: "Без обʼєкта", items: group.items, total: group.total, perMonth: true }
+      );
+    }
+    // Змінні — завжди остання секція, навіть порожня (щоб місяць читався повністю).
+    sections.push({
+      key: "variable",
+      label: "Змінні витрати",
+      legend: "Змінні",
+      items: selectedItems,
+      total: selectedVariableSum,
+      perMonth: false,
+    });
+    // Кольори роздаємо лише непорожнім (вони ж — сегменти смуги); решті — сірий у секції.
+    const buckets: { key: string; label: string; amount: number; color: string }[] = [];
+    const colors = new Map<string, string>();
+    for (const s of sections) {
+      if (s.total > 0) {
+        const color = BENTO_COLORS[buckets.length % BENTO_COLORS.length];
+        colors.set(s.key, color);
+        buckets.push({ key: s.key, label: s.legend, amount: s.total, color });
       }
     }
-    if (selectedVariableSum > 0) buckets.push({ key: "variable", label: "Змінні", amount: selectedVariableSum });
-    return buckets;
-  }, [servicesBaseline, otherByObject, selectedVariableSum]);
+    return { monthSections: sections, monthBuckets: buckets, sectionColor: colors };
+  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum]);
+
+  // Розгорнутість секцій: за замовчуванням відкриті, вибір живе в localStorage
+  // (ключі динамічні — обʼєкти зʼявляються з даних, тому оверрайди поверх бази).
+  const [sectionOpenOverrides, setSectionOpenOverrides] = React.useState<Record<string, boolean>>({});
+  const isSectionOpen = React.useCallback(
+    (key: string) => sectionOpenOverrides[key] ?? readGroupOpen(key),
+    [sectionOpenOverrides]
+  );
+  const setSectionOpen = React.useCallback((key: string, next: boolean) => {
+    setSectionOpenOverrides((prev) => ({ ...prev, [key]: next }));
+    try {
+      window.localStorage.setItem(`${GROUP_OPEN_STORAGE_PREFIX}${key}`, next ? "1" : "0");
+    } catch {
+      // приватний режим — не критично
+    }
+  }, []);
+  const toggleSection = React.useCallback(
+    (key: string) => setSectionOpen(key, !isSectionOpen(key)),
+    [setSectionOpen, isSectionOpen]
+  );
+
+  // Клік по легенді bento: розгорнути секцію і мʼяко проскролити до неї (під липкий бар).
+  const sectionElsRef = React.useRef(new Map<string, HTMLElement | null>());
+  const registerSectionEl = React.useCallback((key: string, el: HTMLElement | null) => {
+    sectionElsRef.current.set(key, el);
+  }, []);
+  const scrollToSection = React.useCallback(
+    (key: string) => {
+      setSectionOpen(key, true);
+      requestAnimationFrame(() => {
+        sectionElsRef.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [setSectionOpen]
+  );
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceExpense | null>(null);
@@ -1114,174 +1165,77 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Степер місяця + кнопка додавання в одному рядку (як у «Виплати команді»). */}
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              aria-label="Попередній місяць"
-              onClick={() => setSelectedMonth((k) => shiftMonthKey(k, -1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-[140px] text-center text-sm font-medium">{monthLabel(selectedMonth)}</div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              aria-label="Наступний місяць"
-              onClick={() => setSelectedMonth((k) => shiftMonthKey(k, 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            {selectedMonth !== currentKey ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0"
-                onClick={() => setSelectedMonth(currentKey)}
-              >
-                Поточний
-              </Button>
-            ) : null}
-            <Button type="button" size="sm" className="ml-auto h-8 shrink-0 gap-1.5" onClick={openCreate}>
+          {/* Липкий бар місяця (спільний для розділів Фінансів): місяць і головна дія
+              лишаються на екрані під час скролу. */}
+          <FinanceMonthBar
+            label={monthLabel(selectedMonth)}
+            onPrev={() => setSelectedMonth((k) => shiftMonthKey(k, -1))}
+            onNext={() => setSelectedMonth((k) => shiftMonthKey(k, 1))}
+            onReset={() => setSelectedMonth(currentKey)}
+            showReset={selectedMonth !== currentKey}
+          >
+            <Button type="button" size="sm" className="h-8 gap-1.5" onClick={openCreate}>
               <Plus className="h-4 w-4" /> Додати витрату
             </Button>
-          </div>
+          </FinanceMonthBar>
 
-          {/* Bento-підсумок вибраного місяця: разом, дельта до попереднього, розподіл */}
-          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-              <div>
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Разом за {monthLabel(selectedMonth)}
-                </div>
-                <div className="mt-1.5 text-2xl font-semibold leading-none tabular-nums text-foreground sm:text-[28px]">
-                  {formatOrderMoney(monthTotal, "UAH")}
-                </div>
-              </div>
-              {monthDeltaPct !== null ? (
-                Math.abs(monthDeltaPct) < 0.5 ? (
-                  <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    ≈ рівень {monthGenitive(prevMonthKey, selectedMonth)}
-                  </span>
-                ) : (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums",
-                      monthDeltaPct > 0
-                        ? "border-destructive/25 bg-destructive/5 text-destructive"
-                        : "border-success-soft-border bg-success-soft text-success-foreground"
-                    )}
-                  >
-                    {monthDeltaPct > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {monthDeltaPct > 0 ? "+" : "−"}
-                    {formatDeltaPct(Math.abs(monthDeltaPct))}% до {monthGenitive(prevMonthKey, selectedMonth)}
-                  </span>
-                )
-              ) : null}
-            </div>
-            {monthBuckets.length > 0 && monthTotal > 0 ? (
-              <>
-                {/* Смуга «куди йдуть гроші» — частки пропорційні сумам, дрібні видно завдяки minWidth */}
-                <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
-                  {monthBuckets.map((b, i) => (
-                    <div
-                      key={b.key}
-                      className={cn("rounded-[2px]", BUCKET_COLORS[i % BUCKET_COLORS.length])}
-                      style={{ flexGrow: b.amount, flexBasis: 0, minWidth: 6 }}
-                      title={`${b.label} — ${formatOrderMoney(b.amount, "UAH")}`}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
-                  {monthBuckets.map((b, i) => (
-                    <span key={b.key} className="inline-flex items-center gap-1.5 text-xs">
-                      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", BUCKET_COLORS[i % BUCKET_COLORS.length])} />
-                      <span className="text-muted-foreground">{b.label}</span>
-                      <span className="font-medium tabular-nums text-foreground">{formatOrderMoney(b.amount, "UAH")}</span>
+          {/* Bento-підсумок вибраного місяця — спільний компонент розділів Фінансів.
+              Легенда клікабельна: розгортає відповідну секцію нижче і скролить до неї. */}
+          <FinanceBentoSummary
+            title={`Разом за ${monthLabel(selectedMonth)}`}
+            totalText={formatOrderMoney(monthTotal, "UAH")}
+            deltaPct={monthDeltaPct}
+            deltaVs={monthGenitive(prevMonthKey, selectedMonth)}
+            buckets={monthTotal > 0 ? monthBuckets : []}
+            onBucketClick={scrollToSection}
+            footnote={
+              fixed.length > 0 ? (
+                <>
+                  <span>
+                    Регулярна база:{" "}
+                    <span className="font-medium tabular-nums text-foreground/80">
+                      {formatOrderMoney(fixedBaseline, "UAH")} / міс
                     </span>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          {/* Підписки та сталі витрати — однакова місячна база в кожному місяці */}
-          {fixed.length > 0 ? (
-            <div className="rounded-xl border border-border/60">
-              <button
-                type="button"
-                onClick={() => setFixedOpen((o) => !o)}
-                className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left"
-              >
-                <span className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <RefreshCw className="h-3 w-3" /> Регулярні витрати
                   </span>
-                  <Badge variant="outline" className="text-[10px] font-semibold text-foreground">
-                    {formatOrderMoney(fixedBaseline, "UAH")} / міс
-                  </Badge>
                   {spreadBaseline > 0 ? (
-                    <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                      з них {formatOrderMoney(spreadBaseline, "UAH")} — неодномісячні, розбиті на місяці
-                    </span>
+                    <span>з них {formatOrderMoney(spreadBaseline, "UAH")} — неодномісячні, розбиті на місяці</span>
                   ) : null}
                   {missingRateCount > 0 ? (
-                    <span className="text-[10px] font-normal normal-case text-destructive">
-                      {missingRateCount} у валюті без курсу
-                    </span>
+                    <span className="text-destructive">{missingRateCount} у валюті без курсу</span>
                   ) : null}
-                </span>
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                    fixedOpen && "rotate-180"
-                  )}
-                />
-              </button>
-              {fixedOpen ? (
-                <div className="space-y-3 px-3 pb-3">
-                  <ExpenseGroup
-                    storageKey="services"
-                    icon={Cloud}
-                    label="Сервіси та підписки"
-                    count={services.length}
-                    total={servicesBaseline}
-                    items={services}
-                    renderItem={renderSubscriptionRow}
-                  />
-                  <ExpenseGroup
-                    storageKey="other"
-                    icon={Building2}
-                    label="Інші регулярні платежі"
-                    count={recurringOther.length}
-                    total={otherBaseline}
-                    items={recurringOther}
-                    subGroups={otherByObject}
-                    renderItem={renderSubscriptionRow}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                </>
+              ) : undefined
+            }
+          />
 
-          {/* Variable expenses for the selected month */}
-          <div>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Змінні витрати · {monthLabel(selectedMonth)}
-            </h3>
-            {selectedItems.length > 0 ? (
-              <div className="grid gap-2">{selectedItems.map(renderRow)}</div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
-                Немає змінних витрат за {monthLabel(selectedMonth)}.
-              </div>
-            )}
+          {/* Секції = кошики bento: той самий порядок і колір, без зайвих обгорток.
+              Кожна згортається стрілочкою, вибір памʼятається між сесіями. */}
+          <div className="space-y-1.5">
+            {monthSections.map((s) => (
+              <ExpenseSection
+                key={s.key}
+                sectionKey={s.key}
+                colorClass={sectionColor.get(s.key) ?? "bg-muted-foreground/25"}
+                label={s.key === "variable" ? `${s.label} · ${monthLabel(selectedMonth)}` : s.label}
+                count={s.items.length}
+                totalText={`${formatOrderMoney(s.total, "UAH")}${s.perMonth ? " / міс" : ""}`}
+                open={isSectionOpen(s.key)}
+                onToggle={() => toggleSection(s.key)}
+                registerEl={registerSectionEl}
+              >
+                {s.key === "variable" ? (
+                  s.items.length > 0 ? (
+                    <div className="grid gap-2">{s.items.map(renderRow)}</div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                      Немає змінних витрат за {monthLabel(selectedMonth)}.
+                    </div>
+                  )
+                ) : (
+                  <div className="grid gap-2">{s.items.map(renderSubscriptionRow)}</div>
+                )}
+              </ExpenseSection>
+            ))}
           </div>
 
           {/* Variable expenses without a date — surfaced so they aren't lost */}
@@ -1319,91 +1273,52 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   );
 }
 
-// Підгрупа всередині регулярних витрат: заголовок з кількістю та місячною сумою.
-// Порожню групу не малюємо — краще менше рамок, ніж «0 позицій».
-// Згортається окремо від сусідньої: у згорнутому вигляді лишається головне —
-// скільки позицій і скільки це на місяць. Вибір запам'ятовується між сесіями.
-type ObjectSubGroup = { label: string | null; items: FinanceExpense[]; total: number };
-
-function ExpenseGroup({
-  storageKey,
-  icon: Icon,
+// Секція реєстру витрат: кольорова крапка (та сама, що в bento-смузі), назва,
+// кількість і сума справа. Згортається стрілочкою — щоб довгі списки (11 сервісів)
+// не розповзались; вибір запам'ятовується між сесіями. scroll-mt = висота липкого бару.
+function ExpenseSection({
+  sectionKey,
+  colorClass,
   label,
   count,
-  total,
-  items,
-  subGroups,
-  renderItem,
+  totalText,
+  open,
+  onToggle,
+  registerEl,
+  children,
 }: {
-  storageKey: string;
-  icon: LucideIcon;
+  sectionKey: string;
+  colorClass: string;
   label: string;
   count: number;
-  total: number;
-  items: FinanceExpense[];
-  /** Якщо задано — рядки під-групуються за обʼєктом/адресою (з підсумком кожного). */
-  subGroups?: ObjectSubGroup[];
-  renderItem: (expense: FinanceExpense) => React.ReactNode;
+  totalText: string;
+  open: boolean;
+  onToggle: () => void;
+  registerEl: (key: string, el: HTMLElement | null) => void;
+  children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(() => readGroupOpen(storageKey));
-
-  const toggle = () => {
-    setOpen((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(`${GROUP_OPEN_STORAGE_PREFIX}${storageKey}`, next ? "1" : "0");
-      } catch {
-        // Приватний режим / переповнене сховище — не критично, просто не запам'ятаємо.
-      }
-      return next;
-    });
-  };
-
-  if (count === 0) return null;
-  // Групуємо за обʼєктом лише коли є хоч один названий обʼєкт — інакше плаский список.
-  const useSubGroups = Boolean(subGroups && subGroups.some((g) => g.label));
   return (
-    <section>
+    <section
+      ref={(el) => {
+        registerEl(sectionKey, el);
+      }}
+      className="scroll-mt-14"
+    >
       <button
         type="button"
-        onClick={toggle}
+        onClick={onToggle}
         aria-expanded={open}
-        className="mb-1.5 flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-muted/40"
       >
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !open && "-rotate-90")} />
-          <Icon className="h-3 w-3" />
-          {label}
-          <span className="font-normal normal-case text-muted-foreground/70">· {count}</span>
-        </span>
-        <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
-          {formatOrderMoney(total, "UAH")} / міс
-        </span>
+        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", colorClass)} />
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground/80">· {count}</span>
+        <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">{totalText}</span>
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
+        />
       </button>
-      {open ? (
-        useSubGroups && subGroups ? (
-          <div className="space-y-3">
-            {subGroups.map((g) => (
-              <div key={g.label ?? "__none"} className={cn(g.label && "rounded-xl border border-border/50 p-2")}>
-                {g.label ? (
-                  <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                      {g.label}
-                    </span>
-                    <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
-                      {formatOrderMoney(g.total, "UAH")} / міс
-                    </span>
-                  </div>
-                ) : null}
-                <div className="grid gap-2">{g.items.map(renderItem)}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-2">{items.map(renderItem)}</div>
-        )
-      ) : null}
+      {open ? <div className="pb-2 pt-0.5">{children}</div> : null}
     </section>
   );
 }

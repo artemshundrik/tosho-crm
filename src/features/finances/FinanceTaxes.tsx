@@ -2,6 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Check, Landmark, Loader2, Plus } from "lucide-react";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
+import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +86,28 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
     [taxes]
   );
 
+  // Кошики bento: «до сплати» в розрізі типів податку (лише очікувані зобовʼязання).
+  const pendingByType = React.useMemo(() => {
+    const map = new Map<TaxType, number>();
+    for (const t of taxes) {
+      if (t.status !== "pending") continue;
+      map.set(t.taxType, (map.get(t.taxType) ?? 0) + t.amount);
+    }
+    return (Object.keys(TAX_TYPE_LABELS) as TaxType[])
+      .filter((type) => (map.get(type) ?? 0) > 0)
+      .map((type, i) => ({
+        key: type,
+        label: TAX_TYPE_LABELS[type],
+        amount: map.get(type) ?? 0,
+        color: BENTO_COLORS[i % BENTO_COLORS.length],
+      }));
+  }, [taxes]);
+  const pendingCount = React.useMemo(() => taxes.filter((t) => t.status === "pending").length, [taxes]);
+  const paidTotal = React.useMemo(
+    () => taxes.filter((t) => t.status === "paid").reduce((sum, t) => sum + t.amount, 0),
+    [taxes]
+  );
+
   const toggleStatus = async (tax: FinanceTax) => {
     if (!teamId) return;
     const nextStatus: TaxStatus = tax.status === "paid" ? "pending" : "paid";
@@ -120,13 +143,26 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
 
   return (
     <div className="space-y-3">
+      {/* Bento-підсумок (спільний із Витратами): скільки до сплати і з яких податків складається. */}
+      <FinanceBentoSummary
+        title="Податки до сплати"
+        totalText={formatOrderMoney(unpaidTotal, "UAH")}
+        buckets={pendingByType}
+        footnote={
+          <>
+            <span>
+              Очікують: <span className="font-medium tabular-nums text-foreground/80">{pendingCount}</span>
+            </span>
+            <span>
+              Сплачено (за весь час):{" "}
+              <span className="font-medium tabular-nums text-foreground/80">{formatOrderMoney(paidTotal, "UAH")}</span>
+            </span>
+          </>
+        }
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            ПДВ (ТОВ) та ФОП (єдиний податок, ЄСВ, військовий збір). До сплати:{" "}
-            <span className="font-semibold text-foreground">{formatOrderMoney(unpaidTotal, "UAH")}</span>
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">ПДВ (ТОВ) та ФОП (єдиний податок, ЄСВ, військовий збір).</p>
         <Button
           type="button"
           size="sm"

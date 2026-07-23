@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { useFxRates } from "@/lib/fxRates";
 import { listAccounts, listExpenses, listPayments } from "./api";
+import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   ACCOUNT_KIND_LABELS,
   expenseUahAmount,
@@ -73,6 +74,28 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
     [visibleAccounts, inByAccount, outByAccount]
   );
 
+  // Кошики bento: додатні баланси кас (смуга не вміє відʼємних — ті йдуть у виноску).
+  const accountBuckets = React.useMemo(
+    () =>
+      visibleAccounts
+        .map((a) => ({ account: a, balance: (inByAccount.get(a.id) ?? 0) - (outByAccount.get(a.id) ?? 0) }))
+        .filter((x) => x.balance > 0)
+        .map((x, i) => ({
+          key: x.account.id,
+          label: x.account.name,
+          amount: x.balance,
+          color: BENTO_COLORS[i % BENTO_COLORS.length],
+        })),
+    [visibleAccounts, inByAccount, outByAccount]
+  );
+  const negativeAccounts = React.useMemo(
+    () =>
+      visibleAccounts
+        .map((a) => ({ id: a.id, name: a.name, balance: (inByAccount.get(a.id) ?? 0) - (outByAccount.get(a.id) ?? 0) }))
+        .filter((x) => x.balance < 0),
+    [visibleAccounts, inByAccount, outByAccount]
+  );
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
@@ -83,14 +106,22 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border/60 bg-card p-4">
-        <div className="text-xs text-muted-foreground">Загальний баланс по касах</div>
-        <div className="mt-1.5 text-xl font-semibold text-foreground">{formatOrderMoney(grandBalance, "UAH")}</div>
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Баланс = надходження − витрати, проведені через касу. Каси додаються в «Налаштування → Каси та рахунки».
-      </p>
+      {/* Bento-підсумок (спільний із Витратами): всього грошей і як вони лежать по касах. */}
+      <FinanceBentoSummary
+        title="Всього по касах"
+        totalText={formatOrderMoney(grandBalance, "UAH")}
+        buckets={accountBuckets}
+        footnote={
+          <>
+            <span>Баланс = надходження − витрати через касу. Каси додаються в «Налаштування → Каси та рахунки».</span>
+            {negativeAccounts.map((x) => (
+              <span key={x.id} className="text-destructive">
+                {x.name}: {formatOrderMoney(x.balance, "UAH")}
+              </span>
+            ))}
+          </>
+        }
+      />
 
       {visibleAccounts.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
