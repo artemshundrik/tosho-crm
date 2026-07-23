@@ -31,7 +31,7 @@ import {
 } from "./api";
 import {
   INVOICE_STATUS_LABELS,
-  INVOICE_STATUS_TONE,
+  INVOICE_STATUS_BADGE_TONE,
   formatLegalEntityLabel,
   ORDER_TYPE_LABELS,
   type FinanceInvoice,
@@ -297,7 +297,11 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
                         № {invoice.number}
                       </Badge>
                     ) : null}
-                    <Badge variant="outline" className={cn("text-[10px]", INVOICE_STATUS_TONE[invoice.status])}>
+                    <Badge
+                      tone={INVOICE_STATUS_BADGE_TONE[invoice.status]}
+                      size="sm"
+                      className={cn("text-[10px]", invoice.status === "cancelled" && "line-through")}
+                    >
                       {INVOICE_STATUS_LABELS[invoice.status]}
                     </Badge>
                     {invoice.vatRate ? (

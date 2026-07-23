@@ -156,13 +156,17 @@ export const INVOICE_STATUS_LABELS: Record<FinanceInvoiceStatus, string> = {
   cancelled: "Скасовано",
 };
 
-export const INVOICE_STATUS_TONE: Record<FinanceInvoiceStatus, string> = {
-  draft: "text-muted-foreground",
-  sent: "border-info/40 bg-info/10 text-info-foreground",
-  partial: "border-warning/40 bg-warning/10 text-warning-foreground",
-  paid: "border-success/40 bg-success/10 text-success-foreground",
-  overdue: "border-destructive/40 bg-destructive/10 text-destructive",
-  cancelled: "text-muted-foreground line-through",
+/** Badge tone= для статусу рахунку — та сама семантика, що всі бейджі апки. */
+export const INVOICE_STATUS_BADGE_TONE: Record<
+  FinanceInvoiceStatus,
+  "neutral" | "info" | "warning" | "success" | "danger"
+> = {
+  draft: "neutral",
+  sent: "info",
+  partial: "warning",
+  paid: "success",
+  overdue: "danger",
+  cancelled: "neutral",
 };
 
 /** Invoice counts toward receivables unless cancelled. */

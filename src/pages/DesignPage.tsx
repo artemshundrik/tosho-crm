@@ -4984,13 +4984,18 @@ export default function DesignPage() {
           </div>
         ) : null}
         {task.designTaskType ? (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/8 px-2.5 py-1 text-[11px] font-medium text-primary">
+          /* Тип задачі — фіолетовий accent-tone («дизайн»-колір апки: чипи ⌘K, аватари),
+             а не brand-синій: таксономія не має носити колір дій/кнопок. */
+          <Badge
+            tone="accent"
+            className="mt-2 gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium normal-case tracking-normal"
+          >
             {(() => {
               const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
               return <TypeIcon className="h-3.5 w-3.5" />;
             })()}
             <span>{DESIGN_TASK_TYPE_LABELS[task.designTaskType]}</span>
-          </div>
+          </Badge>
         ) : null}
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">

@@ -1046,10 +1046,12 @@
     border-color: hsl(var(--info-soft-border));
     color: hsl(var(--info-foreground));
   }
+  /* «Дизайн готовий» — фіолетовий accent-tone («дизайн»-колір апки), щоб не
+     зливався з синім «В роботі»: різні етапи воркфлоу = різні кольори. */
   .design-status-badge-pm-review {
-    background-color: hsl(var(--info-soft));
-    border-color: hsl(var(--info-soft-border));
-    color: hsl(var(--info-foreground));
+    background-color: hsl(var(--accent-tone-soft));
+    border-color: hsl(var(--accent-tone-soft-border));
+    color: hsl(var(--accent-tone-foreground));
   }
   .design-status-badge-client-review {
     background-color: hsl(var(--warning-soft));

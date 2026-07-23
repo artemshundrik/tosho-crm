@@ -32,7 +32,8 @@ export const CONTROL_ICON_BTN = cx(
   "inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)]",
   "text-muted-foreground hover:text-foreground",
   "hover:bg-muted",
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+  // Нейтральний фокус, як у решти контролів (без синього рінга).
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
 );
 
 export const SEARCH_WRAP = cx("relative flex-1 max-w-[520px] min-w-[240px]");
