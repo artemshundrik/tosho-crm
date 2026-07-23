@@ -1334,6 +1334,53 @@ export type Database = {
           },
         ]
       }
+      finance_expense_monthly_amounts: {
+        Row: {
+          amount: number
+          created_at: string
+          entered_by: string | null
+          entry_date: string
+          expense_id: string
+          id: string
+          note: string | null
+          period: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          entered_by?: string | null
+          entry_date: string
+          expense_id: string
+          id?: string
+          note?: string | null
+          period: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          entered_by?: string | null
+          entry_date?: string
+          expense_id?: string
+          id?: string
+          note?: string | null
+          period?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_expense_monthly_amounts_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "finance_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_expense_allocations: {
         Row: {
           amount: number

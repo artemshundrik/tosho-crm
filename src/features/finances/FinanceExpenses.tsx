@@ -3,15 +3,21 @@ import { toast } from "sonner";
 import {
   Building2,
   CalendarClock,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Cloud,
   Loader2,
+  MapPin,
+  Pencil,
   PiggyBank,
   Pin,
   Plus,
+  Receipt,
   RefreshCw,
+  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +37,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SubscriptionLogo } from "./SubscriptionLogo";
@@ -44,25 +60,32 @@ import {
 import { OrderPickerInline } from "./OrderPickerInline";
 import {
   createExpense,
+  createExpenseCategory,
+  createExpenseEntry,
   deleteExpense,
+  deleteExpenseEntry,
   listAccounts,
   listExpenseCategories,
+  listExpenseEntries,
   listExpenses,
   listLegalEntities,
   listOrdersForFinance,
   updateExpense,
+  updateExpenseEntry,
   type ExpenseAllocationInput,
   type ExpenseInput,
 } from "./api";
 import {
   BILLING_PERIOD_LABELS,
   BILLING_PERIOD_MONTHS,
+  BILLING_PERIOD_ORDER,
   billingPeriodOf,
   EXPENSE_CATEGORY_KIND_LABELS,
   expenseMonthlyUah,
   expenseUahAmount,
   formatLegalEntityLabel,
   type BillingPeriod,
+  type ExpenseEntry,
   type FinanceAccount,
   type FinanceExpense,
   type FinanceExpenseCategory,
@@ -87,6 +110,14 @@ type FinanceExpensesProps = {
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
+// Короткий підпис одиниці періоду для рядка списку («$200 / рік»).
+const PERIOD_UNIT_SHORT: Record<BillingPeriod, string> = {
+  monthly: "міс",
+  quarterly: "квартал",
+  semiannual: "півроку",
+  yearly: "рік",
+};
+
 const MONTHS = [
   "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень",
   "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень",
@@ -105,6 +136,26 @@ const shiftMonthKey = (key: string, delta: number) => {
   const d = new Date(year, (month || 1) - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
+
+// Парсинг суми з «людського» вводу: апостроф/пробіл (і nbsp) — роздільник тисяч,
+// останній «,» або «.» — десятковий. «6'238,20» → 6238.2; «12 500» → 12500.
+// Повертає null, якщо це не додатне число (для валідації + тосту).
+const parseAmountInput = (raw: string): number | null => {
+  const s = raw.trim().replace(/[\s'’`]/g, "");
+  if (!s) return null;
+  const lastSep = Math.max(s.lastIndexOf(","), s.lastIndexOf("."));
+  let normalized = s;
+  if (lastSep !== -1) {
+    const intPart = s.slice(0, lastSep).replace(/[.,]/g, "");
+    const frac = s.slice(lastSep + 1).replace(/[.,]/g, "");
+    normalized = frac ? `${intPart}.${frac}` : intPart;
+  }
+  const n = Number(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+// Сума як число для розрахунків (невалідне/порожнє → 0).
+const amountNumber = (raw: string): number => parseAmountInput(raw) ?? 0;
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const formatDate = (value?: string | null) => {
@@ -144,12 +195,311 @@ const uahHint = (expense: FinanceExpense, rates: FxRates) => {
   return uah === null ? "курс невідомий" : `≈ ${formatOrderMoney(uah, "UAH")}`;
 };
 
+const CURRENCY_SYMBOL: Record<FxCurrency, string> = { UAH: "₴", USD: "$", EUR: "€" };
+
+// «запис / записи / записів» за українським правилом множини.
+const pluralEntries = (n: number) => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "запис";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "записи";
+  return "записів";
+};
+
+// «05.07» — короткий день+місяць запису (рік зрозумілий із заголовка місяця).
+const formatDayShort = (entryDate: string) => {
+  const [, m, d] = entryDate.split("-");
+  return d && m ? `${d}.${m}` : entryDate;
+};
+
+// Дата за замовчуванням для нового запису: сьогодні, якщо додаємо в поточний місяць,
+// інакше — перше число вибраного місяця (коли «доганяєш» минулий).
+const defaultEntryDate = (monthKey: string, currentKey: string) =>
+  monthKey === currentKey ? todayISO() : `${monthKey}-01`;
+
+// Сума запису в рідній валюті + гривневий орієнтир (для не-гривні).
+const entryAmountLabel = (amount: number, currency: FxCurrency) =>
+  currency === "UAH" ? formatOrderMoney(amount, "UAH") : formatCurrencyAmount(amount, currency);
+
+// Спільний inline-редактор запису журналу: дата + сума + коментар.
+// Використовується і для додавання, і для редагування наявного запису.
+function EntryEditor({
+  currency,
+  initialDate,
+  initialAmount,
+  initialNote,
+  submitLabel,
+  saving,
+  autoFocusAmount,
+  onSubmit,
+  onCancel,
+}: {
+  currency: FxCurrency;
+  initialDate: string;
+  initialAmount: string;
+  initialNote: string;
+  submitLabel: string;
+  saving: boolean;
+  autoFocusAmount?: boolean;
+  onSubmit: (values: { entryDate: string; amount: number; note: string }) => void;
+  onCancel: () => void;
+}) {
+  const [date, setDate] = React.useState(initialDate);
+  const [amount, setAmount] = React.useState(initialAmount);
+  const [note, setNote] = React.useState(initialNote);
+
+  const trySubmit = () => {
+    if (!date) {
+      toast.error("Вкажіть дату запису");
+      return;
+    }
+    const parsed = parseAmountInput(amount);
+    if (parsed === null || parsed <= 0) {
+      toast.error("Перевірте суму", {
+        description: `«${amount.trim() || "порожньо"}» — не схоже на число. Приклад: 6238,20`,
+      });
+      return;
+    }
+    onSubmit({ entryDate: date, amount: parsed, note: note.trim() });
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      trySubmit();
+    } else if (e.key === "Escape") {
+      onCancel();
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background p-2">
+      <Input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label="Дата запису"
+        className="h-8 w-[150px]"
+      />
+      <div className="flex items-center gap-1">
+        <Input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          onKeyDown={onKeyDown}
+          inputMode="decimal"
+          placeholder="0.00"
+          autoFocus={autoFocusAmount}
+          aria-label="Сума"
+          className="h-8 w-24 text-right text-sm tabular-nums"
+        />
+        <span className="w-3 text-xs text-muted-foreground">{CURRENCY_SYMBOL[currency]}</span>
+      </div>
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder="коментар (напр. кухня+санвузли)"
+        aria-label="Коментар"
+        className="h-8 min-w-[140px] flex-1"
+      />
+      <div className="flex items-center gap-1">
+        <Button size="sm" className="h-8 gap-1" onClick={trySubmit} disabled={saving}>
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {submitLabel}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCancel} aria-label="Скасувати">
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Один рядок журналу: показ (дата · сума · коментар) із перемиканням у режим редагування.
+function JournalEntryRow({
+  entry,
+  currency,
+  rates,
+  busy,
+  onUpdate,
+  onDelete,
+}: {
+  entry: ExpenseEntry;
+  currency: FxCurrency;
+  rates: FxRates;
+  busy: boolean;
+  onUpdate: (values: { entryDate: string; amount: number; note: string }) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const uah = currency === "UAH" ? null : convertToUah(entry.amount, currency, rates, null);
+
+  if (editing) {
+    return (
+      <EntryEditor
+        currency={currency}
+        initialDate={entry.entryDate}
+        initialAmount={String(entry.amount)}
+        initialNote={entry.note ?? ""}
+        submitLabel="Зберегти"
+        saving={busy}
+        onSubmit={(values) => {
+          onUpdate(values);
+          setEditing(false);
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/40">
+      <span className="w-12 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+        {formatDayShort(entry.entryDate)}
+      </span>
+      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">
+        {entryAmountLabel(entry.amount, currency)}
+      </span>
+      {uah !== null ? (
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">≈ {formatOrderMoney(uah, "UAH")}</span>
+      ) : null}
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{entry.note || "—"}</span>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground"
+          onClick={() => setEditing(true)}
+          aria-label="Редагувати запис"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+          disabled={busy}
+          aria-label="Видалити запис"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Розгортна панель журналу під рядком змінної витрати: записи вибраного місяця + додавання.
+function ExpenseJournalPanel({
+  monthKey,
+  monthText,
+  currentKey,
+  currency,
+  rates,
+  entries,
+  busy,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  monthKey: string;
+  monthText: string;
+  currentKey: string;
+  currency: FxCurrency;
+  rates: FxRates;
+  entries: ExpenseEntry[]; // лише за цей місяць
+  busy: boolean;
+  onAdd: (values: { entryDate: string; amount: number; note: string }) => void;
+  onUpdate: (entryId: string, values: { entryDate: string; amount: number; note: string }) => void;
+  onDelete: (entryId: string) => void;
+}) {
+  const [adding, setAdding] = React.useState(false);
+  // Після кожного додавання ремаунтимо форму (зміною key), щоб очистити суму/коментар
+  // для наступного запису. Дату памʼятаємо (lastDate) — зазвичай додають поспіль близькі дати.
+  const [addSeq, setAddSeq] = React.useState(0);
+  const [lastDate, setLastDate] = React.useState(() => defaultEntryDate(monthKey, currentKey));
+  React.useEffect(() => {
+    setLastDate(defaultEntryDate(monthKey, currentKey));
+  }, [monthKey, currentKey]);
+
+  // Хронологічно (1-ше → останнє) — читається як журнал подій.
+  const ordered = React.useMemo(
+    () => entries.slice().sort((a, b) => a.entryDate.localeCompare(b.entryDate)),
+    [entries]
+  );
+
+  return (
+    <div className="border-t border-border/60 bg-muted/20 px-3 py-2.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Журнал · {monthText}
+        </span>
+        {ordered.length > 0 ? (
+          <span className="text-[11px] text-muted-foreground">
+            {ordered.length} {pluralEntries(ordered.length)}
+          </span>
+        ) : null}
+      </div>
+
+      {ordered.length > 0 ? (
+        <div className="space-y-0.5">
+          {ordered.map((entry) => (
+            <JournalEntryRow
+              key={entry.id}
+              entry={entry}
+              currency={currency}
+              rates={rates}
+              busy={busy}
+              onUpdate={(values) => onUpdate(entry.id, values)}
+              onDelete={() => onDelete(entry.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="px-2 py-1 text-xs text-muted-foreground">
+          Ще немає записів за цей місяць. Додай перше прибирання нижче.
+        </p>
+      )}
+
+      <div className="mt-2">
+        {adding ? (
+          <EntryEditor
+            key={addSeq}
+            currency={currency}
+            initialDate={lastDate}
+            initialAmount=""
+            initialNote=""
+            submitLabel="Додати"
+            saving={busy}
+            autoFocusAmount
+            onSubmit={(values) => {
+              onAdd(values);
+              // Форма лишається відкритою (нове key) для швидкого вводу кількох прибирань поспіль.
+              setLastDate(values.entryDate);
+              setAddSeq((n) => n + 1);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAdding(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Додати запис
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpensesProps) {
   const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
   const [categories, setCategories] = React.useState<FinanceExpenseCategory[]>([]);
   const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
   const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
   const [orders, setOrders] = React.useState<FinanceOrderRef[]>([]);
+  // expenseId → журнал датованих записів (для регулярних платежів зі змінною сумою).
+  const [entriesByExpense, setEntriesByExpense] = React.useState<Map<string, ExpenseEntry[]>>(() => new Map());
   const [loading, setLoading] = React.useState(true);
   const [ordersLoading, setOrdersLoading] = React.useState(true);
 
@@ -161,7 +511,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       const nextExpenses = await listExpenses(teamId);
       setExpenses(nextExpenses);
       // Supporting data: failures here are logged but don't wipe the expense list.
-      const [nextCategories, nextAccounts, nextEntities] = await Promise.all([
+      const [nextCategories, nextAccounts, nextEntities, nextEntries] = await Promise.all([
         listExpenseCategories(teamId).catch((e) => {
           console.error("[finance] listExpenseCategories failed", e);
           return [] as FinanceExpenseCategory[];
@@ -174,10 +524,15 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           console.error("[finance] listLegalEntities failed", e);
           return [] as FinanceLegalEntity[];
         }),
+        listExpenseEntries(teamId).catch((e) => {
+          console.error("[finance] listExpenseEntries failed", e);
+          return new Map<string, ExpenseEntry[]>();
+        }),
       ]);
       setCategories(nextCategories);
       setAccounts(nextAccounts);
       setEntities(nextEntities);
+      setEntriesByExpense(nextEntries);
     } catch (error) {
       console.error("[finance] listExpenses failed", error);
       toast.error("Не вдалося завантажити витрати", { description: getErrorMessage(error, "Спробуйте ще раз.") });
@@ -211,6 +566,16 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [accounts, canSeeSensitive]
   );
 
+  // Наявні обʼєкти (адреси) — для підказок у полі «Обʼєкт».
+  const objectSuggestions = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const e of expenses) {
+      const label = e.objectGroup?.trim();
+      if (label) set.add(label);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "uk"));
+  }, [expenses]);
+
   // Hide expenses paid from sensitive accounts from non-top roles.
   const visibleExpenses = React.useMemo(() => {
     if (canSeeSensitive) return expenses;
@@ -223,6 +588,31 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   // Курс той самий, що в шапці застосунку (Мінфін, міжбанк).
   const rates = useFxRates();
 
+  // Місяць-у-фокусі — оголошуємо раніше за базлайни, бо змінні платежі рахуються
+  // саме за цей місяць (комуналка різна щомісяця).
+  const currentKey = React.useMemo(() => todayISO().slice(0, 7), []);
+  const [selectedMonth, setSelectedMonth] = React.useState(currentKey);
+
+  // Записи журналу конкретної витрати за конкретний місяць.
+  const entriesForMonth = React.useCallback(
+    (expenseId: string, monthKey: string): ExpenseEntry[] =>
+      (entriesByExpense.get(expenseId) ?? []).filter((en) => en.entryDate.slice(0, 7) === monthKey),
+    [entriesByExpense]
+  );
+
+  // Місячна гривнева вартість регулярного платежу ДЛЯ вибраного місяця:
+  // стала — та сама щомісяця; змінна — сума записів журналу за місяць
+  // (або стартовий орієнтир, якщо записів ще немає).
+  const monthlyForSelected = React.useCallback(
+    (e: FinanceExpense): number | null => {
+      if (!e.amountVaries) return expenseMonthlyUah(e, rates);
+      const monthEntries = entriesForMonth(e.id, selectedMonth);
+      const amt = monthEntries.length > 0 ? monthEntries.reduce((s, en) => s + en.amount, 0) : e.amount;
+      return convertToUah(amt, e.currency, rates, e.fxRate);
+    },
+    [rates, entriesForMonth, selectedMonth]
+  );
+
   const { fixed, variable } = React.useMemo(() => {
     const fixedList: FinanceExpense[] = [];
     const variableList: FinanceExpense[] = [];
@@ -231,16 +621,14 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       else variableList.push(expense);
     }
     // Найдорожче на місяць — зверху, щоб одразу було видно, що з'їдає бюджет.
-    fixedList.sort((a, b) => (expenseMonthlyUah(b, rates) ?? 0) - (expenseMonthlyUah(a, rates) ?? 0));
+    fixedList.sort((a, b) => (monthlyForSelected(b) ?? 0) - (monthlyForSelected(a) ?? 0));
     return { fixed: fixedList, variable: variableList };
-  }, [visibleExpenses, rates]);
+  }, [visibleExpenses, monthlyForSelected]);
 
-  // Сталі витрати — місячна база, яка враховується в КОЖНОМУ місяці.
-  // Річний платіж ділиться на 12, квартальний — на 3, тож «Разом за місяць»
-  // показує рівну щомісячну вартість, а не пік у місяці списання.
+  // Регулярна місячна база за вибраний місяць (змінні платежі — фактом того місяця).
   const fixedBaseline = React.useMemo(
-    () => fixed.reduce((sum, e) => sum + (expenseMonthlyUah(e, rates) ?? 0), 0),
-    [fixed, rates]
+    () => fixed.reduce((sum, e) => sum + (monthlyForSelected(e) ?? 0), 0),
+    [fixed, monthlyForSelected]
   );
 
   // Дві різні природи витрат в одному блоці читались як каша: підписка на Dropbox
@@ -256,27 +644,46 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   }, [fixed]);
 
   const sumMonthly = React.useCallback(
-    (list: FinanceExpense[]) => list.reduce((sum, e) => sum + (expenseMonthlyUah(e, rates) ?? 0), 0),
-    [rates]
+    (list: FinanceExpense[]) => list.reduce((sum, e) => sum + (monthlyForSelected(e) ?? 0), 0),
+    [monthlyForSelected]
   );
   const servicesBaseline = React.useMemo(() => sumMonthly(services), [services, sumMonthly]);
   const otherBaseline = React.useMemo(() => sumMonthly(recurringOther), [recurringOther, sumMonthly]);
 
-  // Скільки з місячної бази — це не-щомісячні підписки (річні/квартальні).
+  // «Інші регулярні» під-групуємо за обʼєктом/адресою: оренда+комуналка+інтернет
+  // одного офісу разом, з підсумком. Без обʼєкта — окремим блоком у кінці.
+  const otherByObject = React.useMemo(() => {
+    const byLabel = new Map<string, FinanceExpense[]>();
+    const untagged: FinanceExpense[] = [];
+    for (const e of recurringOther) {
+      const label = e.objectGroup?.trim();
+      if (label) {
+        const list = byLabel.get(label);
+        if (list) list.push(e);
+        else byLabel.set(label, [e]);
+      } else {
+        untagged.push(e);
+      }
+    }
+    const named = Array.from(byLabel.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], "uk"))
+      .map(([label, items]) => ({ label, items, total: sumMonthly(items) }));
+    return untagged.length > 0
+      ? [...named, { label: null, items: untagged, total: sumMonthly(untagged) }]
+      : named;
+  }, [recurringOther, sumMonthly]);
+
+  // Скільки з місячної бази — це не-щомісячні підписки (квартальні/піврічні/річні).
   const spreadBaseline = React.useMemo(
     () => sumMonthly(fixed.filter((e) => billingPeriodOf(e) !== "monthly")),
     [fixed, sumMonthly]
   );
 
   const missingRateCount = React.useMemo(
-    () => fixed.filter((e) => expenseMonthlyUah(e, rates) === null).length,
-    [fixed, rates]
+    () => fixed.filter((e) => monthlyForSelected(e) === null).length,
+    [fixed, monthlyForSelected]
   );
 
-  // Month-focused view: one month at a time so the page never becomes an endless
-  // scroll as data accumulates. The overview strip handles cross-month navigation.
-  const currentKey = React.useMemo(() => todayISO().slice(0, 7), []);
-  const [selectedMonth, setSelectedMonth] = React.useState(currentKey);
   const [fixedOpen, setFixedOpen] = React.useState(true);
 
   // Variable expenses bucketed by month key («YYYY-MM»; «» = no date).
@@ -323,6 +730,126 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       toast.error("Не вдалося видалити витрату", { description: getErrorMessage(error, "Спробуйте ще раз.") });
     }
   };
+
+  // Які журнали розгорнуті (за expenseId).
+  const [openJournals, setOpenJournals] = React.useState<Set<string>>(() => new Set());
+  const toggleJournal = React.useCallback((expenseId: string) => {
+    setOpenJournals((prev) => {
+      const next = new Set(prev);
+      if (next.has(expenseId)) next.delete(expenseId);
+      else next.add(expenseId);
+      return next;
+    });
+  }, []);
+
+  // Для яких витрат зараз триває запис у журнал (блокує кнопки, щоб не дублювати).
+  const [busyExpenses, setBusyExpenses] = React.useState<Set<string>>(() => new Set());
+  const setExpenseBusy = React.useCallback((expenseId: string, on: boolean) => {
+    setBusyExpenses((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(expenseId);
+      else next.delete(expenseId);
+      return next;
+    });
+  }, []);
+
+  // Додати запис журналу. Реальний рядок (з id) приходить із сервера й лягає в стан.
+  const addEntry = React.useCallback(
+    async (expenseId: string, values: { entryDate: string; amount: number; note: string }) => {
+      if (!teamId) return;
+      setExpenseBusy(expenseId, true);
+      try {
+        const created = await createExpenseEntry(teamId, {
+          expenseId,
+          entryDate: values.entryDate,
+          amount: values.amount,
+          note: values.note || null,
+          enteredBy: userId,
+        });
+        setEntriesByExpense((prev) => {
+          const next = new Map(prev);
+          next.set(expenseId, [created, ...(next.get(expenseId) ?? [])]);
+          return next;
+        });
+        toast.success(`Додано за ${formatDate(values.entryDate)}`);
+      } catch (error) {
+        toast.error("Не вдалося додати запис", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+      } finally {
+        setExpenseBusy(expenseId, false);
+      }
+    },
+    [teamId, userId, setExpenseBusy]
+  );
+
+  // Оновити запис (оптимістично; на помилці відкочуємо до попереднього списку).
+  const updateEntry = React.useCallback(
+    async (expenseId: string, entryId: string, values: { entryDate: string; amount: number; note: string }) => {
+      if (!teamId) return;
+      const prevList = entriesByExpense.get(expenseId) ?? [];
+      setEntriesByExpense((prev) => {
+        const next = new Map(prev);
+        next.set(
+          expenseId,
+          (next.get(expenseId) ?? []).map((en) =>
+            en.id === entryId
+              ? { ...en, entryDate: values.entryDate, amount: values.amount, note: values.note || null }
+              : en
+          )
+        );
+        return next;
+      });
+      setExpenseBusy(expenseId, true);
+      try {
+        await updateExpenseEntry(teamId, entryId, {
+          entryDate: values.entryDate,
+          amount: values.amount,
+          note: values.note || null,
+        });
+        toast.success("Запис оновлено");
+      } catch (error) {
+        toast.error("Не вдалося оновити запис", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+        setEntriesByExpense((prev) => {
+          const next = new Map(prev);
+          next.set(expenseId, prevList);
+          return next;
+        });
+      } finally {
+        setExpenseBusy(expenseId, false);
+      }
+    },
+    [teamId, entriesByExpense, setExpenseBusy]
+  );
+
+  // Видалити запис (оптимістично; на помилці відкочуємо).
+  const deleteEntry = React.useCallback(
+    async (expenseId: string, entryId: string) => {
+      if (!teamId) return;
+      const prevList = entriesByExpense.get(expenseId) ?? [];
+      setEntriesByExpense((prev) => {
+        const next = new Map(prev);
+        next.set(
+          expenseId,
+          (next.get(expenseId) ?? []).filter((en) => en.id !== entryId)
+        );
+        return next;
+      });
+      setExpenseBusy(expenseId, true);
+      try {
+        await deleteExpenseEntry(teamId, entryId);
+        toast.success("Запис видалено");
+      } catch (error) {
+        toast.error("Не вдалося видалити запис", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+        setEntriesByExpense((prev) => {
+          const next = new Map(prev);
+          next.set(expenseId, prevList);
+          return next;
+        });
+      } finally {
+        setExpenseBusy(expenseId, false);
+      }
+    },
+    [teamId, entriesByExpense, setExpenseBusy]
+  );
 
   const rowActions = (expense: FinanceExpense) => (
     <div className="flex shrink-0 items-center gap-1.5">
@@ -393,60 +920,106 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     // беремо бренд, далі статтю витрат, і тільки в найгіршому разі — «Без назви».
     const title = expense.supplierName?.trim() || brand?.label || category?.name || "Без назви";
     const logo = resolveSubscriptionLogo(expense);
-    const monthly = expenseMonthlyUah(expense, rates);
+    const monthly = monthlyForSelected(expense);
     const overdue = expense.nextChargeDate ? daysUntil(expense.nextChargeDate) < 0 : false;
+    const monthEntries = expense.amountVaries ? entriesForMonth(expense.id, selectedMonth) : [];
+    const hasEntries = monthEntries.length > 0;
+    const journalOpen = openJournals.has(expense.id);
 
     return (
-      <div
-        key={expense.id}
-        className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <SubscriptionLogo
-            logoUrl={logo}
-            name={title}
-            categoryName={category?.name}
-            categoryKind={category?.kind}
-            size={36}
-          />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="truncate text-sm font-semibold text-foreground">{title}</span>
-              <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
-                {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
-                {BILLING_PERIOD_LABELS[period]}
-              </Badge>
-              {category ? (
-                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                  {category.name}
+      <div key={expense.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <SubscriptionLogo
+              logoUrl={logo}
+              name={title}
+              categoryName={category?.name}
+              categoryKind={category?.kind}
+              size={36}
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+                <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+                  {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
+                  {BILLING_PERIOD_LABELS[period]}
                 </Badge>
-              ) : null}
-            </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/80">
-                {nativeAmountLabel(expense)} / {period === "monthly" ? "міс" : period === "quarterly" ? "квартал" : "рік"}
-              </span>
-              {expense.nextChargeDate ? (
-                <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive")}>
-                  <CalendarClock className="h-3 w-3" />
-                  {formatDate(expense.nextChargeDate)} · {chargeCountdown(expense.nextChargeDate)}
-                </span>
-              ) : null}
-              {account ? <span>{account.name}</span> : null}
+                {expense.amountVaries ? (
+                  <Badge variant="outline" className="gap-1 border-info/40 bg-info/10 text-[10px] text-info-foreground">
+                    журнал по датах
+                  </Badge>
+                ) : null}
+                {category ? (
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    {category.name}
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                {expense.amountVaries ? (
+                  <span className="font-medium text-foreground/80">по факту — записуй кожну дату</span>
+                ) : (
+                  <span className="font-medium text-foreground/80">
+                    {nativeAmountLabel(expense)} / {PERIOD_UNIT_SHORT[period]}
+                  </span>
+                )}
+                {!expense.amountVaries && expense.nextChargeDate ? (
+                  <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive")}>
+                    <CalendarClock className="h-3 w-3" />
+                    {formatDate(expense.nextChargeDate)} · {chargeCountdown(expense.nextChargeDate)}
+                  </span>
+                ) : null}
+                {account ? <span>{account.name}</span> : null}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="text-right">
-            <div className="text-sm font-semibold tabular-nums text-foreground">
-              {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              {monthly === null ? "курс невідомий" : "на місяць"}
-            </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {expense.amountVaries ? (
+              <button
+                type="button"
+                onClick={() => toggleJournal(expense.id)}
+                aria-expanded={journalOpen}
+                className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted/50"
+              >
+                <div className="text-right">
+                  <div className="text-sm font-semibold tabular-nums text-foreground">
+                    {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {hasEntries ? `${monthEntries.length} ${pluralEntries(monthEntries.length)} · факт` : "орієнтир — додай"}
+                  </div>
+                </div>
+                <ChevronDown
+                  className={cn("h-4 w-4 text-muted-foreground transition-transform", journalOpen && "rotate-180")}
+                />
+              </button>
+            ) : (
+              <div className="text-right">
+                <div className="text-sm font-semibold tabular-nums text-foreground">
+                  {monthly === null ? "—" : formatOrderMoney(monthly, "UAH")}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {monthly === null ? "курс невідомий" : "на місяць"}
+                </div>
+              </div>
+            )}
+            {rowActions(expense)}
           </div>
-          {rowActions(expense)}
         </div>
+        {expense.amountVaries && journalOpen ? (
+          <ExpenseJournalPanel
+            monthKey={selectedMonth}
+            monthText={monthLabel(selectedMonth)}
+            currentKey={currentKey}
+            currency={expense.currency}
+            rates={rates}
+            entries={monthEntries}
+            busy={busyExpenses.has(expense.id)}
+            onAdd={(values) => void addEntry(expense.id, values)}
+            onUpdate={(entryId, values) => void updateEntry(expense.id, entryId, values)}
+            onDelete={(entryId) => void deleteEntry(expense.id, entryId)}
+          />
+        ) : null}
       </div>
     );
   };
@@ -544,7 +1117,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   </Badge>
                   {spreadBaseline > 0 ? (
                     <span className="text-[10px] font-normal normal-case text-muted-foreground">
-                      з них {formatOrderMoney(spreadBaseline, "UAH")} — річні/квартальні, розбиті на місяці
+                      з них {formatOrderMoney(spreadBaseline, "UAH")} — неодномісячні, розбиті на місяці
                     </span>
                   ) : null}
                   {missingRateCount > 0 ? (
@@ -578,6 +1151,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                     count={recurringOther.length}
                     total={otherBaseline}
                     items={recurringOther}
+                    subGroups={otherByObject}
                     renderItem={renderSubscriptionRow}
                   />
                 </div>
@@ -613,6 +1187,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 
       {dialogOpen ? (
         <ExpenseDialog
+          // key прив'язує інстанс до конкретної витрати: кожне відкриття (нова / інша
+          // витрата) дає свіжий стан замість залишків попереднього редагування.
+          key={editing ? editing.id : "new"}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           teamId={teamId}
@@ -623,6 +1200,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           entities={entities}
           orders={orders}
           ordersLoading={ordersLoading}
+          objectSuggestions={objectSuggestions}
           onSaved={reload}
         />
       ) : null}
@@ -634,6 +1212,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 // Порожню групу не малюємо — краще менше рамок, ніж «0 позицій».
 // Згортається окремо від сусідньої: у згорнутому вигляді лишається головне —
 // скільки позицій і скільки це на місяць. Вибір запам'ятовується між сесіями.
+type ObjectSubGroup = { label: string | null; items: FinanceExpense[]; total: number };
+
 function ExpenseGroup({
   storageKey,
   icon: Icon,
@@ -641,6 +1221,7 @@ function ExpenseGroup({
   count,
   total,
   items,
+  subGroups,
   renderItem,
 }: {
   storageKey: string;
@@ -649,6 +1230,8 @@ function ExpenseGroup({
   count: number;
   total: number;
   items: FinanceExpense[];
+  /** Якщо задано — рядки під-групуються за обʼєктом/адресою (з підсумком кожного). */
+  subGroups?: ObjectSubGroup[];
   renderItem: (expense: FinanceExpense) => React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(() => readGroupOpen(storageKey));
@@ -666,6 +1249,8 @@ function ExpenseGroup({
   };
 
   if (count === 0) return null;
+  // Групуємо за обʼєктом лише коли є хоч один названий обʼєкт — інакше плаский список.
+  const useSubGroups = Boolean(subGroups && subGroups.some((g) => g.label));
   return (
     <section>
       <button
@@ -684,7 +1269,30 @@ function ExpenseGroup({
           {formatOrderMoney(total, "UAH")} / міс
         </span>
       </button>
-      {open ? <div className="grid gap-2">{items.map(renderItem)}</div> : null}
+      {open ? (
+        useSubGroups && subGroups ? (
+          <div className="space-y-3">
+            {subGroups.map((g) => (
+              <div key={g.label ?? "__none"} className={cn(g.label && "rounded-xl border border-border/50 p-2")}>
+                {g.label ? (
+                  <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                      {g.label}
+                    </span>
+                    <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
+                      {formatOrderMoney(g.total, "UAH")} / міс
+                    </span>
+                  </div>
+                ) : null}
+                <div className="grid gap-2">{g.items.map(renderItem)}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-2">{items.map(renderItem)}</div>
+        )
+      ) : null}
     </section>
   );
 }
@@ -740,11 +1348,121 @@ type AllocRow = { quoteId: string; amount: string };
 // бо від нього залежить і набір полів, і група, в якій витрата опиниться в списку.
 type ExpenseFormKind = "one_off" | "service" | "recurring";
 
-const EXPENSE_KIND_OPTIONS: { value: ExpenseFormKind; label: string; hint: string }[] = [
-  { value: "one_off", label: "Разова", hint: "Купівля під замовлення" },
-  { value: "service", label: "Сервіс", hint: "Dropbox, Adobe, Supabase…" },
-  { value: "recurring", label: "Регулярний платіж", hint: "Оренда, комуналка, прибирання" },
+const EXPENSE_KIND_OPTIONS: {
+  value: ExpenseFormKind;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+}[] = [
+  { value: "one_off", label: "Разова", hint: "Купівля, матеріали, під замовлення", icon: Receipt },
+  { value: "service", label: "Сервіс", hint: "Dropbox, Adobe, Supabase…", icon: Cloud },
+  { value: "recurring", label: "Регулярний платіж", hint: "Оренда, комуналка, прибирання", icon: RefreshCw },
 ];
+
+// Один рядок батч-вводу регулярних платежів.
+type RecurRow = {
+  id: string;
+  categoryId: string; // існуюча стаття, або "" якщо нова
+  categoryName: string; // підпис існуючої / назва нової (створимо при збереженні)
+  name: string;
+  amount: string;
+  currency: FxCurrency;
+  period: BillingPeriod;
+  amountVaries: boolean; // сума змінна (комуналка) — факт вводиться по місяцях
+};
+
+// Вибір «виду» (статті) з можливістю вписати нову — combobox поверх Command.
+function CategoryPicker({
+  categories,
+  categoryId,
+  categoryName,
+  onChange,
+}: {
+  categories: FinanceExpenseCategory[];
+  categoryId: string;
+  categoryName: string;
+  onChange: (next: { categoryId: string; categoryName: string }) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const q = query.trim();
+  const filtered = React.useMemo(
+    () => (q ? categories.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())) : categories),
+    [categories, q]
+  );
+  const exactExists = categories.some((c) => c.name.trim().toLowerCase() === q.toLowerCase());
+
+  // Іконка обраного виду: за наявною статтею, інакше — здогадка за введеною назвою.
+  const selected = categories.find((c) => c.id === categoryId) ?? null;
+  const TriggerIcon = categoryName
+    ? getExpenseCategoryIcon(selected?.name ?? categoryName, selected?.kind ?? "fixed")
+    : null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn("h-10 w-full justify-between px-3 font-normal", !categoryName && "text-muted-foreground")}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            {TriggerIcon
+              ? React.createElement(TriggerIcon, { className: "h-4 w-4 shrink-0 text-muted-foreground" })
+              : null}
+            <span className="truncate">{categoryName || "Вид витрати"}</span>
+          </span>
+          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] min-w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Пошук або нова стаття…" value={query} onValueChange={setQuery} />
+          <CommandList>
+            {filtered.length === 0 && !q ? <CommandEmpty>Немає статей</CommandEmpty> : null}
+            <CommandGroup>
+              {filtered.map((c) => {
+                const Icon = getExpenseCategoryIcon(c.name, c.kind);
+                return (
+                  <CommandItem
+                    key={c.id}
+                    value={c.name}
+                    onSelect={() => {
+                      onChange({ categoryId: c.id, categoryName: c.name });
+                      setQuery("");
+                      setOpen(false);
+                    }}
+                  >
+                    <Icon className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{c.name}</span>
+                    <Check
+                      className={cn("ml-auto h-4 w-4 shrink-0", categoryId === c.id ? "opacity-100" : "opacity-0")}
+                    />
+                  </CommandItem>
+                );
+              })}
+              {q && !exactExists ? (
+                <CommandItem
+                  value={`__create_${q}`}
+                  onSelect={() => {
+                    onChange({ categoryId: "", categoryName: q });
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Створити «{q}»
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function ExpenseDialog({
   open,
@@ -757,6 +1475,7 @@ function ExpenseDialog({
   entities,
   orders,
   ordersLoading,
+  objectSuggestions,
   onSaved,
 }: {
   open: boolean;
@@ -769,6 +1488,7 @@ function ExpenseDialog({
   entities: FinanceLegalEntity[];
   orders: FinanceOrderRef[];
   ordersLoading: boolean;
+  objectSuggestions: string[];
   onSaved: () => Promise<void> | void;
 }) {
   const rates = useFxRates();
@@ -788,6 +1508,8 @@ function ExpenseDialog({
   const [billingPeriod, setBillingPeriod] = React.useState<BillingPeriod>(
     editing ? billingPeriodOf(editing) : "monthly"
   );
+  const [amountVaries, setAmountVaries] = React.useState(editing?.amountVaries ?? false);
+  const [objectGroup, setObjectGroup] = React.useState(editing?.objectGroup ?? "");
   const [nextChargeDate, setNextChargeDate] = React.useState(editing?.nextChargeDate ?? "");
   const [notes, setNotes] = React.useState(editing?.notes ?? "");
   const [allocations, setAllocations] = React.useState<AllocRow[]>(
@@ -795,8 +1517,38 @@ function ExpenseDialog({
   );
   const [saving, setSaving] = React.useState(false);
 
-  const amountNum = Number(amount.replace(",", ".")) || 0;
-  const allocatedNum = allocations.reduce((sum, a) => sum + (Number(a.amount.replace(",", ".")) || 0), 0);
+  // Батч-режим — лише при СТВОРЕННІ регулярних платежів. Редагування завжди одиночне.
+  const batchMode = !editing && expenseKind === "recurring";
+  const rowIdRef = React.useRef(0);
+  const makeRow = React.useCallback(
+    (): RecurRow => ({
+      id: String(++rowIdRef.current),
+      categoryId: "",
+      categoryName: "",
+      name: "",
+      amount: "",
+      currency: "UAH",
+      period: "monthly",
+      amountVaries: false,
+    }),
+    []
+  );
+  const [recurRows, setRecurRows] = React.useState<RecurRow[]>(() => [makeRow()]);
+  const updateRow = (id: string, patch: Partial<RecurRow>) =>
+    setRecurRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const addRow = () => setRecurRows((prev) => [...prev, makeRow()]);
+  const removeRow = (id: string) =>
+    setRecurRows((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.id !== id)));
+
+  const rowMonthlyUah = (r: RecurRow) => {
+    const uah = convertToUah(amountNumber(r.amount), r.currency, rates);
+    return uah === null ? 0 : uah / BILLING_PERIOD_MONTHS[r.period];
+  };
+  const batchMonthlyTotal = recurRows.reduce((sum, r) => sum + rowMonthlyUah(r), 0);
+  const batchValidCount = recurRows.filter((r) => amountNumber(r.amount) > 0).length;
+
+  const amountNum = amountNumber(amount);
+  const allocatedNum = allocations.reduce((sum, a) => sum + amountNumber(a.amount), 0);
   const remaining = Math.round((amountNum - allocatedNum) * 100) / 100;
 
   const uahValue = convertToUah(amountNum, currency, rates);
@@ -826,20 +1578,37 @@ function ExpenseDialog({
   const removeAllocation = (index: number) =>
     setAllocations((prev) => prev.filter((_, i) => i !== index));
 
+  // Змінна сума (комуналка) при створенні — сума в формі необовʼязкова (орієнтир),
+  // факт вводиться по місяцях у списку.
+  const varyingRecurring = isRecurring && amountVaries;
+
   const submit = async () => {
     if (!teamId) return;
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    // Введена, але «нечислова» сума (напр. зайвий символ у «6'238,20») — не мовчимо: явний тост.
+    if (amount.trim() && parseAmountInput(amount) === null) {
+      toast.error("Перевірте суму", {
+        description: `«${amount.trim()}» — не схоже на число. Приклад: 6238,20`,
+      });
+      return;
+    }
+    if (!varyingRecurring && (!Number.isFinite(amountNum) || amountNum <= 0)) {
       toast.error("Вкажіть коректну суму витрати.");
       return;
     }
-    if (allocatedNum - amountNum > 0.005) {
+    // Розподіл на замовлення існує лише для разових. Гейтимо і валідацію, і payload
+    // за типом — інакше приховані алокації (лишені після перемикання типу) поїхали б
+    // у сервіс/підписку й тихо зіпсували маржу.
+    const useAllocations = expenseKind === "one_off";
+    if (useAllocations && allocatedNum - amountNum > 0.005) {
       toast.error("Розподілено більше, ніж сума витрати.");
       return;
     }
-    const allocInput: ExpenseAllocationInput[] = allocations
-      .filter((a) => a.quoteId)
-      .map((a) => ({ quoteId: a.quoteId, amount: Number(a.amount.replace(",", ".")) || 0 }))
-      .filter((a) => a.amount > 0);
+    const allocInput: ExpenseAllocationInput[] = useAllocations
+      ? allocations
+          .filter((a) => a.quoteId)
+          .map((a) => ({ quoteId: a.quoteId, amount: amountNumber(a.amount) }))
+          .filter((a) => a.amount > 0)
+      : [];
 
     const input: ExpenseInput = {
       categoryId: categoryId || null,
@@ -858,6 +1627,8 @@ function ExpenseDialog({
       legalEntityId: legalEntityId || null,
       isRecurring,
       recurrence: isRecurring ? billingPeriod : null,
+      amountVaries: varyingRecurring,
+      objectGroup: isRecurring ? objectGroup || null : null,
       nextChargeDate: isRecurring ? nextChargeDate || null : null,
       notes,
       enteredBy: userId,
@@ -866,8 +1637,13 @@ function ExpenseDialog({
 
     setSaving(true);
     try {
-      if (editing) await updateExpense(teamId, editing.id, input);
-      else await createExpense(teamId, input);
+      if (editing) {
+        await updateExpense(teamId, editing.id, input);
+      } else {
+        // Змінна сума: тут вписують лише ОРІЄНТИР (amount). Фактичні датовані записи
+        // додаються потім у списку через журнал — тому нічого не сідаємо на старті.
+        await createExpense(teamId, input);
+      }
       onOpenChange(false);
       await onSaved();
       toast.success(editing ? "Витрату оновлено" : "Витрату додано");
@@ -878,182 +1654,498 @@ function ExpenseDialog({
     }
   };
 
+  // Батч-збереження регулярних платежів: нові статті створюємо один раз (дедуп за назвою).
+  const submitBatch = async () => {
+    if (!teamId) return;
+    const hasAmount = (r: RecurRow) => amountNumber(r.amount) > 0;
+    const isTouched = (r: RecurRow) =>
+      Boolean(r.amount.trim() || r.name.trim() || r.categoryId || r.categoryName.trim());
+
+    // Заповнений рядок без суми — найчастіша причина «зникнення» платежу: раніше він
+    // тихо відсіювався. Тепер блокуємо збереження й прямо кажемо, який рядок доповнити.
+    // Виняток — «сума змінна» (комуналка): для неї сума на старті необовʼязкова.
+    const touched = recurRows.filter(isTouched);
+    // Введена, але «нечислова» сума (зайвий символ) — окремий, зрозумілий тост,
+    // щоб не плутати з «забули вписати суму».
+    const badAmount = touched.find((r) => r.amount.trim() && parseAmountInput(r.amount) === null);
+    if (badAmount) {
+      toast.error("Перевірте суму", {
+        description: `«${badAmount.amount.trim()}» — не схоже на число. Приклад: 6238,20`,
+      });
+      return;
+    }
+    const missingAmount = touched.filter((r) => !r.amountVaries && !hasAmount(r));
+    if (missingAmount.length > 0) {
+      toast.error("Вкажіть суму для кожного платежу", {
+        description: "Рядок без суми не збережеться. Додайте суму або приберіть зайвий рядок.",
+      });
+      return;
+    }
+    const rows = touched; // усі заповнені мають суму
+    if (rows.length === 0) {
+      toast.error("Додайте хоча б один платіж із сумою.");
+      return;
+    }
+
+    setSaving(true);
+    // Вставляємо по одному (немає bulk-RPC), кожен у власному try — збій одного рядка
+    // не «з'їдає» решту. Успішні знімаємо зі списку, щоб повтор не дублював.
+    const savedIds: string[] = [];
+    let firstError: unknown = null;
+    try {
+      const nameToId = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id]));
+      const resolveCategory = async (r: RecurRow): Promise<string | null> => {
+        if (r.categoryId) return r.categoryId;
+        const nm = r.categoryName.trim();
+        if (!nm) return null;
+        const existing = nameToId.get(nm.toLowerCase());
+        if (existing) return existing;
+        const created = await createExpenseCategory(teamId, { name: nm, kind: "fixed" });
+        nameToId.set(nm.toLowerCase(), created.id);
+        return created.id;
+      };
+      for (const r of rows) {
+        try {
+          const catId = await resolveCategory(r);
+          const rowAmount = amountNumber(r.amount);
+          await createExpense(teamId, {
+            categoryId: catId,
+            amount: rowAmount,
+            currency: r.currency,
+            fxRate: null,
+            supplierName: r.name,
+            vendorKey: null,
+            logoUrl: null,
+            expenseDate,
+            accountId: accountId || null,
+            legalEntityId: legalEntityId || null,
+            isRecurring: true,
+            recurrence: r.period,
+            amountVaries: r.amountVaries,
+            objectGroup: objectGroup || null,
+            nextChargeDate: null,
+            notes: null,
+            enteredBy: userId,
+            allocations: [],
+          });
+          // Змінна сума: rowAmount — лише орієнтир. Фактичні датовані записи
+          // додаються згодом у списку (журнал), тож нічого не сідаємо тут.
+          savedIds.push(r.id);
+        } catch (rowError) {
+          if (firstError === null) firstError = rowError;
+        }
+      }
+
+      if (firstError === null) {
+        onOpenChange(false);
+        await onSaved();
+        toast.success(`Додано платежів: ${rows.length}`);
+      } else {
+        // Частину збережено: приберемо успішні рядки, лишимо проблемні для повтору.
+        if (savedIds.length > 0) setRecurRows((prev) => prev.filter((r) => !savedIds.includes(r.id)));
+        await onSaved();
+        toast.error(
+          savedIds.length > 0
+            ? `Збережено ${savedIds.length}, не вдалося ${rows.length - savedIds.length}`
+            : "Не вдалося зберегти платежі",
+          { description: getErrorMessage(firstError, "Спробуйте ще раз.") }
+        );
+      }
+    } catch (error) {
+      toast.error("Не вдалося зберегти платежі", { description: getErrorMessage(error, "Спробуйте ще раз.") });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
+      {/* Каркас фіксованої висоти (шапка / скрол-тіло / футер): висота стала для всіх
+          типів — перемикання Разова/Сервіс/Регулярний не смикає вікно. Довший вміст
+          (сервіс, багато платежів) скролить усередині тіла. */}
+      <DialogContent className="h-[640px] max-h-[calc(100dvh-2rem)] gap-0 p-0 sm:max-w-[720px] sm:gap-0 sm:p-0">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 pb-4 pt-5">
           <DialogTitle>{editing ? "Редагувати витрату" : "Нова витрата"}</DialogTitle>
-          <DialogDescription>
-            {expenseKind === "service"
-              ? "Підписка на зовнішній сервіс. Річна оплата розіб'ється по місяцях."
-              : expenseKind === "recurring"
-                ? "Платіж, який повторюється щомісяця чи щороку: оренда, комуналка, прибирання."
-                : "Разова витрата. Її можна розподілити між замовленнями для коректної маржі."}
+          <DialogDescription className="min-h-[20px]">
+            {batchMode
+              ? "Кілька регулярних платежів одразу: оренда, комуналка, інтернет…"
+              : expenseKind === "service"
+                ? "Підписка на зовнішній сервіс. Річна оплата розіб'ється по місяцях."
+                : expenseKind === "recurring"
+                  ? "Регулярний платіж: оренда, комуналка, прибирання."
+                  : "Разова витрата. Її можна розподілити між замовленнями для коректної маржі."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {/* Підказки наявних обʼєктів для полів «Обʼєкт / адреса». */}
+          <datalist id="expense-object-options">
+            {objectSuggestions.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
           {/* Тип витрати задає і поля форми, і групу в списку — тому він перший і явний. */}
-          <div
-            role="radiogroup"
-            aria-label="Тип витрати"
-            className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/20 p-1"
-          >
+          <div role="radiogroup" aria-label="Тип витрати" className="grid gap-2 sm:grid-cols-3">
             {EXPENSE_KIND_OPTIONS.map((option) => {
               const active = expenseKind === option.value;
+              const Icon = option.icon;
               return (
                 <button
                   key={option.value}
                   type="button"
                   role="radio"
                   aria-checked={active}
-                  title={option.hint}
                   onClick={() => setExpenseKind(option.value)}
                   className={cn(
-                    "cursor-pointer rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
+                    "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition-colors",
                     active
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
+                      ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border/60 hover:border-border hover:bg-muted/40"
                   )}
                 >
-                  {option.label}
+                  <div
+                    className={cn(
+                      "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                      active
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border/60 bg-muted/30 text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className={cn("text-sm font-semibold", active ? "text-foreground" : "text-foreground/90")}>
+                      {option.label}
+                    </div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">{option.hint}</div>
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Сума <span className="text-destructive">*</span></Label>
-              <div className="flex gap-2">
-                <Input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  className="h-9"
-                />
-                <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)}>
-                  <SelectTrigger className="h-9 w-[86px] shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UAH">₴ грн</SelectItem>
-                    <SelectItem value="USD">$ USD</SelectItem>
-                    <SelectItem value="EUR">€ EUR</SelectItem>
-                  </SelectContent>
-                </Select>
+          {batchMode ? (
+            /* ── Батч регулярних платежів: список рядків + спільні поля ── */
+            <div className="mt-5 space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Платежі
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {batchValidCount > 0 ? `${batchValidCount} із сумою` : "додайте суми"}
+                  </span>
+                </div>
+
+                {/* Кожен платіж — простора картка 2×2: Вид | Назва (пів-картки) зверху,
+                    Сума | Періодичність знизу. Колонки вирівняні, нічого не тісниться. */}
+                <div className="space-y-2.5">
+                  {recurRows.map((row) => (
+                    <div key={row.id} className="space-y-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        <div className="grid gap-1.5">
+                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                            Вид
+                          </Label>
+                          <CategoryPicker
+                            categories={categories}
+                            categoryId={row.categoryId}
+                            categoryName={row.categoryName}
+                            onChange={(next) => updateRow(row.id, next)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                              Назва
+                            </Label>
+                            {recurRows.length > 1 ? (
+                              <button
+                                type="button"
+                                aria-label="Видалити платіж"
+                                onClick={() => removeRow(row.id)}
+                                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> прибрати
+                              </button>
+                            ) : null}
+                          </div>
+                          <Input
+                            value={row.name}
+                            onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                            placeholder="Напр. Богданівська, Київстар…"
+                            aria-label="Назва платежу"
+                            className="h-10"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        <div className="grid gap-1.5">
+                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                            {row.amountVaries ? "Орієнтир" : "Сума"}
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              value={row.amount}
+                              onChange={(e) => updateRow(row.id, { amount: e.target.value })}
+                              inputMode="decimal"
+                              placeholder={row.amountVaries ? "необов'язково" : "0.00"}
+                              aria-label="Сума"
+                              className="h-10 min-w-0 flex-1 tabular-nums"
+                            />
+                            <Select
+                              value={row.currency}
+                              onValueChange={(v) => updateRow(row.id, { currency: v as FxCurrency })}
+                            >
+                              <SelectTrigger className="h-10 w-[64px] shrink-0 px-2.5" aria-label="Валюта">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="UAH">₴</SelectItem>
+                                <SelectItem value="USD">$</SelectItem>
+                                <SelectItem value="EUR">€</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                            Періодичність
+                          </Label>
+                          <Select
+                            value={row.period}
+                            onValueChange={(v) => updateRow(row.id, { period: v as BillingPeriod })}
+                          >
+                            <SelectTrigger className="h-10" aria-label="Періодичність">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {BILLING_PERIOD_ORDER.map((p) => (
+                                <SelectItem key={p} value={p}>
+                                  {BILLING_PERIOD_LABELS[p]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={row.amountVaries}
+                          onCheckedChange={(v) => updateRow(row.id, { amountVaries: v === true })}
+                        />
+                        Сума змінна — журнал по датах (прибирання, комуналка)
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                <Button type="button" variant="outline" size="sm" className="mt-2 h-9 gap-1.5" onClick={addRow}>
+                  <Plus className="h-4 w-4" /> Додати платіж
+                </Button>
               </div>
-              {currency !== "UAH" ? (
-                <p className="text-[11px] text-muted-foreground">
-                  {currentRate
-                    ? `≈ ${formatOrderMoney(uahValue ?? 0, "UAH")} за курсом ${currentRate.toFixed(2)}`
-                    : "Курс ще не завантажився — гривневий еквівалент з'явиться пізніше."}
-                </p>
-              ) : null}
+
+              {/* Спільні поля — застосуються до всіх платежів у списку */}
+              <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Спільне для всіх
+                </div>
+                <div className="mb-3 grid gap-2">
+                  <Label>Обʼєкт / адреса</Label>
+                  <Input
+                    value={objectGroup}
+                    onChange={(e) => setObjectGroup(e.target.value)}
+                    list="expense-object-options"
+                    placeholder="Напр. Богданівська 7 — згрупує оренду, комуналку, інтернет цього офісу"
+                    className="h-10"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label>Спосіб оплати</Label>
+                    <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Не вказано" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Не вказано</SelectItem>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Юрособа</Label>
+                    <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Не вказано" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Не вказано</SelectItem>
+                        {entities.map((entity) => (
+                          <SelectItem key={entity.id} value={entity.id}>
+                            {formatLegalEntityLabel(entity)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Дата початку</Label>
+                    <Input
+                      type="date"
+                      value={expenseDate}
+                      onChange={(e) => setExpenseDate(e.target.value)}
+                      className="h-10"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label>Дата</Label>
-              <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-9" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Стаття витрат</Label>
-              <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Без статті" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Без статті</SelectItem>
-                  {categories.map((category) => {
-                    const Icon = getExpenseCategoryIcon(category.name, category.kind);
-                    return (
-                      <SelectItem key={category.id} value={category.id}>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                          {category.name} · {EXPENSE_CATEGORY_KIND_LABELS[category.kind]}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>{expenseKind === "service" ? "Сервіс" : "Постачальник"}</Label>
-              <Input
-                value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                placeholder={expenseKind === "service" ? "Dropbox або dropbox.com" : "Назва постачальника"}
-                className="h-9"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Каса / рахунок</Label>
-              <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Не вказано" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Не вказано</SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Юрособа</Label>
-              <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Не вказано" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Не вказано</SelectItem>
-                  {entities.map((entity) => (
-                    <SelectItem key={entity.id} value={entity.id}>
-                      {formatLegalEntityLabel(entity)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {isRecurring ? (
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label>Періодичність</Label>
-                  <Select value={billingPeriod} onValueChange={(v) => setBillingPeriod(v as BillingPeriod)}>
-                    <SelectTrigger className="h-9">
+          ) : (
+            /* ── Одиночна витрата (разова / сервіс / редагування) ──
+               Один grid: повноширинні блоки — sm:col-span-2, тож рядки завжди вирівняні. */
+            <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>
+                  {varyingRecurring ? "Орієнтовна сума" : "Сума"}
+                  {varyingRecurring ? null : <span className="text-destructive"> *</span>}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    autoFocus={!editing}
+                    className="h-10 text-base font-semibold tabular-nums"
+                  />
+                  <Select value={currency} onValueChange={(v) => setCurrency(v as FxCurrency)}>
+                    <SelectTrigger className="h-10 w-[92px] shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="monthly">{BILLING_PERIOD_LABELS.monthly}</SelectItem>
-                      <SelectItem value="quarterly">{BILLING_PERIOD_LABELS.quarterly}</SelectItem>
-                      <SelectItem value="yearly">{BILLING_PERIOD_LABELS.yearly}</SelectItem>
+                      <SelectItem value="UAH">₴ грн</SelectItem>
+                      <SelectItem value="USD">$ USD</SelectItem>
+                      <SelectItem value="EUR">€ EUR</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Наступне списання</Label>
+              </div>
+              <div className="grid gap-2">
+                <Label>{varyingRecurring ? "Веду облік з" : isRecurring ? "Дата початку" : "Дата оплати"}</Label>
+                <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-10" />
+              </div>
+
+              {/* FX — на всю ширину, тому наступні рядки не зсуваються */}
+              <p className="-mt-2 min-h-[16px] text-[11px] leading-4 text-muted-foreground sm:col-span-2">
+                {currency !== "UAH"
+                  ? currentRate
+                    ? `≈ ${formatOrderMoney(uahValue ?? 0, "UAH")} за курсом ${currentRate.toFixed(2)}`
+                    : "Курс ще не завантажився — гривневий еквівалент з'явиться пізніше."
+                  : ""}
+              </p>
+
+              {/* Сума змінна: у списку зʼявиться журнал — кожна оплата з датою й коментарем. */}
+              {isRecurring ? (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
+                  <Checkbox
+                    checked={amountVaries}
+                    onCheckedChange={(v) => setAmountVaries(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm">
+                    <span className="font-medium text-foreground">Сума змінна — вести журнал по датах</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Для прибирання, комуналки й подібного: у списку зʼявиться журнал, куди вписуватимеш
+                      кожну оплату — конкретна дата, сума й коментар (кілька на місяць — теж можна).
+                      Сума вище — лише орієнтир. Оренда/підписки — лишай вимкненим.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+
+              {/* Обʼєкт/адреса — групує оренду+комуналку одного офісу в списку «Інші регулярні». */}
+              {expenseKind === "recurring" ? (
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label>Обʼєкт / адреса</Label>
                   <Input
-                    type="date"
-                    value={nextChargeDate}
-                    onChange={(e) => setNextChargeDate(e.target.value)}
-                    className="h-9"
+                    value={objectGroup}
+                    onChange={(e) => setObjectGroup(e.target.value)}
+                    list="expense-object-options"
+                    placeholder="Напр. Богданівська 7 (щоб згрупувати з комуналкою)"
+                    className="h-10"
                   />
                 </div>
+              ) : null}
+
+              {isRecurring ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label>Періодичність</Label>
+                    <Select value={billingPeriod} onValueChange={(v) => setBillingPeriod(v as BillingPeriod)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BILLING_PERIOD_ORDER.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            {BILLING_PERIOD_LABELS[p]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Наступне списання — лише для сталої суми: у журналі дати ведуться поштучно. */}
+                  {varyingRecurring ? null : (
+                    <div className="grid gap-2">
+                      <Label>Наступне списання</Label>
+                      <Input type="date" value={nextChargeDate} onChange={(e) => setNextChargeDate(e.target.value)} className="h-10" />
+                    </div>
+                  )}
+                </>
+              ) : null}
+
+              <div className="grid gap-2">
+                <Label>{expenseKind === "service" ? "Сервіс" : "Постачальник"}</Label>
+                <Input
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  placeholder={expenseKind === "service" ? "Dropbox або dropbox.com" : "Назва постачальника"}
+                  className="h-10"
+                />
               </div>
+              <div className="grid gap-2">
+                <Label>Стаття витрат</Label>
+                <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Без статті" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без статті</SelectItem>
+                    {categories.map((category) => {
+                      const Icon = getExpenseCategoryIcon(category.name, category.kind);
+                      return (
+                        <SelectItem key={category.id} value={category.id}>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                            {category.name} · {EXPENSE_CATEGORY_KIND_LABELS[category.kind]}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {expenseKind === "service" ? (
-                <div className="grid gap-2">
-                  <Label>Сервіс зі списку (підтягне лого й валюту)</Label>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label>Сервіс зі списку</Label>
                   <Select value={vendorKey || "none"} onValueChange={(v) => applyBrand(v === "none" ? "" : v)}>
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger className="h-10">
                       <SelectValue placeholder="Не вказано" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1066,102 +2158,182 @@ function ExpenseDialog({
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    Якщо сервісу нема в списку — впишіть його домен у «Сервіс» (напр. `vercel.com`), лого
-                    підтягнеться саме.
+                    Підтягне лого й типову валюту. Немає в списку — впишіть домен у назву (напр. vercel.com).
                   </p>
                 </div>
               ) : null}
-              <div className="rounded-lg bg-background px-3 py-2 text-xs">
-                {monthlyUah === null ? (
-                  <span className="text-muted-foreground">Курс ще не завантажився.</span>
-                ) : (
-                  <>
-                    <span className="text-muted-foreground">У витратах кожного місяця: </span>
-                    <span className="font-semibold text-foreground">{formatOrderMoney(monthlyUah, "UAH")}</span>
-                    {billingPeriod !== "monthly" ? (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        ({nativeAmountLabel({ amount: amountNum, currency })} ÷{" "}
-                        {BILLING_PERIOD_MONTHS[billingPeriod]} міс)
-                      </span>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-          ) : null}
 
-          <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                Розподіл на замовлення
-              </Label>
-              <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={addAllocation}>
-                <Plus className="h-3.5 w-3.5" /> Замовлення
-              </Button>
-            </div>
-            {allocations.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Не обов'язково. Додайте, якщо ця витрата стосується конкретних замовлень (для маржі).
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {allocations.map((row, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <OrderPickerInline
-                        orders={orders}
-                        loading={ordersLoading}
-                        value={row.quoteId}
-                        onChange={(quoteId) => updateAllocation(index, { quoteId })}
-                        excludeQuoteIds={usedQuoteIds}
-                        placeholder="Замовлення"
-                      />
-                    </div>
-                    <Input
-                      value={row.amount}
-                      onChange={(e) => updateAllocation(index, { amount: e.target.value })}
-                      inputMode="decimal"
-                      placeholder="сума"
-                      className="h-9 w-28"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground"
-                      onClick={() => removeAllocation(index)}
-                    >
-                      <X className="h-4 w-4" />
+              <div className="grid gap-2">
+                <Label>Спосіб оплати</Label>
+                <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Не вказано" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Не вказано</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Юрособа</Label>
+                <Select value={legalEntityId || "none"} onValueChange={(v) => setLegalEntityId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Не вказано" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Не вказано</SelectItem>
+                    {entities.map((entity) => (
+                      <SelectItem key={entity.id} value={entity.id}>
+                        {formatLegalEntityLabel(entity)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {isRecurring ? (
+                <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5 text-xs sm:col-span-2">
+                  {varyingRecurring ? (
+                    <span className="text-muted-foreground">
+                      Сума змінна — кожну оплату з датою й коментарем додаси в журналі (у списку витрат).
+                    </span>
+                  ) : monthlyUah === null ? (
+                    <span className="text-muted-foreground">
+                      {amountNum > 0 ? "Курс ще не завантажився." : "Введіть суму — порахуємо місячну вартість."}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">У витратах кожного місяця: </span>
+                      <span className="font-semibold text-foreground">{formatOrderMoney(monthlyUah, "UAH")}</span>
+                      {billingPeriod !== "monthly" ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          ({nativeAmountLabel({ amount: amountNum, currency })} ÷ {BILLING_PERIOD_MONTHS[billingPeriod]} міс)
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Розподіл на замовлення — тільки разова: підписка не належить замовленню. */}
+              {expenseKind === "one_off" ? (
+                <div className="rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Розподіл на замовлення
+                    </Label>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={addAllocation}>
+                      <Plus className="h-3.5 w-3.5" /> Замовлення
                     </Button>
                   </div>
-                ))}
-                <div
-                  className={cn(
-                    "flex items-center justify-between rounded-lg px-2 py-1 text-xs",
-                    remaining < -0.005 ? "text-destructive" : "text-muted-foreground"
+                  {allocations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Не обов'язково. Додайте, якщо витрата стосується конкретних замовлень (для маржі).
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {allocations.map((row, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <OrderPickerInline
+                              orders={orders}
+                              loading={ordersLoading}
+                              value={row.quoteId}
+                              onChange={(quoteId) => updateAllocation(index, { quoteId })}
+                              excludeQuoteIds={usedQuoteIds}
+                              placeholder="Замовлення"
+                            />
+                          </div>
+                          <Input
+                            value={row.amount}
+                            onChange={(e) => updateAllocation(index, { amount: e.target.value })}
+                            inputMode="decimal"
+                            placeholder="сума"
+                            className="h-9 w-24"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0 text-muted-foreground"
+                            onClick={() => removeAllocation(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div
+                        className={cn(
+                          "flex items-center justify-between rounded-lg px-2 py-1 text-xs",
+                          remaining < -0.005 ? "text-destructive" : "text-muted-foreground"
+                        )}
+                      >
+                        <span>Розподілено: {nativeAmountLabel({ amount: allocatedNum, currency })}</span>
+                        <span>Залишок: {nativeAmountLabel({ amount: remaining, currency })}</span>
+                      </div>
+                    </div>
                   )}
-                >
-                  <span>Розподілено: {nativeAmountLabel({ amount: allocatedNum, currency })}</span>
-                  <span>Залишок (загальні): {nativeAmountLabel({ amount: remaining, currency })}</span>
                 </div>
+              ) : null}
+
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>Коментар</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Необов'язково"
+                  className="min-h-[64px]"
+                />
               </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0 flex-col items-stretch gap-3 border-t border-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          {/* Живий підсумок — завжди в одному місці, читається без пошуку по формі. */}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+            {batchMode ? (
+              batchMonthlyTotal > 0 ? (
+                <>
+                  <span className="text-muted-foreground">Разом на місяць:</span>
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {formatOrderMoney(batchMonthlyTotal, "UAH")}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Заповніть суми платежів</span>
+              )
+            ) : amountNum > 0 ? (
+              <>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {nativeAmountLabel({ amount: amountNum, currency })}
+                </span>
+                {currency !== "UAH" && uahValue !== null ? (
+                  <span className="text-muted-foreground">≈ {formatOrderMoney(uahValue, "UAH")}</span>
+                ) : null}
+                {isRecurring && monthlyUah !== null ? (
+                  <span className="text-muted-foreground">· {formatOrderMoney(monthlyUah, "UAH")} / міс</span>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-muted-foreground">Введіть суму</span>
             )}
           </div>
-
-          <div className="grid gap-2">
-            <Label>Коментар</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[50px]" />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Скасувати
+            </Button>
+            <Button onClick={() => void (batchMode ? submitBatch() : submit())} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {batchMode && batchValidCount > 1 ? `Зберегти (${batchValidCount})` : "Зберегти"}
+            </Button>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Скасувати
-          </Button>
-          <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Зберегти
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

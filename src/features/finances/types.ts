@@ -217,23 +217,28 @@ export type FinanceExpenseAllocation = {
 };
 
 /** Період білінгу сталої витрати / підписки. */
-export type BillingPeriod = "monthly" | "quarterly" | "yearly";
+export type BillingPeriod = "monthly" | "quarterly" | "semiannual" | "yearly";
 
 export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = {
-  monthly: "Щомісяця",
-  quarterly: "Щокварталу",
-  yearly: "Щороку",
+  monthly: "Раз на місяць",
+  quarterly: "Раз на квартал",
+  semiannual: "Раз на півроку",
+  yearly: "Раз на рік",
 };
 
 /** На скільки місяців розтягується один платіж — база для розбиття річної оплати. */
 export const BILLING_PERIOD_MONTHS: Record<BillingPeriod, number> = {
   monthly: 1,
   quarterly: 3,
+  semiannual: 6,
   yearly: 12,
 };
 
+/** Порядок для селектів (від найчастішого до найрідшого). */
+export const BILLING_PERIOD_ORDER: BillingPeriod[] = ["monthly", "quarterly", "semiannual", "yearly"];
+
 export const isBillingPeriod = (value: unknown): value is BillingPeriod =>
-  value === "monthly" || value === "quarterly" || value === "yearly";
+  value === "monthly" || value === "quarterly" || value === "semiannual" || value === "yearly";
 
 export const billingPeriodOf = (expense: { recurrence: string | null }): BillingPeriod =>
   isBillingPeriod(expense.recurrence) ? expense.recurrence : "monthly";
@@ -252,6 +257,10 @@ export type FinanceExpense = {
   expenseDate: string;
   isRecurring: boolean;
   recurrence: string | null;
+  /** true = регулярний платіж зі змінною сумою (комуналка): факт вводиться по місяцях. */
+  amountVaries: boolean;
+  /** Обʼєкт/адреса (напр. «Богданівська 7») для групування оренди+комуналки одного офісу. */
+  objectGroup: string | null;
   nextChargeDate: string | null;
   vendorKey: string | null;
   logoUrl: string | null;
@@ -279,6 +288,21 @@ export const expenseMonthlyUah = (expense: FinanceExpense, rates: FxRates): numb
   const uah = expenseUahAmount(expense, rates);
   if (uah === null) return null;
   return uah / BILLING_PERIOD_MONTHS[billingPeriodOf(expense)];
+};
+
+// --- Змінні регулярні платежі (комуналка/прибирання): журнал датованих записів --
+
+/**
+ * Один запис журналу регулярного платежу зі змінною сумою: конкретна подія
+ * (напр. одне прибирання офісу) — дата + сума + коментар. За місяць їх може бути
+ * кілька; місячна вартість = сума записів цього місяця.
+ */
+export type ExpenseEntry = {
+  id: string;
+  expenseId: string;
+  entryDate: string; // YYYY-MM-DD — коли фактично сталося
+  amount: number;
+  note: string | null;
 };
 
 // --- Team payouts overlay (finance_payout_meta) ----------------------------

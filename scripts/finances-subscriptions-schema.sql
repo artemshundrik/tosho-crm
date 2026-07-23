@@ -30,7 +30,7 @@ alter table tosho.finance_expenses
   drop constraint if exists finance_expenses_recurrence_check;
 alter table tosho.finance_expenses
   add constraint finance_expenses_recurrence_check
-  check (recurrence is null or recurrence in ('monthly', 'quarterly', 'yearly'));
+  check (recurrence is null or recurrence in ('monthly', 'quarterly', 'semiannual', 'yearly'));
 
 create index if not exists finance_expenses_next_charge_idx
   on tosho.finance_expenses (team_id, next_charge_date)

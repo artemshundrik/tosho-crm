@@ -10,6 +10,7 @@ import type {
   FinanceAccount,
   FinanceAccountKind,
   FinanceBankProvider,
+  ExpenseEntry,
   FinanceExpense,
   FinanceExpenseAllocation,
   FinanceExpenseCategory,
@@ -670,7 +671,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -686,6 +687,8 @@ type ExpenseRow = {
   expense_date: string;
   is_recurring: boolean | null;
   recurrence: string | null;
+  amount_varies: boolean | null;
+  object_group: string | null;
   next_charge_date: string | null;
   vendor_key: string | null;
   logo_url: string | null;
@@ -724,6 +727,8 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   expenseDate: row.expense_date,
   isRecurring: Boolean(row.is_recurring),
   recurrence: row.recurrence ?? null,
+  amountVaries: Boolean(row.amount_varies),
+  objectGroup: row.object_group ?? null,
   nextChargeDate: row.next_charge_date ?? null,
   vendorKey: row.vendor_key ?? null,
   logoUrl: row.logo_url ?? null,
@@ -783,6 +788,8 @@ export type ExpenseInput = {
   expenseDate: string;
   isRecurring: boolean;
   recurrence?: BillingPeriod | null;
+  amountVaries?: boolean;
+  objectGroup?: string | null;
   nextChargeDate?: string | null;
   vendorKey?: string | null;
   logoUrl?: string | null;
@@ -803,6 +810,10 @@ const serializeExpense = (input: ExpenseInput) => ({
   expense_date: input.expenseDate,
   is_recurring: input.isRecurring,
   recurrence: input.isRecurring ? input.recurrence || "monthly" : null,
+  // Змінна сума — лише для регулярних; для решти завжди false.
+  amount_varies: input.isRecurring ? Boolean(input.amountVaries) : false,
+  // Обʼєкт/адреса — тільки для регулярних (групування офісних платежів).
+  object_group: input.isRecurring ? input.objectGroup?.trim() || null : null,
   // Дата наступного списання має сенс лише для сталої витрати/підписки.
   next_charge_date: input.isRecurring ? input.nextChargeDate || null : null,
   vendor_key: input.vendorKey || null,
@@ -858,13 +869,111 @@ export async function updateExpense(teamId: string, id: string, input: ExpenseIn
 }
 
 export async function deleteExpense(teamId: string, id: string): Promise<void> {
-  // allocations cascade-delete via FK
+  // allocations + monthly amounts cascade-delete via FK
   const { error } = await supabase
     .schema("tosho")
     .from("finance_expenses")
     .delete()
     .eq("team_id", teamId)
     .eq("id", id);
+  if (error) throw error;
+}
+
+// --- Журнал датованих записів для регулярних платежів зі змінною сумою --------
+// Одна витрата «сума змінна» (напр. прибирання офісу) тримає багато записів:
+// кожен = дата + сума + коментар. Місячна вартість = сума записів того місяця.
+
+type ExpenseEntryRow = {
+  id: string;
+  expense_id: string;
+  entry_date: string;
+  amount: number | string | null;
+  note: string | null;
+};
+
+const mapExpenseEntry = (row: ExpenseEntryRow): ExpenseEntry => ({
+  id: row.id,
+  expenseId: row.expense_id,
+  entryDate: row.entry_date,
+  amount: toNumber(row.amount),
+  note: row.note,
+});
+
+// period лишається місячним бакетом — тримаємо в синхроні з датою запису.
+const periodOf = (entryDate: string) => `${entryDate.slice(0, 7)}-01`;
+
+/** Усі записи журналу команди: expenseId → записи (від найновішого до найстарішого). */
+export async function listExpenseEntries(teamId: string): Promise<Map<string, ExpenseEntry[]>> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("finance_expense_monthly_amounts")
+    .select("id,expense_id,entry_date,amount,note")
+    .eq("team_id", teamId)
+    .order("entry_date", { ascending: false });
+  if (error) throw error;
+  const byExpense = new Map<string, ExpenseEntry[]>();
+  for (const row of (data as unknown as ExpenseEntryRow[]) ?? []) {
+    const entry = mapExpenseEntry(row);
+    const list = byExpense.get(entry.expenseId);
+    if (list) list.push(entry);
+    else byExpense.set(entry.expenseId, [entry]);
+  }
+  return byExpense;
+}
+
+/** Додати запис журналу. Повертає створений рядок (з реальним id). */
+export async function createExpenseEntry(
+  teamId: string,
+  input: { expenseId: string; entryDate: string; amount: number; note?: string | null; enteredBy?: string | null }
+): Promise<ExpenseEntry> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("finance_expense_monthly_amounts")
+    .insert({
+      team_id: teamId,
+      expense_id: input.expenseId,
+      period: periodOf(input.entryDate),
+      entry_date: input.entryDate,
+      amount: input.amount,
+      note: input.note?.trim() || null,
+      entered_by: input.enteredBy || null,
+    })
+    .select("id,expense_id,entry_date,amount,note")
+    .single();
+  if (error) throw error;
+  return mapExpenseEntry(data as unknown as ExpenseEntryRow);
+}
+
+/** Оновити запис журналу (дата/сума/коментар). period тримаємо в синхроні з датою. */
+export async function updateExpenseEntry(
+  teamId: string,
+  entryId: string,
+  patch: { entryDate?: string; amount?: number; note?: string | null }
+): Promise<void> {
+  const update: Record<string, unknown> = {};
+  if (patch.entryDate !== undefined) {
+    update.entry_date = patch.entryDate;
+    update.period = periodOf(patch.entryDate);
+  }
+  if (patch.amount !== undefined) update.amount = patch.amount;
+  if (patch.note !== undefined) update.note = patch.note?.trim() || null;
+  const { error } = await supabase
+    .schema("tosho")
+    .from("finance_expense_monthly_amounts")
+    .update(update)
+    .eq("team_id", teamId)
+    .eq("id", entryId);
+  if (error) throw error;
+}
+
+/** Видалити запис журналу. */
+export async function deleteExpenseEntry(teamId: string, entryId: string): Promise<void> {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("finance_expense_monthly_amounts")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("id", entryId);
   if (error) throw error;
 }
 
