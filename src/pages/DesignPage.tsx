@@ -4986,10 +4986,15 @@ export default function DesignPage() {
              реакції, — дедлайн. Тип сканують, уже відкривши картку, тож він віддає
              кольоровий бюджет дедлайну, а сам упізнається іконкою й текстом.
              Це також вирівнює борд з рештою застосунку: у згрупованому вигляді, на
-             сторінці задачі та в картці клієнта тип уже був нейтральним. */
+             сторінці задачі та в картці клієнта тип уже був нейтральним.
+
+             Заливка — bg-muted/20, а не neutral-soft: суцільний сірий (#f0f0f0)
+             на білій картці читається як ще одна пляма поруч з дедлайном. Тут
+             навмисно та сама трійка, що й у згрупованому вигляді нижче по файлу,
+             щоб два вигляди однієї сторінки не розходились. */
           <Badge
-            tone="neutral"
-            className="mt-2 gap-1.5 rounded-full px-2.5 py-1 text-2xs font-medium normal-case tracking-normal"
+            variant="outline"
+            className="mt-2 gap-1.5 rounded-full border-border/60 bg-muted/20 px-2.5 py-1 text-2xs font-medium normal-case tracking-normal text-muted-foreground"
           >
             {(() => {
               const TypeIcon = DESIGN_TASK_TYPE_ICONS[task.designTaskType];
