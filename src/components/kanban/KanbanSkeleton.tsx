@@ -29,7 +29,18 @@ export function KanbanSkeleton({
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className={className}
+      /**
+       * h-full min-h-0 тут ОБОВ'ЯЗКОВІ, і ось чому.
+       *
+       * У завантаженому стані KanbanBoard — прямий нащадок виміряного вьюпорта
+       * (той div має height у пікселях), тому його h-full має проти чого
+       * резолвитись. У скелетоні між ними стоїть ЦЕЙ обгортковий div, і поки
+       * він був без висоти, ланцюг рвався: h-full на борді резолвився проти
+       * auto-висоти, відкочувався до висоти контенту, і колонки малювались
+       * заввишки з три скелетонні картки — приблизно вполовину борда, який
+       * зʼявиться наступної миті.
+       */
+      className={cn("h-full min-h-0", className)}
     >
       <KanbanBoard
         className={cn("h-full pb-2 md:pb-3 [container-type:inline-size]", boardClassName)}

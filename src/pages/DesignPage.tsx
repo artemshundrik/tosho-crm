@@ -59,7 +59,7 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -5447,20 +5447,12 @@ export default function DesignPage() {
                       dropTargetStatus === col.id && "border-primary bg-primary/5"
                     )}
                     header={
-                      <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {(() => {
-                            const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
-                            return <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />;
-                          })()}
-                          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground truncate">
-                            {col.label}
-                          </span>
-                        </div>
-                        <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">
-                          {items.length}
-                        </span>
-                      </div>
+                      <KanbanColumnHeader
+                        icon={DESIGN_STATUS_ICON_BY_STATUS[col.id]}
+                        toneClassName={DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id]}
+                        label={col.label}
+                        count={items.length}
+                      />
                     }
                     bodyClassName="px-2.5 pb-1.5 pt-2.5 space-y-2"
                     onDragOver={(event) => {

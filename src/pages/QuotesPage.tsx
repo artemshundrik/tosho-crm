@@ -156,7 +156,7 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 
 type QuotesPageProps = {
   teamId: string;
@@ -6918,20 +6918,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
                       )}
                       header={
-                        <div className="kanban-column-header flex items-center justify-between gap-2 px-3.5 py-3 shrink-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {(() => {
-                              const Icon = statusIcons[column.id] ?? Clock;
-                              return <Icon className={cn("h-3.5 w-3.5 shrink-0", statusColorClass[column.id] ?? "text-muted-foreground")} />;
-                            })()}
-                            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground truncate">
-                              {column.label}
-                            </span>
-                          </div>
-                          <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">
-                            {items.length}
-                          </span>
-                        </div>
+                        <KanbanColumnHeader
+                          icon={statusIcons[column.id] ?? Clock}
+                          toneClassName={statusColorClass[column.id]}
+                          label={column.label}
+                          count={items.length}
+                        />
                       }
                       onDragOver={(e) => {
                         e.preventDefault();
