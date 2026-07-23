@@ -2,8 +2,14 @@ import * as React from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatOrderMoney, loadDerivedOrders } from "@/features/orders/orderRecords";
-import { listAccounts, listInvoices, listLegalEntities, listPayments } from "./api";
+import { formatOrderMoney } from "@/features/orders/orderRecords";
+import {
+  useFinanceAccounts,
+  useFinanceDerivedOrderNames,
+  useFinanceInvoices,
+  useFinanceLegalEntities,
+  useFinancePayments,
+} from "./queries";
 import {
   invoiceIsReceivable,
   formatLegalEntityLabel,
@@ -22,6 +28,14 @@ type FinanceDashboardProps = {
 
 type OrderMini = { customerName: string };
 
+// Стабільні порожні значення для стану «дані ще не приїхали» — щоб useMemo
+// нижче по файлу не перераховувались через новий [] на кожен рендер.
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_ACCOUNTS: FinanceAccount[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+const EMPTY_INVOICES: FinanceInvoice[] = [];
+const EMPTY_ORDERS = new Map<string, OrderMini>();
+
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
@@ -33,52 +47,33 @@ const monthStartISO = () => {
 const uah = (value: number) => formatOrderMoney(value, "UAH");
 
 export function FinanceDashboard({ teamId, userId, canSeeSensitive }: FinanceDashboardProps) {
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [invoices, setInvoices] = React.useState<FinanceInvoice[]>([]);
-  const [ordersByQuote, setOrdersByQuote] = React.useState<Map<string, OrderMini>>(new Map());
-  const [loading, setLoading] = React.useState(true);
+  // React Query замість useEffect+useState: повторний вхід на вкладку рендерить
+  // одразу з кешу, свіжість тримає refetchOnMount:"always" (див. queries.ts).
+  const paymentsQuery = useFinancePayments(teamId);
+  const accountsQuery = useFinanceAccounts(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const invoicesQuery = useFinanceInvoices(teamId);
+  // Orders (for debtor names) — best-effort, не блокує дашборд (помилка → порожня мапа).
+  const ordersQuery = useFinanceDerivedOrderNames(teamId, userId ?? null);
 
-  React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setLoading(true);
-    void Promise.all([listPayments(teamId), listAccounts(teamId), listLegalEntities(teamId), listInvoices(teamId)])
-      .then(([p, a, e, inv]) => {
-        if (!active) return;
-        setPayments(p);
-        setAccounts(a);
-        setEntities(e);
-        setInvoices(inv);
-      })
-      .catch((error) => {
-        if (active) toast.error("Не вдалося завантажити дашборд", { description: getErrorMessage(error, "") });
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [teamId]);
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
+  const ordersByQuote: Map<string, OrderMini> = ordersQuery.data ?? EMPTY_ORDERS;
 
-  // Orders (for debtor names) — best-effort, doesn't block the dashboard.
+  // isPending = нема ані кешу, ані відповіді. Фоновий рефетч свіжого кешу
+  // скелетона не показує — саме тому перемикання вкладок стало миттєвим.
+  const loading =
+    paymentsQuery.isPending || accountsQuery.isPending || entitiesQuery.isPending || invoicesQuery.isPending;
+
+  const loadError =
+    paymentsQuery.error ?? accountsQuery.error ?? entitiesQuery.error ?? invoicesQuery.error ?? null;
   React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    void loadDerivedOrders(teamId, userId)
-      .then((records) => {
-        if (!active) return;
-        setOrdersByQuote(new Map(records.map((r) => [r.quoteId, { customerName: r.customerName }])));
-      })
-      .catch(() => {
-        /* names just fall back to the order id */
-      });
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити дашборд", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   const accountById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 

@@ -1,0 +1,144 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import {
+  listAccounts,
+  listExpenses,
+  listInvoices,
+  listLegalEntities,
+  listPayments,
+  listTaxes,
+} from "./api";
+import type {
+  FinanceAccount,
+  FinanceExpense,
+  FinanceInvoice,
+  FinanceLegalEntity,
+  FinancePayment,
+  FinanceTax,
+} from "./types";
+
+/**
+ * React Query-шар для довідників Фінансів.
+ *
+ * НАВІЩО: вкладки Фінансів тягнуть ті самі списки (рахунки, юрособи, платежі,
+ * інвойси…) кожна собі через useEffect — перемикання вкладки означало холодний
+ * фетч і скелетон, навіть якщо дані щойно були на сусідній вкладці.
+ * Гарячі сторінки (Quotes/Design/…) мають ручний session-кеш; Фінанси були
+ * єдиним щоденним модулем зовсім без кешу.
+ *
+ * СТРАТЕГІЯ СВІЖОСТІ — refetchOnMount: "always":
+ * кеш дає миттєвий перший рендер (isPending=false, коли дані вже є), а фоновий
+ * рефетч ЗАВЖДИ звіряє з сервером. Тобто свіжість рівно та сама, що була з
+ * useEffect, плюс зникає скелетон між вкладками. Обрано навмисно замість
+ * staleTime-кешування: мутації розкидані по вкладках (створення витрати,
+ * оплата інвойсу…) і НЕ інвалідують ключі — покладатись на staleTime означало б
+ * показувати стухлі числа після запису на сусідній вкладці. Коли всі мутації
+ * перейдуть на invalidateFinance(), можна буде підняти staleTime і прибрати
+ * "always".
+ *
+ * staleTime: 15s все ж стоїть — він дедуплікує ЗАПАРАЛЕЛЕНІ запити одного
+ * ресурсу під час одного заходу (кілька компонентів однієї вкладки просять
+ * accounts одночасно → один мережевий виклик), не впливаючи на між-вкладкову
+ * свіжість (refetchOnMount "always" сильніший за staleTime при монтуванні).
+ */
+const FINANCE_SHARED_OPTIONS = {
+  refetchOnMount: "always",
+  staleTime: 15_000,
+  gcTime: 30 * 60_000,
+} as const;
+
+export const financeKeys = {
+  all: (teamId: string) => ["finances", teamId] as const,
+  payments: (teamId: string) => ["finances", teamId, "payments"] as const,
+  accounts: (teamId: string) => ["finances", teamId, "accounts"] as const,
+  legalEntities: (teamId: string) => ["finances", teamId, "legal-entities"] as const,
+  invoices: (teamId: string) => ["finances", teamId, "invoices"] as const,
+  expenses: (teamId: string) => ["finances", teamId, "expenses"] as const,
+  taxes: (teamId: string) => ["finances", teamId, "taxes"] as const,
+  derivedOrders: (teamId: string, userId: string | null) =>
+    ["finances", teamId, "derived-orders", userId ?? ""] as const,
+};
+
+export function useFinancePayments(teamId: string | null) {
+  return useQuery<FinancePayment[]>({
+    queryKey: financeKeys.payments(teamId ?? ""),
+    queryFn: () => listPayments(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+export function useFinanceAccounts(teamId: string | null) {
+  return useQuery<FinanceAccount[]>({
+    queryKey: financeKeys.accounts(teamId ?? ""),
+    queryFn: () => listAccounts(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+export function useFinanceLegalEntities(teamId: string | null) {
+  return useQuery<FinanceLegalEntity[]>({
+    queryKey: financeKeys.legalEntities(teamId ?? ""),
+    queryFn: () => listLegalEntities(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+export function useFinanceInvoices(teamId: string | null) {
+  return useQuery<FinanceInvoice[]>({
+    queryKey: financeKeys.invoices(teamId ?? ""),
+    queryFn: () => listInvoices(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+export function useFinanceExpenses(teamId: string | null) {
+  return useQuery<FinanceExpense[]>({
+    queryKey: financeKeys.expenses(teamId ?? ""),
+    queryFn: () => listExpenses(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+export function useFinanceTaxes(teamId: string | null) {
+  return useQuery<FinanceTax[]>({
+    queryKey: financeKeys.taxes(teamId ?? ""),
+    queryFn: () => listTaxes(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Замовлення для підпису боржників — best-effort: помилка = порожня мапа, дашборд не блокується. */
+export function useFinanceDerivedOrderNames(teamId: string | null, userId: string | null) {
+  return useQuery({
+    queryKey: financeKeys.derivedOrders(teamId ?? "", userId),
+    queryFn: async () => {
+      try {
+        const records = await loadDerivedOrders(teamId as string, userId);
+        return new Map(records.map((r) => [r.quoteId, { customerName: r.customerName }]));
+      } catch {
+        return new Map<string, { customerName: string }>();
+      }
+    },
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/**
+ * Інвалідація після мутацій. Поки мутації вкладок її не викликають, свіжість
+ * забезпечує refetchOnMount:"always"; хелпер існує, щоб нові мутації одразу
+ * писались правильно.
+ */
+export function useInvalidateFinance(teamId: string | null) {
+  const queryClient = useQueryClient();
+  return () => {
+    if (!teamId) return Promise.resolve();
+    return queryClient.invalidateQueries({ queryKey: financeKeys.all(teamId) });
+  };
+}
