@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
-import { createTax, deleteTax, listLegalEntities, listTaxes, updateTax, type TaxInput } from "./api";
+import { createTax, deleteTax, updateTax, type TaxInput } from "./api";
+import { useFinanceLegalEntities, useFinanceTaxes, useInvalidateFinance } from "./queries";
 import {
   formatLegalEntityLabel,
   TAX_STATUS_LABELS,
@@ -53,30 +54,28 @@ const formatDate = (value?: string | null) => {
   }
 };
 
+const EMPTY_TAXES: FinanceTax[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+
 export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
-  const [taxes, setTaxes] = React.useState<FinanceTax[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  // Спільні finance-хуки (див. queries.ts); мутації податків ідуть через
+  // інвалідацію кешу — календар побачить зміни при наступному відкритті.
+  const taxesQuery = useFinanceTaxes(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const taxes = taxesQuery.data ?? EMPTY_TAXES;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const loading = taxesQuery.isPending || entitiesQuery.isPending;
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceTax | null>(null);
 
-  const reload = React.useCallback(async () => {
-    if (!teamId) return;
-    setLoading(true);
-    try {
-      const [nextTaxes, nextEntities] = await Promise.all([listTaxes(teamId), listLegalEntities(teamId)]);
-      setTaxes(nextTaxes);
-      setEntities(nextEntities);
-    } catch (error) {
-      toast.error("Не вдалося завантажити податки", { description: getErrorMessage(error, "") });
-    } finally {
-      setLoading(false);
-    }
-  }, [teamId]);
+  const reload = useInvalidateFinance(teamId);
 
+  const loadError = taxesQuery.error ?? entitiesQuery.error ?? null;
   React.useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити податки", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
 

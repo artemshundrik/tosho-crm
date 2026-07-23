@@ -22,12 +22,15 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import {
   createPayment,
   deletePayment,
-  listAccounts,
-  listOrdersForFinance,
-  listPayments,
   updatePayment,
   type PaymentInput,
 } from "./api";
+import {
+  useFinanceAccounts,
+  useFinanceOrderRefs,
+  useFinancePayments,
+  useInvalidateFinance,
+} from "./queries";
 import {
   ACCOUNT_KIND_LABELS,
   PAYMENT_SOURCE_LABELS,
@@ -57,49 +60,30 @@ const formatDate = (value?: string | null) => {
   }
 };
 
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_ACCOUNTS: FinanceAccount[] = [];
+const EMPTY_ORDER_REFS: FinanceOrderRef[] = [];
+
 export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaymentsProps) {
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
-  const [orders, setOrders] = React.useState<FinanceOrderRef[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [ordersLoading, setOrdersLoading] = React.useState(true);
+  // Спільні finance-хуки (див. queries.ts): payments/accounts — ті самі ключі,
+  // що на Касах/Дашборді; замовлення — best-effort усередині хука.
+  const paymentsQuery = useFinancePayments(teamId);
+  const accountsQuery = useFinanceAccounts(teamId);
+  const ordersQuery = useFinanceOrderRefs(teamId, userId ?? null);
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const orders = ordersQuery.data ?? EMPTY_ORDER_REFS;
+  const loading = paymentsQuery.isPending || accountsQuery.isPending;
+  const ordersLoading = ordersQuery.isPending;
 
-  const reload = React.useCallback(async () => {
-    if (!teamId) return;
-    setLoading(true);
-    try {
-      const [nextPayments, nextAccounts] = await Promise.all([listPayments(teamId), listAccounts(teamId)]);
-      setPayments(nextPayments);
-      setAccounts(nextAccounts);
-    } catch (error) {
-      toast.error("Не вдалося завантажити оплати", { description: getErrorMessage(error, "Спробуйте ще раз.") });
-    } finally {
-      setLoading(false);
+  const reload = useInvalidateFinance(teamId);
+
+  const loadError = paymentsQuery.error ?? accountsQuery.error ?? null;
+  React.useEffect(() => {
+    if (loadError) {
+      toast.error("Не вдалося завантажити оплати", { description: getErrorMessage(loadError, "Спробуйте ще раз.") });
     }
-  }, [teamId]);
-
-  React.useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setOrdersLoading(true);
-    void listOrdersForFinance(teamId, userId)
-      .then((rows) => {
-        if (active) setOrders(rows);
-      })
-      .catch(() => {
-        if (active) setOrders([]);
-      })
-      .finally(() => {
-        if (active) setOrdersLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+  }, [loadError]);
 
   const accountById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   const orderByQuote = React.useMemo(() => new Map(orders.map((o) => [o.quoteId, o])), [orders]);
