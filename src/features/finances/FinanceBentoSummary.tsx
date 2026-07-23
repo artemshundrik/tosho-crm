@@ -90,7 +90,7 @@ export function FinanceBentoSummary({
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
-          <div className="mt-1.5 text-2xl font-semibold leading-none tabular-nums text-foreground sm:text-[28px]">
+          <div className="figure mt-1.5 text-2xl font-semibold leading-none text-foreground sm:text-[28px]">
             {totalText}
           </div>
         </div>

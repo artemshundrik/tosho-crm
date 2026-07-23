@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { FinanceStickyBar } from "./FinanceMonthBar";
 import {
   listAccounts,
   listExpenseCategories,
@@ -166,19 +167,22 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
 
   return (
     <div className="space-y-5">
-      <div className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
-        {(["month", "year", "all"] as RangeKey[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            className={cn(SEGMENTED_TRIGGER_SM)}
-            data-state={range === r ? "active" : "inactive"}
-            onClick={() => setRange(r)}
-          >
-            {r === "month" ? "Цей місяць" : r === "year" ? "Цей рік" : "Весь час"}
-          </button>
-        ))}
-      </div>
+      {/* Період — у липкому барі, як перемикачі в решті розділів Фінансів. */}
+      <FinanceStickyBar>
+        <div className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
+          {(["month", "year", "all"] as RangeKey[]).map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={cn(SEGMENTED_TRIGGER_SM)}
+              data-state={range === r ? "active" : "inactive"}
+              onClick={() => setRange(r)}
+            >
+              {r === "month" ? "Цей місяць" : r === "year" ? "Цей рік" : "Весь час"}
+            </button>
+          ))}
+        </div>
+      </FinanceStickyBar>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Отримано" value={uah(received)} />
@@ -232,7 +236,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "su
       )}
     >
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1.5 text-lg font-semibold text-foreground">{value}</div>
+      <div className="figure mt-1.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );
 }

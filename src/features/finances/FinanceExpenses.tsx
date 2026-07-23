@@ -1065,7 +1065,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   {BILLING_PERIOD_LABELS[period]}
                 </Badge>
                 {expense.amountVaries ? (
-                  <Badge variant="outline" className="gap-1 border-info/40 bg-info/10 text-[10px] text-info-foreground">
+                  <Badge tone="info" size="sm" className="gap-1 text-[10px]">
                     журнал по датах
                   </Badge>
                 ) : null}

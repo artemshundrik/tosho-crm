@@ -270,7 +270,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
       }
     >
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1.5 text-lg font-semibold text-foreground">{value}</div>
+      <div className="figure mt-1.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );
 }

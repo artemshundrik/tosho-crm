@@ -16,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { createTax, deleteTax, listLegalEntities, listTaxes, updateTax, type TaxInput } from "./api";
 import {
@@ -203,15 +202,9 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                     <Badge variant="outline" className="text-[10px]">
                       {TAX_TYPE_LABELS[tax.taxType]}
                     </Badge>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        isPaid
-                          ? "border-success/40 bg-success/10 text-success-foreground"
-                          : "border-warning/40 bg-warning/10 text-warning-foreground"
-                      )}
-                    >
+                    {/* Семантичний tone бейджа (старі ручні класи bg-success/10 були
+                        мертві — таких кольорів нема в tailwind.config). */}
+                    <Badge tone={isPaid ? "success" : "warning"} size="sm" className="text-[10px]">
                       {TAX_STATUS_LABELS[tax.status]}
                     </Badge>
                   </div>
@@ -225,7 +218,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Button
                     type="button"
-                    variant={isPaid ? "secondary" : "outline"}
+                    variant={isPaid ? "successTonal" : "outline"}
                     size="sm"
                     className="h-9 gap-1.5"
                     onClick={() => void toggleStatus(tax)}

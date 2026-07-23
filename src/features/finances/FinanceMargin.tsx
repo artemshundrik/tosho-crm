@@ -226,7 +226,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "su
       )}
     >
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
+      <div className="figure mt-2 text-xl font-semibold text-foreground">{value}</div>
     </div>
   );
 }

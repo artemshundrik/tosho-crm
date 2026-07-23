@@ -261,7 +261,7 @@ function StatCard({
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className={cn("h-3.5 w-3.5", tone === "warning" && "text-warning-foreground")} /> {label}
       </div>
-      <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
+      <div className="figure mt-2 text-xl font-semibold text-foreground">{value}</div>
     </div>
   );
 }
