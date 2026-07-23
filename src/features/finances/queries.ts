@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
-import { loadPayrollEntries, periodKey } from "@/lib/payroll";
+import { loadPayrollEntries, periodKey, type PayrollEntry } from "@/lib/payroll";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import {
+  listWorkspaceMembersForDisplay,
+  type WorkspaceMemberDisplayRow,
+} from "@/lib/workspaceMemberDirectory";
 import {
   listAccounts,
   listExpenseCategories,
@@ -25,6 +29,7 @@ import type {
   FinanceOrderMeta,
   FinanceOrderRef,
   FinancePayment,
+  FinancePayoutMeta,
   FinanceTax,
 } from "./types";
 
@@ -75,6 +80,12 @@ export const financeKeys = {
     ["finances", teamId, "order-refs", userId ?? ""] as const,
   expenseCategories: (teamId: string) => ["finances", teamId, "expense-categories"] as const,
   expenseEntries: (teamId: string) => ["finances", teamId, "expense-entries"] as const,
+  payrollWorkspace: (teamId: string, userId: string | null) =>
+    ["finances", teamId, "payroll-workspace", userId ?? ""] as const,
+  payrollPeriod: (teamId: string, workspaceId: string | null, period: string) =>
+    ["finances", teamId, "payroll-period", workspaceId ?? "", period] as const,
+  payrollPrevTotal: (teamId: string, workspaceId: string | null, period: string) =>
+    ["finances", teamId, "payroll-prev-total", workspaceId ?? "", period] as const,
 };
 
 export function useFinancePayments(teamId: string | null) {
@@ -210,6 +221,68 @@ export function useFinanceOrderRefs(teamId: string | null, userId: string | null
       }
     },
     enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Воркспейс + ростер для вкладки «Виплати команді». */
+export function usePayrollWorkspace(teamId: string | null, userId: string | null) {
+  return useQuery<{ workspaceId: string | null; members: WorkspaceMemberDisplayRow[] }>({
+    queryKey: financeKeys.payrollWorkspace(teamId ?? "", userId),
+    queryFn: async () => {
+      const workspaceId = await resolveWorkspaceId(userId as string);
+      if (!workspaceId) return { workspaceId: null, members: [] };
+      const members = await listWorkspaceMembersForDisplay(workspaceId);
+      return { workspaceId, members };
+    },
+    enabled: !!teamId && !!userId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/**
+ * Записи виплат + мета виплат за період — ОДНИМ запитом, бо вкладка сідає
+ * з них разом (drafts редактора будуються з entries+meta одночасно).
+ * УВАГА: вкладка Виплат — редактор з debounce-автозбереженням; вона тримає
+ * entries/meta/drafts у локальному стані й гідратується звідси з guard-ом
+ * «не чіпати місяць, який користувач уже редагує» (див. FinancePayroll).
+ */
+export function usePayrollPeriodData(
+  teamId: string | null,
+  workspaceId: string | null,
+  period: string
+) {
+  return useQuery<{ entries: Map<string, PayrollEntry>; meta: Map<string, FinancePayoutMeta> }>({
+    queryKey: financeKeys.payrollPeriod(teamId ?? "", workspaceId, period),
+    queryFn: async () => {
+      const [entries, meta] = await Promise.all([
+        loadPayrollEntries(workspaceId as string, period),
+        listPayoutMeta(teamId as string, period),
+      ]);
+      return { entries, meta };
+    },
+    enabled: !!teamId && !!workspaceId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Сума «до виплати» минулого місяця — для бейджа дельти. Best-effort → null. */
+export function usePayrollPrevTotal(
+  teamId: string | null,
+  workspaceId: string | null,
+  prevPeriod: string
+) {
+  return useQuery<number | null>({
+    queryKey: financeKeys.payrollPrevTotal(teamId ?? "", workspaceId, prevPeriod),
+    queryFn: async () => {
+      try {
+        const entries = await loadPayrollEntries(workspaceId as string, prevPeriod);
+        return Array.from(entries.values()).reduce((sum, e) => sum + e.totalAmount, 0);
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!teamId && !!workspaceId,
     ...FINANCE_SHARED_OPTIONS,
   });
 }

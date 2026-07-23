@@ -11,10 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
-import { resolveWorkspaceId } from "@/lib/workspace";
-import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
+import { type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import {
-  loadPayrollEntries,
   upsertPayrollEntry,
   periodKey,
   parsePayrollAmount,
@@ -23,8 +21,11 @@ import {
   MANUAL_PAYROLL_PEOPLE,
   type PayrollEntry,
 } from "@/lib/payroll";
-import { listPayoutMeta, upsertPayoutMeta } from "./api";
+import { upsertPayoutMeta } from "./api";
+import { usePayrollPeriodData, usePayrollPrevTotal, usePayrollWorkspace } from "./queries";
 import { type FinancePayoutMeta } from "./types";
+
+const EMPTY_MEMBERS: WorkspaceMemberDisplayRow[] = [];
 
 type FinancePayrollProps = {
   teamId: string | null;
@@ -78,78 +79,72 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   }, [year, month]);
   const prevPeriod = React.useMemo(() => periodKey(prev.year, prev.month), [prev]);
 
-  const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
-  const [members, setMembers] = React.useState<WorkspaceMemberDisplayRow[]>([]);
+  // React Query: воркспейс+ростер і дані періоду — з кешу (повернення на
+  // вкладку і перемикання місяців туди-назад рендеряться миттєво), свіжість —
+  // фоновий рефетч (refetchOnMount:"always" у queries.ts).
+  const workspaceQuery = usePayrollWorkspace(teamId, userId);
+  const workspaceId = workspaceQuery.data?.workspaceId ?? null;
+  const members = workspaceQuery.data?.members ?? EMPTY_MEMBERS;
+  const periodQuery = usePayrollPeriodData(teamId, workspaceId, period);
+  // «До виплати» минулого місяця — для бейджа дельти; збій не критичний (null).
+  const prevTotalQuery = usePayrollPrevTotal(teamId, workspaceId, prevPeriod);
+  const prevTotal = prevTotalQuery.data ?? null;
+  const loading = workspaceQuery.isPending || periodQuery.isPending;
+
+  React.useEffect(() => {
+    if (workspaceQuery.error) {
+      toast.error("Не вдалося завантажити команду", { description: getErrorMessage(workspaceQuery.error, "") });
+    }
+  }, [workspaceQuery.error]);
+  React.useEffect(() => {
+    if (periodQuery.error) {
+      toast.error("Не вдалося завантажити виплати", { description: getErrorMessage(periodQuery.error, "") });
+    }
+  }, [periodQuery.error]);
+
+  // РЕДАКТОР — ГІБРИД, і це навмисно. Це не список, а табличка місяця з
+  // debounce-автозбереженням: суми (queueSaveAmount), нотатки (saveNote,
+  // оптимістично) і мета виплат (saveMeta, оптимістично) пишуть у локальний
+  // стан. Кеш його лише гідратує, з правилом: НОВИЙ місяць (або перші дані
+  // місяця) застосовуються завжди; фоновий рефетч того САМОГО місяця
+  // застосовується тільки поки користувач у ньому нічого не редагував —
+  // інакше рефетч, що стартував до вводу, перезаписав би цифри під пальцями.
   const [entries, setEntries] = React.useState<Map<string, PayrollEntry>>(new Map());
   const [meta, setMeta] = React.useState<Map<string, FinancePayoutMeta>>(new Map());
   const [drafts, setDrafts] = React.useState<Record<string, Draft>>({});
-  const [loading, setLoading] = React.useState(true);
-  // «До виплати» минулого місяця (сума total_amount) — для бейджа дельти в bento.
-  const [prevTotal, setPrevTotal] = React.useState<number | null>(null);
-
   const saveTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const periodDataKey = `${workspaceId ?? ""}:${period}`;
+  const hydrationRef = React.useRef<{ key: string; at: number; dirty: boolean }>({
+    key: "",
+    at: 0,
+    dirty: false,
+  });
+  const markPeriodDirty = React.useCallback(() => {
+    if (hydrationRef.current.key === `${workspaceId ?? ""}:${period}`) {
+      hydrationRef.current.dirty = true;
+    }
+  }, [workspaceId, period]);
 
-  // Load members + reference data once.
   React.useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const wsId = await resolveWorkspaceId(userId);
-        if (!wsId || cancelled) return;
-        const rows = await listWorkspaceMembersForDisplay(wsId);
-        if (cancelled) return;
-        setWorkspaceId(wsId);
-        setMembers(rows);
-      } catch (error) {
-        if (!cancelled) toast.error("Не вдалося завантажити команду", { description: getErrorMessage(error, "") });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, teamId]);
-
-  // Load period entries + payout meta whenever period or workspace changes.
-  React.useEffect(() => {
-    if (!workspaceId || !teamId) return;
-    let cancelled = false;
-    setLoading(true);
-    void Promise.all([
-      loadPayrollEntries(workspaceId, period),
-      listPayoutMeta(teamId, period),
-      // Минулий місяць — лише сума «до виплати» для дельти; збій не критичний.
-      loadPayrollEntries(workspaceId, prevPeriod).catch(() => null),
-    ])
-      .then(([nextEntries, nextMeta, prevEntries]) => {
-        if (cancelled) return;
-        setEntries(nextEntries);
-        setMeta(nextMeta);
-        setPrevTotal(
-          prevEntries
-            ? Array.from(prevEntries.values()).reduce((sum, e) => sum + e.totalAmount, 0)
-            : null
-        );
-        const nextDrafts: Record<string, Draft> = {};
-        nextEntries.forEach((entry, uid) => {
-          nextDrafts[uid] = {
-            base: amountToInput(entry.baseAmount),
-            bonus: amountToInput(entry.bonusAmount),
-            deduction: amountToInput(entry.deductionAmount),
-          };
-        });
-        setDrafts(nextDrafts);
-      })
-      .catch((error) => {
-        if (!cancelled) toast.error("Не вдалося завантажити виплати", { description: getErrorMessage(error, "") });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, teamId, period, prevPeriod]);
+    const data = periodQuery.data;
+    if (!data) return;
+    const ref = hydrationRef.current;
+    const keyChanged = ref.key !== periodDataKey;
+    if (!keyChanged && periodQuery.dataUpdatedAt <= ref.at) return;
+    if (!keyChanged && ref.dirty) return;
+    hydrationRef.current = { key: periodDataKey, at: periodQuery.dataUpdatedAt, dirty: false };
+    setEntries(data.entries);
+    setMeta(data.meta);
+    const nextDrafts: Record<string, Draft> = {};
+    data.entries.forEach((entry, uid) => {
+      nextDrafts[uid] = {
+        base: amountToInput(entry.baseAmount),
+        bonus: amountToInput(entry.bonusAmount),
+        deduction: amountToInput(entry.deductionAmount),
+      };
+    });
+    setDrafts(nextDrafts);
+  }, [periodQuery.data, periodQuery.dataUpdatedAt, periodDataKey]);
 
   const people = React.useMemo<Person[]>(() => {
     const real = members
@@ -207,6 +202,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   }, [people, drafts, entries, meta]);
 
   const queueSaveAmount = (uid: string, patch: Partial<Draft>) => {
+    markPeriodDirty();
     setDrafts((prev) => ({ ...prev, [uid]: { ...draftFor(uid), ...patch } }));
     if (!workspaceId) return;
     if (saveTimers.current[uid]) clearTimeout(saveTimers.current[uid]);
@@ -230,6 +226,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 
   const saveNote = async (uid: string, note: string) => {
     if (!workspaceId) return;
+    markPeriodDirty();
     const d = draftFor(uid);
     const trimmed = note.trim();
     const nextNote = trimmed ? trimmed : null;
@@ -266,6 +263,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
 
   const saveMeta = async (uid: string, patch: Partial<FinancePayoutMeta>) => {
     if (!teamId) return;
+    markPeriodDirty();
     const current = meta.get(uid);
     const next: FinancePayoutMeta = {
       userId: uid,
