@@ -2,8 +2,14 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Loader2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatOrderMoney, loadDerivedOrders } from "@/features/orders/orderRecords";
-import { listExpenses, listInvoices, listOrderMeta, listPayments } from "./api";
+import { formatOrderMoney } from "@/features/orders/orderRecords";
+import {
+  useFinanceDerivedOrderInfo,
+  useFinanceExpenses,
+  useFinanceInvoices,
+  useFinanceOrderMeta,
+  useFinancePayments,
+} from "./queries";
 import {
   invoiceIsReceivable,
   ORDER_TYPE_LABELS,
@@ -39,57 +45,36 @@ type MarginRow = {
   margin: number; // received − expenses (factual)
 };
 
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_INVOICES: FinanceInvoice[] = [];
+const EMPTY_EXPENSES: FinanceExpense[] = [];
+const EMPTY_ORDER_META = new Map<string, FinanceOrderMeta>();
+const EMPTY_ORDERS = new Map<string, OrderInfo>();
+
 export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [invoices, setInvoices] = React.useState<FinanceInvoice[]>([]);
-  const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
-  const [orderMeta, setOrderMeta] = React.useState<Map<string, FinanceOrderMeta>>(new Map());
-  const [ordersByQuote, setOrdersByQuote] = React.useState<Map<string, OrderInfo>>(new Map());
-  const [loading, setLoading] = React.useState(true);
+  // Спільні finance-хуки (див. queries.ts): рендер з кешу між вкладками;
+  // мапа замовлень — той самий ключ, що в дашборда (один мережевий виклик).
+  const paymentsQuery = useFinancePayments(teamId);
+  const invoicesQuery = useFinanceInvoices(teamId);
+  const expensesQuery = useFinanceExpenses(teamId);
+  const orderMetaQuery = useFinanceOrderMeta(teamId);
+  const ordersQuery = useFinanceDerivedOrderInfo(teamId, userId ?? null);
 
-  React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setLoading(true);
-    void Promise.all([listPayments(teamId), listInvoices(teamId), listExpenses(teamId), listOrderMeta(teamId)])
-      .then(([p, inv, exp, meta]) => {
-        if (!active) return;
-        setPayments(p);
-        setInvoices(inv);
-        setExpenses(exp);
-        setOrderMeta(meta);
-      })
-      .catch((error) => {
-        if (active) toast.error("Не вдалося завантажити маржу", { description: getErrorMessage(error, "") });
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId]);
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
+  const expenses = expensesQuery.data ?? EMPTY_EXPENSES;
+  const orderMeta = orderMetaQuery.data ?? EMPTY_ORDER_META;
+  const ordersByQuote: Map<string, OrderInfo> = ordersQuery.data ?? EMPTY_ORDERS;
+  const loading =
+    paymentsQuery.isPending || invoicesQuery.isPending || expensesQuery.isPending || orderMetaQuery.isPending;
 
+  const loadError =
+    paymentsQuery.error ?? invoicesQuery.error ?? expensesQuery.error ?? orderMetaQuery.error ?? null;
   React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    void loadDerivedOrders(teamId, userId)
-      .then((records) => {
-        if (!active) return;
-        setOrdersByQuote(
-          new Map(
-            records.map((r) => [
-              r.quoteId,
-              { number: r.quoteNumber, customerName: r.customerName, total: r.total, currency: r.currency },
-            ])
-          )
-        );
-      })
-      .catch(() => {
-        /* names fall back to quote id */
-      });
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити маржу", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   const rows = React.useMemo<MarginRow[]>(() => {
     const byQuote = new Map<string, MarginRow>();

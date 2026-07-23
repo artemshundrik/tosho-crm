@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import {
   useFinanceAccounts,
-  useFinanceDerivedOrderNames,
+  useFinanceDerivedOrderInfo,
   useFinanceInvoices,
   useFinanceLegalEntities,
   useFinancePayments,
@@ -54,7 +54,7 @@ export function FinanceDashboard({ teamId, userId, canSeeSensitive }: FinanceDas
   const entitiesQuery = useFinanceLegalEntities(teamId);
   const invoicesQuery = useFinanceInvoices(teamId);
   // Orders (for debtor names) — best-effort, не блокує дашборд (помилка → порожня мапа).
-  const ordersQuery = useFinanceDerivedOrderNames(teamId, userId ?? null);
+  const ordersQuery = useFinanceDerivedOrderInfo(teamId, userId ?? null);
 
   const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
   const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;

@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
-import { listInvoices, listLegalEntities, listOrdersForFinance, listPayments } from "./api";
+import {
+  useFinanceInvoices,
+  useFinanceLegalEntities,
+  useFinanceOrderRefs,
+  useFinancePayments,
+} from "./queries";
 import {
   invoiceIsReceivable,
   formatLegalEntityLabel,
@@ -30,39 +35,38 @@ type FinanceReconciliationProps = { teamId: string | null; userId: string | null
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const EMPTY_ORDER_REFS: FinanceOrderRef[] = [];
+const EMPTY_INVOICES: FinanceInvoice[] = [];
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+
 export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationProps) {
-  const [orders, setOrders] = React.useState<FinanceOrderRef[]>([]);
-  const [invoices, setInvoices] = React.useState<FinanceInvoice[]>([]);
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  // Спільні finance-хуки — рендер з кешу між вкладками (див. queries.ts).
+  const ordersQuery = useFinanceOrderRefs(teamId, userId ?? null);
+  const invoicesQuery = useFinanceInvoices(teamId);
+  const paymentsQuery = useFinancePayments(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const orders = ordersQuery.data ?? EMPTY_ORDER_REFS;
+  const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const loading =
+    ordersQuery.isPending || invoicesQuery.isPending || paymentsQuery.isPending || entitiesQuery.isPending;
   const [customerKey, setCustomerKey] = React.useState("");
   const [sellerId, setSellerId] = React.useState("");
 
+  // Дефолт продавця — перша юрособа (як і було: разово, без перезапису вибору).
   React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setLoading(true);
-    void Promise.all([
-      listOrdersForFinance(teamId, userId),
-      listInvoices(teamId),
-      listPayments(teamId),
-      listLegalEntities(teamId),
-    ])
-      .then(([o, inv, p, ent]) => {
-        if (!active) return;
-        setOrders(o);
-        setInvoices(inv);
-        setPayments(p);
-        setEntities(ent);
-        if (ent[0]) setSellerId((prev) => prev || ent[0].id);
-      })
-      .catch((error) => active && toast.error("Не вдалося завантажити дані", { description: getErrorMessage(error, "") }))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+    const first = entities[0];
+    if (first) setSellerId((prev) => prev || first.id);
+  }, [entities]);
+
+  const loadError = invoicesQuery.error ?? paymentsQuery.error ?? entitiesQuery.error ?? null;
+  React.useEffect(() => {
+    if (loadError) {
+      toast.error("Не вдалося завантажити дані", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   // Customers derived from orders (key = customerId or name fallback).
   const customers = React.useMemo(() => {

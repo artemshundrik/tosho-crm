@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { useFxRates } from "@/lib/fxRates";
-import { listAccounts, listExpenses, listPayments } from "./api";
+import { useFinanceAccounts, useFinanceExpenses, useFinancePayments } from "./queries";
 import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   ACCOUNT_KIND_LABELS,
@@ -21,30 +21,28 @@ type FinanceAccountsViewProps = { teamId: string | null; canSeeSensitive: boolea
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const EMPTY_ACCOUNTS: FinanceAccount[] = [];
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_EXPENSES: FinanceExpense[] = [];
+
 export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccountsViewProps) {
   const rates = useFxRates();
-  const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  // Спільні finance-хуки: ті самі ключі, що на сусідніх вкладках — рендер з
+  // кешу, свіжість тримає refetchOnMount:"always" (див. queries.ts).
+  const accountsQuery = useFinanceAccounts(teamId);
+  const paymentsQuery = useFinancePayments(teamId);
+  const expensesQuery = useFinanceExpenses(teamId);
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const expenses = expensesQuery.data ?? EMPTY_EXPENSES;
+  const loading = accountsQuery.isPending || paymentsQuery.isPending || expensesQuery.isPending;
 
+  const loadError = accountsQuery.error ?? paymentsQuery.error ?? expensesQuery.error ?? null;
   React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setLoading(true);
-    void Promise.all([listAccounts(teamId), listPayments(teamId), listExpenses(teamId)])
-      .then(([a, p, e]) => {
-        if (!active) return;
-        setAccounts(a);
-        setPayments(p);
-        setExpenses(e);
-      })
-      .catch((error) => active && toast.error("Не вдалося завантажити каси", { description: getErrorMessage(error, "") }))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити каси", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   const visibleAccounts = React.useMemo(
     () => (canSeeSensitive ? accounts : accounts.filter((a) => !a.isSensitive)),

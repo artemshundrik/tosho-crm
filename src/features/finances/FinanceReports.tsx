@@ -6,14 +6,14 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { FinanceStickyBar } from "./FinanceMonthBar";
 import {
-  listAccounts,
-  listExpenseCategories,
-  listExpenses,
-  listInvoices,
-  listLegalEntities,
-  listPayments,
-  listTaxes,
-} from "./api";
+  useFinanceAccounts,
+  useFinanceExpenseCategories,
+  useFinanceExpenses,
+  useFinanceInvoices,
+  useFinanceLegalEntities,
+  useFinancePayments,
+  useFinanceTaxes,
+} from "./queries";
 import {
   invoiceIsReceivable,
   formatLegalEntityLabel,
@@ -44,48 +44,55 @@ const rangeStart = (range: RangeKey): string => {
   return "0000-01-01";
 };
 
+const EMPTY_PAYMENTS: FinancePayment[] = [];
+const EMPTY_INVOICES: FinanceInvoice[] = [];
+const EMPTY_EXPENSES: FinanceExpense[] = [];
+const EMPTY_TAXES: FinanceTax[] = [];
+const EMPTY_ACCOUNTS: FinanceAccount[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+const EMPTY_CATEGORIES: FinanceExpenseCategory[] = [];
+
 export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps) {
   const [range, setRange] = React.useState<RangeKey>("month");
-  const [payments, setPayments] = React.useState<FinancePayment[]>([]);
-  const [invoices, setInvoices] = React.useState<FinanceInvoice[]>([]);
-  const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
-  const [taxes, setTaxes] = React.useState<FinanceTax[]>([]);
-  const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [categories, setCategories] = React.useState<FinanceExpenseCategory[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  // Спільні finance-хуки (див. queries.ts): звіти — чисте читання, всі сім
+  // ресурсів уже в кеші після відвідин сусідніх вкладок.
+  const paymentsQuery = useFinancePayments(teamId);
+  const invoicesQuery = useFinanceInvoices(teamId);
+  const expensesQuery = useFinanceExpenses(teamId);
+  const taxesQuery = useFinanceTaxes(teamId);
+  const accountsQuery = useFinanceAccounts(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const categoriesQuery = useFinanceExpenseCategories(teamId);
 
+  const payments = paymentsQuery.data ?? EMPTY_PAYMENTS;
+  const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
+  const expenses = expensesQuery.data ?? EMPTY_EXPENSES;
+  const taxes = taxesQuery.data ?? EMPTY_TAXES;
+  const accounts = accountsQuery.data ?? EMPTY_ACCOUNTS;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const loading =
+    paymentsQuery.isPending ||
+    invoicesQuery.isPending ||
+    expensesQuery.isPending ||
+    taxesQuery.isPending ||
+    accountsQuery.isPending ||
+    entitiesQuery.isPending ||
+    categoriesQuery.isPending;
+
+  const loadError =
+    paymentsQuery.error ??
+    invoicesQuery.error ??
+    expensesQuery.error ??
+    taxesQuery.error ??
+    accountsQuery.error ??
+    entitiesQuery.error ??
+    null;
   React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setLoading(true);
-    void Promise.all([
-      listPayments(teamId),
-      listInvoices(teamId),
-      listExpenses(teamId),
-      listTaxes(teamId),
-      listAccounts(teamId),
-      listLegalEntities(teamId),
-      listExpenseCategories(teamId),
-    ])
-      .then(([p, inv, exp, tx, acc, ent, cat]) => {
-        if (!active) return;
-        setPayments(p);
-        setInvoices(inv);
-        setExpenses(exp);
-        setTaxes(tx);
-        setAccounts(acc);
-        setEntities(ent);
-        setCategories(cat);
-      })
-      .catch((error) => {
-        if (active) toast.error("Не вдалося завантажити звіти", { description: getErrorMessage(error, "") });
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити звіти", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
 
   const accountById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   const start = rangeStart(range);

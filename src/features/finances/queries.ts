@@ -142,16 +142,32 @@ export function useFinanceTaxes(teamId: string | null) {
   });
 }
 
-/** Замовлення для підпису боржників — best-effort: помилка = порожня мапа, дашборд не блокується. */
-export function useFinanceDerivedOrderNames(teamId: string | null, userId: string | null) {
+export type FinanceDerivedOrderInfo = {
+  number: string;
+  customerName: string;
+  total: number;
+  currency: string;
+};
+
+/**
+ * Замовлення по quoteId (номер, замовник, сума, валюта) — дашборд бере звідси
+ * імена боржників, маржа — повний рядок. Один ключ = один мережевий виклик на
+ * обидві вкладки. Best-effort: помилка = порожня мапа, вкладки не блокуються.
+ */
+export function useFinanceDerivedOrderInfo(teamId: string | null, userId: string | null) {
   return useQuery({
     queryKey: financeKeys.derivedOrders(teamId ?? "", userId),
     queryFn: async () => {
       try {
         const records = await loadDerivedOrders(teamId as string, userId);
-        return new Map(records.map((r) => [r.quoteId, { customerName: r.customerName }]));
+        return new Map<string, FinanceDerivedOrderInfo>(
+          records.map((r) => [
+            r.quoteId,
+            { number: r.quoteNumber, customerName: r.customerName, total: r.total, currency: r.currency },
+          ])
+        );
       } catch {
-        return new Map<string, { customerName: string }>();
+        return new Map<string, FinanceDerivedOrderInfo>();
       }
     },
     enabled: !!teamId,
