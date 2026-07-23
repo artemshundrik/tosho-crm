@@ -95,7 +95,7 @@ export function DeliveryPointsSection({
                       aria-pressed={point.isDefault}
                       onClick={() => onSetDefault(index)}
                     >
-                      <Star className={cn("h-3.5 w-3.5", point.isDefault && "fill-amber-400 text-amber-400")} />
+                      <Star className={cn("h-3.5 w-3.5", point.isDefault && "fill-star text-star")} />
                       {point.isDefault ? "Основна" : "Зробити основною"}
                     </Button>
                     <Button

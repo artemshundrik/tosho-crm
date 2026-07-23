@@ -212,7 +212,7 @@ export function QuoteDeliveryFields({
                     <span className="inline-flex items-center gap-1.5">
                       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                       {[point.city, point.address].filter(Boolean).join(", ") || "Без адреси"}
-                      {point.isDefault ? <Star className="h-3 w-3 fill-amber-400 text-amber-400" /> : null}
+                      {point.isDefault ? <Star className="h-3 w-3 fill-star text-star" /> : null}
                     </span>
                   </SelectItem>
                 );

@@ -172,7 +172,7 @@ function SimpleModelCardBase({
         "group relative flex cursor-pointer flex-col rounded-xl border bg-card transition-all duration-200",
         "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
         !validation.isValid
-          ? "border-amber-500/40 hover:border-amber-500/60"
+          ? "border-warning-soft-border hover:border-warning-foreground/50"
           : "border-border/60 hover:border-primary/30"
       )}
       onClick={openEditor}
@@ -319,7 +319,7 @@ function SimpleModelCardBase({
 
         <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
           {hasNoMethods ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-500/90">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-warning-foreground">
               <AlertTriangle className="h-3 w-3" />
               Методи не вказані
             </span>

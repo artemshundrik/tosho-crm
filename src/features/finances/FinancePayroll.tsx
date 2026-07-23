@@ -328,8 +328,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         buckets={
           totals.total > 0
             ? [
-                { key: "paid", label: "Виплачено", amount: totals.paid, color: "bg-emerald-500" },
-                { key: "remaining", label: "Лишилось", amount: Math.max(0, totals.total - totals.paid), color: "bg-amber-500" },
+                { key: "paid", label: "Виплачено", amount: totals.paid, color: "tone-dot-success" },
+                { key: "remaining", label: "Лишилось", amount: Math.max(0, totals.total - totals.paid), color: "tone-dot-warning" },
               ].filter((b) => b.amount > 0)
             : []
         }

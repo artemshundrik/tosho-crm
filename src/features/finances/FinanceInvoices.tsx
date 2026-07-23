@@ -295,9 +295,9 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
           title="Дебіторка · відкриті рахунки"
           totalText={formatOrderMoney(receivables.total, "UAH")}
           buckets={[
-            { key: "overdue", label: "Прострочено", amount: receivables.overdue, color: "bg-rose-500" },
-            { key: "partial", label: "Частково оплачено", amount: receivables.partial, color: "bg-amber-500" },
-            { key: "sent", label: "Чекає оплати", amount: receivables.sent, color: "bg-sky-500" },
+            { key: "overdue", label: "Прострочено", amount: receivables.overdue, color: "tone-dot-danger" },
+            { key: "partial", label: "Частково оплачено", amount: receivables.partial, color: "tone-dot-warning" },
+            { key: "sent", label: "Чекає оплати", amount: receivables.sent, color: "tone-dot-info" },
           ].filter((b) => b.amount > 0)}
           footnote={
             <>

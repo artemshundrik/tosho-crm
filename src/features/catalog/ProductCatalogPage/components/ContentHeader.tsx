@@ -283,7 +283,7 @@ export function ContentHeader({
                 {positionUsage === null ? (
                   <span className="text-2xs text-muted-foreground">Перевірка використання…</span>
                 ) : positionUsage > 0 ? (
-                  <span className="text-2xs text-amber-500">
+                  <span className="text-2xs text-warning-foreground">
                     Використовується в {positionUsage} {positionUsage === 1 ? "прорахунку" : "прорахунках"}
                   </span>
                 ) : null}
@@ -364,7 +364,7 @@ export function ContentHeader({
                 {methodUsage === null ? (
                   <span className="text-2xs text-muted-foreground">Перевірка використання…</span>
                 ) : methodUsage > 0 ? (
-                  <span className="text-2xs text-amber-500">
+                  <span className="text-2xs text-warning-foreground">
                     Використовується в {methodUsage} {methodUsage === 1 ? "прорахунку" : "прорахунках"}
                   </span>
                 ) : null}

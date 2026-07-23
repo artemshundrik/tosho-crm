@@ -304,19 +304,9 @@ function describeAnomaly(current: number, history: number[], unit: string) {
   };
 }
 
-function toneClasses(tone: "good" | "warning" | "danger" | "neutral") {
-  if (tone === "good") return "border-success-soft-border bg-success-soft text-success-foreground";
-  if (tone === "danger") return "border-danger-soft-border bg-danger-soft text-danger-foreground";
-  if (tone === "warning") return "border-warning-soft-border bg-warning-soft text-warning-foreground";
-  return "border-border/70 bg-muted/40 text-muted-foreground";
-}
-
-function statusDotClasses(tone: "good" | "warning" | "danger" | "neutral") {
-  if (tone === "good") return "bg-success-foreground";
-  if (tone === "danger") return "bg-danger-foreground";
-  if (tone === "warning") return "bg-warning-foreground";
-  return "bg-muted-foreground/70";
-}
+// toneClasses/statusDotClasses видалено: байт-в-байт копії тих, що живуть у
+// ObservabilityPanels.tsx, лишились тут після виділення панелей у компонент.
+// Обидві були мертві — на них не було жодного посилання.
 
 function formatAxisNumber(value: number | undefined) {
   const safeValue = numberOrZero(value);

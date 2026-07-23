@@ -21,7 +21,18 @@ export default defineConfig([
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'error',
+      // Префікс `_` — загальноприйнятий маркер «свідомо не використовую»
+      // (позиційний параметр, який не можна викинути, не зламавши сигнатуру).
+      // Код цю конвенцію вже писав, а конфіг про неї не знав — звідси були
+      // 16 помилок на параметрах, які автор навмисно позначив.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       'react-refresh/only-export-components': 'off',
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/purity': 'off',

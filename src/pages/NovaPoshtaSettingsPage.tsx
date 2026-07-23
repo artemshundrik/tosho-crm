@@ -199,9 +199,9 @@ export default function NovaPoshtaSettingsPage() {
       </div>
 
       {notConfigured ? (
-        <Card className="border-amber-300/60 bg-amber-50/50 dark:bg-amber-500/5">
+        <Card className="tone-warning-subtle">
           <CardContent className="flex items-start gap-3 py-4 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
             <div>
               Ключ API Нової Пошти не налаштований на сервері. Додайте{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">NOVA_POSHTA_API_KEY</code> у змінні

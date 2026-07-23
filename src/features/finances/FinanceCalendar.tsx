@@ -23,13 +23,15 @@ import {
 
 type FinanceCalendarProps = { teamId: string | null; userId: string | null };
 
-// Статусні кольори кошиків терміновості (bento-смуга «до сплати»).
+// Статусні кольори кошиків терміновості (bento-смуга «до сплати»). Це СТАН, а
+// не категорія, тому семантичні тони, а не категоріальна палітра графіків:
+// прострочене мусить бути того самого червоного, що й усе термінове в застосунку.
 const DUE_BUCKET_COLORS: Record<string, string> = {
-  overdue: "bg-rose-500",
-  week: "bg-amber-500",
-  month: "bg-sky-500",
-  later: "bg-slate-400",
-  nodate: "bg-slate-300",
+  overdue: "tone-dot-danger",
+  week: "tone-dot-warning",
+  month: "tone-dot-info",
+  later: "tone-dot-neutral",
+  nodate: "bg-muted-foreground/40",
 };
 
 const getErrorMessage = (error: unknown, fallback: string) =>
@@ -205,7 +207,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
           key: b.key,
           label: b.label,
           amount: b.items.reduce((s, i) => s + i.amount, 0),
-          color: DUE_BUCKET_COLORS[b.key] ?? "bg-slate-400",
+          color: DUE_BUCKET_COLORS[b.key] ?? "tone-dot-neutral",
         }))
         .filter((b) => b.amount > 0),
     [buckets]

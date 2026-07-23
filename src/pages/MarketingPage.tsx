@@ -1059,7 +1059,7 @@ export default function MarketingPage() {
                   className={cn(
                     "h-4 w-4",
                     record.isFavorite
-                      ? "fill-amber-400 text-amber-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
+                      ? "fill-star text-star drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]"
                       : "text-white"
                   )}
                 />
@@ -1261,7 +1261,7 @@ export default function MarketingPage() {
           <Chip
             size="sm"
             active={onlyFavorites}
-            icon={<Star className={cn("h-3.5 w-3.5", onlyFavorites && "fill-amber-400 text-amber-400")} />}
+            icon={<Star className={cn("h-3.5 w-3.5", onlyFavorites && "fill-star text-star")} />}
             onClick={() => setOnlyFavorites((prev) => !prev)}
           >
             Обрані
@@ -1482,7 +1482,7 @@ export default function MarketingPage() {
                       onClick={() => handleToggleFavorite(selected)}
                     >
                       <Star
-                        className={cn("h-4 w-4", selectedRecord.isFavorite && "fill-amber-400 text-amber-400")}
+                        className={cn("h-4 w-4", selectedRecord.isFavorite && "fill-star text-star")}
                       />
                     </button>
                   </div>

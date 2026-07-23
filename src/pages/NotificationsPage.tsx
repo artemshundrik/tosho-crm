@@ -199,15 +199,6 @@ function Toggle({
   );
 }
 
-function statusPillClass(tone: SettingsTone) {
-  return cn(
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-3 py-2 text-[13px] font-medium transition-colors sm:text-sm",
-    tone === "active" && "border-primary/25 bg-primary/10 text-primary",
-    tone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-    tone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
-  );
-}
-
 function statusIconButtonClass(tone: SettingsTone) {
   return cn(
     "inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition-colors",
