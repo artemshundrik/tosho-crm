@@ -94,7 +94,11 @@ function RouteSuspense({
   children: React.ReactNode;
   shell?: boolean;
 }) {
-  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
+  return (
+    <RouteRuntimeBoundary>
+      <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+    </RouteRuntimeBoundary>
+  );
 }
 
 const CHUNK_RELOAD_GUARD_KEY = "app_chunk_reload_once";
@@ -343,7 +347,16 @@ function reloadOnceForChunkError(): boolean {
   return true;
 }
 
-type AppBoundaryProps = { children: ReactNode };
+type AppBoundaryProps = {
+  children: ReactNode;
+  /**
+   * "screen" — повноекранна заглушка (глобальний boundary над усім деревом).
+   * "route" — картка в потоці сторінки: шел із сайдбаром лишається живим,
+   * падає тільки зона контенту. Без route-рівня будь-який рендер-краш однієї
+   * сторінки зносив увесь застосунок, хоча винна була одна в'юха.
+   */
+  layout?: "screen" | "route";
+};
 type AppBoundaryState = { hasError: boolean; message: string };
 
 class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundaryState> {
@@ -381,23 +394,40 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
 
   render() {
     if (!this.state.hasError) return this.props.children;
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-lg rounded-inner border border-border bg-card p-5">
-          <div className="text-base font-semibold">Сталася помилка інтерфейсу</div>
-          <div className="mt-2 text-sm text-muted-foreground">{this.state.message}</div>
-          <div className="mt-4 flex gap-2">
-            <Button type="button" onClick={() => window.location.reload()}>
-              Оновити сторінку
-            </Button>
-            <Button type="button" variant="outline" asChild>
-              <Link to="/overview">На головну</Link>
-            </Button>
-          </div>
+    const card = (
+      <div className="w-full max-w-lg rounded-inner border border-border bg-card p-5">
+        <div className="text-base font-semibold">Сталася помилка інтерфейсу</div>
+        <div className="mt-2 text-sm text-muted-foreground">{this.state.message}</div>
+        <div className="mt-4 flex gap-2">
+          <Button type="button" onClick={() => window.location.reload()}>
+            Оновити сторінку
+          </Button>
+          <Button type="button" variant="outline" asChild>
+            <Link to="/overview">На головну</Link>
+          </Button>
         </div>
       </div>
     );
+    if (this.props.layout === "route") {
+      return <div className="flex justify-center p-6 md:p-10">{card}</div>;
+    }
+    return <div className="min-h-screen flex items-center justify-center bg-background p-6">{card}</div>;
   }
+}
+
+/**
+ * Route-рівневий boundary. key={pathname} — це і є механізм відновлення:
+ * перехід на інший маршрут перемонтовує boundary й скидає hasError, тож
+ * «На головну» працює без повного перезавантаження — решта застосунку
+ * (сайдбар, сповіщення, presence) увесь цей час лишалась живою.
+ */
+function RouteRuntimeBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return (
+    <AppRuntimeBoundary layout="route" key={location.pathname}>
+      {children}
+    </AppRuntimeBoundary>
+  );
 }
 
 // =======================
