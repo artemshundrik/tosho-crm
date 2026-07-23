@@ -15,7 +15,9 @@ export default {
       },
       extend: {
         fontFamily: {
-          sans: ["Inter", "sans-serif"],
+          // "Inter Variable" — ім'я родини з @fontsource-variable/inter;
+          // "Inter" лишається фолбеком для середовищ зі встановленим локально.
+          sans: ["Inter Variable", "Inter", "sans-serif"],
         },
         colors: {
           border: "hsl(var(--border))",

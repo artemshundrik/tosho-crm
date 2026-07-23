@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+// Self-host Inter (variable, з cyrillic-сабсетами через unicode-range) замість
+// Google Fonts CDN: мінус render-blocking запит до стороннього домену на
+// кожен холодний вхід, файли їдуть з нашого ж CDN з fingerprint-кешем.
+import "@fontsource-variable/inter";
 import "./index.css";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
