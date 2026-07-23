@@ -140,7 +140,7 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
               <div
                 key={account.id}
                 className={cn(
-                  "flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3",
+                  "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3",
                   account.isSensitive && "border-warning/30 bg-warning/5"
                 )}
               >

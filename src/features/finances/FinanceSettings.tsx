@@ -280,7 +280,7 @@ function LegalEntitiesPanel({
           {entities.map((entity) => (
             <div
               key={entity.id}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+              className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -524,7 +524,7 @@ function AccountsPanel({
           {accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+              className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -856,7 +856,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
             { label: "IBAN", value: entity.iban },
           ];
           return (
-            <div key={entity.id} className="rounded-xl border border-border/60 bg-card p-4">
+            <div key={entity.id} className="rounded-xl border border-border/40 bg-card p-4 shadow-card">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-[10px]">

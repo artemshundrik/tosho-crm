@@ -265,7 +265,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
   return (
     <div
       className={
-        "rounded-2xl border border-border/60 bg-card p-4" +
+        "rounded-2xl border border-border/40 bg-card p-4 shadow-card" +
         (tone === "warning" ? " border-warning/40 bg-warning/5" : tone === "info" ? " border-info/40 bg-info/5" : "")
       }
     >

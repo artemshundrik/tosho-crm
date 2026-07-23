@@ -220,7 +220,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "su
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-card p-4",
+        "rounded-2xl border border-border/40 bg-card p-4 shadow-card",
         tone === "danger" && "border-destructive/40 bg-destructive/5",
         tone === "success" && "border-success/40 bg-success/5"
       )}

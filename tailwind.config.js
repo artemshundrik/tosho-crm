@@ -60,6 +60,10 @@ export default {
           info: "hsl(var(--info-foreground))",
           danger: "hsl(var(--danger-foreground))",
         },
+        boxShadow: {
+          // Глибина in-flow карток — див. --shadow-card в index.css (світла/темна).
+          card: "var(--shadow-card)",
+        },
         borderRadius: {
           lg: "var(--radius)",
           md: "calc(var(--radius) - 2px)",
