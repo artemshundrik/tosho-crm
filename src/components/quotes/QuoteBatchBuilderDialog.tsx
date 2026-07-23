@@ -1745,7 +1745,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 <DialogTitle className="flex items-center gap-2 text-base">
                   <Layers3 className="h-4 w-4" />
                   Білдер прорахунку
-                  <Badge variant="outline" className="ml-1 rounded-md">
+                  <Badge variant="outline" className="ml-1 rounded-full">
                     {resultLabel}
                   </Badge>
                 </DialogTitle>
@@ -2467,7 +2467,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         {activeProduct.files.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {activeProduct.files.map((file, index) => (
-                              <Badge key={`${file.name}-${index}`} variant="outline" className="gap-1 rounded-md">
+                              <Badge key={`${file.name}-${index}`} variant="outline" className="gap-1 rounded-full">
                                 <FileText className="h-3.5 w-3.5" />
                                 <span className="max-w-[180px] truncate">{file.name}</span>
                                 <button

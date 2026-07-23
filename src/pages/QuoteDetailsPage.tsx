@@ -5722,7 +5722,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   {(() => {
                     const Icon = quoteTypeIcon(quote.quote_type);
                     return (
-                      <div className="inline-flex h-6 items-center gap-1 rounded-md border border-primary/25 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold">
                         {Icon ? <Icon className="h-3 w-3" /> : null}
                         {quoteTypeLabel(quote.quote_type)}
                       </div>

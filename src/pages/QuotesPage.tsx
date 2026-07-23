@@ -7048,7 +7048,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                       </HoverCopyText>
                                     </div>
                                     <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
-                                      <div className="inline-flex h-6 items-center gap-1 rounded-[var(--radius-md)] border border-primary/35 bg-primary/10 px-2 text-[10px] font-semibold text-primary">
+                                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-[10px] font-semibold">
                                         {Icon ? <Icon className="h-3 w-3" /> : null}
                                         {quoteTypeLabel(row.quote_type)}
                                       </div>
@@ -7170,7 +7170,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                     <span
                                                       key={runLabel.id}
                                                       className={cn(
-                                                        "inline-flex h-5 items-center rounded-md border px-1.5 text-[11px] leading-none",
+                                                        "inline-flex h-5 items-center rounded-full border px-2 text-[11px] leading-none",
                                                         runLabel.active
                                                           ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
                                                           : "border-border/60 bg-muted/20 font-medium text-muted-foreground"

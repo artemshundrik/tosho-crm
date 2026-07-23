@@ -3148,7 +3148,7 @@ export function TeamMembersPage() {
                         <Badge
                           variant="outline"
                           className={cn(
-                            "w-fit px-2.5 py-1 rounded-[var(--radius)]",
+                            "w-fit px-2.5 py-1 rounded-full",
                             getEmploymentStatusBadgeClass(selectedEmploymentStatus)
                           )}
                         >
@@ -3252,23 +3252,23 @@ export function TeamMembersPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-[var(--radius)]", getAccessBadgeClass(m.access_role ?? null))}>
+                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-full", getAccessBadgeClass(m.access_role ?? null))}>
                               {getAccessRoleLabel(m.access_role ?? null)}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-[var(--radius)]", getJobBadgeClass(m.job_role ?? null))}>
+                            <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium rounded-full", getJobBadgeClass(m.job_role ?? null))}>
                               {getJobRoleLabel(m.job_role ?? null)}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col gap-1">
                               {rowInactive ? (
-                                <Badge variant="outline" className="w-fit px-2 py-0.5 text-xs rounded-[var(--radius)] border-muted-foreground/30 bg-muted text-muted-foreground">
+                                <Badge variant="outline" className="w-fit px-2 py-0.5 text-xs rounded-full border-muted-foreground/30 bg-muted text-muted-foreground">
                                   Співпрацю завершено
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className={cn("w-fit px-2 py-0.5 text-xs rounded-[var(--radius)]", getAvailabilityBadgeClass(rowAvailability))}>
+                                <Badge variant="outline" className={cn("w-fit px-2 py-0.5 text-xs rounded-full", getAvailabilityBadgeClass(rowAvailability))}>
                                   {getAvailabilityLabel(rowAvailability)}
                                 </Badge>
                               )}
@@ -3433,7 +3433,7 @@ export function TeamMembersPage() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)]", getAccessBadgeClass(inv.access_role))}
+                            className={cn("px-2 py-0.5 text-xs rounded-full", getAccessBadgeClass(inv.access_role))}
                           >
                             {getAccessRoleLabel(inv.access_role)}
                           </Badge>
@@ -3441,7 +3441,7 @@ export function TeamMembersPage() {
                         <TableCell>
                           <Badge
                             variant="outline"
-                            className={cn("px-2 py-0.5 text-xs rounded-[var(--radius)]", getJobBadgeClass(inv.job_role))}
+                            className={cn("px-2 py-0.5 text-xs rounded-full", getJobBadgeClass(inv.job_role))}
                           >
                             {getJobRoleLabel(inv.job_role)}
                           </Badge>
