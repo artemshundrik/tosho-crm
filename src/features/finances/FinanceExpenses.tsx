@@ -18,6 +18,8 @@ import {
   Receipt,
   RefreshCw,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -129,6 +131,34 @@ const monthLabel = (key: string) => {
   const [year, month] = key.split("-").map(Number);
   return `${MONTHS[(month || 1) - 1]} ${year}`;
 };
+
+const MONTHS_GENITIVE = [
+  "січня", "лютого", "березня", "квітня", "травня", "червня",
+  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
+];
+
+// «до червня» (рік дописуємо лише коли він інший, ніж у порівнюваному місяці).
+const monthGenitive = (key: string, vsKey: string) => {
+  const [year, month] = key.split("-").map(Number);
+  const [vsYear] = vsKey.split("-").map(Number);
+  const name = MONTHS_GENITIVE[(month || 1) - 1];
+  return year === vsYear ? name : `${name} ${year}`;
+};
+
+// «3» або «0,8» — модуль відсотка дельти: цілим від 10%, інакше з одним знаком.
+const formatDeltaPct = (abs: number) => (abs >= 9.95 ? String(Math.round(abs)) : abs.toFixed(1).replace(".", ","));
+
+// Кольори кошиків смуги розподілу (сервіси → обʼєкти → змінні) — стабільні за порядком.
+const BUCKET_COLORS = [
+  "bg-sky-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+  "bg-indigo-400",
+  "bg-slate-400",
+];
 
 // Shift a «YYYY-MM» key by a number of months.
 const shiftMonthKey = (key: string, delta: number) => {
@@ -600,17 +630,21 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [entriesByExpense]
   );
 
-  // Місячна гривнева вартість регулярного платежу ДЛЯ вибраного місяця:
+  // Місячна гривнева вартість регулярного платежу ДЛЯ конкретного місяця:
   // стала — та сама щомісяця; змінна — сума записів журналу за місяць
   // (або стартовий орієнтир, якщо записів ще немає).
-  const monthlyForSelected = React.useCallback(
-    (e: FinanceExpense): number | null => {
+  const monthlyFor = React.useCallback(
+    (e: FinanceExpense, monthKey: string): number | null => {
       if (!e.amountVaries) return expenseMonthlyUah(e, rates);
-      const monthEntries = entriesForMonth(e.id, selectedMonth);
+      const monthEntries = entriesForMonth(e.id, monthKey);
       const amt = monthEntries.length > 0 ? monthEntries.reduce((s, en) => s + en.amount, 0) : e.amount;
       return convertToUah(amt, e.currency, rates, e.fxRate);
     },
-    [rates, entriesForMonth, selectedMonth]
+    [rates, entriesForMonth]
+  );
+  const monthlyForSelected = React.useCallback(
+    (e: FinanceExpense): number | null => monthlyFor(e, selectedMonth),
+    [monthlyFor, selectedMonth]
   );
 
   const { fixed, variable } = React.useMemo(() => {
@@ -710,6 +744,41 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [selectedItems, rates]
   );
   const undatedItems = React.useMemo(() => variableByMonth.get("") ?? [], [variableByMonth]);
+
+  // --- Bento-підсумок місяця: разом + дельта до попереднього + розподіл --------
+  const monthTotal = fixedBaseline + selectedVariableSum;
+  const prevMonthKey = shiftMonthKey(selectedMonth, -1);
+
+  // Той самий підрахунок, що й для вибраного місяця, тільки за попередній:
+  // регулярні — місячною вартістю (змінні — фактом того місяця), плюс змінні витрати.
+  const prevMonthTotal = React.useMemo(() => {
+    const regular = fixed.reduce((sum, e) => sum + (monthlyFor(e, prevMonthKey) ?? 0), 0);
+    const variablePrev = (variableByMonth.get(prevMonthKey) ?? []).reduce(
+      (sum, e) => sum + (expenseUahAmount(e, rates) ?? 0),
+      0
+    );
+    return regular + variablePrev;
+  }, [fixed, monthlyFor, prevMonthKey, variableByMonth, rates]);
+
+  // Δ% до попереднього місяця; null — якщо порівнювати нема з чим.
+  const monthDeltaPct = prevMonthTotal > 0 ? ((monthTotal - prevMonthTotal) / prevMonthTotal) * 100 : null;
+
+  // Кошики смуги «куди йдуть гроші»: сервіси → обʼєкти → без обʼєкта → змінні.
+  const monthBuckets = React.useMemo(() => {
+    const buckets: { key: string; label: string; amount: number }[] = [];
+    if (servicesBaseline > 0) buckets.push({ key: "services", label: "Сервіси та підписки", amount: servicesBaseline });
+    for (const group of otherByObject) {
+      if (group.total > 0) {
+        buckets.push({
+          key: `obj:${group.label ?? "__untagged"}`,
+          label: group.label ?? "Без обʼєкта",
+          amount: group.total,
+        });
+      }
+    }
+    if (selectedVariableSum > 0) buckets.push({ key: "variable", label: "Змінні", amount: selectedVariableSum });
+    return buckets;
+  }, [servicesBaseline, otherByObject, selectedVariableSum]);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<FinanceExpense | null>(null);
@@ -1084,20 +1153,62 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             </Button>
           </div>
 
-          {/* KPI cells for the selected month */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <ExpenseKpi
-              label="Сервіси та підписки"
-              value={formatOrderMoney(servicesBaseline, "UAH")}
-              hint={rates.usdUah ? `$ ${rates.usdUah.toFixed(2)}` : undefined}
-            />
-            <ExpenseKpi label="Інші регулярні" value={formatOrderMoney(otherBaseline, "UAH")} />
-            <ExpenseKpi label="Змінні за місяць" value={formatOrderMoney(selectedVariableSum, "UAH")} />
-            <ExpenseKpi
-              label="Разом за місяць"
-              value={formatOrderMoney(fixedBaseline + selectedVariableSum, "UAH")}
-              accent
-            />
+          {/* Bento-підсумок вибраного місяця: разом, дельта до попереднього, розподіл */}
+          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Разом за {monthLabel(selectedMonth)}
+                </div>
+                <div className="mt-1.5 text-2xl font-semibold leading-none tabular-nums text-foreground sm:text-[28px]">
+                  {formatOrderMoney(monthTotal, "UAH")}
+                </div>
+              </div>
+              {monthDeltaPct !== null ? (
+                Math.abs(monthDeltaPct) < 0.5 ? (
+                  <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    ≈ рівень {monthGenitive(prevMonthKey, selectedMonth)}
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums",
+                      monthDeltaPct > 0
+                        ? "border-destructive/25 bg-destructive/5 text-destructive"
+                        : "border-success-soft-border bg-success-soft text-success-foreground"
+                    )}
+                  >
+                    {monthDeltaPct > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {monthDeltaPct > 0 ? "+" : "−"}
+                    {formatDeltaPct(Math.abs(monthDeltaPct))}% до {monthGenitive(prevMonthKey, selectedMonth)}
+                  </span>
+                )
+              ) : null}
+            </div>
+            {monthBuckets.length > 0 && monthTotal > 0 ? (
+              <>
+                {/* Смуга «куди йдуть гроші» — частки пропорційні сумам, дрібні видно завдяки minWidth */}
+                <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full" aria-hidden="true">
+                  {monthBuckets.map((b, i) => (
+                    <div
+                      key={b.key}
+                      className={cn("rounded-[2px]", BUCKET_COLORS[i % BUCKET_COLORS.length])}
+                      style={{ flexGrow: b.amount, flexBasis: 0, minWidth: 6 }}
+                      title={`${b.label} — ${formatOrderMoney(b.amount, "UAH")}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+                  {monthBuckets.map((b, i) => (
+                    <span key={b.key} className="inline-flex items-center gap-1.5 text-xs">
+                      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", BUCKET_COLORS[i % BUCKET_COLORS.length])} />
+                      <span className="text-muted-foreground">{b.label}</span>
+                      <span className="font-medium tabular-nums text-foreground">{formatOrderMoney(b.amount, "UAH")}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
 
           {/* Підписки та сталі витрати — однакова місячна база в кожному місяці */}
@@ -1294,40 +1405,6 @@ function ExpenseGroup({
         )
       ) : null}
     </section>
-  );
-}
-
-function ExpenseKpi({
-  label,
-  value,
-  accent,
-  hint,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  hint?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-xl border border-border/60 bg-card p-3",
-        accent && "border-primary/40 bg-primary/5"
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-muted-foreground">{label}</span>
-        {hint ? <span className="text-[10px] text-muted-foreground/80">{hint}</span> : null}
-      </div>
-      <div
-        className={cn(
-          "mt-1 text-base font-semibold tabular-nums text-foreground",
-          accent && "text-primary"
-        )}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 
