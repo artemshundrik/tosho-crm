@@ -53,7 +53,7 @@ import {
   type FxCurrency,
   type FxRates,
 } from "@/lib/fxRates";
-import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
+import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { OrderPickerInline } from "./OrderPickerInline";
 import {
@@ -126,19 +126,6 @@ const monthLabel = (key: string) => {
   if (!key) return "Без дати";
   const [year, month] = key.split("-").map(Number);
   return `${MONTHS[(month || 1) - 1]} ${year}`;
-};
-
-const MONTHS_GENITIVE = [
-  "січня", "лютого", "березня", "квітня", "травня", "червня",
-  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
-];
-
-// «до червня» (рік дописуємо лише коли він інший, ніж у порівнюваному місяці).
-const monthGenitive = (key: string, vsKey: string) => {
-  const [year, month] = key.split("-").map(Number);
-  const [vsYear] = vsKey.split("-").map(Number);
-  const name = MONTHS_GENITIVE[(month || 1) - 1];
-  return year === vsYear ? name : `${name} ${year}`;
 };
 
 // Секція реєстру витрат — вона ж кошик bento-смуги (спільний ключ, порядок і колір).
@@ -992,7 +979,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     return (
       <div
         key={expense.id}
-        className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+        className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
       >
         <div className="flex min-w-0 gap-3">
           <SubscriptionLogo
@@ -1047,7 +1034,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     const journalOpen = openJournals.has(expense.id);
 
     return (
-      <div key={expense.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+      <div key={expense.id} className="overflow-hidden rounded-xl border border-border/40 bg-card shadow-card">
         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
             <SubscriptionLogo

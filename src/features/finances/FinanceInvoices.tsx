@@ -29,6 +29,7 @@ import {
   upsertOrderMeta,
   type InvoiceInput,
 } from "./api";
+import { FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_BADGE_TONE,
@@ -124,6 +125,28 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
 
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
   const orderByQuote = React.useMemo(() => new Map(orders.map((o) => [o.quoteId, o])), [orders]);
+
+  // Дебіторка: скільки нам винні по відкритих рахунках, у розрізі статусів.
+  // Відкрита сума = balance_amount (як є), інакше amount − передоплата.
+  const receivables = React.useMemo(() => {
+    const openAmount = (inv: FinanceInvoice) =>
+      typeof inv.balanceAmount === "number" && Number.isFinite(inv.balanceAmount)
+        ? Math.max(0, inv.balanceAmount)
+        : Math.max(0, inv.amount - (inv.prepaymentAmount ?? 0));
+    let sent = 0;
+    let partial = 0;
+    let overdue = 0;
+    let draftCount = 0;
+    let paidTotal = 0;
+    for (const inv of invoices) {
+      if (inv.status === "sent") sent += openAmount(inv);
+      else if (inv.status === "partial") partial += openAmount(inv);
+      else if (inv.status === "overdue") overdue += openAmount(inv);
+      else if (inv.status === "draft") draftCount += 1;
+      else if (inv.status === "paid") paidTotal += inv.amount;
+    }
+    return { sent, partial, overdue, total: sent + partial + overdue, draftCount, paidTotal };
+  }, [invoices]);
 
   const reloadVchasnoStatuses = React.useCallback(async () => {
     if (!teamId || invoices.length === 0) {
@@ -265,6 +288,31 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
         </div>
       ) : null}
 
+      {/* Bento дебіторки (спільний із Витратами): скільки винні й у якому стані.
+          Статусні кольори — прострочене найтривожніше, тому першим. */}
+      {!loading && invoices.length > 0 ? (
+        <FinanceBentoSummary
+          title="Дебіторка · відкриті рахунки"
+          totalText={formatOrderMoney(receivables.total, "UAH")}
+          buckets={[
+            { key: "overdue", label: "Прострочено", amount: receivables.overdue, color: "bg-rose-500" },
+            { key: "partial", label: "Частково оплачено", amount: receivables.partial, color: "bg-amber-500" },
+            { key: "sent", label: "Чекає оплати", amount: receivables.sent, color: "bg-sky-500" },
+          ].filter((b) => b.amount > 0)}
+          footnote={
+            <>
+              <span>
+                Оплачено (за весь час):{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  {formatOrderMoney(receivables.paidTotal, "UAH")}
+                </span>
+              </span>
+              {receivables.draftCount > 0 ? <span>Чернеток: {receivables.draftCount}</span> : null}
+            </>
+          }
+        />
+      ) : null}
+
       {loading ? (
         <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
@@ -285,7 +333,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
             return (
               <div
                 key={invoice.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+                className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

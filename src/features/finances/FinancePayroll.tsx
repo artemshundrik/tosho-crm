@@ -2,7 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Check, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FinanceBentoSummary } from "./FinanceBentoSummary";
+import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -71,6 +71,12 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const [year, setYear] = React.useState(() => now.getFullYear());
   const [month, setMonth] = React.useState(() => now.getMonth() + 1);
   const period = React.useMemo(() => periodKey(year, month), [year, month]);
+  // Попередній місяць — для бейджа дельти «до …» у bento.
+  const prev = React.useMemo(() => {
+    const d = new Date(year, month - 2, 1);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }, [year, month]);
+  const prevPeriod = React.useMemo(() => periodKey(prev.year, prev.month), [prev]);
 
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
   const [members, setMembers] = React.useState<WorkspaceMemberDisplayRow[]>([]);
@@ -78,6 +84,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const [meta, setMeta] = React.useState<Map<string, FinancePayoutMeta>>(new Map());
   const [drafts, setDrafts] = React.useState<Record<string, Draft>>({});
   const [loading, setLoading] = React.useState(true);
+  // «До виплати» минулого місяця (сума total_amount) — для бейджа дельти в bento.
+  const [prevTotal, setPrevTotal] = React.useState<number | null>(null);
 
   const saveTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -107,11 +115,21 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     if (!workspaceId || !teamId) return;
     let cancelled = false;
     setLoading(true);
-    void Promise.all([loadPayrollEntries(workspaceId, period), listPayoutMeta(teamId, period)])
-      .then(([nextEntries, nextMeta]) => {
+    void Promise.all([
+      loadPayrollEntries(workspaceId, period),
+      listPayoutMeta(teamId, period),
+      // Минулий місяць — лише сума «до виплати» для дельти; збій не критичний.
+      loadPayrollEntries(workspaceId, prevPeriod).catch(() => null),
+    ])
+      .then(([nextEntries, nextMeta, prevEntries]) => {
         if (cancelled) return;
         setEntries(nextEntries);
         setMeta(nextMeta);
+        setPrevTotal(
+          prevEntries
+            ? Array.from(prevEntries.values()).reduce((sum, e) => sum + e.totalAmount, 0)
+            : null
+        );
         const nextDrafts: Record<string, Draft> = {};
         nextEntries.forEach((entry, uid) => {
           nextDrafts[uid] = {
@@ -131,7 +149,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, teamId, period]);
+  }, [workspaceId, teamId, period, prevPeriod]);
 
   const people = React.useMemo<Person[]>(() => {
     const real = members
@@ -302,6 +320,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       <FinanceBentoSummary
         title={`До виплати за ${PAYROLL_MONTHS[month - 1].toLowerCase()} ${year}`}
         totalText={formatUAH(totals.total)}
+        deltaPct={prevTotal !== null && prevTotal > 0 ? ((totals.total - prevTotal) / prevTotal) * 100 : null}
+        deltaVs={monthGenitive(
+          `${prev.year}-${String(prev.month).padStart(2, "0")}`,
+          `${year}-${String(month).padStart(2, "0")}`
+        )}
         buckets={
           totals.total > 0
             ? [

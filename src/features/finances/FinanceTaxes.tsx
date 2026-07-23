@@ -2,7 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Check, Landmark, Loader2, Plus } from "lucide-react";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
-import { BENTO_COLORS, FinanceBentoSummary } from "./FinanceBentoSummary";
+import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,6 +107,19 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
     [taxes]
   );
 
+  // Нараховано за поточний і минулий місяці (незалежно від статусу) — чесне
+  // порівняння місяць-до-місяця у виносці; бейдж-дельта тут збрехала б, бо
+  // велике число — це «до сплати» за всі періоди, а не за місяць.
+  const now = React.useMemo(() => new Date(), []);
+  const accrual = React.useMemo(() => {
+    const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const curKey = key(now);
+    const prevKey = key(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const sumFor = (k: string) =>
+      taxes.filter((t) => t.period.startsWith(k)).reduce((sum, t) => sum + t.amount, 0);
+    return { curKey, prevKey, current: sumFor(curKey), previous: sumFor(prevKey) };
+  }, [taxes, now]);
+
   const toggleStatus = async (tax: FinanceTax) => {
     if (!teamId) return;
     const nextStatus: TaxStatus = tax.status === "paid" ? "pending" : "paid";
@@ -156,6 +169,18 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
               Сплачено (за весь час):{" "}
               <span className="font-medium tabular-nums text-foreground/80">{formatOrderMoney(paidTotal, "UAH")}</span>
             </span>
+            {accrual.current > 0 || accrual.previous > 0 ? (
+              <span>
+                Нараховано за {monthGenitive(accrual.curKey, accrual.curKey)}:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  {formatOrderMoney(accrual.current, "UAH")}
+                </span>{" "}
+                · за {monthGenitive(accrual.prevKey, accrual.curKey)}:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  {formatOrderMoney(accrual.previous, "UAH")}
+                </span>
+              </span>
+            ) : null}
           </>
         }
       />
@@ -194,7 +219,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
             return (
               <div
                 key={tax.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3"
+                className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

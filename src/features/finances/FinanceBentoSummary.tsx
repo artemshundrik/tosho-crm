@@ -30,6 +30,19 @@ export type BentoBucket = {
 // «3» або «0,8» — модуль відсотка дельти: цілим від 10%, інакше з одним знаком.
 const formatDeltaPct = (abs: number) => (abs >= 9.95 ? String(Math.round(abs)) : abs.toFixed(1).replace(".", ","));
 
+const MONTHS_GENITIVE = [
+  "січня", "лютого", "березня", "квітня", "травня", "червня",
+  "липня", "серпня", "вересня", "жовтня", "листопада", "грудня",
+];
+
+/** «до червня» (рік дописуємо, лише коли він інший, ніж у порівнюваному місяці). */
+export const monthGenitive = (key: string, vsKey: string) => {
+  const [year, month] = key.split("-").map(Number);
+  const [vsYear] = vsKey.split("-").map(Number);
+  const name = MONTHS_GENITIVE[(month || 1) - 1];
+  return year === vsYear ? name : `${name} ${year}`;
+};
+
 export function FinanceBentoSummary({
   title,
   totalText,
@@ -86,7 +99,7 @@ export function FinanceBentoSummary({
   );
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
+    <div className="rounded-2xl border border-border/40 bg-card p-4 shadow-card sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
