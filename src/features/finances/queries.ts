@@ -1,11 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
+import { loadPayrollEntries, periodKey } from "@/lib/payroll";
+import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   listAccounts,
   listExpenses,
   listInvoices,
   listLegalEntities,
   listPayments,
+  listPayoutMeta,
   listTaxes,
 } from "./api";
 import type {
@@ -57,6 +60,8 @@ export const financeKeys = {
   taxes: (teamId: string) => ["finances", teamId, "taxes"] as const,
   derivedOrders: (teamId: string, userId: string | null) =>
     ["finances", teamId, "derived-orders", userId ?? ""] as const,
+  pendingPayout: (teamId: string, userId: string | null, period: string) =>
+    ["finances", teamId, "pending-payout", userId ?? "", period] as const,
 };
 
 export function useFinancePayments(teamId: string | null) {
@@ -126,6 +131,42 @@ export function useFinanceDerivedOrderNames(teamId: string | null, userId: strin
       }
     },
     enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/**
+ * Незакриті виплати команді за поточний місяць (для календаря платежів).
+ * Best-effort: будь-яка помилка → нулі, календар не блокується — та сама
+ * поведінка, що була в ручному ефекті. Період входить у ключ, тож зміна
+ * місяця посеред сесії дає окремий кеш-запис, а не перезапис минулого.
+ */
+export function useFinancePendingPayout(teamId: string | null, userId: string | null) {
+  const now = new Date();
+  const period = periodKey(now.getFullYear(), now.getMonth() + 1);
+  return useQuery({
+    queryKey: financeKeys.pendingPayout(teamId ?? "", userId, period),
+    queryFn: async () => {
+      try {
+        const wsId = await resolveWorkspaceId(userId as string);
+        if (!wsId) return { total: 0, count: 0 };
+        const [entries, meta] = await Promise.all([
+          loadPayrollEntries(wsId, period),
+          listPayoutMeta(teamId as string, period),
+        ]);
+        let payout = { total: 0, count: 0 };
+        entries.forEach((entry, uid) => {
+          if (meta.get(uid)?.status !== "paid" && entry.totalAmount > 0) {
+            payout = { total: payout.total + entry.totalAmount, count: payout.count + 1 };
+          }
+        });
+        return payout;
+      } catch (error) {
+        console.error("[finance] pending payout failed", error);
+        return { total: 0, count: 0 };
+      }
+    },
+    enabled: !!teamId && !!userId,
     ...FINANCE_SHARED_OPTIONS,
   });
 }

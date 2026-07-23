@@ -3,12 +3,15 @@ import { toast } from "sonner";
 import { AlertTriangle, CalendarClock, Landmark, Loader2, RefreshCw, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
-import { resolveWorkspaceId } from "@/lib/workspace";
-import { loadPayrollEntries, periodKey } from "@/lib/payroll";
 import { formatCurrencyAmount, useFxRates } from "@/lib/fxRates";
 import { getSubscriptionBrand, resolveSubscriptionLogo } from "./subscriptionBrands";
 import { SubscriptionLogo } from "./SubscriptionLogo";
-import { listExpenses, listLegalEntities, listPayoutMeta, listTaxes } from "./api";
+import {
+  useFinanceExpenses,
+  useFinanceLegalEntities,
+  useFinancePendingPayout,
+  useFinanceTaxes,
+} from "./queries";
 import { FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   BILLING_PERIOD_LABELS,
@@ -67,55 +70,45 @@ type DueItem = {
 
 type Bucket = { key: string; label: string; tone?: "danger" | "warning"; items: DueItem[] };
 
+const EMPTY_TAXES: FinanceTax[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+const EMPTY_EXPENSES: FinanceExpense[] = [];
+const ZERO_PAYOUT = { total: 0, count: 0 };
+
 export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
   const rates = useFxRates();
-  const [taxes, setTaxes] = React.useState<FinanceTax[]>([]);
-  const [subscriptions, setSubscriptions] = React.useState<FinanceExpense[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [pendingPayout, setPendingPayout] = React.useState<{ total: number; count: number }>({ total: 0, count: 0 });
-  const [loading, setLoading] = React.useState(true);
+  // React Query замість ручного ефекту: taxes/entities/expenses — спільні
+  // довідники з queries.ts, тож дані, які щойно бачила сусідня вкладка
+  // (Витрати, Дашборд), рендеряться миттєво; свіжість — refetchOnMount:"always".
+  const taxesQuery = useFinanceTaxes(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  // Підписки з датою наступного списання — це теж заплановані платежі.
+  // Expenses і payroll — best-effort (помилка не блокує календар): expenses
+  // деградує до порожнього списку тут, payroll — до нулів усередині хука.
+  const expensesQuery = useFinanceExpenses(teamId);
+  const payoutQuery = useFinancePendingPayout(teamId, userId);
 
+  const taxes = taxesQuery.data ?? EMPTY_TAXES;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const pendingPayout = payoutQuery.data ?? ZERO_PAYOUT;
+  const subscriptions = React.useMemo(
+    () => (expensesQuery.data ?? EMPTY_EXPENSES).filter((e) => e.isRecurring && e.nextChargeDate),
+    [expensesQuery.data]
+  );
+
+  const loading = taxesQuery.isPending || entitiesQuery.isPending;
+
+  const loadError = taxesQuery.error ?? entitiesQuery.error ?? null;
   React.useEffect(() => {
-    if (!teamId || !userId) return;
-    let active = true;
-    setLoading(true);
-    const period = periodKey(new Date().getFullYear(), new Date().getMonth() + 1);
-    void (async () => {
-      try {
-        const [nextTaxes, nextEntities, nextExpenses] = await Promise.all([
-          listTaxes(teamId),
-          listLegalEntities(teamId),
-          // Підписки з датою наступного списання — це теж заплановані платежі.
-          listExpenses(teamId).catch((error) => {
-            console.error("[finance] calendar: listExpenses failed", error);
-            return [] as FinanceExpense[];
-          }),
-        ]);
-        const wsId = await resolveWorkspaceId(userId);
-        let payout = { total: 0, count: 0 };
-        if (wsId) {
-          const [entries, meta] = await Promise.all([loadPayrollEntries(wsId, period), listPayoutMeta(teamId, period)]);
-          entries.forEach((entry, uid) => {
-            if (meta.get(uid)?.status !== "paid" && entry.totalAmount > 0) {
-              payout = { total: payout.total + entry.totalAmount, count: payout.count + 1 };
-            }
-          });
-        }
-        if (!active) return;
-        setTaxes(nextTaxes);
-        setEntities(nextEntities);
-        setSubscriptions(nextExpenses.filter((e) => e.isRecurring && e.nextChargeDate));
-        setPendingPayout(payout);
-      } catch (error) {
-        if (active) toast.error("Не вдалося завантажити календар", { description: getErrorMessage(error, "") });
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+    if (loadError) {
+      toast.error("Не вдалося завантажити календар", { description: getErrorMessage(loadError, "") });
+    }
+  }, [loadError]);
+  React.useEffect(() => {
+    if (expensesQuery.error) {
+      console.error("[finance] calendar: listExpenses failed", expensesQuery.error);
+    }
+  }, [expensesQuery.error]);
 
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
 
