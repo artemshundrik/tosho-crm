@@ -21,14 +21,17 @@ import { formatOrderMoney } from "@/features/orders/orderRecords";
 import {
   createInvoice,
   deleteInvoice,
-  listInvoices,
-  listLegalEntities,
-  listOrderMeta,
-  listOrdersForFinance,
   updateInvoice,
   upsertOrderMeta,
   type InvoiceInput,
 } from "./api";
+import {
+  useFinanceInvoices,
+  useFinanceLegalEntities,
+  useFinanceOrderMeta,
+  useFinanceOrderRefs,
+  useInvalidateFinance,
+} from "./queries";
 import { FinanceBentoSummary } from "./FinanceBentoSummary";
 import {
   INVOICE_STATUS_LABELS,
@@ -68,13 +71,27 @@ const formatDate = (value?: string | null) => {
   }
 };
 
+const EMPTY_INVOICES: FinanceInvoice[] = [];
+const EMPTY_ENTITIES: FinanceLegalEntity[] = [];
+const EMPTY_ORDERS: FinanceOrderRef[] = [];
+const EMPTY_ORDER_META = new Map<string, FinanceOrderMeta>();
+
 export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
-  const [invoices, setInvoices] = React.useState<FinanceInvoice[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [orders, setOrders] = React.useState<FinanceOrderRef[]>([]);
-  const [orderMeta, setOrderMeta] = React.useState<Map<string, FinanceOrderMeta>>(new Map());
-  const [loading, setLoading] = React.useState(true);
-  const [ordersLoading, setOrdersLoading] = React.useState(true);
+  // React Query замість ручного reload: invoices/entities — спільні ключі з
+  // дашбордом і календарем, тож вкладка рендериться з кешу миттєво, фоновий
+  // рефетч звіряє (refetchOnMount:"always" у queries.ts).
+  const invoicesQuery = useFinanceInvoices(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const orderMetaQuery = useFinanceOrderMeta(teamId);
+  const ordersQuery = useFinanceOrderRefs(teamId, userId ?? null);
+
+  const invoices = invoicesQuery.data ?? EMPTY_INVOICES;
+  const entities = entitiesQuery.data ?? EMPTY_ENTITIES;
+  const orders = ordersQuery.data ?? EMPTY_ORDERS;
+  const orderMeta = orderMetaQuery.data ?? EMPTY_ORDER_META;
+  const loading = invoicesQuery.isPending || entitiesQuery.isPending || orderMetaQuery.isPending;
+  const ordersLoading = ordersQuery.isPending;
+
   const [vchasnoBusyId, setVchasnoBusyId] = React.useState<string | null>(null);
   const [vchasnoStatuses, setVchasnoStatuses] = React.useState<Map<string, VchasnoDocStatus>>(new Map());
 
@@ -87,41 +104,17 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
     return auth.permissions.isSuperAdmin || ["seo", "accountant", "chief_accountant"].includes(role);
   }, [auth.jobRole, auth.permissions.isSuperAdmin]);
 
-  const reload = React.useCallback(async () => {
-    if (!teamId) return;
-    setLoading(true);
-    try {
-      const [nextInvoices, nextEntities, nextMeta] = await Promise.all([
-        listInvoices(teamId),
-        listLegalEntities(teamId),
-        listOrderMeta(teamId),
-      ]);
-      setInvoices(nextInvoices);
-      setEntities(nextEntities);
-      setOrderMeta(nextMeta);
-    } catch (error) {
-      toast.error("Не вдалося завантажити рахунки", { description: getErrorMessage(error, "Спробуйте ще раз.") });
-    } finally {
-      setLoading(false);
+  // Мутації (створення/редагування/видалення/Вчасно) викликали await reload()
+  // — тепер це інвалідація всього finance-кешу: активні запити цієї вкладки
+  // рефетчаться одразу, кеш сусідніх вкладок позначається стухлим.
+  const reload = useInvalidateFinance(teamId);
+
+  const loadError = invoicesQuery.error ?? entitiesQuery.error ?? orderMetaQuery.error ?? null;
+  React.useEffect(() => {
+    if (loadError) {
+      toast.error("Не вдалося завантажити рахунки", { description: getErrorMessage(loadError, "Спробуйте ще раз.") });
     }
-  }, [teamId]);
-
-  React.useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setOrdersLoading(true);
-    void listOrdersForFinance(teamId, userId)
-      .then((rows) => active && setOrders(rows))
-      .catch(() => active && setOrders([]))
-      .finally(() => active && setOrdersLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+  }, [loadError]);
 
   const entityById = React.useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
   const orderByQuote = React.useMemo(() => new Map(orders.map((o) => [o.quoteId, o])), [orders]);

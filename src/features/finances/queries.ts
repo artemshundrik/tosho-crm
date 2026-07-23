@@ -7,6 +7,8 @@ import {
   listExpenses,
   listInvoices,
   listLegalEntities,
+  listOrderMeta,
+  listOrdersForFinance,
   listPayments,
   listPayoutMeta,
   listTaxes,
@@ -16,6 +18,8 @@ import type {
   FinanceExpense,
   FinanceInvoice,
   FinanceLegalEntity,
+  FinanceOrderMeta,
+  FinanceOrderRef,
   FinancePayment,
   FinanceTax,
 } from "./types";
@@ -62,6 +66,9 @@ export const financeKeys = {
     ["finances", teamId, "derived-orders", userId ?? ""] as const,
   pendingPayout: (teamId: string, userId: string | null, period: string) =>
     ["finances", teamId, "pending-payout", userId ?? "", period] as const,
+  orderMeta: (teamId: string) => ["finances", teamId, "order-meta"] as const,
+  orderRefs: (teamId: string, userId: string | null) =>
+    ["finances", teamId, "order-refs", userId ?? ""] as const,
 };
 
 export function useFinancePayments(teamId: string | null) {
@@ -128,6 +135,33 @@ export function useFinanceDerivedOrderNames(teamId: string | null, userId: strin
         return new Map(records.map((r) => [r.quoteId, { customerName: r.customerName }]));
       } catch {
         return new Map<string, { customerName: string }>();
+      }
+    },
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Класифікація замовлень (тип + юрособа) з finance_order_meta. */
+export function useFinanceOrderMeta(teamId: string | null) {
+  return useQuery<Map<string, FinanceOrderMeta>>({
+    queryKey: financeKeys.orderMeta(teamId ?? ""),
+    queryFn: () => listOrderMeta(teamId as string),
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Замовлення для прив'язки рахунків. Best-effort: помилка → порожній список. */
+export function useFinanceOrderRefs(teamId: string | null, userId: string | null) {
+  return useQuery<FinanceOrderRef[]>({
+    queryKey: financeKeys.orderRefs(teamId ?? "", userId),
+    queryFn: async () => {
+      try {
+        return await listOrdersForFinance(teamId as string, userId);
+      } catch (error) {
+        console.error("[finance] order refs failed", error);
+        return [];
       }
     },
     enabled: !!teamId,
