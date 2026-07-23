@@ -4,6 +4,8 @@ import { loadPayrollEntries, periodKey } from "@/lib/payroll";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   listAccounts,
+  listExpenseCategories,
+  listExpenseEntries,
   listExpenses,
   listInvoices,
   listLegalEntities,
@@ -14,8 +16,10 @@ import {
   listTaxes,
 } from "./api";
 import type {
+  ExpenseEntry,
   FinanceAccount,
   FinanceExpense,
+  FinanceExpenseCategory,
   FinanceInvoice,
   FinanceLegalEntity,
   FinanceOrderMeta,
@@ -69,6 +73,8 @@ export const financeKeys = {
   orderMeta: (teamId: string) => ["finances", teamId, "order-meta"] as const,
   orderRefs: (teamId: string, userId: string | null) =>
     ["finances", teamId, "order-refs", userId ?? ""] as const,
+  expenseCategories: (teamId: string) => ["finances", teamId, "expense-categories"] as const,
+  expenseEntries: (teamId: string) => ["finances", teamId, "expense-entries"] as const,
 };
 
 export function useFinancePayments(teamId: string | null) {
@@ -135,6 +141,45 @@ export function useFinanceDerivedOrderNames(teamId: string | null, userId: strin
         return new Map(records.map((r) => [r.quoteId, { customerName: r.customerName }]));
       } catch {
         return new Map<string, { customerName: string }>();
+      }
+    },
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/** Категорії витрат. Best-effort: помилка → порожній список (витрати без категорій, не помилка вкладки). */
+export function useFinanceExpenseCategories(teamId: string | null) {
+  return useQuery<FinanceExpenseCategory[]>({
+    queryKey: financeKeys.expenseCategories(teamId ?? ""),
+    queryFn: async () => {
+      try {
+        return await listExpenseCategories(teamId as string);
+      } catch (error) {
+        console.error("[finance] listExpenseCategories failed", error);
+        return [];
+      }
+    },
+    enabled: !!teamId,
+    ...FINANCE_SHARED_OPTIONS,
+  });
+}
+
+/**
+ * Журнали датованих записів (expenseId → записи) для регулярних витрат зі
+ * змінною сумою. Best-effort → порожня мапа. УВАГА: вкладка Витрат тримає
+ * журнал у ЛОКАЛЬНОМУ стані з оптимістичними правками і гідратується звідси
+ * з guard-ом — не переводь її сліпо на query.data (див. FinanceExpenses).
+ */
+export function useFinanceExpenseEntries(teamId: string | null) {
+  return useQuery<Map<string, ExpenseEntry[]>>({
+    queryKey: financeKeys.expenseEntries(teamId ?? ""),
+    queryFn: async () => {
+      try {
+        return await listExpenseEntries(teamId as string);
+      } catch (error) {
+        console.error("[finance] listExpenseEntries failed", error);
+        return new Map<string, ExpenseEntry[]>();
       }
     },
     enabled: !!teamId,

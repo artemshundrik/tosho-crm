@@ -62,17 +62,20 @@ import {
   createExpenseEntry,
   deleteExpense,
   deleteExpenseEntry,
-  listAccounts,
-  listExpenseCategories,
-  listExpenseEntries,
-  listExpenses,
-  listLegalEntities,
-  listOrdersForFinance,
   updateExpense,
   updateExpenseEntry,
   type ExpenseAllocationInput,
   type ExpenseInput,
 } from "./api";
+import {
+  useFinanceAccounts,
+  useFinanceExpenseCategories,
+  useFinanceExpenseEntries,
+  useFinanceExpenses,
+  useFinanceLegalEntities,
+  useFinanceOrderRefs,
+  useInvalidateFinance,
+} from "./queries";
 import {
   BILLING_PERIOD_LABELS,
   BILLING_PERIOD_MONTHS,
@@ -502,71 +505,72 @@ function ExpenseJournalPanel({
   );
 }
 
+// Стабільні порожні значення, щоб useMemo нижче не перераховувались
+// через новий літерал на кожен рендер.
+const EMPTY_EXPENSES: FinanceExpense[] = [];
+const EMPTY_CATEGORIES: FinanceExpenseCategory[] = [];
+const EMPTY_FIN_ACCOUNTS: FinanceAccount[] = [];
+const EMPTY_FIN_ENTITIES: FinanceLegalEntity[] = [];
+const EMPTY_ORDER_REFS: FinanceOrderRef[] = [];
+
 export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpensesProps) {
-  const [expenses, setExpenses] = React.useState<FinanceExpense[]>([]);
-  const [categories, setCategories] = React.useState<FinanceExpenseCategory[]>([]);
-  const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
-  const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
-  const [orders, setOrders] = React.useState<FinanceOrderRef[]>([]);
-  // expenseId → журнал датованих записів (для регулярних платежів зі змінною сумою).
-  const [entriesByExpense, setEntriesByExpense] = React.useState<Map<string, ExpenseEntry[]>>(() => new Map());
-  const [loading, setLoading] = React.useState(true);
-  const [ordersLoading, setOrdersLoading] = React.useState(true);
+  // React Query: expenses — критичний шлях (помилка → toast); категорії,
+  // рахунки, юрособи, журнали — supporting, деградують до порожніх усередині
+  // хуків (як і в старому reload). accounts/entities — спільні ключі з
+  // дашбордом/календарем/рахунками, тож перемикання вкладок іде з кешу.
+  const expensesQuery = useFinanceExpenses(teamId);
+  const categoriesQuery = useFinanceExpenseCategories(teamId);
+  const accountsQuery = useFinanceAccounts(teamId);
+  const entitiesQuery = useFinanceLegalEntities(teamId);
+  const entriesQuery = useFinanceExpenseEntries(teamId);
+  const ordersQuery = useFinanceOrderRefs(teamId, userId ?? null);
 
-  const reload = React.useCallback(async () => {
-    if (!teamId) return;
-    setLoading(true);
-    try {
-      // Critical path: if expenses fail, show error and bail.
-      const nextExpenses = await listExpenses(teamId);
-      setExpenses(nextExpenses);
-      // Supporting data: failures here are logged but don't wipe the expense list.
-      const [nextCategories, nextAccounts, nextEntities, nextEntries] = await Promise.all([
-        listExpenseCategories(teamId).catch((e) => {
-          console.error("[finance] listExpenseCategories failed", e);
-          return [] as FinanceExpenseCategory[];
-        }),
-        listAccounts(teamId).catch((e) => {
-          console.error("[finance] listAccounts failed", e);
-          return [] as FinanceAccount[];
-        }),
-        listLegalEntities(teamId).catch((e) => {
-          console.error("[finance] listLegalEntities failed", e);
-          return [] as FinanceLegalEntity[];
-        }),
-        listExpenseEntries(teamId).catch((e) => {
-          console.error("[finance] listExpenseEntries failed", e);
-          return new Map<string, ExpenseEntry[]>();
-        }),
-      ]);
-      setCategories(nextCategories);
-      setAccounts(nextAccounts);
-      setEntities(nextEntities);
-      setEntriesByExpense(nextEntries);
-    } catch (error) {
-      console.error("[finance] listExpenses failed", error);
-      toast.error("Не вдалося завантажити витрати", { description: getErrorMessage(error, "Спробуйте ще раз.") });
-    } finally {
-      setLoading(false);
+  const expenses = expensesQuery.data ?? EMPTY_EXPENSES;
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const accounts = accountsQuery.data ?? EMPTY_FIN_ACCOUNTS;
+  const entities = entitiesQuery.data ?? EMPTY_FIN_ENTITIES;
+  const orders = ordersQuery.data ?? EMPTY_ORDER_REFS;
+  const ordersLoading = ordersQuery.isPending;
+  // Скелетон тримається до приїзду всього пакета — так робив і старий reload
+  // (setLoading(false) стояв після supporting-даних). Supporting-хуки ніколи
+  // не падають (catch усередині), тож isPending гарантовано завершується.
+  const loading =
+    expensesQuery.isPending ||
+    categoriesQuery.isPending ||
+    accountsQuery.isPending ||
+    entitiesQuery.isPending ||
+    entriesQuery.isPending;
+
+  React.useEffect(() => {
+    if (expensesQuery.error) {
+      console.error("[finance] listExpenses failed", expensesQuery.error);
+      toast.error("Не вдалося завантажити витрати", {
+        description: getErrorMessage(expensesQuery.error, "Спробуйте ще раз."),
+      });
     }
-  }, [teamId]);
+  }, [expensesQuery.error]);
 
+  // ЖУРНАЛ — ГІБРИД, і це навмисно. Правки журналу оптимістичні (оновлення й
+  // видалення міняють список ДО відповіді сервера, з відкатом на помилці),
+  // тому джерелом правди під час взаємодії мусить бути локальний стан — інакше
+  // канонічний query.data «з'їдав» би оптимістичні зміни. Кеш лише гідратує:
+  // кожен ЗАВЕРШЕНИЙ фетч застосовується один раз (guard по dataUpdatedAt), і
+  // пропускається, якщо в цей момент летить мутація журналу — рефетч, що
+  // стартував до мутації, міг би відкотити щойно зроблену правку.
+  const [entriesByExpense, setEntriesByExpense] = React.useState<Map<string, ExpenseEntry[]>>(() => new Map());
+  const [busyExpenses, setBusyExpenses] = React.useState<Set<string>>(() => new Set());
+  const appliedEntriesAtRef = React.useRef(0);
   React.useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!entriesQuery.data) return;
+    if (entriesQuery.dataUpdatedAt <= appliedEntriesAtRef.current) return;
+    if (busyExpenses.size > 0) return;
+    appliedEntriesAtRef.current = entriesQuery.dataUpdatedAt;
+    setEntriesByExpense(entriesQuery.data);
+  }, [entriesQuery.data, entriesQuery.dataUpdatedAt, busyExpenses]);
 
-  React.useEffect(() => {
-    if (!teamId) return;
-    let active = true;
-    setOrdersLoading(true);
-    void listOrdersForFinance(teamId, userId)
-      .then((rows) => active && setOrders(rows))
-      .catch(() => active && setOrders([]))
-      .finally(() => active && setOrdersLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [teamId, userId]);
+  // Мутації самої витрати (створити/редагувати/видалити) ідуть через
+  // інвалідацію finance-кешу — як на вкладці Рахунків.
+  const reload = useInvalidateFinance(teamId);
 
   const categoryById = React.useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accountById = React.useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
@@ -849,8 +853,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     });
   }, []);
 
-  // Для яких витрат зараз триває запис у журнал (блокує кнопки, щоб не дублювати).
-  const [busyExpenses, setBusyExpenses] = React.useState<Set<string>>(() => new Set());
+  // busyExpenses (для яких витрат летить запис у журнал) оголошений вище, поруч
+  // з гідратацією журналу — він і блокує кнопки, і охороняє від перезапису
+  // оптимістичного стану фоновим рефетчем.
   const setExpenseBusy = React.useCallback((expenseId: string, on: boolean) => {
     setBusyExpenses((prev) => {
       const next = new Set(prev);
