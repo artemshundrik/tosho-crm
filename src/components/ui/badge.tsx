@@ -50,7 +50,9 @@ const badgeVariants = cva(
 
       pill: {
         true: "rounded-full uppercase tracking-wide",
-        false: "rounded-[var(--radius)]",
+        // Крихкий радіус: тег читається чітко, без «майже круглого» (--radius = 10px
+        // на висоті бейджа виглядало як недо-пілюля).
+        false: "rounded-[6px]",
       },
     },
 

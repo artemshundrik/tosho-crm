@@ -12,8 +12,10 @@ export const CONTROL_BASE = cx(
   "text-foreground placeholder:text-muted-foreground",
   "transition-all duration-200 ease-out",
   "hover:bg-muted/60",
-  "focus-visible:outline-none focus-visible:bg-background focus-visible:shadow-[var(--shadow-elevated-sm)] focus-visible:ring-1 focus-visible:ring-[hsl(var(--soft-ring))]",
-  "focus:bg-background focus:shadow-[var(--shadow-elevated-sm)] focus:ring-1 focus:ring-[hsl(var(--soft-ring))]",
+  // Фокус: тільки темніша рамка, без рінга (рінг давав «блюр»-глоу на темній) і
+  // тільки focus-visible (клавіатура) — інакше обводка липла на селект-тригері
+  // після вибору мишею. Текстові поля браузер і так підсвічує focus-visible при вводі.
+  "focus-visible:outline-none focus-visible:bg-background focus-visible:border-foreground/50",
   "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted/20 disabled:shadow-none",
   "[&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:transition-colors",
   "hover:[&>svg]:text-foreground"

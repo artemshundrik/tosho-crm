@@ -68,6 +68,14 @@ const buttonVariants = cva(
           "active:scale-[0.98]",
         ].join(" "),
 
+        // ✅ Success: тональна для дій-підтверджень («Сплачено», «Готово», «Виплачено»)
+        successTonal: [
+          "!font-medium",
+          "bg-success-soft text-success-foreground border border-success-soft-border",
+          "hover:bg-success-soft/70",
+          "active:scale-[0.98]",
+        ].join(" "),
+
         // ✅ Ghost/link: medium
         ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.98]",
         link: "!font-medium bg-transparent text-primary underline-offset-4 hover:underline",
@@ -152,16 +160,19 @@ const buttonVariants = cva(
       },
 
       // ✅ Height (як ти хотів “як була”)
+      // Радіус масштабується з висотою (інакше 14px на h-8 читається як піл):
+      // ≤h-8 → rounded-md (8px), h-9 → rounded-lg (10px), h-10 → базовий rounded-xl,
+      // у парі з інпутами тієї ж висоти.
       size: {
-        xxs: "h-6 px-2 text-[10px] leading-none",
-        xs: "h-7 px-2.5 text-xs",
-        sm: "h-8 px-3 text-xs",
-        md: "h-9 px-4 text-sm",
+        xxs: "h-6 rounded-md px-2 text-[10px] leading-none",
+        xs: "h-7 rounded-md px-2.5 text-xs",
+        sm: "h-8 rounded-md px-3 text-xs",
+        md: "h-9 rounded-lg px-4 text-sm",
         lg: "h-10 px-5 text-[15px]",
-        compact: "h-7 px-3 text-xs",
-        iconXs: "h-7 w-7 px-0",
-        iconSm: "h-8 w-8 px-0",
-        iconMd: "h-9 w-9 px-0",
+        compact: "h-7 rounded-md px-3 text-xs",
+        iconXs: "h-7 w-7 rounded-md px-0",
+        iconSm: "h-8 w-8 rounded-md px-0",
+        iconMd: "h-9 w-9 rounded-lg px-0",
         icon: "h-10 w-10 px-0",
       },
     },

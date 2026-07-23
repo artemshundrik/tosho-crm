@@ -51,6 +51,14 @@ export default {
             DEFAULT: "hsl(var(--card))",
             foreground: "hsl(var(--card-foreground))",
           },
+          // Семантичні тони як повноцінні кольори: вмикають bg-success/5,
+          // border-warning/40 тощо (раніше «мертві» — success/warning/info/danger
+          // не були оголошені, тому рендерились прозорими). DEFAULT = насичений
+          // «foreground»-відтінок; *-foreground-утиліти лишаються рукописними в index.css.
+          success: "hsl(var(--success-foreground))",
+          warning: "hsl(var(--warning-foreground))",
+          info: "hsl(var(--info-foreground))",
+          danger: "hsl(var(--danger-foreground))",
         },
         borderRadius: {
           lg: "var(--radius)",
