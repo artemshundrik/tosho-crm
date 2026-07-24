@@ -166,6 +166,20 @@ type DesignViewMode = "kanban" | "timeline" | "assignee";
 type DesignContentView = "all" | "linked" | "standalone";
 type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
 
+/**
+ * Таймлайн вимкнено як гіпотезу: перевіряємо, чи ним узагалі користуються.
+ * Код НЕ видалено — щоб повернути, достатньо поставити true. Поки false:
+ * вкладка прихована, секції не рендеряться, а збережений viewMode="timeline"
+ * тихо падає в kanban (інакше ті, хто востаннє був на таймлайні, побачили б
+ * порожню сторінку).
+ */
+const DESIGN_TIMELINE_ENABLED = false;
+
+const normalizeDesignViewMode = (value?: DesignViewMode | null): DesignViewMode => {
+  if (value === "timeline" && !DESIGN_TIMELINE_ENABLED) return "kanban";
+  return value ?? "kanban";
+};
+
 const ALL_DESIGNERS_FILTER = "__all__";
 const NO_DESIGNER_FILTER = "__none__";
 const ALL_MANAGERS_FILTER = "__all__";
@@ -977,7 +991,7 @@ export default function DesignPage() {
     nextStatus?: DesignStatus;
   } | null>(null);
   const [contentView, setContentView] = useState<DesignContentView>(() => restoredFilters?.contentView ?? "all");
-  const [viewMode, setViewMode] = useState<DesignViewMode>(() => restoredFilters?.viewMode ?? "kanban");
+  const [viewMode, setViewMode] = useState<DesignViewMode>(() => normalizeDesignViewMode(restoredFilters?.viewMode));
   const [search, setSearch] = useState(() => restoredFilters?.search ?? "");
   // Keep the input itself instant; let filtering + the full-dataset fetch run at
   // lower priority off the deferred value so fast typing never drops letters.
@@ -4833,16 +4847,18 @@ export default function DesignPage() {
                 <LayoutGrid className="h-3.5 w-3.5" />
                 <span className="hidden xl:inline">Kanban</span>
               </Button>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={viewMode === "timeline"}
-                onClick={() => setViewMode("timeline")}
-                className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
-              >
-                <CalendarRange className="h-3.5 w-3.5" />
-                <span className="hidden xl:inline">Timeline</span>
-              </Button>
+              {DESIGN_TIMELINE_ENABLED ? (
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={viewMode === "timeline"}
+                  onClick={() => setViewMode("timeline")}
+                  className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
+                >
+                  <CalendarRange className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Timeline</span>
+                </Button>
+              ) : null}
               <Button
                 variant="segmented"
                 size="xs"
