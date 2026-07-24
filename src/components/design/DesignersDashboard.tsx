@@ -134,6 +134,13 @@ const TYPE_SHORT: Record<DesignTaskType, string> = {
   creative: "Креатив",
 };
 
+/* Вид завантаженого файлу (output_kind) — кольори з семантичних токенів, не серій. */
+const FILE_KIND_META = [
+  { key: "visualization", label: "Візуал", color: "hsl(var(--info-foreground))" },
+  { key: "layout", label: "Макет", color: "hsl(var(--success-foreground))" },
+  { key: "attachment", label: "Файли задачі", color: "hsl(var(--muted-foreground))" },
+] as const;
+
 /* Розширення, для яких показуємо прев'ю з превʼю-пайплайна (як у старому дровері). */
 const PREVIEWABLE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "avif", "bmp", "pdf", "tif", "tiff"]);
 
@@ -1543,7 +1550,117 @@ export function DesignersDashboard({
             </>
           )}
         </section>
-      ) : null}
+      ) : (
+        /* Командний аналог «Робіт»: скільки файлів залив кожен + розбивка (як старий звіт). */
+        (() => {
+          const rows = [...visibleDesigners]
+            .map((designer) => ({ designer, agg: analytics.perDesigner.get(designer.id)?.[mi] ?? null }))
+            .filter((entry): entry is { designer: (typeof visibleDesigners)[number]; agg: DesignerMonthAgg } => !!entry.agg)
+            .sort((a, b) => b.agg.files - a.agg.files);
+          const teamFiles = rows.reduce((sum, entry) => sum + entry.agg.files, 0);
+          const withFiles = rows.filter((entry) => entry.agg.files > 0);
+          return (
+            <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+                  <FileText className="h-4 w-4 text-primary" />
+                  Файли за {monthShort(months[mi].value)} {months[mi].year}
+                </h3>
+                <span className="text-2xs tabular-nums text-muted-foreground">{teamFiles} файлів команди</span>
+                <p className="w-full text-xs text-muted-foreground">
+                  Скільки файлів залив кожен, з розбивкою по розширеннях і виду. Клік по рядку — профіль дизайнера.
+                </p>
+              </div>
+              {withFiles.length === 0 ? (
+                <div className="mt-3 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
+                  За цей місяць немає завантажених файлів.
+                </div>
+              ) : (
+                <div className="mt-2 divide-y divide-border/50">
+                  {withFiles.map(({ designer, agg }) => {
+                    const total = agg.files;
+                    const exts = Object.entries(agg.filesByExt)
+                      .filter(([, count]) => count > 0)
+                      .sort((a, b) => b[1] - a[1]);
+                    return (
+                      <button
+                        key={designer.id}
+                        type="button"
+                        onClick={() => selectScope(designer.id)}
+                        className="grid w-full cursor-pointer grid-cols-1 items-center gap-x-4 gap-y-2 rounded-xl px-2 py-3 text-left transition-colors hover:bg-muted/10 sm:grid-cols-[minmax(170px,1.2fr)_64px_minmax(0,1.6fr)_150px_18px]"
+                      >
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          <AvatarBase
+                            src={getMemberAvatar(designer.id)}
+                            name={designer.label}
+                            fallback={getInitials(designer.label)}
+                            size={36}
+                            className="shrink-0 border-border/70"
+                            inactive={memberInactiveById[designer.id] ?? false}
+                          />
+                          <span className="truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
+                        </span>
+                        <span className="text-xl font-bold tabular-nums text-foreground">
+                          {total}
+                          <span className="block text-3xs font-medium text-muted-foreground">файлів</span>
+                        </span>
+                        <span className="flex flex-wrap gap-1.5">
+                          {exts.map(([ext, count]) => (
+                            <span
+                              key={ext}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-soft-border bg-neutral-soft px-2 py-0.5 text-3xs"
+                            >
+                              <span className="font-semibold uppercase text-muted-foreground">{ext}</span>
+                              <span className="font-semibold tabular-nums text-foreground">{count}</span>
+                            </span>
+                          ))}
+                        </span>
+                        <span className="flex flex-col gap-1.5">
+                          <span
+                            className="flex h-2.5 cursor-help gap-0.5 overflow-hidden rounded"
+                            {...bindTip(() => {
+                              const kindRows: TipRow[] = FILE_KIND_META.map((kind) => ({
+                                color: kind.color,
+                                label: kind.label,
+                                value: `${agg.filesByKind[kind.key]}`,
+                              }));
+                              kindRows.push({ label: "Разом", value: `${total}`, strong: true });
+                              return { title: designer.label, rows: kindRows };
+                            })}
+                          >
+                            {FILE_KIND_META.map((kind) =>
+                              agg.filesByKind[kind.key] > 0 ? (
+                                <span
+                                  key={kind.key}
+                                  className="h-full first:rounded-l last:rounded-r"
+                                  style={{ width: `${(agg.filesByKind[kind.key] / total) * 100}%`, background: kind.color }}
+                                />
+                              ) : null
+                            )}
+                          </span>
+                          <span className="text-3xs text-muted-foreground">
+                            Візуал {agg.filesByKind.visualization} · Макет {agg.filesByKind.layout} · Задачі {agg.filesByKind.attachment}
+                          </span>
+                        </span>
+                        <ChevronRight className="hidden h-4 w-4 justify-self-end text-muted-foreground/60 sm:block" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/50 pt-3">
+                <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Вид файлу:</span>
+                {FILE_KIND_META.map((kind) => (
+                  <span key={kind.key} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+                    <span className="h-2 w-3.5 rounded-sm" style={{ background: kind.color }} aria-hidden="true" />
+                    {kind.label}
+                  </span>
+                ))}
+              </div>
+            </section>
+          );
+        })()
+      )}
 
       {/* ---------- джерела ---------- */}
       <p className="px-1 pb-2 text-2xs leading-relaxed text-muted-foreground/80">

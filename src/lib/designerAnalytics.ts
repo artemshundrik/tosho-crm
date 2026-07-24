@@ -34,6 +34,10 @@ export type DesignerMonthAgg = {
   tasksClosed: number;
   /** Залиті файли за місяць (усі upload-події, включно з видаленими згодом). */
   files: number;
+  /** Розподіл файлів за розширенням (ai/pdf/jpg/…) — для звіту «Файли за період». */
+  filesByExt: Record<string, number>;
+  /** Розподіл файлів за видом завантаження (output_kind). */
+  filesByKind: { visualization: number; layout: number; attachment: number };
   /** Секунди у таймері (сесії користувача, за started_at; кожна сесія обрізана до MAX_SESSION_SECONDS). */
   trackedSeconds: number;
   /** Розподіл секунд користувача за типами задач (для стека структури часу). */
@@ -98,6 +102,8 @@ export type DesignerAnalytics = {
 export const emptyMonthAgg = (): DesignerMonthAgg => ({
   tasksClosed: 0,
   files: 0,
+  filesByExt: {},
+  filesByKind: { visualization: 0, layout: 0, attachment: 0 },
   trackedSeconds: 0,
   secondsByType: { visualization: 0, presentation: 0, layout_adaptation: 0, layout: 0, creative: 0, none: 0 },
   timerTaskCountByType: {},
@@ -371,15 +377,25 @@ export async function loadDesignerAnalytics(params: {
     });
   });
 
-  /* ---------- файли ---------- */
+  /* ---------- файли (усього + по розширеннях + по виду) ---------- */
+  const uploadKind = (value?: string | null): "visualization" | "layout" | "attachment" =>
+    value === "visualization" ? "visualization" : value === "layout" ? "layout" : "attachment";
   uploadRows.forEach((row) => {
     if (!row.user_id || !designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.created_at);
     if (monthIdx < 0) return;
-    const count = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files.length : 0;
-    if (count <= 0) return;
+    const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
+    if (uploaded.length === 0) return;
+    const kind = uploadKind(row.metadata?.output_kind ?? null);
     aggFor(row.user_id, monthIdx).forEach((agg) => {
-      agg.files += count;
+      agg.files += uploaded.length;
+      agg.filesByKind[kind] += uploaded.length;
+      uploaded.forEach((file) => {
+        const name = typeof file?.file_name === "string" ? file.file_name : "";
+        const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+        const ext = match ? match[1] : "інше";
+        agg.filesByExt[ext] = (agg.filesByExt[ext] ?? 0) + 1;
+      });
     });
   });
 
