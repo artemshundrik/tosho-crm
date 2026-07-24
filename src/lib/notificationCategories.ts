@@ -11,7 +11,8 @@ export type NotificationCategoryKey =
   | "contractor"
   | "team_events"
   | "probation"
-  | "employment";
+  | "employment"
+  | "finance_payment";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -60,6 +61,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     label: "Працевлаштування",
     description: "Зміни статусу співпраці",
   },
+  {
+    key: "finance_payment",
+    label: "Платежі та підписки",
+    description: "Нагадування про майбутній платіж / списання підписки",
+  },
 ];
 
 // Видимість категорій за роллю. Чиста функція від рядків ролей —
@@ -74,12 +80,17 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isPrivileged = access === "owner" || access === "admin" || job === "seo";
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
   const isDesigner = job === "designer" || job === "дизайнер";
+  // Фінанси — власник + SEO + бухгалтери (той самий набір, що має доступ до Фінансів).
+  const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     // Універсальні / персональні — бачать усі.
     case "team_events":
     case "probation":
     case "employment":
       return true;
+    // Платежі / підписки — лише фін-ролі.
+    case "finance_payment":
+      return isFinance;
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
     case "design":
       return isQuoteWorker || isDesigner;

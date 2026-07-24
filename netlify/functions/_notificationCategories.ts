@@ -9,7 +9,8 @@ export type NotificationCategoryKey =
   | "contractor"
   | "team_events"
   | "probation"
-  | "employment";
+  | "employment"
+  | "finance_payment";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
@@ -25,6 +26,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "team_events", label: "Події команди" },
   { key: "probation", label: "Випробувальний термін" },
   { key: "employment", label: "Працевлаштування" },
+  { key: "finance_payment", label: "Платежі та підписки" },
 ];
 
 // Видимість категорій за роллю — копія src/lib/notificationCategories.ts (тримати синхронно).
@@ -38,11 +40,14 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isPrivileged = access === "owner" || access === "admin" || job === "seo";
   const isQuoteWorker = isPrivileged || QUOTE_JOB_ROLES.includes(job);
   const isDesigner = job === "designer" || job === "дизайнер";
+  const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     case "team_events":
     case "probation":
     case "employment":
       return true;
+    case "finance_payment":
+      return isFinance;
     case "design":
       return isQuoteWorker || isDesigner;
     case "customer_followup":

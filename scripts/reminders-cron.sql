@@ -71,6 +71,18 @@ select cron.schedule(
        timeout_milliseconds := 20000) $$
 );
 
+-- Finance payment reminders: «за N днів до next_charge_date» + прокрутка дати вперед.
+-- Раз на день (функція резолвить «сьогодні» в Europe/Kiev, тож година не критична).
+-- ВАЖЛИВО: планувати лише ПІСЛЯ деплою функції finance-payment-reminders на прод.
+select cron.schedule(
+  'reminders-finance-payment',
+  '0 6 * * *',
+  $$ select net.http_post(
+       url := 'https://tosho.pro/.netlify/functions/finance-payment-reminders',
+       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+       timeout_milliseconds := 20000) $$
+);
+
 -- ---------------------------------------------------------------------------
 -- Optional. Uncomment if you also want these back. Times below are UTC
 -- (Kyiv = UTC+3 in summer / UTC+2 in winter, so they drift ~1h across DST).
