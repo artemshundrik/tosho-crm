@@ -54,6 +54,7 @@ import { declineToGenitive } from "@/lib/nameDeclension";
 import { toSignatureInitials } from "@/lib/signatureFormat";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { renderPrintDocument } from "@/lib/printDocument";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -815,19 +816,11 @@ const buildOrderDocumentHtml = (
   const partiesSectionIndex = partiesSectionNumber(contractSectionsToRender);
 
   if (kind === "contract") {
-    return `<!doctype html>
-    <html lang="uk">
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(title)} ${escapeHtml(record.quoteNumber)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 0; line-height: 1.45; background: #f3f4f6; }
-          .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; background: rgba(255,255,255,0.96); border-bottom: 1px solid #e5e7eb; backdrop-filter: blur(8px); }
-          .toolbar-title { font-size: 14px; color: #4b5563; }
-          .toolbar-actions { display: flex; gap: 12px; }
-          .toolbar-button { border: 1px solid #d1d5db; background: #ffffff; color: #111827; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-          .toolbar-button.primary { background: #111827; border-color: #111827; color: #ffffff; }
-          .page { max-width: 960px; margin: 24px auto; background: #ffffff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); padding: 36px; }
+    // Хром (toolbar/page/print-media) — спільний, див. lib/printDocument.
+    return renderPrintDocument({
+      title: `${title} ${record.quoteNumber}`,
+      toolbarTitle: `Договір ${effectiveContractNumber}`,
+      styles: `
           h1 { font-size: 24px; text-align: center; margin: 0; }
           h2 { font-size: 16px; text-align: center; margin: 2px 0 18px; font-weight: 600; }
           h3 { font-size: 15px; margin: 20px 0 10px; font-weight: 700; text-transform: uppercase; }
@@ -840,22 +833,8 @@ const buildOrderDocumentHtml = (
           .party-title { font-weight: 700; margin-bottom: 10px; }
           .signature { margin-top: 18px; }
           .muted { color: #6b7280; }
-          @media print {
-            body { background: #ffffff; }
-            .toolbar { display: none; }
-            .page { max-width: none; margin: 0; box-shadow: none; padding: 0; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="toolbar">
-          <div class="toolbar-title">Договір ${escapeHtml(effectiveContractNumber)}</div>
-          <div class="toolbar-actions">
-            <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
-            <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
-          </div>
-        </div>
-        <div class="page">
+      `,
+      bodyHtml: `
         <h1>ДОГОВІР № ${escapeHtml(effectiveContractNumber)}</h1>
         <h2>на виготовлення та поставку рекламно-сувенірної продукції</h2>
         <div class="topline">
@@ -891,25 +870,15 @@ const buildOrderDocumentHtml = (
             <p class="signature">${escapeHtml(customerSignatoryRole)} ____________________ ${escapeHtml(customerSignatureLabel)}</p>
           </div>
         </div>
-        </div>
-      </body>
-    </html>`;
+      `,
+    });
   }
 
   if (kind === "specification") {
-    return `<!doctype html>
-    <html lang="uk">
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(title)} ${escapeHtml(record.quoteNumber)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 0; line-height: 1.45; background: #f3f4f6; }
-          .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; background: rgba(255,255,255,0.96); border-bottom: 1px solid #e5e7eb; backdrop-filter: blur(8px); }
-          .toolbar-title { font-size: 14px; color: #4b5563; }
-          .toolbar-actions { display: flex; gap: 12px; }
-          .toolbar-button { border: 1px solid #d1d5db; background: #ffffff; color: #111827; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-          .toolbar-button.primary { background: #111827; border-color: #111827; color: #ffffff; }
-          .page { max-width: 960px; margin: 24px auto; background: #ffffff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); padding: 36px; }
+    return renderPrintDocument({
+      title: `${title} ${record.quoteNumber}`,
+      toolbarTitle: `СП ${record.quoteNumber}`,
+      styles: `
           p { margin: 0 0 10px; font-size: 14px; }
           .center { text-align: center; }
           .small { font-size: 13px; }
@@ -928,23 +897,11 @@ const buildOrderDocumentHtml = (
           .visualization { margin: 18px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
           .visualization img { max-width: 100%; max-height: 320px; object-fit: contain; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; }
           @media print {
-            body { background: #ffffff; }
-            .toolbar { display: none; }
-            .page { max-width: none; margin: 0; box-shadow: none; padding: 0; }
             .visualization { page-break-inside: avoid; }
             .visualization img { max-height: 260px; }
           }
-        </style>
-      </head>
-      <body>
-        <div class="toolbar">
-          <div class="toolbar-title">СП ${escapeHtml(record.quoteNumber)}</div>
-          <div class="toolbar-actions">
-            <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
-            <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
-          </div>
-        </div>
-        <div class="page">
+      `,
+      bodyHtml: `
           <div class="center small">Додаток № ${escapeHtml(specificationNumber)}</div>
           <div class="center small">До Договору на виготовлення та поставку рекламно-сувенірної продукції</div>
           <div class="center small">№${escapeHtml(effectiveContractNumber)} від ${escapeHtml(formatSlashDate(effectiveContractDateSource))}</div>
@@ -1040,9 +997,8 @@ const buildOrderDocumentHtml = (
               <p>______________________ ${escapeHtml(customerSignatureLabel)}</p>
             </div>
           </div>
-        </div>
-      </body>
-    </html>`;
+      `,
+    });
   }
 
   const extraSection =
@@ -1060,19 +1016,12 @@ const buildOrderDocumentHtml = (
             <div><b>Телефон:</b> ${escapeHtml(record.contactPhone || "Не вказано")}</div>
           </div>`;
 
-  return `<!doctype html>
-  <html lang="uk">
-    <head>
-      <meta charset="utf-8" />
-      <title>${escapeHtml(title)} ${escapeHtml(record.quoteNumber)}</title>
-      <style>
-        body { font-family: Arial, sans-serif; color: #111827; margin: 0; background: #f3f4f6; }
-        .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; background: rgba(255,255,255,0.96); border-bottom: 1px solid #e5e7eb; backdrop-filter: blur(8px); }
-        .toolbar-title { font-size: 14px; color: #4b5563; }
-        .toolbar-actions { display: flex; gap: 12px; }
-        .toolbar-button { border: 1px solid #d1d5db; background: #ffffff; color: #111827; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .toolbar-button.primary { background: #111827; border-color: #111827; color: #ffffff; }
-        .page { max-width: 960px; margin: 24px auto; background: #ffffff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); padding: 32px; }
+  // Дрібна уніфікація: раніше цей документ мав padding 32 і дефолтний
+  // line-height — тепер бере хромові 36px/1.45, як договір і специфікація.
+  return renderPrintDocument({
+    title: `${title} ${record.quoteNumber}`,
+    toolbarTitle: `${title} ${record.quoteNumber}`,
+    styles: `
         h1 { font-size: 28px; margin: 0 0 8px; }
         .sub { color: #6b7280; margin-bottom: 24px; }
         .meta-block { margin: 0 0 20px; display: grid; gap: 6px; font-size: 14px; }
@@ -1081,22 +1030,8 @@ const buildOrderDocumentHtml = (
         th { background: #f8fafc; text-align: left; }
         .num { text-align: right; white-space: nowrap; }
         .total { margin-top: 16px; display: flex; justify-content: flex-end; font-size: 18px; font-weight: bold; }
-        @media print {
-          body { background: #ffffff; }
-          .toolbar { display: none; }
-          .page { max-width: none; margin: 0; box-shadow: none; padding: 0; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="toolbar">
-        <div class="toolbar-title">${escapeHtml(title)} ${escapeHtml(record.quoteNumber)}</div>
-        <div class="toolbar-actions">
-          <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
-          <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
-        </div>
-      </div>
-      <div class="page">
+    `,
+    bodyHtml: `
       <h1>${escapeHtml(title)}</h1>
       <div class="sub">Замовлення ${escapeHtml(record.quoteNumber)} від ${escapeHtml(formatOrderDate(record.updatedAt))}</div>
       ${extraSection}
@@ -1114,9 +1049,8 @@ const buildOrderDocumentHtml = (
         <tbody>${rows}</tbody>
       </table>
       <div class="total">Всього: ${escapeHtml(formatOrderMoney(record.total, record.currency))}</div>
-      </div>
-    </body>
-  </html>`;
+    `,
+  });
 };
 
 export default function OrdersProductionDetailsPage() {

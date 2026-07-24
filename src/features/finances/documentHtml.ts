@@ -3,6 +3,8 @@
 // Excel via an HTML-table blob with the ms-excel mime type. See
 // src/pages/OrdersProductionDetailsPage.tsx (buildOrderDocumentHtml).
 
+import { renderPrintDocument } from "@/lib/printDocument";
+
 export const escapeHtml = (value: unknown): string =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -23,14 +25,9 @@ export const fmtDate = (value?: string | null): string => {
   }
 };
 
+// Хром (body/toolbar/page/print-media) — спільний з документами замовлення,
+// див. lib/printDocument. Тут лишились тільки стилі самих фінансових документів.
 const DOCUMENT_STYLES = `
-  body { font-family: Arial, sans-serif; color: #111827; margin: 0; line-height: 1.45; background: #f3f4f6; }
-  .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; background: rgba(255,255,255,0.96); border-bottom: 1px solid #e5e7eb; }
-  .toolbar-title { font-size: 14px; color: #4b5563; }
-  .toolbar-actions { display: flex; gap: 12px; }
-  .toolbar-button { border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  .toolbar-button.primary { background: #111827; border-color: #111827; color: #fff; }
-  .page { max-width: 900px; margin: 24px auto; background: #fff; box-shadow: 0 10px 30px rgba(15,23,42,0.08); padding: 36px; }
   h1 { font-size: 22px; text-align: center; margin: 0 0 4px; }
   h2 { font-size: 14px; text-align: center; margin: 0 0 20px; font-weight: 600; color: #4b5563; }
   p { margin: 0 0 8px; font-size: 14px; }
@@ -45,21 +42,17 @@ const DOCUMENT_STYLES = `
   .totals .row { display: flex; justify-content: flex-end; gap: 16px; }
   .totals .row .v { min-width: 160px; text-align: right; font-weight: 700; }
   .signature { margin-top: 36px; display: flex; justify-content: space-between; gap: 28px; font-size: 14px; }
-  @media print { body { background: #fff; } .toolbar { display: none; } .page { max-width: none; margin: 0; box-shadow: none; padding: 0; } }
 `;
 
-const wrapDocument = (title: string, toolbarTitle: string, body: string): string => `<!doctype html>
-<html lang="uk"><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title><style>${DOCUMENT_STYLES}</style></head>
-<body>
-  <div class="toolbar">
-    <div class="toolbar-title">${escapeHtml(toolbarTitle)}</div>
-    <div class="toolbar-actions">
-      <button class="toolbar-button" type="button" onclick="window.close()">Закрити</button>
-      <button class="toolbar-button primary" type="button" onclick="window.print()">Зберегти PDF / Друк</button>
-    </div>
-  </div>
-  <div class="page">${body}</div>
-</body></html>`;
+const wrapDocument = (title: string, toolbarTitle: string, body: string): string =>
+  renderPrintDocument({
+    title,
+    toolbarTitle,
+    styles: DOCUMENT_STYLES,
+    bodyHtml: body,
+    // Фінансові документи історично вужчі за документи замовлення (900 vs 960).
+    pageMaxWidth: 900,
+  });
 
 /** Open an HTML document in a new tab with a print button (→ Save as PDF). */
 export const openPrintableDocument = (html: string): boolean => {
