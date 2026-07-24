@@ -5636,6 +5636,7 @@ export default function DesignPage() {
                   const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
                   return (
                     <button
+                      type="button"
                       key={row.task.id}
                       className="rounded-section border border-border/60 bg-card/70 p-4 text-left shadow-sm transition-colors hover:bg-card"
                       onClick={() => openTask(row.task.id)}
@@ -5767,6 +5768,7 @@ export default function DesignPage() {
                     return (
                       <div key={row.task.id} className="contents">
                         <button
+                          type="button"
                           className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-4 py-3 text-left transition-colors hover:bg-muted/20"
                           onClick={() => openTask(row.task.id)}
                           onAuxClick={(event) => {
@@ -6988,6 +6990,7 @@ export default function DesignPage() {
                       <span className="text-xs">{file.name}</span>
                       <button
                         type="button"
+                        aria-label={`Видалити файл ${file.name}`}
                         onClick={() => removeCreateFile(index)}
                         className="text-muted-foreground hover:text-foreground"
                       >

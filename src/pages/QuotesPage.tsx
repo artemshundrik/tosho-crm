@@ -6077,6 +6077,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableHead>
                     <TableHead className="w-[140px] min-w-[140px]">
                       <button
+                        type="button"
                         onClick={() => handleSort("number")}
                         className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
                       >
@@ -6088,6 +6089,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </TableHead>
                     <TableHead className="w-[160px]">
                       <button
+                        type="button"
                         onClick={() => handleSort("date")}
                         className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps-tight hover:text-foreground transition-colors"
                       >

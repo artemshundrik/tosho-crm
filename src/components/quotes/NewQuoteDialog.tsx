@@ -2565,6 +2565,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           <Paperclip className="h-3 w-3" />
                           <span className="text-xs">{file.name}</span>
                           <button
+                            type="button"
+                            aria-label={`Видалити файл ${file.name}`}
                             onClick={() => setFiles(files.filter((_, i) => i !== index))}
                             className="text-muted-foreground hover:text-foreground"
                           >

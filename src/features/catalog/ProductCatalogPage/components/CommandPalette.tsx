@@ -116,6 +116,7 @@ export function CommandPalette({
                 <div className="flex items-center justify-between">
                   <span>Недавні пошуки</span>
                   <button
+                    type="button"
                     onClick={onClearHistory}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
