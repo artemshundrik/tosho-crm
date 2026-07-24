@@ -79,7 +79,10 @@ const SNAPSHOT_MAX_AGE_DAYS = 7;
 const PAYMENT_HORIZON_DAYS = 7;
 const MAX_TIMER_SESSION_SECONDS = 8 * 60 * 60;
 // Прорахунок «на погодженні», якого не чіпали стільки днів, — застояний.
-const PIPELINE_STALE_DAYS = 7;
+// 30, а не 7: на проді ВСІ 54 прорахунки на погодженні старші за тиждень, тож
+// поріг у 7 днів давав рядок «54 · без руху 54» — кваліфікатор, який дублює
+// саме число і нічого не додає. Місяць уже відділяє живе від покинутого.
+const PIPELINE_STALE_DAYS = 30;
 // Прострочене рахуємо лише за останній місяць: у базі повно давно покинутих
 // прорахунків із дедлайнами дворічної давнини, і без вікна цифра стає шумом.
 const OVERDUE_WINDOW_DAYS = 30;
@@ -538,25 +541,53 @@ async function sumQuotesByRuns(admin: AdminClient, quoteIds: string[]): Promise<
 /**
  * Прорахунки, затверджені у вікні [startIso, endIso).
  *
- * ЧОМУ НЕ quotes.decided_at: перевірено на проді — колонка порожня у всіх 37
- * затверджених прорахунків, а quote_status_history містить 2 рядки на всю базу.
- * Єдиний робочий журнал — activity_log з action='змінив статус' і
- * metadata {from,to,source:'quote_status'}, де entity_id = id прорахунку.
+ * У цій базі немає жодного повністю надійного джерела, тому беремо два і
+ * зливаємо за id (дедуплікація робить об'єднання безпечним):
+ *
+ *  1. `activity_log` з `action='змінив статус'` — точний журнал переходів.
+ *     Перевірено на проді: пише його щось зламане, останній запис 2026-07-01,
+ *     хоча статуси прорахунків після цієї дати змінювались. Поки не полагодять
+ *     — джерело мовчить, але щойно оживе, воно найточніше.
+ *  2. `quotes.status='approved'` + `updated_at` у вікні — груба заміна.
+ *     Ловить факт затвердження, але дасть хибне спрацювання, якщо вже
+ *     затверджений прорахунок просто відредагували.
+ *
+ * НЕ використовуємо `quotes.decided_at`: колонка порожня у всіх затверджених
+ * прорахунків. І не `quote_status_history`: там 2 рядки на всю базу.
  */
-async function approvedQuoteIds(admin: AdminClient, startIso: string, endIso: string): Promise<string[]> {
-  const { data, error } = await admin
-    .from("activity_log")
-    .select("entity_id")
-    .eq("action", "змінив статус")
-    .eq("entity_type", "quotes")
-    .eq("metadata->>to", "approved")
-    .gte("created_at", startIso)
-    .lt("created_at", endIso)
-    .limit(5000);
-  if (error) throw new Error(`activity_log (quote status): ${error.message}`);
-  const ids = ((data ?? []) as Array<{ entity_id?: string | null }>)
-    .map((r) => r.entity_id)
-    .filter((v): v is string => Boolean(v));
+async function approvedQuoteIds(
+  admin: AdminClient,
+  teamIds: string[],
+  startIso: string,
+  endIso: string
+): Promise<string[]> {
+  const [logResult, snapshotResult] = await Promise.all([
+    admin
+      .from("activity_log")
+      .select("entity_id")
+      .eq("action", "змінив статус")
+      .eq("entity_type", "quotes")
+      .eq("metadata->>to", "approved")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(5000),
+    admin
+      .schema("tosho")
+      .from("quotes")
+      .select("id")
+      .in("team_id", teamIds)
+      .eq("status", "approved")
+      .gte("updated_at", startIso)
+      .lt("updated_at", endIso)
+      .limit(5000),
+  ]);
+  if (logResult.error) throw new Error(`activity_log (quote status): ${logResult.error.message}`);
+  if (snapshotResult.error) throw new Error(`quotes (approved): ${snapshotResult.error.message}`);
+
+  const ids = [
+    ...((logResult.data ?? []) as Array<{ entity_id?: string | null }>).map((r) => r.entity_id),
+    ...((snapshotResult.data ?? []) as Array<{ id?: string | null }>).map((r) => r.id),
+  ].filter((v): v is string => Boolean(v));
   return Array.from(new Set(ids));
 }
 
@@ -617,8 +648,16 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   const monthStart = monthStartKey(todayKey);
   const overdueFromIso = new Date(now.getTime() - OVERDUE_WINDOW_DAYS * 86_400_000).toISOString();
 
-  const [quotesResult, tasks, paymentsResult, ordersResult, pipelineResult, monthQuotesResult, staleLeadsResult] =
-    await Promise.all([
+  const [
+    quotesResult,
+    tasks,
+    paymentsResult,
+    ordersResult,
+    pipelineResult,
+    monthQuotesResult,
+    staleLeadsResult,
+    recentLeadsResult,
+  ] = await Promise.all([
     admin
       .schema("tosho")
       .from("quotes")
@@ -676,6 +715,13 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
       .in("team_id", teamIds)
       .gte("created_at", new Date(now.getTime() - LEAD_RECENT_DAYS * 86_400_000).toISOString())
       .lt("updated_at", new Date(now.getTime() - LEAD_STALE_DAYS * 86_400_000).toISOString()),
+    // Скільки їх усього за той самий квартал — щоб застояні читались як частка.
+    admin
+      .schema("tosho")
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .in("team_id", teamIds)
+      .gte("created_at", new Date(now.getTime() - LEAD_RECENT_DAYS * 86_400_000).toISOString()),
   ]);
 
   if (quotesResult.error) throw new Error(`quotes: ${quotesResult.error.message}`);
@@ -684,6 +730,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (pipelineResult.error) throw new Error(`quotes (pipeline): ${pipelineResult.error.message}`);
   if (monthQuotesResult.error) throw new Error(`quotes (month): ${monthQuotesResult.error.message}`);
   if (staleLeadsResult.error) throw new Error(`leads (stale): ${staleLeadsResult.error.message}`);
+  if (recentLeadsResult.error) throw new Error(`leads (recent): ${recentLeadsResult.error.message}`);
 
   // Дедлайни прорахунків — floating wall-clock, тому реінтерпретуємо в Києві.
   const openQuotes = ((quotesResult.data ?? []) as QuoteRow[]).filter(
@@ -727,6 +774,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   const awaitingStale = awaitingApproval.filter(
     (q) => q.updated_at && new Date(q.updated_at).getTime() < staleBefore
   ).length;
+  const awaitingOldestDays = awaitingApproval.reduce((oldest, q) => {
+    if (!q.updated_at) return oldest;
+    const days = Math.floor((now.getTime() - new Date(q.updated_at).getTime()) / 86_400_000);
+    return days > oldest ? days : oldest;
+  }, 0);
 
   const monthQuoteIds = ((monthQuotesResult.data ?? []) as Array<{ id: string }>).map((q) => q.id);
   const staleLeads = staleLeadsResult.count ?? 0;
@@ -749,9 +801,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   // Воронка йде першою: у тихий день це єдине, що взагалі має значення.
   const funnel: string[] = [];
   if (awaitingApproval.length > 0) {
+    // Вік важливіший за просто кількість: 54 свіжих і 54 піврічних — різні речі.
     funnel.push(
       `• На погодженні: ${awaitingApproval.length}` +
-        (awaitingStale > 0 ? ` · без руху >${PIPELINE_STALE_DAYS} днів: ${awaitingStale}` : "")
+        (awaitingStale > 0 ? ` · старші за ${PIPELINE_STALE_DAYS} днів: ${awaitingStale}` : "") +
+        (awaitingOldestDays > 0 ? ` · найстарішому ${awaitingOldestDays} дн` : "")
     );
   }
   if (estimated.length > 0) funnel.push(`• Пораховано, чекає відправки: ${estimated.length}`);
@@ -771,7 +825,14 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (todaySection.length > 0) lines.push("", "<b>Сьогодні</b>", ...todaySection);
 
   const tail: string[] = [];
-  if (staleLeads > 0) tail.push(`Ліди без руху ${LEAD_STALE_DAYS}+ днів: ${staleLeads}`);
+  // «120 з 121» читається як «база холодна», а голе «120» — як випадкове число.
+  if (staleLeads > 0) {
+    const recentLeads = recentLeadsResult.count ?? 0;
+    tail.push(
+      `Ліди без руху ${LEAD_STALE_DAYS}+ днів: ${staleLeads}` +
+        (recentLeads > staleLeads ? ` з ${recentLeads}` : " — уся база за квартал")
+    );
+  }
   if (paymentsByCurrency.size > 0) {
     const parts = Array.from(paymentsByCurrency.entries()).map(
       ([currency, entry]) => `${formatMoney(entry.sum, currency)} (${entry.count})`
@@ -845,9 +906,14 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
         .gte("created_at", today.startIso)
         .lt("created_at", today.endIso)
         .limit(2000),
-      approvedQuoteIds(admin, today.startIso, today.endIso),
-      approvedQuoteIds(admin, kievDayBounds(monthStart).startIso, today.endIso),
-      approvedQuoteIds(admin, kievDayBounds(prevMonth.startKey).startIso, kievDayBounds(prevMonth.endKey).endIso),
+      approvedQuoteIds(admin, teamIds, today.startIso, today.endIso),
+      approvedQuoteIds(admin, teamIds, kievDayBounds(monthStart).startIso, today.endIso),
+      approvedQuoteIds(
+        admin,
+        teamIds,
+        kievDayBounds(prevMonth.startKey).startIso,
+        kievDayBounds(prevMonth.endKey).endIso
+      ),
       admin
         .schema("tosho")
         .from("orders")
