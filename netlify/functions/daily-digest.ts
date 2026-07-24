@@ -1080,10 +1080,17 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     lines.push("", "<b>Місяць до дати</b>");
     lines.push(`• Затверджено: ${approvedMonthIds.length} на ${escapeTelegramHtml(formatMoney(monthSum))}`);
     if (approvedPrevMonthIds.length > 0) {
-      const delta = prevSum > 0 ? Math.round(((monthSum - prevSum) / prevSum) * 100) : null;
+      const deltaRaw = prevSum > 0 ? ((monthSum - prevSum) / prevSum) * 100 : null;
+      let deltaText = "";
+      if (deltaRaw !== null) {
+        const rounded = Math.round(deltaRaw);
+        // «-100%» означає нуль. Поки сума не нульова, показуємо десяту частку,
+        // інакше -99,9% округлюється до «виторгу немає».
+        const value = Math.abs(rounded) === 100 && monthSum > 0 ? deltaRaw.toFixed(1) : String(rounded);
+        deltaText = ` (${deltaRaw >= 0 ? "+" : ""}${value}%)`;
+      }
       lines.push(
-        `• Минулого місяця за цей самий період: ${escapeTelegramHtml(formatMoney(prevSum))}` +
-          (delta === null ? "" : ` (${delta >= 0 ? "+" : ""}${delta}%)`)
+        `• Минулого місяця за цей самий період: ${escapeTelegramHtml(formatMoney(prevSum))}${deltaText}`
       );
     }
   }
