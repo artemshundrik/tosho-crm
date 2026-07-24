@@ -12,12 +12,16 @@ export type NotificationCategoryKey =
   | "team_events"
   | "probation"
   | "employment"
-  | "finance_payment";
+  | "finance_payment"
+  | "admin_digest"
+  | "business_digest";
 
 export type NotificationCategory = {
   key: NotificationCategoryKey;
   label: string;
   description: string;
+  /** Категорія доставляється лише в Telegram — у матриці налаштувань push-тумблер не показуємо. */
+  telegramOnly?: boolean;
 };
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
@@ -66,6 +70,18 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     label: "Платежі та підписки",
     description: "Нагадування про майбутній платіж / списання підписки",
   },
+  {
+    key: "admin_digest",
+    label: "Системний дайджест",
+    description: "Ранковий звіт про бекапи, storage, базу та cron",
+    telegramOnly: true,
+  },
+  {
+    key: "business_digest",
+    label: "Бізнес-дайджест",
+    description: "Ранковий план на день і вечірній підсумок продажів та дизайну",
+    telegramOnly: true,
+  },
 ];
 
 // Видимість категорій за роллю. Чиста функція від рядків ролей —
@@ -91,6 +107,12 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Платежі / підписки — лише фін-ролі.
     case "finance_payment":
       return isFinance;
+    // Системний дайджест — лише ті, хто має доступ до Observability.
+    case "admin_digest":
+      return access === "owner" || access === "admin";
+    // Бізнес-дайджест — власник/адмін + SEO.
+    case "business_digest":
+      return isPrivileged;
     // Дизайн-задачі — дизайнери + ті, хто з прорахунками/дизайном.
     case "design":
       return isQuoteWorker || isDesigner;

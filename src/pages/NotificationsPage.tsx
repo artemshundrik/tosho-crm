@@ -1283,12 +1283,18 @@ export default function NotificationsPage() {
                     </div>
                     <div className="flex shrink-0 items-center gap-6">
                       <div className="flex w-12 justify-center">
-                        <Toggle
-                          checked={isCategoryChannelOn(cat.key, "push")}
-                          disabled={channelPrefsBusy}
-                          onClick={() => toggleCategoryChannel(cat.key, "push")}
-                          label={`Push: ${cat.label}`}
-                        />
+                        {cat.telegramOnly ? (
+                          <span className="text-xs text-muted-foreground" title="Цей тип шлеться лише в Telegram">
+                            —
+                          </span>
+                        ) : (
+                          <Toggle
+                            checked={isCategoryChannelOn(cat.key, "push")}
+                            disabled={channelPrefsBusy}
+                            onClick={() => toggleCategoryChannel(cat.key, "push")}
+                            label={`Push: ${cat.label}`}
+                          />
+                        )}
                       </div>
                       <div className="flex w-16 justify-center">
                         <Toggle
