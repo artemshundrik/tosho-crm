@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { useLocation } from "react-router-dom";
 
 type AppVersionPayload = {
   version: string;
@@ -13,7 +13,6 @@ const VERSION_RETRY_INTERVAL_MS = 5_000;
 const SAFE_RELOAD_IDLE_MS = 15_000;
 const VERSION_BROADCAST_KEY = "tosho:app-version-update";
 const VERSION_RELOAD_GUARD_KEY = "tosho:app-version-reload";
-const VERSION_TOAST_ID = "app-version-update";
 
 function isEditableElement(value: Element | null): value is HTMLElement {
   if (!(value instanceof HTMLElement)) return false;
@@ -27,11 +26,8 @@ function isEditableElement(value: Element | null): value is HTMLElement {
   );
 }
 
-function canReloadSafely(lastInteractionAt: number) {
-  if (typeof document === "undefined") return false;
-  if (document.hidden) return true;
-  if (isEditableElement(document.activeElement)) return false;
-  return Date.now() - lastInteractionAt >= SAFE_RELOAD_IDLE_MS;
+function editableFocused() {
+  return typeof document !== "undefined" && isEditableElement(document.activeElement);
 }
 
 function shouldSkipReload(buildId: string) {
@@ -62,12 +58,35 @@ function markReload(buildId: string) {
   }
 }
 
+/**
+ * Silent auto-update. When a new deploy is detected the tab reloads itself at
+ * the first SAFE moment — no toast, no button (review feedback: nobody presses
+ * "Оновити", stale tabs then run broken bundles for weeks):
+ *
+ *  1. the tab goes to the background, or the user returns to it — unless the
+ *     focus is in an editable field (an unsent draft must survive);
+ *  2. an SPA navigation happens — the new page just mounted, nothing is typed;
+ *  3. the tab is visible but quiet: no click/keystroke for 15s and no editable
+ *     focused. Mouse movement deliberately does NOT count as interaction —
+ *     counting it kept the reload from ever firing for active users.
+ */
 export function AppVersionWatcher() {
   const pendingVersionRef = useRef<AppVersionPayload | null>(null);
   const lastInteractionAtRef = useRef(Date.now());
   const retryTimerRef = useRef<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const location = useLocation();
+
+  // Rule 2: a route change is the safest reload moment — the destination just
+  // mounted and nothing is typed yet. Reloading here loads the SAME url on the
+  // fresh bundle, so the user lands exactly where they navigated.
+  useEffect(() => {
+    const pending = pendingVersionRef.current;
+    if (!pending || editableFocused() || shouldSkipReload(pending.buildId)) return;
+    markReload(pending.buildId);
+    window.location.reload();
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (import.meta.env.DEV) return;
@@ -88,36 +107,26 @@ export function AppVersionWatcher() {
 
     const reloadForVersion = (version: AppVersionPayload) => {
       if (shouldSkipReload(version.buildId)) return;
-      toast.dismiss(VERSION_TOAST_ID);
       markReload(version.buildId);
       window.location.reload();
     };
 
-    const ensureVersionToast = () => {
-      toast.info("CRM оновлено", {
-        id: VERSION_TOAST_ID,
-        duration: Infinity,
-        description: "Вкладка перезавантажиться автоматично, коли ви завершите поточну дію.",
-        action: {
-          label: "Оновити зараз",
-          onClick: () => {
-            if (pendingVersionRef.current) {
-              reloadForVersion(pendingVersionRef.current);
-            }
-          },
-        },
-      });
+    const canReloadSafely = () => {
+      if (typeof document === "undefined") return false;
+      if (document.hidden) return !editableFocused();
+      if (editableFocused()) return false;
+      return Date.now() - lastInteractionAtRef.current >= SAFE_RELOAD_IDLE_MS;
     };
 
+    // Rule 3: visible but quiet — keep probing until the pause comes.
     const scheduleRetry = () => {
       clearRetryTimer();
       retryTimerRef.current = window.setTimeout(() => {
         if (!pendingVersionRef.current) return;
-        if (canReloadSafely(lastInteractionAtRef.current)) {
+        if (canReloadSafely()) {
           reloadForVersion(pendingVersionRef.current);
           return;
         }
-        ensureVersionToast();
         scheduleRetry();
       }, VERSION_RETRY_INTERVAL_MS);
     };
@@ -136,20 +145,29 @@ export function AppVersionWatcher() {
       }
     };
 
-    const activatePendingVersion = (version: AppVersionPayload, shouldBroadcast = false) => {
+    const activatePendingVersion = (
+      version: AppVersionPayload,
+      options: { broadcast?: boolean; immediate?: boolean } = {}
+    ) => {
       if (!version.buildId || version.buildId === __APP_VERSION__.buildId) return;
-      if (pendingVersionRef.current?.buildId === version.buildId) return;
-      pendingVersionRef.current = version;
-      if (shouldBroadcast) announceVersion(version);
-      if (canReloadSafely(lastInteractionAtRef.current)) {
+      if (pendingVersionRef.current?.buildId !== version.buildId) {
+        pendingVersionRef.current = version;
+        if (options.broadcast) announceVersion(version);
+      }
+      // Rule 1 (return leg): the user just came back — reload before they start
+      // doing anything, unless a draft is focused.
+      if (options.immediate && !editableFocused()) {
         reloadForVersion(version);
         return;
       }
-      ensureVersionToast();
+      if (canReloadSafely()) {
+        reloadForVersion(version);
+        return;
+      }
       scheduleRetry();
     };
 
-    const fetchCurrentVersion = async () => {
+    const fetchCurrentVersion = async (options: { immediate?: boolean } = {}) => {
       try {
         const response = await fetch(`${VERSION_CHECK_URL}?t=${Date.now()}`, {
           cache: "no-store",
@@ -166,31 +184,38 @@ export function AppVersionWatcher() {
         ) {
           return;
         }
-        activatePendingVersion(payload as AppVersionPayload, true);
+        activatePendingVersion(payload as AppVersionPayload, {
+          broadcast: true,
+          immediate: options.immediate,
+        });
       } catch {
         // ignore transient polling issues
       }
     };
 
+    // Only real input counts. Mouse movement is NOT interaction: with it in the
+    // list, an active user never reached the idle window and the auto-reload
+    // never fired (that is why the old toast just sat there forever).
     const markInteraction = () => {
       lastInteractionAtRef.current = Date.now();
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        if (pendingVersionRef.current) {
+        // Rule 1 (leave leg): reload the backgrounded tab so the user returns
+        // to a fresh one — but never discard a focused draft.
+        if (pendingVersionRef.current && !editableFocused()) {
           reloadForVersion(pendingVersionRef.current);
-          return;
         }
         return;
       }
-      markInteraction();
-      void fetchCurrentVersion();
+      // Returning is NOT interaction — marking it used to postpone the reload
+      // exactly when it was safest. Check the version and reload right away.
+      void fetchCurrentVersion({ immediate: true });
     };
 
     const handleWindowFocus = () => {
-      markInteraction();
-      void fetchCurrentVersion();
+      void fetchCurrentVersion({ immediate: true });
     };
 
     const handleOnline = () => {
@@ -208,19 +233,13 @@ export function AppVersionWatcher() {
         ) {
           return;
         }
-        activatePendingVersion(payload as AppVersionPayload, false);
+        activatePendingVersion(payload as AppVersionPayload);
       } catch {
         // ignore malformed storage events
       }
     };
 
-    const activityEvents: Array<keyof WindowEventMap> = [
-      "pointerdown",
-      "keydown",
-      "mousemove",
-      "touchstart",
-      "focus",
-    ];
+    const activityEvents: Array<keyof WindowEventMap> = ["pointerdown", "keydown", "touchstart"];
 
     activityEvents.forEach((eventName) => {
       window.addEventListener(eventName, markInteraction, { passive: true });
@@ -234,7 +253,7 @@ export function AppVersionWatcher() {
       broadcastChannelRef.current = new BroadcastChannel(VERSION_BROADCAST_KEY);
       broadcastChannelRef.current.onmessage = (event: MessageEvent<AppVersionPayload>) => {
         if (!event.data) return;
-        activatePendingVersion(event.data, false);
+        activatePendingVersion(event.data);
       };
     }
 
@@ -247,7 +266,6 @@ export function AppVersionWatcher() {
     return () => {
       clearRetryTimer();
       clearPollTimer();
-      toast.dismiss(VERSION_TOAST_ID);
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, markInteraction);
       });
