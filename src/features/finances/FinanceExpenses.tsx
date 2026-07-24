@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
+  BellRing,
   CalendarClock,
   Check,
   ChevronDown,
@@ -171,6 +172,24 @@ const parseAmountInput = (raw: string): number | null => {
 const amountNumber = (raw: string): number => parseAmountInput(raw) ?? 0;
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+
+// Пресети «за скільки днів до платежу» нагадувати + людські підписи.
+const REMINDER_LEAD_OPTIONS = [1, 3, 7, 14, 30];
+const REMINDER_LEAD_LABELS: Record<number, string> = {
+  1: "За 1 день",
+  3: "За 3 дні",
+  7: "За тиждень",
+  14: "За 2 тижні",
+  30: "За місяць",
+};
+const reminderLeadLabel = (d: number) => REMINDER_LEAD_LABELS[d] ?? `За ${d} дн.`;
+
+// «YYYY-MM-DD» мінус N днів → «YYYY-MM-DD» (дата спрацювання нагадування).
+const subtractDays = (iso: string, days: number): string => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+};
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
   try {
@@ -1081,6 +1100,14 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                     {formatDate(expense.nextChargeDate)} · {chargeCountdown(expense.nextChargeDate)}
                   </span>
                 ) : null}
+                {expense.reminderLeadDays != null && expense.nextChargeDate ? (
+                  <span
+                    className="inline-flex items-center gap-1 text-warning-foreground"
+                    title={`Нагадаємо ${formatDate(subtractDays(expense.nextChargeDate, expense.reminderLeadDays))} (за ${expense.reminderLeadDays} дн.)`}
+                  >
+                    <BellRing className="h-3 w-3" /> нагадування
+                  </span>
+                ) : null}
                 {account ? <span>{account.name}</span> : null}
               </div>
             </div>
@@ -1495,6 +1522,9 @@ function ExpenseDialog({
   const [amountVaries, setAmountVaries] = React.useState(editing?.amountVaries ?? false);
   const [objectGroup, setObjectGroup] = React.useState(editing?.objectGroup ?? "");
   const [nextChargeDate, setNextChargeDate] = React.useState(editing?.nextChargeDate ?? "");
+  // Нагадування про платіж: увімкнено = reminderLeadDays не null; дефолт 7 днів.
+  const [reminderEnabled, setReminderEnabled] = React.useState((editing?.reminderLeadDays ?? null) !== null);
+  const [reminderLeadDays, setReminderLeadDays] = React.useState(editing?.reminderLeadDays ?? 7);
   const [notes, setNotes] = React.useState(editing?.notes ?? "");
   const [allocations, setAllocations] = React.useState<AllocRow[]>(
     editing?.allocations.map((a) => ({ quoteId: a.quoteId, amount: String(a.amount) })) ?? []
@@ -1614,6 +1644,8 @@ function ExpenseDialog({
       amountVaries: varyingRecurring,
       objectGroup: isRecurring ? objectGroup || null : null,
       nextChargeDate: isRecurring ? nextChargeDate || null : null,
+      // Нагадування зберігаємо лише коли ввімкнено й є дата (serializeExpense ще раз гейтить).
+      reminderLeadDays: reminderEnabled && !varyingRecurring ? reminderLeadDays : null,
       notes,
       enteredBy: userId,
       allocations: allocInput,
@@ -2088,6 +2120,55 @@ function ExpenseDialog({
                     <div className="grid gap-2">
                       <Label>Наступне списання</Label>
                       <Input type="date" value={nextChargeDate} onChange={(e) => setNextChargeDate(e.target.value)} className="h-10" />
+                    </div>
+                  )}
+
+                  {/* Нагадування про платіж — має сенс лише коли є конкретна дата списання. */}
+                  {varyingRecurring ? null : (
+                    <div className="grid gap-2 sm:col-span-2">
+                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
+                        <Checkbox
+                          checked={reminderEnabled}
+                          onCheckedChange={(v) => setReminderEnabled(v === true)}
+                          className="mt-0.5"
+                        />
+                        <span className="text-sm">
+                          <span className="font-medium text-foreground">Нагадати про платіж</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            Попередимо заздалегідь — у дзвіночку й Telegram — щоб були кошти на картці.
+                          </span>
+                        </span>
+                      </label>
+                      {reminderEnabled ? (
+                        nextChargeDate ? (
+                          <div className="flex flex-wrap items-center gap-2 pl-1">
+                            <span className="text-sm text-muted-foreground">за</span>
+                            <Select
+                              value={String(reminderLeadDays)}
+                              onValueChange={(v) => setReminderLeadDays(Number(v))}
+                            >
+                              <SelectTrigger className="h-9 w-[136px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {REMINDER_LEAD_OPTIONS.map((d) => (
+                                  <SelectItem key={d} value={String(d)}>
+                                    {reminderLeadLabel(d)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <span className="text-sm text-muted-foreground">до дати платежу</span>
+                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-warning-soft/50 px-2.5 py-1 text-xs text-warning-foreground">
+                              <BellRing className="h-3.5 w-3.5" /> Нагадаємо {formatDate(subtractDays(nextChargeDate, reminderLeadDays))}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="pl-1 text-xs text-warning-foreground">
+                            Спершу вкажіть «Наступне списання» — від нього рахуємо нагадування.
+                          </p>
+                        )
+                      ) : null}
                     </div>
                   )}
                 </>

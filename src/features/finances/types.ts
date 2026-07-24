@@ -265,6 +265,8 @@ export type FinanceExpense = {
   amountVaries: boolean;
   /** Обʼєкт/адреса (напр. «Богданівська 7») для групування оренди+комуналки одного офісу. */
   objectGroup: string | null;
+  /** Нагадати про платіж за N днів до nextChargeDate (null = вимкнено). */
+  reminderLeadDays: number | null;
   nextChargeDate: string | null;
   vendorKey: string | null;
   logoUrl: string | null;

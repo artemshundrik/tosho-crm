@@ -671,7 +671,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -689,6 +689,7 @@ type ExpenseRow = {
   recurrence: string | null;
   amount_varies: boolean | null;
   object_group: string | null;
+  reminder_lead_days: number | null;
   next_charge_date: string | null;
   vendor_key: string | null;
   logo_url: string | null;
@@ -729,6 +730,7 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   recurrence: row.recurrence ?? null,
   amountVaries: Boolean(row.amount_varies),
   objectGroup: row.object_group ?? null,
+  reminderLeadDays: row.reminder_lead_days ?? null,
   nextChargeDate: row.next_charge_date ?? null,
   vendorKey: row.vendor_key ?? null,
   logoUrl: row.logo_url ?? null,
@@ -790,6 +792,7 @@ export type ExpenseInput = {
   recurrence?: BillingPeriod | null;
   amountVaries?: boolean;
   objectGroup?: string | null;
+  reminderLeadDays?: number | null;
   nextChargeDate?: string | null;
   vendorKey?: string | null;
   logoUrl?: string | null;
@@ -816,6 +819,9 @@ const serializeExpense = (input: ExpenseInput) => ({
   object_group: input.isRecurring ? input.objectGroup?.trim() || null : null,
   // Дата наступного списання має сенс лише для сталої витрати/підписки.
   next_charge_date: input.isRecurring ? input.nextChargeDate || null : null,
+  // Нагадування — лише коли є дата платежу (сталий регулярний із next_charge_date).
+  reminder_lead_days:
+    input.isRecurring && input.nextChargeDate ? input.reminderLeadDays ?? null : null,
   vendor_key: input.vendorKey || null,
   logo_url: input.logoUrl?.trim() || null,
   notes: input.notes?.trim() || null,
