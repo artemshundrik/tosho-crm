@@ -321,7 +321,7 @@ export function TeamPulsePanel({
   return (
     <div className="flex flex-col">
       {/* Range + KPIs */}
-      <div className="flex w-full flex-col gap-5 pb-8 pt-4">
+      <div className="flex w-full flex-col gap-5 px-4 pb-8 pt-4 md:px-5 lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
             {RANGE_OPTIONS.map((option) => (
