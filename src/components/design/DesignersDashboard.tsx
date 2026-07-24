@@ -687,10 +687,6 @@ export function DesignersDashboard({
     );
   }
 
-  const scopedBalance = scopedDesigner
-    ? analytics.balance.find((row) => row.designerId === scopedDesigner.id) ?? null
-    : null;
-
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
@@ -767,11 +763,6 @@ export function DesignersDashboard({
           {scopedDesigner ? (
             <>
               <span className="font-semibold text-foreground">{scopedDesigner.label}</span>
-              {scopedBalance ? (
-                <Badge variant="outline" className={cn("px-2 py-0.5 text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[scopedBalance.workload.level])}>
-                  {CAPACITY_LABEL_BY_LEVEL[scopedBalance.workload.level]} · {scopedBalance.workload.activeTaskCount} активних
-                </Badge>
-              ) : null}
               <span aria-hidden="true">·</span>
               <span>
                 {timerTaskCount === 0
