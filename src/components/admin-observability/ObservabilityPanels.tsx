@@ -369,7 +369,7 @@ function TrendCard({
               tickFormatter={(value: number) => (axisFormatter ?? formatter)(value)}
             />
             <Tooltip
-              cursor={{ stroke: "hsl(var(--primary) / 0.2)", strokeWidth: 1 }}
+              cursor={{ stroke: "hsl(var(--chart-1) / 0.2)", strokeWidth: 1 }}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
                 color: "hsl(var(--foreground))",
@@ -1321,8 +1321,8 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                     <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 8, bottom: 6 }}>
                       <defs>
                         <linearGradient id="aiUsageFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.28} />
+                          <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} vertical={false} />
@@ -1346,7 +1346,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                       <Area
                         type="monotone"
                         dataKey="usd"
-                        stroke="hsl(var(--primary))"
+                        stroke="hsl(var(--chart-1))"
                         strokeWidth={2}
                         fill="url(#aiUsageFill)"
                       />

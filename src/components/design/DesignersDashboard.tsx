@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { InlineLoading } from "@/components/app/loading-primitives";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
@@ -231,9 +231,10 @@ function SparkLine({ values, width = 88, height = 30 }: { values: number[]; widt
   const [lastX, lastY] = points[points.length - 1];
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className="shrink-0">
-      <path d={area} fill="hsl(var(--primary))" opacity={0.1} />
-      <path d={line} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={lastX} cy={lastY} r={2.6} fill="hsl(var(--primary))" />
+      {/* chart-1, не бренд-primary: канонічний синій візуалізацій (див. index.css). */}
+      <path d={area} fill="hsl(var(--chart-1))" opacity={0.1} />
+      <path d={line} fill="none" stroke="hsl(var(--chart-1))" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r={2.6} fill="hsl(var(--chart-1))" />
     </svg>
   );
 }
@@ -361,6 +362,99 @@ const MATRIX_METRICS: MatrixMetric[] = [
   })),
 ];
 
+/* ---------- кеш аналітики ----------
+ * Вкладка «Дизайнери» рендериться умовно, тож при кожному поверненні компонент
+ * монтується заново і без кешу рахував би все з нуля (4 запити + агрегація).
+ * Тримаємо результат у модульному кеші на час SPA-сесії: повернення показує
+ * дані миттєво, а якщо вони старші за TTL — тихо оновлюємо у фоні (SWR), без
+ * спінера поверх уже показаних чисел. У sessionStorage свідомо НЕ пишемо:
+ * works містить усі файли за 6 місяців — це важко й ризиковано для квоти.
+ */
+type AnalyticsCacheEntry = { data: DesignerAnalytics; cachedAt: number };
+const analyticsCache = new Map<string, AnalyticsCacheEntry>();
+const ANALYTICS_TTL_MS = 5 * 60 * 1000;
+
+/** Скелетон у формі дашборду — щоб перший показ не «стрибав» після завантаження. */
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5" aria-busy="true" aria-label="Завантажуємо аналітику">
+      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70 shadow-card">
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
+          <Skeleton className="h-9 w-64 rounded-xl" />
+          <Skeleton className="ml-auto h-9 w-[180px] rounded-lg" />
+        </div>
+        <div className="px-4 pt-3">
+          <Skeleton className="h-3.5 w-72 rounded-full" />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-px border-t border-border/50 bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="bg-background/70 p-3.5">
+              <Skeleton className="h-3 w-24 rounded-full" />
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-6 w-14 rounded-md" />
+                  <Skeleton className="h-3 w-20 rounded-full opacity-70" />
+                </div>
+                <Skeleton className="h-7 w-16 rounded-md opacity-70" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <section className="rounded-2xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
+          <Skeleton className="h-4 w-56 rounded-full" />
+          <Skeleton className="mt-2 h-3 w-80 rounded-full opacity-70" />
+          <div className="mt-4 space-y-3.5">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="grid items-center gap-3 sm:grid-cols-[210px_minmax(0,1fr)_170px]">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="h-2.5 w-2.5 rounded-sm" />
+                  <Skeleton className="h-3.5 w-32 rounded-full" />
+                </div>
+                <Skeleton className={cn("h-3.5 rounded", index % 2 === 0 ? "w-[62%]" : "w-[38%]")} />
+                <Skeleton className="h-3.5 w-24 justify-self-end rounded-full opacity-70" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+          <Skeleton className="h-4 w-36 rounded-full" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-2.5">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-28 rounded-full" />
+                  <Skeleton className="h-3 w-40 rounded-full opacity-70" />
+                </div>
+                <Skeleton className="h-5 w-14 rounded-full opacity-70" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-28 rounded-full" />
+          <Skeleton className="ml-auto h-8 w-56 rounded-full" />
+        </div>
+        <div className="mt-4 space-y-2.5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-3.5 w-40 rounded-full" />
+              <Skeleton className="ml-auto h-8 w-[46%] rounded-lg opacity-70" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 /* ---------- компонент ---------- */
 
 export function DesignersDashboard({
@@ -371,8 +465,19 @@ export function DesignersDashboard({
   memberInactiveById,
   getMemberAvatar,
 }: DesignersDashboardProps) {
-  const [analytics, setAnalytics] = useState<DesignerAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Ключ-рядок замість масиву: `designers` пересоздається на кожному рендері
+  // сторінки, і ефект на ньому перезапускав завантаження без потреби.
+  const designerIdsKey = useMemo(
+    () => designers.map((designer) => designer.id).sort().join(","),
+    [designers]
+  );
+  const cacheKey = teamId && designerIdsKey ? `${teamId}|${designerIdsKey}` : null;
+
+  const [analytics, setAnalytics] = useState<DesignerAnalytics | null>(
+    () => (cacheKey ? analyticsCache.get(cacheKey)?.data ?? null : null)
+  );
+  // Спінер/скелетон — тільки коли показувати нічого; інакше оновлюємо тихо.
+  const [loading, setLoading] = useState(() => !(cacheKey && analyticsCache.has(cacheKey)));
   const [loadError, setLoadError] = useState(false);
   const [monthIdx, setMonthIdx] = useState<number | null>(null);
   const [scope, setScope] = useState<string>("team");
@@ -394,24 +499,42 @@ export function DesignersDashboard({
 
   useEffect(() => {
     let cancelled = false;
-    if (!teamId || designers.length === 0) {
+    if (!teamId || !cacheKey) {
       setAnalytics(null);
       setLoading(false);
       return () => {
         cancelled = true;
       };
     }
-    setLoading(true);
+
+    const cached = analyticsCache.get(cacheKey);
+    if (cached) {
+      // Показуємо кеш миттєво (навіть протухлий) — жодного порожнього екрана.
+      setAnalytics(cached.data);
+      setMonthIdx((current) => current ?? cached.data.months.length - 1);
+      setLoading(false);
+      if (Date.now() - cached.cachedAt < ANALYTICS_TTL_MS) {
+        return () => {
+          cancelled = true;
+        };
+      }
+      // Протухло — оновлюємо у фоні, без скелетона поверх живих даних.
+    } else {
+      setLoading(true);
+    }
     setLoadError(false);
-    loadDesignerAnalytics({ teamId, designerIds: designers.map((designer) => designer.id) })
+
+    loadDesignerAnalytics({ teamId, designerIds: designerIdsKey.split(",") })
       .then((result) => {
+        analyticsCache.set(cacheKey, { data: result, cachedAt: Date.now() });
         if (cancelled) return;
         setAnalytics(result);
         setMonthIdx((current) => current ?? result.months.length - 1);
       })
       .catch((error) => {
         console.warn("Failed to load designer analytics", error);
-        if (!cancelled) setLoadError(true);
+        // Помилку показуємо лише коли показати нічого; інакше лишаємо кеш.
+        if (!cancelled && !cached) setLoadError(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -419,7 +542,7 @@ export function DesignersDashboard({
     return () => {
       cancelled = true;
     };
-  }, [teamId, designers]);
+  }, [teamId, cacheKey, designerIdsKey]);
 
   const labelById = useMemo(() => {
     const map = new Map<string, string>();
@@ -447,13 +570,7 @@ export function DesignersDashboard({
 
   if (!teamId) return null;
 
-  if (loading) {
-    return (
-      <div className="px-4 pt-6 pb-4 sm:px-5">
-        <InlineLoading label="Рахуємо аналітику дизайнерів..." />
-      </div>
-    );
-  }
+  if (loading) return <DashboardSkeleton />;
 
   if (loadError || !analytics) {
     return (
@@ -1361,7 +1478,7 @@ export function DesignersDashboard({
                                   }}
                                   {...bindTip(() => {
                                     const tipRows: TipRow[] = [
-                                      { color: metric.type ? typeColor(metric.type) : "hsl(var(--primary))", label: metric.label, value: metric.formatLong(value), strong: true },
+                                      { color: metric.type ? typeColor(metric.type) : "hsl(var(--chart-1))", label: metric.label, value: metric.formatLong(value), strong: true },
                                     ];
                                     if (prevValue != null) {
                                       const d = value - prevValue;
