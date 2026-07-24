@@ -21,7 +21,10 @@ export function getTeamAvailabilityBadgeClass(value?: TeamAvailabilityStatus | n
   return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
-export function getTeamAvailabilityAvatarClass(value?: TeamAvailabilityStatus | null) {
+export function getTeamAvailabilityAvatarClass(_value?: TeamAvailabilityStatus | null) {
+  // Навмисний no-op: аватар більше не фарбується статусом присутності, але
+  // сигнатуру лишили, щоб не чіпати всі місця виклику. Прапорець-індикатор
+  // (getTeamStatusIndicatorClass) несе статус тепер сам.
   return "";
 }
 

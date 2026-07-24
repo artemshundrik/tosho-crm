@@ -1015,14 +1015,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   }, []);
 
-  const getAttachmentDownloadName = useCallback(
-    (attachment: {
-      name?: string | null;
-      mimeType?: string | null;
-      storagePath?: string | null;
-    }) => getAttachmentDownloadFileName(attachment.name, attachment.storagePath, attachment.mimeType),
-    []
-  );
 
   const getAttachmentDisplayName = useCallback(
     (attachment: {

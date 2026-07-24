@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -229,13 +229,6 @@ const SIDEBAR_STATUS_ACTION_META: Partial<Record<DesignStatus, { icon: typeof Pl
   client_review: { icon: Send, tone: "info", description: "Переведе задачу в етап погодження із замовником." },
   approved: { icon: CheckCircle2, tone: "success", description: "Закриє задачу як фінально погоджену." },
   changes: { icon: AlertTriangle, tone: "warning", description: "Поверне задачу на правки та доопрацювання." },
-};
-
-const SIDEBAR_ACTION_TONE_CLASS: Record<SidebarActionTone, string> = {
-  neutral: "design-task-side-action-tone-neutral",
-  info: "design-task-side-action-tone-info",
-  warning: "design-task-side-action-tone-warning",
-  success: "design-task-side-action-tone-success",
 };
 
 type QuoteItemRow = {
@@ -546,8 +539,6 @@ const normalizePartyLabel = (value?: string | null) => {
 };
 
 const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).replace(/\s+/g, "");
-
-const DROPBOX_ORDERS_ROOT_SUFFIX = "/Замовлення";
 
 function sanitizeDropboxNameSegment(value: string, fallback: string) {
   const normalized = value
@@ -2306,10 +2297,6 @@ export default function DesignTaskPage() {
             null,
           createdAt: rowCreatedAt ?? (quote?.created_at as string | null),
         };
-        const designOutputKeys = new Set(
-          designFilesWithUrls.map((file) => `${file.storage_bucket}:${file.storage_path}`)
-        );
-
         const nextQuoteItem = item ?? null;
         const nextProductPreviewUrl = itemPreviewUrl;
         const nextProductZoomPreviewUrl = itemZoomPreviewUrl;

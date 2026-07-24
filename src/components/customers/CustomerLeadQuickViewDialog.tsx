@@ -31,15 +31,12 @@ import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses 
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import {
-  Building2,
   CalendarDays,
-  Loader2,
   Mail,
   PackageCheck,
   Phone,
   ReceiptText,
   Send,
-  User,
   ExternalLink,
 } from "lucide-react";
 import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";

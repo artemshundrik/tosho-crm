@@ -3,8 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
   BellRing,
-  Cake,
-  CalendarRange,
   MonitorSmartphone,
   PlaneTakeoff,
   PartyPopper,

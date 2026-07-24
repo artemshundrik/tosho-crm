@@ -159,14 +159,6 @@ function isDirectAvatarHttpUrl(value: string) {
   );
 }
 
-function isSupabaseStorageUrl(url: string, bucket: string) {
-  return (
-    url.includes(`/storage/v1/object/public/${bucket}/`) ||
-    url.includes(`/storage/v1/object/sign/${bucket}/`) ||
-    url.includes(`/storage/v1/object/${bucket}/`)
-  );
-}
-
 function shouldResolveFromStorage(rawUrl: string, bucket: string) {
   const normalizedUrl = normalizeAvatarKey(rawUrl);
   if (!normalizedUrl) return false;

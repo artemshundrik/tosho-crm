@@ -65,10 +65,6 @@ function isPreviewable(path: string, fileName = "", mimeType = "") {
   );
 }
 
-function buildKey(bucket: string, path: string) {
-  return `${bucket}:${path}`;
-}
-
 function parseEntityFromPath(path: string) {
   const parts = path.split("/");
   const category = parts[2] ?? "";

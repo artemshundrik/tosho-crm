@@ -6,10 +6,7 @@ import {
   AlertTriangle,
   Database,
   Download,
-  Eye,
-  ExternalLink,
   HardDrive,
-  Search,
   RefreshCw,
   ShieldAlert,
   Sparkles,
@@ -19,9 +16,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSignedAttachmentUrl, removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -330,7 +326,7 @@ function sliceTrendData(data: TrendDatum[], range: ChartRange) {
 }
 
 export default function AdminObservabilityPage() {
-  const { teamId, userId, loading: authLoading, permissions } = useAuth();
+  const { userId, loading: authLoading, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [backupRuns, setBackupRuns] = useState<BackupRunRow[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups" | "telegram" | "ai-usage">("overview");
@@ -690,7 +686,6 @@ export default function AdminObservabilityPage() {
   }, [rows]);
 
   const dbStats = latest?.database_stats ?? null;
-  const topTables = asArray<TableSizeStat>(latest?.top_tables);
   const deadTupleTables = asArray<DeadTupleStat>(latest?.dead_tuple_tables);
   const healthDeadTupleTables = deadTupleTables.filter((row) => {
     const schema = (row.schema_name ?? "").trim().toLowerCase();
@@ -700,16 +695,9 @@ export default function AdminObservabilityPage() {
     if (schema === "tosho" && table === "admin_observability_snapshots") return false;
     return true;
   });
-  const bucketSizes = asArray<BucketStat>(latest?.bucket_sizes);
-  const storageTodayBreakdown = asArray<BucketStat>(latest?.storage_today_breakdown);
-  const attachmentOrphanTopFolders = asArray<AttachmentGroupStat>(latest?.attachment_orphan_top_folders);
-  const attachmentOrphanByExtension = asArray<AttachmentGroupStat>(latest?.attachment_orphan_by_extension);
-  const activityLogQueries = asArray<QueryStat>(latest?.top_activity_log_queries);
-  const attachmentQueries = asArray<QueryStat>(latest?.top_quote_attachment_queries);
   const attachmentOrphanCount = numberOrZero(latest?.attachment_possible_orphan_original_count);
   const attachmentOrphanBytes = numberOrZero(latest?.attachment_possible_orphan_original_bytes);
   const attachmentMissingVariants = numberOrZero(latest?.attachment_missing_variants_count);
-  const attachmentSafeReclaimableCount = numberOrZero(latest?.attachment_safe_reclaimable_count);
   const attachmentSafeReclaimableBytes = numberOrZero(latest?.attachment_safe_reclaimable_bytes);
   const attachmentHygieneTone: "good" | "warning" | "danger" | "neutral" =
     attachmentSafeReclaimableBytes >= 100 * 1024 ** 2 || attachmentOrphanBytes >= 500 * 1024 ** 2 || attachmentMissingVariants >= 100
