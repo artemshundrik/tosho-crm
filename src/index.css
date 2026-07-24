@@ -116,8 +116,14 @@
 
     --warning-soft: 40 100% 87%;
     --warning-soft-border: 36 96% 58%;
+    /* Темний бурштин для ТЕКСТУ на світлих тлі/бейджах — світлити не можна
+       (яскравий жовтий як текст на white/soft провалює 4.5:1). Для суцільних
+       заливок без тексту (крапки статусів) є --warning-solid. */
     --warning-foreground: 26 98% 36%;
     --warning-copy-foreground: 24 18% 30%;
+    /* Яскравий «живий» жовтий (= жовтий «Верстки», --chart-4) для СУЦІЛЬНИХ
+       заливок без тексту: крапки статусів (away/busy, changes…), індикатори. */
+    --warning-solid: 41 100% 46.5%;
 
     --danger-soft: 356 100% 92%;
     --danger-soft-border: 356 90% 78%;
@@ -374,6 +380,8 @@
     --warning-soft-border: 33 78% 44%;
     --warning-foreground: 40 100% 66%;
     --warning-copy-foreground: 35 24% 82%;
+    /* Темна тема: жовтий уже яскравий (66% L) — скарга лише про світлу. */
+    --warning-solid: 42 100% 62%;
 
     --danger-soft: 356 34% 16%;
     --danger-soft-border: 356 42% 32%;
@@ -931,7 +939,9 @@
     background-color: hsl(var(--success-solid));
   }
   .tone-dot-warning {
-    background-color: hsl(var(--warning-foreground));
+    /* Яскравий жовтий для крапок статусів (заливка без тексту) — не текстовий
+       warning-foreground. */
+    background-color: hsl(var(--warning-solid));
   }
   .tone-dot-danger {
     background-color: hsl(var(--danger-foreground));

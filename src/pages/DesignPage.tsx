@@ -5244,7 +5244,7 @@ export default function DesignPage() {
                   Вертикальна лінія показує сьогоднішній день.
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-warning-soft-border bg-warning-soft/50 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-warning-foreground" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-warning-solid" />
                   Жовтий контур сигналізує, що часу до дедлайну мало для старту.
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-danger-soft-border bg-danger-soft/50 px-3 py-2">
@@ -5266,7 +5266,7 @@ export default function DesignPage() {
                 Лінія сьогодні
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-warning-soft-border bg-warning-soft/40 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-warning-foreground" />
+                <span className="h-2 w-2 rounded-full bg-warning-solid" />
                 Ризик старту
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-danger-soft-border bg-danger-soft/40 px-2 py-1">
@@ -5334,7 +5334,7 @@ export default function DesignPage() {
                           <div
                             className={cn(
                               "h-2 rounded-full transition-all",
-                              row.isOverdue ? "bg-danger-foreground" : row.isStartRisk ? "bg-warning-foreground" : "bg-primary/70"
+                              row.isOverdue ? "bg-danger-foreground" : row.isStartRisk ? "bg-warning-solid" : "bg-primary/70"
                             )}
                             style={{ width: `${Math.max(8, Math.round(progressRatio * 100))}%` }}
                           />

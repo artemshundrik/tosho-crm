@@ -69,6 +69,9 @@ export default {
             soft: "hsl(var(--success-soft))",
             "soft-border": "hsl(var(--success-soft-border))",
             foreground: "hsl(var(--success-foreground))",
+            // Яскрава суцільна заливка без тексту (крапки/смужки/індикатори).
+            // НЕ для тексту й не для кнопки з написом — там потрібен foreground.
+            solid: "hsl(var(--success-solid))",
           },
           warning: {
             DEFAULT: "hsl(var(--warning-foreground))",
@@ -76,6 +79,7 @@ export default {
             "soft-border": "hsl(var(--warning-soft-border))",
             foreground: "hsl(var(--warning-foreground))",
             copy: "hsl(var(--warning-copy-foreground))",
+            solid: "hsl(var(--warning-solid))",
           },
           info: {
             DEFAULT: "hsl(var(--info-foreground))",
