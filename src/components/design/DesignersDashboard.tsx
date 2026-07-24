@@ -137,7 +137,7 @@ const TYPE_SHORT: Record<DesignTaskType, string> = {
 /* Вид завантаженого файлу (output_kind) — кольори з семантичних токенів, не серій. */
 const FILE_KIND_META = [
   { key: "visualization", label: "Візуал", color: "hsl(var(--info-foreground))" },
-  { key: "layout", label: "Макет", color: "hsl(var(--success-foreground))" },
+  { key: "layout", label: "Макет", color: "hsl(var(--success-solid))" },
   { key: "attachment", label: "Файли задачі", color: "hsl(var(--muted-foreground))" },
 ] as const;
 
