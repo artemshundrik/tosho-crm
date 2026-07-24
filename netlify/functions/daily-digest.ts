@@ -64,7 +64,9 @@ const DEAD_TUPLE_DANGER_PERCENT = 40;
 const ORPHAN_DANGER_COUNT = 200;
 const CRON_WARN_FAILURES = 1;
 const CRON_DANGER_FAILURES = 3;
-const CRON_STALE_HOURS = 24;
+// 26, а не 24: щоденний джоб перед своїм наступним запуском законно підходить
+// впритул до 24 год, і рівний поріг давав би 🔴 на рівному місці.
+const CRON_STALE_HOURS = 26;
 const AI_WARN_USD = 5;
 const AI_DANGER_USD = 15;
 // Снапшот Observability пишеться лише коли адмін тисне «Оновити», тож старіші
@@ -295,8 +297,14 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
     const failures = num(job.failures);
     const hoursSince = job.hours_since_last_run == null ? null : num(job.hours_since_last_run);
 
-    if (hoursSince === null || hoursSince > CRON_STALE_HOURS) {
-      signals.push({ tone: "danger", text: `Cron ${name}: не запускався понад добу` });
+    // Порожня історія ≠ поламаний джоб: щойно заплановане завдання ще не мало
+    // першого запуску. Це жовтий сигнал «перевір завтра», а не червоний.
+    if (hoursSince === null) {
+      signals.push({ tone: "warning", text: `Cron ${name}: ще жодного запуску` });
+      continue;
+    }
+    if (hoursSince > CRON_STALE_HOURS) {
+      signals.push({ tone: "danger", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
       continue;
     }
     if (failures >= CRON_DANGER_FAILURES) {
