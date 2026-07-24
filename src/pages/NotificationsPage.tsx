@@ -799,19 +799,25 @@ export default function NotificationsPage() {
     if (n.href) navigate(n.href);
   };
 
-  const updateInAppNotificationPreferences = (next: { enabled?: boolean; soundEnabled?: boolean }) => {
-    const resolved = {
-      enabled: next.enabled ?? inAppNotificationsEnabled,
-      soundEnabled: next.soundEnabled ?? inAppNotificationSoundEnabled,
-    };
-    const normalized = {
-      enabled: resolved.enabled,
-      soundEnabled: resolved.enabled ? resolved.soundEnabled : false,
-    };
-    setInAppNotificationsEnabled(normalized.enabled);
-    setInAppNotificationSoundEnabled(normalized.soundEnabled);
-    writeInAppNotificationPreferences(normalized);
-  };
+  // useCallback, щоб клік-хендлери нижче могли тримати її в deps без
+  // перестворення щорендер (writeInAppNotificationPreferences — модульний
+  // імпорт, сетери стабільні; залежить лише від двох поточних значень).
+  const updateInAppNotificationPreferences = useCallback(
+    (next: { enabled?: boolean; soundEnabled?: boolean }) => {
+      const resolved = {
+        enabled: next.enabled ?? inAppNotificationsEnabled,
+        soundEnabled: next.soundEnabled ?? inAppNotificationSoundEnabled,
+      };
+      const normalized = {
+        enabled: resolved.enabled,
+        soundEnabled: resolved.enabled ? resolved.soundEnabled : false,
+      };
+      setInAppNotificationsEnabled(normalized.enabled);
+      setInAppNotificationSoundEnabled(normalized.soundEnabled);
+      writeInAppNotificationPreferences(normalized);
+    },
+    [inAppNotificationsEnabled, inAppNotificationSoundEnabled]
+  );
 
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
@@ -900,16 +906,16 @@ export default function NotificationsPage() {
       return;
     }
     void push.enable();
-  }, [push.disable, push.enable, push.enabled, push.supported]);
+  }, [push]);
 
   const handleInAppPillClick = useCallback(() => {
     updateInAppNotificationPreferences({ enabled: !inAppNotificationsEnabled });
-  }, [inAppNotificationsEnabled]);
+  }, [inAppNotificationsEnabled, updateInAppNotificationPreferences]);
 
   const handleSoundPillClick = useCallback(() => {
     if (!inAppNotificationsEnabled) return;
     updateInAppNotificationPreferences({ soundEnabled: !inAppNotificationSoundEnabled });
-  }, [inAppNotificationSoundEnabled, inAppNotificationsEnabled]);
+  }, [inAppNotificationSoundEnabled, inAppNotificationsEnabled, updateInAppNotificationPreferences]);
 
   const notificationsHeaderActions = useMemo(
     () => (

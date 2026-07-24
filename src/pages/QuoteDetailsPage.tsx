@@ -1026,9 +1026,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
 
   useEffect(() => {
+    // Set створюється раз (useRef(new Set())) і .current ніколи не
+    // переприсвоюється — лише мутується. Тож захоплення на маунті = те саме,
+    // що читання при анмаунті; це знімає застереження exhaustive-deps про
+    // «ref міг змінитися до cleanup» без зміни поведінки.
+    const registry = attachmentObjectUrlRegistryRef.current;
     return () => {
-      attachmentObjectUrlRegistryRef.current.forEach((url) => URL.revokeObjectURL(url));
-      attachmentObjectUrlRegistryRef.current.clear();
+      registry.forEach((url) => URL.revokeObjectURL(url));
+      registry.clear();
     };
   }, []);
 

@@ -2346,7 +2346,6 @@ export default function DesignTaskPage() {
       }
     };
     void load();
-// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTeamId, id]);
 
   useEffect(() => {
@@ -7347,7 +7346,7 @@ export default function DesignTaskPage() {
   const dropboxExportWarnings = useMemo(() => {
     const warnings: string[] = [];
     return warnings;
-  }, [dropboxPlanByKind]);
+  }, []);
 
   const dropboxExportPlan = useMemo(() => {
     const exported: DropboxExportPlanFile[] = [];

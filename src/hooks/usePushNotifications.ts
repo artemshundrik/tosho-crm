@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -106,15 +106,23 @@ export function usePushNotifications(userId: string | null | undefined) {
     }
   }, []);
 
-  return {
-    supported: isPushSupported(),
-    configured: hasPushConfig(),
-    enabled,
-    busy,
-    permission,
-    enable,
-    disable,
-    sendTest,
-    refresh,
-  };
+  // Мемоїзуємо return: без цього хук віддавав новий об'єкт щорендер, тож
+  // споживачам доводилось залежати від окремих push.enable/push.disable у
+  // deps (що дратувало exhaustive-deps + React Compiler). Стабільний об'єкт
+  // дозволяє чистий [push] у залежностях. supported/configured — чисті
+  // функції середовища, сталі протягом сесії.
+  return useMemo(
+    () => ({
+      supported: isPushSupported(),
+      configured: hasPushConfig(),
+      enabled,
+      busy,
+      permission,
+      enable,
+      disable,
+      sendTest,
+      refresh,
+    }),
+    [enabled, busy, permission, enable, disable, sendTest, refresh]
+  );
 }

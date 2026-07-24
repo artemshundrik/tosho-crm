@@ -725,7 +725,7 @@ export function CustomerLeadQuickViewDialog({
         </button>
       );
     },
-    [navigate]
+    []
   );
 
   return (
