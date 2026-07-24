@@ -376,7 +376,7 @@ export function DesignersDashboard({
   const [loadError, setLoadError] = useState(false);
   const [monthIdx, setMonthIdx] = useState<number | null>(null);
   const [scope, setScope] = useState<string>("team");
-  const [tableMode, setTableMode] = useState<"month" | "trend">("month");
+  const [tableMode, setTableMode] = useState<"month" | "trend" | "files">("month");
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
   const { bind: bindTip, overlay: tipOverlay } = useChartTooltip();
@@ -626,6 +626,31 @@ export function DesignersDashboard({
       : value >= 70
         ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
         : "border-danger-soft-border bg-danger-soft text-danger-foreground";
+
+  /* ---------- режим «Файли»: матриця дизайнери × розширення за обраний місяць ---------- */
+  const filesRows = [...visibleDesigners]
+    .map((designer) => ({ designer, agg: analytics.perDesigner.get(designer.id)?.[mi] ?? null }))
+    .filter((entry): entry is { designer: (typeof visibleDesigners)[number]; agg: DesignerMonthAgg } => !!entry.agg && entry.agg.files > 0)
+    .sort((a, b) => b.agg.files - a.agg.files);
+  const extTotalsForMonth = new Map<string, number>();
+  filesRows.forEach(({ agg }) => {
+    Object.entries(agg.filesByExt).forEach(([ext, count]) => {
+      if (count > 0) extTotalsForMonth.set(ext, (extTotalsForMonth.get(ext) ?? 0) + count);
+    });
+  });
+  const sortedExts = [...extTotalsForMonth.entries()].sort((a, b) => b[1] - a[1]).map(([ext]) => ext);
+  const EXT_COL_LIMIT = 12; // рідкісні формати згортаємо в «Інші», щоб матриця не розповзалась
+  const fileExtColumns = sortedExts.slice(0, EXT_COL_LIMIT);
+  const hasOtherExts = sortedExts.length > EXT_COL_LIMIT;
+  const otherFiles = (agg: DesignerMonthAgg) => sortedExts.slice(EXT_COL_LIMIT).reduce((sum, ext) => sum + (agg.filesByExt[ext] ?? 0), 0);
+  let filesHeatMax = 1;
+  filesRows.forEach(({ agg }) => {
+    fileExtColumns.forEach((ext) => { filesHeatMax = Math.max(filesHeatMax, agg.filesByExt[ext] ?? 0); });
+    if (hasOtherExts) filesHeatMax = Math.max(filesHeatMax, otherFiles(agg));
+  });
+  const filesHeatBucket = (value: number) => (value <= 0 ? -1 : Math.min(6, Math.round((value / filesHeatMax) * 6)));
+  const teamFilesByExt = (ext: string) => filesRows.reduce((sum, { agg }) => sum + (agg.filesByExt[ext] ?? 0), 0);
+  const teamFilesTotal = filesRows.reduce((sum, { agg }) => sum + agg.files, 0);
 
   /* ---------- роботи ---------- */
   const WORKS_PREVIEW = 8;
@@ -1103,11 +1128,22 @@ export function DesignersDashboard({
               >
                 По місяцях
               </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={tableMode === "files"}
+                onClick={() => setTableMode("files")}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                Файли
+              </Button>
             </div>
             <p className="w-full text-xs text-muted-foreground">
               {tableMode === "month"
                 ? "Показники за обраний місяць. Клік по рядку — профіль дизайнера."
-                : `Динаміка «${metric.label}» за ${months.length} місяців. Клік по імені — профіль.`}
+                : tableMode === "files"
+                  ? `Скільки файлів залив кожен за ${monthShort(months[mi].value)}, по розширеннях. Клік по імені — профіль.`
+                  : `Динаміка «${metric.label}» за ${months.length} місяців. Клік по імені — профіль.`}
             </p>
           </div>
 
@@ -1251,7 +1287,7 @@ export function DesignersDashboard({
                   );
                 })}
               </div>
-            ) : (
+            ) : tableMode === "trend" ? (
               <table className="w-full min-w-[860px] border-separate border-spacing-0.5">
                 <thead>
                   <tr>
@@ -1391,6 +1427,146 @@ export function DesignersDashboard({
                   </tr>
                 </tbody>
               </table>
+            ) : filesRows.length === 0 ? (
+              <div className="mx-2 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+                За {monthShort(months[mi].value)} немає завантажених файлів.
+              </div>
+            ) : (
+              <table className="w-full min-w-[720px] border-separate border-spacing-0.5">
+                <thead>
+                  <tr>
+                    <th className="px-2 py-1.5 text-left text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Дизайнер</th>
+                    {fileExtColumns.map((ext) => (
+                      <th key={ext} className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
+                        {ext}
+                      </th>
+                    ))}
+                    {hasOtherExts ? (
+                      <th className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Інші</th>
+                    ) : null}
+                    <th className="px-2 py-1.5 text-center text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">Всього</th>
+                    <th className="px-2 py-1.5 text-left text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80" style={{ minWidth: 130 }}>
+                      Вид
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filesRows.map(({ designer, agg }) => {
+                    const selected = scope === designer.id;
+                    const heatCell = (value: number, label: string) => {
+                      const bucket = filesHeatBucket(value);
+                      if (bucket < 0) {
+                        return (
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/60 text-2xs text-muted-foreground/50">
+                            ·
+                          </div>
+                        );
+                      }
+                      return (
+                        <div
+                          className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04] hover:shadow-[var(--shadow-menu)]"
+                          style={{ background: `hsl(var(--heat-${bucket}))`, color: `hsl(var(--heat-ink-${bucket}))` }}
+                          {...bindTip(() => ({
+                            title: `${designer.label} · ${label}`,
+                            rows: [{ label: "Файлів", value: `${value}`, strong: true }],
+                          }))}
+                        >
+                          {value}
+                        </div>
+                      );
+                    };
+                    return (
+                      <tr key={designer.id}>
+                        <td className="pr-1">
+                          <button
+                            type="button"
+                            onClick={() => selectScope(selected ? "team" : designer.id)}
+                            className={cn(
+                              "flex w-full min-w-[170px] cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left transition-colors hover:bg-muted/10",
+                              selected && "border-primary/25 bg-primary/5"
+                            )}
+                          >
+                            <AvatarBase
+                              src={getMemberAvatar(designer.id)}
+                              name={designer.label}
+                              fallback={getInitials(designer.label)}
+                              size={28}
+                              className="shrink-0 border-border/70"
+                              inactive={memberInactiveById[designer.id] ?? false}
+                            />
+                            <span className="truncate text-xs font-semibold text-foreground">{designer.label}</span>
+                          </button>
+                        </td>
+                        {fileExtColumns.map((ext) => (
+                          <td key={ext}>{heatCell(agg.filesByExt[ext] ?? 0, ext)}</td>
+                        ))}
+                        {hasOtherExts ? <td>{heatCell(otherFiles(agg), "Інші формати")}</td> : null}
+                        <td>
+                          <div className="flex h-10 items-center justify-center rounded-lg text-[13px] font-bold tabular-nums text-foreground">
+                            {agg.files}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex h-10 items-center px-1">
+                            <span
+                              className="flex h-2.5 w-full cursor-help gap-0.5 overflow-hidden rounded"
+                              {...bindTip(() => {
+                                const kindRows: TipRow[] = FILE_KIND_META.map((kind) => ({
+                                  color: kind.color,
+                                  label: kind.label,
+                                  value: `${agg.filesByKind[kind.key]}`,
+                                }));
+                                kindRows.push({ label: "Разом", value: `${agg.files}`, strong: true });
+                                return { title: designer.label, rows: kindRows };
+                              })}
+                            >
+                              {FILE_KIND_META.map((kind) =>
+                                agg.filesByKind[kind.key] > 0 ? (
+                                  <span
+                                    key={kind.key}
+                                    className="h-full first:rounded-l last:rounded-r"
+                                    style={{ width: `${(agg.filesByKind[kind.key] / agg.files) * 100}%`, background: kind.color }}
+                                  />
+                                ) : null
+                              )}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td className="pr-1">
+                      <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="truncate text-xs font-semibold text-muted-foreground">Команда · разом</span>
+                      </div>
+                    </td>
+                    {fileExtColumns.map((ext) => (
+                      <td key={ext}>
+                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                          {teamFilesByExt(ext) || "—"}
+                        </div>
+                      </td>
+                    ))}
+                    {hasOtherExts ? (
+                      <td>
+                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                          {filesRows.reduce((sum, { agg }) => sum + otherFiles(agg), 0) || "—"}
+                        </div>
+                      </td>
+                    ) : null}
+                    <td>
+                      <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-bold tabular-nums text-muted-foreground">
+                        {teamFilesTotal}
+                      </div>
+                    </td>
+                    <td />
+                  </tr>
+                </tbody>
+              </table>
             )}
           </div>
 
@@ -1404,6 +1580,24 @@ export function DesignersDashboard({
                     {TYPE_SHORT[option.value]}
                   </span>
                 ))}
+              </>
+            ) : tableMode === "files" ? (
+              <>
+                <span className="text-2xs text-muted-foreground">Темніше — більше файлів</span>
+                <span className="flex h-2.5 w-40 overflow-hidden rounded-full" aria-hidden="true">
+                  {[0, 1, 2, 3, 4, 5, 6].map((step) => (
+                    <span key={step} className="h-full flex-1" style={{ background: `hsl(var(--heat-${step}))` }} />
+                  ))}
+                </span>
+                <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Вид:</span>
+                  {FILE_KIND_META.map((kind) => (
+                    <span key={kind.key} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
+                      <span className="h-2 w-3.5 rounded-sm" style={{ background: kind.color }} aria-hidden="true" />
+                      {kind.label}
+                    </span>
+                  ))}
+                </span>
               </>
             ) : (
               <>
@@ -1550,117 +1744,7 @@ export function DesignersDashboard({
             </>
           )}
         </section>
-      ) : (
-        /* Командний аналог «Робіт»: скільки файлів залив кожен + розбивка (як старий звіт). */
-        (() => {
-          const rows = [...visibleDesigners]
-            .map((designer) => ({ designer, agg: analytics.perDesigner.get(designer.id)?.[mi] ?? null }))
-            .filter((entry): entry is { designer: (typeof visibleDesigners)[number]; agg: DesignerMonthAgg } => !!entry.agg)
-            .sort((a, b) => b.agg.files - a.agg.files);
-          const teamFiles = rows.reduce((sum, entry) => sum + entry.agg.files, 0);
-          const withFiles = rows.filter((entry) => entry.agg.files > 0);
-          return (
-            <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                  <FileText className="h-4 w-4 text-primary" />
-                  Файли за {monthShort(months[mi].value)} {months[mi].year}
-                </h3>
-                <span className="text-2xs tabular-nums text-muted-foreground">{teamFiles} файлів команди</span>
-                <p className="w-full text-xs text-muted-foreground">
-                  Скільки файлів залив кожен, з розбивкою по розширеннях і виду. Клік по рядку — профіль дизайнера.
-                </p>
-              </div>
-              {withFiles.length === 0 ? (
-                <div className="mt-3 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
-                  За цей місяць немає завантажених файлів.
-                </div>
-              ) : (
-                <div className="mt-2 divide-y divide-border/50">
-                  {withFiles.map(({ designer, agg }) => {
-                    const total = agg.files;
-                    const exts = Object.entries(agg.filesByExt)
-                      .filter(([, count]) => count > 0)
-                      .sort((a, b) => b[1] - a[1]);
-                    return (
-                      <button
-                        key={designer.id}
-                        type="button"
-                        onClick={() => selectScope(designer.id)}
-                        className="grid w-full cursor-pointer grid-cols-1 items-center gap-x-4 gap-y-2 rounded-xl px-2 py-3 text-left transition-colors hover:bg-muted/10 sm:grid-cols-[minmax(170px,1.2fr)_64px_minmax(0,1.6fr)_150px_18px]"
-                      >
-                        <span className="flex min-w-0 items-center gap-2.5">
-                          <AvatarBase
-                            src={getMemberAvatar(designer.id)}
-                            name={designer.label}
-                            fallback={getInitials(designer.label)}
-                            size={36}
-                            className="shrink-0 border-border/70"
-                            inactive={memberInactiveById[designer.id] ?? false}
-                          />
-                          <span className="truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
-                        </span>
-                        <span className="text-xl font-bold tabular-nums text-foreground">
-                          {total}
-                          <span className="block text-3xs font-medium text-muted-foreground">файлів</span>
-                        </span>
-                        <span className="flex flex-wrap gap-1.5">
-                          {exts.map(([ext, count]) => (
-                            <span
-                              key={ext}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-neutral-soft-border bg-neutral-soft px-2 py-0.5 text-3xs"
-                            >
-                              <span className="font-semibold uppercase text-muted-foreground">{ext}</span>
-                              <span className="font-semibold tabular-nums text-foreground">{count}</span>
-                            </span>
-                          ))}
-                        </span>
-                        <span className="flex flex-col gap-1.5">
-                          <span
-                            className="flex h-2.5 cursor-help gap-0.5 overflow-hidden rounded"
-                            {...bindTip(() => {
-                              const kindRows: TipRow[] = FILE_KIND_META.map((kind) => ({
-                                color: kind.color,
-                                label: kind.label,
-                                value: `${agg.filesByKind[kind.key]}`,
-                              }));
-                              kindRows.push({ label: "Разом", value: `${total}`, strong: true });
-                              return { title: designer.label, rows: kindRows };
-                            })}
-                          >
-                            {FILE_KIND_META.map((kind) =>
-                              agg.filesByKind[kind.key] > 0 ? (
-                                <span
-                                  key={kind.key}
-                                  className="h-full first:rounded-l last:rounded-r"
-                                  style={{ width: `${(agg.filesByKind[kind.key] / total) * 100}%`, background: kind.color }}
-                                />
-                              ) : null
-                            )}
-                          </span>
-                          <span className="text-3xs text-muted-foreground">
-                            Візуал {agg.filesByKind.visualization} · Макет {agg.filesByKind.layout} · Задачі {agg.filesByKind.attachment}
-                          </span>
-                        </span>
-                        <ChevronRight className="hidden h-4 w-4 justify-self-end text-muted-foreground/60 sm:block" />
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/50 pt-3">
-                <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Вид файлу:</span>
-                {FILE_KIND_META.map((kind) => (
-                  <span key={kind.key} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-                    <span className="h-2 w-3.5 rounded-sm" style={{ background: kind.color }} aria-hidden="true" />
-                    {kind.label}
-                  </span>
-                ))}
-              </div>
-            </section>
-          );
-        })()
-      )}
+      ) : null}
 
       {/* ---------- джерела ---------- */}
       <p className="px-1 pb-2 text-2xs leading-relaxed text-muted-foreground/80">
