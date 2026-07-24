@@ -1012,7 +1012,7 @@ export function TeamPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-20 md:pb-8">
+    <div className="flex w-full flex-col gap-6 pb-20 md:pb-8">
       {/* KPI-плитки — не просто цифри, а швидкі фільтри списку. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
