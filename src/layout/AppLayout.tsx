@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -8,6 +8,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Calculator,
+  Loader2,
   Factory,
   FolderKanban,
   KeyRound,
@@ -82,7 +83,14 @@ import {
   useDesignerTimerController,
 } from "@/components/app/DesignerTimerWidget";
 import { toast } from "sonner";
-import { ToShoAiConsole, ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiConsole";
+import { ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiWordmark";
+
+// Консоль ToSho AI (110+ KB) — lazy: SheetContent демонтується в закритому
+// стані (без forceMount), тож чанк їде лише при першому відкритті шторки.
+// Раніше вона сиділа в головному чанку і вантажилась усім на кожній сторінці.
+const ToShoAiConsole = lazy(() =>
+  import("@/features/tosho-ai/ToShoAiConsole").then((m) => ({ default: m.ToShoAiConsole }))
+);
 import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi";
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -2279,13 +2287,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </SheetHeader>
             </div>
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-0">
-              <ToShoAiConsole
-                key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}`}
-                active={toshoAiOpen}
-                surface="sheet"
-                initialContext={toshoAiContext}
-                initialRequestId={toshoAiRequestedThreadId}
-              />
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Завантаження ToSho AI…
+                  </div>
+                }
+              >
+                <ToShoAiConsole
+                  key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}`}
+                  active={toshoAiOpen}
+                  surface="sheet"
+                  initialContext={toshoAiContext}
+                  initialRequestId={toshoAiRequestedThreadId}
+                />
+              </Suspense>
             </div>
           </div>
         </SheetContent>

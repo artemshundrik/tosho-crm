@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
@@ -40,7 +40,14 @@ import {
   type OrderDesignAsset,
   type DerivedOrderRecord,
 } from "@/features/orders/orderRecords";
-import { ContractRevisionsPanel } from "@/components/contracts/ContractRevisionsPanel";
+// Панель ревізій договору тягне rich-text-редактор (tiptap/prosemirror,
+// ~900 KB у чанку) — lazy, щоб сторінка замовлення відкривалась без нього;
+// стек їде тільки коли до панелі реально дійшов рендер.
+const ContractRevisionsPanel = lazy(() =>
+  import("@/components/contracts/ContractRevisionsPanel").then((m) => ({
+    default: m.ContractRevisionsPanel,
+  }))
+);
 import {
   buildDefaultContractSections,
   renderContractSectionsHtml,
@@ -72,6 +79,7 @@ import {
   Palette,
   Pencil,
   Phone,
+  Loader2,
   Send,
   Truck,
 } from "lucide-react";
@@ -2128,6 +2136,13 @@ export default function OrdersProductionDetailsPage() {
       </Card>
 
       {teamId && userId ? (
+        <Suspense
+          fallback={
+            <Card className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Завантаження договорів…
+            </Card>
+          }
+        >
         <ContractRevisionsPanel
           teamId={teamId}
           orderId={record.id}
@@ -2167,6 +2182,7 @@ export default function OrdersProductionDetailsPage() {
             }
           }}
         />
+        </Suspense>
       ) : null}
         </div>
 
