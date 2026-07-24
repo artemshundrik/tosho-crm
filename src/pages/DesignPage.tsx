@@ -1182,11 +1182,13 @@ export default function DesignPage() {
     navigate(href);
   };
 
-  const getMemberLabel = (id: string | null | undefined) => {
+  // useCallback, щоб getTaskCollaborators (та інші мемо-споживачі) могли
+  // тримати її в deps без перестворення щорендер.
+  const getMemberLabel = useCallback((id: string | null | undefined) => {
     if (!id) return "Без виконавця";
     if (id === userId && currentUserDisplayName) return currentUserDisplayName;
     return memberById[id] ?? id.slice(0, 8);
-  };
+  }, [userId, currentUserDisplayName, memberById]);
   const getMemberAvatar = useCallback((id: string | null | undefined) => {
     if (!id) return null;
     if (id === userId && currentUserAvatarUrl) return currentUserAvatarUrl;
@@ -1224,7 +1226,7 @@ export default function DesignPage() {
         resolveLabel: getMemberLabel,
         resolveAvatar: getMemberAvatar,
       }),
-    [getMemberAvatar]
+    [getMemberAvatar, getMemberLabel]
   );
   const isUserCollaboratorOnTask = useCallback(
     (task: Pick<DesignTask, "assigneeUserId" | "metadata">, memberId?: string | null) =>
@@ -3994,6 +3996,11 @@ export default function DesignPage() {
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
+    // Навмисно лише [createDialogOpen]: обидва хендлери працюють ВИКЛЮЧНО з
+    // переданим clipboardData (аргумент), а запис іде через функціональний
+    // setCreateFiles(prev => …) — stale-closure неможливий. Додавання їх у
+    // deps лише перечіпляло б paste-listener щорендер без зміни поведінки.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createDialogOpen]);
 
   const removeCreateFile = (index: number) => {
@@ -5317,6 +5324,7 @@ export default function DesignPage() {
       loading,
       managerFilter,
       managerFilterOptions,
+      refreshing,
       renderDesignerFilterValue,
       renderManagerFilterValue,
       search,

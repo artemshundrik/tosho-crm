@@ -490,7 +490,7 @@ export default function ContractorsPage() {
     } finally {
       setSaving(false);
     }
-  }, [editingRow?.id, form, loadContractors, teamId]);
+  }, [activeTab, editingRow, form, loadContractors, teamId]);
 
   const handleDelete = useCallback(async () => {
     if (!teamId || !deleteTarget?.id) return;

@@ -1540,22 +1540,26 @@ export default function DesignTaskPage() {
     syncDesignPageCacheTask(effectiveTeamId ?? "", task);
   }, [effectiveTeamId, task]);
 
-  const ensureCanEdit = () => {
+  // useCallback: використовується в deps кількох мемо-колбеків (експорт у
+  // Dropbox тощо), тож має бути стабільною, інакше ті колбеки перестворюються щорендер.
+  const ensureCanEdit = useCallback(() => {
     if (!designTaskLockedByOther) return true;
     toast.error(
       `Запис зараз редагує ${designTaskLock.holderName ?? "інший користувач"}. Доступно лише перегляд.`
     );
     return false;
-  };
+  }, [designTaskLock, designTaskLockedByOther]);
 
-  const getMemberLabel = (id: string | null | undefined) => {
+  // useCallback, щоб мемо-споживачі (getTaskCollaborators) тримали самі
+  // функції в deps замість вручну виписаних memberById/memberAvatarById.
+  const getMemberLabel = useCallback((id: string | null | undefined) => {
     if (!id) return "Без виконавця";
     return memberById[id] ?? id.slice(0, 8);
-  };
-  const getMemberAvatar = (id: string | null | undefined) => {
+  }, [memberById]);
+  const getMemberAvatar = useCallback((id: string | null | undefined) => {
     if (!id) return null;
     return memberAvatarById[id] ?? null;
-  };
+  }, [memberAvatarById]);
   const getTaskCollaborators = useCallback(
     (targetTask?: Pick<DesignTask, "assigneeUserId" | "metadata"> | null) =>
       targetTask
@@ -1565,7 +1569,7 @@ export default function DesignTaskPage() {
             resolveAvatar: getMemberAvatar,
           })
         : [],
-    [memberById, memberAvatarById]
+    [getMemberLabel, getMemberAvatar]
   );
   const taskCollaborators = useMemo(() => getTaskCollaborators(task), [getTaskCollaborators, task]);
   const isCollaboratorOnTask = !!userId && taskCollaborators.some((entry) => entry.userId === userId);
@@ -2492,7 +2496,7 @@ export default function DesignTaskPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.quoteId]);
 
-  const loadHistory = async (taskId: string, options?: { full?: boolean }) => {
+  const loadHistory = useCallback(async (taskId: string, options?: { full?: boolean }) => {
     if (!effectiveTeamId) return;
     setHistoryLoading(true);
     setHistoryError(null);
@@ -2538,7 +2542,7 @@ export default function DesignTaskPage() {
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, [effectiveTeamId]);
 
   useEffect(() => {
     if (!task?.id) return;
@@ -3908,7 +3912,7 @@ export default function DesignTaskPage() {
     });
   };
 
-  const buildOutputSelectionMetadata = (
+  const buildOutputSelectionMetadata = useCallback((
     metadata: Record<string, unknown>,
     nextSelectedByKind: Record<DesignOutputKind, string[]>,
     actorLabel: string,
@@ -3963,7 +3967,7 @@ export default function DesignTaskPage() {
     nextMetadata.selected_design_output_selected_by = unionSelectedIds.length > 0 ? (userId ?? null) : null;
     nextMetadata.selected_design_output_selected_by_label = unionSelectedIds.length > 0 ? actorLabel : null;
     return nextMetadata;
-  };
+  }, [designOutputFiles, userId]);
 
   const reconcileGhostDesignOutputs = useCallback(async () => {
     if (!task || !effectiveTeamId || !isUuid(task.quoteId) || designOutputFiles.length === 0) return;
@@ -4082,6 +4086,11 @@ export default function DesignTaskPage() {
       setDesignOutputFiles(corrected);
       void persistDesignOutputs(corrected, designOutputLinks);
     }
+    // persistDesignOutputs навмисно поза deps: це одноразова міграція з
+    // ref-guard'ом (migratedDesignOutputsTaskIdRef === task.id → return), і
+    // persist — імперативна ДІЯ всередині захищеної гілки, а не тригер. Її
+    // deps не мають перезапускати міграцію.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, designOutputFiles, designOutputLinks, designTaskLockedByOther]);
 
   const handleUploadDesignOutputs = async (files: FileList | null) => {
@@ -7681,7 +7690,7 @@ export default function DesignTaskPage() {
         setDropboxExporting(false);
       }
     },
-    [dropboxDisplayedFolderName, ensureCanEdit, inspectDropboxFolder, task?.customerId, task?.customerName]
+    [dropboxDisplayedFolderName, effectiveTeamId, ensureCanEdit, inspectDropboxFolder, task]
   );
 
   const handleExportToDropbox = useCallback(async () => {
@@ -7886,6 +7895,7 @@ export default function DesignTaskPage() {
       setDropboxExporting(false);
     }
   }, [
+    buildOutputSelectionMetadata,
     dropboxClientLabel,
     dropboxClientPath,
     dropboxDateLabel,
@@ -7897,6 +7907,8 @@ export default function DesignTaskPage() {
     designOutputFiles,
     effectiveTeamId,
     ensureCanEdit,
+    getMemberLabel,
+    loadHistory,
     selectedLayoutOutputFileIds,
     selectedVisualizationOutputFileIds,
     task,

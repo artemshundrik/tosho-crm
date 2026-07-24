@@ -74,6 +74,39 @@ interface UseModelEditorProps {
   allModelsWithContext: ModelWithContext[];
 }
 
+// Чисті рядкові хелпери (лише аргумент, без стану/пропсів) — на рівні модуля,
+// щоб бути стабільними й не потрапляти в deps мемо-колбеків усередині хука.
+const normalizeCatalogLookup = (value?: string | null) =>
+  (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[«»"']/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getMethodLookupKeys = (name: string) => {
+  const normalized = normalizeCatalogLookup(name);
+  const keys = new Set([normalized]);
+  if (normalized.includes("термодрук") || normalized.includes("термоперенос") || normalized.includes("термотрансфер")) {
+    keys.add("термодрук");
+    keys.add("термоперенос");
+    keys.add("термотрансфер");
+    keys.add(normalizeCatalogLookup("FLEX плівка"));
+  }
+  if (normalized.includes("шовкодрук") || normalized.includes("шовкограф")) {
+    keys.add("шовкодрук");
+    keys.add("шовкографія");
+  }
+  if (normalized.includes("вишив")) {
+    keys.add("вишивка");
+  }
+  if (normalized.includes("dtf")) {
+    keys.add("dtf");
+  }
+  return keys;
+};
+
 export function useModelEditor({
   teamId,
   catalog,
@@ -285,37 +318,6 @@ export function useModelEditor({
         ),
       };
     });
-  };
-
-  const normalizeCatalogLookup = (value?: string | null) =>
-    (value ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[«»"']/g, "")
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const getMethodLookupKeys = (name: string) => {
-    const normalized = normalizeCatalogLookup(name);
-    const keys = new Set([normalized]);
-    if (normalized.includes("термодрук") || normalized.includes("термоперенос") || normalized.includes("термотрансфер")) {
-      keys.add("термодрук");
-      keys.add("термоперенос");
-      keys.add("термотрансфер");
-      keys.add(normalizeCatalogLookup("FLEX плівка"));
-    }
-    if (normalized.includes("шовкодрук") || normalized.includes("шовкограф")) {
-      keys.add("шовкодрук");
-      keys.add("шовкографія");
-    }
-    if (normalized.includes("вишив")) {
-      keys.add("вишивка");
-    }
-    if (normalized.includes("dtf")) {
-      keys.add("dtf");
-    }
-    return keys;
   };
 
   const findTypeByHints = (hints: string[]) => {
