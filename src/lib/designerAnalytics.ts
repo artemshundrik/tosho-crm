@@ -12,16 +12,17 @@ import type { DesignStatus } from "@/lib/designTaskStatus";
  * Аналітика вкладки «Дизайнери»: агрегати за вікно з N календарних місяців.
  *
  * Джерела (усе — наявні дані, без нової схеми):
- *  · закриття задач — activity_log action='design_task_status' з to_status='approved'
- *    (метадані події несуть assignee_user_id і design_task_type на момент закриття);
+ *  · час і середні — public.design_task_timer_sessions (started_at/paused_at),
+ *    згруповані за user_id (хто вів таймер = дизайнер). Середній час НЕ залежить
+ *    від закриття задачі — інакше метрика майже завжди порожня, бо дизайнери
+ *    рідко самі переводять задачу в «Затверджено» (це роблять PM/клієнт);
+ *  · закриття (approved) — activity_log action='design_task_status' — окрема KPI;
  *  · файли — activity_log action in ('design_output_upload','design_task_attachment')
  *    (та сама база, що й старий звіт «Файли за період»);
- *  · час — public.design_task_timer_sessions (started_at/paused_at);
  *  · естімейт/правки — metadata задачі (estimate_minutes, design_brief_change_requests).
  *
- * Межі місяців — UTC, як у старого звіту файлів. Сесії відносяться до місяця за
- * started_at; час задачі = сума ВСІХ сесій задачі у вікні (сесії до вікна не
- * враховуються — для 6-місячного вікна похибка лише на межових задачах).
+ * Межі місяців — UTC. Сесія відноситься до місяця за started_at; кожна сесія
+ * обрізана до MAX_SESSION_SECONDS, щоб забутий таймер не отруював суми.
  */
 
 export const DESIGNER_FILE_UPLOAD_ACTIONS = ["design_output_upload", "design_task_attachment"];
@@ -29,30 +30,29 @@ export const DESIGNER_FILE_UPLOAD_ACTIONS = ["design_output_upload", "design_tas
 export type MonthKey = { year: number; month: number; value: string };
 
 export type DesignerMonthAgg = {
-  /** Закриті (approved) задачі за місяць. */
+  /** Закриті (approved) задачі за місяць — окрема productivity-метрика. */
   tasksClosed: number;
   /** Залиті файли за місяць (усі upload-події, включно з видаленими згодом). */
   files: number;
-  /** Секунди у таймері (сесії користувача, за started_at). */
+  /** Секунди у таймері (сесії користувача, за started_at; кожна сесія обрізана до MAX_SESSION_SECONDS). */
   trackedSeconds: number;
   /** Розподіл секунд користувача за типами задач (для стека структури часу). */
   secondsByType: Record<DesignTaskType, number> & { none: number };
-  /** Кількість закритих задач за типами. */
-  closedByType: Partial<Record<DesignTaskType, number>>;
-  /** Сумарний час задач (усі сесії задачі) за типами — для середнього. */
-  closedTaskSecondsByType: Partial<Record<DesignTaskType, number>>;
-  /** Кількість закритих задач типу, що мають час у таймері (знаменник середнього). */
-  closedWithTimerByType: Partial<Record<DesignTaskType, number>>;
-  /** Сумарний час усіх закритих задач із таймером (для ⌀/задачу). */
-  closedTaskSecondsTotal: number;
-  /** Закриті задачі з часом у таймері (покриття). */
-  timerCoveredClosed: number;
-  /** Закриті задачі з естімейтом і таймером. */
+  /**
+   * Розподіл секунд за типами прив'язаний до задач, у яких дизайнер вів таймер.
+   * Це основа середнього часу: середній час типу = secondsByType[type] ÷
+   * timerTaskCountByType[type]. Не залежить від закриття задачі — тому метрика
+   * заповнюється, щойно є будь-яка активність таймера.
+   */
+  timerTaskCountByType: Partial<Record<DesignTaskType, number>>;
+  /** Скільки різних задач дизайнер тримав у таймері цього місяця (знаменник ⌀/задачу). */
+  timerTaskCount: number;
+  /** Сума правок по timer-активних задачах (для ⌀ правок/задачу). */
+  revisionsTotal: number;
+  /** Закриті задачі з естімейтом і таймером (для точності естімейту — тільки завершені). */
   estimateEligible: number;
   /** З них — вклалися в естімейт (факт ≤ естімейт). */
   estimateHit: number;
-  /** Сума правок по закритих задачах. */
-  revisionsTotal: number;
 };
 
 export type DesignerWorkFileItem = {
@@ -100,14 +100,11 @@ export const emptyMonthAgg = (): DesignerMonthAgg => ({
   files: 0,
   trackedSeconds: 0,
   secondsByType: { visualization: 0, presentation: 0, layout_adaptation: 0, layout: 0, creative: 0, none: 0 },
-  closedByType: {},
-  closedTaskSecondsByType: {},
-  closedWithTimerByType: {},
-  closedTaskSecondsTotal: 0,
-  timerCoveredClosed: 0,
+  timerTaskCountByType: {},
+  timerTaskCount: 0,
+  revisionsTotal: 0,
   estimateEligible: 0,
   estimateHit: 0,
-  revisionsTotal: 0,
 });
 
 export function buildMonthWindow(monthsBack: number, now = new Date()): MonthKey[] {
@@ -188,12 +185,17 @@ type ActiveTaskRow = {
   metadata?: Record<string, unknown> | null;
 };
 
+// Один таймер рідко перевищує робочий день; сесія понад це — майже завжди
+// забутий (незупинений) таймер. Обрізаємо кожну сесію, щоб один «застряглий»
+// таймер (у проді траплялись сесії на 200+ год) не отруював суми й середні.
+const MAX_SESSION_SECONDS = 8 * 3600;
+
 const sessionSeconds = (row: TimerSessionRow, nowMs: number) => {
   const startMs = new Date(row.started_at).getTime();
   if (!Number.isFinite(startMs)) return 0;
   const endMs = row.paused_at ? new Date(row.paused_at).getTime() : nowMs;
   if (!Number.isFinite(endMs)) return 0;
-  return Math.max(0, Math.floor((endMs - startMs) / 1000));
+  return Math.min(MAX_SESSION_SECONDS, Math.max(0, Math.floor((endMs - startMs) / 1000)));
 };
 
 const parseTaskMeta = (row: { id: string; title?: string | null; metadata?: Record<string, unknown> | null }): TaskMetaLite => {
@@ -336,7 +338,7 @@ export async function loadDesignerAnalytics(params: {
   };
 
   /* ---------- закриття: останнє approved на задачу у вікні ---------- */
-  const lastApprovedByTask = new Map<string, { monthIdx: number; designerId: string | null; type: DesignTaskType | null }>();
+  const lastApprovedByTask = new Map<string, { monthIdx: number; designerId: string | null }>();
   statusRows.forEach((row) => {
     if (row.metadata?.to_status !== "approved") return;
     const taskId = eventTaskId(row);
@@ -348,12 +350,10 @@ export async function loadDesignerAnalytics(params: {
       (typeof row.metadata?.assignee_user_id === "string" && row.metadata.assignee_user_id) ||
       meta?.assigneeUserId ||
       null;
-    const type = parseDesignTaskType(row.metadata?.design_task_type) ?? meta?.designTaskType ?? null;
     // рядки відсортовані за created_at asc → останній перезаписує попередні
     lastApprovedByTask.set(taskId, {
       monthIdx,
       designerId: designerId && designerIdSet.has(designerId) ? designerId : null,
-      type,
     });
   });
 
@@ -362,18 +362,8 @@ export async function loadDesignerAnalytics(params: {
     const seconds = taskTotalSeconds.get(taskId) ?? 0;
     aggFor(closure.designerId, closure.monthIdx).forEach((agg) => {
       agg.tasksClosed += 1;
-      agg.revisionsTotal += meta?.revisions ?? 0;
-      if (seconds > 0) {
-        agg.timerCoveredClosed += 1;
-        agg.closedTaskSecondsTotal += seconds;
-      }
-      if (closure.type) {
-        agg.closedByType[closure.type] = (agg.closedByType[closure.type] ?? 0) + 1;
-        if (seconds > 0) {
-          agg.closedTaskSecondsByType[closure.type] = (agg.closedTaskSecondsByType[closure.type] ?? 0) + seconds;
-          agg.closedWithTimerByType[closure.type] = (agg.closedWithTimerByType[closure.type] ?? 0) + 1;
-        }
-      }
+      // Точність естімейту чесно міряється лише на ЗАВЕРШЕНИХ задачах із таймером
+      // (де факт часу вже фінальний), тож цей блок лишається прив'язаним до approved.
       if (meta?.estimateMinutes && seconds > 0) {
         agg.estimateEligible += 1;
         if (seconds <= meta.estimateMinutes * 60) agg.estimateHit += 1;
@@ -393,18 +383,49 @@ export async function loadDesignerAnalytics(params: {
     });
   });
 
-  /* ---------- час користувача за місяцями + структура за типами ---------- */
+  /* ---------- час користувача за місяцями + структура/середні за типами ----------
+   * Середній час рахуємо ТУТ (від активності таймера), а не від закриттів: дизайнер
+   * веде таймер набагато частіше, ніж сам переводить задачу в «Затверджено». Кожна
+   * задача рахується один раз у межах (скоуп × місяць) — навіть якщо має кілька сесій;
+   * задача з сесіями у двох місяцях потрапляє в обидва (час ділиться за місяцем сесії).
+   */
+  const seenTaskByBucket = new Map<string, Set<string>>(); // `${scopeKey}` → різні taskId
+  const seenTaskByBucketType = new Map<string, Set<string>>(); // `${scopeKey}:${type}` → різні taskId
+  const firstSeen = (map: Map<string, Set<string>>, key: string, taskId: string) => {
+    let set = map.get(key);
+    if (!set) {
+      set = new Set();
+      map.set(key, set);
+    }
+    if (set.has(taskId)) return false;
+    set.add(taskId);
+    return true;
+  };
   timerRows.forEach((row) => {
     if (!designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.started_at);
     if (monthIdx < 0) return;
     const seconds = sessionSeconds(row, nowMs);
     if (seconds <= 0) return;
-    const type = taskMetaById.get(row.design_task_id)?.designTaskType ?? null;
-    aggFor(row.user_id, monthIdx).forEach((agg) => {
+    const meta = taskMetaById.get(row.design_task_id);
+    const type = meta?.designTaskType ?? null;
+    const taskId = row.design_task_id;
+    const targets: Array<{ agg: DesignerMonthAgg; scopeKey: string }> = [
+      { agg: team[monthIdx], scopeKey: `team:${monthIdx}` },
+    ];
+    const designerAgg = perDesigner.get(row.user_id)?.[monthIdx];
+    if (designerAgg) targets.push({ agg: designerAgg, scopeKey: `${row.user_id}:${monthIdx}` });
+    targets.forEach(({ agg, scopeKey }) => {
       agg.trackedSeconds += seconds;
       if (type) agg.secondsByType[type] += seconds;
       else agg.secondsByType.none += seconds;
+      if (firstSeen(seenTaskByBucket, scopeKey, taskId)) {
+        agg.timerTaskCount += 1;
+        agg.revisionsTotal += meta?.revisions ?? 0;
+      }
+      if (type && firstSeen(seenTaskByBucketType, `${scopeKey}:${type}`, taskId)) {
+        agg.timerTaskCountByType[type] = (agg.timerTaskCountByType[type] ?? 0) + 1;
+      }
     });
   });
 
@@ -493,14 +514,14 @@ export async function loadDesignerAnalytics(params: {
 /* ---------- похідні хелпери для рендера ---------- */
 
 export const avgSecondsForType = (agg: DesignerMonthAgg, type: DesignTaskType): number | null => {
-  const withTimer = agg.closedWithTimerByType[type] ?? 0;
-  if (withTimer <= 0) return null;
-  return Math.round((agg.closedTaskSecondsByType[type] ?? 0) / withTimer);
+  const tasks = agg.timerTaskCountByType[type] ?? 0;
+  if (tasks <= 0) return null;
+  return Math.round(agg.secondsByType[type] / tasks);
 };
 
 export const avgSecondsPerTask = (agg: DesignerMonthAgg): number | null => {
-  if (agg.timerCoveredClosed <= 0) return null;
-  return Math.round(agg.closedTaskSecondsTotal / agg.timerCoveredClosed);
+  if (agg.timerTaskCount <= 0) return null;
+  return Math.round(agg.trackedSeconds / agg.timerTaskCount);
 };
 
 export const estimateHitPercent = (agg: DesignerMonthAgg): number | null => {
@@ -509,11 +530,6 @@ export const estimateHitPercent = (agg: DesignerMonthAgg): number | null => {
 };
 
 export const revisionsPerTask = (agg: DesignerMonthAgg): number | null => {
-  if (agg.tasksClosed <= 0) return null;
-  return agg.revisionsTotal / agg.tasksClosed;
-};
-
-export const timerCoveragePercent = (agg: DesignerMonthAgg): number | null => {
-  if (agg.tasksClosed <= 0) return null;
-  return Math.round((agg.timerCoveredClosed / agg.tasksClosed) * 100);
+  if (agg.timerTaskCount <= 0) return null;
+  return agg.revisionsTotal / agg.timerTaskCount;
 };

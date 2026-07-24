@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -37,7 +38,6 @@ import {
   estimateHitPercent,
   loadDesignerAnalytics,
   revisionsPerTask,
-  timerCoveragePercent,
   type DesignerAnalytics,
   type DesignerMonthAgg,
   type DesignerWorkGroup,
@@ -232,6 +232,71 @@ function SparkLine({ values, width = 88, height = 30 }: { values: number[]; widt
   );
 }
 
+/* ---------- інтерактивний tooltip (як у Supabase: наведення → поповер) ----------
+ * Один портал на body, керований станом. bind(build) повертає mouse-хендлери;
+ * контент будується ліниво на mouseenter, тож рядки не рахуються щорендер.
+ */
+type TipRow = { color?: string; label: string; value: string; strong?: boolean; muted?: boolean };
+type TipModel = { title?: string; rows: TipRow[]; note?: string };
+type TipState = TipModel & { x: number; y: number };
+
+function ChartTooltipView({ tip }: { tip: TipState }) {
+  const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+  const flipX = tip.x > vw * 0.66;
+  const flipY = tip.y > vh * 0.72;
+  return (
+    <div
+      role="tooltip"
+      style={{
+        position: "fixed",
+        left: tip.x,
+        top: tip.y,
+        transform: `translate(${flipX ? "calc(-100% - 14px)" : "14px"}, ${flipY ? "calc(-100% - 16px)" : "16px"})`,
+        zIndex: 60,
+        pointerEvents: "none",
+      }}
+      className="max-w-[264px] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-[var(--shadow-menu)]"
+    >
+      {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
+      <div className="flex flex-col gap-1">
+        {tip.rows.map((row, index) => (
+          <div key={index} className="flex items-center gap-1.5">
+            {row.color ? <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: row.color }} aria-hidden="true" /> : null}
+            <span className={cn("truncate", row.muted ? "text-muted-foreground/70" : "text-muted-foreground")}>{row.label}</span>
+            <span className={cn("ml-auto shrink-0 tabular-nums", row.strong ? "font-semibold text-foreground" : "text-foreground")}>
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {tip.note ? <div className="mt-1 text-3xs text-muted-foreground/80">{tip.note}</div> : null}
+    </div>
+  );
+}
+
+function useChartTooltip() {
+  const [tip, setTip] = useState<TipState | null>(null);
+  const bind = useCallback(
+    (build: () => TipModel) => ({
+      onMouseEnter: (event: ReactMouseEvent) => {
+        const model = build();
+        setTip({ ...model, x: event.clientX, y: event.clientY });
+      },
+      onMouseMove: (event: ReactMouseEvent) => {
+        const x = event.clientX;
+        const y = event.clientY;
+        setTip((prev) => (prev ? { ...prev, x, y } : prev));
+      },
+      onMouseLeave: () => setTip(null),
+    }),
+    []
+  );
+  const overlay: ReactNode =
+    tip && typeof document !== "undefined" ? createPortal(<ChartTooltipView tip={tip} />, document.body) : null;
+  return { bind, overlay };
+}
+
 /* ---------- метрики матриці ---------- */
 
 type MatrixMetric = {
@@ -260,12 +325,12 @@ const MATRIX_METRICS: MatrixMetric[] = [
   {
     key: "tasks",
     group: "Обсяг",
-    label: "Задачі",
+    label: "Задачі у роботі",
     lowerBetter: false,
     teamAgg: "sum",
-    get: (agg) => agg.tasksClosed,
+    get: (agg) => agg.timerTaskCount,
     format: (value) => `${Math.round(value)}`,
-    formatLong: (value) => `${Math.round(value)} закритих задач`,
+    formatLong: (value) => `${Math.round(value)} задач у таймері`,
   },
   {
     key: "files",
@@ -308,6 +373,7 @@ export function DesignersDashboard({
   const [tableMode, setTableMode] = useState<"month" | "trend">("month");
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
+  const { bind: bindTip, overlay: tipOverlay } = useChartTooltip();
 
   const visibleDesigners = useMemo(
     () => (canSeeAll ? designers : designers.filter((designer) => designer.id === currentUserId)),
@@ -408,29 +474,35 @@ export function DesignersDashboard({
   const avgPrevious = previousAgg ? avgSecondsPerTask(previousAgg) : null;
   const revCurrent = currentAgg ? revisionsPerTask(currentAgg) : null;
   const revPrevious = previousAgg ? revisionsPerTask(previousAgg) : null;
-  const coverage = currentAgg ? timerCoveragePercent(currentAgg) : null;
+  const timerTaskCount = currentAgg?.timerTaskCount ?? 0;
 
   const kpis: Array<{
     label: string;
     icon: typeof Target;
     value: string;
     unit?: string;
+    sub?: string;
     delta: JSX.Element;
     series: number[];
+    seriesFmt: (value: number) => string;
   }> = [
     {
-      label: "Задач закрито",
+      // Первинний обсяг = задачі, над якими дизайнер працював (таймер), а не approved:
+      // закриття роблять PM/клієнт і часто = 0, тому «закрито» лишається вторинним підписом.
+      label: "Задач у роботі",
       icon: Target,
-      value: `${currentAgg?.tasksClosed ?? 0}`,
+      value: `${currentAgg?.timerTaskCount ?? 0}`,
+      sub: `${currentAgg?.tasksClosed ?? 0} закрито`,
       delta: (
         <DeltaChip
-          current={currentAgg?.tasksClosed ?? null}
-          previous={previousAgg?.tasksClosed ?? null}
+          current={currentAgg?.timerTaskCount ?? null}
+          previous={previousAgg?.timerTaskCount ?? null}
           lowerBetter={false}
           format={(diff) => `${Math.round(diff)}`}
         />
       ),
-      series: kpiSeries((agg) => agg.tasksClosed),
+      series: kpiSeries((agg) => agg.timerTaskCount),
+      seriesFmt: (value) => `${value} задач`,
     },
     {
       label: "Файлів залито",
@@ -445,6 +517,7 @@ export function DesignersDashboard({
         />
       ),
       series: kpiSeries((agg) => agg.files),
+      seriesFmt: (value) => `${value} файлів`,
     },
     {
       label: "Годин у таймері",
@@ -460,6 +533,7 @@ export function DesignersDashboard({
         />
       ),
       series: kpiSeries((agg) => Math.round(agg.trackedSeconds / 3600)),
+      seriesFmt: (value) => `${value} год`,
     },
     {
       label: "⌀ час / задачу",
@@ -474,7 +548,8 @@ export function DesignersDashboard({
           format={(diff) => `${Math.round(diff / 60)} хв`}
         />
       ),
-      series: kpiSeries((agg) => Math.round((avgSecondsPerTask(agg) ?? 0) / 60)),
+      series: kpiSeries((agg) => avgSecondsPerTask(agg) ?? 0),
+      seriesFmt: (value) => (value > 0 ? `${formatHM(value)} год` : "—"),
     },
     ...(scopedDesigner
       ? [
@@ -492,7 +567,8 @@ export function DesignersDashboard({
                 downWord="менше правок"
               />
             ),
-            series: kpiSeries((agg) => Math.round((revisionsPerTask(agg) ?? 0) * 10) / 10),
+            series: kpiSeries((agg) => revisionsPerTask(agg) ?? 0),
+            seriesFmt: (value: number) => value.toFixed(1),
           },
         ]
       : []),
@@ -510,8 +586,8 @@ export function DesignersDashboard({
       : previousAgg
         ? avgSecondsForType(previousAgg, type)
         : null;
-    const closedCount = currentAgg?.closedByType[type] ?? 0;
-    return { type, option, current, compare, closedCount };
+    const taskCount = currentAgg?.timerTaskCountByType[type] ?? 0;
+    return { type, option, current, compare, taskCount };
   });
   const typeScaleMax = Math.max(
     1,
@@ -620,7 +696,7 @@ export function DesignersDashboard({
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- скоуп-бар + місяць ---------- */}
       <div className="sticky top-2 z-20">
-        <div className="flex flex-wrap items-center gap-2 rounded-full border border-border/60 bg-card/95 px-3 py-2 shadow-[var(--shadow-menu)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/95 px-3 py-2 shadow-[var(--shadow-menu)] backdrop-blur">
           <span className="px-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">Скоуп</span>
           {canSeeAll ? (
             <button
@@ -628,7 +704,7 @@ export function DesignersDashboard({
               onClick={() => selectScope("team")}
               aria-pressed={scope === "team"}
               className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors",
+                "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors",
                 "hover:border-border/60 hover:bg-muted/20 hover:text-foreground",
                 scope === "team" && "border-primary bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
               )}
@@ -646,7 +722,7 @@ export function DesignersDashboard({
                 onClick={() => selectScope(designer.id)}
                 aria-pressed={active}
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-2 rounded-full border border-transparent py-1 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors",
+                  "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-transparent py-1 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors",
                   "hover:border-border/60 hover:bg-muted/20 hover:text-foreground",
                   active && "border-primary bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                 )}
@@ -665,13 +741,13 @@ export function DesignersDashboard({
           })}
           <div className="ml-auto flex items-center gap-2">
             {isCurrentMonth ? (
-              <span className="hidden items-center gap-1.5 rounded-full border border-warning-soft-border bg-warning-soft px-2.5 py-1 text-3xs font-medium text-warning-foreground sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-md border border-warning-soft-border bg-warning-soft px-2.5 py-1 text-3xs font-medium text-warning-foreground sm:inline-flex">
                 <CalendarIcon className="h-3 w-3" />
                 поточний місяць
               </span>
             ) : null}
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>
-              <SelectTrigger className="h-8 w-[170px] rounded-full text-xs font-medium">
+              <SelectTrigger className="h-8 w-[170px] text-xs font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -717,13 +793,13 @@ export function DesignersDashboard({
               })()}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {coverage == null
-                ? "Немає закритих задач за цей місяць — середні часи не рахуються."
-                : `Таймер покриває ${coverage}% закритих задач за ${monthShort(months[mi].value)} — наскільки чесні середні.`}
+              {timerTaskCount === 0
+                ? `Немає активності таймера за ${monthShort(months[mi].value)} — середній час рахувати нема з чого.`
+                : `Середні рахуємо по ${timerTaskCount} ${timerTaskCount === 1 ? "задачі" : "задачах"} із таймером за ${monthShort(months[mi].value)}.`}
             </p>
           </div>
           {canSeeAll ? (
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => selectScope("team")}>
+            <Button variant="outline" size="sm" onClick={() => selectScope("team")}>
               <X className="h-3.5 w-3.5" />
               До команди
             </Button>
@@ -743,11 +819,26 @@ export function DesignersDashboard({
               {kpi.delta}
             </div>
             <div className="mt-2 flex items-end justify-between gap-3">
-              <div className="text-2xl font-bold tracking-tight text-foreground">
-                {kpi.value}
-                {kpi.unit ? <span className="ml-1 text-sm font-medium text-muted-foreground">{kpi.unit}</span> : null}
+              <div className="min-w-0">
+                <div className="text-2xl font-bold tracking-tight text-foreground">
+                  {kpi.value}
+                  {kpi.unit ? <span className="ml-1 text-sm font-medium text-muted-foreground">{kpi.unit}</span> : null}
+                </div>
+                {kpi.sub ? <div className="mt-0.5 text-3xs tabular-nums text-muted-foreground">{kpi.sub}</div> : null}
               </div>
-              <SparkLine values={kpi.series} />
+              <span
+                className="shrink-0 cursor-help"
+                {...bindTip(() => ({
+                  title: kpi.label,
+                  rows: months.map((month, index) => ({
+                    label: monthTitle(month.value),
+                    value: kpi.seriesFmt(kpi.series[index] ?? 0),
+                    strong: index === mi,
+                  })),
+                }))}
+              >
+                <SparkLine values={kpi.series} />
+              </span>
             </div>
           </div>
         ))}
@@ -785,7 +876,7 @@ export function DesignersDashboard({
               )}
             </span>
             <p className="w-full text-xs text-muted-foreground">
-              Час у таймері закритих задач типу ÷ кількість таких задач. Задачі без таймера в середнє не входять.
+              Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять.
             </p>
           </div>
           <div className="mt-2 divide-y divide-border/50">
@@ -794,14 +885,31 @@ export function DesignersDashboard({
               const currentWidth = row.current == null ? 0 : Math.max(2, (row.current / typeScaleMax) * 100);
               const compareWidth = row.compare == null ? 0 : Math.max(2, (row.compare / typeScaleMax) * 100);
               const diff = row.current != null && row.compare != null ? row.current - row.compare : null;
+              const compareLabel = scopedDesigner ? "Середнє по команді" : monthShort(months[prevIdx ?? mi].value);
+              const tipRows: TipRow[] = [
+                {
+                  color: typeColor(row.type),
+                  label: scopedDesigner ? firstName(scopedDesigner.label) : monthShort(months[mi].value),
+                  value: row.current == null ? "—" : formatHumanSeconds(row.current),
+                  strong: true,
+                },
+              ];
+              if (row.compare != null) {
+                tipRows.push({ label: compareLabel, value: formatHumanSeconds(row.compare), muted: true });
+              }
+              tipRows.push({ label: "Задач у таймері", value: `${row.taskCount}`, muted: true });
               return (
-                <div key={row.type} className="grid items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]">
+                <div
+                  key={row.type}
+                  className="grid cursor-help items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]"
+                  {...bindTip(() => ({ title: row.option.label, rows: tipRows }))}
+                >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: typeColor(row.type) }} aria-hidden="true" />
                     <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">
                       <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
-                      <span className="text-3xs tabular-nums text-muted-foreground">{row.closedCount} задач</span>
+                      <span className="text-3xs tabular-nums text-muted-foreground">{row.taskCount} задач у таймері</span>
                     </span>
                   </div>
                   <div className="relative h-6">
@@ -816,7 +924,7 @@ export function DesignersDashboard({
                         style={{ width: `${currentWidth}%`, background: typeColor(row.type) }}
                       />
                     ) : (
-                      <span className="absolute top-1 text-3xs text-muted-foreground">немає закритих задач із таймером</span>
+                      <span className="absolute top-1 text-3xs text-muted-foreground">немає задач із таймером</span>
                     )}
                     {scopedDesigner ? (
                       row.compare != null ? (
@@ -868,8 +976,34 @@ export function DesignersDashboard({
                     <div className="grid h-40 grid-flow-col items-end gap-3">
                       {rows.map((agg, index) => {
                         const total = agg.trackedSeconds;
+                        const buildTip = (): TipModel => {
+                          const typeRowsTip: TipRow[] = DESIGN_TASK_TYPE_OPTIONS.filter(
+                            (option) => agg.secondsByType[option.value] > 0
+                          ).map((option) => ({
+                            color: typeColor(option.value),
+                            label: TYPE_SHORT[option.value],
+                            value: formatHumanSeconds(agg.secondsByType[option.value]),
+                          }));
+                          if (agg.secondsByType.none > 0) {
+                            typeRowsTip.push({ label: "Без типу", value: formatHumanSeconds(agg.secondsByType.none), muted: true });
+                          }
+                          if (typeRowsTip.length === 0) {
+                            typeRowsTip.push({ label: "Немає активності таймера", value: "—", muted: true });
+                          } else {
+                            typeRowsTip.push({ label: "Разом", value: `${formatHours(total)} год`, strong: true });
+                          }
+                          return {
+                            title: monthTitle(months[index].value),
+                            rows: typeRowsTip,
+                            note: `${agg.timerTaskCount} задач у таймері`,
+                          };
+                        };
                         return (
-                          <div key={months[index].value} className="flex h-full min-w-0 flex-col items-center justify-end gap-1.5">
+                          <div
+                            key={months[index].value}
+                            className="flex h-full min-w-0 cursor-help flex-col items-center justify-end gap-1.5"
+                            {...bindTip(buildTip)}
+                          >
                             <span className="text-3xs font-semibold tabular-nums text-muted-foreground">
                               {formatHours(total)}
                             </span>
@@ -882,7 +1016,6 @@ export function DesignersDashboard({
                                     key={option.value}
                                     className="block w-full min-h-[3px] first:rounded-b last:rounded-t"
                                     style={{ height: `${(seconds / total) * 100}%`, background: typeColor(option.value) }}
-                                    title={`${option.label}: ${formatHumanSeconds(seconds)}`}
                                   />
                                 );
                               })}
@@ -1007,7 +1140,7 @@ export function DesignersDashboard({
                       onClick={() => setMetricKey(entry.key)}
                       aria-pressed={active}
                       className={cn(
-                        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-background px-2.5 py-1 text-2xs font-medium text-muted-foreground transition-colors",
+                        "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/70 bg-background px-2.5 py-1 text-2xs font-medium text-muted-foreground transition-colors",
                         "hover:border-foreground/40 hover:text-foreground",
                         active && "border-primary bg-primary text-primary-foreground hover:border-primary hover:text-primary-foreground"
                       )}
@@ -1033,7 +1166,7 @@ export function DesignersDashboard({
                 <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_128px_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
                   <span>#</span>
                   <span>Дизайнер</span>
-                  <span>Задачі</span>
+                  <span>У роботі</span>
                   <span>Файли</span>
                   <span>Час</span>
                   <span>⌀ / задачу</span>
@@ -1046,7 +1179,6 @@ export function DesignersDashboard({
                   if (!agg) return null;
                   const avg = avgSecondsPerTask(agg);
                   const hit = estimateHitPercent(agg);
-                  const cov = timerCoveragePercent(agg);
                   const structureTotal = agg.trackedSeconds;
                   const selected = scope === designer.id;
                   return (
@@ -1075,18 +1207,31 @@ export function DesignersDashboard({
                         <span className="min-w-0">
                           <span className="block truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
                           <span className="text-3xs text-muted-foreground">
-                            {cov == null ? "без закритих задач" : `таймер ${cov}%`}
+                            {agg.tasksClosed} закрито · {agg.files} файлів
                           </span>
                         </span>
                       </span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.tasksClosed}</span>
+                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.timerTaskCount}</span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.files}</span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">
                         {formatHours(agg.trackedSeconds)}
                         <span className="text-3xs font-medium text-muted-foreground"> год</span>
                       </span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{avg == null ? "—" : formatHM(avg)}</span>
-                      <span className="flex h-3 gap-0.5 overflow-hidden rounded" aria-hidden="true">
+                      <span
+                        className={cn("flex h-3 gap-0.5 overflow-hidden rounded", structureTotal > 0 && "cursor-help")}
+                        {...(structureTotal > 0
+                          ? bindTip(() => ({
+                              title: designer.label,
+                              rows: DESIGN_TASK_TYPE_OPTIONS.filter((option) => agg.secondsByType[option.value] > 0).map((option) => ({
+                                color: typeColor(option.value),
+                                label: TYPE_SHORT[option.value],
+                                value: `${formatHumanSeconds(agg.secondsByType[option.value])} · ${Math.round((agg.secondsByType[option.value] / structureTotal) * 100)}%`,
+                              })),
+                              note: `Разом ${formatHours(structureTotal)} год у ${monthShort(months[mi].value)}`,
+                            }))
+                          : {})}
+                      >
                         {structureTotal > 0 ? (
                           DESIGN_TASK_TYPE_OPTIONS.map((option) => {
                             const seconds = agg.secondsByType[option.value];
@@ -1096,12 +1241,11 @@ export function DesignersDashboard({
                                 key={option.value}
                                 className="h-full first:rounded-l last:rounded-r"
                                 style={{ width: `${(seconds / structureTotal) * 100}%`, background: typeColor(option.value) }}
-                                title={`${option.label}: ${formatHumanSeconds(seconds)}`}
                               />
                             );
                           })
                         ) : (
-                          <span className="h-full w-full rounded bg-muted/40" />
+                          <span className="h-full w-full rounded bg-muted/40" aria-hidden="true" />
                         )}
                       </span>
                       <span>
@@ -1177,6 +1321,7 @@ export function DesignersDashboard({
                         </td>
                         {rows.map((agg, index) => {
                           const value = metric.get(agg);
+                          const prevValue = index > 0 ? metric.get(rows[index - 1]) : null;
                           return (
                             <td key={months[index].value}>
                               {value == null ? (
@@ -1185,12 +1330,25 @@ export function DesignersDashboard({
                                 </div>
                               ) : (
                                 <div
-                                  className="flex h-10 cursor-default items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04] hover:shadow-[var(--shadow-menu)]"
+                                  className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04] hover:shadow-[var(--shadow-menu)]"
                                   style={{
                                     background: `hsl(var(--heat-${heatBucket(value)}))`,
                                     color: `hsl(var(--heat-ink-${heatBucket(value)}))`,
                                   }}
-                                  title={`${designer.label} · ${monthTitle(months[index].value)}: ${metric.formatLong(value)}`}
+                                  {...bindTip(() => {
+                                    const tipRows: TipRow[] = [
+                                      { color: metric.type ? typeColor(metric.type) : "hsl(var(--primary))", label: metric.label, value: metric.formatLong(value), strong: true },
+                                    ];
+                                    if (prevValue != null) {
+                                      const d = value - prevValue;
+                                      tipRows.push({
+                                        label: `проти ${monthShort(months[index - 1].value)}`,
+                                        value: `${d >= 0 ? "+" : "−"}${metric.format(Math.abs(d))}`,
+                                        muted: true,
+                                      });
+                                    }
+                                    return { title: `${designer.label} · ${monthTitle(months[index].value)}`, rows: tipRows };
+                                  })}
                                 >
                                   {metric.format(value)}
                                 </div>
@@ -1386,7 +1544,7 @@ export function DesignersDashboard({
               </div>
               {worksList.length > WORKS_PREVIEW ? (
                 <div className="mt-3 flex justify-center">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setWorksExpanded((value) => !value)}>
+                  <Button variant="outline" size="sm" onClick={() => setWorksExpanded((value) => !value)}>
                     {worksExpanded ? (
                       <>
                         <ChevronUp className="h-3.5 w-3.5" />
@@ -1408,10 +1566,12 @@ export function DesignersDashboard({
 
       {/* ---------- джерела ---------- */}
       <p className="px-1 pb-2 text-2xs leading-relaxed text-muted-foreground/80">
-        Дані: таймер задач (разом із правками) · закриття = переведення в «Затверджено» · файли — всі завантаження за
-        місяць, включно з видаленими згодом · середній час типу = таймер закритих задач типу ÷ їх кількість; задачі без
-        таймера в середні не входять (дивіться «покриття таймером»).
+        Дані: середні й час рахуємо за таймером задач (сесія довша за 8 год обрізається — забутий таймер) ·
+        «закрито» = переведення в «Затверджено» · файли — всі завантаження за місяць, включно з видаленими згодом ·
+        середній час типу = час у таймері на задачах типу ÷ кількість таких задач у таймері.
       </p>
+
+      {tipOverlay}
     </div>
   );
 }
