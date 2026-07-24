@@ -107,9 +107,11 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     // Платежі / підписки — лише фін-ролі.
     case "finance_payment":
       return isFinance;
-    // Системний дайджест — лише ті, хто має доступ до Observability.
+    // Системний дайджест — лише власник. Свідомо вужче за доступ до
+    // Observability: у команді решта «адмінів» — це SEO, і щоденна технічна
+    // зведення їм лише шум (бізнес-дайджест вони отримують окремо).
     case "admin_digest":
-      return access === "owner" || access === "admin";
+      return access === "owner";
     // Бізнес-дайджест — власник/адмін + SEO.
     case "business_digest":
       return isPrivileged;

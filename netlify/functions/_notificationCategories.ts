@@ -53,7 +53,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "finance_payment":
       return isFinance;
     case "admin_digest":
-      return access === "owner" || access === "admin";
+      return access === "owner";
     case "business_digest":
       return isPrivileged;
     case "design":
