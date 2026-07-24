@@ -17,7 +17,6 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -256,14 +255,14 @@ function ChartTooltipView({ tip }: { tip: TipState }) {
         zIndex: 60,
         pointerEvents: "none",
       }}
-      className="max-w-[264px] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-[var(--shadow-menu)]"
+      className="w-max max-w-[min(88vw,360px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-[var(--shadow-menu)]"
     >
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">
         {tip.rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-1.5">
+          <div key={index} className="flex items-center gap-3 whitespace-nowrap">
             {row.color ? <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: row.color }} aria-hidden="true" /> : null}
-            <span className={cn("truncate", row.muted ? "text-muted-foreground/70" : "text-muted-foreground")}>{row.label}</span>
+            <span className={cn(row.muted ? "text-muted-foreground/70" : "text-muted-foreground")}>{row.label}</span>
             <span className={cn("ml-auto shrink-0 tabular-nums", row.strong ? "font-semibold text-foreground" : "text-foreground")}>
               {row.value}
             </span>
@@ -551,27 +550,23 @@ export function DesignersDashboard({
       series: kpiSeries((agg) => avgSecondsPerTask(agg) ?? 0),
       seriesFmt: (value) => (value > 0 ? `${formatHM(value)} год` : "—"),
     },
-    ...(scopedDesigner
-      ? [
-          {
-            label: "Правок / задачу",
-            icon: RotateCcw,
-            value: revCurrent == null ? "—" : revCurrent.toFixed(1),
-            delta: (
-              <DeltaChip
-                current={revCurrent}
-                previous={revPrevious}
-                lowerBetter
-                format={(diff) => diff.toFixed(1)}
-                upWord="більше правок"
-                downWord="менше правок"
-              />
-            ),
-            series: kpiSeries((agg) => revisionsPerTask(agg) ?? 0),
-            seriesFmt: (value: number) => value.toFixed(1),
-          },
-        ]
-      : []),
+    {
+      label: "Правок / задачу",
+      icon: RotateCcw,
+      value: revCurrent == null ? "—" : revCurrent.toFixed(1),
+      delta: (
+        <DeltaChip
+          current={revCurrent}
+          previous={revPrevious}
+          lowerBetter
+          format={(diff) => diff.toFixed(1)}
+          upWord="більше правок"
+          downWord="менше правок"
+        />
+      ),
+      series: kpiSeries((agg) => revisionsPerTask(agg) ?? 0),
+      seriesFmt: (value: number) => value.toFixed(1),
+    },
   ];
 
   /* ---------- середній час за типами ---------- */
@@ -692,62 +687,68 @@ export function DesignersDashboard({
     );
   }
 
+  const scopedBalance = scopedDesigner
+    ? analytics.balance.find((row) => row.designerId === scopedDesigner.id) ?? null
+    : null;
+
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
-      {/* ---------- скоуп-бар + місяць ---------- */}
-      <div className="sticky top-2 z-20">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card/95 px-3 py-2 shadow-[var(--shadow-menu)] backdrop-blur">
-          <span className="px-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">Скоуп</span>
-          {canSeeAll ? (
-            <button
-              type="button"
-              onClick={() => selectScope("team")}
-              aria-pressed={scope === "team"}
-              className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors",
-                "hover:border-border/60 hover:bg-muted/20 hover:text-foreground",
-                scope === "team" && "border-primary bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
-              )}
-            >
-              <Users className="h-3.5 w-3.5" />
-              Вся команда
-            </button>
-          ) : null}
-          {visibleDesigners.map((designer) => {
-            const active = scope === designer.id;
-            return (
+      {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
+      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70 shadow-card">
+        {/* Ряд 1 — перемикач скоупу + місяць */}
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner">
+            {canSeeAll ? (
               <button
-                key={designer.id}
                 type="button"
-                onClick={() => selectScope(designer.id)}
-                aria-pressed={active}
+                onClick={() => selectScope("team")}
+                aria-pressed={scope === "team"}
                 className={cn(
-                  "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-transparent py-1 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-colors",
-                  "hover:border-border/60 hover:bg-muted/20 hover:text-foreground",
-                  active && "border-primary bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all",
+                  "hover:text-foreground",
+                  scope === "team" && "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]"
                 )}
               >
-                <AvatarBase
-                  src={getMemberAvatar(designer.id)}
-                  name={designer.label}
-                  fallback={getInitials(designer.label)}
-                  size={22}
-                  className="shrink-0 border-border/70"
-                  inactive={memberInactiveById[designer.id] ?? false}
-                />
-                {firstName(designer.label)}
+                <Users className="h-3.5 w-3.5" />
+                Вся команда
               </button>
-            );
-          })}
+            ) : null}
+            {visibleDesigners.map((designer) => {
+              const active = scope === designer.id;
+              return (
+                <button
+                  key={designer.id}
+                  type="button"
+                  onClick={() => selectScope(designer.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-2 rounded-lg py-1 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-all",
+                    "hover:text-foreground",
+                    active && "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]"
+                  )}
+                >
+                  <AvatarBase
+                    src={getMemberAvatar(designer.id)}
+                    name={designer.label}
+                    fallback={getInitials(designer.label)}
+                    size={22}
+                    className="shrink-0 border-border/70"
+                    inactive={memberInactiveById[designer.id] ?? false}
+                  />
+                  {firstName(designer.label)}
+                </button>
+              );
+            })}
+          </div>
           <div className="ml-auto flex items-center gap-2">
             {isCurrentMonth ? (
-              <span className="hidden items-center gap-1.5 rounded-md border border-warning-soft-border bg-warning-soft px-2.5 py-1 text-3xs font-medium text-warning-foreground sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full border border-warning-soft-border bg-warning-soft px-2.5 py-1 text-3xs font-medium text-warning-foreground sm:inline-flex">
                 <CalendarIcon className="h-3 w-3" />
                 поточний місяць
               </span>
             ) : null}
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>
-              <SelectTrigger className="h-8 w-[170px] text-xs font-medium">
+              <SelectTrigger className="h-9 w-[180px] text-sm font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -760,89 +761,78 @@ export function DesignersDashboard({
             </Select>
           </div>
         </div>
-      </div>
+
+        {/* Ряд 2 — контекст (завжди присутній, тому висота панелі стабільна) */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pt-3 text-xs text-muted-foreground">
+          {scopedDesigner ? (
+            <>
+              <span className="font-semibold text-foreground">{scopedDesigner.label}</span>
+              {scopedBalance ? (
+                <Badge variant="outline" className={cn("px-2 py-0.5 text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[scopedBalance.workload.level])}>
+                  {CAPACITY_LABEL_BY_LEVEL[scopedBalance.workload.level]} · {scopedBalance.workload.activeTaskCount} активних
+                </Badge>
+              ) : null}
+              <span aria-hidden="true">·</span>
+              <span>
+                {timerTaskCount === 0
+                  ? `немає активності таймера за ${monthShort(months[mi].value)}`
+                  : `середні рахуємо по ${timerTaskCount} ${timerTaskCount === 1 ? "задачі" : "задачах"} із таймером`}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold text-foreground">Вся команда</span>
+              <span aria-hidden="true">·</span>
+              <span>{visibleDesigners.length} дизайнерів</span>
+              <span aria-hidden="true">·</span>
+              <span>{timerTaskCount} задач у таймері за {monthShort(months[mi].value)}</span>
+            </>
+          )}
+        </div>
+
+        {/* Ряд 3 — KPI-комірки (завжди 5, дільники через 1px-гап) */}
+        <div className="mt-3 grid grid-cols-2 gap-px border-t border-border/50 bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
+          {kpis.map((kpi) => (
+            <div key={kpi.label} className="bg-background/70 p-3.5">
+              <div className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
+                <kpi.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                <span className="truncate">{kpi.label}</span>
+              </div>
+              <div className="mt-1.5 flex items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xl font-bold tracking-tight text-foreground">
+                    {kpi.value}
+                    {kpi.unit ? <span className="ml-1 text-xs font-medium text-muted-foreground">{kpi.unit}</span> : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {kpi.delta}
+                    {kpi.sub ? <span className="text-3xs tabular-nums text-muted-foreground">{kpi.sub}</span> : null}
+                  </div>
+                </div>
+                <span
+                  className="shrink-0 cursor-help"
+                  {...bindTip(() => ({
+                    title: kpi.label,
+                    rows: months.map((month, index) => ({
+                      label: monthTitle(month.value),
+                      value: kpi.seriesFmt(kpi.series[index] ?? 0),
+                      strong: index === mi,
+                    })),
+                  }))}
+                >
+                  <SparkLine values={kpi.series} width={64} height={28} />
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {analytics.truncated ? (
         <div className="rounded-section border border-warning-soft-border bg-warning-soft px-4 py-2 text-xs text-warning-foreground">
           Даних дуже багато — найстаріші місяці можуть бути неповними (уперлись у ліміт вибірки).
         </div>
       ) : null}
-
-      {/* ---------- профіль-стрічка ---------- */}
-      {scopedDesigner ? (
-        <section className="flex flex-wrap items-center gap-3.5 rounded-2xl border border-border/60 bg-background/70 px-5 py-4">
-          <AvatarBase
-            src={getMemberAvatar(scopedDesigner.id)}
-            name={scopedDesigner.label}
-            fallback={getInitials(scopedDesigner.label)}
-            size={46}
-            className="shrink-0 border-border/70"
-            inactive={memberInactiveById[scopedDesigner.id] ?? false}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-semibold tracking-tight text-foreground">{scopedDesigner.label}</h3>
-              {(() => {
-                const balance = analytics.balance.find((row) => row.designerId === scopedDesigner.id);
-                if (!balance) return null;
-                return (
-                  <Badge variant="outline" className={cn("px-2 py-0.5 text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[balance.workload.level])}>
-                    {CAPACITY_LABEL_BY_LEVEL[balance.workload.level]} · {balance.workload.activeTaskCount} активних
-                  </Badge>
-                );
-              })()}
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {timerTaskCount === 0
-                ? `Немає активності таймера за ${monthShort(months[mi].value)} — середній час рахувати нема з чого.`
-                : `Середні рахуємо по ${timerTaskCount} ${timerTaskCount === 1 ? "задачі" : "задачах"} із таймером за ${monthShort(months[mi].value)}.`}
-            </p>
-          </div>
-          {canSeeAll ? (
-            <Button variant="outline" size="sm" onClick={() => selectScope("team")}>
-              <X className="h-3.5 w-3.5" />
-              До команди
-            </Button>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* ---------- KPI ---------- */}
-      <div className={cn("grid gap-3", scopedDesigner ? "sm:grid-cols-2 xl:grid-cols-5" : "sm:grid-cols-2 xl:grid-cols-4")}>
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-border/60 bg-background/70 p-4 shadow-card">
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground">
-                <kpi.icon className="h-3.5 w-3.5 text-muted-foreground/70" />
-                {kpi.label}
-              </span>
-              {kpi.delta}
-            </div>
-            <div className="mt-2 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-2xl font-bold tracking-tight text-foreground">
-                  {kpi.value}
-                  {kpi.unit ? <span className="ml-1 text-sm font-medium text-muted-foreground">{kpi.unit}</span> : null}
-                </div>
-                {kpi.sub ? <div className="mt-0.5 text-3xs tabular-nums text-muted-foreground">{kpi.sub}</div> : null}
-              </div>
-              <span
-                className="shrink-0 cursor-help"
-                {...bindTip(() => ({
-                  title: kpi.label,
-                  rows: months.map((month, index) => ({
-                    label: monthTitle(month.value),
-                    value: kpi.seriesFmt(kpi.series[index] ?? 0),
-                    strong: index === mi,
-                  })),
-                }))}
-              >
-                <SparkLine values={kpi.series} />
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
 
       {/* ---------- типи + баланс/динаміка ---------- */}
       <div className="grid gap-3 lg:grid-cols-3">
