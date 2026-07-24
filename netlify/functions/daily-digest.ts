@@ -11,6 +11,8 @@ import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
 //   ?kind=business_evening  — «що сталося» (owner/admin + SEO), вечір
 //   ?dry=1                  — відрендерити й повернути текст, нічого не слати
 //   ?force=1                — проігнорувати захист «раз на добу»
+//   ?only=<email>           — надіслати лише одній людині (звужує коло, не
+//                             розширює: рольовий гейт застосовується першим)
 //
 // Доставка навмисно НЕ через deliverNotifications: той helper завжди пише рядок
 // у дзвіночок і форматує «title + body + одна кнопка». Дайджест багаторядковий,
@@ -40,6 +42,7 @@ type MemberRow = {
   teamId: string | null;
   accessRole: string | null;
   jobRole: string | null;
+  email: string | null;
 };
 
 type SettingsRow = {
@@ -199,7 +202,11 @@ type AdminClient = SupabaseClient;
 
 async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
   const [membershipsResult, profilesResult, teamsResult] = await Promise.all([
-    admin.schema("tosho").from("memberships_view").select("workspace_id,user_id,access_role,job_role").limit(10000),
+    admin
+      .schema("tosho")
+      .from("memberships_view")
+      .select("workspace_id,user_id,access_role,job_role,email")
+      .limit(10000),
     admin.schema("tosho").from("team_member_profiles").select("user_id,employment_status").limit(10000),
     admin.from("team_members").select("user_id,team_id").limit(10000),
   ]);
@@ -223,6 +230,7 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
     user_id?: string | null;
     access_role?: string | null;
     job_role?: string | null;
+    email?: string | null;
   }>)) {
     if (!row.workspace_id || !row.user_id) continue;
     // Звільнені/відхилені не отримують нічого. Відсутній профіль не привід
@@ -235,6 +243,7 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
       teamId: teamByUser.get(row.user_id) ?? null,
       accessRole: row.access_role ?? null,
       jobRole: row.job_role ?? null,
+      email: row.email ?? null,
     });
   }
   return members;
@@ -944,9 +953,21 @@ export const handler = async (event: HttpEvent) => {
     const category = kind === "tech" ? "admin_digest" : "business_digest";
 
     const members = await loadMembers(admin);
-    const recipients = members.filter((m) =>
+    let recipients = members.filter((m) =>
       isCategoryVisibleForRole(category, { accessRole: m.accessRole, jobRole: m.jobRole })
     );
+
+    // ?only=<email> — звузити адресатів до однієї людини (перегляд «спершу
+    // собі», перш ніж вмикати розсилку на команду). Фільтр застосовується
+    // ПІСЛЯ рольового гейта, тож він може лише звузити коло, ніколи не
+    // розширити: людина поза своєю категорією так не отримає нічого.
+    const only = (query.only ?? "").trim().toLowerCase();
+    if (only) {
+      recipients = recipients.filter((m) => (m.email ?? "").trim().toLowerCase() === only);
+      if (recipients.length === 0) {
+        return jsonResponse(404, { error: `No recipient of ${category} matches ${only}` });
+      }
+    }
 
     const digest =
       kind === "tech"
