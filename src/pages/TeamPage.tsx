@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpDown,
+  Award,
+  Cake,
   CalendarDays,
   CalendarOff,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Mail,
   Pencil,
+  Phone,
+  Plane,
   Plus,
+  Thermometer,
   Trash2,
+  Undo2,
+  UserCheck,
   UserMinus,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +35,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,13 +48,17 @@ import {
   formatEmploymentDuration,
   formatEmploymentDate,
   getBirthdayInsight,
+  getEmploymentDurationDays,
   getWorkAnniversaryInsight,
   isInactiveEmployment,
+  type BirthdayInsight,
+  type WorkAnniversaryInsight,
 } from "@/lib/employment";
 import {
   getTeamAvailabilityBadgeClass,
   getTeamAvailabilityLabel,
   normalizeTeamAvailabilityStatus,
+  type TeamAvailabilityStatus,
 } from "@/lib/teamAvailability";
 import {
   createTeamAbsence,
@@ -55,13 +71,23 @@ import {
   type TeamAbsence,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
+import {
+  toneBadgeClass,
+  toneDotClass,
+  toneIconBoxClass,
+  toneSubtleClass,
+  toneTextClass,
+  type Tone,
+} from "@/lib/statusTones";
 import { getInitialsFromName } from "@/lib/userName";
-import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+
+type TeamEventType = "birthday" | "anniversary" | "return";
 
 type TeamEvent = {
   id: string;
-  type: "birthday" | "anniversary" | "return";
+  type: TeamEventType;
   userId: string;
   title: string;
   caption: string;
@@ -74,6 +100,20 @@ type CalendarItem = {
   label: string;
   toneClass: string;
 };
+
+type EnrichedMember = WorkspaceMemberDisplayRow & {
+  availabilityStatus: TeamAvailabilityStatus;
+  online: boolean;
+  idle: boolean;
+  lastSeenAt: string | null;
+  inactive: boolean;
+  birthdayInsight: BirthdayInsight | null;
+  anniversaryInsight: WorkAnniversaryInsight | null;
+  tenureDays: number | null;
+};
+
+type QuickFilter = "all" | "online" | "away";
+type SortMode = "presence" | "name" | "tenure" | "birthday";
 
 const ROLE_LABELS: Record<string, string> = {
   manager: "Менеджер",
@@ -97,17 +137,46 @@ const ROLE_LABELS: Record<string, string> = {
 
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
-const BIRTHDAY_TONE = "tone-warning";
-const ANNIVERSARY_TONE = "tone-info";
-const RETURN_TONE = "border-primary/25 bg-primary/[0.08] text-primary";
+/** Домен → тон. Класи збираються ТІЛЬКИ через таблиці statusTones. */
+const EVENT_TONE: Record<TeamEventType, Tone> = {
+  birthday: "warning",
+  anniversary: "accent",
+  return: "success",
+};
 
-const CALENDAR_LEGEND: Array<{ label: string; toneClass: string }> = [
-  { label: TEAM_ABSENCE_KIND_LABELS.sick_leave, toneClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.sick_leave },
-  { label: TEAM_ABSENCE_KIND_LABELS.vacation, toneClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.vacation },
-  { label: TEAM_ABSENCE_KIND_LABELS.day_off, toneClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.day_off },
-  { label: "День народження", toneClass: BIRTHDAY_TONE },
-  { label: "Річниця", toneClass: ANNIVERSARY_TONE },
-  { label: "Повернення", toneClass: RETURN_TONE },
+const EVENT_ICONS: Record<TeamEventType, LucideIcon> = {
+  birthday: Cake,
+  anniversary: Award,
+  return: Undo2,
+};
+
+const ABSENCE_KIND_TONE: Record<TeamAbsenceKind, Tone> = {
+  sick_leave: "danger",
+  day_off: "info",
+  vacation: "warning",
+  other: "neutral",
+};
+
+/** Тон і іконка «недоступності» на картці людини. */
+const AWAY_TONE: Record<Exclude<TeamAvailabilityStatus, "available">, Tone> = {
+  vacation: "warning",
+  sick_leave: "danger",
+  offline: "neutral",
+};
+
+const AWAY_ICONS: Record<Exclude<TeamAvailabilityStatus, "available">, LucideIcon> = {
+  vacation: Plane,
+  sick_leave: Thermometer,
+  offline: CalendarOff,
+};
+
+const CALENDAR_LEGEND: Array<{ label: string; swatchClass: string }> = [
+  { label: TEAM_ABSENCE_KIND_LABELS.sick_leave, swatchClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.sick_leave },
+  { label: TEAM_ABSENCE_KIND_LABELS.vacation, swatchClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.vacation },
+  { label: TEAM_ABSENCE_KIND_LABELS.day_off, swatchClass: TEAM_ABSENCE_KIND_BADGE_CLASSES.day_off },
+  { label: "День народження", swatchClass: toneBadgeClass[EVENT_TONE.birthday] },
+  { label: "Річниця", swatchClass: toneBadgeClass[EVENT_TONE.anniversary] },
+  { label: "Повернення", swatchClass: toneBadgeClass[EVENT_TONE.return] },
 ];
 
 function formatRoleLabel(value?: string | null) {
@@ -209,11 +278,262 @@ function formatAvailabilityRange(startDate?: string | null, endDate?: string | n
   return "";
 }
 
-function getEventToneClass(type: TeamEvent["type"]) {
-  if (type === "birthday") return BIRTHDAY_TONE;
-  if (type === "return") return RETURN_TONE;
-  return ANNIVERSARY_TONE;
+/** Компактне «до 28.07» для сайдбару, без року. */
+function formatUntilShort(endDate?: string | null) {
+  const trimmed = endDate?.trim();
+  if (!trimmed) return "";
+  return `до ${formatDayMonth(parseDateKey(trimmed))}`;
 }
+
+function formatDaysChip(daysUntil: number) {
+  return daysUntil === 0 ? "Сьогодні" : `${daysUntil} дн`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Картка людини                                                       */
+/* ------------------------------------------------------------------ */
+
+type MemberRibbon = {
+  toneClass: string;
+  iconToneClass: string;
+  icon: LucideIcon;
+  text: string;
+  chip?: string;
+};
+
+function getMemberRibbon(member: EnrichedMember): MemberRibbon | null {
+  if (member.inactive) return null;
+
+  const birthday = member.birthdayInsight;
+  if (birthday && birthday.daysUntil === 0) {
+    return {
+      toneClass: toneSubtleClass[EVENT_TONE.birthday],
+      iconToneClass: toneTextClass[EVENT_TONE.birthday],
+      icon: Cake,
+      text: birthday.ageTurning ? `День народження — ${birthday.ageTurning}` : "День народження",
+      chip: "Сьогодні",
+    };
+  }
+
+  if (member.availabilityStatus !== "available") {
+    const status = member.availabilityStatus;
+    const range = formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate);
+    return {
+      toneClass: toneSubtleClass[AWAY_TONE[status]],
+      iconToneClass: toneTextClass[AWAY_TONE[status]],
+      icon: AWAY_ICONS[status],
+      text: range ? `${getTeamAvailabilityLabel(status)} · ${range}` : getTeamAvailabilityLabel(status),
+    };
+  }
+
+  if (birthday && birthday.daysUntil <= 7) {
+    return {
+      toneClass: toneSubtleClass[EVENT_TONE.birthday],
+      iconToneClass: toneTextClass[EVENT_TONE.birthday],
+      icon: Cake,
+      text: birthday.ageTurning ? `ДН ${birthday.dateLabel} — виповниться ${birthday.ageTurning}` : `ДН ${birthday.dateLabel}`,
+      chip: formatDaysChip(birthday.daysUntil),
+    };
+  }
+
+  const anniversary = member.anniversaryInsight;
+  if (anniversary && anniversary.daysUntil <= 7) {
+    return {
+      toneClass: toneSubtleClass[EVENT_TONE.anniversary],
+      iconToneClass: toneTextClass[EVENT_TONE.anniversary],
+      icon: Award,
+      text: anniversary.label,
+      chip: formatDaysChip(anniversary.daysUntil),
+    };
+  }
+
+  return null;
+}
+
+function MemberContactRow({
+  icon: Icon,
+  value,
+  successMessage,
+}: {
+  icon: LucideIcon;
+  value: string;
+  successMessage: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+      <HoverCopyText
+        value={value}
+        buttonStyle="inline"
+        className="min-w-0 flex-1"
+        textClassName="text-xs text-muted-foreground"
+        successMessage={successMessage}
+      />
+    </div>
+  );
+}
+
+function TeamMemberCard({ member }: { member: EnrichedMember }) {
+  const ribbon = getMemberRibbon(member);
+  const birthday = member.birthdayInsight;
+  const tenure = formatEmploymentDuration(member.startDate);
+  const email = member.email?.trim() ?? "";
+  const phone = member.phone?.trim() ?? "";
+  const isProbation = member.employmentStatus === "probation";
+
+  return (
+    <article
+      className={cn(
+        "group flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card shadow-card",
+        "transition-all duration-200 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]"
+      )}
+    >
+      <div className="flex items-start gap-3 p-4 pb-0">
+        <AvatarBase
+          src={member.avatarDisplayUrl}
+          name={member.label}
+          fallback={getInitialsFromName(member.label, member.email)}
+          assetVariant="md"
+          size={46}
+          availability={member.availabilityStatus}
+          presence={member.online ? "online" : "offline"}
+          inactive={member.inactive}
+        />
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              "truncate text-sm font-semibold text-foreground",
+              member.inactive && "text-muted-foreground line-through"
+            )}
+          >
+            {member.label}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="truncate text-xs text-muted-foreground">{formatRoleLabel(member.jobRole)}</span>
+            {isProbation ? (
+              <Badge tone="info" size="sm">
+                Випробувальний
+              </Badge>
+            ) : null}
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
+            <span
+              aria-hidden
+              className={cn("h-1.5 w-1.5 shrink-0 rounded-full", member.online ? "tone-dot-success" : "bg-border")}
+            />
+            <span className="truncate">
+              {member.inactive ? "Співпрацю завершено" : formatPresenceText(member.lastSeenAt, member.online)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {email || phone ? (
+        <div className="mt-3 space-y-1 px-4">
+          {email ? <MemberContactRow icon={Mail} value={email} successMessage="Email скопійовано" /> : null}
+          {phone ? <MemberContactRow icon={Phone} value={phone} successMessage="Номер скопійовано" /> : null}
+        </div>
+      ) : (
+        <div className="mt-3 px-4 text-2xs text-muted-foreground/70">Контактів не вказано</div>
+      )}
+
+      <div className="mt-auto grid grid-cols-2 gap-2 px-4 pb-4 pt-3">
+        <div className="rounded-[var(--radius)] border border-border/40 bg-muted/20 px-2.5 py-2">
+          <div className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">Стаж</div>
+          <div className="mt-0.5 truncate text-xs font-semibold tabular-nums text-foreground">{tenure || "—"}</div>
+          <div className="truncate text-3xs text-muted-foreground">
+            {member.startDate ? `з ${formatEmploymentDate(member.startDate)}` : "дата не вказана"}
+          </div>
+        </div>
+        <div className="rounded-[var(--radius)] border border-border/40 bg-muted/20 px-2.5 py-2">
+          <div className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">День народження</div>
+          <div className="mt-0.5 truncate text-xs font-semibold tabular-nums text-foreground">
+            {birthday ? birthday.dateLabel : "—"}
+          </div>
+          <div className="truncate text-3xs text-muted-foreground">
+            {birthday
+              ? birthday.daysUntil === 0
+                ? "сьогодні!"
+                : `через ${birthday.daysUntil} ${pluralizeDays(birthday.daysUntil)}`
+              : "дата не вказана"}
+          </div>
+        </div>
+      </div>
+
+      {ribbon ? (
+        <div className={cn("flex items-center gap-2 border-t px-4 py-2", ribbon.toneClass)}>
+          <ribbon.icon className={cn("h-3.5 w-3.5 shrink-0", ribbon.iconToneClass)} aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-2xs font-medium text-foreground">{ribbon.text}</span>
+          {ribbon.chip ? (
+            <span className={cn("shrink-0 text-2xs font-semibold tabular-nums", ribbon.iconToneClass)}>
+              {ribbon.chip}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* KPI-плитка                                                          */
+/* ------------------------------------------------------------------ */
+
+function StatTile({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  pressed,
+  onClick,
+  ariaLabel,
+  title,
+}: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  tone?: Tone;
+  pressed?: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-label={ariaLabel}
+      title={title ?? ariaLabel}
+      className={cn(
+        "rounded-inner border border-border/40 bg-card p-4 text-left shadow-card",
+        "transition-all duration-200 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        tone ? toneSubtleClass[tone] : null,
+        pressed && "border-primary/50 ring-1 ring-primary/40"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className={cn("truncate text-sm", tone ? toneTextClass[tone] : "text-muted-foreground")}>{label}</div>
+          <div className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-foreground">{value}</div>
+        </div>
+        <div
+          className={cn(
+            "shrink-0 rounded-xl border p-2.5",
+            tone ? toneIconBoxClass[tone] : "border-border/60 bg-muted/20"
+          )}
+        >
+          <Icon className={cn("h-5 w-5", tone ? toneTextClass[tone] : "text-muted-foreground")} aria-hidden />
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Сторінка                                                            */
+/* ------------------------------------------------------------------ */
 
 export function TeamPage() {
   const { userId, loading, permissions } = useAuth();
@@ -221,6 +541,8 @@ export function TeamPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [availabilityFilter, setAvailabilityFilter] = useState<string>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("presence");
   const [monthOffset, setMonthOffset] = useState(0);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -259,15 +581,20 @@ export function TeamPage() {
     [workspacePresence.entries]
   );
 
-  const enrichedMembers = useMemo(() => {
+  const enrichedMembers = useMemo<EnrichedMember[]>(() => {
     return members.map((member) => {
       const presence = presenceByUserId.get(member.userId);
+      const inactive = isInactiveEmployment(member.employmentStatus);
       return {
         ...member,
         availabilityStatus: normalizeTeamAvailabilityStatus(member.availabilityStatus),
-        online: Boolean(presence?.online),
+        online: Boolean(presence?.online) && !inactive,
         idle: Boolean(presence?.idle),
         lastSeenAt: presence?.lastSeenAt ?? null,
+        inactive,
+        birthdayInsight: getBirthdayInsight(member.birthDate),
+        anniversaryInsight: getWorkAnniversaryInsight(member.startDate),
+        tenureDays: getEmploymentDurationDays(member.startDate),
       };
     });
   }, [members, presenceByUserId]);
@@ -275,6 +602,14 @@ export function TeamPage() {
   const memberById = useMemo(
     () => new Map(enrichedMembers.map((member) => [member.userId, member])),
     [enrichedMembers]
+  );
+
+  /** Активний склад: без завершеної співпраці. KPI та події рахуємо по ньому. */
+  const activeMembers = useMemo(() => enrichedMembers.filter((member) => !member.inactive), [enrichedMembers]);
+  const onlineCount = useMemo(() => activeMembers.filter((member) => member.online).length, [activeMembers]);
+  const awayMembers = useMemo(
+    () => activeMembers.filter((member) => member.availabilityStatus !== "available"),
+    [activeMembers]
   );
 
   const roleOptions = useMemo(() => {
@@ -285,27 +620,47 @@ export function TeamPage() {
 
   const filteredMembers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return enrichedMembers.filter((member) => {
+    const presenceRank = (member: EnrichedMember) =>
+      member.availabilityStatus !== "available" ? 2 : member.online ? 0 : 1;
+
+    const list = enrichedMembers.filter((member) => {
       if (roleFilter !== "all" && (member.jobRole ?? "") !== roleFilter) return false;
       if (availabilityFilter !== "all" && member.availabilityStatus !== availabilityFilter) return false;
+      if (quickFilter === "online" && !member.online) return false;
+      if (quickFilter === "away" && (member.inactive || member.availabilityStatus === "available")) return false;
       if (!normalizedSearch) return true;
       const haystack = [member.label, member.email ?? "", formatRoleLabel(member.jobRole)].join(" ").toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [availabilityFilter, enrichedMembers, roleFilter, search]);
 
-  const onlineMembers = useMemo(() => enrichedMembers.filter((member) => member.online), [enrichedMembers]);
-  const awayMembers = useMemo(
-    () => enrichedMembers.filter((member) => member.availabilityStatus !== "available"),
-    [enrichedMembers]
-  );
+    return list.sort((a, b) => {
+      if (a.inactive !== b.inactive) return a.inactive ? 1 : -1;
+      if (sortMode === "name") return a.label.localeCompare(b.label, "uk");
+      if (sortMode === "tenure") {
+        const at = a.tenureDays ?? -1;
+        const bt = b.tenureDays ?? -1;
+        if (bt !== at) return bt - at;
+        return a.label.localeCompare(b.label, "uk");
+      }
+      if (sortMode === "birthday") {
+        const ad = a.birthdayInsight?.daysUntil ?? Number.POSITIVE_INFINITY;
+        const bd = b.birthdayInsight?.daysUntil ?? Number.POSITIVE_INFINITY;
+        if (ad !== bd) return ad - bd;
+        return a.label.localeCompare(b.label, "uk");
+      }
+      const ar = presenceRank(a);
+      const br = presenceRank(b);
+      if (ar !== br) return ar - br;
+      return a.label.localeCompare(b.label, "uk");
+    });
+  }, [availabilityFilter, enrichedMembers, quickFilter, roleFilter, search, sortMode]);
 
   const teamEvents = useMemo(() => {
     const next: TeamEvent[] = [];
     const today = startOfDay(new Date());
 
-    enrichedMembers.forEach((member) => {
-      const birthday = getBirthdayInsight(member.birthDate);
+    activeMembers.forEach((member) => {
+      const birthday = member.birthdayInsight;
       if (birthday && birthday.daysUntil <= 45) {
         const eventDate = new Date(today);
         eventDate.setDate(today.getDate() + birthday.daysUntil);
@@ -320,7 +675,7 @@ export function TeamPage() {
         });
       }
 
-      const anniversary = getWorkAnniversaryInsight(member.startDate);
+      const anniversary = member.anniversaryInsight;
       if (anniversary && anniversary.daysUntil <= 45) {
         const eventDate = new Date(today);
         eventDate.setDate(today.getDate() + anniversary.daysUntil);
@@ -354,9 +709,14 @@ export function TeamPage() {
     });
 
     return next.sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [enrichedMembers]);
+  }, [activeMembers]);
 
-  const upcomingEvents = useMemo(() => teamEvents.slice(0, 8), [teamEvents]);
+  const todayEvents = useMemo(() => teamEvents.filter((event) => event.daysUntil === 0), [teamEvents]);
+  const upcomingEvents = useMemo(() => teamEvents.filter((event) => event.daysUntil > 0).slice(0, 8), [teamEvents]);
+  const extraUpcomingCount = useMemo(
+    () => Math.max(0, teamEvents.filter((event) => event.daysUntil > 0).length - 8),
+    [teamEvents]
+  );
 
   const selectedMonth = useMemo(() => addMonths(getStartOfMonth(new Date()), monthOffset), [monthOffset]);
 
@@ -399,20 +759,23 @@ export function TeamPage() {
     void reloadAbsences();
   }, [reloadAbsences]);
 
-  const openCreateAbsenceDialog = useCallback(() => {
-    const today = new Date();
-    const inSelectedMonth =
-      today.getFullYear() === selectedMonth.getFullYear() && today.getMonth() === selectedMonth.getMonth();
-    const defaultDate = toDateInputValue(inSelectedMonth ? today : selectedMonth);
-    setAbsenceEditingId(null);
-    setAbsenceDraftUserId("");
-    setAbsenceDraftStart(defaultDate);
-    setAbsenceDraftEnd(defaultDate);
-    setAbsenceMultiDay(false);
-    setAbsenceDraftKind("sick_leave");
-    setAbsenceDraftComment("");
-    setAbsenceDialogOpen(true);
-  }, [selectedMonth]);
+  const openCreateAbsenceDialog = useCallback(
+    (presetDate?: string) => {
+      const today = new Date();
+      const inSelectedMonth =
+        today.getFullYear() === selectedMonth.getFullYear() && today.getMonth() === selectedMonth.getMonth();
+      const defaultDate = presetDate ?? toDateInputValue(inSelectedMonth ? today : selectedMonth);
+      setAbsenceEditingId(null);
+      setAbsenceDraftUserId("");
+      setAbsenceDraftStart(defaultDate);
+      setAbsenceDraftEnd(defaultDate);
+      setAbsenceMultiDay(false);
+      setAbsenceDraftKind("sick_leave");
+      setAbsenceDraftComment("");
+      setAbsenceDialogOpen(true);
+    },
+    [selectedMonth]
+  );
 
   const openEditAbsenceDialog = useCallback((entry: TeamAbsence) => {
     setAbsenceEditingId(entry.id);
@@ -523,6 +886,11 @@ export function TeamPage() {
     [selectedMonth]
   );
 
+  const todayLabel = useMemo(() => {
+    const label = new Date().toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" });
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+  }, []);
+
   const monthDays = useMemo(() => {
     const gridStart = getStartOfCalendarGrid(selectedMonth);
     const todayKey = getDateKey(startOfDay(new Date()));
@@ -534,7 +902,7 @@ export function TeamPage() {
       const items: CalendarItem[] = [
         ...teamEvents
           .filter((event) => event.dateKey === key)
-          .map((event) => ({ id: event.id, label: event.title, toneClass: getEventToneClass(event.type) })),
+          .map((event) => ({ id: event.id, label: event.title, toneClass: toneBadgeClass[EVENT_TONE[event.type]] })),
         ...monthAbsences
           .filter((entry) => entry.startDate <= key && key <= entry.endDate)
           .map((entry) => ({
@@ -548,6 +916,7 @@ export function TeamPage() {
         date,
         inMonth: date.getMonth() === selectedMonth.getMonth(),
         isToday: key === todayKey,
+        isWeekend: index % 7 >= 5,
         items,
       };
     });
@@ -585,7 +954,7 @@ export function TeamPage() {
               Календар
             </Button>
             {canManageAbsences ? (
-              <Button type="button" className="gap-2" onClick={openCreateAbsenceDialog}>
+              <Button type="button" className="gap-2" onClick={() => openCreateAbsenceDialog()}>
                 <Plus className="h-4 w-4" />
                 Відсутність
               </Button>
@@ -644,87 +1013,89 @@ export function TeamPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-20 md:pb-8">
-      <Card className="border-border/60 bg-card/80">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Всього</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{enrichedMembers.length}</div>
-            </div>
-            <div className="tone-success-subtle rounded-2xl border px-4 py-3">
-              <div className="tone-text-success text-xs uppercase tracking-wide">Онлайн</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{onlineMembers.length}</div>
-            </div>
-            <div className="tone-warning-subtle rounded-2xl border px-4 py-3">
-              <div className="tone-text-warning text-xs uppercase tracking-wide">Відсутні</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{awayMembers.length}</div>
-            </div>
-            <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Подій попереду</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{teamEvents.length}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* KPI-плитки — не просто цифри, а швидкі фільтри списку. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="У команді"
+          value={activeMembers.length}
+          icon={Users}
+          pressed={quickFilter === "all" ? undefined : false}
+          onClick={() => setQuickFilter("all")}
+          ariaLabel="Показати всіх людей"
+          title="Скинути швидкий фільтр"
+        />
+        <StatTile
+          label="Онлайн"
+          value={onlineCount}
+          icon={UserCheck}
+          tone="success"
+          pressed={quickFilter === "online"}
+          onClick={() => setQuickFilter((prev) => (prev === "online" ? "all" : "online"))}
+          ariaLabel="Показати тільки тих, хто онлайн"
+        />
+        <StatTile
+          label="Відсутні"
+          value={awayMembers.length}
+          icon={UserMinus}
+          tone="warning"
+          pressed={quickFilter === "away"}
+          onClick={() => setQuickFilter((prev) => (prev === "away" ? "all" : "away"))}
+          ariaLabel="Показати тільки відсутніх"
+        />
+        <StatTile
+          label="Подій попереду"
+          value={teamEvents.length}
+          icon={CalendarDays}
+          tone="info"
+          onClick={() => setCalendarOpen(true)}
+          ariaLabel="Відкрити календар команди"
+        />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_360px]">
-        <Card className="order-2 border-border/60 bg-card/80 xl:order-1">
+        <Card className="order-2 xl:order-1">
           <CardHeader className="pb-3">
-            {/* Пошук і фільтри переїхали в тулбар сторінки (usePageHeaderActions) —
-                тут лишається тільки заголовок картки. */}
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              Люди в команді
-              <span className="text-sm font-normal text-muted-foreground">{filteredMembers.length}</span>
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                Люди в команді
+                <span className="text-sm font-normal tabular-nums text-muted-foreground">{filteredMembers.length}</span>
+              </CardTitle>
+              <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
+                <SelectTrigger
+                  aria-label="Сортування списку"
+                  className="h-8 w-auto gap-1.5 rounded-lg border-border/50 bg-muted/40 px-2.5 text-xs shadow-inner"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="presence">Спочатку онлайн</SelectItem>
+                  <SelectItem value="name">За іменем</SelectItem>
+                  <SelectItem value="tenure">За стажем</SelectItem>
+                  <SelectItem value="birthday">Найближчі ДН</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             {filteredMembers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-4 py-10 text-center text-sm text-muted-foreground">
-                Немає людей за цими фільтрами.
-              </div>
+              <EmptyStateCard
+                badgeLabel="Порожньо"
+                title="Немає людей за цими фільтрами"
+                description="Змініть пошук або скиньте фільтри — і список оживе."
+                actionLabel="Скинути фільтри"
+                onAction={() => {
+                  setSearch("");
+                  setRoleFilter("all");
+                  setAvailabilityFilter("all");
+                  setQuickFilter("all");
+                }}
+              />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                 {filteredMembers.map((member) => (
-                  <div
-                    key={member.userId}
-                    className="rounded-2xl border border-border/60 bg-background/68 p-4 transition-colors hover:border-border"
-                  >
-                    <div className="flex items-start gap-3">
-                      <AvatarBase
-                        src={member.avatarDisplayUrl}
-                        name={member.label}
-                        fallback={getInitialsFromName(member.label, member.email)}
-                        assetVariant="md"
-                        size={44}
-                        availability={member.availabilityStatus}
-                        presence={member.online ? "online" : "offline"}
-                        inactive={isInactiveEmployment(member.employmentStatus)}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-foreground">{member.label}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">{member.email || "Email не вказано"}</div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge variant="outline">{formatRoleLabel(member.jobRole)}</Badge>
-                          <Badge variant="outline" className={getTeamAvailabilityBadgeClass(member.availabilityStatus)}>
-                            {getTeamAvailabilityLabel(member.availabilityStatus)}
-                          </Badge>
-                          {member.availabilityStatus !== "available" && formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate) ? (
-                            <Badge variant="outline">
-                              {formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate)}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-                      <div>{formatPresenceText(member.lastSeenAt, member.online)}</div>
-                      <div>Стаж: {formatEmploymentDuration(member.startDate) || "Не вказано"}</div>
-                      <div>Працює з: {member.startDate ? formatEmploymentDate(member.startDate) : "Не вказано"}</div>
-                      <div>День народження: {member.birthDate ? formatEmploymentDate(member.birthDate) : "Не вказано"}</div>
-                    </div>
-                  </div>
+                  <TeamMemberCard key={member.userId} member={member} />
                 ))}
               </div>
             )}
@@ -732,24 +1103,84 @@ export function TeamPage() {
         </Card>
 
         <div className="order-1 space-y-4 xl:order-2">
-          <Card className="border-border/60 bg-card/80">
+          {/* Сьогодні: хто відсутній і що святкуємо — перший погляд ранку. */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                Сьогодні
+              </CardTitle>
+              <div className="text-xs text-muted-foreground">{todayLabel}</div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {awayMembers.length === 0 && todayEvents.length === 0 ? (
+                <div className={cn("flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2.5", toneSubtleClass.success)}>
+                  <UserCheck className={cn("h-4 w-4 shrink-0", toneTextClass.success)} aria-hidden />
+                  <span className="text-xs font-medium text-foreground">Вся команда доступна</span>
+                </div>
+              ) : (
+                <>
+                  {awayMembers.map((member) => (
+                    <div
+                      key={`today-away:${member.userId}`}
+                      className="flex items-center gap-2.5 rounded-[var(--radius)] border border-border/50 bg-muted/10 px-3 py-2"
+                    >
+                      <AvatarBase
+                        src={member.avatarDisplayUrl}
+                        name={member.label}
+                        fallback={getInitialsFromName(member.label, member.email)}
+                        assetVariant="md"
+                        size={28}
+                        availability={member.availabilityStatus}
+                        presence={member.online ? "online" : "offline"}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{member.label}</span>
+                      {formatUntilShort(member.availabilityEndDate) ? (
+                        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
+                          {formatUntilShort(member.availabilityEndDate)}
+                        </span>
+                      ) : null}
+                      <Badge className={cn("shrink-0", getTeamAvailabilityBadgeClass(member.availabilityStatus))} size="sm">
+                        {getTeamAvailabilityLabel(member.availabilityStatus)}
+                      </Badge>
+                    </div>
+                  ))}
+                  {todayEvents.map((event) => {
+                    const EventIcon = EVENT_ICONS[event.type];
+                    return (
+                      <div
+                        key={`today-event:${event.id}`}
+                        className={cn("flex items-center gap-2.5 rounded-[var(--radius)] border px-3 py-2", toneSubtleClass[EVENT_TONE[event.type]])}
+                      >
+                        <EventIcon className={cn("h-4 w-4 shrink-0", toneTextClass[EVENT_TONE[event.type]])} aria-hidden />
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{event.title}</span>
+                        <span className="shrink-0 text-2xs text-muted-foreground">{event.caption}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CalendarOff className="h-4 w-4 text-muted-foreground" />
                   Відсутності
                   {absences && absences.length > 0 ? (
-                    <span className="text-sm font-normal text-muted-foreground">{absences.length}</span>
+                    <span className="text-sm font-normal tabular-nums text-muted-foreground">{absences.length}</span>
                   ) : null}
                 </CardTitle>
                 {canManageAbsences ? (
-                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={openCreateAbsenceDialog}>
+                  <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => openCreateAbsenceDialog()}>
                     <Plus className="h-3.5 w-3.5" />
                     Додати
                   </Button>
                 ) : null}
               </div>
-              <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-background/60 p-1">
+              <div className="mt-3 flex items-center justify-between gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner">
                 <Button
                   type="button"
                   variant="ghost"
@@ -760,7 +1191,20 @@ export function TeamPage() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="text-sm font-semibold capitalize text-foreground">{monthLabel}</div>
+                <div className="flex min-w-0 items-center justify-center gap-1.5">
+                  <span className="truncate text-sm font-semibold capitalize text-foreground">{monthLabel}</span>
+                  {monthOffset !== 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 rounded-md px-1.5 text-2xs text-muted-foreground"
+                      onClick={() => setMonthOffset(0)}
+                    >
+                      Зараз
+                    </Button>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -775,12 +1219,12 @@ export function TeamPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {absencesLoading && !absences ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/68 px-4 py-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-[var(--radius)] border border-border/50 bg-muted/10 px-3 py-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Завантажуємо журнал...
                 </div>
               ) : !absences || absences.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-4 py-6 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius)] border border-dashed border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
                   За цей місяць відсутностей не записано.
                 </div>
               ) : (
@@ -789,33 +1233,40 @@ export function TeamPage() {
                   const label = member?.label ?? "Колишній співробітник";
                   const durationDays = getAbsenceDurationDays(entry.startDate, entry.endDate);
                   return (
-                    <div key={entry.id} className="rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
+                    <div
+                      key={entry.id}
+                      className="group rounded-[var(--radius)] border border-border/50 bg-muted/10 px-3 py-2.5 transition-colors hover:border-border"
+                    >
                       <div className="flex items-start gap-3">
                         <AvatarBase
                           src={member?.avatarDisplayUrl ?? null}
                           name={label}
                           fallback={getInitialsFromName(label, member?.email)}
                           assetVariant="md"
-                          size={34}
-                          inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
+                          size={32}
+                          inactive={member?.inactive ?? false}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-foreground">{label}</div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <Badge variant="outline" className={cn("text-2xs", TEAM_ABSENCE_KIND_BADGE_CLASSES[entry.kind])}>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge className={cn("text-2xs", TEAM_ABSENCE_KIND_BADGE_CLASSES[entry.kind])} size="sm">
                               {TEAM_ABSENCE_KIND_LABELS[entry.kind]}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">{formatAbsenceRange(entry.startDate, entry.endDate)}</span>
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              {formatAbsenceRange(entry.startDate, entry.endDate)}
+                            </span>
                             {durationDays > 1 ? (
-                              <span className="text-xs text-muted-foreground">· {durationDays} {pluralizeDays(durationDays)}</span>
+                              <span className="text-xs text-muted-foreground">
+                                · {durationDays} {pluralizeDays(durationDays)}
+                              </span>
                             ) : null}
                           </div>
                           {entry.comment ? (
-                            <p className="mt-1.5 break-words text-xs text-muted-foreground">{entry.comment}</p>
+                            <p className="mt-1 break-words text-xs text-muted-foreground">{entry.comment}</p>
                           ) : null}
                         </div>
                         {canManageAbsences ? (
-                          <div className="flex shrink-0 items-center gap-0.5">
+                          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                             <Button
                               type="button"
                               variant="ghost"
@@ -851,73 +1302,52 @@ export function TeamPage() {
             </CardContent>
           </Card>
 
-          {awayMembers.length > 0 ? (
-            <Card className="border-border/60 bg-card/80">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <UserMinus className="h-4 w-4 text-muted-foreground" />
-                  Зараз не в роботі
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {awayMembers.slice(0, 6).map((member) => (
-                  <div key={`away:${member.userId}`} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
-                    <AvatarBase
-                      src={member.avatarDisplayUrl}
-                      name={member.label}
-                      fallback={getInitialsFromName(member.label, member.email)}
-                      assetVariant="md"
-                      size={36}
-                      availability={member.availabilityStatus}
-                      presence={member.online ? "online" : "offline"}
-                      inactive={isInactiveEmployment(member.employmentStatus)}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-foreground">{member.label}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        <Badge variant="outline" className={cn("text-2xs", getTeamAvailabilityBadgeClass(member.availabilityStatus))}>
-                          {getTeamAvailabilityLabel(member.availabilityStatus)}
-                        </Badge>
-                        {formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate) ? (
-                          <span className="text-xs text-muted-foreground">
-                            {formatAvailabilityRange(member.availabilityStartDate, member.availabilityEndDate)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Card className="border-border/60 bg-card/80">
+          <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                <Cake className="h-4 w-4 text-muted-foreground" />
                 Найближчі події
               </CardTitle>
-              <div className="mt-1 text-xs text-muted-foreground">Дні народження, річниці та повернення</div>
+              <div className="text-xs text-muted-foreground">Дні народження, річниці та повернення</div>
             </CardHeader>
             <CardContent className="space-y-2">
               {upcomingEvents.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-4 py-6 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius)] border border-dashed border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
                   Додайте дати народження, старту роботи та періоди відсутності.
                 </div>
               ) : (
-                upcomingEvents.map((event) => (
-                  <div key={event.id} className="rounded-2xl border border-border/60 bg-background/68 px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">{event.title}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">{event.caption}</div>
+                <>
+                  {upcomingEvents.map((event) => {
+                    const EventIcon = EVENT_ICONS[event.type];
+                    const tone = EVENT_TONE[event.type];
+                    return (
+                      <div
+                        key={event.id}
+                        className="flex items-center gap-3 rounded-[var(--radius)] border border-border/50 bg-muted/10 px-3 py-2.5 transition-colors hover:border-border"
+                      >
+                        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border", toneIconBoxClass[tone])}>
+                          <EventIcon className={cn("h-4 w-4", toneTextClass[tone])} aria-hidden />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-foreground">{event.title}</div>
+                          <div className="truncate text-2xs text-muted-foreground">{event.caption}</div>
+                        </div>
+                        <Badge tone={tone} size="sm" className="shrink-0 tabular-nums">
+                          {formatDaysChip(event.daysUntil)}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className={cn("shrink-0", getEventToneClass(event.type))}>
-                        {event.daysUntil === 0 ? "Сьогодні" : `Через ${event.daysUntil} дн`}
-                      </Badge>
-                    </div>
-                  </div>
-                ))
+                    );
+                  })}
+                  {extraUpcomingCount > 0 ? (
+                    <button
+                      type="button"
+                      className="w-full rounded-[var(--radius)] px-3 py-1.5 text-center text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                      onClick={() => setCalendarOpen(true)}
+                    >
+                      і ще {extraUpcomingCount} — у календарі
+                    </button>
+                  ) : null}
+                </>
               )}
             </CardContent>
           </Card>
@@ -931,7 +1361,10 @@ export function TeamPage() {
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
               Календар команди
             </DialogTitle>
-            <DialogDescription>Відсутності, дні народження, річниці та повернення за місяць.</DialogDescription>
+            <DialogDescription>
+              Відсутності, дні народження, річниці та повернення за місяць.
+              {canManageAbsences ? " Клік по дню — новий запис відсутності." : ""}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -957,11 +1390,16 @@ export function TeamPage() {
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
+              {monthOffset !== 0 ? (
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setMonthOffset(0)}>
+                  Сьогодні
+                </Button>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {CALENDAR_LEGEND.map((legend) => (
                 <span key={legend.label} className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-                  <span className={cn("h-2.5 w-2.5 rounded-full border", legend.toneClass)} />
+                  <span className={cn("h-2.5 w-2.5 rounded-full border", legend.swatchClass)} />
                   {legend.label}
                 </span>
               ))}
@@ -976,47 +1414,77 @@ export function TeamPage() {
                     {label}
                   </div>
                 ))}
-                {monthDays.map((day) => (
-                  <div
-                    key={day.key}
-                    className={cn(
-                      "min-h-[92px] rounded-xl border p-2 transition-colors",
-                      day.inMonth ? "border-border/60 bg-background/60" : "border-border/40 bg-background/40 opacity-55",
-                      day.isToday ? "ring-1 ring-primary/30" : ""
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div
-                        className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
-                          day.isToday ? "bg-primary text-primary-foreground" : "text-foreground"
-                        )}
-                      >
-                        {day.date.getDate()}
-                      </div>
-                      {day.items.length > 3 ? (
-                        <span className="text-3xs font-medium text-muted-foreground">+{day.items.length - 3}</span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      {day.items.slice(0, 3).map((item) => (
+                {monthDays.map((day) => {
+                  const dayInner = (
+                    <>
+                      <div className="flex items-center justify-between">
                         <div
-                          key={item.id}
-                          className={cn("truncate rounded-md border px-1.5 py-0.5 text-3xs font-medium leading-4", item.toneClass)}
-                          title={item.label}
+                          className={cn(
+                            "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
+                            day.isToday ? "bg-primary text-primary-foreground" : "text-foreground"
+                          )}
                         >
-                          {item.label}
+                          {day.date.getDate()}
                         </div>
-                      ))}
+                        {day.items.length > 3 ? (
+                          <span className="text-3xs font-medium text-muted-foreground">+{day.items.length - 3}</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 space-y-1">
+                        {day.items.slice(0, 3).map((item) => (
+                          <div
+                            key={item.id}
+                            className={cn("truncate rounded-md border px-1.5 py-0.5 text-3xs font-medium leading-4", item.toneClass)}
+                            title={item.label}
+                          >
+                            {item.label}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                  const dayClass = cn(
+                    "min-h-[92px] rounded-xl border p-2 text-left transition-colors",
+                    day.inMonth
+                      ? day.isWeekend
+                        ? "border-border/60 bg-muted/30"
+                        : "border-border/60 bg-background/60"
+                      : "border-border/40 bg-background/40 opacity-55",
+                    day.isToday ? "ring-1 ring-primary/30" : ""
+                  );
+                  if (canManageAbsences && day.inMonth) {
+                    return (
+                      <button
+                        key={day.key}
+                        type="button"
+                        className={cn(
+                          dayClass,
+                          "cursor-pointer hover:border-primary/40 hover:ring-1 hover:ring-primary/20",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                        )}
+                        title={`Записати відсутність: ${formatDayMonth(day.date)}`}
+                        aria-label={`Записати відсутність на ${formatDayMonth(day.date)}`}
+                        onClick={() => {
+                          setCalendarOpen(false);
+                          openCreateAbsenceDialog(day.key);
+                        }}
+                      >
+                        {dayInner}
+                      </button>
+                    );
+                  }
+                  return (
+                    <div key={day.key} className={dayClass}>
+                      {dayInner}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             <div className="space-y-2 md:hidden">
               {agendaDays.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/60 bg-background/50 px-4 py-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-[var(--radius)] border border-dashed border-border/60 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
                   Цього місяця подій немає.
                 </div>
               ) : (
@@ -1024,13 +1492,13 @@ export function TeamPage() {
                   <div
                     key={day.key}
                     className={cn(
-                      "flex items-start gap-3 rounded-2xl border bg-background/60 px-3 py-2.5",
+                      "flex items-start gap-3 rounded-[var(--radius)] border bg-background/60 px-3 py-2.5",
                       day.isToday ? "border-primary/40 ring-1 ring-primary/20" : "border-border/60"
                     )}
                   >
                     <div className="w-11 shrink-0 text-center">
                       <div className="text-2xs uppercase text-muted-foreground">{formatWeekdayShort(day.date)}</div>
-                      <div className="text-lg font-semibold leading-tight text-foreground">{day.date.getDate()}</div>
+                      <div className="text-lg font-semibold leading-tight tabular-nums text-foreground">{day.date.getDate()}</div>
                     </div>
                     <div className="flex min-w-0 flex-1 flex-wrap gap-1.5 pt-0.5">
                       {day.items.map((item) => (
@@ -1078,22 +1546,22 @@ export function TeamPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {enrichedMembers
-                    .filter((member) => !isInactiveEmployment(member.employmentStatus))
+                    .filter((member) => !member.inactive)
                     .map((member) => (
-                    <SelectItem key={member.userId} value={member.userId}>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <AvatarBase
-                          src={member.avatarDisplayUrl}
-                          name={member.label}
-                          fallback={getInitialsFromName(member.label, member.email)}
-                          assetVariant="md"
-                          size={20}
-                          className="shrink-0 border-border/60"
-                        />
-                        <span className="truncate">{member.label}</span>
-                      </span>
-                    </SelectItem>
-                  ))}
+                      <SelectItem key={member.userId} value={member.userId}>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <AvatarBase
+                            src={member.avatarDisplayUrl}
+                            name={member.label}
+                            fallback={getInitialsFromName(member.label, member.email)}
+                            assetVariant="md"
+                            size={20}
+                            className="shrink-0 border-border/60"
+                          />
+                          <span className="truncate">{member.label}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1160,7 +1628,10 @@ export function TeamPage() {
                 <SelectContent>
                   {TEAM_ABSENCE_KIND_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                      <span className="flex items-center gap-2">
+                        <span className={cn("h-2 w-2 rounded-full", toneDotClass[ABSENCE_KIND_TONE[option.value]])} aria-hidden />
+                        {option.label}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
