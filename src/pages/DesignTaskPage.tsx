@@ -543,6 +543,9 @@ const compactPartyLabel = (value?: string | null) => normalizePartyLabel(value).
 function sanitizeDropboxNameSegment(value: string, fallback: string) {
   const normalized = value
     .normalize("NFKC")
+    // Контрольні символи \x00–\x1f матчимо НАВМИСНО: Dropbox відхиляє їх в
+    // іменах, тож ми їх вирізаємо. Саме цього no-control-regex і не очікує.
+    // eslint-disable-next-line no-control-regex
     .replace(/[<>:"|?*\u0000-\u001f]/g, " ")
     .replace(/[\\/]+/g, "-")
     .replace(/\s+/g, " ")

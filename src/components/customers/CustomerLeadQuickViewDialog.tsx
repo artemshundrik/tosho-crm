@@ -369,7 +369,9 @@ export function CustomerLeadQuickViewDialog({
           const escapedName = escapePostgrestTerm(trimmedName);
 
           const runQueryWithFallback = async (
-            buildQuery: (columns: string) => any
+            // Supabase-білдер awaitable і резолвиться у { data, error } —
+            // цього досить для .error/.data нижче, повний PostgrestBuilder тут зайвий.
+            buildQuery: (columns: string) => PromiseLike<{ data: unknown; error: unknown }>
           ) => {
             let variant: LeadColumnsVariant = "full";
             let response = await buildQuery(getLeadColumns(variant));
