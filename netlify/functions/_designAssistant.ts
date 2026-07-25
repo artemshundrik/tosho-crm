@@ -11,6 +11,8 @@ import { escapeTelegramHtml } from "./_telegram";
 export type DesignIntent =
   | "workload_now"
   | "designer_workload"
+  | "team_workload"
+  | "task_details"
   | "tasks_list"
   | "created_count"
   | "approved_count"
@@ -24,6 +26,8 @@ export type DesignIntent =
 export type DesignPeriod =
   | "today"
   | "yesterday"
+  | "last_7_days"
+  | "last_30_days"
   | "this_week"
   | "last_week"
   | "this_month"
@@ -36,6 +40,8 @@ export type DesignQuery = {
   status?: string | null;
   period?: DesignPeriod | null;
   limit?: number | null;
+  /** Вільний текст: номер задачі, назва, ім'я клієнта — для пошукових інтентів. */
+  query?: string | null;
 };
 
 const TIME_ZONE = "Europe/Kiev";
@@ -142,7 +148,17 @@ export function resolvePeriod(period: DesignPeriod | null | undefined, now: Date
     label,
   });
 
+  const rollingDays = (days: number, label: string): ResolvedPeriod => ({
+    startIso: new Date(now.getTime() - days * 86_400_000).toISOString(),
+    endIso: dayStartInstant(shiftDays(today, 1)).toISOString(),
+    label,
+  });
+
   switch (period) {
+    case "last_7_days":
+      return rollingDays(7, "за останні 7 днів");
+    case "last_30_days":
+      return rollingDays(30, "за останні 30 днів");
     case "yesterday":
       return bounds(shiftDays(today, -1), today, "за вчора");
     case "this_week":
@@ -465,6 +481,77 @@ export async function answerDesignQuery(params: {
           lines.push("", `По людях: ${escapeTelegramHtml(parts.join(" · "))}`);
         }
       }
+      return { text: lines.join("\n"), handled: true };
+    }
+
+    case "team_workload": {
+      // Хто чим завантажений — зріз по всій команді одразу.
+      const tasks = await loadTasks(admin, teamId, { statuses: ACTIVE_STATUSES });
+      if (tasks.length === 0) return { text: "Активних дизайн-задач зараз немає.", handled: true };
+
+      const byDesigner = new Map<string, { total: number; changes: number }>();
+      let unassigned = 0;
+      for (const task of tasks) {
+        const assignee = taskAssignee(task);
+        if (!assignee) {
+          unassigned += 1;
+          continue;
+        }
+        const entry = byDesigner.get(assignee) ?? { total: 0, changes: 0 };
+        entry.total += 1;
+        if (taskStatus(task) === "changes") entry.changes += 1;
+        byDesigner.set(assignee, entry);
+      }
+
+      const lines = [`<b>Завантаження дизайну — ${tasks.length} активних задач</b>`, ""];
+      for (const [userId, entry] of Array.from(byDesigner.entries()).sort((a, b) => b[1].total - a[1].total)) {
+        lines.push(
+          `• ${escapeTelegramHtml(shortName(nameByUser.get(userId) ?? "—"))}: ${entry.total}` +
+            (entry.changes > 0 ? ` (у правках: ${entry.changes})` : "")
+        );
+      }
+      if (unassigned > 0) lines.push("", `Без виконавця: ${unassigned}`);
+      return { text: lines.join("\n"), handled: true };
+    }
+
+    case "task_details": {
+      const needle = normalizeName(query.query ?? query.designer ?? "");
+      if (!needle) return { text: "Уточни номер або назву задачі.", handled: true };
+
+      // Шукаємо серед усіх задач, а не лише активних: питають і про закриті.
+      const all = await loadTasks(admin, teamId);
+      const hits = all.filter((task) => {
+        const number = normalizeName(taskNumber(task) ?? "");
+        const title = normalizeName(task.title ?? "");
+        return (number && number.includes(needle)) || (title && title.includes(needle));
+      });
+
+      if (hits.length === 0) {
+        return { text: `Не знайшов задачі за «${escapeTelegramHtml(needle)}».`, handled: true };
+      }
+      if (hits.length > 1) {
+        const lines = [`<b>Знайшов ${hits.length} — уточни</b>`, ""];
+        for (const task of hits.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        return { text: lines.join("\n"), handled: true };
+      }
+
+      const task = hits[0];
+      const assignee = taskAssignee(task);
+      const deadline = taskDeadlineKey(task);
+      const pending = pendingRevisions(task);
+      const created = task.created_at ? new Date(task.created_at) : null;
+      const ageDays = created ? Math.floor((now.getTime() - created.getTime()) / 86_400_000) : null;
+
+      const lines = [
+        `<b>${escapeTelegramHtml([taskNumber(task), (task.title ?? "").trim() || "(без назви)"].filter(Boolean).join(" · "))}</b>`,
+        "",
+        `• Статус: ${STATUS_LABELS[taskStatus(task)] ?? taskStatus(task)}`,
+        `• Виконавець: ${escapeTelegramHtml(assignee ? shortName(nameByUser.get(assignee) ?? "—") : "не призначено")}`,
+      ];
+      if (deadline) lines.push(`• Дедлайн: ${deadline.slice(8, 10)}.${deadline.slice(5, 7)}`);
+      if (pending > 0) lines.push(`• Правок без відповіді: ${pending}`);
+      if (ageDays !== null) lines.push(`• В роботі: ${ageDays} дн`);
+      lines.push("", `${APP_URL}/design/${task.id}`);
       return { text: lines.join("\n"), handled: true };
     }
 

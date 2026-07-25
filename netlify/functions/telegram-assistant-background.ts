@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
@@ -11,6 +11,7 @@ import {
   type DesignQuery,
 } from "./_designAssistant";
 import { answerAdminQuery, type AdminIntent } from "./_adminAssistant";
+import { answerQuotesQuery, type QuotesIntent } from "./_quotesAssistant";
 
 // Асистент по дизайн-задачах у Telegram (docs/TELEGRAM_ASSISTANT_DESIGN.md).
 //
@@ -42,14 +43,63 @@ type Payload = {
 };
 
 const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken"];
+const QUOTES_INTENTS: QuotesIntent[] = [
+  "quotes_pipeline",
+  "quotes_created",
+  "quotes_approved",
+  "quotes_overdue",
+  "customer_summary",
+];
 
 function isAdminIntent(value: string): value is AdminIntent {
   return (ADMIN_INTENTS as string[]).includes(value);
 }
 
+function isQuotesIntent(value: string): value is QuotesIntent {
+  return (QUOTES_INTENTS as string[]).includes(value);
+}
+
+/** Скільки хвилин контекст діалогу лишається чинним. */
+const CONTEXT_TTL_MINUTES = 30;
+
+type AdminClient = SupabaseClient;
+
+/**
+ * Останній розібраний запит цього чату — щоб «а вчора?» доповнювало попереднє
+ * питання, а не падало в довідку. Протухає за CONTEXT_TTL_MINUTES: завтрашнє
+ * «а вчора?» не повинно підхоплювати вчорашню тему.
+ */
+async function loadContext(admin: AdminClient, chatId: number): Promise<DesignQuery | null> {
+  const { data } = await admin
+    .schema("tosho")
+    .from("assistant_context")
+    .select("last_query,updated_at")
+    .eq("chat_id", chatId)
+    .maybeSingle();
+  const row = data as { last_query?: unknown; updated_at?: string } | null;
+  if (!row?.last_query || !row.updated_at) return null;
+  const ageMinutes = (Date.now() - new Date(row.updated_at).getTime()) / 60_000;
+  if (ageMinutes > CONTEXT_TTL_MINUTES) return null;
+  return row.last_query as DesignQuery;
+}
+
+async function saveContext(admin: AdminClient, chatId: number, query: DesignQuery): Promise<void> {
+  // Довідку не запам'ятовуємо: доповнювати «нічого» немає сенсу.
+  if (query.intent === "help") return;
+  await admin
+    .schema("tosho")
+    .from("assistant_context")
+    .upsert(
+      { chat_id: chatId, last_query: query, updated_at: new Date().toISOString() },
+      { onConflict: "chat_id" }
+    );
+}
+
 const INTENTS: DesignIntent[] = [
   "workload_now",
   "designer_workload",
+  "team_workload",
+  "task_details",
   "tasks_list",
   "created_count",
   "approved_count",
@@ -64,6 +114,8 @@ const INTENTS: DesignIntent[] = [
 const PERIODS: DesignPeriod[] = [
   "today",
   "yesterday",
+  "last_7_days",
+  "last_30_days",
   "this_week",
   "last_week",
   "this_month",
@@ -73,20 +125,20 @@ const PERIODS: DesignPeriod[] = [
 
 const TOOL = {
   type: "function",
-  name: "answer_design_question",
+  name: "answer_crm_question",
   description:
-    "Перекласти питання користувача про дизайн-задачі у структуровані параметри. Використовувати ЗАВЖДИ. Якщо питання не про дизайн-задачі або незрозуміле — intent='help'.",
+    "Перекласти питання користувача про CRM (дизайн-задачі, прорахунки, стан системи) у структуровані параметри. Використовувати ЗАВЖДИ. Якщо питання поза цими темами або незрозуміле — intent='help'.",
   strict: true,
   parameters: {
     type: "object",
     additionalProperties: false,
-    required: ["intent", "designer", "status", "period", "limit"],
+    required: ["intent", "designer", "status", "period", "limit", "query"],
     properties: {
       intent: {
         type: "string",
-        enum: [...INTENTS, ...ADMIN_INTENTS],
+        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -106,6 +158,11 @@ const TOOL = {
         type: ["integer", "null"],
         description: "Скільки позицій показати в списку, якщо просять «топ N». Інакше null.",
       },
+      query: {
+        type: ["string", "null"],
+        description:
+          "Вільний текст для пошукових інтентів: номер або назва задачі (task_details), назва клієнта (customer_summary). Інакше null.",
+      },
     },
   },
 } as const;
@@ -124,7 +181,18 @@ const SYSTEM_PROMPT = [
   "• «що по AI», «скільки витратили на AI» = ai_usage",
   "• «що не працює», «є проблеми?», «все ок?» = whats_broken",
   "• «як система», «стан», «бекапи», «cron» = system_health",
-  "• якщо питання поза цим (прорахунки, гроші клієнтів) — intent help",
+  "• «воронка», «скільки відкритих прорахунків» = quotes_pipeline",
+  "• «скільки прорахунків завели» = quotes_created; «скільки затвердили» = quotes_approved",
+  "• «що по клієнту X» = customer_summary, назву клієнта клади в query",
+  "• «покажи задачу DZ-0412» = task_details, номер або назву клади в query",
+  "• «хто чим завантажений», «розподіл по дизайнерах» = team_workload",
+  "• якщо питання поза цим — intent help",
+  "",
+  "КОНТЕКСТ. Якщо нижче дано попереднє питання, а нове є уточненням («а вчора?»,",
+  "«а за тиждень?», «а по Марʼяні?», «покажи їх»), ДОПОВНИ попереднє: візьми з нього",
+  "все, що користувач не змінив, і заміни лише назване. «а вчора?» після питання про",
+  "задачі Лєни = той самий інтент і той самий дизайнер, лише period=yesterday.",
+  "Якщо нове питання самостійне — попереднє ігноруй повністю.",
 ].join("\n");
 
 function json(statusCode: number, body: Record<string, unknown>) {
@@ -143,7 +211,10 @@ function parseToolCall(payload: Record<string, unknown>): DesignQuery | null {
     if (typed.type !== "function_call" || typed.name !== TOOL.name) continue;
     try {
       const args = JSON.parse(typeof typed.arguments === "string" ? typed.arguments : "{}") as Record<string, unknown>;
-      const intent = INTENTS.includes(args.intent as DesignIntent) ? (args.intent as DesignIntent) : "help";
+      const rawIntent = typeof args.intent === "string" ? args.intent : "";
+      const known =
+        INTENTS.includes(rawIntent as DesignIntent) || isAdminIntent(rawIntent) || isQuotesIntent(rawIntent);
+      const intent = (known ? rawIntent : "help") as DesignIntent;
       const period = PERIODS.includes(args.period as DesignPeriod) ? (args.period as DesignPeriod) : null;
       return {
         intent,
@@ -151,6 +222,7 @@ function parseToolCall(payload: Record<string, unknown>): DesignQuery | null {
         status: typeof args.status === "string" && args.status.trim() ? args.status.trim() : null,
         period,
         limit: typeof args.limit === "number" && Number.isFinite(args.limit) ? args.limit : null,
+        query: typeof args.query === "string" && args.query.trim() ? args.query.trim() : null,
       };
     } catch {
       return null;
@@ -208,6 +280,17 @@ export const handler = async (event: HttpEvent) => {
         now,
       });
     }
+    if (isQuotesIntent(query.intent)) {
+      return answerQuotesQuery({
+        admin,
+        teamIds: [teamId],
+        intent: query.intent,
+        period: query.period ?? null,
+        query: query.query ?? null,
+        limit: query.limit ?? 8,
+        now,
+      });
+    }
     const answer = await answerDesignQuery({ admin, teamId, workspaceId, query, now });
     return answer.text;
   };
@@ -222,11 +305,13 @@ export const handler = async (event: HttpEvent) => {
     // Кнопка-заготовка: інтент уже відомий, модель не потрібна — і не оплачується.
     if (directIntent) {
       const known =
-        isAdminIntent(directIntent) || INTENTS.includes(directIntent as DesignIntent)
+        isAdminIntent(directIntent) || isQuotesIntent(directIntent) || INTENTS.includes(directIntent as DesignIntent)
           ? (directIntent as DesignIntent)
           : null;
       if (!known) return json(400, { error: `Unknown directIntent: ${directIntent}` });
-      await reply(await runQuery({ intent: known, designer: null, status: null, period: null, limit: null }));
+      await reply(
+        await runQuery({ intent: known, designer: null, status: null, period: null, limit: null, query: null })
+      );
       return json(200, { ok: true, intent: known, viaButton: true });
     }
 
@@ -235,7 +320,13 @@ export const handler = async (event: HttpEvent) => {
       return json(200, { ok: true, note: "no OPENAI_API_KEY — sent help" });
     }
 
-    // 1. Розбір питання моделлю.
+    // 1. Розбір питання моделлю — разом із попереднім запитом, щоб уточнення
+    //    («а вчора?») доповнювало його, а не падало в довідку.
+    const previous = await loadContext(admin, chatId);
+    const userText = previous
+      ? `ПОПЕРЕДНЄ ПИТАННЯ (для доповнення): ${JSON.stringify(previous)}\n\nНОВЕ ПИТАННЯ: ${question.slice(0, 1000)}`
+      : question.slice(0, 1000);
+
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -243,7 +334,7 @@ export const handler = async (event: HttpEvent) => {
         model,
         input: [
           { role: "system", content: [{ type: "input_text", text: SYSTEM_PROMPT }] },
-          { role: "user", content: [{ type: "input_text", text: question.trim().slice(0, 1000) }] },
+          { role: "user", content: [{ type: "input_text", text: userText }] },
         ],
         tools: [TOOL],
         tool_choice: "required",
@@ -283,7 +374,8 @@ export const handler = async (event: HttpEvent) => {
 
     // 2. Детермінована відповідь.
     await reply(await runQuery(query));
-    return json(200, { ok: true, intent: query.intent });
+    await saveContext(admin, chatId, query);
+    return json(200, { ok: true, intent: query.intent, hadContext: Boolean(previous) });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     await sendTelegramMessage(chatId, "Щось зламалось на моєму боці. Спробуй ще раз.", { parseMode: "HTML" });
