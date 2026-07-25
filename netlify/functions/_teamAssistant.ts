@@ -7,6 +7,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { escapeTelegramHtml } from "./_telegram";
 import { formatJobRole } from "../../src/lib/jobRoles";
+// Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
+// Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
+import { actionLabel, isNoiseActivity } from "../../src/components/team/activityCategories";
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
@@ -21,6 +24,31 @@ const ROLE_GROUPS: Record<string, string[]> = {
   маркетолог: ["marketer", "smm", "seo"],
   pm: ["pm"],
 };
+
+// Емодзі за посадою — щоб список читався оком, а не вичитувався.
+const ROLE_EMOJI: Record<string, string> = {
+  manager: "💼",
+  sales_manager: "💼",
+  junior_sales_manager: "💼",
+  top_manager: "💼",
+  office_manager: "🗂",
+  designer: "🎨",
+  pm: "🧭",
+  seo: "📈",
+  smm: "📣",
+  marketer: "📣",
+  accountant: "🧮",
+  chief_accountant: "🧮",
+  logistics: "🚚",
+  head_of_logistics: "🚚",
+  head_of_production: "🏭",
+  printer: "🖨",
+  packer: "📦",
+};
+
+function roleEmoji(jobRole: string | null): string {
+  return ROLE_EMOJI[(jobRole ?? "").trim().toLowerCase()] ?? "👤";
+}
 
 export type TeamMember = {
   userId: string;
@@ -74,11 +102,12 @@ export function renderTeamList(members: TeamMember[], roleQuery: string | null):
     byRole.set(label, list);
   }
 
-  const lines = [`<b>Команда — ${filtered.length}</b>`];
+  const lines = [`👥 <b>Команда — ${filtered.length}</b>`];
   for (const [role, list] of Array.from(byRole.entries()).sort((a, b) => b[1].length - a[1].length)) {
-    lines.push("", `<b>${escapeTelegramHtml(role)}</b>`);
+    const emoji = roleEmoji(list[0]?.jobRole ?? null);
+    lines.push("", `${emoji} <b>${escapeTelegramHtml(role)}</b>`);
     for (const member of list.sort((a, b) => a.name.localeCompare(b.name, "uk"))) {
-      lines.push(`• ${escapeTelegramHtml(member.name || "(без імені)")}`);
+      lines.push(`   ${escapeTelegramHtml(member.name || "(без імені)")}`);
     }
   }
   return lines.join("\n");
@@ -189,41 +218,45 @@ export async function renderPersonSummary(params: {
 
   const role = formatJobRole(person.jobRole);
   const lines = [
-    `<b>${escapeTelegramHtml(person.name || "—")}${role ? ` · ${escapeTelegramHtml(role)}` : ""}</b>`,
-    escapeTelegramHtml(resolved.label),
+    `${roleEmoji(person.jobRole)} <b>${escapeTelegramHtml(person.name || "—")}</b>${role ? ` · ${escapeTelegramHtml(role)}` : ""}`,
+    `🗓 ${escapeTelegramHtml(resolved.label)}`,
   ];
 
   const sales: string[] = [];
   if (createdIds.length > 0) {
-    sales.push(`• Прорахунків: ${createdIds.length} на ${escapeTelegramHtml(formatMoney(sumOf(createdIds)))}`);
+    sales.push(`🧾 Прорахунків: <b>${createdIds.length}</b> на ${escapeTelegramHtml(formatMoney(sumOf(createdIds)))}`);
   }
   if (approvedIds.length > 0) {
-    sales.push(`• Затверджено: ${approvedIds.length} на ${escapeTelegramHtml(formatMoney(sumOf(approvedIds)))}`);
+    sales.push(`✅ Затверджено: <b>${approvedIds.length}</b> на ${escapeTelegramHtml(formatMoney(sumOf(approvedIds)))}`);
   }
-  if ((ordersResult.count ?? 0) > 0) sales.push(`• Замовлень: ${ordersResult.count}`);
-  if (sales.length > 0) lines.push("", "<b>Продажі</b>", ...sales);
+  if ((ordersResult.count ?? 0) > 0) sales.push(`📦 Замовлень: <b>${ordersResult.count}</b>`);
+  if (sales.length > 0) lines.push("", "💰 <b>Продажі</b>", ...sales);
 
   const base: string[] = [];
-  if ((customersResult.count ?? 0) > 0) base.push(`• Клієнтів на ньому: ${customersResult.count}`);
-  if ((leadsResult.count ?? 0) > 0) base.push(`• Лідів на ньому: ${leadsResult.count}`);
-  if (base.length > 0) lines.push("", "<b>База</b>", ...base);
+  if ((customersResult.count ?? 0) > 0) base.push(`🤝 Клієнтів: <b>${customersResult.count}</b>`);
+  if ((leadsResult.count ?? 0) > 0) base.push(`🌱 Лідів: <b>${leadsResult.count}</b>`);
+  if (base.length > 0) lines.push("", "📇 <b>База</b>", ...base);
 
   // Активність показує, що людина взагалі робила — навіть коли продажів нема.
+  // Підписи ЛЮДСЬКІ: сирі ключі на кшталт design_task_brief_change_request
+  // читати неможливо.
   const actions = ((activityResult.data ?? []) as Array<{ action?: string | null }>)
     .map((r) => (r.action ?? "").trim())
-    .filter(Boolean);
+    .filter((a) => a && !isNoiseActivity(a, null));
   if (actions.length > 0) {
     const counts = new Map<string, number>();
-    for (const action of actions) counts.set(action, (counts.get(action) ?? 0) + 1);
-    const top = Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([action, count]) => `${action} ${count}`);
-    lines.push("", `<b>Активність</b>`, `• Дій усього: ${actions.length}`, `• ${escapeTelegramHtml(top.join(" · "))}`);
+    for (const action of actions) {
+      const label = actionLabel(action);
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    lines.push("", `⚡️ <b>Чим займався</b> — ${actions.length} дій`);
+    for (const [label, count] of Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)) {
+      lines.push(`   ${escapeTelegramHtml(label)}: <b>${count}</b>`);
+    }
   }
 
   if (lines.length === 2) {
-    lines.push("", `Активності ${escapeTelegramHtml(resolved.label)} не знайшов.`);
+    lines.push("", `😴 Активності ${escapeTelegramHtml(resolved.label)} не знайшов.`);
   }
   return lines.join("\n");
 }

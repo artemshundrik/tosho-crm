@@ -36,6 +36,15 @@ const STATUS_LABELS: Record<string, string> = {
   sent: "Пораховано",
 };
 
+const STATUS_EMOJI: Record<string, string> = {
+  new: "🆕",
+  estimating: "🧮",
+  estimated: "🧾",
+  awaiting_approval: "🤝",
+  approved: "✅",
+  cancelled: "🚫",
+};
+
 type QuoteRow = {
   id: string;
   number?: string | null;
@@ -122,11 +131,11 @@ export async function answerQuotesQuery(params: {
         return days > oldest ? days : oldest;
       }, 0);
 
-      const lines = [`<b>Воронка — ${open.length} відкритих на ${escapeTelegramHtml(formatMoney(openSum))}</b>`, ""];
+      const lines = [`📊 <b>Воронка</b> — ${open.length} відкритих на ${escapeTelegramHtml(formatMoney(openSum))}`, ""];
       for (const [status, count] of Array.from(byStatus.entries()).sort((a, b) => b[1] - a[1])) {
-        lines.push(`• ${escapeTelegramHtml(STATUS_LABELS[status] ?? status)}: ${count}`);
+        lines.push(`   ${STATUS_EMOJI[status] ?? "•"} ${escapeTelegramHtml(STATUS_LABELS[status] ?? status)}: <b>${count}</b>`);
       }
-      if (oldestDays > 0) lines.push("", `Найстарішому без руху: ${oldestDays} дн`);
+      if (oldestDays > 0) lines.push("", `🕰 Найстарішому без руху: <b>${oldestDays} дн</b>`);
       return lines.join("\n");
     }
 
@@ -161,7 +170,7 @@ export async function answerQuotesQuery(params: {
       const sum = rows.reduce((acc, r) => acc + (totals.get(r.id) ?? 0), 0);
 
       const lines = [
-        `<b>${what} ${escapeTelegramHtml(resolved.label)}: ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}</b>`,
+        `${isApproved ? "✅" : "🧾"} <b>${what} ${escapeTelegramHtml(resolved.label)}</b>: ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}`,
         "",
       ];
       for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
@@ -190,7 +199,7 @@ export async function answerQuotesQuery(params: {
       if (rows.length === 0) return "Прострочених прорахунків за останні 30 днів немає.";
 
       const totals = await sumByQuote(admin, rows.map((r) => r.id));
-      const lines = [`<b>Прострочено — ${rows.length}</b>`, ""];
+      const lines = [`🔥 <b>Прострочено</b> — ${rows.length}`, ""];
       for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
       if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
       return lines.join("\n");
@@ -221,10 +230,10 @@ export async function answerQuotesQuery(params: {
       const name = (rows[0].customer_name ?? "").trim() || needle;
 
       const lines = [
-        `<b>${escapeTelegramHtml(name)}</b>`,
+        `🏢 <b>${escapeTelegramHtml(name)}</b>`,
         "",
-        `• Прорахунків: ${rows.length} на ${escapeTelegramHtml(formatMoney(allSum))}`,
-        `• Затверджено: ${approved.length} на ${escapeTelegramHtml(formatMoney(approvedSum))}`,
+        `🧾 Прорахунків: <b>${rows.length}</b> на ${escapeTelegramHtml(formatMoney(allSum))}`,
+        `✅ Затверджено: <b>${approved.length}</b> на ${escapeTelegramHtml(formatMoney(approvedSum))}`,
         "",
       ];
       for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));

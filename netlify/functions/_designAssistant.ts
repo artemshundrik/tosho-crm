@@ -61,6 +61,16 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Скасовано",
 };
 
+const STATUS_EMOJI: Record<string, string> = {
+  new: "🆕",
+  changes: "✏️",
+  in_progress: "🎨",
+  pm_review: "👀",
+  client_review: "🤝",
+  approved: "✅",
+  cancelled: "🚫",
+};
+
 // Слова, за якими розпізнаємо статус, якщо модель віддала його людською мовою.
 const STATUS_ALIASES: Record<string, string> = {
   новий: "new",
@@ -470,12 +480,12 @@ export async function answerDesignQuery(params: {
       const counts = new Map<string, number>();
       for (const task of tasks) counts.set(taskStatus(task), (counts.get(taskStatus(task)) ?? 0) + 1);
       const head = target
-        ? `<b>${escapeTelegramHtml(shortName(target.name))} — ${tasks.length} задач ${escapeTelegramHtml(scopeWord)}</b>`
-        : `<b>Дизайн-задач ${escapeTelegramHtml(scopeWord)}: ${tasks.length}</b>`;
+        ? `🎨 <b>${escapeTelegramHtml(shortName(target.name))}</b> — ${tasks.length} задач ${escapeTelegramHtml(scopeWord)}`
+        : `🎨 <b>Дизайн-задач ${escapeTelegramHtml(scopeWord)}: ${tasks.length}</b>`;
       const lines = [head, ""];
       for (const key of statuses) {
         const count = counts.get(key) ?? 0;
-        if (count > 0) lines.push(`• ${STATUS_LABELS[key]}: ${count}`);
+        if (count > 0) lines.push(`   ${STATUS_EMOJI[key] ?? "•"} ${STATUS_LABELS[key]}: <b>${count}</b>`);
       }
       // Без розбивки по людях, якщо питали про конкретну людину.
       if (!target) {
@@ -489,7 +499,7 @@ export async function answerDesignQuery(params: {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([userId, count]) => `${shortName(nameByUser.get(userId) ?? "—")} ${count}`);
-          lines.push("", `По людях: ${escapeTelegramHtml(parts.join(" · "))}`);
+          lines.push("", `👥 По людях: ${escapeTelegramHtml(parts.join(" · "))}`);
         }
       }
       return { text: lines.join("\n"), handled: true };
@@ -514,14 +524,14 @@ export async function answerDesignQuery(params: {
         byDesigner.set(assignee, entry);
       }
 
-      const lines = [`<b>Завантаження дизайну — ${tasks.length} активних задач</b>`, ""];
+      const lines = [`🎨 <b>Завантаження дизайну</b> — ${tasks.length} активних задач`, ""];
       for (const [userId, entry] of Array.from(byDesigner.entries()).sort((a, b) => b[1].total - a[1].total)) {
         lines.push(
           `• ${escapeTelegramHtml(shortName(nameByUser.get(userId) ?? "—"))}: ${entry.total}` +
             (entry.changes > 0 ? ` (у правках: ${entry.changes})` : "")
         );
       }
-      if (unassigned > 0) lines.push("", `Без виконавця: ${unassigned}`);
+      if (unassigned > 0) lines.push("", `🕳 Без виконавця: <b>${unassigned}</b>`);
       return { text: lines.join("\n"), handled: true };
     }
 
@@ -577,7 +587,7 @@ export async function answerDesignQuery(params: {
         .join(" ");
       if (tasks.length === 0) return { text: `Задач ${escapeTelegramHtml(scope)} немає.`, handled: true };
       const shown = tasks.slice(0, limit);
-      const lines = [`<b>Задачі ${escapeTelegramHtml(scope)} — ${tasks.length}</b>`, ""];
+      const lines = [`📋 <b>Задачі ${escapeTelegramHtml(scope)}</b> — ${tasks.length}`, ""];
       for (const task of shown) lines.push(taskLine(task, nameByUser));
       if (tasks.length > shown.length) lines.push("", `…і ще ${tasks.length - shown.length}`);
       return { text: lines.join("\n"), handled: true };
@@ -663,9 +673,9 @@ export async function answerDesignQuery(params: {
 
       const pendingTasks = activeTasks.filter(byTarget).filter((t) => pendingRevisions(t) > 0);
       const pendingTotal = pendingTasks.reduce((sum, t) => sum + pendingRevisions(t), 0);
-      const lines = [`<b>Правки ${escapeTelegramHtml(period.label)}</b>`, ""];
-      lines.push(`• Нових: ${logResult.count ?? 0}`);
-      lines.push(`• Без відповіді зараз: ${pendingTotal}`);
+      const lines = [`✏️ <b>Правки ${escapeTelegramHtml(period.label)}</b>`, ""];
+      lines.push(`   🆕 Нових: <b>${logResult.count ?? 0}</b>`);
+      lines.push(`   ⏳ Без відповіді зараз: <b>${pendingTotal}</b>`);
       if (pendingTasks.length > 0) {
         lines.push("");
         for (const task of pendingTasks.slice(0, limit)) lines.push(taskLine(task, nameByUser));
@@ -728,12 +738,12 @@ export async function answerDesignQuery(params: {
       }
       const lines: string[] = [];
       if (dueToday.length > 0) {
-        lines.push(`<b>Дедлайн сьогодні — ${dueToday.length}</b>`, "");
+        lines.push(`⏰ <b>Дедлайн сьогодні</b> — ${dueToday.length}`, "");
         for (const task of dueToday.slice(0, limit)) lines.push(taskLine(task, nameByUser));
       }
       if (overdue.length > 0) {
         if (lines.length > 0) lines.push("");
-        lines.push(`<b>Прострочено — ${overdue.length}</b>`, "");
+        lines.push(`🔥 <b>Прострочено</b> — ${overdue.length}`, "");
         for (const task of overdue.slice(0, limit)) lines.push(taskLine(task, nameByUser));
       }
       return { text: lines.join("\n"), handled: true };
@@ -745,7 +755,7 @@ export async function answerDesignQuery(params: {
       const sorted = tasks
         .filter((t) => t.created_at)
         .sort((a, b) => new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime());
-      const lines = [`<b>Найдовше в роботі</b>`, ""];
+      const lines = [`🐌 <b>Найдовше в роботі</b>`, ""];
       for (const task of sorted.slice(0, limit)) {
         const days = Math.floor((now.getTime() - new Date(task.created_at as string).getTime()) / 86_400_000);
         lines.push(`${taskLine(task, nameByUser)} · ${days} дн`);
