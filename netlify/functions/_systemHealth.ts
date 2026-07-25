@@ -1,43 +1,39 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Сигнали здоров'я системи — ЄДИНЕ джерело для ранкового тех-дайджесту і для
-// питань у боті («що не працює?»). Тримати разом принципово: якби пороги жили
-// у двох місцях, звіт і бот почали б суперечити один одному, і довіри до обох
-// не стало б.
+// Пороги — зі спільного модуля, який використовує й сторінка Observability.
+// Тримати їх тут власною копією означало б, що сторінка, звіт і бот з часом
+// почнуть давати різні оцінки одному стану — а це вбиває довіру до всіх трьох.
+import {
+  PRO_STORAGE_LIMIT_BYTES,
+  classifyAiCost,
+  classifyAttachmentHygiene,
+  classifyBackupAge,
+  classifyCronJob,
+  classifyDeadTuples,
+  classifyDeadlocks,
+  classifyStorageUsage,
+  worstHealthTone,
+  type HealthTone,
+} from "../../src/lib/systemHealthThresholds";
 
-export type Tone = "good" | "warning" | "danger" | "neutral";
+// Сигнали здоров'я системи — ЄДИНЕ джерело для ранкового тех-дайджесту і для
+// питань у боті («що не працює?»).
+
+export type Tone = HealthTone;
 export type Signal = { tone: Tone; text: string };
 
-const TONE_RANK: Record<Tone, number> = { neutral: 0, good: 1, warning: 2, danger: 3 };
 export const TONE_EMOJI: Record<Tone, string> = { neutral: "⚪️", good: "🟢", warning: "🟡", danger: "🔴" };
 
 export function worstTone(signals: Signal[]): Tone {
-  return signals.reduce<Tone>((worst, s) => (TONE_RANK[s.tone] > TONE_RANK[worst] ? s.tone : worst), "good");
+  return worstHealthTone(signals.map((s) => s.tone));
 }
 
 export function isProblem(signal: Signal): boolean {
   return signal.tone === "warning" || signal.tone === "danger";
 }
 
-// Пороги. Бекапи / storage / dead tuples збігаються з тим, що рахує сторінка
-// Observability, щоб цифри не розходились.
-const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
-const STORAGE_WARN_PERCENT = 70;
-const STORAGE_DANGER_PERCENT = 90;
-const BACKUP_WARN_HOURS = 8 * 24;
-const BACKUP_DANGER_HOURS = 16 * 24;
-const DEAD_TUPLE_WARN_PERCENT = 20;
-const DEAD_TUPLE_DANGER_PERCENT = 40;
-const ORPHAN_DANGER_COUNT = 200;
-const CRON_WARN_FAILURES = 1;
-const CRON_DANGER_FAILURES = 3;
-// 26, а не 24: щоденний джоб перед своїм наступним запуском законно підходить
-// впритул до доби, і рівний поріг давав би 🔴 на рівному місці.
-const CRON_STALE_HOURS = 26;
-const AI_WARN_USD = 5;
-const AI_DANGER_USD = 15;
-// Снапшот Observability пишеться лише коли адмін тисне «Оновити», тож старіші
-// дані про orphan-вкладення не показуємо взагалі.
+// Снапшот Observability пишеться раз на добу джобом; старіші дані про
+// orphan-вкладення в звіт не тягнемо взагалі.
 const SNAPSHOT_MAX_AGE_DAYS = 7;
 
 export function formatBytes(bytes: number): string {
@@ -75,20 +71,16 @@ function backupSignal(runs: BackupRunRow[], section: string, label: string, now:
     ? Math.max(0, (now.getTime() - new Date(latestSuccess.finished_at).getTime()) / 3_600_000)
     : null;
 
+  const tone = classifyBackupAge({ ageHours, lastRunFailed: latest?.status === "failed" });
   if (latest?.status === "failed") {
     return {
-      tone: "danger",
+      tone,
       text: `Backup ${label}: останній run впав${latest.error_message ? ` — ${latest.error_message}` : ""}`,
     };
   }
-  if (ageHours === null) return { tone: "warning", text: `Backup ${label}: жодного успішного run-у ще не записано` };
-  if (ageHours > BACKUP_DANGER_HOURS) {
-    return { tone: "danger", text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
-  }
-  if (ageHours > BACKUP_WARN_HOURS) {
-    return { tone: "warning", text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
-  }
-  return { tone: "good", text: `${label} ✅ ${formatHoursAgo(ageHours)}` };
+  if (ageHours === null) return { tone, text: `Backup ${label}: жодного успішного run-у ще не записано` };
+  if (tone === "good") return { tone, text: `${label} ✅ ${formatHoursAgo(ageHours)}` };
+  return { tone, text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
 }
 
 type CronJobRow = {
@@ -108,26 +100,23 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
     const name = (job.jobname ?? "—").trim();
     const failures = num(job.failures);
     const hoursSince = job.hours_since_last_run == null ? null : num(job.hours_since_last_run);
+    const tone = classifyCronJob({ hoursSinceLastRun: hoursSince, failures });
 
+    if (tone === "good") {
+      healthy += 1;
+      continue;
+    }
     // Порожня історія ≠ поламаний джоб: щойно заплановане завдання ще не мало
-    // першого запуску. Це жовтий сигнал «перевір завтра», а не червоний.
+    // першого запуску.
     if (hoursSince === null) {
-      signals.push({ tone: "warning", text: `Cron ${name}: ще жодного запуску` });
+      signals.push({ tone, text: `Cron ${name}: ще жодного запуску` });
       continue;
     }
-    if (hoursSince > CRON_STALE_HOURS) {
-      signals.push({ tone: "danger", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
+    if (failures > 0) {
+      signals.push({ tone, text: `Cron ${name}: ${failures} збоїв за добу` });
       continue;
     }
-    if (failures >= CRON_DANGER_FAILURES) {
-      signals.push({ tone: "danger", text: `Cron ${name}: ${failures} збоїв за добу` });
-      continue;
-    }
-    if (failures >= CRON_WARN_FAILURES) {
-      signals.push({ tone: "warning", text: `Cron ${name}: ${failures} збоїв за добу` });
-      continue;
-    }
-    healthy += 1;
+    signals.push({ tone, text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
   }
 
   if (healthy > 0) {
@@ -149,8 +138,7 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
  * Спершу тут була спроба вивести поломку з даних: «прорахунки змінюються, а
  * історія мовчить». Вона дала хибну тривогу одразу після встановлення тригера,
  * і причина принципова: `updated_at` рухається від будь-якого редагування, не
- * лише від зміни статусу. Питання «чи є тригер» відповідається точно, тому
- * інференс тут зайвий.
+ * лише від зміни статусу.
  */
 function dataIntegritySignals(metrics: Record<string, unknown>): Signal[] {
   if (metrics.quote_audit_trigger_ok === false) {
@@ -197,7 +185,9 @@ export async function collectSystemSignals(
     admin
       .schema("tosho")
       .from("admin_observability_snapshots")
-      .select("captured_at,attachment_possible_orphan_original_count,attachment_missing_variants_count")
+      .select(
+        "captured_at,attachment_possible_orphan_original_count,attachment_possible_orphan_original_bytes,attachment_missing_variants_count,attachment_safe_reclaimable_bytes"
+      )
       .order("captured_for_date", { ascending: false })
       .limit(1),
   ]);
@@ -222,8 +212,7 @@ export async function collectSystemSignals(
   const storageBytes = num(metrics.storage_bytes);
   const storagePercent = (storageBytes / PRO_STORAGE_LIMIT_BYTES) * 100;
   signals.push({
-    tone:
-      storagePercent >= STORAGE_DANGER_PERCENT ? "danger" : storagePercent >= STORAGE_WARN_PERCENT ? "warning" : "good",
+    tone: classifyStorageUsage(storagePercent),
     text: `Storage: ${storagePercent.toFixed(1)}% від ліміту Pro (${formatBytes(storageBytes)})`,
   });
 
@@ -231,21 +220,23 @@ export async function collectSystemSignals(
   const dbSize = num(metrics.database_size_bytes);
   const deadlocks = num(metrics.deadlocks);
   const deadRatio = num(metrics.dead_tuple_max_ratio);
+  const deadRows = num(metrics.dead_tuple_worst_rows);
   const deadTable = typeof metrics.dead_tuple_worst_table === "string" ? metrics.dead_tuple_worst_table : null;
 
-  if (deadlocks > 0) {
-    signals.push({ tone: "danger", text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
-  } else if (deadRatio >= DEAD_TUPLE_DANGER_PERCENT) {
-    // Свідомо жовтий, а не червоний. По-перше, це обслуговування — autovacuum
-    // прибере сам. По-друге, гарячі таблиці на кшталт user_presence стрибають
-    // до 100% і назад між двома викликами, тож червоне тут просто миготіло б,
-    // а миготливий алерт гірший за відсутній.
+  const deadlockTone = classifyDeadlocks(deadlocks);
+  const deadTupleTone = classifyDeadTuples({
+    worstDeadRows: deadRows,
+    highestDeadRatio: deadRatio,
+    hasData: deadTable !== null,
+  });
+
+  if (deadlockTone === "danger") {
+    signals.push({ tone: deadlockTone, text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
+  } else if (deadTupleTone === "warning") {
     signals.push({
-      tone: "warning",
+      tone: deadTupleTone,
       text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""} — потрібен vacuum`,
     });
-  } else if (deadRatio >= DEAD_TUPLE_WARN_PERCENT) {
-    signals.push({ tone: "warning", text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""}` });
   } else {
     signals.push({ tone: "good", text: `База: ${formatBytes(dbSize)} · deadlocks 0 · dead tuples у нормі` });
   }
@@ -263,37 +254,32 @@ export async function collectSystemSignals(
       (sum, row) => sum + num(row.cost_usd),
       0
     );
-    signals.push({
-      tone: aiCost > AI_DANGER_USD ? "danger" : aiCost > AI_WARN_USD ? "warning" : "good",
-      text: `AI ${options.aiLabel}: $${aiCost.toFixed(2)}`,
-    });
+    signals.push({ tone: classifyAiCost(aiCost), text: `AI ${options.aiLabel}: $${aiCost.toFixed(2)}` });
   }
 
   // 6. Гігієна вкладень — лише зі свіжого снапшота.
   const snapshot = ((snapshotResult.data ?? []) as Array<{
     captured_at?: string | null;
     attachment_possible_orphan_original_count?: number | null;
+    attachment_possible_orphan_original_bytes?: number | null;
     attachment_missing_variants_count?: number | null;
+    attachment_safe_reclaimable_bytes?: number | null;
   }>)[0];
   if (snapshot?.captured_at) {
     const ageDays = (now.getTime() - new Date(snapshot.captured_at).getTime()) / 86_400_000;
     if (ageDays <= SNAPSHOT_MAX_AGE_DAYS) {
       const orphans = num(snapshot.attachment_possible_orphan_original_count);
       const missing = num(snapshot.attachment_missing_variants_count);
-      // Гігієна вкладень — це прибирання, а не аварія. Максимум жовтий, навіть
-      // коли сміття багато: червоне вмикає миттєвий алерт, а піднімати людину
-      // вночі через orphan-файли безглуздо. Гірше того — сигнал, який горить
-      // постійно, привчає ігнорувати алерти взагалі.
-      if (orphans >= ORPHAN_DANGER_COUNT) {
-        signals.push({
-          tone: "warning",
-          text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю — час прибрати`,
-        });
-      } else if (orphans > 0 || missing > 0) {
-        signals.push({ tone: "warning", text: `Вкладення: ${orphans} orphan, ${missing} без прев'ю` });
-      } else {
-        signals.push({ tone: "good", text: "Вкладення: сміття не накопичується" });
-      }
+      const tone = classifyAttachmentHygiene({
+        safeReclaimableBytes: num(snapshot.attachment_safe_reclaimable_bytes),
+        orphanBytes: num(snapshot.attachment_possible_orphan_original_bytes),
+        missingPreviews: missing,
+      });
+      signals.push(
+        tone === "good"
+          ? { tone, text: "Вкладення: сміття не накопичується" }
+          : { tone, text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю — час прибрати` }
+      );
     }
   }
 

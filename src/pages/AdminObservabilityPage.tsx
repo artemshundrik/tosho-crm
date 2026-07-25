@@ -22,6 +22,17 @@ import { getSignedAttachmentUrl, removeAttachmentWithVariants } from "@/lib/atta
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/lib/workspace";
+// Пороги здоров'я — спільні зі щоденним звітом і ботом (src/lib/systemHealthThresholds.ts).
+// Доти сторінка мала власну копію, і оцінки вже встигли розійтися.
+import {
+  PRO_STORAGE_LIMIT_BYTES,
+  classifyAttachmentHygiene,
+  classifyBackupAge,
+  classifyDeadTuples,
+  classifyDeadlocks,
+  classifyStorageUsage,
+  isDeadTupleTableIgnored,
+} from "@/lib/systemHealthThresholds";
 import { toast } from "sonner";
 import type {
   AttachmentAuditReviewRow,
@@ -144,7 +155,6 @@ type BackupHealth = {
   message: string;
 };
 
-const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
 const CHART_STROKES = {
   primary: "hsl(var(--primary))",
   teal: "hsl(var(--success-foreground))",
@@ -225,16 +235,10 @@ function buildBackupHealth(runs: BackupRunRow[], subjectLabel: string): BackupHe
   const ageHours = latestSuccessfulRun
     ? Math.max(0, (Date.now() - new Date(latestSuccessfulRun.finished_at).getTime()) / (1000 * 60 * 60))
     : null;
-  const tone: BackupHealth["tone"] =
-    latestRun?.status === "failed"
-      ? "danger"
-      : ageHours === null
-        ? "warning"
-        : ageHours <= 8 * 24
-          ? "good"
-          : ageHours <= 16 * 24
-            ? "warning"
-            : "danger";
+  const tone: BackupHealth["tone"] = classifyBackupAge({
+    ageHours,
+    lastRunFailed: latestRun?.status === "failed",
+  });
   const message = latestRun
     ? latestRun.status === "failed"
       ? `Останній backup ${subjectLabel} впав ${formatDateTimeShort(latestRun.finished_at)}.${latestRun.error_message ? ` ${latestRun.error_message}` : ""}`
@@ -691,26 +695,23 @@ export default function AdminObservabilityPage() {
     const schema = (row.schema_name ?? "").trim().toLowerCase();
     const table = (row.table_name ?? "").trim().toLowerCase();
     if (schema === "auth") return false;
-    if (schema === "public" && table === "user_presence") return false;
-    if (schema === "tosho" && table === "admin_observability_snapshots") return false;
-    return true;
+    // Список гарячих таблиць — спільний із дайджестом і RPC, інакше сторінка
+    // й звіт знову почнуть показувати різне.
+    return !isDeadTupleTableIgnored(schema, table);
   });
   const attachmentOrphanCount = numberOrZero(latest?.attachment_possible_orphan_original_count);
   const attachmentOrphanBytes = numberOrZero(latest?.attachment_possible_orphan_original_bytes);
   const attachmentMissingVariants = numberOrZero(latest?.attachment_missing_variants_count);
   const attachmentSafeReclaimableBytes = numberOrZero(latest?.attachment_safe_reclaimable_bytes);
-  const attachmentHygieneTone: "good" | "warning" | "danger" | "neutral" =
-    attachmentSafeReclaimableBytes >= 100 * 1024 ** 2 || attachmentOrphanBytes >= 500 * 1024 ** 2 || attachmentMissingVariants >= 100
-      ? "danger"
-      : attachmentSafeReclaimableBytes > 0 || attachmentOrphanBytes >= 100 * 1024 ** 2 || attachmentMissingVariants > 0
-        ? "warning"
-        : "good";
+  const attachmentHygieneTone = classifyAttachmentHygiene({
+    safeReclaimableBytes: attachmentSafeReclaimableBytes,
+    orphanBytes: attachmentOrphanBytes,
+    missingPreviews: attachmentMissingVariants,
+  });
   const attachmentHygieneMessage =
-    attachmentHygieneTone === "danger"
-      ? `Є накопичене attachment-smittia: safe reclaim ${formatBytes(attachmentSafeReclaimableBytes)}, possible orphan originals ${formatBytes(attachmentOrphanBytes)}, missing previews ${formatCompactCount(attachmentMissingVariants)}.`
-      : attachmentHygieneTone === "warning"
-        ? `Є що прибрати або догенерувати: safe reclaim ${formatBytes(attachmentSafeReclaimableBytes)}, missing previews ${formatCompactCount(attachmentMissingVariants)}.`
-        : "Attachment bucket виглядає чисто: safe reclaimable сміття не видно.";
+    attachmentHygieneTone === "warning"
+      ? `Є що прибрати або догенерувати: safe reclaim ${formatBytes(attachmentSafeReclaimableBytes)}, possible orphan originals ${formatBytes(attachmentOrphanBytes)}, missing previews ${formatCompactCount(attachmentMissingVariants)}.`
+      : "Attachment bucket виглядає чисто: safe reclaimable сміття не видно.";
   const worstDeadTuple = healthDeadTupleTables.reduce<DeadTupleStat | null>((worst, row) => {
     if (!worst) return row;
     if (numberOrZero(row.dead_rows) > numberOrZero(worst.dead_rows)) return row;
@@ -718,24 +719,18 @@ export default function AdminObservabilityPage() {
   }, null);
   const highestDeadRatio = healthDeadTupleTables.reduce((max, row) => Math.max(max, numberOrZero(row.dead_ratio)), 0);
   const worstDeadRows = numberOrZero(worstDeadTuple?.dead_rows);
-  const deadTupleTone: "good" | "warning" | "danger" | "neutral" =
-    worstDeadRows >= 1000 && highestDeadRatio >= 20
-      ? "danger"
-      : worstDeadRows >= 200 && highestDeadRatio >= 10
-        ? "warning"
-        : deadTupleTables.length
-          ? "good"
-          : "neutral";
+  const deadTupleTone = classifyDeadTuples({
+    worstDeadRows,
+    highestDeadRatio,
+    hasData: deadTupleTables.length > 0,
+  });
   const deadTupleMessage =
-    deadTupleTone === "danger"
-      ? `Є велика кількість dead tuples: до ${formatCompactCount(worstDeadRows)} rows і ${formatPercent(highestDeadRatio)}.`
-      : deadTupleTone === "warning"
+    deadTupleTone === "warning"
         ? `Dead tuples вже накопичуються: до ${formatCompactCount(worstDeadRows)} rows і ${formatPercent(highestDeadRatio)}.`
         : healthDeadTupleTables.length
           ? `По dead tuples картина контрольована: максимум ${formatCompactCount(worstDeadRows)} rows.`
           : "Даних по dead tuples поки немає.";
-  const deadlockTone: "good" | "warning" | "danger" | "neutral" =
-    numberOrZero(dbStats?.deadlocks) > 0 ? "danger" : "good";
+  const deadlockTone = classifyDeadlocks(numberOrZero(dbStats?.deadlocks));
   const deadlockMessage =
     numberOrZero(dbStats?.deadlocks) > 0
       ? `Зафіксовано ${formatCompactCount(dbStats?.deadlocks)} deadlocks. Це вже червоний сигнал.`
@@ -745,8 +740,7 @@ export default function AdminObservabilityPage() {
   const remainingStorageBytes = Math.max(PRO_STORAGE_LIMIT_BYTES - totalStorageBytes, 0);
   const storageRunwayDays =
     averageStorageGrowthBytes > 0 ? remainingStorageBytes / averageStorageGrowthBytes : null;
-  const storagePlanTone: "good" | "warning" | "danger" | "neutral" =
-    storageUsagePercent >= 90 ? "danger" : storageUsagePercent >= 70 ? "warning" : "good";
+  const storagePlanTone = classifyStorageUsage(storageUsagePercent);
   const storageBackupHealth = useMemo(
     () => buildBackupHealth(storageBackupRuns, "файлів"),
     [storageBackupRuns]

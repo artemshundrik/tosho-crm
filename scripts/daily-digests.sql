@@ -69,6 +69,7 @@ declare
   storage_objects    bigint := 0;
   buckets_json       jsonb := '[]'::jsonb;
   dead_ratio_max     numeric := 0;
+  dead_rows_max      bigint := 0;
   dead_worst_table   text := null;
   cron_jobs_json     jsonb := '[]'::jsonb;
   http_failures      integer := null;
@@ -103,22 +104,29 @@ begin
     group by o.bucket_id
   ) as bucket_row;
 
-  -- Найгірша таблиця за часткою dead tuples. Поріг застосовує вже дайджест.
+  -- Найгірша таблиця за dead tuples. Пороги застосовує споживач
+  -- (src/lib/systemHealthThresholds.ts) — тут лише сирі числа.
+  --
+  -- Виключаємо гарячі таблиці, які завжди «брудні»: їхня частка стрибає до
+  -- 100% і назад між двома запитами. Той самий список, що на сторінці
+  -- Observability, інакше сторінка й дайджест знову розійдуться.
   select
     coalesce(worst.dead_ratio, 0),
-    worst.table_name
-  into dead_ratio_max, dead_worst_table
+    worst.table_name,
+    coalesce(worst.dead_rows, 0)
+  into dead_ratio_max, dead_worst_table, dead_rows_max
   from (
     select
       stat.relname as table_name,
+      stat.n_dead_tup::bigint as dead_rows,
       case
         when coalesce(stat.n_live_tup, 0) + coalesce(stat.n_dead_tup, 0) = 0 then 0
         else round((stat.n_dead_tup::numeric / (stat.n_live_tup + stat.n_dead_tup)::numeric) * 100, 2)
       end as dead_ratio
     from pg_stat_user_tables stat
-    -- Дрібні таблиці дають 100% сміття на кількох рядках — це шум, не сигнал.
-    where coalesce(stat.n_live_tup, 0) + coalesce(stat.n_dead_tup, 0) >= 1000
-    order by 2 desc
+    where not (stat.schemaname = 'public' and stat.relname = 'user_presence')
+      and not (stat.schemaname = 'tosho' and stat.relname = 'admin_observability_snapshots')
+    order by stat.n_dead_tup desc
     limit 1
   ) as worst;
 
@@ -201,6 +209,7 @@ begin
     'storage_objects', storage_objects,
     'buckets', buckets_json,
     'dead_tuple_max_ratio', dead_ratio_max,
+    'dead_tuple_worst_rows', dead_rows_max,
     'dead_tuple_worst_table', dead_worst_table,
     'cron_jobs', cron_jobs_json,
     'cron_http_failures_24h', http_failures
