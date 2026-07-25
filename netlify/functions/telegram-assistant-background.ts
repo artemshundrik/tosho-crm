@@ -63,6 +63,15 @@ function isAdminIntent(value: string): value is AdminIntent {
   return (ADMIN_INTENTS as string[]).includes(value);
 }
 
+/**
+ * Адмін-інтенти, доступні не лише власнику.
+ *
+ * Витрати на AI — це бюджет, а не внутрішня кухня: СЕО має їх бачити. А от
+ * стан бекапів, cron і «що не працює» лишаються власнику: там інфраструктурні
+ * подробиці, з якими СЕО все одно нічого не зробить.
+ */
+const ADMIN_INTENTS_FOR_EVERYONE: AdminIntent[] = ["ai_usage"];
+
 function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
 }
@@ -292,9 +301,8 @@ export const handler = async (event: HttpEvent) => {
   /** Виконання вже відомого інтенту. Спільний хвіст для кнопок і для моделі. */
   const runQuery = async (query: DesignQuery): Promise<string> => {
     if (isAdminIntent(query.intent)) {
-      // Адмін-інтенти — внутрішня кухня (кости, бекапи, cron). Тільки власнику.
-      if (!payload.isOwner) {
-        return "Це питання доступне лише власнику. Про дизайн-задачі питай вільно — «що ти вмієш?».";
+      if (!payload.isOwner && !ADMIN_INTENTS_FOR_EVERYONE.includes(query.intent)) {
+        return "🔒 Це питання доступне лише власнику. Решту — питай вільно, «що ти вмієш?».";
       }
       return answerAdminQuery({
         admin,

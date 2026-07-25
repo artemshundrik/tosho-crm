@@ -294,12 +294,13 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
       { text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" },
     ],
   ];
+  // AI-кости бачить і SEO: це бюджет, а не інфраструктура.
+  rows.push([{ text: "💰 AI-кости", callback_data: "qa:ai_usage" }]);
   if (isOwnerRole(role)) {
     rows.push([
       { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
-      { text: "💰 AI-кости", callback_data: "qa:ai_usage" },
+      { text: "🩺 Стан системи", callback_data: "qa:system_health" },
     ]);
-    rows.push([{ text: "🩺 Стан системи", callback_data: "qa:system_health" }]);
   }
   rows.push([{ text: "❓ Що можна питати", callback_data: "qa:help" }]);
   return rows;
