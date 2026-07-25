@@ -368,22 +368,26 @@ export async function answerDesignQuery(params: {
   switch (query.intent) {
     case "workload_now":
     case "designer_workload": {
-      const tasks = (await loadTasks(admin, teamId, { statuses: ACTIVE_STATUSES })).filter(byTarget);
+      // Якщо статус названо прямо («скільки В РОБОТІ»), рахуємо саме його, а не
+      // всі активні: інакше на питання про in_progress прилетить сума з «Новий».
+      const statuses = status ? [status] : ACTIVE_STATUSES;
+      const scopeWord = status ? `у статусі «${STATUS_LABELS[status] ?? status}»` : "активних";
+      const tasks = (await loadTasks(admin, teamId, { statuses })).filter(byTarget);
       if (tasks.length === 0) {
         return {
           text: target
-            ? `У ${escapeTelegramHtml(shortName(target.name))} зараз немає активних задач.`
-            : "Активних дизайн-задач зараз немає.",
+            ? `У ${escapeTelegramHtml(shortName(target.name))} зараз немає задач ${escapeTelegramHtml(scopeWord)}.`
+            : `Дизайн-задач ${escapeTelegramHtml(scopeWord)} зараз немає.`,
           handled: true,
         };
       }
       const counts = new Map<string, number>();
       for (const task of tasks) counts.set(taskStatus(task), (counts.get(taskStatus(task)) ?? 0) + 1);
       const head = target
-        ? `<b>${escapeTelegramHtml(shortName(target.name))} — ${tasks.length} активних задач</b>`
-        : `<b>Активних дизайн-задач: ${tasks.length}</b>`;
+        ? `<b>${escapeTelegramHtml(shortName(target.name))} — ${tasks.length} задач ${escapeTelegramHtml(scopeWord)}</b>`
+        : `<b>Дизайн-задач ${escapeTelegramHtml(scopeWord)}: ${tasks.length}</b>`;
       const lines = [head, ""];
-      for (const key of ACTIVE_STATUSES) {
+      for (const key of statuses) {
         const count = counts.get(key) ?? 0;
         if (count > 0) lines.push(`• ${STATUS_LABELS[key]}: ${count}`);
       }
