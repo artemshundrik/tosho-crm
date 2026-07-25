@@ -39,8 +39,6 @@ const AI_DANGER_USD = 15;
 // Снапшот Observability пишеться лише коли адмін тисне «Оновити», тож старіші
 // дані про orphan-вкладення не показуємо взагалі.
 const SNAPSHOT_MAX_AGE_DAYS = 7;
-// Скільки днів тишi в журналі статусів вважаємо підозрілими.
-const STATUS_LOG_STALE_DAYS = 3;
 
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
@@ -144,53 +142,26 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
 /**
  * Цілісність даних — те, що не падає з помилкою, а тихо бреше.
  *
- * Аудит статусів прорахунку з 2026-07-25 тримає тригер у базі
- * (`scripts/quote-status-audit-trigger.sql`), тож обійти його застосунок уже
- * не може. Але сам тригер теж треба сторожити: якщо його зняли або вимкнули,
- * усе знову почне тихо втрачати історію.
+ * Аудит статусів прорахунку тримає тригер у базі
+ * (`scripts/quote-status-audit-trigger.sql`). Перевіряємо його НАЯВНІСТЬ —
+ * факт, а не здогадку.
+ *
+ * Спершу тут була спроба вивести поломку з даних: «прорахунки змінюються, а
+ * історія мовчить». Вона дала хибну тривогу одразу після встановлення тригера,
+ * і причина принципова: `updated_at` рухається від будь-якого редагування, не
+ * лише від зміни статусу. Питання «чи є тригер» відповідається точно, тому
+ * інференс тут зайвий.
  */
-async function dataIntegritySignals(admin: SupabaseClient, teamIds: string[], now: Date): Promise<Signal[]> {
-  const signals: Signal[] = [];
-  if (teamIds.length === 0) return signals;
-
-  const [historyResult, movedResult] = await Promise.all([
-    admin
-      .schema("tosho")
-      .from("quote_status_history")
-      .select("created_at")
-      .in("team_id", teamIds)
-      .order("created_at", { ascending: false })
-      .limit(1),
-    admin
-      .schema("tosho")
-      .from("quotes")
-      .select("updated_at")
-      .in("team_id", teamIds)
-      .neq("status", "new")
-      .order("updated_at", { ascending: false })
-      .limit(1),
-  ]);
-
-  const newestHistory = ((historyResult.data ?? []) as Array<{ created_at?: string | null }>)[0]?.created_at ?? null;
-  const newestMove = ((movedResult.data ?? []) as Array<{ updated_at?: string | null }>)[0]?.updated_at ?? null;
-
-  // Доказовий сигнал: прорахунки рухаються, а історія мовчить — отже тригер
-  // не працює. Просто «давно немає записів» нічого не означає: у тиху добу
-  // статуси й справді ніхто не міняє.
-  if (newestMove) {
-    const historyAgeDays = newestHistory
-      ? (now.getTime() - new Date(newestHistory).getTime()) / 86_400_000
-      : Number.POSITIVE_INFINITY;
-    const movedAfterHistory = newestHistory ? new Date(newestMove) > new Date(newestHistory) : true;
-    if (historyAgeDays > STATUS_LOG_STALE_DAYS && movedAfterHistory) {
-      signals.push({
+function dataIntegritySignals(metrics: Record<string, unknown>): Signal[] {
+  if (metrics.quote_audit_trigger_ok === false) {
+    return [
+      {
         tone: "danger",
-        text: "Історія статусів прорахунків не пишеться — перевір тригер quotes_status_history_trg",
-      });
-    }
+        text: "Тригер аудиту статусів прорахунків відсутній або вимкнений — історія змін втрачається",
+      },
+    ];
   }
-
-  return signals;
+  return [];
 }
 
 export type SystemSignalsOptions = {
@@ -207,7 +178,7 @@ export async function collectSystemSignals(
   now: Date,
   options: SystemSignalsOptions
 ): Promise<Signal[]> {
-  const [metricsResult, backupsResult, aiResult, snapshotResult, integrity] = await Promise.all([
+  const [metricsResult, backupsResult, aiResult, snapshotResult] = await Promise.all([
     admin.schema("tosho").rpc("get_admin_digest_metrics"),
     admin
       .schema("tosho")
@@ -229,7 +200,6 @@ export async function collectSystemSignals(
       .select("captured_at,attachment_possible_orphan_original_count,attachment_missing_variants_count")
       .order("captured_for_date", { ascending: false })
       .limit(1),
-    dataIntegritySignals(admin, options.teamIds, now),
   ]);
 
   if (metricsResult.error) throw new Error(`get_admin_digest_metrics: ${metricsResult.error.message}`);
@@ -317,7 +287,7 @@ export async function collectSystemSignals(
   }
 
   // 7. Цілісність даних.
-  signals.push(...integrity);
+  signals.push(...dataIntegritySignals(metrics));
 
   return signals;
 }

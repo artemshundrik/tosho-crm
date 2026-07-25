@@ -72,6 +72,7 @@ declare
   dead_worst_table   text := null;
   cron_jobs_json     jsonb := '[]'::jsonb;
   http_failures      integer := null;
+  audit_trigger_ok   boolean := false;
 begin
   select pg_database_size(current_database()) into db_size_bytes;
 
@@ -179,7 +180,18 @@ begin
       http_failures := null;
   end;
 
+  -- Аудит статусів прорахунку тримає тригер. Перевіряємо його НАЯВНІСТЬ, а не
+  -- намагаємось вивести поломку з даних: updated_at рухається від будь-якого
+  -- редагування, тож «прорахунок змінився, а історії немає» дає хибну тривогу.
+  select exists (
+    select 1 from pg_trigger t
+    where t.tgrelid = 'tosho.quotes'::regclass
+      and t.tgname = 'quotes_status_history_trg'
+      and t.tgenabled <> 'D'
+  ) into audit_trigger_ok;
+
   return jsonb_build_object(
+    'quote_audit_trigger_ok', audit_trigger_ok,
     'captured_at', timezone('utc', now()),
     'database_size_bytes', db_size_bytes,
     'deadlocks', deadlocks_value,
