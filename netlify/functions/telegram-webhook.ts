@@ -114,6 +114,22 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (command === "/start") {
     const nonce = arg?.trim();
     if (!nonce) {
+      // Уже підключеним «/start» служить перевстановленням постійної кнопки:
+      // вона з'являється лише разом із повідомленням, тож у тих, кто
+      // підключився до її появи, іншого способу її отримати немає.
+      const existing = await loadSettingsByChat(adminClient, chatId);
+      if (existing) {
+        const role = await loadRole(adminClient, existing.user_id);
+        const allowed = isAssistantAllowed(role);
+        await sendTelegramMessage(
+          chatId,
+          allowed
+            ? "Акаунт уже підключено. Питання можна писати текстом, швидкі — у «Меню»."
+            : "Акаунт уже підключено. Налаштування — /settings, відписатись — /stop.",
+          allowed ? { replyMarkup: PERSISTENT_MENU } : undefined
+        );
+        return;
+      }
       await sendTelegramMessage(chatId, LINK_GREETING);
       return;
     }
