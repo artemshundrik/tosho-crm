@@ -32,6 +32,7 @@
     "_lib/teamMembers.test.ts",
     "customer-lead-reminders.ts",
     "daily-digest.ts",
+    "design-timer-reminders.ts",
     "finance-payment-reminders.ts",
     "system-alerts.ts",
     "telegram-assistant-background.ts",
