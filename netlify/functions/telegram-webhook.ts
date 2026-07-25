@@ -285,6 +285,10 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
       { text: "⏱ Час за таймерами", callback_data: "qa:time_spent" },
       { text: "🐌 Найдовше висить", callback_data: "qa:stuck" },
     ],
+    [
+      { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
+      { text: "📊 Воронка", callback_data: "qa:quotes_pipeline" },
+    ],
   ];
   if (isOwnerRole(role)) {
     rows.push([
