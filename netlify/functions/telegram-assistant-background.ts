@@ -225,7 +225,13 @@ function parseToolCall(payload: Record<string, unknown>): DesignQuery | null {
       const args = JSON.parse(typeof typed.arguments === "string" ? typed.arguments : "{}") as Record<string, unknown>;
       const rawIntent = typeof args.intent === "string" ? args.intent : "";
       const known =
-        INTENTS.includes(rawIntent as DesignIntent) || isAdminIntent(rawIntent) || isQuotesIntent(rawIntent);
+        // ВСІ сімейства інтентів мають бути тут. Забутий список не падає з
+        // помилкою — інтент мовчки стає «help», і виглядає це як «модель не
+        // зрозуміла питання», хоча вона зрозуміла все правильно.
+        INTENTS.includes(rawIntent as DesignIntent) ||
+        isAdminIntent(rawIntent) ||
+        isQuotesIntent(rawIntent) ||
+        isTeamIntent(rawIntent);
       const intent = (known ? rawIntent : "help") as DesignIntent;
       const period = PERIODS.includes(args.period as DesignPeriod) ? (args.period as DesignPeriod) : null;
       return {
