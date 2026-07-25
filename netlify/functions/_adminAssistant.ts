@@ -107,7 +107,9 @@ async function answerAiUsage(params: {
     if (row.model) models.add(row.model.trim());
   }
 
-  const money = (usd: number) => (usd < 0.01 && usd > 0 ? "<$0.01" : `$${usd.toFixed(2)}`);
+  // НЕ «<$0.01»: у режимі parse_mode=HTML символ «<» починає тег, і Telegram
+  // відхиляє ВСЕ повідомлення — відповідь просто не доходить.
+  const money = (usd: number) => (usd < 0.01 && usd > 0 ? "менше $0.01" : `$${usd.toFixed(2)}`);
 
   const lines = [
     `🤖 <b>AI-кости ${escapeTelegramHtml(resolved.label)}: ${money(total)}</b>`,

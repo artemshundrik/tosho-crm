@@ -350,7 +350,14 @@ export const handler = async (event: HttpEvent) => {
   const reply = async (text: string) => {
     // Telegram ріже повідомлення на 4096 символах.
     const safe = text.length > 4000 ? `${text.slice(0, 3900)}\n\n…обрізано` : text;
-    await sendTelegramMessage(chatId, safe, { parseMode: "HTML", disablePreview: true });
+    const sent = await sendTelegramMessage(chatId, safe, { parseMode: "HTML", disablePreview: true });
+    if (sent.ok) return;
+
+    // Запобіжник. У режимі HTML один невдалий символ (наприклад «<» у тексті)
+    // змушує Telegram відхилити ВСЕ повідомлення — і відповідь мовчки зникає.
+    // Краще віддати те саме без розмітки, ніж не віддати нічого.
+    const plain = safe.replace(/<[^>]*>/g, "");
+    await sendTelegramMessage(chatId, plain, { disablePreview: true });
   };
 
   try {
