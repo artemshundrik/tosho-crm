@@ -127,6 +127,21 @@ export function classifyAiCost(costUsd: number): HealthTone {
   return "good";
 }
 
+// --- Бюджет AI (куплені кредити) ---
+
+export const AI_BUDGET_WARN_PERCENT = 70;
+export const AI_BUDGET_DANGER_PERCENT = 90;
+
+/**
+ * Витрачено від куплених кредитів. Червоне тут виправдане: коли кредити
+ * закінчаться, API віддаватиме помилку, тобто AI-функції CRM просто стануть.
+ */
+export function classifyAiBudget(percentUsed: number): HealthTone {
+  if (percentUsed >= AI_BUDGET_DANGER_PERCENT) return "danger";
+  if (percentUsed >= AI_BUDGET_WARN_PERCENT) return "warning";
+  return "good";
+}
+
 // --- Cron -------------------------------------------------------------------
 
 export const CRON_WARN_FAILURES = 1;

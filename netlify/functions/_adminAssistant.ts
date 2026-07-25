@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeTelegramHtml } from "./_telegram";
 import { TONE_EMOJI, collectSystemSignals, isProblem, worstTone } from "./_systemHealth";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
+import { classifyAiBudget } from "../../src/lib/systemHealthThresholds";
 
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
@@ -134,6 +135,27 @@ async function answerAiUsage(params: {
 
   if (models.size > 0) {
     lines.push("", `⚙️ Моделі: ${escapeTelegramHtml(Array.from(models).join(", "))}`);
+  }
+
+  // Залишок куплених кредитів — головне, що варто знати: коли вони скінчаться,
+  // AI у CRM просто перестане працювати.
+  const [{ data: budgetRow }, { data: allSpend }] = await Promise.all([
+    admin.schema("tosho").from("cron_config").select("value").eq("key", "ai_credit_balance_usd").maybeSingle(),
+    admin.schema("tosho").from("ai_usage").select("cost_usd").limit(100000),
+  ]);
+  const balance = num((budgetRow as { value?: string } | null)?.value);
+  if (balance > 0) {
+    const spentAll = ((allSpend ?? []) as Array<{ cost_usd?: number | string | null }>).reduce(
+      (sum, row) => sum + num(row.cost_usd),
+      0
+    );
+    const percent = (spentAll / balance) * 100;
+    const left = Math.max(0, balance - spentAll);
+    const mark = classifyAiBudget(percent) === "good" ? "🟢" : classifyAiBudget(percent) === "warning" ? "🟡" : "🔴";
+    lines.push(
+      "",
+      `${mark} <b>Кредити OpenAI</b>: витрачено ${money(spentAll)} із $${balance.toFixed(2)} · лишилось ${money(left)}`
+    );
   }
 
   lines.push(

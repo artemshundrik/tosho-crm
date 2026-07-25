@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyAiBudget,
   classifyAiCost,
   classifyAttachmentHygiene,
   classifyBackupAge,
@@ -106,6 +107,19 @@ describe("classifyAiCost", () => {
     expect(classifyAiCost(0.01)).toBe("good");
     expect(classifyAiCost(7)).toBe("warning");
     expect(classifyAiCost(20)).toBe("danger");
+  });
+});
+
+describe("classifyAiBudget", () => {
+  it("поки далеко до кінця кредитів — зелено", () => {
+    expect(classifyAiBudget(0.4)).toBe("good");
+    expect(classifyAiBudget(50)).toBe("good");
+  });
+
+  it("70% — попередити, 90% — вже червоне", () => {
+    // Червоне тут виправдане: коли кредити скінчаться, AI у CRM просто стане.
+    expect(classifyAiBudget(70)).toBe("warning");
+    expect(classifyAiBudget(95)).toBe("danger");
   });
 });
 

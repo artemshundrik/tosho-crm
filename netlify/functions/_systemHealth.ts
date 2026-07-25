@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // почнуть давати різні оцінки одному стану — а це вбиває довіру до всіх трьох.
 import {
   PRO_STORAGE_LIMIT_BYTES,
+  classifyAiBudget,
   classifyAiCost,
   classifyAttachmentHygiene,
   classifyBackupAge,
@@ -166,7 +167,7 @@ export async function collectSystemSignals(
   now: Date,
   options: SystemSignalsOptions
 ): Promise<Signal[]> {
-  const [metricsResult, backupsResult, aiResult, snapshotResult] = await Promise.all([
+  const [metricsResult, backupsResult, aiResult, budgetResult, spentResult, snapshotResult] = await Promise.all([
     admin.schema("tosho").rpc("get_admin_digest_metrics"),
     admin
       .schema("tosho")
@@ -182,6 +183,8 @@ export async function collectSystemSignals(
       .gte("created_at", options.aiFromIso)
       .lt("created_at", options.aiToIso)
       .limit(20000),
+    admin.schema("tosho").from("cron_config").select("value").eq("key", "ai_credit_balance_usd").maybeSingle(),
+    admin.schema("tosho").from("ai_usage").select("cost_usd").limit(100000),
     admin
       .schema("tosho")
       .from("admin_observability_snapshots")
@@ -255,6 +258,23 @@ export async function collectSystemSignals(
       0
     );
     signals.push({ tone: classifyAiCost(aiCost), text: `AI ${options.aiLabel}: $${aiCost.toFixed(2)}` });
+  }
+
+  // Залишок куплених кредитів OpenAI. Коли вони скінчаться, API почне віддавати
+  // помилку і AI-функції CRM просто стануть — тож попереджаємо заздалегідь.
+  const creditBalance = num((budgetResult.data as { value?: string } | null)?.value);
+  if (creditBalance > 0 && !spentResult.error) {
+    const spent = ((spentResult.data ?? []) as Array<{ cost_usd?: number | string | null }>).reduce(
+      (sum, row) => sum + num(row.cost_usd),
+      0
+    );
+    const percent = (spent / creditBalance) * 100;
+    signals.push({
+      tone: classifyAiBudget(percent),
+      text:
+        `Кредити OpenAI: витрачено $${spent.toFixed(2)} із $${creditBalance.toFixed(2)} ` +
+        `(${percent.toFixed(percent < 10 ? 1 : 0)}%)`,
+    });
   }
 
   // 6. Гігієна вкладень — лише зі свіжого снапшота.
