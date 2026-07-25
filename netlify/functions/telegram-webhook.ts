@@ -6,6 +6,7 @@ import {
   sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
+  type PersistentKeyboard,
 } from "./_telegram";
 import {
   visibleNotificationCategories,
@@ -154,9 +155,17 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       .update({ used_at: nowIso })
       .eq("nonce", nonce);
 
+    // Постійну клавіатуру віддаємо лише тим, хто має доступ до асистента —
+    // решті вона була б кнопкою в нікуди.
+    const role = await loadRole(adminClient, tokenRow.user_id as string);
     await sendTelegramMessage(
       chatId,
-      "✅ Telegram підключено! Сповіщення CRM приходитимуть сюди.\n\nНалаштувати, що саме слати — /settings. Вимкнути все — /stop."
+      "✅ Telegram підключено! Сповіщення CRM приходитимуть сюди.\n\n" +
+        (isAssistantAllowed(role)
+          ? "Питання про дизайн-задачі можна писати просто текстом, а швидкі — у «Меню».\n\n"
+          : "") +
+        "Налаштувати, що саме слати — /settings. Вимкнути все — /stop.",
+      isAssistantAllowed(role) ? { replyMarkup: PERSISTENT_MENU } : undefined
     );
     return;
   }
@@ -174,7 +183,8 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
-  if (command === "/menu") {
+  // Постійна кнопка надсилає свій підпис як звичайний текст — ловимо тут.
+  if (command === "/menu" || text === MENU_BUTTON_LABEL) {
     const settings = await loadSettingsByChat(adminClient, chatId);
     if (!settings) {
       await sendTelegramMessage(chatId, NOT_LINKED);
@@ -188,6 +198,11 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     await sendTelegramMessage(chatId, "Швидкі питання — тисни, або просто напиши своє:", {
       replyMarkup: { inline_keyboard: buildQuickKeyboard(role) },
     });
+    return;
+  }
+
+  if (command === "/help") {
+    await handleAssistantQuestion(adminClient, chatId, { directIntent: "help" });
     return;
   }
 
@@ -221,6 +236,19 @@ function isOwnerRole(role: RoleContext): boolean {
 
 const ASSISTANT_FORBIDDEN =
   "Я поки відповідаю на питання лише керівництву. Команди: /settings — що слати, /stop — відписатись.";
+
+/**
+ * Підпис постійної кнопки під полем введення. Вона надсилає звичайний текст,
+ * тому перехоплюємо його ДО моделі — інакше кожен тап був би оплаченим
+ * запитом до OpenAI замість безкоштовного відкриття меню.
+ */
+const MENU_BUTTON_LABEL = "📋 Меню";
+
+const PERSISTENT_MENU: PersistentKeyboard = {
+  keyboard: [[{ text: MENU_BUTTON_LABEL }]],
+  resize_keyboard: true,
+  is_persistent: true,
+};
 
 /**
  * Заготовки. callback_data несе інтент напряму, тож натискання кнопки не

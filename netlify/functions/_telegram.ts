@@ -15,7 +15,19 @@ export type InlineKeyboardButton =
   | { text: string; url: string }
   | { text: string; callback_data: string };
 export type InlineKeyboard = InlineKeyboardButton[][];
-type ReplyMarkup = { inline_keyboard: InlineKeyboard };
+
+/**
+ * Постійна клавіатура під полем введення (Bot API 6.4+). Кнопки надсилають
+ * звичайний текст, тому їхні підписи треба перехоплювати у вебхуці, інакше
+ * питання полетить у модель і буде оплачене.
+ */
+export type PersistentKeyboard = {
+  keyboard: Array<Array<{ text: string }>>;
+  resize_keyboard: true;
+  is_persistent: true;
+};
+
+type ReplyMarkup = { inline_keyboard: InlineKeyboard } | PersistentKeyboard;
 
 export type TelegramApiResult = {
   ok: boolean;
@@ -89,4 +101,20 @@ export async function editTelegramReplyMarkup(
 
 export async function answerTelegramCallback(callbackQueryId: string, text?: string): Promise<TelegramApiResult> {
   return callTelegram("answerCallbackQuery", { callback_query_id: callbackQueryId, text });
+}
+
+/**
+ * Список команд бота. Саме він і вмикає нативну кнопку «Меню» біля поля
+ * введення: без зареєстрованих команд Telegram її не показує взагалі.
+ * Викликається один раз на бота, не на користувача.
+ */
+export async function setTelegramCommands(
+  commands: Array<{ command: string; description: string }>
+): Promise<TelegramApiResult> {
+  return callTelegram("setMyCommands", { commands, scope: { type: "default" }, language_code: "" });
+}
+
+/** Явно вмикаємо режим «Меню = список команд» (це і так дефолт, але хай буде). */
+export async function setTelegramMenuButtonToCommands(): Promise<TelegramApiResult> {
+  return callTelegram("setChatMenuButton", { menu_button: { type: "commands" } });
 }
