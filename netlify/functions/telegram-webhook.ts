@@ -174,6 +174,23 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
+  if (command === "/menu") {
+    const settings = await loadSettingsByChat(adminClient, chatId);
+    if (!settings) {
+      await sendTelegramMessage(chatId, NOT_LINKED);
+      return;
+    }
+    const role = await loadRole(adminClient, settings.user_id);
+    if (!isAssistantAllowed(role)) {
+      await sendTelegramMessage(chatId, ASSISTANT_FORBIDDEN);
+      return;
+    }
+    await sendTelegramMessage(chatId, "Швидкі питання — тисни, або просто напиши своє:", {
+      replyMarkup: { inline_keyboard: buildQuickKeyboard(role) },
+    });
+    return;
+  }
+
   if (command === "/stop") {
     await adminClient
       .schema("tosho")
@@ -187,8 +204,53 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
-  // Не команда — віддаємо асистенту по дизайн-задачах.
-  await handleAssistantQuestion(adminClient, chatId, text);
+  // Не команда — віддаємо асистенту.
+  await handleAssistantQuestion(adminClient, chatId, { question: text });
+}
+
+/** Хто може ставити питання асистенту: власник і SEO. */
+function isAssistantAllowed(role: RoleContext): boolean {
+  const access = (role.accessRole ?? "").trim().toLowerCase();
+  const job = (role.jobRole ?? "").trim().toLowerCase();
+  return access === "owner" || job === "seo";
+}
+
+function isOwnerRole(role: RoleContext): boolean {
+  return (role.accessRole ?? "").trim().toLowerCase() === "owner";
+}
+
+const ASSISTANT_FORBIDDEN =
+  "Я поки відповідаю на питання лише керівництву. Команди: /settings — що слати, /stop — відписатись.";
+
+/**
+ * Заготовки. callback_data несе інтент напряму, тож натискання кнопки не
+ * витрачає виклик моделі взагалі — відповідь збирається одразу по базі.
+ * Префікс «qa:» відрізняє їх від тоглів налаштувань («cat:», «all:»).
+ */
+function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
+  const rows: InlineKeyboard = [
+    [
+      { text: "🎨 Задачі в роботі", callback_data: "qa:workload_now" },
+      { text: "📋 Список задач", callback_data: "qa:tasks_list" },
+    ],
+    [
+      { text: "⏰ Дедлайни", callback_data: "qa:deadlines" },
+      { text: "✏️ Правки", callback_data: "qa:revisions" },
+    ],
+    [
+      { text: "⏱ Час за таймерами", callback_data: "qa:time_spent" },
+      { text: "🐌 Найдовше висить", callback_data: "qa:stuck" },
+    ],
+  ];
+  if (isOwnerRole(role)) {
+    rows.push([
+      { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
+      { text: "💰 AI-кости", callback_data: "qa:ai_usage" },
+    ]);
+    rows.push([{ text: "🩺 Стан системи", callback_data: "qa:system_health" }]);
+  }
+  rows.push([{ text: "❓ Що можна питати", callback_data: "qa:help" }]);
+  return rows;
 }
 
 /**
@@ -200,7 +262,11 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
  * Саму роботу віддаємо background-функції: Telegram чекає відповіді на вебхук
  * секунди й повторює запит, а модель думає 5–20 с.
  */
-async function handleAssistantQuestion(adminClient: AdminClient, chatId: number, question: string) {
+async function handleAssistantQuestion(
+  adminClient: AdminClient,
+  chatId: number,
+  input: { question?: string; directIntent?: string }
+) {
   const settings = await loadSettingsByChat(adminClient, chatId);
   if (!settings) {
     await sendTelegramMessage(chatId, NOT_LINKED);
@@ -208,22 +274,24 @@ async function handleAssistantQuestion(adminClient: AdminClient, chatId: number,
   }
 
   const role = await loadRole(adminClient, settings.user_id);
-  const access = (role.accessRole ?? "").trim().toLowerCase();
-  const job = (role.jobRole ?? "").trim().toLowerCase();
-  if (access !== "owner" && job !== "seo") {
-    await sendTelegramMessage(
-      chatId,
-      "Я поки відповідаю на питання лише керівництву. Команди: /settings — що слати, /stop — відписатись."
-    );
+  if (!isAssistantAllowed(role)) {
+    await sendTelegramMessage(chatId, ASSISTANT_FORBIDDEN);
     return;
   }
 
   // workspace_id для ролей і team_id для даних — це РІЗНІ ідентифікатори.
-  const [membership, teamMember] = await Promise.all([
+  // Ім'я беремо з team_member_profiles: memberships_view.full_name порожній.
+  const [membership, profile, teamMember] = await Promise.all([
     adminClient
       .schema("tosho")
       .from("memberships_view")
-      .select("workspace_id,full_name")
+      .select("workspace_id")
+      .eq("user_id", settings.user_id)
+      .maybeSingle(),
+    adminClient
+      .schema("tosho")
+      .from("team_member_profiles")
+      .select("first_name,last_name")
       .eq("user_id", settings.user_id)
       .maybeSingle(),
     adminClient.from("team_members").select("team_id").eq("user_id", settings.user_id).maybeSingle(),
@@ -235,6 +303,11 @@ async function handleAssistantQuestion(adminClient: AdminClient, chatId: number,
     await sendTelegramMessage(chatId, "Не можу визначити твою команду в CRM. Напиши адміну.");
     return;
   }
+  const actorName =
+    [profile.data?.first_name, profile.data?.last_name]
+      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .filter(Boolean)
+      .join(" ") || null;
 
   await sendTelegramChatAction(chatId, "typing");
 
@@ -251,8 +324,10 @@ async function handleAssistantQuestion(adminClient: AdminClient, chatId: number,
         userId: settings.user_id,
         workspaceId,
         teamId,
-        actorName: (membership.data?.full_name as string | undefined) ?? null,
-        question,
+        actorName,
+        isOwner: isOwnerRole(role),
+        question: input.question,
+        directIntent: input.directIntent,
       }),
     });
   } catch {
@@ -272,6 +347,14 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
   const row = await loadSettingsByChat(adminClient, chatId);
   if (!row) {
     await answerTelegramCallback(cb.id, "Акаунт не підключено");
+    return;
+  }
+
+  // Кнопка-заготовка асистента. Відповідаємо на callback одразу (щоб Telegram
+  // зняв «годинник»), а сам інтент виконує background-функція.
+  if (data.startsWith("qa:")) {
+    await answerTelegramCallback(cb.id);
+    await handleAssistantQuestion(adminClient, chatId, { directIntent: data.slice(3) });
     return;
   }
 

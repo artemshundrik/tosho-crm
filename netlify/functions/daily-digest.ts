@@ -3,6 +3,13 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { isChannelEnabled, isCategoryVisibleForRole } from "./_notificationCategories";
 import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import {
+  TONE_EMOJI,
+  collectSystemSignals,
+  worstTone,
+  type Signal,
+  type Tone,
+} from "./_systemHealth";
 
 // Щоденні дайджести в Telegram — див. docs/DAILY_DIGESTS_DESIGN.md.
 //
@@ -26,10 +33,6 @@ type HttpEvent = {
 };
 
 type DigestKind = "tech" | "business_morning" | "business_evening";
-
-type Tone = "good" | "warning" | "danger" | "neutral";
-
-type Signal = { tone: Tone; text: string };
 
 // ГОТЧА, підтверджена на проді: ролі лежать у tosho.memberships_view, а НЕ в
 // team_member_profiles (там їх просто немає). А workspace_id ≠ team_id:
@@ -58,24 +61,6 @@ const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
 // Пороги — docs/DAILY_DIGESTS_DESIGN.md §4. Бекапи/storage/dead tuples
 // збігаються з тим, що рахує сторінка Observability.
-const PRO_STORAGE_LIMIT_BYTES = 100 * 1024 ** 3;
-const STORAGE_WARN_PERCENT = 70;
-const STORAGE_DANGER_PERCENT = 90;
-const BACKUP_WARN_HOURS = 8 * 24;
-const BACKUP_DANGER_HOURS = 16 * 24;
-const DEAD_TUPLE_WARN_PERCENT = 20;
-const DEAD_TUPLE_DANGER_PERCENT = 40;
-const ORPHAN_DANGER_COUNT = 200;
-const CRON_WARN_FAILURES = 1;
-const CRON_DANGER_FAILURES = 3;
-// 26, а не 24: щоденний джоб перед своїм наступним запуском законно підходить
-// впритул до 24 год, і рівний поріг давав би 🔴 на рівному місці.
-const CRON_STALE_HOURS = 26;
-const AI_WARN_USD = 5;
-const AI_DANGER_USD = 15;
-// Снапшот Observability пишеться лише коли адмін тисне «Оновити», тож старіші
-// дані про orphan-вкладення в щоденний звіт не тягнемо.
-const SNAPSHOT_MAX_AGE_DAYS = 7;
 const PAYMENT_HORIZON_DAYS = 7;
 const MAX_TIMER_SESSION_SECONDS = 8 * 60 * 60;
 // Прорахунок «на погодженні», якого не чіпали стільки днів, — застояний.
@@ -168,13 +153,6 @@ function formatDayLabel(dayKey: string): string {
 
 // --- Форматування -----------------------------------------------------------
 
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${Math.round(bytes)} B`;
-}
-
 const CURRENCY_SYMBOL: Record<string, string> = { UAH: "₴", USD: "$", EUR: "€" };
 
 function formatMoney(amount: number, currency = "UAH"): string {
@@ -188,19 +166,6 @@ function formatDuration(totalSeconds: number): string {
   const minutes = Math.round((totalSeconds % 3600) / 60);
   if (hours === 0) return `${minutes} хв`;
   return minutes > 0 ? `${hours} год ${minutes} хв` : `${hours} год`;
-}
-
-function formatHoursAgo(hours: number | null): string {
-  if (hours === null) return "невідомо";
-  if (hours < 48) return `${Math.round(hours)} год тому`;
-  return `${Math.round(hours / 24)} дн тому`;
-}
-
-const TONE_RANK: Record<Tone, number> = { neutral: 0, good: 1, warning: 2, danger: 3 };
-const TONE_EMOJI: Record<Tone, string> = { neutral: "⚪️", good: "🟢", warning: "🟡", danger: "🔴" };
-
-function worstTone(signals: Signal[]): Tone {
-  return signals.reduce<Tone>((worst, s) => (TONE_RANK[s.tone] > TONE_RANK[worst] ? s.tone : worst), "good");
 }
 
 function num(value: unknown): number {
@@ -284,202 +249,18 @@ function resolveTeamIds(members: MemberRow[]): string[] {
 
 // --- Тех-звіт ---------------------------------------------------------------
 
-type BackupRunRow = {
-  section: string;
-  status: "success" | "failed";
-  finished_at: string;
-  error_message?: string | null;
-};
-
-function backupSignal(runs: BackupRunRow[], section: string, label: string, now: Date): Signal {
-  const sectionRuns = runs
-    .filter((r) => r.section === section)
-    .sort((a, b) => new Date(b.finished_at).getTime() - new Date(a.finished_at).getTime());
-  const latest = sectionRuns[0] ?? null;
-  const latestSuccess = sectionRuns.find((r) => r.status === "success") ?? null;
-  const ageHours = latestSuccess
-    ? Math.max(0, (now.getTime() - new Date(latestSuccess.finished_at).getTime()) / 3_600_000)
-    : null;
-
-  if (latest?.status === "failed") {
-    return { tone: "danger", text: `Backup ${label}: останній run впав${latest.error_message ? ` — ${latest.error_message}` : ""}` };
-  }
-  if (ageHours === null) return { tone: "warning", text: `Backup ${label}: жодного успішного run-у ще не записано` };
-  if (ageHours > BACKUP_DANGER_HOURS) {
-    return { tone: "danger", text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
-  }
-  if (ageHours > BACKUP_WARN_HOURS) {
-    return { tone: "warning", text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
-  }
-  return { tone: "good", text: `${label} ✅ ${formatHoursAgo(ageHours)}` };
-}
-
-type CronJobRow = {
-  jobname?: string | null;
-  failures?: number | null;
-  runs?: number | null;
-  hours_since_last_run?: number | null;
-};
-
-function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] {
-  if (jobs.length === 0) {
-    return [{ tone: "neutral", text: "Cron: статус недоступний" }];
-  }
-
-  const signals: Signal[] = [];
-  let healthy = 0;
-
-  for (const job of jobs) {
-    const name = (job.jobname ?? "—").trim();
-    const failures = num(job.failures);
-    const hoursSince = job.hours_since_last_run == null ? null : num(job.hours_since_last_run);
-
-    // Порожня історія ≠ поламаний джоб: щойно заплановане завдання ще не мало
-    // першого запуску. Це жовтий сигнал «перевір завтра», а не червоний.
-    if (hoursSince === null) {
-      signals.push({ tone: "warning", text: `Cron ${name}: ще жодного запуску` });
-      continue;
-    }
-    if (hoursSince > CRON_STALE_HOURS) {
-      signals.push({ tone: "danger", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
-      continue;
-    }
-    if (failures >= CRON_DANGER_FAILURES) {
-      signals.push({ tone: "danger", text: `Cron ${name}: ${failures} збоїв за добу` });
-      continue;
-    }
-    if (failures >= CRON_WARN_FAILURES) {
-      signals.push({ tone: "warning", text: `Cron ${name}: ${failures} збоїв за добу` });
-      continue;
-    }
-    healthy += 1;
-  }
-
-  if (healthy > 0) {
-    signals.push({ tone: "good", text: `Cron: ${healthy}/${jobs.length} джобів без збоїв за добу` });
-  }
-  if (httpFailures !== null && httpFailures > 0) {
-    signals.push({ tone: "warning", text: `HTTP-помилок від cron-викликів: ${httpFailures}` });
-  }
-  return signals;
-}
-
-async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string) {
+async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string, teamIds: string[]) {
   const yesterdayKey = shiftDays(todayKey, -1);
   const yesterday = kievDayBounds(yesterdayKey);
 
-  const [metricsResult, backupsResult, aiResult, snapshotResult] = await Promise.all([
-    admin.schema("tosho").rpc("get_admin_digest_metrics"),
-    admin
-      .schema("tosho")
-      .from("backup_runs")
-      .select("section,status,finished_at,error_message")
-      .in("section", ["storage", "database"])
-      .order("finished_at", { ascending: false })
-      .limit(40),
-    admin
-      .schema("tosho")
-      .from("ai_usage")
-      .select("cost_usd")
-      .gte("created_at", yesterday.startIso)
-      .lt("created_at", yesterday.endIso)
-      .limit(20000),
-    admin
-      .schema("tosho")
-      .from("admin_observability_snapshots")
-      .select("captured_at,attachment_possible_orphan_original_count,attachment_missing_variants_count")
-      .order("captured_for_date", { ascending: false })
-      .limit(1),
-  ]);
-
-  if (metricsResult.error) throw new Error(`get_admin_digest_metrics: ${metricsResult.error.message}`);
-  if (backupsResult.error) throw new Error(`backup_runs: ${backupsResult.error.message}`);
-
-  const metrics = (metricsResult.data ?? {}) as Record<string, unknown>;
-  const backups = (backupsResult.data ?? []) as BackupRunRow[];
-
-  const signals: Signal[] = [];
-
-  // 1. Бекапи.
-  const dbBackup = backupSignal(backups, "database", "база", now);
-  const filesBackup = backupSignal(backups, "storage", "файли", now);
-  if (dbBackup.tone === "good" && filesBackup.tone === "good") {
-    signals.push({ tone: "good", text: `Бекапи: ${dbBackup.text} · ${filesBackup.text}` });
-  } else {
-    signals.push(dbBackup, filesBackup);
-  }
-
-  // 2. Storage від ліміту Pro.
-  const storageBytes = num(metrics.storage_bytes);
-  const storagePercent = (storageBytes / PRO_STORAGE_LIMIT_BYTES) * 100;
-  const storageText = `Storage: ${storagePercent.toFixed(1)}% від ліміту Pro (${formatBytes(storageBytes)})`;
-  signals.push({
-    tone:
-      storagePercent >= STORAGE_DANGER_PERCENT ? "danger" : storagePercent >= STORAGE_WARN_PERCENT ? "warning" : "good",
-    text: storageText,
+  // Пороги й самі перевірки живуть у _systemHealth: той самий набір сигналів
+  // віддає бот на питання «що не працює?», тож звіт і бот не розходяться.
+  const signals = await collectSystemSignals(admin, now, {
+    aiFromIso: yesterday.startIso,
+    aiToIso: yesterday.endIso,
+    aiLabel: "за вчора",
+    teamIds,
   });
-
-  // 3. База: розмір, deadlocks, dead tuples.
-  const dbSize = num(metrics.database_size_bytes);
-  const deadlocks = num(metrics.deadlocks);
-  const deadRatio = num(metrics.dead_tuple_max_ratio);
-  const deadTable = typeof metrics.dead_tuple_worst_table === "string" ? metrics.dead_tuple_worst_table : null;
-
-  if (deadlocks > 0) {
-    signals.push({ tone: "danger", text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
-  } else if (deadRatio >= DEAD_TUPLE_DANGER_PERCENT) {
-    signals.push({
-      tone: "danger",
-      text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""} — потрібен vacuum`,
-    });
-  } else if (deadRatio >= DEAD_TUPLE_WARN_PERCENT) {
-    signals.push({
-      tone: "warning",
-      text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""}`,
-    });
-  } else {
-    signals.push({ tone: "good", text: `База: ${formatBytes(dbSize)} · deadlocks 0 · dead tuples у нормі` });
-  }
-
-  // 4. Cron.
-  const cronJobs = Array.isArray(metrics.cron_jobs) ? (metrics.cron_jobs as CronJobRow[]) : [];
-  const httpFailures = metrics.cron_http_failures_24h == null ? null : num(metrics.cron_http_failures_24h);
-  signals.push(...cronSignals(cronJobs, httpFailures));
-
-  // 5. AI-кости за вчора. Помилку запиту не ховаємо за «$0.00».
-  if (aiResult.error) {
-    signals.push({ tone: "neutral", text: "AI-кости: дані недоступні" });
-  } else {
-    const aiCost = ((aiResult.data ?? []) as Array<{ cost_usd?: number | string | null }>).reduce(
-      (sum, row) => sum + num(row.cost_usd),
-      0
-    );
-    signals.push({
-      tone: aiCost > AI_DANGER_USD ? "danger" : aiCost > AI_WARN_USD ? "warning" : "good",
-      text: `AI за вчора: $${aiCost.toFixed(2)}`,
-    });
-  }
-
-  // 6. Гігієна вкладень — лише зі свіжого снапшота (крона для нього немає).
-  const snapshot = ((snapshotResult.data ?? []) as Array<{
-    captured_at?: string | null;
-    attachment_possible_orphan_original_count?: number | null;
-    attachment_missing_variants_count?: number | null;
-  }>)[0];
-  if (snapshot?.captured_at) {
-    const ageDays = (now.getTime() - new Date(snapshot.captured_at).getTime()) / 86_400_000;
-    if (ageDays <= SNAPSHOT_MAX_AGE_DAYS) {
-      const orphans = num(snapshot.attachment_possible_orphan_original_count);
-      const missing = num(snapshot.attachment_missing_variants_count);
-      if (orphans >= ORPHAN_DANGER_COUNT) {
-        signals.push({ tone: "danger", text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю` });
-      } else if (orphans > 0 || missing > 0) {
-        signals.push({ tone: "warning", text: `Вкладення: ${orphans} orphan, ${missing} без прев'ю` });
-      } else {
-        signals.push({ tone: "good", text: "Вкладення: сміття не накопичується" });
-      }
-    }
-  }
 
   return renderTechMessage(signals, todayKey);
 }
@@ -1262,7 +1043,7 @@ export const handler = async (event: HttpEvent) => {
 
     const digest =
       kind === "tech"
-        ? await buildTechDigest(admin, now, todayKey)
+        ? await buildTechDigest(admin, now, todayKey, resolveTeamIds(members))
         : kind === "business_morning"
           ? await buildBusinessMorning(admin, members, now, todayKey)
           : await buildBusinessEvening(admin, members, now, todayKey);

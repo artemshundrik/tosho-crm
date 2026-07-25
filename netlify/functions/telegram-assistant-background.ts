@@ -10,6 +10,7 @@ import {
   type DesignPeriod,
   type DesignQuery,
 } from "./_designAssistant";
+import { answerAdminQuery, type AdminIntent } from "./_adminAssistant";
 
 // Асистент по дизайн-задачах у Telegram (docs/TELEGRAM_ASSISTANT_DESIGN.md).
 //
@@ -34,7 +35,17 @@ type Payload = {
   teamId?: string;
   actorName?: string | null;
   question?: string;
+  /** true — власник; лише йому доступні адмін-інтенти. */
+  isOwner?: boolean;
+  /** Кнопка-заготовка: інтент відомий, модель не потрібна (і не оплачується). */
+  directIntent?: string;
 };
+
+const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken"];
+
+function isAdminIntent(value: string): value is AdminIntent {
+  return (ADMIN_INTENTS as string[]).includes(value);
+}
 
 const INTENTS: DesignIntent[] = [
   "workload_now",
@@ -73,9 +84,9 @@ const TOOL = {
     properties: {
       intent: {
         type: "string",
-        enum: INTENTS,
+        enum: [...INTENTS, ...ADMIN_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; help — не про дизайн-задачі чи незрозуміло.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -110,7 +121,10 @@ const SYSTEM_PROMPT = [
   "• «скільки зробив/затвердив» = approved_count",
   "• «скільки зараз у Ірини» = designer_workload",
   "• «покажи», «список», «які саме» = tasks_list",
-  "• якщо питання не про дизайн-задачі (прорахунки, гроші, клієнти) — intent help",
+  "• «що по AI», «скільки витратили на AI» = ai_usage",
+  "• «що не працює», «є проблеми?», «все ок?» = whats_broken",
+  "• «як система», «стан», «бекапи», «cron» = system_health",
+  "• якщо питання поза цим (прорахунки, гроші клієнтів) — intent help",
 ].join("\n");
 
 function json(statusCode: number, body: Record<string, unknown>) {
@@ -161,9 +175,11 @@ export const handler = async (event: HttpEvent) => {
     return json(400, { error: "Invalid JSON body" });
   }
 
-  const { chatId, userId, workspaceId, teamId, question } = payload;
-  if (!chatId || !userId || !workspaceId || !teamId || !question?.trim()) {
-    return json(400, { error: "Missing chatId/userId/workspaceId/teamId/question" });
+  const { chatId, userId, workspaceId, teamId } = payload;
+  const question = payload.question?.trim() ?? "";
+  const directIntent = payload.directIntent?.trim() ?? "";
+  if (!chatId || !userId || !workspaceId || !teamId || (!question && !directIntent)) {
+    return json(400, { error: "Missing chatId/userId/workspaceId/teamId and question/directIntent" });
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -174,7 +190,46 @@ export const handler = async (event: HttpEvent) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
   const model = (process.env.OPENAI_MODEL || "").trim() || "gpt-5.4";
 
+  const now = new Date();
+
+  /** Виконання вже відомого інтенту. Спільний хвіст для кнопок і для моделі. */
+  const runQuery = async (query: DesignQuery): Promise<string> => {
+    if (isAdminIntent(query.intent)) {
+      // Адмін-інтенти — внутрішня кухня (кости, бекапи, cron). Тільки власнику.
+      if (!payload.isOwner) {
+        return "Це питання доступне лише власнику. Про дизайн-задачі питай вільно — «що ти вмієш?».";
+      }
+      return answerAdminQuery({
+        admin,
+        intent: query.intent,
+        workspaceId,
+        teamIds: [teamId],
+        period: query.period ?? null,
+        now,
+      });
+    }
+    const answer = await answerDesignQuery({ admin, teamId, workspaceId, query, now });
+    return answer.text;
+  };
+
+  const reply = async (text: string) => {
+    // Telegram ріже повідомлення на 4096 символах.
+    const safe = text.length > 4000 ? `${text.slice(0, 3900)}\n\n…обрізано` : text;
+    await sendTelegramMessage(chatId, safe, { parseMode: "HTML", disablePreview: true });
+  };
+
   try {
+    // Кнопка-заготовка: інтент уже відомий, модель не потрібна — і не оплачується.
+    if (directIntent) {
+      const known =
+        isAdminIntent(directIntent) || INTENTS.includes(directIntent as DesignIntent)
+          ? (directIntent as DesignIntent)
+          : null;
+      if (!known) return json(400, { error: `Unknown directIntent: ${directIntent}` });
+      await reply(await runQuery({ intent: known, designer: null, status: null, period: null, limit: null }));
+      return json(200, { ok: true, intent: known, viaButton: true });
+    }
+
     if (!apiKey) {
       await sendTelegramMessage(chatId, HELP_TEXT, { parseMode: "HTML", disablePreview: true });
       return json(200, { ok: true, note: "no OPENAI_API_KEY — sent help" });
@@ -227,12 +282,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     // 2. Детермінована відповідь.
-    const answer = await answerDesignQuery({ admin, teamId, workspaceId, query, now: new Date() });
-
-    // Telegram ріже повідомлення на 4096 символах.
-    const text = answer.text.length > 4000 ? `${answer.text.slice(0, 3900)}\n\n…-обрізано` : answer.text;
-    await sendTelegramMessage(chatId, text, { parseMode: "HTML", disablePreview: true });
-
+    await reply(await runQuery(query));
     return json(200, { ok: true, intent: query.intent });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unexpected error";
