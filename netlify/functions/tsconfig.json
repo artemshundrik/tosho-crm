@@ -31,6 +31,7 @@
     "customer-lead-reminders.ts",
     "daily-digest.ts",
     "finance-payment-reminders.ts",
+    "system-alerts.ts",
     "telegram-assistant-background.ts",
     "telegram-setup.ts",
     "telegram-webhook.ts"
