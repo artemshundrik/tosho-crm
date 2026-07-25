@@ -13,6 +13,7 @@ import {
   type NotificationCategory,
   type RoleContext,
 } from "./_notificationCategories";
+import { canSeeAiCosts, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
 
 // Telegram webhook:
 //  - /start <nonce> — прив'язка акаунта, /stop — відписка (фаза 1)
@@ -239,11 +240,13 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   await handleAssistantQuestion(adminClient, chatId, { question: text });
 }
 
-/** Хто може ставити питання асистенту: власник і SEO. */
-function isAssistantAllowed(role: RoleContext): boolean {
-  const access = (role.accessRole ?? "").trim().toLowerCase();
-  const job = (role.jobRole ?? "").trim().toLowerCase();
-  return access === "owner" || job === "seo";
+/**
+ * Асистент доступний усій прив'язаній команді. Обсяг видимого визначає рівень
+ * доступу (_lib/assistantAccess.ts), а не сам факт входу: дизайнер не побачить
+ * грошей, а менеджер — чужої статистики.
+ */
+function isAssistantAllowed(_role: RoleContext): boolean {
+  return true;
 }
 
 function isOwnerRole(role: RoleContext): boolean {
@@ -272,6 +275,7 @@ const PERSISTENT_MENU: PersistentKeyboard = {
  * Префікс «qa:» відрізняє їх від тоглів налаштувань («cat:», «all:»).
  */
 function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
+  const level: AccessLevel = resolveAccessLevel(role);
   const rows: InlineKeyboard = [
     [
       { text: "🎨 Задачі в роботі", callback_data: "qa:workload_now" },
@@ -287,15 +291,18 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
     ],
     [
       { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
-      { text: "📊 Воронка", callback_data: "qa:quotes_pipeline" },
-    ],
-    [
       { text: "🟢 Хто в системі", callback_data: "qa:who_is_online" },
-      { text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" },
     ],
+    [{ text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" }],
   ];
-  // AI-кости бачить і SEO: це бюджет, а не інфраструктура.
-  rows.push([{ text: "💰 AI-кости", callback_data: "qa:ai_usage" }]);
+  // Кнопки показуємо тільки ті, що людина справді може натиснути: кнопка, яка
+  // відповідає «немає доступу», дратує більше, ніж її відсутність.
+  if (canUseQuotes(level)) {
+    rows.push([{ text: "📊 Воронка", callback_data: "qa:quotes_pipeline" }]);
+  }
+  if (canSeeAiCosts(level)) {
+    rows.push([{ text: "💰 AI-кости", callback_data: "qa:ai_usage" }]);
+  }
   if (isOwnerRole(role)) {
     rows.push([
       { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
@@ -379,6 +386,7 @@ async function handleAssistantQuestion(
         teamId,
         actorName,
         isOwner: isOwnerRole(role),
+        access: resolveAccessLevel(role),
         question: input.question,
         directIntent: input.directIntent,
       }),

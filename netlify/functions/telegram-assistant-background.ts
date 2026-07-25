@@ -5,7 +5,7 @@ import { logAiUsage } from "./_aiUsageLog";
 import { sendTelegramMessage } from "./_telegram";
 import {
   answerDesignQuery,
-  HELP_TEXT,
+  helpText,
   type DesignIntent,
   type DesignPeriod,
   type DesignQuery,
@@ -20,6 +20,13 @@ import {
   type TeamIntent,
 } from "./_teamAssistant";
 import { loadDesignMembers, matchMember } from "./_designAssistant";
+import {
+  canQueryOtherPeople,
+  canSeeAiCosts,
+  canSeeSystemHealth,
+  canUseQuotes,
+  type AccessLevel,
+} from "./_lib/assistantAccess";
 
 // Асистент по дизайн-задачах у Telegram (docs/TELEGRAM_ASSISTANT_DESIGN.md).
 //
@@ -48,7 +55,12 @@ type Payload = {
   isOwner?: boolean;
   /** Кнопка-заготовка: інтент відомий, модель не потрібна (і не оплачується). */
   directIntent?: string;
+  /** Рівень доступу; за замовчуванням найвужчий — помилка не має відкривати зайве. */
+  access?: AccessLevel;
 };
+
+/** Інтенти, які стосуються конкретної людини — їх звужуємо до себе. */
+const PERSON_INTENTS = new Set(["designer_workload", "designer_summary", "person_summary", "time_spent"]);
 
 const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken"];
 const QUOTES_INTENTS: QuotesIntent[] = [
@@ -62,15 +74,6 @@ const QUOTES_INTENTS: QuotesIntent[] = [
 function isAdminIntent(value: string): value is AdminIntent {
   return (ADMIN_INTENTS as string[]).includes(value);
 }
-
-/**
- * Адмін-інтенти, доступні не лише власнику.
- *
- * Витрати на AI — це бюджет, а не внутрішня кухня: СЕО має їх бачити. А от
- * стан бекапів, cron і «що не працює» лишаються власнику: там інфраструктурні
- * подробиці, з якими СЕО все одно нічого не зробить.
- */
-const ADMIN_INTENTS_FOR_EVERYONE: AdminIntent[] = ["ai_usage"];
 
 function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
@@ -299,10 +302,33 @@ export const handler = async (event: HttpEvent) => {
   const now = new Date();
 
   /** Виконання вже відомого інтенту. Спільний хвіст для кнопок і для моделі. */
-  const runQuery = async (query: DesignQuery): Promise<string> => {
+  // За замовчуванням найвужчий рівень: якщо роль не визначилась, людина не
+  // повинна випадково отримати гроші компанії.
+  const level: AccessLevel = payload.access ?? "basic";
+  const isOwner = Boolean(payload.isOwner);
+
+  const runQuery = async (rawQuery: DesignQuery): Promise<string> => {
+    // Питання про КОНКРЕТНУ людину без права на це — звужуємо до себе, а не
+    // відмовляємо: «скільки задач у Марʼяни» від колеги стає «скільки в мене».
+    // Відмова тут була б і грубішою, і менш корисною.
+    let query = rawQuery;
+    let narrowedToSelf = false;
+    if (PERSON_INTENTS.has(query.intent) && !canQueryOtherPeople(level)) {
+      if (query.designer) narrowedToSelf = true;
+      query = { ...query, designer: null };
+    }
+
+    // Довідку віддаємо тут, а не в рушії: лише тут відомий рівень доступу, а
+    // показувати приклади, яких людина не може спитати, — шлях до розчарування.
+    if (query.intent === "help") {
+      return helpText({ canUseQuotes: canUseQuotes(level), isFull: level === "full" });
+    }
+
     if (isAdminIntent(query.intent)) {
-      if (!payload.isOwner && !ADMIN_INTENTS_FOR_EVERYONE.includes(query.intent)) {
-        return "🔒 Це питання доступне лише власнику. Решту — питай вільно, «що ти вмієш?».";
+      const allowed =
+        query.intent === "ai_usage" ? canSeeAiCosts(level) : canSeeSystemHealth(level, isOwner);
+      if (!allowed) {
+        return "🔒 Це доступно лише керівництву. Решту — питай вільно, «що ти вмієш?».";
       }
       return answerAdminQuery({
         admin,
@@ -321,9 +347,11 @@ export const handler = async (event: HttpEvent) => {
       if (query.intent === "who_is_online") {
         return renderPresence(members, presence, now);
       }
-      // Ім'я шукаємо тим самим матчером, що й для дизайнерів: він розуміє
-      // відмінки («по Владиславу») і різні апострофи.
-      const matched = matchMember(members, query.designer ?? query.query ?? null);
+      // Без права на чужу статистику — завжди про себе.
+      const selfMember = members.find((m) => m.userId === userId) ?? null;
+      const matched = canQueryOtherPeople(level)
+        ? matchMember(members, query.designer ?? query.query ?? null)
+        : selfMember;
       if (matched === "ambiguous") {
         return `Не зрозумів, про кого саме — уточни ім'я.`;
       }
@@ -341,6 +369,9 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (isQuotesIntent(query.intent)) {
+      if (!canUseQuotes(level)) {
+        return "🔒 Прорахунки й суми доступні керівництву та менеджерам. Про дизайн-задачі питай вільно.";
+      }
       return answerQuotesQuery({
         admin,
         teamIds: [teamId],
@@ -351,8 +382,15 @@ export const handler = async (event: HttpEvent) => {
         now,
       });
     }
-    const answer = await answerDesignQuery({ admin, teamId, workspaceId, query, now });
-    return answer.text;
+    // Те саме для дизайн-інтентів: якщо людина не має права питати про інших,
+    // персональні інтенти рахуються по ній самій.
+    let designQuery = query;
+    if (PERSON_INTENTS.has(query.intent) && !canQueryOtherPeople(level)) {
+      const self = (await loadDesignMembers(admin, workspaceId)).find((m) => m.userId === userId);
+      designQuery = { ...query, designer: self?.name ?? null };
+    }
+    const answer = await answerDesignQuery({ admin, teamId, workspaceId, query: designQuery, now });
+    return narrowedToSelf ? `${answer.text}\n\n<i>ℹ️ Показую по тобі — чужа статистика доступна керівництву.</i>` : answer.text;
   };
 
   const reply = async (text: string) => {
@@ -386,7 +424,10 @@ export const handler = async (event: HttpEvent) => {
     }
 
     if (!apiKey) {
-      await sendTelegramMessage(chatId, HELP_TEXT, { parseMode: "HTML", disablePreview: true });
+      await sendTelegramMessage(chatId, helpText({ canUseQuotes: canUseQuotes(level), isFull: level === "full" }), {
+        parseMode: "HTML",
+        disablePreview: true,
+      });
       return json(200, { ok: true, note: "no OPENAI_API_KEY — sent help" });
     }
 
@@ -438,7 +479,10 @@ export const handler = async (event: HttpEvent) => {
 
     const query = parseToolCall(aiPayload);
     if (!query) {
-      await sendTelegramMessage(chatId, HELP_TEXT, { parseMode: "HTML", disablePreview: true });
+      await sendTelegramMessage(chatId, helpText({ canUseQuotes: canUseQuotes(level), isFull: level === "full" }), {
+        parseMode: "HTML",
+        disablePreview: true,
+      });
       return json(200, { ok: true, note: "no tool call — sent help" });
     }
 
