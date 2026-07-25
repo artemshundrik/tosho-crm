@@ -3,6 +3,7 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { isChannelEnabled, isCategoryVisibleForRole } from "./_notificationCategories";
 import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
+import { formatLastSeen, loadPresence } from "./_teamAssistant";
 import {
   TONE_EMOJI,
   collectSystemSignals,
@@ -74,6 +75,8 @@ const OVERDUE_WINDOW_DAYS = 30;
 // Лід, який рухався в межах кварталу, але завмер на два тижні.
 const LEAD_STALE_DAYS = 14;
 const LEAD_RECENT_DAYS = 90;
+// Активний співробітник, який стільки не заходив, — привід спитати, чи все гаразд.
+const MEMBER_ABSENT_DAYS = 7;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -635,6 +638,26 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (todaySection.length > 0) lines.push("", "<b>Сьогодні</b>", ...todaySection);
 
   const tail: string[] = [];
+
+  // Хто давно не заходив. Свідомо в ранковому звіті, а не в «що не працює»:
+  // це управлінський сигнал, а не аварія системи.
+  const presence = await loadPresence(admin);
+  const absentBefore = now.getTime() - MEMBER_ABSENT_DAYS * 86_400_000;
+  const absent = members
+    .map((m) => ({ member: m, lastSeen: presence.get(m.userId)?.lastSeenAt ?? null }))
+    .filter((r) => !r.lastSeen || new Date(r.lastSeen).getTime() < absentBefore)
+    .sort((a, b) => (a.lastSeen ?? "").localeCompare(b.lastSeen ?? ""));
+  if (absent.length > 0) {
+    const names = absent
+      .slice(0, 5)
+      .map((r) => `${(r.member.fullName ?? "").trim() || "—"} (${formatLastSeen(r.lastSeen, now)})`)
+      .join(" · ");
+    tail.push(
+      `😴 Не заходили ${MEMBER_ABSENT_DAYS}+ днів: ${absent.length} — ${escapeTelegramHtml(names)}` +
+        (absent.length > 5 ? ` …і ще ${absent.length - 5}` : "")
+    );
+  }
+
   // «120 з 121» читається як «база холодна», а голе «120» — як випадкове число.
   if (staleLeads > 0) {
     const recentLeads = recentLeadsResult.count ?? 0;
@@ -924,6 +947,16 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     );
   }
   if (designLines.length > 0) lines.push("", "<b>Дизайн</b>", ...designLines);
+
+  // Хто сьогодні взагалі заходив — проста міра залученості команди.
+  const presence = await loadPresence(admin);
+  const seenToday = members.filter((m) => {
+    const seen = presence.get(m.userId)?.lastSeenAt;
+    return seen ? seen >= today.startIso : false;
+  }).length;
+  if (members.length > 0) {
+    lines.push("", `👥 У системі сьогодні: ${seenToday} із ${members.length}`);
+  }
 
   if (aiCost > 0) lines.push("", `AI за сьогодні: $${aiCost.toFixed(2)}`);
 
