@@ -170,7 +170,27 @@ export function resolvePeriod(period: DesignPeriod | null | undefined, now: Date
 
 function normalizeName(value: string): string {
   // Свідомо БЕЗ NFKD: воно ламає українські й/ї (див. пам'ятку про пошук).
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  // Апострофи в базі різних видів: «Марʼяна» через U+02BC, «Дар'я» через
+  // звичайний — зводимо до одного, інакше пошук по імені мовчить.
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[ʼ‘’`´]/g, "'")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Основа слова для порівняння імен у різних відмінках: «Марʼяни» → «марʼя»,
+ * «Лєни» → «лєн». Українською питають «скільки у Марʼяни», а в базі лежить
+ * «Марʼяна», тож точний збіг не працює майже ніколи.
+ */
+function nameStem(word: string): string {
+  return word.slice(0, Math.max(3, word.length - 2));
+}
+
+function tokenMatches(nameToken: string, needleToken: string): boolean {
+  if (nameToken === needleToken) return true;
+  return nameToken.startsWith(nameStem(needleToken)) || needleToken.startsWith(nameStem(nameToken));
 }
 
 function shortName(fullName: string): string {
@@ -186,15 +206,26 @@ export function resolveStatus(raw: string | null | undefined): string | null {
   return STATUS_ALIASES[value] ?? null;
 }
 
-/** Пошук дизайнера за фрагментом імені. Повертає null, якщо збіг неоднозначний. */
+/** Пошук людини за іменем у будь-якому відмінку. «ambiguous» — якщо збігів кілька. */
 export function matchMember(members: Member[], raw: string | null | undefined): Member | "ambiguous" | null {
-  const needle = normalizeName(raw ?? "");
-  if (!needle) return null;
-  const hits = members.filter((m) => normalizeName(m.name).includes(needle));
-  if (hits.length === 1) return hits[0];
-  if (hits.length > 1) {
-    // Точний збіг по імені виграє над кількома частковими.
-    const exact = hits.filter((m) => normalizeName(m.name).split(" ").includes(needle));
+  const needleTokens = normalizeName(raw ?? "").split(" ").filter(Boolean);
+  if (needleTokens.length === 0) return null;
+
+  const candidates = members.filter((m) => {
+    const nameTokens = normalizeName(m.name).split(" ").filter(Boolean);
+    if (nameTokens.length === 0) return false;
+    // Кожне слово запиту має знайти собі слово в імені — так «марʼяни
+    // андроскової» не зачепить іншу Марину, а просте «марʼяни» спрацює.
+    return needleTokens.every((needle) => nameTokens.some((token) => tokenMatches(token, needle)));
+  });
+
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) {
+    // Точний збіг слова виграє над кількома наближеними.
+    const exact = candidates.filter((m) => {
+      const nameTokens = normalizeName(m.name).split(" ");
+      return needleTokens.every((needle) => nameTokens.includes(needle));
+    });
     if (exact.length === 1) return exact[0];
     return "ambiguous";
   }
@@ -259,19 +290,47 @@ function taskLine(task: TaskRow, nameByUser: Map<string, string>): string {
 
 // --- завантаження -----------------------------------------------------------
 
+/**
+ * Учасники з іменами.
+ *
+ * ГОТЧА: `memberships_view.full_name` на проді порожній майже у всіх — імена
+ * лежать у `team_member_profiles.first_name/last_name`. Брати їх із в'юшки
+ * означає «—» замість кожного імені й непрацюючий пошук по людині.
+ */
 export async function loadDesignMembers(admin: SupabaseClient, workspaceId: string): Promise<Member[]> {
-  const { data, error } = await admin
-    .schema("tosho")
-    .from("memberships_view")
-    .select("user_id,full_name,job_role")
-    .eq("workspace_id", workspaceId)
-    .limit(1000);
-  if (error) throw new Error(`memberships_view: ${error.message}`);
-  return ((data ?? []) as Array<{ user_id?: string | null; full_name?: string | null; job_role?: string | null }>)
+  const [rolesResult, profilesResult] = await Promise.all([
+    admin
+      .schema("tosho")
+      .from("memberships_view")
+      .select("user_id,job_role")
+      .eq("workspace_id", workspaceId)
+      .limit(1000),
+    admin
+      .schema("tosho")
+      .from("team_member_profiles")
+      .select("user_id,first_name,last_name")
+      .eq("workspace_id", workspaceId)
+      .limit(1000),
+  ]);
+  if (rolesResult.error) throw new Error(`memberships_view: ${rolesResult.error.message}`);
+  if (profilesResult.error) throw new Error(`team_member_profiles: ${profilesResult.error.message}`);
+
+  const nameByUser = new Map<string, string>();
+  for (const row of ((profilesResult.data ?? []) as Array<{
+    user_id?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>)) {
+    if (!row.user_id) continue;
+    const name = [row.first_name, row.last_name].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
+    if (name) nameByUser.set(row.user_id, name);
+  }
+
+  return ((rolesResult.data ?? []) as Array<{ user_id?: string | null; job_role?: string | null }>)
     .filter((r) => r.user_id)
     .map((r) => ({
       userId: r.user_id as string,
-      name: (r.full_name ?? "").trim(),
+      name: nameByUser.get(r.user_id as string) ?? "",
       jobRole: r.job_role ?? null,
     }));
 }

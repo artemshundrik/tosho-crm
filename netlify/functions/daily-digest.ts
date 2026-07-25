@@ -217,9 +217,15 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
     admin
       .schema("tosho")
       .from("memberships_view")
-      .select("workspace_id,user_id,access_role,job_role,email,full_name")
+      .select("workspace_id,user_id,access_role,job_role,email")
       .limit(10000),
-    admin.schema("tosho").from("team_member_profiles").select("user_id,employment_status").limit(10000),
+    // Імена беремо тут, а НЕ з memberships_view.full_name: на проді та колонка
+    // порожня майже у всіх, і розбивки по людях виходили б «—».
+    admin
+      .schema("tosho")
+      .from("team_member_profiles")
+      .select("user_id,employment_status,first_name,last_name")
+      .limit(10000),
     admin.from("team_members").select("user_id,team_id").limit(10000),
   ]);
   if (membershipsResult.error) throw new Error(`memberships_view: ${membershipsResult.error.message}`);
@@ -227,8 +233,17 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
   if (teamsResult.error) throw new Error(`team_members: ${teamsResult.error.message}`);
 
   const statusByUser = new Map<string, string>();
-  for (const row of ((profilesResult.data ?? []) as Array<{ user_id?: string | null; employment_status?: string | null }>)) {
-    if (row.user_id) statusByUser.set(row.user_id, (row.employment_status ?? "").trim().toLowerCase());
+  const nameByUserId = new Map<string, string>();
+  for (const row of ((profilesResult.data ?? []) as Array<{
+    user_id?: string | null;
+    employment_status?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>)) {
+    if (!row.user_id) continue;
+    statusByUser.set(row.user_id, (row.employment_status ?? "").trim().toLowerCase());
+    const name = [row.first_name, row.last_name].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
+    if (name) nameByUserId.set(row.user_id, name);
   }
 
   const teamByUser = new Map<string, string>();
@@ -243,7 +258,6 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
     access_role?: string | null;
     job_role?: string | null;
     email?: string | null;
-    full_name?: string | null;
   }>)) {
     if (!row.workspace_id || !row.user_id) continue;
     // Звільнені/відхилені не отримують нічого. Відсутній профіль не привід
@@ -257,7 +271,7 @@ async function loadMembers(admin: AdminClient): Promise<MemberRow[]> {
       accessRole: row.access_role ?? null,
       jobRole: row.job_role ?? null,
       email: row.email ?? null,
-      fullName: row.full_name ?? null,
+      fullName: nameByUserId.get(row.user_id) ?? null,
     });
   }
   return members;
