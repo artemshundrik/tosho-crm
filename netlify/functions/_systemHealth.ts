@@ -276,8 +276,15 @@ export async function collectSystemSignals(
     if (ageDays <= SNAPSHOT_MAX_AGE_DAYS) {
       const orphans = num(snapshot.attachment_possible_orphan_original_count);
       const missing = num(snapshot.attachment_missing_variants_count);
+      // Гігієна вкладень — це прибирання, а не аварія. Максимум жовтий, навіть
+      // коли сміття багато: червоне вмикає миттєвий алерт, а піднімати людину
+      // вночі через orphan-файли безглуздо. Гірше того — сигнал, який горить
+      // постійно, привчає ігнорувати алерти взагалі.
       if (orphans >= ORPHAN_DANGER_COUNT) {
-        signals.push({ tone: "danger", text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю` });
+        signals.push({
+          tone: "warning",
+          text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю — час прибрати`,
+        });
       } else if (orphans > 0 || missing > 0) {
         signals.push({ tone: "warning", text: `Вкладення: ${orphans} orphan, ${missing} без прев'ю` });
       } else {
