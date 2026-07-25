@@ -67,6 +67,14 @@ export async function sendTelegramMessage(
   });
 }
 
+/** «печатає…» у чаті. Живе ~5 с — достатньо, поки асистент думає. */
+export async function sendTelegramChatAction(
+  chatId: number | string,
+  action: "typing" = "typing"
+): Promise<TelegramApiResult> {
+  return callTelegram("sendChatAction", { chat_id: chatId, action });
+}
+
 export async function editTelegramReplyMarkup(
   chatId: number | string,
   messageId: number,

@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   answerTelegramCallback,
   editTelegramReplyMarkup,
+  sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
 } from "./_telegram";
@@ -45,7 +46,9 @@ type SettingsRow = {
   channel_prefs: ChannelPrefs | null;
 };
 
-type AdminClient = ReturnType<typeof createClient>;
+// SupabaseClient, а не ReturnType<typeof createClient>: другий резолвить
+// схему в never, через що .schema("tosho") не типізується.
+type AdminClient = SupabaseClient;
 
 const LINK_GREETING =
   "Привіт! Це бот сповіщень ToSho CRM.\n\nЩоб підключити акаунт — відкрий профіль у CRM і натисни «Підключити Telegram». Звідти прийдеш сюди з персональним посиланням.";
@@ -184,10 +187,77 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
-  await sendTelegramMessage(
-    chatId,
-    "Команди: /settings — що слати, /stop — відписатись. Підключення — у профілі CRM."
-  );
+  // Не команда — віддаємо асистенту по дизайн-задачах.
+  await handleAssistantQuestion(adminClient, chatId, text);
+}
+
+/**
+ * Вільний текст → асистент (docs/TELEGRAM_ASSISTANT_DESIGN.md).
+ *
+ * Дані асистент читає service-role ключем, тому цей рольовий гейт — ЄДИНИЙ
+ * захист. Він мусить бути тут, ДО будь-якого виклику моделі.
+ *
+ * Саму роботу віддаємо background-функції: Telegram чекає відповіді на вебхук
+ * секунди й повторює запит, а модель думає 5–20 с.
+ */
+async function handleAssistantQuestion(adminClient: AdminClient, chatId: number, question: string) {
+  const settings = await loadSettingsByChat(adminClient, chatId);
+  if (!settings) {
+    await sendTelegramMessage(chatId, NOT_LINKED);
+    return;
+  }
+
+  const role = await loadRole(adminClient, settings.user_id);
+  const access = (role.accessRole ?? "").trim().toLowerCase();
+  const job = (role.jobRole ?? "").trim().toLowerCase();
+  if (access !== "owner" && job !== "seo") {
+    await sendTelegramMessage(
+      chatId,
+      "Я поки відповідаю на питання лише керівництву. Команди: /settings — що слати, /stop — відписатись."
+    );
+    return;
+  }
+
+  // workspace_id для ролей і team_id для даних — це РІЗНІ ідентифікатори.
+  const [membership, teamMember] = await Promise.all([
+    adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("workspace_id,full_name")
+      .eq("user_id", settings.user_id)
+      .maybeSingle(),
+    adminClient.from("team_members").select("team_id").eq("user_id", settings.user_id).maybeSingle(),
+  ]);
+
+  const workspaceId = (membership.data?.workspace_id as string | undefined) ?? null;
+  const teamId = (teamMember.data?.team_id as string | undefined) ?? null;
+  if (!workspaceId || !teamId) {
+    await sendTelegramMessage(chatId, "Не можу визначити твою команду в CRM. Напиши адміну.");
+    return;
+  }
+
+  await sendTelegramChatAction(chatId, "typing");
+
+  const base = process.env.PUBLIC_APP_URL || "https://tosho.pro";
+  const secret = process.env.CRON_SHARED_SECRET ?? "";
+  try {
+    // Fire-and-forget: -background функція відповідає 202 одразу, роботу робить
+    // сама. Await тут лише на віддачу запиту, не на результат аналізу.
+    await fetch(`${base}/.netlify/functions/telegram-assistant-background`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-key": secret },
+      body: JSON.stringify({
+        chatId,
+        userId: settings.user_id,
+        workspaceId,
+        teamId,
+        actorName: (membership.data?.full_name as string | undefined) ?? null,
+        question,
+      }),
+    });
+  } catch {
+    await sendTelegramMessage(chatId, "Не зміг прийняти питання. Спробуй ще раз.");
+  }
 }
 
 async function handleCallback(adminClient: AdminClient, cb: NonNullable<TelegramUpdate["callback_query"]>) {
