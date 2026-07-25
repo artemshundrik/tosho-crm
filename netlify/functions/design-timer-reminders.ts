@@ -104,9 +104,11 @@ export const handler = async (event: HttpEvent) => {
             `«${title}» — ${formatHours(hours)} без зупинки. ` +
             `У статистику зараховується щонайбільше ${STUCK_AFTER_HOURS} год за сесію, ` +
             `тож решта часу просто не порахується.`,
-          // Дата в href робить нагадування щоденним: одна забута сесія нагадує
-          // раз на добу, а не щогодини й не один раз назавжди.
-          href: `/design/${session.design_task_id}?timer=${session.id}&d=${todayKey}`,
+          // ОБОВ'ЯЗКОВО «reminder=» у href: унікальний індекс, на якому тримається
+          // dedupeByHref, часткий і діє ЛИШЕ для таких адрес. З будь-яким іншим
+          // параметром дедуплікація мовчки не працює і сповіщення дублюються.
+          // Дата в ключі робить нагадування щоденним, а не разовим назавжди.
+          href: `/design/${session.design_task_id}?reminder=timer:${session.id}:${todayKey}`,
           type: "warning" as const,
         };
       });

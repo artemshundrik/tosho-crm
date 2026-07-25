@@ -36,6 +36,14 @@ type UserSettingsRow = {
 };
 
 type DeliverNotificationsOptions = {
+  /**
+   * Гасить повтори за (user_id, href).
+   *
+   * ПАСТКА: тримається на ЧАСТКОВОМУ унікальному індексі
+   * notifications_user_reminder_href_unique, який діє лише коли href містить
+   * «reminder=». З будь-яким іншим параметром прапорець виглядає робочим, але
+   * дублікати спокійно вставляються — помилки при цьому немає.
+   */
   dedupeByHref?: boolean;
   // Категорія сповіщення (ключ із notificationCategories) — для гейтингу каналів
   // через user_notification_settings.channel_prefs. Одна категорія на батч.
