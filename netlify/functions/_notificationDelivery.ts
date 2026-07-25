@@ -1,10 +1,12 @@
 import webpush from "web-push";
-import { createClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
 import { isChannelEnabled } from "./_notificationCategories";
 
 // Приймаємо реальний Supabase service-role клієнт (як його створюють reminder-функції).
-type AdminClient = ReturnType<typeof createClient>;
+// SupabaseClient, а не ReturnType<typeof createClient>: другий резолвить схему
+// в never, після чого .schema("tosho") і .insert() перестають типізуватись.
+type AdminClient = SupabaseClient;
 
 type ChannelPrefs = Record<string, Record<string, boolean>>;
 

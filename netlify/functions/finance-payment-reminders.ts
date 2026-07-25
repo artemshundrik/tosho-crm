@@ -1,6 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
+import {
+  groupRecipientsByTeam,
+  isFinanceRole,
+  mergeTeamMembers,
+  type MembershipSource,
+  type ProfileSource,
+  type TeamLinkSource,
+} from "./_lib/teamMembers";
 
 // Нагадування про майбутній регулярний платіж (велика річна підписка тощо):
 // шле нотифікацію за reminder_lead_days днів до next_charge_date. Отримувачі —
@@ -24,14 +32,6 @@ type ExpenseRow = {
   recurrence?: string | null;
   next_charge_date?: string | null;
   reminder_lead_days?: number | null;
-};
-
-type MemberProfileRow = {
-  workspace_id: string;
-  user_id: string;
-  access_role?: string | null;
-  job_role?: string | null;
-  employment_status?: string | null;
 };
 
 type PendingNotificationRow = {
@@ -104,22 +104,6 @@ function formatAmount(amount: number, currency: string): string {
   return `${num} ${sym}`;
 }
 
-function normalize(value?: string | null) {
-  return (value ?? "").trim().toLowerCase();
-}
-
-function isDeliverableMember(profile: MemberProfileRow) {
-  const status = normalize(profile.employment_status);
-  return status !== "inactive" && status !== "rejected";
-}
-
-// Фін-ролі: власник + SEO + бухгалтери (той самий набір, що бачить Фінанси).
-function isFinanceMember(profile: MemberProfileRow) {
-  const access = normalize(profile.access_role);
-  const job = normalize(profile.job_role);
-  return access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
-}
-
 function reminderKeyFromHref(href?: string | null) {
   if (!href) return null;
   const q = href.indexOf("?");
@@ -172,16 +156,24 @@ export const handler = async (event: HttpEvent) => {
       return jsonResponse(200, { success: true, scanned: 0, delivered: 0, rolled: 0 });
     }
 
-    const teamIds = Array.from(new Set(expenses.map((e) => e.team_id).filter(Boolean)));
     const categoryIds = Array.from(new Set(expenses.map((e) => e.category_id).filter(Boolean))) as string[];
 
-    const [profilesResult, categoriesResult, existingResult] = await Promise.all([
+    // Ролі, статус і team_id лежать у ТРЬОХ різних таблицях — зводить їх
+    // mergeTeamMembers. Раніше тут вибирались access_role/job_role із
+    // team_member_profiles, де цих колонок немає: функція падала з 42703 при
+    // кожному запуску, і жодне нагадування не дійшло б навіть у свій день.
+    const [membershipsResult, profilesResult, teamLinksResult, categoriesResult, existingResult] = await Promise.all([
+      adminClient
+        .schema("tosho")
+        .from("memberships_view")
+        .select("user_id,workspace_id,access_role,job_role")
+        .limit(10000),
       adminClient
         .schema("tosho")
         .from("team_member_profiles")
-        .select("workspace_id,user_id,access_role,job_role,employment_status")
-        .in("workspace_id", teamIds)
+        .select("user_id,employment_status,first_name,last_name")
         .limit(10000),
+      adminClient.from("team_members").select("user_id,team_id").limit(10000),
       categoryIds.length
         ? adminClient.schema("tosho").from("finance_expense_categories").select("id,name").in("id", categoryIds)
         : Promise.resolve({ data: [], error: null }),
@@ -193,18 +185,22 @@ export const handler = async (event: HttpEvent) => {
         .gte("created_at", notificationFromIso)
         .limit(5000),
     ]);
+    if (membershipsResult.error) throw membershipsResult.error;
     if (profilesResult.error) throw profilesResult.error;
+    if (teamLinksResult.error) throw teamLinksResult.error;
     if (categoriesResult.error) throw categoriesResult.error;
     if (existingResult.error) throw existingResult.error;
 
-    // teamId → набір фін-отримувачів.
-    const recipientsByTeam = new Map<string, Set<string>>();
-    for (const p of (profilesResult.data ?? []) as MemberProfileRow[]) {
-      if (!p.workspace_id || !p.user_id || !isDeliverableMember(p) || !isFinanceMember(p)) continue;
-      const set = recipientsByTeam.get(p.workspace_id) ?? new Set<string>();
-      set.add(p.user_id);
-      recipientsByTeam.set(p.workspace_id, set);
-    }
+    // Ключ — ОПЕРАЦІЙНИЙ team_id (той самий, що у finance_expenses.team_id),
+    // а не workspace_id: вони різні, і на цьому теж губились отримувачі.
+    const recipientsByTeam = groupRecipientsByTeam(
+      mergeTeamMembers({
+        memberships: (membershipsResult.data ?? []) as MembershipSource[],
+        profiles: (profilesResult.data ?? []) as ProfileSource[],
+        teamLinks: (teamLinksResult.data ?? []) as TeamLinkSource[],
+      }),
+      isFinanceRole
+    );
 
     const categoryName = new Map<string, string>();
     for (const c of (categoriesResult.data ?? []) as Array<{ id: string; name: string }>) {

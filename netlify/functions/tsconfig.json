@@ -1,0 +1,37 @@
+{
+  "//": "Netlify-функції не входять у кореневий tsconfig (він включає лише src), тому довго не перевірялись типами взагалі — у теці назбиралось ~250 помилок. Замість «полагодити все або нічого» тут ХРАПОВИК: перевіряються лише файли, які вже чисті. Правиш легаси-функцію — дописуй її сюди. Запуск: npm run typecheck:functions",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "files": [
+    "_aiPricing.ts",
+    "_aiUsageLog.ts",
+    "_adminAssistant.ts",
+    "_cronAuth.ts",
+    "_designAssistant.ts",
+    "_notificationCategories.ts",
+    "_notificationDelivery.ts",
+    "_systemHealth.ts",
+    "_telegram.ts",
+    "_lib/quotePricing.ts",
+    "_lib/teamMembers.ts",
+    "_lib/teamMembers.test.ts",
+    "daily-digest.ts",
+    "finance-payment-reminders.ts",
+    "telegram-assistant-background.ts",
+    "telegram-setup.ts",
+    "telegram-webhook.ts"
+  ]
+}
