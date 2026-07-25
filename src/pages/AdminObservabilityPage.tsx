@@ -735,7 +735,15 @@ export default function AdminObservabilityPage() {
     numberOrZero(dbStats?.deadlocks) > 0
       ? `Зафіксовано ${formatCompactCount(dbStats?.deadlocks)} deadlocks. Це вже червоний сигнал.`
       : "Deadlocks не зафіксовані.";
-  const totalStorageBytes = numberOrZero(latest?.attachments_bucket_bytes) + numberOrZero(latest?.avatars_bucket_bytes);
+  // Сумуємо ВСІ бакети, а не лише attachments + avatars: Supabase тарифікує
+  // все сховище, тож попередній варіант недоліковував public-assets і
+  // contract-snapshots і показував менший відсоток ліміту, ніж є насправді
+  // (бот рахував наживо по всіх бакетах — звідси й розбіжність у цифрах).
+  // Старі знімки без bucket_sizes лишаються на попередній формулі.
+  const bucketSizes = asArray<BucketStat>(latest?.bucket_sizes);
+  const totalStorageBytes = bucketSizes.length
+    ? bucketSizes.reduce((sum, bucket) => sum + numberOrZero(bucket.bytes), 0)
+    : numberOrZero(latest?.attachments_bucket_bytes) + numberOrZero(latest?.avatars_bucket_bytes);
   const storageUsagePercent = PRO_STORAGE_LIMIT_BYTES > 0 ? (totalStorageBytes / PRO_STORAGE_LIMIT_BYTES) * 100 : 0;
   const remainingStorageBytes = Math.max(PRO_STORAGE_LIMIT_BYTES - totalStorageBytes, 0);
   const storageRunwayDays =
