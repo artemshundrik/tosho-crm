@@ -236,8 +236,12 @@ export async function collectSystemSignals(
   if (deadlocks > 0) {
     signals.push({ tone: "danger", text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
   } else if (deadRatio >= DEAD_TUPLE_DANGER_PERCENT) {
+    // Свідомо жовтий, а не червоний. По-перше, це обслуговування — autovacuum
+    // прибере сам. По-друге, гарячі таблиці на кшталт user_presence стрибають
+    // до 100% і назад між двома викликами, тож червоне тут просто миготіло б,
+    // а миготливий алерт гірший за відсутній.
     signals.push({
-      tone: "danger",
+      tone: "warning",
       text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""} — потрібен vacuum`,
     });
   } else if (deadRatio >= DEAD_TUPLE_WARN_PERCENT) {
