@@ -90,6 +90,25 @@ async function loadSettingsByChat(adminClient: AdminClient, chatId: number): Pro
   return (data as SettingsRow | null) ?? null;
 }
 
+/**
+ * Чи працює людина досі.
+ *
+ * Критично саме для бота: він ходить під service-role і тому ОБХОДИТЬ RLS, на
+ * якій тримається блокування звільнених у самій CRM. Без цієї перевірки
+ * звільнений співробітник із прив'язаним Telegram продовжував би отримувати
+ * дані компанії — інтерфейс йому закритий, а бот ні.
+ */
+async function isActiveMember(adminClient: AdminClient, userId: string): Promise<boolean> {
+  const { data } = await adminClient
+    .schema("tosho")
+    .from("team_member_profiles")
+    .select("employment_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const status = ((data?.employment_status as string | null) ?? "").trim().toLowerCase();
+  return status !== "inactive" && status !== "rejected";
+}
+
 async function loadRole(adminClient: AdminClient, userId: string): Promise<RoleContext> {
   const { data } = await adminClient
     .schema("tosho")
@@ -207,6 +226,10 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       await sendTelegramMessage(chatId, NOT_LINKED);
       return;
     }
+    if (!(await isActiveMember(adminClient, settings.user_id))) {
+      await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
+      return;
+    }
     const role = await loadRole(adminClient, settings.user_id);
     if (!isAssistantAllowed(role)) {
       await sendTelegramMessage(chatId, ASSISTANT_FORBIDDEN);
@@ -252,6 +275,9 @@ function isAssistantAllowed(_role: RoleContext): boolean {
 function isOwnerRole(role: RoleContext): boolean {
   return (role.accessRole ?? "").trim().toLowerCase() === "owner";
 }
+
+const DEACTIVATED_MESSAGE =
+  "Доступ до CRM призупинено. Якщо це помилка — напиши керівнику.";
 
 const ASSISTANT_FORBIDDEN =
   "Я поки відповідаю на питання лише керівництву. Команди: /settings — що слати, /stop — відписатись.";
@@ -330,6 +356,11 @@ async function handleAssistantQuestion(
   const settings = await loadSettingsByChat(adminClient, chatId);
   if (!settings) {
     await sendTelegramMessage(chatId, NOT_LINKED);
+    return;
+  }
+
+  if (!(await isActiveMember(adminClient, settings.user_id))) {
+    await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
     return;
   }
 
