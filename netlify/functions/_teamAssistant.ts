@@ -13,7 +13,7 @@ import { actionLabel, isNoiseActivity } from "../../src/components/team/activity
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
-export type TeamIntent = "team_list" | "person_summary";
+export type TeamIntent = "team_list" | "person_summary" | "who_is_online";
 
 // Групи посад для фільтра «дай список менеджерів».
 const ROLE_GROUPS: Record<string, string[]> = {
@@ -50,6 +50,62 @@ function roleEmoji(jobRole: string | null): string {
   return ROLE_EMOJI[(jobRole ?? "").trim().toLowerCase()] ?? "👤";
 }
 
+const TIME_ZONE = "Europe/Kiev";
+
+export type Presence = { lastSeenAt: string | null; where: string | null };
+
+/**
+ * Остання поява кожного в системі + де саме він був.
+ *
+ * `public.user_presence` тримає один рядок на людину й оновлюється на кожен
+ * пінг, тож це і є чесна відповідь на «коли востаннє був у системі» — краща за
+ * час логіну, бо ловить реальне користування, а не факт входу.
+ */
+export async function loadPresence(admin: SupabaseClient): Promise<Map<string, Presence>> {
+  const { data, error } = await admin
+    .from("user_presence")
+    .select("user_id,last_seen_at,current_label,current_path")
+    .limit(1000);
+  if (error) throw new Error(`user_presence: ${error.message}`);
+  const map = new Map<string, Presence>();
+  for (const row of ((data ?? []) as Array<{
+    user_id?: string | null;
+    last_seen_at?: string | null;
+    current_label?: string | null;
+    current_path?: string | null;
+  }>)) {
+    if (!row.user_id) continue;
+    map.set(row.user_id, {
+      lastSeenAt: row.last_seen_at ?? null,
+      where: (row.current_label ?? "").trim() || (row.current_path ?? "").trim() || null,
+    });
+  }
+  return map;
+}
+
+/** «щойно» / «14 хв тому» / «вчора о 17:32» — людською мовою, а не ISO. */
+export function formatLastSeen(lastSeenAt: string | null, now: Date): string {
+  if (!lastSeenAt) return "не заходив";
+  const minutes = Math.floor((now.getTime() - new Date(lastSeenAt).getTime()) / 60_000);
+  if (minutes < 3) return "зараз онлайн";
+  if (minutes < 60) return `${minutes} хв тому`;
+  if (minutes < 60 * 20) return `${Math.round(minutes / 60)} год тому`;
+  const label = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: TIME_ZONE,
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(lastSeenAt));
+  return label;
+}
+
+/** Онлайн вважаємо тих, хто пінгував протягом 5 хвилин. */
+export function isOnline(lastSeenAt: string | null, now: Date): boolean {
+  if (!lastSeenAt) return false;
+  return now.getTime() - new Date(lastSeenAt).getTime() < 5 * 60_000;
+}
+
 export type TeamMember = {
   userId: string;
   name: string;
@@ -81,7 +137,12 @@ function resolveRoleFilter(raw: string | null): string[] | null {
   return null;
 }
 
-export function renderTeamList(members: TeamMember[], roleQuery: string | null): string {
+export function renderTeamList(
+  members: TeamMember[],
+  roleQuery: string | null,
+  presence: Map<string, Presence>,
+  now: Date
+): string {
   const filter = resolveRoleFilter(roleQuery);
   const filtered = filter
     ? members.filter((m) => filter.includes((m.jobRole ?? "").trim().toLowerCase()))
@@ -107,7 +168,50 @@ export function renderTeamList(members: TeamMember[], roleQuery: string | null):
     const emoji = roleEmoji(list[0]?.jobRole ?? null);
     lines.push("", `${emoji} <b>${escapeTelegramHtml(role)}</b>`);
     for (const member of list.sort((a, b) => a.name.localeCompare(b.name, "uk"))) {
-      lines.push(`   ${escapeTelegramHtml(member.name || "(без імені)")}`);
+      const seen = presence.get(member.userId);
+      const online = isOnline(seen?.lastSeenAt ?? null, now);
+      const mark = online ? "🟢" : "⚪️";
+      lines.push(
+        `   ${mark} ${escapeTelegramHtml(member.name || "(без імені)")} · ` +
+          `<i>${escapeTelegramHtml(formatLastSeen(seen?.lastSeenAt ?? null, now))}</i>`
+      );
+    }
+  }
+  return lines.join("\n");
+}
+
+/** «Хто зараз у системі» — онлайн зараз і хто був сьогодні, з місцем перебування. */
+export function renderPresence(members: TeamMember[], presence: Map<string, Presence>, now: Date): string {
+  const rows = members
+    .map((m) => ({ member: m, seen: presence.get(m.userId) ?? null }))
+    .filter((r) => r.seen?.lastSeenAt)
+    .sort((a, b) => new Date(b.seen!.lastSeenAt!).getTime() - new Date(a.seen!.lastSeenAt!).getTime());
+
+  if (rows.length === 0) return "🤷 Даних про присутність поки немає.";
+
+  const online = rows.filter((r) => isOnline(r.seen!.lastSeenAt, now));
+  const rest = rows.filter((r) => !isOnline(r.seen!.lastSeenAt, now));
+
+  const lines: string[] = [];
+  if (online.length > 0) {
+    lines.push(`🟢 <b>Зараз у системі — ${online.length}</b>`, "");
+    for (const r of online) {
+      lines.push(
+        `   ${roleEmoji(r.member.jobRole)} ${escapeTelegramHtml(shortName(r.member.name))}` +
+          (r.seen!.where ? ` · <i>${escapeTelegramHtml(r.seen!.where)}</i>` : "")
+      );
+    }
+  } else {
+    lines.push("😴 <b>Зараз у системі нікого</b>");
+  }
+
+  if (rest.length > 0) {
+    lines.push("", `⚪️ <b>Були раніше</b>`, "");
+    for (const r of rest.slice(0, 12)) {
+      lines.push(
+        `   ${roleEmoji(r.member.jobRole)} ${escapeTelegramHtml(shortName(r.member.name))} · ` +
+          `<i>${escapeTelegramHtml(formatLastSeen(r.seen!.lastSeenAt, now))}</i>`
+      );
     }
   }
   return lines.join("\n");
@@ -144,9 +248,10 @@ export async function renderPersonSummary(params: {
   teamIds: string[];
   person: TeamMember;
   period: DesignPeriod | null;
+  presence: Presence | null;
   now: Date;
 }): Promise<string> {
-  const { admin, teamIds, person, period, now } = params;
+  const { admin, teamIds, person, period, presence, now } = params;
   const resolved = resolvePeriod(period ?? "this_month", now);
   const userId = person.userId;
 
@@ -201,7 +306,7 @@ export async function renderPersonSummary(params: {
         .in("team_id", teamIds)
         .eq("manager_user_id", userId),
       (() => {
-        let q = admin.from("activity_log").select("action").eq("user_id", userId).limit(5000);
+        let q = admin.from("activity_log").select("action,created_at").eq("user_id", userId).limit(5000);
         if (resolved.startIso) q = q.gte("created_at", resolved.startIso);
         if (resolved.endIso) q = q.lt("created_at", resolved.endIso);
         return q;
@@ -220,6 +325,9 @@ export async function renderPersonSummary(params: {
   const lines = [
     `${roleEmoji(person.jobRole)} <b>${escapeTelegramHtml(person.name || "—")}</b>${role ? ` · ${escapeTelegramHtml(role)}` : ""}`,
     `🗓 ${escapeTelegramHtml(resolved.label)}`,
+    `${isOnline(presence?.lastSeenAt ?? null, now) ? "🟢" : "⚪️"} У системі: ${escapeTelegramHtml(
+      formatLastSeen(presence?.lastSeenAt ?? null, now)
+    )}${presence?.where ? ` · <i>${escapeTelegramHtml(presence.where)}</i>` : ""}`,
   ];
 
   const sales: string[] = [];
@@ -240,9 +348,40 @@ export async function renderPersonSummary(params: {
   // Активність показує, що людина взагалі робила — навіть коли продажів нема.
   // Підписи ЛЮДСЬКІ: сирі ключі на кшталт design_task_brief_change_request
   // читати неможливо.
-  const actions = ((activityResult.data ?? []) as Array<{ action?: string | null }>)
-    .map((r) => (r.action ?? "").trim())
-    .filter((a) => a && !isNoiseActivity(a, null));
+  const events = ((activityResult.data ?? []) as Array<{ action?: string | null; created_at?: string | null }>)
+    .filter((r) => (r.action ?? "").trim() && !isNoiseActivity((r.action ?? "").trim(), null));
+  const actions = events.map((r) => (r.action ?? "").trim());
+
+  // Ритм дня: коли людина реально працює. Години рахуємо в Києві, інакше
+  // «пік о 6 ранку» замість 9-ї.
+  if (events.length > 0) {
+    const hours = new Map<number, number>();
+    let firstIso: string | null = null;
+    let lastIso: string | null = null;
+    for (const event of events) {
+      if (!event.created_at) continue;
+      const hour = Number(
+        new Intl.DateTimeFormat("uk-UA", { timeZone: TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(
+          new Date(event.created_at)
+        )
+      );
+      if (Number.isFinite(hour)) hours.set(hour, (hours.get(hour) ?? 0) + 1);
+      if (!firstIso || event.created_at < firstIso) firstIso = event.created_at;
+      if (!lastIso || event.created_at > lastIso) lastIso = event.created_at;
+    }
+    const peak = Array.from(hours.entries()).sort((a, b) => b[1] - a[1])[0];
+    const clock = (iso: string | null) =>
+      iso
+        ? new Intl.DateTimeFormat("uk-UA", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" }).format(
+            new Date(iso)
+          )
+        : "—";
+    const rhythm: string[] = [];
+    if (firstIso && lastIso) rhythm.push(`   🌅 Від ${clock(firstIso)} до ${clock(lastIso)}`);
+    if (peak) rhythm.push(`   🔥 Пік о ${String(peak[0]).padStart(2, "0")}:00 — ${peak[1]} дій`);
+    if (rhythm.length > 0) lines.push("", "⏱ <b>Ритм</b>", ...rhythm);
+  }
+
   if (actions.length > 0) {
     const counts = new Map<string, number>();
     for (const action of actions) {
@@ -255,7 +394,7 @@ export async function renderPersonSummary(params: {
     }
   }
 
-  if (lines.length === 2) {
+  if (lines.length === 3) {
     lines.push("", `😴 Активності ${escapeTelegramHtml(resolved.label)} не знайшов.`);
   }
   return lines.join("\n");

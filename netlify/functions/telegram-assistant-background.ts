@@ -12,7 +12,13 @@ import {
 } from "./_designAssistant";
 import { answerAdminQuery, type AdminIntent } from "./_adminAssistant";
 import { answerQuotesQuery, type QuotesIntent } from "./_quotesAssistant";
-import { renderPersonSummary, renderTeamList, type TeamIntent } from "./_teamAssistant";
+import {
+  loadPresence,
+  renderPersonSummary,
+  renderPresence,
+  renderTeamList,
+  type TeamIntent,
+} from "./_teamAssistant";
 import { loadDesignMembers, matchMember } from "./_designAssistant";
 
 // Асистент по дизайн-задачах у Telegram (docs/TELEGRAM_ASSISTANT_DESIGN.md).
@@ -61,7 +67,7 @@ function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
 }
 
-const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary"];
+const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary", "who_is_online"];
 
 function isTeamIntent(value: string): value is TeamIntent {
   return (TEAM_INTENTS as string[]).includes(value);
@@ -146,7 +152,7 @@ const TOOL = {
         type: "string",
         enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -177,8 +183,8 @@ const TOOL = {
 } as const;
 
 const SYSTEM_PROMPT = [
-  "Ти — розбирач питань про дизайн-задачі в CRM ToSho. Твоя ЄДИНА робота — викликати",
-  "answer_design_question з правильними параметрами. Ніколи не відповідай текстом і ніколи",
+  "Ти — розбирач питань про CRM ToSho (дизайн, прорахунки, люди, стан системи).",
+  "Твоя ЄДИНА робота — викликати answer_crm_question з правильними параметрами. Ніколи не відповідай текстом і ніколи",
   "не вигадуй цифри — їх рахує код.",
   "",
   "Підказки:",
@@ -196,6 +202,7 @@ const SYSTEM_PROMPT = [
   "• «покажи задачу DZ-0412» = task_details, номер або назву клади в query",
   "• «дай список менеджерів», «хто в команді» = team_list, слово «менеджерів»/«дизайнерів» клади в query",
   "• «дай статистику по Владиславу», «що робив Антон» = person_summary, ім'я клади в designer",
+  "• «хто зараз у системі», «хто онлайн», «коли Лєна востаннє заходила» = who_is_online",
   "• для ДИЗАЙНЕРА глибша відповідь — designer_summary; для менеджера й решти — person_summary",
   "• «хто чим завантажений», «розподіл по дизайнерах» = team_workload",
   "• якщо питання поза цим — intent help",
@@ -299,9 +306,12 @@ export const handler = async (event: HttpEvent) => {
       });
     }
     if (isTeamIntent(query.intent)) {
-      const members = await loadDesignMembers(admin, workspaceId);
+      const [members, presence] = await Promise.all([loadDesignMembers(admin, workspaceId), loadPresence(admin)]);
       if (query.intent === "team_list") {
-        return renderTeamList(members, query.query ?? query.designer ?? null);
+        return renderTeamList(members, query.query ?? query.designer ?? null, presence, now);
+      }
+      if (query.intent === "who_is_online") {
+        return renderPresence(members, presence, now);
       }
       // Ім'я шукаємо тим самим матчером, що й для дизайнерів: він розуміє
       // відмінки («по Владиславу») і різні апострофи.
@@ -317,6 +327,7 @@ export const handler = async (event: HttpEvent) => {
         teamIds: [teamId],
         person: matched,
         period: query.period ?? null,
+        presence: presence.get(matched.userId) ?? null,
         now,
       });
     }
