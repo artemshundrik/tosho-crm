@@ -289,6 +289,7 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
       { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
       { text: "📊 Воронка", callback_data: "qa:quotes_pipeline" },
     ],
+    [{ text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" }],
   ];
   if (isOwnerRole(role)) {
     rows.push([

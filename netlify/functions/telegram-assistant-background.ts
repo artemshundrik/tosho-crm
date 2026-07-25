@@ -12,6 +12,8 @@ import {
 } from "./_designAssistant";
 import { answerAdminQuery, type AdminIntent } from "./_adminAssistant";
 import { answerQuotesQuery, type QuotesIntent } from "./_quotesAssistant";
+import { renderPersonSummary, renderTeamList, type TeamIntent } from "./_teamAssistant";
+import { loadDesignMembers, matchMember } from "./_designAssistant";
 
 // Асистент по дизайн-задачах у Telegram (docs/TELEGRAM_ASSISTANT_DESIGN.md).
 //
@@ -57,6 +59,12 @@ function isAdminIntent(value: string): value is AdminIntent {
 
 function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
+}
+
+const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary"];
+
+function isTeamIntent(value: string): value is TeamIntent {
+  return (TEAM_INTENTS as string[]).includes(value);
 }
 
 /** Скільки хвилин контекст діалогу лишається чинним. */
@@ -136,13 +144,14 @@ const TOOL = {
     properties: {
       intent: {
         type: "string",
-        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS],
+        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
-        description: "Ім'я людини, якщо названа. Тільки ім'я, без слів «дизайнер», «у», «в».",
+        description:
+          "Ім'я людини (дизайнера, менеджера, будь-кого), якщо названа. Тільки ім'я, без слів «дизайнер», «менеджер», «у», «в».",
       },
       status: {
         type: ["string", "null"],
@@ -185,6 +194,9 @@ const SYSTEM_PROMPT = [
   "• «скільки прорахунків завели» = quotes_created; «скільки затвердили» = quotes_approved",
   "• «що по клієнту X» = customer_summary, назву клієнта клади в query",
   "• «покажи задачу DZ-0412» = task_details, номер або назву клади в query",
+  "• «дай список менеджерів», «хто в команді» = team_list, слово «менеджерів»/«дизайнерів» клади в query",
+  "• «дай статистику по Владиславу», «що робив Антон» = person_summary, ім'я клади в designer",
+  "• для ДИЗАЙНЕРА глибша відповідь — designer_summary; для менеджера й решти — person_summary",
   "• «хто чим завантажений», «розподіл по дизайнерах» = team_workload",
   "• якщо питання поза цим — intent help",
   "",
@@ -280,6 +292,29 @@ export const handler = async (event: HttpEvent) => {
         now,
       });
     }
+    if (isTeamIntent(query.intent)) {
+      const members = await loadDesignMembers(admin, workspaceId);
+      if (query.intent === "team_list") {
+        return renderTeamList(members, query.query ?? query.designer ?? null);
+      }
+      // Ім'я шукаємо тим самим матчером, що й для дизайнерів: він розуміє
+      // відмінки («по Владиславу») і різні апострофи.
+      const matched = matchMember(members, query.designer ?? query.query ?? null);
+      if (matched === "ambiguous") {
+        return `Не зрозумів, про кого саме — уточни ім'я.`;
+      }
+      if (!matched) {
+        return `Не знайшов у команді «${query.designer ?? query.query ?? ""}». Перевір ім'я або спитай «дай список менеджерів».`;
+      }
+      return renderPersonSummary({
+        admin,
+        teamIds: [teamId],
+        person: matched,
+        period: query.period ?? null,
+        now,
+      });
+    }
+
     if (isQuotesIntent(query.intent)) {
       return answerQuotesQuery({
         admin,
@@ -305,7 +340,10 @@ export const handler = async (event: HttpEvent) => {
     // Кнопка-заготовка: інтент уже відомий, модель не потрібна — і не оплачується.
     if (directIntent) {
       const known =
-        isAdminIntent(directIntent) || isQuotesIntent(directIntent) || INTENTS.includes(directIntent as DesignIntent)
+        isAdminIntent(directIntent) ||
+        isQuotesIntent(directIntent) ||
+        isTeamIntent(directIntent) ||
+        INTENTS.includes(directIntent as DesignIntent)
           ? (directIntent as DesignIntent)
           : null;
       if (!known) return json(400, { error: `Unknown directIntent: ${directIntent}` });
