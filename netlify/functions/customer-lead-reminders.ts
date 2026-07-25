@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
 
@@ -31,7 +31,6 @@ type LeadReminderRow = {
 };
 
 type MemberProfileRow = {
-  workspace_id: string;
   user_id: string;
   email?: string | null;
   full_name?: string | null;
@@ -125,13 +124,23 @@ function memberIdentityKeys(profile: MemberProfileRow) {
     .filter(Boolean);
 }
 
-function buildMemberIndex(profiles: MemberProfileRow[]) {
+/**
+ * Індекс «ім'я → user_id», ключований ОПЕРАЦІЙНИМ team_id.
+ *
+ * Раніше ключем був `profile.workspace_id`, а шукали по `team_id` рядка
+ * клієнта — це різні значення, тож пошук менеджера за текстовим полем `manager`
+ * не знаходив нікого взагалі. Не падало лише тому, що resolveRecipients
+ * спершу пробує `manager_user_id`.
+ */
+function buildMemberIndex(profiles: MemberProfileRow[], teamByUser: Map<string, string>) {
   const index = new Map<string, Set<string>>();
 
   for (const profile of profiles) {
-    if (!profile.workspace_id || !profile.user_id || !isDeliverableMember(profile)) continue;
+    if (!profile.user_id || !isDeliverableMember(profile)) continue;
+    const teamId = teamByUser.get(profile.user_id);
+    if (!teamId) continue;
     for (const key of memberIdentityKeys(profile)) {
-      const indexKey = `${profile.workspace_id}:${key}`;
+      const indexKey = `${teamId}:${key}`;
       const userIds = index.get(indexKey) ?? new Set<string>();
       userIds.add(profile.user_id);
       index.set(indexKey, userIds);
@@ -141,11 +150,25 @@ function buildMemberIndex(profiles: MemberProfileRow[]) {
   return index;
 }
 
-async function loadMemberProfiles(adminClient: ReturnType<typeof createClient>, teamIds: string[]) {
+/** user_id → операційний team_id (той, яким скоупляться клієнти й ліди). */
+async function loadTeamByUser(adminClient: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await adminClient.from("team_members").select("user_id,team_id").limit(10000);
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const row of ((data ?? []) as Array<{ user_id?: string | null; team_id?: string | null }>)) {
+    if (row.user_id && row.team_id) map.set(row.user_id, row.team_id);
+  }
+  return map;
+}
+
+async function loadMemberProfiles(adminClient: SupabaseClient) {
+  // Без фільтра по workspace_id: він не дорівнює team_id рядків клієнтів, тож
+  // фільтрація по ньому лишала індекс порожнім. Команда одна — беремо всіх,
+  // а прив'язку до команди дає team_members.
   const selects = [
-    "workspace_id,user_id,email,full_name,first_name,last_name,employment_status",
-    "workspace_id,user_id,full_name,first_name,last_name,employment_status",
-    "workspace_id,user_id,full_name,first_name,last_name",
+    "user_id,email,full_name,first_name,last_name,employment_status",
+    "user_id,full_name,first_name,last_name,employment_status",
+    "user_id,full_name,first_name,last_name",
   ];
   let lastError: { message?: string } | null = null;
 
@@ -154,10 +177,10 @@ async function loadMemberProfiles(adminClient: ReturnType<typeof createClient>, 
       .schema("tosho")
       .from("team_member_profiles")
       .select(columns)
-      .in("workspace_id", teamIds)
       .limit(10000);
 
-    if (!result.error) return (result.data ?? []) as MemberProfileRow[];
+    // Динамічний список колонок — PostgREST не може вивести з нього тип рядка.
+    if (!result.error) return ((result.data ?? []) as unknown) as MemberProfileRow[];
 
     lastError = result.error;
     if (!/column/i.test(result.error.message ?? "")) {
@@ -284,8 +307,11 @@ export const handler = async (event: HttpEvent) => {
       return jsonResponse(200, { success: true, scanned: 0, delivered: 0 });
     }
 
-    const profiles = await loadMemberProfiles(adminClient, teamIds);
-    const memberIndex = buildMemberIndex(profiles);
+    const [profiles, teamByUser] = await Promise.all([
+      loadMemberProfiles(adminClient),
+      loadTeamByUser(adminClient),
+    ]);
+    const memberIndex = buildMemberIndex(profiles, teamByUser);
     const existingKeys = new Set(
       ((existingNotificationsResult.data ?? []) as Array<{ user_id?: string | null; href?: string | null }>)
         .map((row) => {

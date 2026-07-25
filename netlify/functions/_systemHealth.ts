@@ -144,69 +144,50 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
 /**
  * Цілісність даних — те, що не падає з помилкою, а тихо бреше.
  *
- * 1. Журнал змін статусу прорахунку (`activity_log`, action='змінив статус')
- *    зламався 2026-07-01: прорахунки статуси міняли, записів немає. Ловимо це
- *    доказово — рахуємо прорахунки, які змінювались ПІСЛЯ останнього запису в
- *    журналі й уже не в статусі «новий». Якщо такі є, журнал точно відстає.
- * 2. `quotes.decided_at` не заповнюється взагалі, тому «коли затвердили»
- *    доводиться визначати обхідними шляхами.
+ * Аудит статусів прорахунку з 2026-07-25 тримає тригер у базі
+ * (`scripts/quote-status-audit-trigger.sql`), тож обійти його застосунок уже
+ * не може. Але сам тригер теж треба сторожити: якщо його зняли або вимкнули,
+ * усе знову почне тихо втрачати історію.
  */
 async function dataIntegritySignals(admin: SupabaseClient, teamIds: string[], now: Date): Promise<Signal[]> {
   const signals: Signal[] = [];
   if (teamIds.length === 0) return signals;
 
-  const [logResult, approvedResult] = await Promise.all([
+  const [historyResult, movedResult] = await Promise.all([
     admin
-      .from("activity_log")
+      .schema("tosho")
+      .from("quote_status_history")
       .select("created_at")
-      .eq("action", "змінив статус")
-      .eq("entity_type", "quotes")
+      .in("team_id", teamIds)
       .order("created_at", { ascending: false })
       .limit(1),
     admin
       .schema("tosho")
       .from("quotes")
-      .select("id", { count: "exact", head: true })
+      .select("updated_at")
       .in("team_id", teamIds)
-      .eq("status", "approved")
-      .is("decided_at", null),
+      .neq("status", "new")
+      .order("updated_at", { ascending: false })
+      .limit(1),
   ]);
 
-  const newestLog = ((logResult.data ?? []) as Array<{ created_at?: string | null }>)[0]?.created_at ?? null;
-  if (!newestLog) {
-    signals.push({ tone: "warning", text: "Журнал змін статусу прорахунків порожній" });
-  } else {
-    const ageDays = (now.getTime() - new Date(newestLog).getTime()) / 86_400_000;
-    if (ageDays > STATUS_LOG_STALE_DAYS) {
-      // Докази: чи є прорахунки, що рухались уже після останнього запису.
-      const { count } = await admin
-        .schema("tosho")
-        .from("quotes")
-        .select("id", { count: "exact", head: true })
-        .in("team_id", teamIds)
-        .gt("updated_at", newestLog)
-        .neq("status", "new");
-      const moved = count ?? 0;
-      if (moved > 0) {
-        signals.push({
-          tone: "danger",
-          text: `Журнал змін статусу прорахунків не пишеться ${Math.round(ageDays)} дн (${moved} прорахунків змінились після останнього запису)`,
-        });
-      } else {
-        signals.push({
-          tone: "neutral",
-          text: `Статуси прорахунків не змінювались ${Math.round(ageDays)} дн`,
-        });
-      }
-    }
-  }
+  const newestHistory = ((historyResult.data ?? []) as Array<{ created_at?: string | null }>)[0]?.created_at ?? null;
+  const newestMove = ((movedResult.data ?? []) as Array<{ updated_at?: string | null }>)[0]?.updated_at ?? null;
 
-  const withoutDecidedAt = approvedResult.count ?? 0;
-  if (withoutDecidedAt > 0) {
-    signals.push({
-      tone: "warning",
-      text: `decided_at не заповнено у ${withoutDecidedAt} затверджених прорахунків`,
-    });
+  // Доказовий сигнал: прорахунки рухаються, а історія мовчить — отже тригер
+  // не працює. Просто «давно немає записів» нічого не означає: у тиху добу
+  // статуси й справді ніхто не міняє.
+  if (newestMove) {
+    const historyAgeDays = newestHistory
+      ? (now.getTime() - new Date(newestHistory).getTime()) / 86_400_000
+      : Number.POSITIVE_INFINITY;
+    const movedAfterHistory = newestHistory ? new Date(newestMove) > new Date(newestHistory) : true;
+    if (historyAgeDays > STATUS_LOG_STALE_DAYS && movedAfterHistory) {
+      signals.push({
+        tone: "danger",
+        text: "Історія статусів прорахунків не пишеться — перевір тригер quotes_status_history_trg",
+      });
+    }
   }
 
   return signals;

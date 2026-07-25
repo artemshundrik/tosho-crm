@@ -336,19 +336,20 @@ async function sumQuotesByRuns(admin: AdminClient, quoteIds: string[]): Promise<
 /**
  * Прорахунки, затверджені у вікні [startIso, endIso).
  *
- * У цій базі немає жодного повністю надійного джерела, тому беремо два і
- * зливаємо за id (дедуплікація робить об'єднання безпечним):
+ * Джерел три, зливаємо за id (дедуплікація робить об'єднання безпечним):
  *
- *  1. `activity_log` з `action='змінив статус'` — точний журнал переходів.
- *     Перевірено на проді: пише його щось зламане, останній запис 2026-07-01,
- *     хоча статуси прорахунків після цієї дати змінювались. Поки не полагодять
- *     — джерело мовчить, але щойно оживе, воно найточніше.
- *  2. `quotes.status='approved'` + `updated_at` у вікні — груба заміна.
- *     Ловить факт затвердження, але дасть хибне спрацювання, якщо вже
- *     затверджений прорахунок просто відредагували.
+ *  1. `quotes.decided_at` — з 2026-07-25 його надійно проставляє тригер
+ *     `quotes_status_stamp_trg` при будь-якому шляху зміни статусу. Найточніше
+ *     джерело для всього, що затверджено ПІСЛЯ цієї дати.
+ *  2. `quote_status_history` — той самий тригер пише туди перехід. Дає ще й
+ *     автора та нотатку.
+ *  3. `quotes.status='approved'` + `updated_at` у вікні — запасний варіант для
+ *     історичних записів (37 прорахунків затверджені до тригера й досі мають
+ *     decided_at = NULL). Дає хибне спрацювання, якщо вже затверджений
+ *     прорахунок просто відредагували, тому він лише третій.
  *
- * НЕ використовуємо `quotes.decided_at`: колонка порожня у всіх затверджених
- * прорахунків. І не `quote_status_history`: там 2 рядки на всю базу.
+ * `activity_log` з `action='змінив статус'` більше не читаємо: його писав
+ * застосунок в обхід бази, і він замовк 2026-07-01.
  */
 async function approvedQuoteIds(
   admin: AdminClient,
@@ -356,31 +357,45 @@ async function approvedQuoteIds(
   startIso: string,
   endIso: string
 ): Promise<string[]> {
-  const [logResult, snapshotResult] = await Promise.all([
-    admin
-      .from("activity_log")
-      .select("entity_id")
-      .eq("action", "змінив статус")
-      .eq("entity_type", "quotes")
-      .eq("metadata->>to", "approved")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso)
-      .limit(5000),
+  const [decidedResult, historyResult, snapshotResult] = await Promise.all([
     admin
       .schema("tosho")
       .from("quotes")
       .select("id")
       .in("team_id", teamIds)
       .eq("status", "approved")
+      .gte("decided_at", startIso)
+      .lt("decided_at", endIso)
+      .limit(5000),
+    admin
+      .schema("tosho")
+      .from("quote_status_history")
+      .select("quote_id")
+      .in("team_id", teamIds)
+      .eq("to_status", "approved")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .limit(5000),
+    // Запасний варіант для затверджених ДО появи тригера: у них decided_at
+    // порожній, і крім updated_at спертися нема на що.
+    admin
+      .schema("tosho")
+      .from("quotes")
+      .select("id")
+      .in("team_id", teamIds)
+      .eq("status", "approved")
+      .is("decided_at", null)
       .gte("updated_at", startIso)
       .lt("updated_at", endIso)
       .limit(5000),
   ]);
-  if (logResult.error) throw new Error(`activity_log (quote status): ${logResult.error.message}`);
-  if (snapshotResult.error) throw new Error(`quotes (approved): ${snapshotResult.error.message}`);
+  if (decidedResult.error) throw new Error(`quotes (decided_at): ${decidedResult.error.message}`);
+  if (historyResult.error) throw new Error(`quote_status_history: ${historyResult.error.message}`);
+  if (snapshotResult.error) throw new Error(`quotes (approved fallback): ${snapshotResult.error.message}`);
 
   const ids = [
-    ...((logResult.data ?? []) as Array<{ entity_id?: string | null }>).map((r) => r.entity_id),
+    ...((decidedResult.data ?? []) as Array<{ id?: string | null }>).map((r) => r.id),
+    ...((historyResult.data ?? []) as Array<{ quote_id?: string | null }>).map((r) => r.quote_id),
     ...((snapshotResult.data ?? []) as Array<{ id?: string | null }>).map((r) => r.id),
   ].filter((v): v is string => Boolean(v));
   return Array.from(new Set(ids));

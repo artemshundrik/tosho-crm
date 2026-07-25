@@ -28,6 +28,7 @@
     "_lib/quotePricing.ts",
     "_lib/teamMembers.ts",
     "_lib/teamMembers.test.ts",
+    "customer-lead-reminders.ts",
     "daily-digest.ts",
     "finance-payment-reminders.ts",
     "telegram-assistant-background.ts",
