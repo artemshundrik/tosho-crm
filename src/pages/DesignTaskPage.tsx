@@ -1935,8 +1935,16 @@ export default function DesignTaskPage() {
           .select("id,entity_id,metadata,title,created_at,user_id")
           .eq("team_id", effectiveTeamId)
           .eq("id", id)
-          .single();
+          // maybeSingle, а не single: на видаленій задачі single кидає сирий
+          // PostgREST-текст «Cannot coerce the result to a single JSON object»,
+          // і користувач бачить саме його замість пояснення.
+          .maybeSingle();
         if (rowError) throw rowError;
+        if (!row) {
+          setError("Задачу не знайдено — схоже, її видалили.");
+          setLoading(false);
+          return;
+        }
         const meta = (row?.metadata as Record<string, unknown> | null) ?? {};
         const metadataQuoteId =
           typeof meta.quote_id === "string" && meta.quote_id.trim() ? meta.quote_id.trim() : null;

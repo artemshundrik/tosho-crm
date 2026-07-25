@@ -71,15 +71,34 @@ export const handler = async (event: HttpEvent) => {
     // Назви задач — щоб у сповіщенні було видно, який саме таймер зупиняти.
     const taskIds = Array.from(new Set(sessions.map((s) => s.design_task_id).filter(Boolean)));
     const titleById = new Map<string, string>();
+    const existingTasks = new Set<string>();
     if (taskIds.length > 0) {
       const { data: tasks } = await admin.from("activity_log").select("id,title").in("id", taskIds).limit(500);
       for (const row of ((tasks ?? []) as Array<{ id?: string | null; title?: string | null }>)) {
-        if (row.id && (row.title ?? "").trim()) titleById.set(row.id, (row.title as string).trim());
+        if (!row.id) continue;
+        existingTasks.add(row.id);
+        if ((row.title ?? "").trim()) titleById.set(row.id, (row.title as string).trim());
       }
     }
 
+    // Таймер на ВИДАЛЕНІЙ задачі зупинити з інтерфейсу неможливо — сторінки вже
+    // немає. Нагадувати про такий безглуздо: людина щодня отримувала б посилання
+    // в нікуди. Закриваємо самі, нульовою тривалістю: інакше в статистику впаде
+    // до 8 год (обрізка) роботи по задачі, якої не існує.
+    const orphans = sessions.filter((s) => !existingTasks.has(s.design_task_id));
+    for (const orphan of orphans) {
+      await admin
+        .from("design_task_timer_sessions")
+        .update({ paused_at: orphan.started_at })
+        .eq("id", orphan.id);
+    }
+    const liveSessions = sessions.filter((s) => existingTasks.has(s.design_task_id));
+    if (liveSessions.length === 0) {
+      return jsonResponse(200, { success: true, stuck: sessions.length, orphansClosed: orphans.length, delivered: 0 });
+    }
+
     // Звільнених не турбуємо.
-    const userIds = Array.from(new Set(sessions.map((s) => s.user_id)));
+    const userIds = Array.from(new Set(liveSessions.map((s) => s.user_id)));
     const { data: profiles } = await admin
       .schema("tosho")
       .from("team_member_profiles")
@@ -92,7 +111,7 @@ export const handler = async (event: HttpEvent) => {
     );
 
     const todayKey = now.toISOString().slice(0, 10);
-    const rows = sessions
+    const rows = liveSessions
       .filter((s) => !inactive.has(s.user_id))
       .map((session) => {
         const hours = (now.getTime() - new Date(session.started_at).getTime()) / 3_600_000;
@@ -118,7 +137,7 @@ export const handler = async (event: HttpEvent) => {
     }
 
     const result = await deliverNotifications(admin, rows, { dedupeByHref: true, category: "design" });
-    return jsonResponse(200, { success: true, stuck: sessions.length, ...result });
+    return jsonResponse(200, { success: true, stuck: sessions.length, orphansClosed: orphans.length, ...result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return jsonResponse(500, { error: message });
