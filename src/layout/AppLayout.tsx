@@ -1774,7 +1774,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             "left-0"
           )}
         >
-          <div className="flex h-14 items-center gap-3 px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(300px,380px)_minmax(0,1fr)] md:items-center md:gap-4 md:px-5 lg:px-6">
+          {/* Права колонка — minmax(max-content,1fr): її вміст (віджети таймера,
+              заробітку, сповіщень) має shrink-0, тож при minmax(0,1fr) колонка
+              ставала вужчою за вміст і той налазив на центральний пошук.
+              max-content гарантує колонці щонайменше ширину вмісту, а пошук
+              віддає простір, стискаючись у своїх межах. */}
+          <div className="flex h-14 items-center gap-3 px-4 md:grid md:grid-cols-[minmax(0,1fr)_minmax(260px,380px)_minmax(max-content,1fr)] md:items-center md:gap-4 md:px-5 lg:px-6">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {/* Mobile menu */}
               <div className="md:hidden">
