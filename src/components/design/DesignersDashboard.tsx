@@ -905,8 +905,9 @@ export function DesignersDashboard({
             })}
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {/* Пояснення, чому цифри неповні, а не попередження — нейтральний тон. */}
             {isCurrentMonth ? (
-              <span className="hidden items-center gap-1.5 rounded-full border border-warning-soft-border bg-warning-soft px-2.5 py-1 text-3xs font-medium text-warning-foreground sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-3xs font-medium text-muted-foreground sm:inline-flex">
                 <CalendarIcon className="h-3 w-3" />
                 поточний місяць
               </span>
@@ -1001,7 +1002,7 @@ export function DesignersDashboard({
       </section>
 
       {analytics.truncated ? (
-        <div className="rounded-section border border-warning-soft-border bg-warning-soft px-4 py-2 text-xs text-warning-foreground">
+        <div className="rounded-section border border-border bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
           Даних дуже багато — найстаріші місяці можуть бути неповними (уперлись у ліміт вибірки).
         </div>
       ) : null}

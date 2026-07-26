@@ -40,6 +40,31 @@ function Money({ value, masked, className }: { value: string; masked: boolean; c
   );
 }
 
+/**
+ * Робочі дні місяця квадратиками: зафарбовані — ті, що вже минули.
+ *
+ * Робочих днів дискретна кількість (23, а не «78%»), тому сітка відповідає на
+ * «скільки лишилось» без читання цифр. Поточний день навмисно НЕ виділяємо —
+ * останній зафарбований квадратик і є сьогодні, окрема мітка лише шумить.
+ * Рядок із цифрами поруч дає ту саму інформацію рідеру, тому сітка aria-hidden.
+ */
+function WorkdayGrid({ total, passed }: { total: number; passed: number }) {
+  if (total <= 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-[3px]" aria-hidden="true">
+      {Array.from({ length: total }, (_, index) => (
+        <span
+          key={index}
+          className={cn(
+            "h-[11px] w-[11px] rounded-[3px]",
+            index < passed ? "bg-success-solid" : "border border-border bg-muted"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function DesignerEarningsWidget({
   teamId,
   userId,
@@ -162,9 +187,9 @@ export function DesignerEarningsWidget({
           <div className="flex items-center gap-2 px-3.5 pt-3">
             <Wallet className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">Мій заробіток · {monthLabel}</span>
-            <span className="ml-auto rounded-full border border-warning-soft-border bg-warning-soft px-2 py-0.5 text-3xs font-semibold uppercase tracking-caps text-warning-foreground">
-              до податків
-            </span>
+            {/* Це виноска до суми, а не попередження — тому тихий підпис,
+                а не warning-бейдж: нічого не зламалось і робити нічого не треба. */}
+            <span className="ml-auto text-3xs text-muted-foreground">до податків</span>
           </div>
 
           <div className="px-3.5 pt-2.5">
@@ -179,8 +204,14 @@ export function DesignerEarningsWidget({
           </div>
 
           <div className="mt-3 border-t border-border/50 px-3.5 py-2.5">
-            <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">База</div>
-            <div className="mt-1 flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">База</span>
+              <span className="ml-auto text-3xs tabular-nums text-muted-foreground">
+                {earnings.workdaysPassed} з {earnings.workdaysTotal} робочих днів
+              </span>
+            </div>
+            <WorkdayGrid total={earnings.workdaysTotal} passed={earnings.workdaysPassed} />
+            <div className="mt-1.5 flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Накопичено зі ставки</span>
               <span className="ml-auto font-semibold tabular-nums text-foreground">
                 <Money value={uahShort(earnings.baseAccrued)} masked={masked} />
@@ -189,9 +220,6 @@ export function DesignerEarningsWidget({
                   <Money value={uahShort(earnings.terms.baseMonthRate)} masked={masked} />
                 </span>
               </span>
-            </div>
-            <div className="mt-1 text-3xs tabular-nums text-muted-foreground">
-              {earnings.workdaysPassed} з {earnings.workdaysTotal} робочих днів
             </div>
           </div>
 
