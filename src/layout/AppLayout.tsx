@@ -775,13 +775,26 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           return permissions.isSuperAdmin || permissions.isAdmin;
         }
         if (!link.moduleKey) return true;
-        // Фінанси обмежені роллю в самій БД (RLS) — тримаємо UI у згоді з нею.
-        if (link.moduleKey === "finance") {
-          return permissions.isSuperAdmin || isFinanceJobRole;
-        }
-        if (permissions.isSuperAdmin) return true;
         // Доступи ще вантажаться — краще не показати пункт, ніж блимнути ним.
         if (moduleAccess === undefined) return false;
+
+        /**
+         * Явно знята галочка ховає пункт навіть у власника.
+         *
+         * Це не обмеження прав: доступ у нього лишається (роут-гейт пропускає,
+         * RLS не змінюється) — ховається саме пункт меню. Власник має право
+         * прибрати з очей те, чим не користується; ігнорувати його ж свідомий
+         * вибір і показувати пункт назад — просто незручно. Права за
+         * замовчуванням не звужуються: незаписаний ключ і далі означає
+         * «показувати».
+         */
+        const hiddenExplicitly = moduleAccess[link.moduleKey] === false;
+
+        // Фінанси обмежені роллю в самій БД (RLS) — тримаємо UI у згоді з нею.
+        if (link.moduleKey === "finance") {
+          return (permissions.isSuperAdmin || isFinanceJobRole) && !hiddenExplicitly;
+        }
+        if (permissions.isSuperAdmin) return !hiddenExplicitly;
         return hasModuleAccess(moduleAccess, link.moduleKey);
       }),
     [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]

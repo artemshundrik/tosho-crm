@@ -1316,13 +1316,28 @@ export function TeamMembersPage() {
         editProfileMember.job_role
       );
       const currentEmploymentStatus = normalizeEmploymentStatus(currentMeta.employmentStatus, currentMeta.probationEndDate);
+      const probationDatesChanged = currentMeta.probationEndDate !== probationEndDate;
+      /**
+       * Статус зайнятості при збереженні картки.
+       *
+       * ГОЧА: раніше тут стояло просто `probationEndDate ? "probation" : "active"`,
+       * тобто статус виводився ЛИШЕ з дати. Дата випробувального лишається в
+       * картці і після переведення в штат (це історія), тож будь-яке наступне
+       * збереження — навіть просто зміна доступів — мовчки повертало людину на
+       * випробувальний. Гілка "active" була недосяжною, і рішення, ухвалене
+       * через team-member-probation, не трималося.
+       *
+       * Тепер уже підтверджений штат зберігається; на випробувальний повертаємо
+       * лише коли дату справді змінили — тобто розпочали новий термін.
+       */
       const nextEmploymentStatus =
         currentEmploymentStatus === "rejected" || currentEmploymentStatus === "inactive"
           ? currentEmploymentStatus
+          : currentEmploymentStatus === "active" && !probationDatesChanged
+          ? "active"
           : probationEndDate
           ? "probation"
           : "active";
-      const probationDatesChanged = currentMeta.probationEndDate !== probationEndDate;
       const probationReviewNotifiedAt =
         nextEmploymentStatus === "probation" && probationDatesChanged ? "" : currentMeta.probationReviewNotifiedAt;
       const probationReviewedAt =

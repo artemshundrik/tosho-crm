@@ -195,15 +195,24 @@ export const handler = async (event: HttpEvent) => {
     updated_by: userData.user.id,
   };
 
-  const { error: updateError } = await adminClient
+  // .select() навмисно: без нього update, який не зачепив жодного рядка,
+  // повертає error === null — рішення тихо не застосувалось би, а подію нижче
+  // ми б усе одно записали. Саме так журнал розійшовся з профілями: у
+  // team_member_probation_events лежали рішення «active», а картки лишались
+  // на випробувальному.
+  const { data: updatedRows, error: updateError } = await adminClient
     .schema("tosho")
     .from("team_member_profiles")
     .update(updatePayload)
     .eq("workspace_id", workspaceId)
-    .eq("user_id", targetUserId);
+    .eq("user_id", targetUserId)
+    .select("user_id");
 
   if (updateError) {
     return jsonResponse(500, { error: updateError.message });
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return jsonResponse(409, { error: "Профіль не оновився — рішення не збережено" });
   }
 
   await adminClient.schema("tosho").from("team_member_probation_events").insert({
