@@ -677,34 +677,50 @@ export function DesignersDashboard({
   ];
 
   /* ---------- середній час за типами ----------
-   * Дизайнеру НЕ показуємо порівняння з командою: при двох дизайнерах
-   * командне середнє арифметично розкриває колегу (колега = 2×команда − я).
-   * Замість цього орієнтир — норматив (15/30 хв), який чесніший і не залежить
-   * від того, скільки людей у команді.
+   * Що показуємо на треку (домовлена модель):
+   *  · «Вся команда»  → бар місяця + тінь попереднього + норма;
+   *  · дизайнер очима SEO/адміна → його бар + тінь ЙОГО попереднього + мітки
+   *    колег + норма;
+   *  · дизайнер у власному профілі → бар + тінь свого попереднього + норма,
+   *    БЕЗ колег і без командного середнього (при двох дизайнерах командне
+   *    середнє арифметично розкриває колегу: колега = 2×команда − я).
+   *
+   * Тінь попереднього місяця тепер є в усіх трьох випадках — це «сам проти
+   * себе», найзрозуміліше порівняння для будь-якої ролі.
    */
-  const teamAggCurrent = analytics.team[mi] ?? null;
-  const showTeamCompare = canSeeAll && !!scopedDesigner;
+  const peerDesigners = scopedDesigner
+    ? visibleDesigners.filter((designer) => designer.id !== scopedDesigner.id)
+    : [];
+  const showPeers = canSeeAll && peerDesigners.length > 0;
   const typeRows = DESIGN_TASK_TYPE_OPTIONS.map((option) => {
     const type = option.value;
     const current = currentAgg ? avgSecondsForType(currentAgg, type) : null;
-    const compare = showTeamCompare
-      ? teamAggCurrent
-        ? avgSecondsForType(teamAggCurrent, type)
-        : null
-      : scopedDesigner
-        ? null
-        : previousAgg
-          ? avgSecondsForType(previousAgg, type)
-          : null;
+    // Порівняння = завжди попередній місяць того ж скоупу (команда або людина).
+    const compare = previousAgg ? avgSecondsForType(previousAgg, type) : null;
+    const peers = showPeers
+      ? peerDesigners
+          .map((designer) => {
+            const agg = analytics.perDesigner.get(designer.id)?.[mi] ?? null;
+            const value = agg ? avgSecondsForType(agg, type) : null;
+            return value == null ? null : { designer, value, tasks: agg?.timerTaskCountByType[type] ?? 0 };
+          })
+          .filter((entry): entry is { designer: (typeof peerDesigners)[number]; value: number; tasks: number } => !!entry)
+      : [];
     const taskCount = currentAgg?.timerTaskCountByType[type] ?? 0;
+    const prevTaskCount = previousAgg?.timerTaskCountByType[type] ?? 0;
     const normMinutes = DESIGN_TASK_TYPE_NORM_MINUTES[type];
     const normSeconds = normMinutes == null ? null : normMinutes * 60;
     const overNorm = current != null && normSeconds != null ? current > normSeconds : null;
-    return { type, option, current, compare, taskCount, normMinutes, normSeconds, overNorm };
+    return { type, option, current, compare, peers, taskCount, prevTaskCount, normMinutes, normSeconds, overNorm };
   });
   const typeScaleMax = Math.max(
     1,
-    ...typeRows.flatMap((row) => [row.current ?? 0, row.compare ?? 0, row.normSeconds ?? 0])
+    ...typeRows.flatMap((row) => [
+      row.current ?? 0,
+      row.compare ?? 0,
+      row.normSeconds ?? 0,
+      ...row.peers.map((peer) => peer.value),
+    ])
   );
 
   /* ---------- таблиця ---------- */
@@ -988,29 +1004,30 @@ export function DesignersDashboard({
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Clock className="h-4 w-4 text-primary" />
               {scopedDesigner
-                ? `Середній час за типами — ${firstName(scopedDesigner.label)} проти команди`
+                ? `Середній час за типами — ${firstName(scopedDesigner.label)}`
                 : "Середній час на задачу — за типами"}
             </h3>
-            <span className="text-2xs text-muted-foreground">
-              {scopedDesigner ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2 w-4 rounded-sm bg-foreground/80" aria-hidden="true" />
+                {monthShort(months[mi].value)}
+              </span>
+              {prevIdx != null ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block h-3 w-0.5 rounded-full bg-foreground/60" aria-hidden="true" />
-                  середнє по команді
+                  <span className="inline-block h-1.5 w-4 rounded-sm bg-foreground/25" aria-hidden="true" />
+                  {monthShort(months[prevIdx].value)}
                 </span>
-              ) : (
-                <span className="inline-flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-4 rounded-sm bg-foreground/80" aria-hidden="true" />
-                    {monthShort(months[mi].value)}
-                  </span>
-                  {prevIdx != null ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-block h-2 w-4 rounded-sm bg-foreground/25" aria-hidden="true" />
-                      {monthShort(months[prevIdx].value)}
-                    </span>
-                  ) : null}
+              ) : null}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-3 border-l-2 border-dashed border-foreground/45" aria-hidden="true" />
+                норма
+              </span>
+              {showPeers ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-border/70 bg-muted/40" aria-hidden="true" />
+                  колеги
                 </span>
-              )}
+              ) : null}
             </span>
             <p className="w-full text-xs text-muted-foreground">
               Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять.
@@ -1022,20 +1039,33 @@ export function DesignersDashboard({
               const currentWidth = row.current == null ? 0 : Math.max(2, (row.current / typeScaleMax) * 100);
               const compareWidth = row.compare == null ? 0 : Math.max(2, (row.compare / typeScaleMax) * 100);
               const diff = row.current != null && row.compare != null ? row.current - row.compare : null;
-              const compareLabel = scopedDesigner ? "Середнє по команді" : monthShort(months[prevIdx ?? mi].value);
+              const prevMonthLabel = monthShort(months[prevIdx ?? mi].value);
               const tipRows: TipRow[] = [
                 {
                   color: typeColor(row.type),
-                  label: scopedDesigner ? firstName(scopedDesigner.label) : monthShort(months[mi].value),
+                  label: `${scopedDesigner ? firstName(scopedDesigner.label) : "Команда"} · ${monthShort(months[mi].value)}`,
                   value: row.current == null ? "—" : formatHumanSeconds(row.current),
                   strong: true,
                 },
               ];
               if (row.compare != null) {
-                tipRows.push({ label: compareLabel, value: formatHumanSeconds(row.compare), muted: true });
+                tipRows.push({
+                  label: prevMonthLabel,
+                  // Кількість задач поруч — щоб було видно, наскільки база надійна:
+                  // на 1–2 задачах різниця місяць-до-місяця це шум, а не тренд.
+                  value: `${formatHumanSeconds(row.compare)} · ${row.prevTaskCount} задач`,
+                  muted: true,
+                });
               }
+              row.peers.forEach((peer) => {
+                tipRows.push({
+                  label: firstName(peer.designer.label),
+                  value: `${formatHumanSeconds(peer.value)} · ${peer.tasks} задач`,
+                  muted: true,
+                });
+              });
               if (row.normMinutes != null) {
-                tipRows.push({ label: "Норма", value: `до ${row.normMinutes} хв`, muted: true });
+                tipRows.push({ label: "Норма", value: `≤ ${row.normMinutes} хв`, muted: true });
               }
               tipRows.push({ label: "Задач у таймері", value: `${row.taskCount}`, muted: true });
               return (
@@ -1049,13 +1079,15 @@ export function DesignersDashboard({
                     <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">
                       <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
-                      <span className="text-3xs tabular-nums text-muted-foreground">
-                        {row.taskCount} задач у таймері
-                        {row.normMinutes != null ? ` · норма до ${row.normMinutes} хв` : ""}
+                      {/* whitespace-nowrap + truncate: підпис має жити рівно в один рядок,
+                          інакше «норма до 15 / хв» рветься навпіл і рядок типу стрибає. */}
+                      <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
+                        {row.taskCount} задач
+                        {row.normMinutes != null ? ` · норма ≤ ${row.normMinutes} хв` : ""}
                       </span>
                     </span>
                   </div>
-                  <div className="relative h-6">
+                  <div className="relative h-7">
                     <div className="absolute inset-0 flex justify-between" aria-hidden="true">
                       {[0, 1, 2, 3, 4].map((line) => (
                         <span key={line} className="w-px bg-foreground/5" />
@@ -1069,18 +1101,12 @@ export function DesignersDashboard({
                     ) : (
                       <span className="absolute top-1 text-3xs text-muted-foreground">немає задач із таймером</span>
                     )}
-                    {scopedDesigner ? (
-                      row.compare != null ? (
-                        <span
-                          className="absolute inset-y-0 w-0.5 rounded-full bg-foreground/60"
-                          style={{ left: `${(row.compare / typeScaleMax) * 100}%` }}
-                          aria-hidden="true"
-                        />
-                      ) : null
-                    ) : row.compare != null ? (
+                    {/* Тінь попереднього місяця того ж скоупу — «сам проти себе». */}
+                    {row.compare != null && row.current != null ? (
                       <div
-                        className="absolute bottom-0 h-2 rounded-r opacity-25"
+                        className="absolute top-[19px] h-1.5 rounded-r opacity-30"
                         style={{ width: `${compareWidth}%`, background: typeColor(row.type) }}
+                        aria-hidden="true"
                       />
                     ) : null}
                     {/* Норматив — пунктирна межа: усе, що правіше, вийшло за норму. */}
@@ -1091,22 +1117,58 @@ export function DesignersDashboard({
                         aria-hidden="true"
                       />
                     ) : null}
+                    {/* Колеги — лише для тих, хто бачить усіх (SEO/адмін), і лише
+                        коли відкрито конкретного дизайнера. */}
+                    {row.peers.map((peer) => (
+                      <span
+                        key={peer.designer.id}
+                        className="absolute inset-y-0 flex -translate-x-1/2 cursor-help items-center"
+                        style={{ left: `${Math.min(100, (peer.value / typeScaleMax) * 100)}%` }}
+                        {...bindTip(() => ({
+                          title: `${peer.designer.label} · ${row.option.label}`,
+                          rows: [
+                            { color: typeColor(row.type), label: "⌀ час", value: formatHumanSeconds(peer.value), strong: true },
+                            { label: "Задач у таймері", value: `${peer.tasks}`, muted: true },
+                            ...(row.normMinutes != null
+                              ? [{ label: "Норма", value: `≤ ${row.normMinutes} хв`, muted: true }]
+                              : []),
+                          ],
+                        }))}
+                      >
+                        <span className="absolute inset-y-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground/45" aria-hidden="true" />
+                        <AvatarBase
+                          src={getMemberAvatar(peer.designer.id)}
+                          name={peer.designer.label}
+                          fallback={getInitials(peer.designer.label)}
+                          size={18}
+                          className="relative z-10 shrink-0 ring-2 ring-background"
+                          inactive={memberInactiveById[peer.designer.id] ?? false}
+                        />
+                      </span>
+                    ))}
                   </div>
                   <div className="flex items-center gap-2 sm:justify-end">
-                    <span className="text-[13px] font-semibold tabular-nums text-foreground">
+                    <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
                       {row.current == null ? "—" : formatHumanSeconds(row.current)}
                     </span>
                     {row.overNorm != null ? (
+                      /* Короткий підпис + nowrap: «+4 хв понад норму» не влазив у колонку
+                         і рвався на два рядки. Що це саме норма — вже кажуть іконка,
+                         колір, пунктир на треку і підпис зліва; повний текст — у title. */
                       <span
                         className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold",
+                          "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-3xs font-semibold",
                           row.overNorm ? DELTA_CLASS.bad : DELTA_CLASS.good
                         )}
-                        title={`Норма: до ${row.normMinutes} хв на задачу`}
+                        title={
+                          row.overNorm
+                            ? `Норма ≤ ${row.normMinutes} хв на задачу — перевищено`
+                            : `Норма ≤ ${row.normMinutes} хв на задачу — у межах`
+                        }
                       >
                         {row.overNorm ? <TrendingUp className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                         {row.overNorm
-                          ? `+${formatHumanMinutes(((row.current ?? 0) - (row.normSeconds ?? 0)) / 60)} понад норму`
+                          ? `+${formatHumanMinutes(((row.current ?? 0) - (row.normSeconds ?? 0)) / 60)}`
                           : "у нормі"}
                       </span>
                     ) : diff != null ? (
