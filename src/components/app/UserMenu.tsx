@@ -184,17 +184,22 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           />
           <div className="min-w-0 flex-1 text-left">
             <div className="truncate text-sm font-semibold">{userData.name}</div>
-            <div className="mt-0.5 flex items-center gap-1 text-2xs">
-              <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
+            {/* Тільки посада — «Access role • Посада» вилазив за межі картки: два
+                truncate-спани в flex-рядку без min-w-0 не стискаються, а виштовхуються.
+                Доступ (Super Admin/Admin) видно на сторінці Команди; тут — лише
+                фолбек на нього, якщо посаду ще не вказали. */}
+            {userData.jobRole ? (
+              <div className="mt-0.5 truncate text-2xs text-muted-foreground">{userData.jobRole}</div>
+            ) : (
+              <div
+                className={cn(
+                  "mt-0.5 truncate text-2xs",
+                  ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground"
+                )}
+              >
                 {userData.accessRole}
-              </span>
-              {userData.jobRole ? (
-                <>
-                  <span className="text-muted-foreground/70">•</span>
-                  <span className="truncate text-muted-foreground">{userData.jobRole}</span>
-                </>
-              ) : null}
-            </div>
+              </div>
+            )}
           </div>
         </Button>
         <Button
@@ -319,17 +324,18 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
 
             <div className="min-w-0 flex-1 text-left leading-tight">
               <div className="truncate text-sm font-semibold">{userData.name}</div>
-              <div className="mt-0.5 flex items-center gap-1 text-2xs">
-                <span className={cn("truncate", ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground")}>
+              {userData.jobRole ? (
+                <div className="mt-0.5 truncate text-2xs text-muted-foreground">{userData.jobRole}</div>
+              ) : (
+                <div
+                  className={cn(
+                    "mt-0.5 truncate text-2xs",
+                    ROLE_TEXT_CLASSES[userData.roleKey] || "text-muted-foreground"
+                  )}
+                >
                   {userData.accessRole}
-                </span>
-                {userData.jobRole ? (
-                  <>
-                    <span className="text-muted-foreground/70">•</span>
-                    <span className="truncate text-muted-foreground">{userData.jobRole}</span>
-                  </>
-                ) : null}
-              </div>
+                </div>
+              )}
             </div>
 
             <MoreVertical className="h-4 w-4 text-muted-foreground" />
