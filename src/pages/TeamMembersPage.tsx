@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { formatJobRole } from "@/lib/jobRoles";
 import { toast } from "sonner";
 import {
   ShieldAlert,
@@ -202,26 +203,6 @@ const ACCESS_ROLE_LABELS: Record<string, string> = {
   member: "Member",
 };
 
-const JOB_ROLE_LABELS: Record<string, string> = {
-  manager: "Менеджер",
-  printer: "Друкар",
-  head_of_logistics: "Начальник відділу логістики",
-  head_of_production: "Начальник з виробництва",
-  designer: "Дизайнер",
-  logistics: "Логіст",
-  packer: "Пакувальник",
-  pm: "PM",
-  sales_manager: "Менеджер з продажу",
-  top_manager: "Топ-менеджер",
-  junior_sales_manager: "Молодший менеджер з продажу",
-  office_manager: "Офіс-менеджер",
-  accountant: "Бухгалтер",
-  chief_accountant: "Головний бухгалтер",
-  marketer: "Маркетолог",
-  smm: "СММ",
-  seo: "SEO",
-};
-
 const ACCESS_ROLE_OPTIONS: AccessRoleOption[] = [
   { value: "member", label: "Member" },
   { value: "admin", label: "Admin" },
@@ -247,10 +228,12 @@ const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "junior_sales_manager", label: "Молодший менеджер з продажу" },
   { value: "office_manager", label: "Офіс-менеджер" },
   { value: "accountant", label: "Бухгалтер" },
+  { value: "junior_accountant", label: "Молодший бухгалтер" },
   { value: "chief_accountant", label: "Головний бухгалтер" },
   { value: "marketer", label: "Маркетолог" },
   { value: "smm", label: "СММ" },
   { value: "seo", label: "SEO" },
+  { value: "it_specialist", label: "IT-спеціаліст" },
 ];
 
 const AVAILABILITY_OPTIONS = [
@@ -333,8 +316,11 @@ function getAccessRoleLabel(role: string | null) {
   return ACCESS_ROLE_LABELS[role ?? ""] ?? "Member";
 }
 
+// Делегує канонічному довіднику (src/lib/jobRoles.ts) — раніше тут була власна
+// копія списку посад, яка розходилась із джерелом істини (нові посади показувались
+// сирим ключем англійською: «it specialist» замість «IT-спеціаліст»).
 function getJobRoleLabel(role: string | null) {
-  return JOB_ROLE_LABELS[role ?? ""] ?? "Без ролі";
+  return formatJobRole(role) || "Без ролі";
 }
 
 function normalizeJobRoleInput(role: string | null) {

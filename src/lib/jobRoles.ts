@@ -17,10 +17,12 @@ export const JOB_ROLE_NAMES: Record<string, string> = {
   junior_sales_manager: "Молодший менеджер з продажу",
   office_manager: "Офіс-менеджер",
   accountant: "Бухгалтер",
+  junior_accountant: "Молодший бухгалтер",
   chief_accountant: "Головний бухгалтер",
   marketer: "Маркетолог",
   smm: "СММ",
   seo: "SEO",
+  it_specialist: "IT-спеціаліст",
 };
 
 // Maps a job-role key to its Ukrainian label. Unknown or already-localized

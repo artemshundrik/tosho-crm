@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { formatJobRole } from "@/lib/jobRoles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -115,26 +116,6 @@ type EnrichedMember = WorkspaceMemberDisplayRow & {
 type QuickFilter = "all" | "online" | "away";
 type SortMode = "presence" | "name" | "tenure" | "birthday";
 
-const ROLE_LABELS: Record<string, string> = {
-  manager: "Менеджер",
-  printer: "Друкар",
-  head_of_logistics: "Начальник відділу логістики",
-  head_of_production: "Начальник з виробництва",
-  designer: "Дизайнер",
-  logistics: "Логіст",
-  packer: "Пакувальник",
-  pm: "PM",
-  sales_manager: "Менеджер з продажу",
-  top_manager: "Топ-менеджер",
-  junior_sales_manager: "Молодший менеджер з продажу",
-  office_manager: "Офіс-менеджер",
-  accountant: "Бухгалтер",
-  chief_accountant: "Головний бухгалтер",
-  marketer: "Маркетолог",
-  smm: "СММ",
-  seo: "SEO",
-};
-
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
 /** Домен → тон. Класи збираються ТІЛЬКИ через таблиці statusTones. */
@@ -179,9 +160,11 @@ const CALENDAR_LEGEND: Array<{ label: string; swatchClass: string }> = [
   { label: "Повернення", swatchClass: toneBadgeClass[EVENT_TONE.return] },
 ];
 
+// Тонка обгортка над канонічним довідником (src/lib/jobRoles.ts) — раніше тут
+// була власна копія списку посад, яка розходилась із джерелом істини (нові
+// посади типу «IT-спеціаліст» показувались сирим ключем англійською).
 function formatRoleLabel(value?: string | null) {
-  if (!value) return "Без ролі";
-  return ROLE_LABELS[value] ?? value.replaceAll("_", " ");
+  return formatJobRole(value) || "Без ролі";
 }
 
 function startOfDay(date: Date) {

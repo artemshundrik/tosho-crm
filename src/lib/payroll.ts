@@ -67,8 +67,6 @@ export const PAYROLL_MONTHS = [
  * Used by the finance "Виплати команді" view.
  */
 export const PAYROLL_EXCLUDED_USER_IDS = new Set<string>([
-  "438b2643-e6fb-4366-bb92-83a88475c1f4", // Артем Шундрик (owner)
-  "a411928a-27d8-495c-90e6-c7125d2ee1f5", // Артем Шундрик (другий акаунт)
   "9753ba06-3911-40fe-a9d4-bea1a92f1667", // В'ячеслав Хом'яков
   "ceade688-2792-4814-b0f4-c4e4b6d058e1", // Олена Борщ
   "e73aee8c-ebc8-449f-af12-6420a363498a", // Євгенія Безручко
