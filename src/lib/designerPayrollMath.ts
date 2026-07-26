@@ -6,19 +6,34 @@
  * supabase-клієнт. I/O живе в `designerPayroll.ts`, який реекспортує це все.
  *
  * Модель і рішення: docs/DESIGNER_PAYROLL_DESIGN.md
+ *
+ * НОРМА — ДЕННА (рішення CEO 2026-07-26). Місячна норма була несправедлива:
+ * у травні 2026 — 21 робочий день, у липні — 23, тобто до 10% різниці на
+ * рівному місці. Тепер норма = «стільки робіт на робочий день» × робочі дні
+ * людини, і відпустка з лікарняним зменшують її самі.
+ *
+ * Рахуються ДВА види робіт із різними нормами й тарифами: візуали
+ * (`output_kind='visualization'`) і макети (все інше). Одиниця — унікальна
+ * робота `(задача + назва файлу без розширення)`, а не файл: один візуал
+ * перезаливають після правок по 5–9 разів.
  */
 
 export type DesignerPayDefaults = {
-  visualNorm: number;
-  overNormRate: number;
+  visualNormPerDay: number;
+  layoutNormPerDay: number;
+  visualOverRate: number;
+  layoutOverRate: number;
   creativePercent: number;
   minCreativeCost: number;
 };
 
 export type DesignerPayRate = {
   baseMonthRate: number;
-  visualNorm: number | null;
-  overNormRate: number | null;
+  /** null у будь-якому полі = «беремо командний дефолт». */
+  visualNormPerDay: number | null;
+  layoutNormPerDay: number | null;
+  visualOverRate: number | null;
+  layoutOverRate: number | null;
   creativePercent: number | null;
   effectiveFrom: string;
 };
@@ -26,9 +41,35 @@ export type DesignerPayRate = {
 /** Ефективні умови = індивідуальний override поверх командних дефолтів. */
 export type EffectivePayTerms = {
   baseMonthRate: number;
-  visualNorm: number;
-  overNormRate: number;
+  visualNormPerDay: number;
+  layoutNormPerDay: number;
+  visualOverRate: number;
+  layoutOverRate: number;
   creativePercent: number;
+};
+
+/** Скільки унікальних робіт і скільки сирих файлів за ними стоїть. */
+export type OutputCounts = {
+  works: number;
+  files: number;
+};
+
+/** Підсумок по одному виду робіт (візуали або макети). */
+export type OutputEarnings = {
+  works: number;
+  /** Сирі файли — довідково, показує масштаб перезаливів. На гроші не впливають. */
+  files: number;
+  normPerDay: number;
+  overRate: number;
+  /** Норма, набрана на сьогодні: `normPerDay × нормо-днів, що минули`. */
+  normToDate: number;
+  /** Норма на повний місяць — для прогнозу й підпису «з N». */
+  normFull: number;
+  over: number;
+  pay: number;
+  forecastWorks: number;
+  forecastOver: number;
+  forecastPay: number;
 };
 
 /**
@@ -49,17 +90,19 @@ export type CreativePay = {
 export type DesignerEarnings = {
   month: string;                 // "2026-07"
   terms: EffectivePayTerms;
-  /** Робочі дні місяця та скільки з них уже минуло (з урахуванням відсутностей). */
+  /** Робочі дні місяця та скільки з них уже минуло — БАЗА (відсутності не віднімаються). */
   workdaysTotal: number;
   workdaysPassed: number;
+  /** Ті самі дні мінус відпустки/лікарняні — НОРМА. */
+  normDaysTotal: number;
+  normDaysPassed: number;
   /** Ті самі дні поденно — для сітки квадратиків. Порожній масив, якщо не завантажували. */
   workdays: WorkdayCell[];
   /** Накопичена база на сьогодні. */
   baseAccrued: number;
-  /** Унікальні візуали за місяць (не файли!) і скільки з них понад норму. */
-  visuals: number;
-  visualFiles: number;           // сирі файли — довідково, показує масштаб перезаливів
-  visualsOverNorm: number;
+  visuals: OutputEarnings;
+  layouts: OutputEarnings;
+  /** Доплата понад норму за обидва види разом. */
   overNormPay: number;
   /** Платні креативи: зараховані (approved) і ті, що чекають затвердження. */
   creatives: CreativePay[];
@@ -68,7 +111,6 @@ export type DesignerEarnings = {
   /** Разом на сьогодні + прогноз на кінець місяця. */
   earnedTotal: number;
   forecastTotal: number;
-  forecastVisuals: number;
 };
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
@@ -146,8 +188,13 @@ export function listWorkdays(params: WorkdayParams): WorkdayCell[] {
 }
 
 /**
- * Робочі дні місяця для розрахунку бази: пн–пт, скориговані винятками
- * календаря, мінус дні відсутності — під час них лічильник бази стоїть.
+ * Робочі дні місяця: пн–пт, скориговані винятками календаря, мінус дні
+ * відсутності (якщо їх передали) — під час них лічильник стоїть.
+ *
+ * Викликається ДВІЧІ з різними аргументами, і це навмисно:
+ *  · для БАЗИ — без `absences` (лікарняний не зменшує ставку);
+ *  · для НОРМИ — з `absences` (за день хвороби норму не набирають).
+ * Асиметрія на користь людини, рішення CEO 2026-07-26.
  *
  * Рахується з того самого переліку, що малює сітку, щоб цифри «18 з 23» і
  * кількість квадратиків не могли розійтися.
@@ -164,8 +211,10 @@ export function countWorkdays(params: WorkdayParams): { total: number; passed: n
 export function resolveTerms(rate: DesignerPayRate, defaults: DesignerPayDefaults): EffectivePayTerms {
   return {
     baseMonthRate: rate.baseMonthRate,
-    visualNorm: rate.visualNorm ?? defaults.visualNorm,
-    overNormRate: rate.overNormRate ?? defaults.overNormRate,
+    visualNormPerDay: rate.visualNormPerDay ?? defaults.visualNormPerDay,
+    layoutNormPerDay: rate.layoutNormPerDay ?? defaults.layoutNormPerDay,
+    visualOverRate: rate.visualOverRate ?? defaults.visualOverRate,
+    layoutOverRate: rate.layoutOverRate ?? defaults.layoutOverRate,
     creativePercent: rate.creativePercent ?? defaults.creativePercent,
   };
 }
@@ -180,41 +229,99 @@ export function pickRateForMonth(rates: DesignerPayRate[], monthKey: string): De
 }
 
 /**
+ * Один вид робіт: скільки зроблено проти норми на сьогодні й скільки за це
+ * доплатять.
+ *
+ * Норма «на сьогодні», а не на весь місяць — інакше до останнього дня місяця
+ * доплата показувала б нуль, а потім стрибала. Побічний ефект: якщо дизайнер
+ * вирвався вперед, а потім пригальмував, доплата в віджеті може зменшитись —
+ * це чесне відображення live-розрахунку, а не помилка.
+ */
+function computeOutput(params: {
+  counts: OutputCounts;
+  normPerDay: number;
+  overRate: number;
+  normDaysTotal: number;
+  normDaysPassed: number;
+}): OutputEarnings {
+  const { counts, normPerDay, overRate, normDaysTotal, normDaysPassed } = params;
+  const normToDate = normPerDay * normDaysPassed;
+  const normFull = normPerDay * normDaysTotal;
+
+  const over = Math.max(0, counts.works - normToDate);
+  const pay = Math.round(over * overRate);
+
+  // Прогноз: темп за нормо-днями, екстрапольований на повний місяць.
+  const forecastWorks =
+    normDaysPassed > 0 ? Math.round((counts.works / normDaysPassed) * normDaysTotal) : counts.works;
+  const forecastOver = Math.max(0, forecastWorks - normFull);
+
+  return {
+    works: counts.works,
+    files: counts.files,
+    normPerDay,
+    overRate,
+    normToDate,
+    normFull,
+    over,
+    pay,
+    forecastWorks,
+    forecastOver,
+    forecastPay: Math.round(forecastOver * overRate),
+  };
+}
+
+/**
  * Чиста функція підрахунку — вся арифметика тут, щоб її можна було перевірити
  * без мережі й без React.
  */
 export function computeEarnings(input: {
   monthKey: string;
   terms: EffectivePayTerms;
+  /** Дні для БАЗИ (без вирахування відсутностей). */
   workdaysTotal: number;
   workdaysPassed: number;
-  visuals: number;
-  visualFiles: number;
+  /** Дні для НОРМИ (мінус відсутності). Не передали — беремо ті самі, що для бази. */
+  normDaysTotal?: number;
+  normDaysPassed?: number;
+  visuals: OutputCounts;
+  layouts: OutputCounts;
   creatives?: CreativePay[];
   /** Поденна сітка для показу. На гроші не впливає — лічильники беруться з workdays*. */
   workdays?: WorkdayCell[];
 }): DesignerEarnings {
-  const { terms, workdaysTotal, workdaysPassed, visuals, visualFiles } = input;
+  const { terms, workdaysTotal, workdaysPassed } = input;
+  const normDaysTotal = input.normDaysTotal ?? workdaysTotal;
+  const normDaysPassed = input.normDaysPassed ?? workdaysPassed;
   const creatives = input.creatives ?? [];
+
   const ratio = workdaysTotal > 0 ? workdaysPassed / workdaysTotal : 0;
   const baseAccrued = Math.round(terms.baseMonthRate * ratio);
 
-  const visualsOverNorm = Math.max(0, visuals - terms.visualNorm);
-  const overNormPay = Math.round(visualsOverNorm * terms.overNormRate);
+  const visuals = computeOutput({
+    counts: input.visuals,
+    normPerDay: terms.visualNormPerDay,
+    overRate: terms.visualOverRate,
+    normDaysTotal,
+    normDaysPassed,
+  });
+  const layouts = computeOutput({
+    counts: input.layouts,
+    normPerDay: terms.layoutNormPerDay,
+    overRate: terms.layoutOverRate,
+    normDaysTotal,
+    normDaysPassed,
+  });
+  const overNormPay = visuals.pay + layouts.pay;
 
   // Креативи: у «зароблено» йдуть лише затверджені; решта — тільки в прогноз.
   const creativesPay = creatives.filter((item) => item.earned).reduce((sum, item) => sum + item.payout, 0);
   const creativesPendingPay = creatives.filter((item) => !item.earned).reduce((sum, item) => sum + item.payout, 0);
 
-  // Прогноз: лінійна екстраполяція темпу візуалів на повний місяць.
-  // Поки жодного робочого дня не минуло — прогнозувати нема з чого.
-  const forecastVisuals =
-    workdaysPassed > 0 ? Math.round((visuals / workdaysPassed) * workdaysTotal) : visuals;
-  const forecastOverNorm = Math.max(0, forecastVisuals - terms.visualNorm);
   // Прогноз включає і те, що чекає затвердження: менеджер уже назвав суму,
   // тож дизайнеру чесно показати, на що він виходить.
   const forecastTotal = Math.round(
-    terms.baseMonthRate + forecastOverNorm * terms.overNormRate + creativesPay + creativesPendingPay
+    terms.baseMonthRate + visuals.forecastPay + layouts.forecastPay + creativesPay + creativesPendingPay
   );
 
   return {
@@ -222,18 +329,18 @@ export function computeEarnings(input: {
     terms,
     workdaysTotal,
     workdaysPassed,
+    normDaysTotal,
+    normDaysPassed,
     workdays: input.workdays ?? [],
     baseAccrued,
     visuals,
-    visualFiles,
-    visualsOverNorm,
+    layouts,
     overNormPay,
     creatives,
     creativesPay,
     creativesPendingPay,
     earnedTotal: baseAccrued + overNormPay + creativesPay,
     forecastTotal,
-    forecastVisuals,
   };
 }
 

@@ -13,6 +13,7 @@ import {
   type DesignerEarnings,
   type DesignerPayDefaults,
   type DesignerPayRate,
+  type OutputCounts,
 } from "@/lib/designerPayrollMath";
 
 /**
@@ -28,8 +29,10 @@ import {
  * ГОЛОВНИЙ ГОЧА — одиниця норми. Рахуються НЕ файли, а унікальні роботи:
  * `(задача + назва файлу без розширення)`. Один візуал перезаливають після
  * правок по 5–9 разів під тією самою назвою, тож «за файл» оплачувало б одну
- * роботу дев'ять разів. Макети (`layout`) у норму не входять — тільки
- * `output_kind='visualization'`.
+ * роботу дев'ять разів.
+ *
+ * Візуали й макети рахуються ОКРЕМО: у них різні денні норми (7 і 4) і різні
+ * тарифи понад норму (100 і 200 ₴).
  */
 
 export * from "@/lib/designerPayrollMath";
@@ -68,15 +71,20 @@ const monthBounds = (monthKey: string) => {
 const baseNameOf = (fileName: string) => fileName.toLowerCase().replace(/\.[a-z0-9]+$/, "");
 
 /**
- * Унікальні візуали дизайнера за місяць.
+ * Унікальні роботи дизайнера за місяць, розведені на візуали й макети.
+ *
  * Повертає і кількість робіт, і кількість сирих файлів — розрив між ними
- * показує масштаб перезаливів (у проді буває до ×1.9).
+ * показує масштаб перезаливів (у проді буває до ×1.9; макети ллють у двох
+ * форматах .ai+.pdf, але базова назва в них однакова, тож це одна робота).
+ *
+ * Вид беремо з події завантаження: `visualization` — візуал, усе інше
+ * (`layout`, порожнє, невідоме) — макет. Та сама угода, що в orderRecords.
  */
-export async function loadVisualCount(params: {
+export async function loadOutputCounts(params: {
   teamId: string;
   userId: string;
   monthKey: string;
-}): Promise<{ works: number; files: number }> {
+}): Promise<{ visuals: OutputCounts; layouts: OutputCounts }> {
   const { from, to } = monthBounds(params.monthKey);
   const { data, error } = await supabase
     .from("activity_log")
@@ -84,46 +92,57 @@ export async function loadVisualCount(params: {
     .eq("team_id", params.teamId)
     .eq("user_id", params.userId)
     .eq("action", "design_output_upload")
-    .eq("metadata->>output_kind", OUTPUT_KIND_VISUALIZATION)
     .gte("created_at", from.toISOString())
     .lt("created_at", to.toISOString())
     .limit(5000);
   if (error) throw error;
 
-  const seen = new Set<string>();
-  let files = 0;
+  const seen = { visuals: new Set<string>(), layouts: new Set<string>() };
+  const files = { visuals: 0, layouts: 0 };
   ((data ?? []) as Array<{
     entity_id?: string | null;
-    metadata?: { design_task_id?: string | null; uploaded_files?: Array<{ file_name?: string | null }> } | null;
+    metadata?: {
+      design_task_id?: string | null;
+      output_kind?: string | null;
+      uploaded_files?: Array<{ file_name?: string | null }>;
+    } | null;
   }>).forEach((row) => {
     const taskId = row.entity_id ?? row.metadata?.design_task_id ?? "?";
+    const bucket = row.metadata?.output_kind === OUTPUT_KIND_VISUALIZATION ? "visuals" : "layouts";
     const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
     uploaded.forEach((file) => {
       const name = typeof file?.file_name === "string" ? file.file_name : "";
       if (!name) return;
-      files += 1;
-      seen.add(`${taskId}:${baseNameOf(name)}`);
+      files[bucket] += 1;
+      seen[bucket].add(`${taskId}:${baseNameOf(name)}`);
     });
   });
-  return { works: seen.size, files };
+  return {
+    visuals: { works: seen.visuals.size, files: files.visuals },
+    layouts: { works: seen.layouts.size, files: files.layouts },
+  };
 }
 
 export async function loadPayDefaults(workspaceId: string): Promise<DesignerPayDefaults | null> {
   const { data, error } = await payrollTable("employee_pay_defaults")
-    .select("visual_norm,over_norm_rate,creative_percent,min_creative_cost")
+    .select("visual_norm_per_day,layout_norm_per_day,visual_over_rate,layout_over_rate,creative_percent,min_creative_cost")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
   const row = data as {
-    visual_norm: number;
-    over_norm_rate: number;
+    visual_norm_per_day: number;
+    layout_norm_per_day: number;
+    visual_over_rate: number;
+    layout_over_rate: number;
     creative_percent: number;
     min_creative_cost: number;
   };
   return {
-    visualNorm: Number(row.visual_norm),
-    overNormRate: Number(row.over_norm_rate),
+    visualNormPerDay: Number(row.visual_norm_per_day),
+    layoutNormPerDay: Number(row.layout_norm_per_day),
+    visualOverRate: Number(row.visual_over_rate),
+    layoutOverRate: Number(row.layout_over_rate),
     creativePercent: Number(row.creative_percent),
     minCreativeCost: Number(row.min_creative_cost),
   };
@@ -132,7 +151,9 @@ export async function loadPayDefaults(workspaceId: string): Promise<DesignerPayD
 /** RLS сама віддасть лише свої рядки дизайнеру і всі — SEO/owner. */
 export async function loadPayRates(workspaceId: string, userId?: string): Promise<DesignerPayRate[]> {
   let query = payrollTable("employee_pay_rates")
-    .select("user_id,base_month_rate,visual_norm,over_norm_rate,creative_percent,effective_from")
+    .select(
+      "user_id,base_month_rate,visual_norm_per_day,layout_norm_per_day,visual_over_rate,layout_over_rate,creative_percent,effective_from"
+    )
     .eq("workspace_id", workspaceId)
     .order("effective_from", { ascending: false });
   if (userId) query = query.eq("user_id", userId);
@@ -140,14 +161,18 @@ export async function loadPayRates(workspaceId: string, userId?: string): Promis
   if (error) throw error;
   return ((data ?? []) as Array<{
     base_month_rate: number | string;
-    visual_norm: number | null;
-    over_norm_rate: number | string | null;
+    visual_norm_per_day: number | null;
+    layout_norm_per_day: number | null;
+    visual_over_rate: number | string | null;
+    layout_over_rate: number | string | null;
     creative_percent: number | string | null;
     effective_from: string;
   }>).map((row) => ({
     baseMonthRate: Number(row.base_month_rate),
-    visualNorm: row.visual_norm == null ? null : Number(row.visual_norm),
-    overNormRate: row.over_norm_rate == null ? null : Number(row.over_norm_rate),
+    visualNormPerDay: row.visual_norm_per_day == null ? null : Number(row.visual_norm_per_day),
+    layoutNormPerDay: row.layout_norm_per_day == null ? null : Number(row.layout_norm_per_day),
+    visualOverRate: row.visual_over_rate == null ? null : Number(row.visual_over_rate),
+    layoutOverRate: row.layout_over_rate == null ? null : Number(row.layout_over_rate),
     creativePercent: row.creative_percent == null ? null : Number(row.creative_percent),
     effectiveFrom: row.effective_from,
   }));
@@ -169,11 +194,11 @@ export async function loadWorkdayExceptions(workspaceId: string, monthKey: strin
 }
 
 /**
- * Відсутності людини за місяць — лише щоб розфарбувати сітку днів.
+ * Відсутності людини за місяць: фарбують сітку днів І зменшують норму.
  *
- * На гроші НЕ впливають (рішення CEO 2026-07-26: лікарняний поки не зменшує
- * базу) — `loadDesignerEarnings` навмисно не передає їх у `countWorkdays`.
- * Якщо рішення зміниться, достатньо передати цей самий масив туди.
+ * Базу вони НЕ зменшують (рішення CEO 2026-07-26) — за день лікарняного
+ * ставка нараховується повністю, але 7 візуалів і 4 макети до норми за нього
+ * не додаються. Асиметрія свідома, на користь людини.
  *
  * Живе в tosho, ключується workspace_id; читати може будь-який учасник
  * воркспейсу (політика team_absences_select).
@@ -290,9 +315,9 @@ export async function loadDesignerEarnings(params: {
   if (!rate || !defaults) return null;
 
   const terms = resolveTerms(rate, defaults);
-  const [exceptions, visualData, absences, creatives] = await Promise.all([
+  const [exceptions, outputs, absences, creatives] = await Promise.all([
     loadWorkdayExceptions(params.workspaceId, monthKey),
-    loadVisualCount({ teamId: params.teamId, userId: params.userId, monthKey }),
+    loadOutputCounts({ teamId: params.teamId, userId: params.userId, monthKey }),
     loadAbsences({ workspaceId: params.workspaceId, userId: params.userId, monthKey }).catch((error) => {
       // Відсутності — суто оформлення сітки: без них квадратики просто всі
       // однакові, а суми не змінюються. Падати через це віджету нема сенсу.
@@ -312,32 +337,27 @@ export async function loadDesignerEarnings(params: {
     }),
   ]);
 
-  // Гроші рахуємо БЕЗ відсутностей: лікарняний поки не зменшує базу (рішення
-  // CEO 2026-07-26, питання відкрите). Щоб почати віднімати — досить додати
-  // сюди `absences`, решта вже готова.
-  const { total, passed } = countWorkdays({
-    monthKey,
-    asOf: params.asOf,
-    exceptions,
-    absences: params.absences,
-  });
+  const allAbsences = [...absences, ...(params.absences ?? [])];
+
+  // БАЗА — без відсутностей: лікарняний не зменшує ставку (рішення CEO).
+  const base = countWorkdays({ monthKey, asOf: params.asOf, exceptions });
+  // НОРМА — з відсутностями: за день, якого людина не працювала, норму не
+  // набирають. Денна норма саме для цього й вводилась.
+  const norm = countWorkdays({ monthKey, asOf: params.asOf, exceptions, absences: allAbsences });
   // А сітку малюємо З відсутностями — інакше день хвороби виглядав би як
   // звичайний відпрацьований.
-  const workdays = listWorkdays({
-    monthKey,
-    asOf: params.asOf,
-    exceptions,
-    absences: [...absences, ...(params.absences ?? [])],
-  });
+  const workdays = listWorkdays({ monthKey, asOf: params.asOf, exceptions, absences: allAbsences });
 
   return computeEarnings({
     monthKey,
     terms,
-    workdaysTotal: total,
-    workdaysPassed: passed,
+    workdaysTotal: base.total,
+    workdaysPassed: base.passed,
+    normDaysTotal: norm.total,
+    normDaysPassed: norm.passed,
     workdays,
-    visuals: visualData.works,
-    visualFiles: visualData.files,
+    visuals: outputs.visuals,
+    layouts: outputs.layouts,
     creatives,
   });
 }

@@ -3,7 +3,12 @@ import { Eye, EyeOff, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { loadDesignerEarnings, type DesignerEarnings, type WorkdayCell } from "@/lib/designerPayroll";
+import {
+  loadDesignerEarnings,
+  type DesignerEarnings,
+  type OutputEarnings,
+  type WorkdayCell,
+} from "@/lib/designerPayroll";
 import {
   normalizeTeamAbsenceKind,
   TEAM_ABSENCE_KIND_LABELS,
@@ -128,6 +133,79 @@ function WorkdayGrid({ cells }: { cells: WorkdayCell[] }) {
   );
 }
 
+/**
+ * Секція одного виду робіт: візуали або макети.
+ *
+ * Норма показується «на сьогодні» (7/день × відпрацьовані дні), а не місячна —
+ * інакше 20 днів поспіль дизайнер бачив би «106 з 161» і не розумів, чи він
+ * у графіку. Праворуч у шапці — денна норма, щоб правило гри було під рукою.
+ */
+function OutputSection({
+  label,
+  unitsLabel,
+  data,
+  masked,
+}: {
+  label: string;
+  /** Родовий відмінок для прогнозу: «≈ 137 візуалів». */
+  unitsLabel: string;
+  data: OutputEarnings;
+  masked: boolean;
+}) {
+  const over = data.over > 0;
+  const remaining = Math.max(0, data.normToDate - data.works);
+
+  return (
+    <div className="border-t border-border/50 px-3.5 py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">{label}</span>
+        {over ? (
+          <span className="ml-auto rounded-full border border-success-soft-border bg-success-soft px-2 py-0.5 text-3xs font-semibold text-success-foreground">
+            +{data.over} понад норму
+          </span>
+        ) : (
+          <span className="ml-auto text-3xs tabular-nums text-muted-foreground/70">
+            норма {data.normPerDay}/день
+          </span>
+        )}
+      </div>
+      {/* «Зроблено», а не «До норми»: 106 — це вже зроблене, а стара
+          назва читалась як «залишилось 106». */}
+      <div className="mt-1 flex items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Зроблено</span>
+        <span className="ml-auto font-semibold tabular-nums text-foreground">
+          {data.works} <span className="font-normal text-muted-foreground">з {data.normToDate}</span>
+        </span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div
+          className="h-full rounded-full bg-chart-1"
+          style={{ width: `${Math.min(100, (data.works / Math.max(1, data.normToDate)) * 100)}%` }}
+        />
+      </div>
+      {/* Рядок «Понад норму» показуємо лише коли норму справді перевищено:
+          раніше він 11 місяців на рік висів як «0 × 100 = 0». */}
+      {over ? (
+        <div className="mt-1.5 flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Понад норму</span>
+          <span className="ml-auto font-semibold tabular-nums text-foreground">
+            {data.over} × {data.overRate} = <Money value={uahShort(data.pay)} masked={masked} />
+          </span>
+        </div>
+      ) : remaining > 0 ? (
+        <div className="mt-1.5 text-3xs tabular-nums text-muted-foreground">ще {remaining} до понаднормових</div>
+      ) : null}
+      {/* Прогноз показуємо лише коли темп реально виводить за норму —
+          інакше рядок «+0» лише шумить. */}
+      {!over && data.forecastOver > 0 ? (
+        <div className="mt-1 text-3xs text-muted-foreground">
+          за поточним темпом до кінця місяця ≈ {data.forecastWorks} {unitsLabel} з {data.normFull}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DesignerEarningsWidget({
   teamId,
   userId,
@@ -197,8 +275,6 @@ export function DesignerEarningsWidget({
   });
   const radius = 9.5;
   const circumference = 2 * Math.PI * radius;
-  const overNorm = earnings.visualsOverNorm > 0;
-  const remainingToNorm = Math.max(0, earnings.terms.visualNorm - earnings.visuals);
 
   return (
     /* Пігулка — контейнер із ДВОМА сусідніми кнопками, а не кнопка в кнопці.
@@ -282,52 +358,8 @@ export function DesignerEarningsWidget({
             </div>
           </div>
 
-          <div className="border-t border-border/50 px-3.5 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Візуали</span>
-              {overNorm ? (
-                <span className="ml-auto rounded-full border border-success-soft-border bg-success-soft px-2 py-0.5 text-3xs font-semibold text-success-foreground">
-                  +{earnings.visualsOverNorm} понад норму
-                </span>
-              ) : null}
-            </div>
-            {/* «Зроблено», а не «До норми»: 106 — це вже зроблене, а стара
-                назва читалась як «залишилось 106». */}
-            <div className="mt-1 flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Зроблено</span>
-              <span className="ml-auto font-semibold tabular-nums text-foreground">
-                {earnings.visuals} <span className="font-normal text-muted-foreground">з {earnings.terms.visualNorm}</span>
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-              <div
-                className="h-full rounded-full bg-chart-1"
-                style={{ width: `${Math.min(100, (earnings.visuals / Math.max(1, earnings.terms.visualNorm)) * 100)}%` }}
-              />
-            </div>
-            {/* Рядок «Понад норму» показуємо лише коли норму справді перевищено:
-                раніше він 11 місяців на рік висів як «0 × 100 = 0». */}
-            {overNorm ? (
-              <div className="mt-1.5 flex items-center gap-2 text-xs">
-                <span className="text-muted-foreground">Понад норму</span>
-                <span className="ml-auto font-semibold tabular-nums text-foreground">
-                  {earnings.visualsOverNorm} × {earnings.terms.overNormRate} ={" "}
-                  <Money value={uahShort(earnings.overNormPay)} masked={masked} />
-                </span>
-              </div>
-            ) : remainingToNorm > 0 ? (
-              <div className="mt-1.5 text-3xs tabular-nums text-muted-foreground">
-                ще {remainingToNorm} до понаднормових
-              </div>
-            ) : null}
-            {/* Прогноз показуємо лише коли темп реально виводить за норму —
-                інакше рядок «+0» лише шумить. */}
-            {!overNorm && earnings.forecastVisuals > earnings.terms.visualNorm ? (
-              <div className="mt-1 text-3xs text-muted-foreground">
-                за поточним темпом до кінця місяця ≈ {earnings.forecastVisuals} візуалів
-              </div>
-            ) : null}
-          </div>
+          <OutputSection label="Візуали" unitsLabel="візуалів" data={earnings.visuals} masked={masked} />
+          <OutputSection label="Макети" unitsLabel="макетів" data={earnings.layouts} masked={masked} />
 
           {earnings.creatives.length > 0 ? (
             <div className="border-t border-border/50 px-3.5 py-2.5">
@@ -366,7 +398,8 @@ export function DesignerEarningsWidget({
           ) : null}
 
           <div className="border-t border-border/50 px-3.5 py-2 text-3xs leading-snug text-muted-foreground/80">
-            Рахуються унікальні візуали (перезаливи одного файлу не додають). Макети в норму не входять.
+            Рахуються унікальні роботи — перезаливи одного файлу не додають. Норма денна: за дні відпустки
+            й лікарняного вона не нараховується.
           </div>
         </div>
         }

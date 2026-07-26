@@ -56,8 +56,10 @@ export function MemberPaySection({
   const [error, setError] = useState<string | null>(null);
 
   const [baseRate, setBaseRate] = useState("");
-  const [visualNorm, setVisualNorm] = useState("");
-  const [overNormRate, setOverNormRate] = useState("");
+  const [visualNormPerDay, setVisualNormPerDay] = useState("");
+  const [layoutNormPerDay, setLayoutNormPerDay] = useState("");
+  const [visualOverRate, setVisualOverRate] = useState("");
+  const [layoutOverRate, setLayoutOverRate] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState(nextMonthFirstDay);
 
   const reload = useCallback(async () => {
@@ -103,15 +105,18 @@ export function MemberPaySection({
     setSaving(true);
     setError(null);
     try {
+      // Порожнє поле = «беремо командний дефолт», а не нуль.
+      const override = (value: string) => (isDesigner && value.trim() ? Number(value) : null);
       const payload: Record<string, unknown> = {
         workspace_id: workspaceId,
         user_id: userId,
         base_month_rate: base,
         effective_from: effectiveFrom,
         created_by: currentUserId,
-        // Порожнє поле = «беремо командний дефолт», а не нуль.
-        visual_norm: isDesigner && visualNorm.trim() ? Number(visualNorm) : null,
-        over_norm_rate: isDesigner && overNormRate.trim() ? Number(overNormRate) : null,
+        visual_norm_per_day: override(visualNormPerDay),
+        layout_norm_per_day: override(layoutNormPerDay),
+        visual_over_rate: override(visualOverRate),
+        layout_over_rate: override(layoutOverRate),
       };
       const { error: upsertError } = await supabase
         .schema("tosho")
@@ -119,8 +124,10 @@ export function MemberPaySection({
         .upsert(payload as never, { onConflict: "workspace_id,user_id,effective_from" });
       if (upsertError) throw upsertError;
       setBaseRate("");
-      setVisualNorm("");
-      setOverNormRate("");
+      setVisualNormPerDay("");
+      setLayoutNormPerDay("");
+      setVisualOverRate("");
+      setLayoutOverRate("");
       await reload();
     } catch (saveError) {
       console.warn("Failed to save pay rate", saveError);
@@ -153,9 +160,13 @@ export function MemberPaySection({
             <span className="w-full text-xs text-muted-foreground">діє з {formatDate(current.effectiveFrom)}</span>
             {isDesigner && defaults ? (
               <span className="w-full text-xs text-muted-foreground">
-                Норма візуалів: {current.visualNorm ?? defaults.visualNorm}
-                {current.visualNorm == null ? " (командна)" : " (індивідуальна)"} · понад норму{" "}
-                {current.overNormRate ?? defaults.overNormRate} ₴/візуал
+                Норма на робочий день: {current.visualNormPerDay ?? defaults.visualNormPerDay} візуалів ·{" "}
+                {current.layoutNormPerDay ?? defaults.layoutNormPerDay} макетів
+                {current.visualNormPerDay == null && current.layoutNormPerDay == null
+                  ? " (командна)"
+                  : " (індивідуальна)"}
+                . Понад норму: {current.visualOverRate ?? defaults.visualOverRate} ₴/візуал ·{" "}
+                {current.layoutOverRate ?? defaults.layoutOverRate} ₴/макет
               </span>
             ) : null}
           </div>
@@ -212,23 +223,46 @@ export function MemberPaySection({
             {isDesigner ? (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">Норма візуалів / міс</Label>
+                  <Label className="text-sm font-medium text-foreground">Норма візуалів / день</Label>
                   <Input
-                    value={visualNorm}
-                    onChange={(event) => setVisualNorm(event.target.value)}
+                    value={visualNormPerDay}
+                    onChange={(event) => setVisualNormPerDay(event.target.value)}
                     inputMode="numeric"
-                    placeholder={defaults ? `${defaults.visualNorm} (командна)` : "250"}
+                    placeholder={defaults ? `${defaults.visualNormPerDay} (командна)` : "7"}
                     className={cn(CONTROL_BASE, "h-11")}
                   />
-                  <p className="text-2xs text-muted-foreground">Порожньо — береться командна норма.</p>
+                  <p className="text-2xs text-muted-foreground">
+                    Порожньо — береться командна норма. Множиться на робочі дні місяця за вирахуванням
+                    відпустки й лікарняних.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-foreground">Норма макетів / день</Label>
+                  <Input
+                    value={layoutNormPerDay}
+                    onChange={(event) => setLayoutNormPerDay(event.target.value)}
+                    inputMode="numeric"
+                    placeholder={defaults ? `${defaults.layoutNormPerDay} (командна)` : "4"}
+                    className={cn(CONTROL_BASE, "h-11")}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Понад норму, ₴/візуал</Label>
                   <Input
-                    value={overNormRate}
-                    onChange={(event) => setOverNormRate(event.target.value)}
+                    value={visualOverRate}
+                    onChange={(event) => setVisualOverRate(event.target.value)}
                     inputMode="numeric"
-                    placeholder={defaults ? `${defaults.overNormRate} (командна)` : "100"}
+                    placeholder={defaults ? `${defaults.visualOverRate} (командна)` : "100"}
+                    className={cn(CONTROL_BASE, "h-11")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-foreground">Понад норму, ₴/макет</Label>
+                  <Input
+                    value={layoutOverRate}
+                    onChange={(event) => setLayoutOverRate(event.target.value)}
+                    inputMode="numeric"
+                    placeholder={defaults ? `${defaults.layoutOverRate} (командна)` : "200"}
                     className={cn(CONTROL_BASE, "h-11")}
                   />
                 </div>

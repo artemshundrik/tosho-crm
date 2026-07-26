@@ -13,14 +13,27 @@ import {
 
 /**
  * Ці числа йдуть у зарплату, тож арифметика перевіряється явно, а не «на око».
- * Сценарій — реальний липень 2026 (1 липня = середа, 23 робочі дні).
+ * Сценарій — реальний липень 2026 (1 липня = середа, 23 робочі дні) і реальні
+ * лічильники робіт із прод-БД.
  */
 
 const DEFAULTS: DesignerPayDefaults = {
-  visualNorm: 250,
-  overNormRate: 100,
+  visualNormPerDay: 7,
+  layoutNormPerDay: 4,
+  visualOverRate: 100,
+  layoutOverRate: 200,
   creativePercent: 30,
   minCreativeCost: 4500,
+};
+
+const RATE: DesignerPayRate = {
+  baseMonthRate: 40000,
+  visualNormPerDay: null,
+  layoutNormPerDay: null,
+  visualOverRate: null,
+  layoutOverRate: null,
+  creativePercent: null,
+  effectiveFrom: "2026-07-01",
 };
 
 /**
@@ -28,6 +41,8 @@ const DEFAULTS: DesignerPayDefaults = {
  * «Отруїлась». Це 9-й робочий день місяця (1-е — середа).
  */
 const SICK_13_07 = [{ start: "2026-07-13", end: "2026-07-13", kind: "sick_leave", comment: "Отруїлась" }];
+
+const none = { works: 0, files: 0 };
 
 describe("listWorkdays", () => {
   it("повертає всі робочі дні місяця, включно з днями відсутності", () => {
@@ -63,18 +78,17 @@ describe("listWorkdays", () => {
 
 describe("countWorkdays", () => {
   /**
-   * Рішення CEO 2026-07-26: лікарняний поки НЕ зменшує базу, тому
-   * loadDesignerEarnings навмисно не передає absences у розрахунок. Ці два
-   * тести фіксують обидві гілки, щоб зміна рішення була свідомою, а не
-   * випадковою.
+   * Викликається двічі з різними аргументами: без absences — для бази,
+   * з absences — для норми. Обидві гілки зафіксовані, щоб зміна рішення була
+   * свідомою, а не випадковою.
    */
-  it("без переданих відсутностей день хвороби рахується як відпрацьований", () => {
+  it("без переданих відсутностей день хвороби рахується як відпрацьований (база)", () => {
     const { total, passed } = countWorkdays({ monthKey: "2026-07", asOf: new Date("2026-07-26T12:00:00Z") });
     expect(total).toBe(23);
     expect(passed).toBe(18);
   });
 
-  it("з переданими відсутностями день хвороби випадає з бази", () => {
+  it("з переданими відсутностями день хвороби випадає (норма)", () => {
     const { total, passed } = countWorkdays({
       monthKey: "2026-07",
       asOf: new Date("2026-07-26T12:00:00Z"),
@@ -87,6 +101,11 @@ describe("countWorkdays", () => {
   it("рахує пн–пт у липні 2026 (23 робочі дні)", () => {
     const { total } = countWorkdays({ monthKey: "2026-07", asOf: new Date("2026-07-31T12:00:00Z") });
     expect(total).toBe(23);
+  });
+
+  it("у травні 2026 робочих днів 21 — саме тому норма денна, а не місячна", () => {
+    const { total } = countWorkdays({ monthKey: "2026-05", asOf: new Date("2026-05-31T12:00:00Z") });
+    expect(total).toBe(21);
   });
 
   it("на 26 липня минуло 18 робочих днів (вихідні не рахуються)", () => {
@@ -126,41 +145,35 @@ describe("countWorkdays", () => {
 });
 
 describe("resolveTerms", () => {
-  const rate: DesignerPayRate = {
-    baseMonthRate: 40000,
-    visualNorm: null,
-    overNormRate: null,
-    creativePercent: null,
-    effectiveFrom: "2026-07-01",
-  };
-
   it("бере командні дефолти, коли індивідуальних немає", () => {
-    expect(resolveTerms(rate, DEFAULTS)).toEqual({
+    expect(resolveTerms(RATE, DEFAULTS)).toEqual({
       baseMonthRate: 40000,
-      visualNorm: 250,
-      overNormRate: 100,
+      visualNormPerDay: 7,
+      layoutNormPerDay: 4,
+      visualOverRate: 100,
+      layoutOverRate: 200,
       creativePercent: 30,
     });
   });
 
   it("індивідуальні значення перебивають дефолти", () => {
-    const custom = { ...rate, visualNorm: 150, overNormRate: 120 };
-    const terms = resolveTerms(custom, DEFAULTS);
-    expect(terms.visualNorm).toBe(150);
-    expect(terms.overNormRate).toBe(120);
-    expect(terms.creativePercent).toBe(30); // не переозначено — лишився дефолт
+    const terms = resolveTerms({ ...RATE, visualNormPerDay: 5, layoutOverRate: 250 }, DEFAULTS);
+    expect(terms.visualNormPerDay).toBe(5);
+    expect(terms.layoutOverRate).toBe(250);
+    expect(terms.layoutNormPerDay).toBe(4); // не переозначено — лишився дефолт
+    expect(terms.creativePercent).toBe(30);
   });
 
   it("нуль як індивідуальне значення НЕ підміняється дефолтом", () => {
-    const zeroed = { ...rate, overNormRate: 0 };
-    expect(resolveTerms(zeroed, DEFAULTS).overNormRate).toBe(0);
+    expect(resolveTerms({ ...RATE, visualOverRate: 0 }, DEFAULTS).visualOverRate).toBe(0);
+    expect(resolveTerms({ ...RATE, layoutNormPerDay: 0 }, DEFAULTS).layoutNormPerDay).toBe(0);
   });
 });
 
 describe("pickRateForMonth", () => {
   const rates: DesignerPayRate[] = [
-    { baseMonthRate: 30000, visualNorm: null, overNormRate: null, creativePercent: null, effectiveFrom: "2026-05-01" },
-    { baseMonthRate: 40000, visualNorm: null, overNormRate: null, creativePercent: null, effectiveFrom: "2026-07-01" },
+    { ...RATE, baseMonthRate: 30000, effectiveFrom: "2026-05-01" },
+    { ...RATE, baseMonthRate: 40000, effectiveFrom: "2026-07-01" },
   ];
 
   it("бере ставку, чинну на початок місяця", () => {
@@ -174,78 +187,143 @@ describe("pickRateForMonth", () => {
 });
 
 describe("computeEarnings", () => {
-  const terms = resolveTerms(
-    { baseMonthRate: 40000, visualNorm: null, overNormRate: null, creativePercent: null, effectiveFrom: "2026-07-01" },
-    DEFAULTS
-  );
+  const terms = resolveTerms(RATE, DEFAULTS);
 
-  it("нараховує базу пропорційно робочим дням", () => {
+  /**
+   * Липень 2026 Лєни, реальні цифри з прод-БД станом на 26.07:
+   * 106 візуалів і 76 макетів, 18 робочих днів минуло, 13.07 — лікарняний,
+   * тож нормо-днів минуло 17.
+   */
+  const LENA_JULY = {
+    monthKey: "2026-07",
+    terms,
+    workdaysTotal: 23,
+    workdaysPassed: 18,
+    normDaysTotal: 22,
+    normDaysPassed: 17,
+    visuals: { works: 106, files: 116 },
+    layouts: { works: 76, files: 104 },
+  };
+
+  it("нараховує базу пропорційно робочим дням, без вирахування лікарняного", () => {
+    // 40000 × 18/23 = 31 304.35 → 31 304 (а не 18-1=17 днів)
+    expect(computeEarnings(LENA_JULY).baseAccrued).toBe(31304);
+  });
+
+  it("норма рахується від нормо-днів: 7×17 візуалів і 4×17 макетів", () => {
+    const result = computeEarnings(LENA_JULY);
+    expect(result.visuals.normToDate).toBe(119);
+    expect(result.layouts.normToDate).toBe(68);
+  });
+
+  it("під нормою по візуалах доплати немає, понад норму по макетах — є", () => {
+    const result = computeEarnings(LENA_JULY);
+    expect(result.visuals.over).toBe(0);
+    expect(result.visuals.pay).toBe(0);
+    expect(result.layouts.over).toBe(8);
+    expect(result.layouts.pay).toBe(1600); // 8 × 200
+    expect(result.overNormPay).toBe(1600);
+    expect(result.earnedTotal).toBe(31304 + 1600);
+  });
+
+  it("прогноз екстраполює темп на повний місяць за нормо-днями", () => {
+    const result = computeEarnings(LENA_JULY);
+    // візуали: 106/17×22 = 137.2 → 137 при нормі 7×22 = 154 → нуль
+    expect(result.visuals.forecastWorks).toBe(137);
+    expect(result.visuals.forecastPay).toBe(0);
+    // макети: 76/17×22 = 98.4 → 98 при нормі 4×22 = 88 → +10 × 200
+    expect(result.layouts.forecastWorks).toBe(98);
+    expect(result.layouts.forecastPay).toBe(2000);
+    expect(result.forecastTotal).toBe(42000);
+  });
+
+  it("квітень Лєни: 116 макетів проти норми 88 = 5 600 ₴", () => {
     const result = computeEarnings({
-      monthKey: "2026-07",
+      monthKey: "2026-04",
       terms,
-      workdaysTotal: 23,
-      workdaysPassed: 18,
-      visuals: 220,
-      visualFiles: 240,
+      workdaysTotal: 22,
+      workdaysPassed: 22,
+      visuals: { works: 107, files: 148 },
+      layouts: { works: 116, files: 151 },
     });
-    // 40000 × 18/23 = 31 304.35 → 31 304
-    expect(result.baseAccrued).toBe(31304);
+    expect(result.visuals.over).toBe(0); // 107 при нормі 154
+    expect(result.layouts.over).toBe(28);
+    expect(result.overNormPay).toBe(5600);
+    expect(result.earnedTotal).toBe(40000 + 5600);
   });
 
-  it("під нормою доплати немає", () => {
-    const result = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 18, visuals: 220, visualFiles: 240,
+  /**
+   * Головна причина переходу на денну норму: однаковий виробіток у місяцях
+   * різної довжини не має давати різну доплату «за календар».
+   */
+  it("той самий виробіток у місяці на 21 і на 23 дні дає різну норму, але однаковий сенс", () => {
+    const shortMonth = computeEarnings({
+      monthKey: "2026-05", terms, workdaysTotal: 21, workdaysPassed: 21,
+      visuals: { works: 21 * 7 + 10, files: 0 }, layouts: none,
     });
-    expect(result.visualsOverNorm).toBe(0);
-    expect(result.overNormPay).toBe(0);
-    expect(result.earnedTotal).toBe(31304);
+    const longMonth = computeEarnings({
+      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23,
+      visuals: { works: 23 * 7 + 10, files: 0 }, layouts: none,
+    });
+    // Перевиконання на 10 робіт в обох місяцях — і доплата однакова.
+    expect(shortMonth.visuals.over).toBe(10);
+    expect(longMonth.visuals.over).toBe(10);
+    expect(shortMonth.overNormPay).toBe(longMonth.overNormPay);
   });
 
-  it("понад норму рахується по ставці за візуал", () => {
-    const result = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 281, visualFiles: 320,
-    });
-    expect(result.visualsOverNorm).toBe(31);
-    expect(result.overNormPay).toBe(3100);
-    expect(result.earnedTotal).toBe(40000 + 3100);
-  });
-
-  it("прогноз екстраполює темп візуалів на повний місяць", () => {
-    const result = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 18, visuals: 220, visualFiles: 240,
-    });
-    // 220/18×23 = 281.1 → 281 візуал; понад норму 31 × 100 = 3100
-    expect(result.forecastVisuals).toBe(281);
-    expect(result.forecastTotal).toBe(43100);
+  it("відсутності зменшують норму, а не базу", () => {
+    const shared = {
+      monthKey: "2026-07" as const, terms, workdaysTotal: 23, workdaysPassed: 23,
+      visuals: { works: 150, files: 150 }, layouts: none,
+    };
+    const healthy = computeEarnings(shared);
+    const twoWeeksOff = computeEarnings({ ...shared, normDaysTotal: 13, normDaysPassed: 13 });
+    // База однакова — ставка за лікарняний не ріжеться.
+    expect(twoWeeksOff.baseAccrued).toBe(healthy.baseAccrued);
+    // А норма менша: 7×13 = 91 замість 7×23 = 161, тож 150 робіт її перекривають.
+    expect(healthy.visuals.over).toBe(0);
+    expect(twoWeeksOff.visuals.over).toBe(59);
   });
 
   it("на початку місяця (0 днів) не ділить на нуль", () => {
     const result = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 0, visuals: 0, visualFiles: 0,
+      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 0, visuals: none, layouts: none,
     });
     expect(result.baseAccrued).toBe(0);
-    expect(result.forecastVisuals).toBe(0);
+    expect(result.visuals.forecastWorks).toBe(0);
     expect(Number.isFinite(result.forecastTotal)).toBe(true);
     expect(result.forecastTotal).toBe(40000);
   });
 
   it("сирі файли не впливають на гроші — платимо за унікальні роботи", () => {
-    const many = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 260, visualFiles: 500,
-    });
-    const few = computeEarnings({
-      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 260, visualFiles: 262,
-    });
+    const shared = { monthKey: "2026-07" as const, terms, workdaysTotal: 23, workdaysPassed: 23, layouts: none };
+    const many = computeEarnings({ ...shared, visuals: { works: 200, files: 500 } });
+    const few = computeEarnings({ ...shared, visuals: { works: 200, files: 202 } });
     expect(many.earnedTotal).toBe(few.earnedTotal);
+  });
+
+  it("макети рахуються за своїм тарифом, а не за візуальним", () => {
+    const result = computeEarnings({
+      monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23,
+      visuals: { works: 162, files: 162 }, // +1 понад норму 161 → 100 ₴
+      layouts: { works: 93, files: 93 },   // +1 понад норму 92 → 200 ₴
+    });
+    expect(result.visuals.pay).toBe(100);
+    expect(result.layouts.pay).toBe(200);
+    expect(result.overNormPay).toBe(300);
   });
 });
 
 describe("платні креативи", () => {
-  const terms = resolveTerms(
-    { baseMonthRate: 40000, visualNorm: null, overNormRate: null, creativePercent: null, effectiveFrom: "2026-07-01" },
-    DEFAULTS
-  );
-  const base = { monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 100, visualFiles: 100 };
+  const terms = resolveTerms(RATE, DEFAULTS);
+  const base = {
+    monthKey: "2026-07",
+    terms,
+    workdaysTotal: 23,
+    workdaysPassed: 23,
+    visuals: { works: 100, files: 100 },
+    layouts: none,
+  };
 
   it("creativePayout = вартість × відсоток", () => {
     expect(creativePayout(6000, 30)).toBe(1800);
