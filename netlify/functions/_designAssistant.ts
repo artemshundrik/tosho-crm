@@ -94,7 +94,7 @@ type TaskRow = {
   created_at?: string | null;
 };
 
-type Member = { userId: string; name: string; jobRole: string | null };
+type Member = { userId: string; name: string; jobRole: string | null; isActive: boolean };
 
 export type AssistantAnswer = { text: string; handled: boolean };
 
@@ -298,13 +298,13 @@ function pendingRevisions(task: TaskRow): number {
 }
 
 /** Рядок списку: клікабельна назва + виконавець і дедлайн. */
-function taskLine(task: TaskRow, nameByUser: Map<string, string>): string {
+function taskLine(task: TaskRow, personLabel: (userId: string) => string): string {
   const number = taskNumber(task);
   const title = (task.title ?? "").trim() || "(без назви)";
   const label = number ? `${number} · ${title}` : title;
   const assignee = taskAssignee(task);
   const meta: string[] = [];
-  if (assignee) meta.push(shortName(nameByUser.get(assignee) ?? "—"));
+  if (assignee) meta.push(personLabel(assignee));
   meta.push(STATUS_LABELS[taskStatus(task)] ?? taskStatus(task));
   const deadline = taskDeadlineKey(task);
   if (deadline) meta.push(`до ${deadline.slice(8, 10)}.${deadline.slice(5, 7)}`);
@@ -334,7 +334,7 @@ export async function loadDesignMembers(admin: SupabaseClient, workspaceId: stri
     admin
       .schema("tosho")
       .from("team_member_profiles")
-      .select("user_id,first_name,last_name")
+      .select("user_id,first_name,last_name,employment_status")
       .eq("workspace_id", workspaceId)
       .limit(1000),
   ]);
@@ -342,14 +342,18 @@ export async function loadDesignMembers(admin: SupabaseClient, workspaceId: stri
   if (profilesResult.error) throw new Error(`team_member_profiles: ${profilesResult.error.message}`);
 
   const nameByUser = new Map<string, string>();
+  const inactive = new Set<string>();
   for (const row of ((profilesResult.data ?? []) as Array<{
     user_id?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    employment_status?: string | null;
   }>)) {
     if (!row.user_id) continue;
     const name = [row.first_name, row.last_name].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
     if (name) nameByUser.set(row.user_id, name);
+    const status = (row.employment_status ?? "").trim().toLowerCase();
+    if (status === "inactive" || status === "rejected") inactive.add(row.user_id);
   }
 
   return ((rolesResult.data ?? []) as Array<{ user_id?: string | null; job_role?: string | null }>)
@@ -358,6 +362,11 @@ export async function loadDesignMembers(admin: SupabaseClient, workspaceId: stri
       userId: r.user_id as string,
       name: nameByUser.get(r.user_id as string) ?? "",
       jobRole: r.job_role ?? null,
+      // Звільнених НЕ прибираємо зі списку тут, а позначаємо. Причина: зі списків
+      // людей їх треба ховати (це і був баг), але історичні питання на кшталт
+      // «скільки Євгенія зробила в травні» мусять і далі працювати. Тому фільтр
+      // застосовують самі рендерери, а не це завантаження.
+      isActive: !inactive.has(r.user_id as string),
     }));
 }
 
@@ -461,6 +470,11 @@ export async function answerDesignQuery(params: {
 
   const members = await loadDesignMembers(admin, workspaceId);
   const nameByUser = new Map(members.map((m) => [m.userId, m.name]));
+  const departed = new Set(members.filter((m) => !m.isActive).map((m) => m.userId));
+  // Звільнений із відкритими задачами — це інформація, а не сміття: роботу
+  // хтось має перебрати. Тому в агрегатах його лишаємо, але позначаємо.
+  const personLabel = (userId: string) =>
+    `${shortName(nameByUser.get(userId) ?? "—")}${departed.has(userId) ? " (не працює)" : ""}`;
 
   // Резолв людини — до будь-яких підрахунків, щоб не рахувати даремно.
   let target: Member | null = null;
@@ -523,7 +537,7 @@ export async function answerDesignQuery(params: {
           const parts = Array.from(perDesigner.entries())
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
-            .map(([userId, count]) => `${shortName(nameByUser.get(userId) ?? "—")} ${count}`);
+            .map(([userId, count]) => `${personLabel(userId)} ${count}`);
           lines.push("", `👥 По людях: ${escapeTelegramHtml(parts.join(" · "))}`);
         }
       }
@@ -552,7 +566,7 @@ export async function answerDesignQuery(params: {
       const lines = [`🎨 <b>Завантаження дизайну</b> — ${tasks.length} активних задач`, ""];
       for (const [userId, entry] of Array.from(byDesigner.entries()).sort((a, b) => b[1].total - a[1].total)) {
         lines.push(
-          `• ${escapeTelegramHtml(shortName(nameByUser.get(userId) ?? "—"))}: ${entry.total}` +
+          `• ${escapeTelegramHtml(personLabel(userId))}: ${entry.total}` +
             (entry.changes > 0 ? ` (у правках: ${entry.changes})` : "")
         );
       }
@@ -577,7 +591,7 @@ export async function answerDesignQuery(params: {
       }
       if (hits.length > 1) {
         const lines = [`<b>Знайшов ${hits.length} — уточни</b>`, ""];
-        for (const task of hits.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        for (const task of hits.slice(0, limit)) lines.push(taskLine(task, personLabel));
         return { text: lines.join("\n"), handled: true };
       }
 
@@ -592,7 +606,7 @@ export async function answerDesignQuery(params: {
         `<b>${escapeTelegramHtml([taskNumber(task), (task.title ?? "").trim() || "(без назви)"].filter(Boolean).join(" · "))}</b>`,
         "",
         `• Статус: ${STATUS_LABELS[taskStatus(task)] ?? taskStatus(task)}`,
-        `• Виконавець: ${escapeTelegramHtml(assignee ? shortName(nameByUser.get(assignee) ?? "—") : "не призначено")}`,
+        `• Виконавець: ${escapeTelegramHtml(assignee ? personLabel(assignee) : "не призначено")}`,
       ];
       if (deadline) lines.push(`• Дедлайн: ${deadline.slice(8, 10)}.${deadline.slice(5, 7)}`);
       if (pending > 0) lines.push(`• Правок без відповіді: ${pending}`);
@@ -613,7 +627,7 @@ export async function answerDesignQuery(params: {
       if (tasks.length === 0) return { text: `Задач ${escapeTelegramHtml(scope)} немає.`, handled: true };
       const shown = tasks.slice(0, limit);
       const lines = [`📋 <b>Задачі ${escapeTelegramHtml(scope)}</b> — ${tasks.length}`, ""];
-      for (const task of shown) lines.push(taskLine(task, nameByUser));
+      for (const task of shown) lines.push(taskLine(task, personLabel));
       if (tasks.length > shown.length) lines.push("", `…і ще ${tasks.length - shown.length}`);
       return { text: lines.join("\n"), handled: true };
     }
@@ -630,7 +644,7 @@ export async function answerDesignQuery(params: {
         `<b>Створено задач ${escapeTelegramHtml(period.label)}${escapeTelegramHtml(who)}: ${tasks.length}</b>`,
         "",
       ];
-      for (const task of tasks.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+      for (const task of tasks.slice(0, limit)) lines.push(taskLine(task, personLabel));
       if (tasks.length > limit) lines.push("", `…і ще ${tasks.length - limit}`);
       return { text: lines.join("\n"), handled: true };
     }
@@ -673,7 +687,7 @@ export async function answerDesignQuery(params: {
         if (perDesigner.size > 0) {
           lines.push("");
           for (const [userId, count] of Array.from(perDesigner.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6)) {
-            lines.push(`• ${escapeTelegramHtml(shortName(nameByUser.get(userId) ?? "—"))}: ${count}`);
+            lines.push(`• ${escapeTelegramHtml(personLabel(userId))}: ${count}`);
           }
         }
       }
@@ -703,7 +717,7 @@ export async function answerDesignQuery(params: {
       lines.push(`   ⏳ Без відповіді зараз: <b>${pendingTotal}</b>`);
       if (pendingTasks.length > 0) {
         lines.push("");
-        for (const task of pendingTasks.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        for (const task of pendingTasks.slice(0, limit)) lines.push(taskLine(task, personLabel));
       }
       return { text: lines.join("\n"), handled: true };
     }
@@ -741,7 +755,7 @@ export async function answerDesignQuery(params: {
       if (!target && perDesigner.size > 1) {
         lines.push("");
         for (const [userId, seconds] of Array.from(perDesigner.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6)) {
-          lines.push(`• ${escapeTelegramHtml(shortName(nameByUser.get(userId) ?? "—"))}: ${formatDuration(seconds)}`);
+          lines.push(`• ${escapeTelegramHtml(personLabel(userId))}: ${formatDuration(seconds)}`);
         }
       }
       return { text: lines.join("\n"), handled: true };
@@ -764,12 +778,12 @@ export async function answerDesignQuery(params: {
       const lines: string[] = [];
       if (dueToday.length > 0) {
         lines.push(`⏰ <b>Дедлайн сьогодні</b> — ${dueToday.length}`, "");
-        for (const task of dueToday.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        for (const task of dueToday.slice(0, limit)) lines.push(taskLine(task, personLabel));
       }
       if (overdue.length > 0) {
         if (lines.length > 0) lines.push("");
         lines.push(`🔥 <b>Прострочено</b> — ${overdue.length}`, "");
-        for (const task of overdue.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        for (const task of overdue.slice(0, limit)) lines.push(taskLine(task, personLabel));
       }
       return { text: lines.join("\n"), handled: true };
     }
@@ -783,7 +797,7 @@ export async function answerDesignQuery(params: {
       const lines = [`🐌 <b>Найдовше в роботі</b>`, ""];
       for (const task of sorted.slice(0, limit)) {
         const days = Math.floor((now.getTime() - new Date(task.created_at as string).getTime()) / 86_400_000);
-        lines.push(`${taskLine(task, nameByUser)} · ${days} дн`);
+        lines.push(`${taskLine(task, personLabel)} · ${days} дн`);
       }
       return { text: lines.join("\n"), handled: true };
     }
@@ -836,7 +850,7 @@ export async function answerDesignQuery(params: {
       ];
       if (mine.length > 0) {
         lines.push("");
-        for (const task of mine.slice(0, limit)) lines.push(taskLine(task, nameByUser));
+        for (const task of mine.slice(0, limit)) lines.push(taskLine(task, personLabel));
       }
       return { text: lines.join("\n"), handled: true };
     }

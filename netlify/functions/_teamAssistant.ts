@@ -110,6 +110,8 @@ export type TeamMember = {
   userId: string;
   name: string;
   jobRole: string | null;
+  /** false = звільнений. Зі списків ховаємо, у пошуку за іменем лишаємо. */
+  isActive?: boolean;
 };
 
 function normalize(value: string): string {
@@ -144,9 +146,12 @@ export function renderTeamList(
   now: Date
 ): string {
   const filter = resolveRoleFilter(roleQuery);
+  // Звільнених у переліку команди бути не має — це не історична довідка, а
+  // «хто в нас зараз працює».
+  const active = members.filter((m) => m.isActive !== false);
   const filtered = filter
-    ? members.filter((m) => filter.includes((m.jobRole ?? "").trim().toLowerCase()))
-    : members;
+    ? active.filter((m) => filter.includes((m.jobRole ?? "").trim().toLowerCase()))
+    : active;
 
   if (filtered.length === 0) {
     return roleQuery
@@ -183,6 +188,7 @@ export function renderTeamList(
 /** «Хто зараз у системі» — онлайн зараз і хто був сьогодні, з місцем перебування. */
 export function renderPresence(members: TeamMember[], presence: Map<string, Presence>, now: Date): string {
   const rows = members
+    .filter((m) => m.isActive !== false)
     .map((m) => ({ member: m, seen: presence.get(m.userId) ?? null }))
     .filter((r) => r.seen?.lastSeenAt)
     .sort((a, b) => new Date(b.seen!.lastSeenAt!).getTime() - new Date(a.seen!.lastSeenAt!).getTime());
@@ -322,8 +328,9 @@ export async function renderPersonSummary(params: {
   const sumOf = (ids: string[]) => ids.reduce((sum, id) => sum + (totals.get(id) ?? 0), 0);
 
   const role = formatJobRole(person.jobRole);
+  const departed = person.isActive === false ? " · <i>не працює</i>" : "";
   const lines = [
-    `${roleEmoji(person.jobRole)} <b>${escapeTelegramHtml(person.name || "—")}</b>${role ? ` · ${escapeTelegramHtml(role)}` : ""}`,
+    `${roleEmoji(person.jobRole)} <b>${escapeTelegramHtml(person.name || "—")}</b>${role ? ` · ${escapeTelegramHtml(role)}` : ""}${departed}`,
     `🗓 ${escapeTelegramHtml(resolved.label)}`,
     `${isOnline(presence?.lastSeenAt ?? null, now) ? "🟢" : "⚪️"} У системі: ${escapeTelegramHtml(
       formatLastSeen(presence?.lastSeenAt ?? null, now)
