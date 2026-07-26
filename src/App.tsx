@@ -24,11 +24,7 @@ import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
-import {
-  getCachedCurrentWorkspaceMemberDirectoryEntry,
-  getCurrentWorkspaceMemberDirectoryEntry,
-  WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT,
-} from "@/lib/workspaceMemberDirectory";
+import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
 
 // =======================
 // Helpers UI
@@ -502,121 +498,35 @@ function PermissionGate({
   return <>{children}</>;
 }
 
-function TeamMembersRouteGate({
-  accessRole,
-  jobRole,
-  canEditMemberRoles,
-  children,
-}: {
-  accessRole: string | null;
-  jobRole: string | null;
-  canEditMemberRoles: boolean;
-  children: React.ReactNode;
-}) {
-  const [hasTeamModuleAccess, setHasTeamModuleAccess] = useState<boolean>(() => {
-    if (canEditMemberRoles) return true;
-    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess?.team === true;
-  });
+/**
+ * Захист маршруту за доступом до модуля.
+ *
+ * Читає доступи з `useAuth()`, а не з довідника напряму — тому автоматично
+ * поважає режим «Дивитись як» і не дублює логіку завантаження. Раніше тут
+ * (і в окремому TeamMembersRouteGate) стояв власний виклик
+ * `getCurrentWorkspaceMemberDirectoryEntry`, який завжди повертав ЛИШЕ свій
+ * запис, тож у режимі перегляду гейти лишалися owner-івськими.
+ */
+function ModuleRouteGate({ moduleKey, children }: { moduleKey: ModuleKey; children: React.ReactNode }) {
+  const { accessRole, jobRole, permissions, moduleAccess } = useAuth();
+  const label = getModuleDefinition(moduleKey)?.label ?? moduleKey;
 
-  useEffect(() => {
-    let cancelled = false;
+  // Фінанси обмежені роллю в самій БД (RLS) — уповноважені ролі проходять
+  // незалежно від галочки, інакше UI розійшовся б із базою.
+  const roleAllowed =
+    permissions.isSuperAdmin ||
+    (moduleKey === "finance" &&
+      ((accessRole ?? "").trim().toLowerCase() === "owner" ||
+        ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase())));
 
-    const syncAccess = async () => {
-      if (canEditMemberRoles) {
-        if (!cancelled) setHasTeamModuleAccess(true);
-        return;
-      }
-
-      const entry = await getCurrentWorkspaceMemberDirectoryEntry();
-      if (!cancelled) {
-        setHasTeamModuleAccess(entry?.moduleAccess?.team === true);
-      }
-    };
-
-    void syncAccess();
-
-    const handleUpdate = () => {
-      void syncAccess();
-    };
-
-    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
-    };
-  }, [canEditMemberRoles]);
+  // Доступи ще вантажаться — нічого не малюємо, щоб не блимнути екраном
+  // «потрібен доступ» на кожному перезавантаженні сторінки.
+  if (!roleAllowed && moduleAccess === undefined) return null;
 
   return (
     <PermissionGate
-      allowed={canEditMemberRoles || hasTeamModuleAccess}
-      requirement="картка доступів: Управління командою або access_role: owner/admin"
-      accessRole={accessRole}
-      jobRole={jobRole}
-    >
-      {children}
-    </PermissionGate>
-  );
-}
-
-function ModuleRouteGate({
-  accessRole,
-  jobRole,
-  isSuperAdmin,
-  moduleKey,
-  moduleLabel,
-  children,
-}: {
-  accessRole: string | null;
-  jobRole: string | null;
-  isSuperAdmin: boolean;
-  moduleKey: string;
-  moduleLabel: string;
-  children: React.ReactNode;
-}) {
-  // Finance is role-restricted (owner / SEO / бухгалтери) — match the DB RLS
-  // so authorized roles always pass regardless of the module_access flag.
-  const financeRoleAllowed =
-    moduleKey === "finance" &&
-    ((accessRole ?? "").trim().toLowerCase() === "owner" ||
-      ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase()));
-
-  const [hasModuleAccess, setHasModuleAccess] = useState<boolean>(() => {
-    if (isSuperAdmin || financeRoleAllowed) return true;
-    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess?.[moduleKey] === true;
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const syncAccess = async () => {
-      if (isSuperAdmin || financeRoleAllowed) {
-        if (!cancelled) setHasModuleAccess(true);
-        return;
-      }
-
-      const entry = await getCurrentWorkspaceMemberDirectoryEntry();
-      if (!cancelled) {
-        setHasModuleAccess(entry?.moduleAccess?.[moduleKey] === true);
-      }
-    };
-
-    void syncAccess();
-
-    const handleUpdate = () => {
-      void syncAccess();
-    };
-
-    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleUpdate);
-    };
-  }, [isSuperAdmin, financeRoleAllowed, moduleKey]);
-
-  return (
-    <PermissionGate
-      allowed={isSuperAdmin || financeRoleAllowed || hasModuleAccess}
-      requirement={`картка доступів: ${moduleLabel} або access_role: owner (Super Admin)`}
+      allowed={roleAllowed || hasModuleAccess(moduleAccess, moduleKey)}
+      requirement={`картка доступів: ${label} або access_role: owner (Super Admin)`}
       accessRole={accessRole}
       jobRole={jobRole}
     >
@@ -922,9 +832,11 @@ function AppRoutes() {
         <Route
           path="overview"
           element={
-            <RouteSuspense shell>
-              <OverviewPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="overview">
+              <RouteSuspense shell>
+                <OverviewPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
@@ -938,93 +850,107 @@ function AppRoutes() {
         <Route
           path="orders/customers"
           element={
-            <RouteSuspense shell>
-              <OrdersCustomersPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="customers">
+              <RouteSuspense shell>
+                <OrdersCustomersPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="orders/estimates"
           element={
-            <RouteSuspense shell>
-              <OrdersEstimatesPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="quotes">
+              <RouteSuspense shell>
+                <OrdersEstimatesPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="orders/estimates/:id"
           element={
-            <RouteSuspense shell>
-              <OrdersEstimateDetailsPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="quotes">
+              <RouteSuspense shell>
+                <OrdersEstimateDetailsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="orders/production"
           element={
-            <RouteSuspense shell>
-              <OrdersProductionPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="orders">
+              <RouteSuspense shell>
+                <OrdersProductionPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="orders/production/:id"
           element={
-            <RouteSuspense shell>
-              <OrdersProductionDetailsRoutePage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="orders">
+              <RouteSuspense shell>
+                <OrdersProductionDetailsRoutePage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="orders/ready-to-ship"
           element={
-            <RouteSuspense shell>
-              <OrdersReadyToShipPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="shipping">
+              <RouteSuspense shell>
+                <OrdersReadyToShipPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="catalog/products"
           element={
-            <RouteSuspense shell>
-              <ProductCatalogPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="catalog">
+              <RouteSuspense shell>
+                <ProductCatalogPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="logistics"
           element={
-            <RouteSuspense shell>
-              <LogisticsPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="logistics">
+              <RouteSuspense shell>
+                <LogisticsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="design"
           element={
-            <RouteSuspense shell>
-              <DesignPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="design">
+              <RouteSuspense shell>
+                <DesignPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="design/:id"
           element={
-            <RouteSuspense shell>
-              <DesignTaskPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="design">
+              <RouteSuspense shell>
+                <DesignTaskPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="contractors"
           element={
-            <ModuleRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-              moduleKey="contractors"
-              moduleLabel="Підрядники та постачальники"
-            >
+            <ModuleRouteGate moduleKey="contractors">
               <RouteSuspense shell>
                 <ContractorsPage />
               </RouteSuspense>
@@ -1034,13 +960,7 @@ function AppRoutes() {
         <Route
           path="stock/samples"
           element={
-            <ModuleRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-              moduleKey="stock"
-              moduleLabel="Склад"
-            >
+            <ModuleRouteGate moduleKey="stock">
               <RouteSuspense shell>
                 <SampleStockPage />
               </RouteSuspense>
@@ -1050,13 +970,7 @@ function AppRoutes() {
         <Route
           path="finances"
           element={
-            <ModuleRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-              moduleKey="finance"
-              moduleLabel="Фінанси"
-            >
+            <ModuleRouteGate moduleKey="finance">
               <RouteSuspense shell>
                 <FinancesPage />
               </RouteSuspense>
@@ -1066,13 +980,7 @@ function AppRoutes() {
         <Route
           path="marketing"
           element={
-            <ModuleRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              isSuperAdmin={permissions.isSuperAdmin}
-              moduleKey="marketing"
-              moduleLabel="Маркетинг"
-            >
+            <ModuleRouteGate moduleKey="marketing">
               <RouteSuspense shell>
                 <MarketingPage />
               </RouteSuspense>
@@ -1082,29 +990,21 @@ function AppRoutes() {
         <Route
           path="settings/members"
           element={
-            <TeamMembersRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              canEditMemberRoles={permissions.canEditMemberRoles}
-            >
+            <ModuleRouteGate moduleKey="members_access">
               <RouteSuspense shell>
                 <TeamMembersPage />
               </RouteSuspense>
-            </TeamMembersRouteGate>
+            </ModuleRouteGate>
           }
         />
         <Route
           path="settings/nova-poshta"
           element={
-            <TeamMembersRouteGate
-              accessRole={accessRole}
-              jobRole={jobRole}
-              canEditMemberRoles={permissions.canEditMemberRoles}
-            >
+            <ModuleRouteGate moduleKey="nova_poshta">
               <RouteSuspense shell>
                 <NovaPoshtaSettingsPage />
               </RouteSuspense>
-            </TeamMembersRouteGate>
+            </ModuleRouteGate>
           }
         />
         <Route

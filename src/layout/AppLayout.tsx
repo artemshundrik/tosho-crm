@@ -43,11 +43,7 @@ import {
 import { preloadRoute } from "@/routes/routePreload";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-  getCachedCurrentWorkspaceMemberDirectoryEntry,
-  getCurrentWorkspaceMemberDirectoryEntry,
-  WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT,
-} from "@/lib/workspaceMemberDirectory";
+import { hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
 
 import {
   disableRealtimeForSession,
@@ -110,17 +106,7 @@ type SidebarLink = {
   to: string;
   group: SidebarGroupKey;
   icon: React.ElementType;
-  moduleKey?:
-    | "overview"
-    | "orders"
-    | "design"
-    | "logistics"
-    | "catalog"
-    | "contractors"
-    | "stock"
-    | "finance"
-    | "marketing"
-    | "team";
+  moduleKey?: ModuleKey;
 };
 
 type HeaderConfig = {
@@ -454,10 +440,10 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
 
   // Замовлення
-  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2, moduleKey: "orders" },
-  { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "orders" },
+  { label: "Замовники", to: ROUTES.ordersCustomers, group: "orders", icon: Building2, moduleKey: "customers" },
+  { label: "Прорахунки", to: ROUTES.ordersEstimates, group: "orders", icon: Calculator, moduleKey: "quotes" },
   { label: "Замовлення", to: ROUTES.ordersProduction, group: "orders", icon: Factory, moduleKey: "orders" },
-  { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "orders" },
+  { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "shipping" },
   // Операції
   { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
   { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Route, moduleKey: "logistics" },
@@ -492,10 +478,10 @@ const baseSidebarLinks: SidebarLink[] = [
   },
 
   // Акаунт
-  { label: "Команда", to: ROUTES.team, group: "account", icon: Users },
+  { label: "Команда", to: ROUTES.team, group: "account", icon: Users, moduleKey: "team" },
   { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
-  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "team" },
-  { label: "Нова Пошта", to: ROUTES.novaPoshta, group: "account", icon: Truck, moduleKey: "team" },
+  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
+  { label: "Нова Пошта", to: ROUTES.novaPoshta, group: "account", icon: Truck, moduleKey: "nova_poshta" },
   { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
 ];
 
@@ -747,7 +733,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session, permissions, jobRole, viewUserId } = useAuth();
+  const { userId, teamId, session, permissions, jobRole, viewUserId, moduleAccess } = useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
@@ -775,35 +761,30 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       }),
     [baseHeader.title, location.pathname, location.search]
   );
-  const [currentModuleAccess, setCurrentModuleAccess] = useState<Record<string, boolean> | null | undefined>(() => {
-    if (!userId) return null;
-    return getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess;
-  });
+  /**
+   * Видимість пунктів меню.
+   *
+   * Доступи беремо з `useAuth()` — вони вже враховують режим «Дивитись як».
+   * Раніше тут стояв власний виклик довідника, який умів повертати лише
+   * власний запис, тому owner у режимі перегляду бачив своє меню.
+   */
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
-        if (link.to === ROUTES.observability && !(permissions.isSuperAdmin || permissions.isAdmin)) {
-          return false;
+        if (link.to === ROUTES.observability) {
+          return permissions.isSuperAdmin || permissions.isAdmin;
         }
-        if (link.moduleKey) {
-          if ((link.moduleKey === "contractors" || link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSuperAdmin) {
-            return true;
-          }
-          if ((link.moduleKey === "stock" || link.moduleKey === "finance") && permissions.isSeo) {
-            return true;
-          }
-          // Finance is role-restricted: owner / SEO / бухгалтери (matches DB RLS).
-          if (link.moduleKey === "finance") {
-            return permissions.isSuperAdmin || isFinanceJobRole;
-          }
-          if (currentModuleAccess === undefined) {
-            return false;
-          }
-          return currentModuleAccess?.[link.moduleKey] !== false || (link.to === ROUTES.membersAccess && permissions.canEditMemberRoles);
+        if (!link.moduleKey) return true;
+        // Фінанси обмежені роллю в самій БД (RLS) — тримаємо UI у згоді з нею.
+        if (link.moduleKey === "finance") {
+          return permissions.isSuperAdmin || isFinanceJobRole;
         }
-        return true;
+        if (permissions.isSuperAdmin) return true;
+        // Доступи ще вантажаться — краще не показати пункт, ніж блимнути ним.
+        if (moduleAccess === undefined) return false;
+        return hasModuleAccess(moduleAccess, link.moduleKey);
       }),
-    [currentModuleAccess, isFinanceJobRole, permissions.canEditMemberRoles, permissions.isAdmin, permissions.isSeo, permissions.isSuperAdmin]
+    [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
@@ -830,44 +811,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(ROUTES.notifications) ||
     location.pathname.startsWith(ROUTES.membersAccess) ||
     location.pathname.startsWith(ROUTES.finances);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadCurrentModuleAccess = async () => {
-      if (!userId) {
-        if (!cancelled) setCurrentModuleAccess(null);
-        return;
-      }
-
-      try {
-        const entry = await getCurrentWorkspaceMemberDirectoryEntry();
-        if (!cancelled) {
-          setCurrentModuleAccess(entry?.moduleAccess ?? null);
-        }
-      } catch (error) {
-        console.error("Failed to resolve current member module access", error);
-        if (!cancelled) {
-          setCurrentModuleAccess(null);
-        }
-      }
-    };
-
-    void loadCurrentModuleAccess();
-
-    const handleDirectoryUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ userId?: string }>).detail;
-      if (!detail?.userId || detail.userId === userId) {
-        void loadCurrentModuleAccess();
-      }
-    };
-
-    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate as EventListener);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate as EventListener);
-    };
-  }, [userId]);
 
   // Optional workspace logo (kept null by default to avoid heavy legacy team queries)
   const [workspaceLogo] = useState<string | null>(null);
@@ -1699,7 +1642,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             sidebarCollapsed ? "px-2 py-2" : "px-4 py-3"
           )}
         >
-          {currentModuleAccess === undefined ? (
+          {moduleAccess === undefined ? (
             <SidebarNavSkeleton collapsed={sidebarCollapsed} />
           ) : (
           <div

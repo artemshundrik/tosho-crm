@@ -4,6 +4,13 @@ import { supabase } from '../lib/supabaseClient';
 import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
 import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
 import { readViewAs, VIEW_AS_CHANGED_EVENT, type ViewAsTarget } from '@/auth/viewAs';
+import { defaultModuleAccess, type ModuleAccess } from '@/lib/moduleAccess';
+import {
+  getCachedCurrentWorkspaceMemberDirectoryEntry,
+  getCurrentWorkspaceMemberDirectoryEntry,
+  listWorkspaceMemberDirectory,
+  WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT,
+} from '@/lib/workspaceMemberDirectory';
 
 type AuthState = {
   session: Session | null;
@@ -13,6 +20,21 @@ type AuthState = {
   accessRole: AccessRole;
   jobRole: JobRole;
   permissions: AppPermissions;
+  /**
+   * Дозволені модулі — вже з урахуванням режиму «Дивитись як».
+   *
+   * `undefined` = ще вантажиться (не показуй меню, бо блимне зайвим). Якщо
+   * запису в довіднику немає, повертаємо дефолти за роллю, а не null: інакше
+   * сайдбар (який трактував відсутність як «дозволено») і роут-гейт (який
+   * вимагав явне true) розходилися, і людина бачила пункт меню, але на кліку
+   * отримувала «потрібен доступ».
+   *
+   * Раніше кожен споживач сам кликав `getCurrentWorkspaceMemberDirectoryEntry()`,
+   * а та функція вміє повертати ЛИШЕ власний запис — тому в режимі перегляду
+   * підмінялись ролі, але не галочки модулів, і owner бачив своє меню очима
+   * дизайнера. Тепер підміна одна на весь застосунок, тут.
+   */
+  moduleAccess: ModuleAccess | undefined;
   /** Активна ціль режиму «Дивитись як» (лише owner); null — звичайний режим. */
   viewAs: ViewAsTarget | null;
   /** Чи має право вмикати режим (owner). */
@@ -295,6 +317,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [activeViewAs, effectiveRole, effectiveAccessRole, effectiveJobRole, realPermissions],
   );
 
+  /**
+   * Дозволені модулі тієї людини, чиїми очима дивимось.
+   *
+   * У звичайному режимі це власний запис із довідника; у режимі «Дивитись як» —
+   * запис обраної людини, який доводиться шукати в повному списку, бо
+   * `getCurrentWorkspaceMemberDirectoryEntry` вміє лише «поточного».
+   */
+  const targetUserId = activeViewAs?.userId ?? userId;
+  const [moduleAccess, setModuleAccess] = useState<ModuleAccess | undefined>(() =>
+    activeViewAs ? undefined : getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    // Немає запису в довіднику — беремо дефолти за роллю, а не «нічого».
+    const fallback = () =>
+      defaultModuleAccess({ accessRole: effectiveAccessRole, jobRole: effectiveJobRole });
+
+    if (!targetUserId) {
+      setModuleAccess(fallback());
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const load = async () => {
+      try {
+        if (!activeViewAs) {
+          const entry = await getCurrentWorkspaceMemberDirectoryEntry();
+          if (!cancelled) setModuleAccess(entry?.moduleAccess ?? fallback());
+          return;
+        }
+        const workspaceId = await resolveWorkspaceId(userId!);
+        if (!workspaceId) {
+          if (!cancelled) setModuleAccess(fallback());
+          return;
+        }
+        const rows = await listWorkspaceMemberDirectory(workspaceId);
+        const entry = rows.find((row) => row.userId === targetUserId);
+        if (!cancelled) setModuleAccess(entry?.moduleAccess ?? fallback());
+      } catch (error) {
+        console.error('Failed to resolve module access', error);
+        if (!cancelled) setModuleAccess(fallback());
+      }
+    };
+
+    void load();
+
+    // Змінили комусь доступи — перечитуємо, не чекаючи перезавантаження.
+    const handleDirectoryUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!detail?.userId || detail.userId === targetUserId) void load();
+    };
+    window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate);
+    };
+  }, [activeViewAs, effectiveAccessRole, effectiveJobRole, targetUserId, userId]);
+
   const value = useMemo<AuthState>(
     () => ({
       session,
@@ -304,6 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessRole: effectiveAccessRole,
       jobRole: effectiveJobRole,
       permissions,
+      moduleAccess,
       loading,
       refreshTeamContext,
       signOut,
@@ -319,6 +402,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       effectiveAccessRole,
       effectiveJobRole,
       permissions,
+      moduleAccess,
       loading,
       refreshTeamContext,
       activeViewAs,

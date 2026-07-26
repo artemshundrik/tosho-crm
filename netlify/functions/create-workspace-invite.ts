@@ -16,16 +16,9 @@ type InviteRequest = {
   startDate?: string | null;
   probationEndDate?: string | null;
   managerUserId?: string | null;
-  moduleAccess?: {
-    overview?: boolean;
-    orders?: boolean;
-    finance?: boolean;
-    design?: boolean;
-    logistics?: boolean;
-    catalog?: boolean;
-    contractors?: boolean;
-    team?: boolean;
-  } | null;
+  // Ключі модулів не перелічуємо: реєстр живе у src/lib/moduleAccess.ts, а тут
+  // ми лише пересилаємо те, що надіслав клієнт, нічого не втрачаючи.
+  moduleAccess?: Record<string, boolean> | null;
 };
 type HttpEvent = {
   httpMethod?: string;
@@ -115,6 +108,20 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
+}
+
+
+/**
+ * Витягує лише булеві прапорці з module_access, не втрачаючи невідомих ключів.
+ * Перелік модулів — у src/lib/moduleAccess.ts (сюди не імпортується).
+ */
+function pickBooleanFlags(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== "object") return {};
+  const result: Record<string, boolean> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === "boolean") result[key] = raw;
+  }
+  return result;
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -506,28 +513,12 @@ export const handler = async (event: HttpEvent) => {
             startDate: typeof meta.start_date === "string" ? meta.start_date : "",
             probationEndDate: typeof meta.probation_end_date === "string" ? meta.probation_end_date : "",
             managerUserId: typeof meta.manager_user_id === "string" ? meta.manager_user_id : "",
-            moduleAccess:
-              meta.module_access && typeof meta.module_access === "object"
-                ? {
-                    overview: Boolean((meta.module_access as Record<string, unknown>).overview),
-                    orders: Boolean((meta.module_access as Record<string, unknown>).orders),
-                    finance: Boolean((meta.module_access as Record<string, unknown>).finance),
-                    design: Boolean((meta.module_access as Record<string, unknown>).design),
-                    logistics: Boolean((meta.module_access as Record<string, unknown>).logistics),
-                    catalog: Boolean((meta.module_access as Record<string, unknown>).catalog),
-                    contractors: Boolean((meta.module_access as Record<string, unknown>).contractors),
-                    team: Boolean((meta.module_access as Record<string, unknown>).team),
-                  }
-                : {
-                    overview: true,
-                    orders: true,
-                    finance: false,
-                    design: true,
-                    logistics: false,
-                    catalog: false,
-                    contractors: false,
-                    team: false,
-                  },
+            // Пропускаємо ВСІ булеві ключі, а не фіксований перелік: раніше тут
+            // було вісім із тринадцяти, і кожен прохід мовчки з'їдав stock,
+            // marketing, pulse та обидва «Вчасно». Список модулів живе в
+            // src/lib/moduleAccess.ts, сюди він не імпортується (окремий
+            // бандл), тож не дублюємо його, а просто нічого не втрачаємо.
+            moduleAccess: pickBooleanFlags(meta.module_access),
           };
         } catch {
           // ignore item-level failures

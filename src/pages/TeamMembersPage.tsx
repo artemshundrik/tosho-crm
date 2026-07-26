@@ -106,6 +106,14 @@ import {
   type WorkspaceMemberDirectoryRow,
 } from "@/lib/workspaceMemberDirectory";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
+import {
+  defaultModuleAccess,
+  getModuleDefinition,
+  MODULE_GROUPS,
+  normalizeModuleAccess,
+  type ModuleAccess,
+  type ModuleKey,
+} from "@/lib/moduleAccess";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
@@ -146,21 +154,7 @@ type MemberProfileMeta = {
   probationReviewedBy: string;
   probationExtensionCount: number;
   managerUserId: string;
-  moduleAccess: {
-    overview: boolean;
-    orders: boolean;
-    design: boolean;
-    logistics: boolean;
-    catalog: boolean;
-    contractors: boolean;
-    stock: boolean;
-    finance: boolean;
-    vchasno: boolean;
-    vchasno_send: boolean;
-    marketing: boolean;
-    team: boolean;
-    pulse: boolean;
-  };
+  moduleAccess: ModuleAccess;
 };
 
 type MemberPresence = {
@@ -244,53 +238,8 @@ const AVAILABILITY_OPTIONS = [
   { value: "offline", label: "Поза офісом" },
 ] as const;
 
-const DEFAULT_MODULE_ACCESS = {
-  overview: true,
-  orders: true,
-  design: true,
-  logistics: false,
-  catalog: false,
-  contractors: false,
-  stock: false,
-  finance: false,
-  vchasno: false,
-  vchasno_send: false,
-  marketing: false,
-  team: false,
-  pulse: false,
-};
-
-const MODULE_ACCESS_LABELS: Record<keyof MemberProfileMeta["moduleAccess"], string> = {
-  overview: "Огляд",
-  orders: "Замовлення",
-  design: "Дизайн",
-  logistics: "Логістика",
-  catalog: "Каталог",
-  contractors: "Підрядники та постачальники",
-  stock: "Склад",
-  finance: "Фінанси",
-  vchasno: "Вчасно — завантаження",
-  vchasno_send: "Вчасно — надсилання",
-  marketing: "Маркетинг",
-  team: "Управління командою",
-  pulse: "Пульс команди (аналітика)",
-};
-
-const VISIBLE_MODULE_ACCESS_KEYS: Array<keyof MemberProfileMeta["moduleAccess"]> = [
-  "overview",
-  "orders",
-  "design",
-  "logistics",
-  "catalog",
-  "contractors",
-  "stock",
-  "finance",
-  "vchasno",
-  "vchasno_send",
-  "marketing",
-  "team",
-  "pulse",
-];
+/** Підписи, порядок і дефолти модулів — у реєстрі src/lib/moduleAccess.ts. */
+const DEFAULT_MODULE_ACCESS = defaultModuleAccess();
 
 const DEFAULT_MEMBER_META: MemberProfileMeta = {
   firstName: "",
@@ -368,48 +317,14 @@ function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | 
   );
 }
 
-function hasDefaultMarketingAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "marketer";
-}
 
-function isForcedModuleAccess(key: keyof MemberProfileMeta["moduleAccess"], accessRole?: string | null, jobRole?: string | null) {
+function isForcedModuleAccess(key: ModuleKey, accessRole?: string | null, jobRole?: string | null) {
+  // Модуль, позначений alwaysOn у реєстрі (наприклад «Команда»), вимкнути не можна.
+  if (getModuleDefinition(key)?.alwaysOn) return true;
   if (key === "contractors" && (accessRole ?? "").trim().toLowerCase() === "owner") return true;
   if (key === "stock" && hasDefaultStockAccess(accessRole, jobRole)) return true;
   if (key === "finance" && hasDefaultFinanceAccess(accessRole, jobRole)) return true;
   return false;
-}
-
-function normalizeModuleAccess(
-  value: unknown,
-  accessRole?: string | null,
-  jobRole?: string | null
-): MemberProfileMeta["moduleAccess"] {
-  const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
-  return {
-    overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
-    orders: typeof input.orders === "boolean" ? input.orders : DEFAULT_MODULE_ACCESS.orders,
-    design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
-    logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
-    catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
-    contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
-    stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
-    finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
-    vchasno: typeof input.vchasno === "boolean" ? input.vchasno : hasDefaultFinanceAccess(accessRole, jobRole),
-    vchasno_send:
-      typeof input.vchasno_send === "boolean"
-        ? input.vchasno_send
-        : (accessRole ?? "").trim().toLowerCase() === "owner" ||
-          (jobRole ?? "").trim().toLowerCase() === "chief_accountant",
-    marketing:
-      typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
-    team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
-    pulse:
-      typeof input.pulse === "boolean"
-        ? input.pulse
-        : (accessRole ?? "").trim().toLowerCase() === "owner" ||
-          (jobRole ?? "").trim().toLowerCase() === "seo",
-  };
 }
 
 function normalizeMemberModuleAccessForRole(
@@ -3063,33 +2978,53 @@ export function TeamMembersPage() {
                     </div>
                     <div className="rounded-[var(--radius)] border border-border bg-background/70 p-4">
                       <div className="mb-4 text-sm font-semibold text-foreground">Доступ до модулів</div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {VISIBLE_MODULE_ACCESS_KEYS.map((key) => (
-                          <label
-                            key={key}
-                            className="flex items-center gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
-                          >
-                            <Checkbox
-                              checked={
-                                isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
-                                  ? true
-                                  : editProfileModuleAccess[key]
-                              }
-                              disabled={
-                                !canManage ||
-                                isForcedModuleAccess(key, editProfileMember?.access_role ?? null, editProfileMember?.job_role ?? null)
-                              }
-                              onCheckedChange={(checked) =>
-                                setEditProfileModuleAccess((prev) => ({
-                                  ...prev,
-                                  [key]: checked === true,
-                                }))
-                              }
-                            />
-                            <span className="text-sm text-foreground">{MODULE_ACCESS_LABELS[key]}</span>
-                          </label>
+                      {/* Порядок і групування — з реєстру модулів, щоб список
+                          не розходився з тим, що реально є в меню. */}
+                      <div className="flex flex-col gap-4">
+                        {MODULE_GROUPS.map((section) => (
+                          <div key={section.group}>
+                            <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">
+                              {section.label}
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {section.modules.map((module) => {
+                                const forced = isForcedModuleAccess(
+                                  module.key,
+                                  editProfileMember?.access_role ?? null,
+                                  editProfileMember?.job_role ?? null
+                                );
+                                return (
+                                  <label
+                                    key={module.key}
+                                    className="flex items-start gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
+                                  >
+                                    <Checkbox
+                                      className="mt-0.5"
+                                      checked={forced ? true : editProfileModuleAccess[module.key]}
+                                      disabled={!canManage || forced}
+                                      onCheckedChange={(checked) =>
+                                        setEditProfileModuleAccess((prev) => ({
+                                          ...prev,
+                                          [module.key]: checked === true,
+                                        }))
+                                      }
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="block text-sm text-foreground">{module.label}</span>
+                                      {module.hint ? (
+                                        <span className="block text-2xs text-muted-foreground">{module.hint}</span>
+                                      ) : null}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
                         ))}
                       </div>
+                      <p className="mt-3 text-2xs text-muted-foreground">
+                        Сповіщення доступні всім і окремого дозволу не потребують.
+                      </p>
                     </div>
                     {canManage ? (
                       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

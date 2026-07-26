@@ -48,7 +48,7 @@ import {
 import { buildInvoiceHtml, openPrintableDocument } from "./documentHtml";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/auth/AuthProvider";
-import { getCachedCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
+import { hasModuleAccess } from "@/lib/moduleAccess";
 import { listVchasnoStatusesByCrmIds, vchasnoStatusBadge, type VchasnoDocStatus } from "./vchasnoStatus";
 import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
 import vchasnoLogo from "@/assets/vchasno-logo.png";
@@ -96,13 +96,13 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
   const [vchasnoStatuses, setVchasnoStatuses] = React.useState<Map<string, VchasnoDocStatus>>(new Map());
 
   const auth = useAuth();
-  // Показ кнопки (сервер усе одно перевіряє право). Дефолт по ролі + override з module_access.
+  // Показ кнопки (сервер усе одно перевіряє право). Доступи беремо з useAuth,
+  // тож режим «Дивитись як» показує кнопку так, як її бачить обрана людина.
   const canUploadVchasno = React.useMemo(() => {
-    const ma = getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess;
-    if (ma && typeof ma.vchasno === "boolean") return ma.vchasno;
+    if (auth.moduleAccess) return hasModuleAccess(auth.moduleAccess, "vchasno");
     const role = (auth.jobRole ?? "").toLowerCase();
     return auth.permissions.isSuperAdmin || ["seo", "accountant", "chief_accountant"].includes(role);
-  }, [auth.jobRole, auth.permissions.isSuperAdmin]);
+  }, [auth.moduleAccess, auth.jobRole, auth.permissions.isSuperAdmin]);
 
   // Мутації (створення/редагування/видалення/Вчасно) викликали await reload()
   // — тепер це інвалідація всього finance-кешу: активні запити цієї вкладки

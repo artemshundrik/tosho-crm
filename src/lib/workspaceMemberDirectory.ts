@@ -3,6 +3,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
 import { getCanonicalAvatarReference, getImmediateAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
+import { defaultModuleAccess, normalizeModuleAccess, type ModuleAccess } from "@/lib/moduleAccess";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const workspaceDirectoryCache = new Map<string, WorkspaceMemberDirectoryRow[]>();
@@ -44,7 +45,7 @@ export type WorkspaceMemberDirectoryRow = {
   probationReviewedBy: string;
   probationExtensionCount: number;
   managerUserId: string;
-  moduleAccess: Record<string, boolean>;
+  moduleAccess: ModuleAccess;
 };
 
 export type WorkspaceMemberDisplayRow = WorkspaceMemberDirectoryRow & {
@@ -138,21 +139,8 @@ type UpsertWorkspaceMemberProfileInput = {
   updatedBy?: string | null;
 };
 
-const DEFAULT_MODULE_ACCESS = {
-  overview: true,
-  orders: true,
-  design: true,
-  logistics: false,
-  catalog: false,
-  contractors: false,
-  stock: false,
-  finance: false,
-  vchasno: false,
-  vchasno_send: false,
-  marketing: false,
-  team: false,
-  pulse: false,
-};
+/** Дефолти й нормалізація живуть у реєстрі модулів — див. src/lib/moduleAccess.ts. */
+const DEFAULT_MODULE_ACCESS = defaultModuleAccess();
 
 function getErrorMessage(error: unknown) {
   if (typeof error !== "object" || !error) return "";
@@ -176,67 +164,6 @@ function isMissingColumn(error: unknown, column?: string) {
   return !column || normalized.includes(column.toLowerCase());
 }
 
-function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
-}
-
-function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (
-    (accessRole ?? "").trim().toLowerCase() === "owner" ||
-    role === "seo" ||
-    role === "accountant" ||
-    role === "chief_accountant"
-  );
-}
-
-// Вчасно: завантажувати/готувати документи — ширше коло (як finance).
-function hasDefaultVchasnoAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (
-    (accessRole ?? "").trim().toLowerCase() === "owner" ||
-    role === "seo" ||
-    role === "accountant" ||
-    role === "chief_accountant"
-  );
-}
-
-// Вчасно: надсилати контрагенту — лише уповноважена особа (директор/головбух).
-function hasDefaultVchasnoSendAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "chief_accountant";
-}
-
-// Маркетинг: галерея візуалів — власник, SEO та маркетолог за замовчуванням.
-function hasDefaultMarketingAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo" || role === "marketer";
-}
-
-// Пульс команди: аналітика активності/часу — лише власник та SEO (керівник).
-function hasDefaultPulseAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (accessRole ?? "").trim().toLowerCase() === "owner" || role === "seo";
-}
-
-function normalizeModuleAccess(value: unknown, accessRole?: string | null, jobRole?: string | null) {
-  const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
-  return {
-    overview: typeof input.overview === "boolean" ? input.overview : DEFAULT_MODULE_ACCESS.overview,
-    orders: typeof input.orders === "boolean" ? input.orders : DEFAULT_MODULE_ACCESS.orders,
-    design: typeof input.design === "boolean" ? input.design : DEFAULT_MODULE_ACCESS.design,
-    logistics: typeof input.logistics === "boolean" ? input.logistics : DEFAULT_MODULE_ACCESS.logistics,
-    catalog: typeof input.catalog === "boolean" ? input.catalog : DEFAULT_MODULE_ACCESS.catalog,
-    contractors: typeof input.contractors === "boolean" ? input.contractors : DEFAULT_MODULE_ACCESS.contractors,
-    stock: typeof input.stock === "boolean" ? input.stock : hasDefaultStockAccess(accessRole, jobRole),
-    finance: typeof input.finance === "boolean" ? input.finance : hasDefaultFinanceAccess(accessRole, jobRole),
-    vchasno: typeof input.vchasno === "boolean" ? input.vchasno : hasDefaultVchasnoAccess(accessRole, jobRole),
-    vchasno_send: typeof input.vchasno_send === "boolean" ? input.vchasno_send : hasDefaultVchasnoSendAccess(accessRole, jobRole),
-    marketing: typeof input.marketing === "boolean" ? input.marketing : hasDefaultMarketingAccess(accessRole, jobRole),
-    team: typeof input.team === "boolean" ? input.team : DEFAULT_MODULE_ACCESS.team,
-    pulse: typeof input.pulse === "boolean" ? input.pulse : hasDefaultPulseAccess(accessRole, jobRole),
-  };
-}
 
 function notifyWorkspaceMemberDirectoryUpdated(workspaceId: string, userId: string) {
   if (typeof window === "undefined") return;
@@ -722,7 +649,9 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
 
     if (!error) {
       updateCachedWorkspaceMemberProfile(input.workspaceId, input.userId, {
-        moduleAccess: payload.module_access ?? undefined,
+        // Ролі тут не потрібні: збережений payload містить усі ключі явно,
+        // тож до дефолтів за роллю нормалізація не дійде.
+        moduleAccess: payload.module_access ? normalizeModuleAccess(payload.module_access) : undefined,
       });
       notifyWorkspaceMemberDirectoryUpdated(input.workspaceId, input.userId);
       return;

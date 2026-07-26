@@ -3862,15 +3862,11 @@ async function listRoutingCandidates(
         {
           fullName: normalizeText(profile.full_name),
           avatarUrl: normalizeText(profile.avatar_url || profile.avatar_path) || null,
-          moduleAccess: {
-            overview: Boolean(moduleAccessInput.overview),
-            orders: Boolean(moduleAccessInput.orders),
-            design: Boolean(moduleAccessInput.design),
-            logistics: Boolean(moduleAccessInput.logistics),
-            catalog: Boolean(moduleAccessInput.catalog),
-            contractors: Boolean(moduleAccessInput.contractors),
-            team: Boolean(moduleAccessInput.team),
-          },
+          // Усі булеві ключі, а не сім із вісімнадцяти: фіксований перелік
+          // мовчки з'їдав нові модулі (склад, маркетинг, прорахунки…).
+          moduleAccess: Object.fromEntries(
+            Object.entries(moduleAccessInput).filter(([, raw]) => typeof raw === "boolean")
+          ) as Record<string, boolean>,
         },
       ];
     })
