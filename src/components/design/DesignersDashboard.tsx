@@ -141,6 +141,16 @@ const DELTA_CLASS: Record<DeltaTone, string> = {
   flat: "border-neutral-soft-border bg-neutral-soft text-neutral-foreground",
 };
 
+/**
+ * Дельта до попереднього місяця: тільки колір + стрілка + число.
+ *
+ * Слова («менше», «швидше», «більше правок») свідомо прибрані — вони дублювали
+ * те, що вже кажуть напрямок стрілки й колір, і робили чіп таким довгим, що він
+ * рвався на два рядки. Словесне пояснення лишилось у `title`: для наведення,
+ * скрінрідера і випадків, коли колір не зчитується.
+ */
+const CHIP_BASE = "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-3xs font-semibold";
+
 function DeltaChip({
   current,
   previous,
@@ -158,18 +168,16 @@ function DeltaChip({
 }) {
   if (current == null || previous == null) {
     return (
-      <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold", DELTA_CLASS.flat)}>
+      <span className={cn(CHIP_BASE, DELTA_CLASS.flat)} title="Немає попереднього місяця для порівняння">
         <Minus className="h-3 w-3" />
-        немає бази
       </span>
     );
   }
   const diff = current - previous;
   if (Math.abs(diff) < 0.001) {
     return (
-      <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold", DELTA_CLASS.flat)}>
+      <span className={cn(CHIP_BASE, DELTA_CLASS.flat)} title="Без змін до попереднього місяця">
         <Minus className="h-3 w-3" />
-        без змін
       </span>
     );
   }
@@ -177,11 +185,12 @@ function DeltaChip({
   const tone: DeltaTone = (lowerBetter ? !up : up) ? "good" : "bad";
   const Icon = up ? TrendingUp : TrendingDown;
   const word = lowerBetter ? (up ? upWord ?? "повільніше" : downWord ?? "швидше") : up ? upWord ?? "більше" : downWord ?? "менше";
+  const value = format(Math.abs(diff));
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold", DELTA_CLASS[tone])}>
+    <span className={cn(CHIP_BASE, DELTA_CLASS[tone])} title={`${up ? "+" : "−"}${value} ${word} за попередній місяць`}>
       <Icon className="h-3 w-3" />
       {up ? "+" : "−"}
-      {format(Math.abs(diff))} · {word}
+      {value}
     </span>
   );
 }
@@ -1152,14 +1161,11 @@ export function DesignersDashboard({
                       {row.current == null ? "—" : formatHumanSeconds(row.current)}
                     </span>
                     {row.overNorm != null ? (
-                      /* Короткий підпис + nowrap: «+4 хв понад норму» не влазив у колонку
-                         і рвався на два рядки. Що це саме норма — вже кажуть іконка,
-                         колір, пунктир на треку і підпис зліва; повний текст — у title. */
+                      /* Короткий підпис: «+4 хв понад норму» не влазив у колонку і рвався
+                         на два рядки. Що це саме норма — вже кажуть іконка, колір, пунктир
+                         на треку і підпис зліва; повний текст — у title. */
                       <span
-                        className={cn(
-                          "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-3xs font-semibold",
-                          row.overNorm ? DELTA_CLASS.bad : DELTA_CLASS.good
-                        )}
+                        className={cn(CHIP_BASE, row.overNorm ? DELTA_CLASS.bad : DELTA_CLASS.good)}
                         title={
                           row.overNorm
                             ? `Норма ≤ ${row.normMinutes} хв на задачу — перевищено`
