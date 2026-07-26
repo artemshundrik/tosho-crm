@@ -76,6 +76,7 @@ import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
 import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
+import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidget";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import {
   DesignerFloatingTimerWidget,
@@ -1936,6 +1937,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
+              {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
+                  (рендерить null, якщо в людини немає чинної ставки). */}
+              {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={userId} /> : null}
               {showDesignerTimerWidget ? (
                 <DesignerHeaderTimerWidget
                   controller={designerTimerController}
