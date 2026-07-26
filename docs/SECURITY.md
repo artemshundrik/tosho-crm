@@ -9,6 +9,23 @@ This database is shared by `tosho` (the app) and historical tables in `public`. 
 Supabase `anon` key is public (it ships in the JS bundle), so "anyone on the internet"
 can act as the `anon` role. Treat `anon` and even `authenticated` as potentially hostile.
 
+## Rule 0 — the owner is not a finding
+
+`access_role = owner` (→ `isSuperAdmin`) is the **top of the permission model, by
+design**: the owner commissioned and owns this system and is meant to see and do
+everything.
+
+- An owner having full access is **never** a security finding. Do not flag it,
+  do not "harden" it, do not propose least-privilege for it in reviews or audits.
+- New gated surfaces grant the owner **by default** — no extra role, flag or
+  grant required.
+- Widen access for others by adding their job role beside the owner check
+  (`isSuperAdmin || isSeo`), never by taking access away from the owner.
+
+Everything below is about keeping *hostile and unauthorized* actors out — it is
+not about limiting the owner. Full role model:
+[CODEX_PROJECT_GUIDE.md → Frontend Auth And Permissions](CODEX_PROJECT_GUIDE.md#frontend-auth-and-permissions).
+
 ## Non-negotiable rules
 
 ### 1. Every table has RLS, deny-by-default

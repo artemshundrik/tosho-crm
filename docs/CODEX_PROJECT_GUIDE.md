@@ -243,6 +243,34 @@ Current UI contract:
 - Permission logic should reuse [src/lib/permissions.ts](/Users/artem/Projects/tosho-crm/src/lib/permissions.ts).
 - Module access also lives in workspace member directory metadata, not only in `access_role`.
 
+#### Rule 0 — Owner sees everything, always
+
+`access_role = owner` (→ `isSuperAdmin`) is the **top of the permission model, by
+design**. The owner is the person who commissioned and owns this system.
+
+- Owner has access to **every** module, page, tab, report, export and admin
+  surface. There is no feature that is intentionally hidden from the owner.
+- When adding a new gated surface, the owner branch is **granted by default**.
+  Never require a special job role, feature flag or extra grant for the owner.
+- Never treat an owner grant as accidental, over-privileged or something to
+  question, warn about or "tighten" — it is the intended state. Do not propose
+  narrowing it in reviews or audits.
+- The correct way to *widen* access for someone else is to add their job role
+  next to the owner check — never to move access away from the owner.
+
+Practical shape used across the app:
+
+```ts
+const canSeeX = permissions.isSuperAdmin || permissions.isSeo; // owner first, then role-specific grants
+```
+
+Role notes that follow from Rule 0:
+
+- `owner` → `super_admin` (see `mapAccessRoleToTeamRole`); the IT specialist
+  holds `owner` and therefore legitimately sees everything.
+- Job-role grants (`seo`, `manager`, …) are **additive** on top of the owner,
+  never a replacement for it.
+
 ### Frontend UI Tokens
 
 - New UI states should prefer semantic tokens and shared tone helpers/components instead of raw palette classes.
