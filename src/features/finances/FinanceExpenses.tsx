@@ -331,7 +331,7 @@ function EntryEditor({
         value={note}
         onChange={(e) => setNote(e.target.value)}
         onKeyDown={onKeyDown}
-        placeholder="коментар (напр. кухня+санвузли)"
+        placeholder="коментар (необовʼязково)"
         aria-label="Коментар"
         className="h-8 min-w-[140px] flex-1"
       />
@@ -490,7 +490,7 @@ function ExpenseJournalPanel({
         </div>
       ) : (
         <p className="px-2 py-1 text-xs text-muted-foreground">
-          Ще немає записів за цей місяць. Додай перше прибирання нижче.
+          Ще немає записів за цей місяць. Додай перший запис нижче.
         </p>
       )}
 
@@ -507,7 +507,7 @@ function ExpenseJournalPanel({
             autoFocusAmount
             onSubmit={(values) => {
               onAdd(values);
-              // Форма лишається відкритою (нове key) для швидкого вводу кількох прибирань поспіль.
+              // Форма лишається відкритою (нове key) для швидкого вводу кількох записів поспіль.
               setLastDate(values.entryDate);
               setAddSeq((n) => n + 1);
             }}
@@ -674,7 +674,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     const servicesList: FinanceExpense[] = [];
     const otherList: FinanceExpense[] = [];
     for (const expense of fixed) {
-      if (isServiceExpense(expense)) servicesList.push(expense);
+      // «Сервіси та підписки» = впізнаваний бренд І СТАЛА сума. Змінні з журналом
+      // (логістика, комуналка) лишаються в «Інші регулярні» навіть із лого бренду.
+      if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
       else otherList.push(expense);
     }
     return { services: servicesList, recurringOther: otherList };
@@ -704,10 +706,20 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     const named = Array.from(byLabel.entries())
       .sort((a, b) => a[0].localeCompare(b[0], "uk"))
       .map(([label, items]) => ({ label, items, total: sumMonthly(items) }));
-    return untagged.length > 0
-      ? [...named, { label: null, items: untagged, total: sumMonthly(untagged) }]
-      : named;
-  }, [recurringOther, sumMonthly]);
+    // Безоб'єктні групуємо за КАТЕГОРІЄЮ (логістика тощо кластеризується сама),
+    // а не звалюємо в один «Без обʼєкта». Об'єкти — за адресою, як і були.
+    const byCat = new Map<string, FinanceExpense[]>();
+    for (const e of untagged) {
+      const catName = (e.categoryId ? categoryById.get(e.categoryId)?.name?.trim() : "") || "Інші регулярні";
+      const list = byCat.get(catName);
+      if (list) list.push(e);
+      else byCat.set(catName, [e]);
+    }
+    const byCategory = Array.from(byCat.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], "uk"))
+      .map(([label, items]) => ({ label, items, total: sumMonthly(items) }));
+    return [...named, ...byCategory];
+  }, [recurringOther, sumMonthly, categoryById]);
 
   // Скільки з місячної бази — це не-щомісячні підписки (квартальні/піврічні/річні).
   const spreadBaseline = React.useMemo(

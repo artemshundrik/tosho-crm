@@ -32,6 +32,13 @@ export const SUBSCRIPTION_BRANDS: SubscriptionBrand[] = [
   { key: "anthropic", label: "Claude (Anthropic)", domain: "anthropic.com", currency: "USD", match: ["anthropic", "claude", "клод"] },
   { key: "figma", label: "Figma", domain: "figma.com", currency: "USD", match: ["figma", "фігма", "фигма"] },
   { key: "netlify", label: "Netlify", domain: "netlify.com", currency: "USD", match: ["netlify", "нетліфай"] },
+  // Логістика/доставка — лого-бренди, але НЕ «сервіси-підписки»: у списку лишаються
+  // в «Інші регулярні» (див. гейт !amountVaries у FinanceExpenses), бо суми змінні (журнал).
+  { key: "novaposhta", label: "Нова Пошта", domain: "novaposhta.ua", currency: "UAH", match: ["нова пошта", "новапошта", "novaposhta", "nova poshta"] },
+  { key: "uklon", label: "Uklon", domain: "uklon.com.ua", currency: "UAH", match: ["уклон", "uklon"] },
+  { key: "movingexpert", label: "Moving Expert", domain: "moving-expert.kyiv.ua", currency: "UAH", match: ["moving expert", "moving-expert", "мувін експерт", "мувин эксперт"] },
+  // Доставка квітів/подарунків — теж лого-бренд зі змінною сумою (журнал), категорія «Подарунки».
+  { key: "laroshen", label: "LaRoshen", domain: "lorashen.ua", currency: "UAH", match: ["laroshen", "lorashen", "ларошен", "ля рошен"] },
 ];
 
 const BRAND_BY_KEY = new Map(SUBSCRIPTION_BRANDS.map((brand) => [brand.key, brand]));

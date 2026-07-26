@@ -3,6 +3,7 @@ import {
   Building2,
   Car,
   CreditCard,
+  Gift,
   GraduationCap,
   Landmark,
   Megaphone,
@@ -26,6 +27,7 @@ import type { ExpenseCategoryKind } from "./types";
 // nothing is stored, and unknown names still get a sensible icon.
 const NAME_ICON_RULES: Array<{ test: RegExp; icon: LucideIcon }> = [
   { test: /маркетинг|реклам|промо|smm|таргет|\bads?\b/, icon: Megaphone },
+  { test: /подарунк|квіт|презент|букет|gift|flower/, icon: Gift },
   { test: /прибир|клінінг|чист/, icon: SprayCan },
   { test: /оренд|офіс|приміщ/, icon: Building2 },
   { test: /дизайн|програм|софт|підписк|ліценз|adobe|figma|subscription|saas/, icon: Palette },
