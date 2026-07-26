@@ -671,7 +671,7 @@ export async function deleteExpenseCategory(teamId: string, id: string): Promise
 // ---------------------------------------------------------------------------
 
 const EXPENSE_COLUMNS =
-  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
+  "id,team_id,legal_entity_id,account_id,category_id,supplier_name,amount,currency,fx_rate,vat_amount,expense_date,is_recurring,recurrence,amount_varies,object_group,reminder_lead_days,vendor_options,event_type,next_charge_date,vendor_key,logo_url,notes,file,entered_by,created_at,updated_at";
 
 type ExpenseRow = {
   id: string;
@@ -690,6 +690,8 @@ type ExpenseRow = {
   amount_varies: boolean | null;
   object_group: string | null;
   reminder_lead_days: number | null;
+  vendor_options: string[] | null;
+  event_type: string | null;
   next_charge_date: string | null;
   vendor_key: string | null;
   logo_url: string | null;
@@ -731,6 +733,8 @@ const normalizeExpense = (row: ExpenseRow, allocations: FinanceExpenseAllocation
   amountVaries: Boolean(row.amount_varies),
   objectGroup: row.object_group ?? null,
   reminderLeadDays: row.reminder_lead_days ?? null,
+  vendorOptions: row.vendor_options ?? [],
+  eventType: row.event_type ?? null,
   nextChargeDate: row.next_charge_date ?? null,
   vendorKey: row.vendor_key ?? null,
   logoUrl: row.logo_url ?? null,
@@ -793,6 +797,8 @@ export type ExpenseInput = {
   amountVaries?: boolean;
   objectGroup?: string | null;
   reminderLeadDays?: number | null;
+  vendorOptions?: string[];
+  eventType?: string | null;
   nextChargeDate?: string | null;
   vendorKey?: string | null;
   logoUrl?: string | null;
@@ -819,6 +825,9 @@ const serializeExpense = (input: ExpenseInput) => ({
   object_group: input.isRecurring ? input.objectGroup?.trim() || null : null,
   // Дата наступного списання має сенс лише для сталої витрати/підписки.
   next_charge_date: input.isRecurring ? input.nextChargeDate || null : null,
+  event_type: input.eventType?.trim() || null,
+  // Список постачальників «звідки» — має сенс лише для журнальних (змінна сума).
+  vendor_options: input.isRecurring && input.amountVaries ? input.vendorOptions ?? [] : [],
   // Нагадування — лише коли є дата платежу (сталий регулярний із next_charge_date).
   reminder_lead_days:
     input.isRecurring && input.nextChargeDate ? input.reminderLeadDays ?? null : null,
@@ -894,6 +903,8 @@ type ExpenseEntryRow = {
   expense_id: string;
   entry_date: string;
   amount: number | string | null;
+  vendor: string | null;
+  event_label: string | null;
   note: string | null;
 };
 
@@ -902,6 +913,8 @@ const mapExpenseEntry = (row: ExpenseEntryRow): ExpenseEntry => ({
   expenseId: row.expense_id,
   entryDate: row.entry_date,
   amount: toNumber(row.amount),
+  vendor: row.vendor,
+  eventLabel: row.event_label,
   note: row.note,
 });
 
@@ -913,7 +926,7 @@ export async function listExpenseEntries(teamId: string): Promise<Map<string, Ex
   const { data, error } = await supabase
     .schema("tosho")
     .from("finance_expense_monthly_amounts")
-    .select("id,expense_id,entry_date,amount,note")
+    .select("id,expense_id,entry_date,amount,vendor,event_label,note")
     .eq("team_id", teamId)
     .order("entry_date", { ascending: false });
   if (error) throw error;
@@ -930,7 +943,15 @@ export async function listExpenseEntries(teamId: string): Promise<Map<string, Ex
 /** Додати запис журналу. Повертає створений рядок (з реальним id). */
 export async function createExpenseEntry(
   teamId: string,
-  input: { expenseId: string; entryDate: string; amount: number; note?: string | null; enteredBy?: string | null }
+  input: {
+    expenseId: string;
+    entryDate: string;
+    amount: number;
+    vendor?: string | null;
+    eventLabel?: string | null;
+    note?: string | null;
+    enteredBy?: string | null;
+  }
 ): Promise<ExpenseEntry> {
   const { data, error } = await supabase
     .schema("tosho")
@@ -941,20 +962,28 @@ export async function createExpenseEntry(
       period: periodOf(input.entryDate),
       entry_date: input.entryDate,
       amount: input.amount,
+      vendor: input.vendor?.trim() || null,
+      event_label: input.eventLabel?.trim() || null,
       note: input.note?.trim() || null,
       entered_by: input.enteredBy || null,
     })
-    .select("id,expense_id,entry_date,amount,note")
+    .select("id,expense_id,entry_date,amount,vendor,event_label,note")
     .single();
   if (error) throw error;
   return mapExpenseEntry(data as unknown as ExpenseEntryRow);
 }
 
-/** Оновити запис журналу (дата/сума/коментар). period тримаємо в синхроні з датою. */
+/** Оновити запис журналу (дата/сума/звідки/коментар). period тримаємо в синхроні з датою. */
 export async function updateExpenseEntry(
   teamId: string,
   entryId: string,
-  patch: { entryDate?: string; amount?: number; note?: string | null }
+  patch: {
+    entryDate?: string;
+    amount?: number;
+    vendor?: string | null;
+    eventLabel?: string | null;
+    note?: string | null;
+  }
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (patch.entryDate !== undefined) {
@@ -962,6 +991,8 @@ export async function updateExpenseEntry(
     update.period = periodOf(patch.entryDate);
   }
   if (patch.amount !== undefined) update.amount = patch.amount;
+  if (patch.vendor !== undefined) update.vendor = patch.vendor?.trim() || null;
+  if (patch.eventLabel !== undefined) update.event_label = patch.eventLabel?.trim() || null;
   if (patch.note !== undefined) update.note = patch.note?.trim() || null;
   const { error } = await supabase
     .schema("tosho")
@@ -970,6 +1001,72 @@ export async function updateExpenseEntry(
     .eq("team_id", teamId)
     .eq("id", entryId);
   if (error) throw error;
+}
+
+/**
+ * Створити ПОДІЮ: кілька позицій однією датою й назвою, одним запитом.
+ * Повертає створені записи (з реальними id) — щоб одразу лягли в стан.
+ */
+export async function createExpenseEventEntries(
+  teamId: string,
+  input: {
+    expenseId: string;
+    entryDate: string;
+    eventLabel: string;
+    enteredBy?: string | null;
+    items: Array<{ amount: number; vendor?: string | null; note?: string | null }>;
+  }
+): Promise<ExpenseEntry[]> {
+  const rows = input.items
+    .filter((item) => item.amount > 0)
+    .map((item) => ({
+      team_id: teamId,
+      expense_id: input.expenseId,
+      period: periodOf(input.entryDate),
+      entry_date: input.entryDate,
+      amount: item.amount,
+      vendor: item.vendor?.trim() || null,
+      event_label: input.eventLabel.trim() || null,
+      note: item.note?.trim() || null,
+      entered_by: input.enteredBy || null,
+    }));
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("finance_expense_monthly_amounts")
+    .insert(rows)
+    .select("id,expense_id,entry_date,amount,vendor,event_label,note");
+  if (error) throw error;
+  return ((data as unknown as ExpenseEntryRow[]) ?? []).map(mapExpenseEntry);
+}
+
+/**
+ * Дописати постачальника у список «звідки» цієї витрати (ідемпотентно).
+ * Викликається, коли в пікері створили нового — щоб наступного разу він був у списку.
+ */
+export async function addExpenseVendorOption(teamId: string, expenseId: string, vendor: string): Promise<void> {
+  const clean = vendor.trim();
+  if (!clean) return;
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .select("vendor_options")
+    .eq("team_id", teamId)
+    .eq("id", expenseId)
+    .single();
+  if (error) throw error;
+  const current = ((data as unknown as { vendor_options: string[] | null } | null)?.vendor_options ?? []).filter(Boolean);
+  if (current.some((v) => v.trim().toLowerCase() === clean.toLowerCase())) return;
+  // Record<string, unknown>, а не літерал: у згенерованих типах finance_expenses
+  // немає vendor_options (як і решти нових колонок) — той самий патерн, що вище.
+  const payload: Record<string, unknown> = { vendor_options: [...current, clean] };
+  const { error: updateError } = await supabase
+    .schema("tosho")
+    .from("finance_expenses")
+    .update(payload)
+    .eq("team_id", teamId)
+    .eq("id", expenseId);
+  if (updateError) throw updateError;
 }
 
 /** Видалити запис журналу. */

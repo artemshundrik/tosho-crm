@@ -13,6 +13,12 @@ export type SubscriptionBrand = {
   currency: FxCurrency;
   /** Слова, за якими впізнаємо сервіс у вже введеній назві постачальника. */
   match: string[];
+  /**
+   * "service" (за замовчуванням) — підписка на сервіс: потрапляє в блок
+   * «Сервіси та підписки». "shop" — магазин/постачальник для записів журналу
+   * («звідки куплено»): дає лого, але НЕ робить витрату сервісом.
+   */
+  group?: "service" | "shop";
 };
 
 export const SUBSCRIPTION_BRANDS: SubscriptionBrand[] = [
@@ -39,7 +45,20 @@ export const SUBSCRIPTION_BRANDS: SubscriptionBrand[] = [
   { key: "movingexpert", label: "Moving Expert", domain: "moving-expert.kyiv.ua", currency: "UAH", match: ["moving expert", "moving-expert", "мувін експерт", "мувин эксперт"] },
   // Доставка квітів/подарунків — теж лого-бренд зі змінною сумою (журнал), категорія «Подарунки».
   { key: "laroshen", label: "LaRoshen", domain: "lorashen.ua", currency: "UAH", match: ["laroshen", "lorashen", "ларошен", "ля рошен"] },
+  { key: "okwine", label: "OKWINE", domain: "okwine.ua", currency: "UAH", match: ["okwine", "ok wine", "оквайн", "ок вайн"] },
+  // Магазини — джерела для записів журналу («звідки куплено»), не підписки.
+  { key: "silpo", label: "Сільпо", domain: "silpo.ua", currency: "UAH", match: ["сільпо", "silpo"], group: "shop" },
+  { key: "metro", label: "Метро", domain: "metro.ua", currency: "UAH", match: ["метро", "metro"], group: "shop" },
+  { key: "novus", label: "Новус", domain: "novus.online", currency: "UAH", match: ["новус", "novus"], group: "shop" },
+  { key: "maudau", label: "МауДау", domain: "maudau.com.ua", currency: "UAH", match: ["маудау", "мау дау", "maudau"], group: "shop" },
+  // Домен саме morshynska.ua (через «y») — на morshinska.ua фавікон інший.
+  { key: "morshynska", label: "Моршинська", domain: "morshynska.ua", currency: "UAH", match: ["моршинськ", "morshynska", "morshinska", "моршин"], group: "shop" },
+  { key: "rozetka", label: "Розетка", domain: "rozetka.com.ua", currency: "UAH", match: ["розетка", "rozetka"], group: "shop" },
+  { key: "winehunters", label: "Вайн Хантерс", domain: "winehunters.com.ua", currency: "UAH", match: ["вайн хантерс", "вайнхантерс", "wine hunters", "winehunters"], group: "shop" },
 ];
+
+/** Магазини-джерела для підказок у записі журналу («звідки»). */
+export const SHOP_BRANDS = SUBSCRIPTION_BRANDS.filter((brand) => brand.group === "shop");
 
 const BRAND_BY_KEY = new Map(SUBSCRIPTION_BRANDS.map((brand) => [brand.key, brand]));
 
@@ -66,7 +85,12 @@ export const isServiceExpense = (input: {
   vendorKey?: string | null;
   supplierName?: string | null;
   notes?: string | null;
-}): boolean => Boolean(resolveSubscriptionLogo(input));
+}): boolean => {
+  // Магазин (Метро, Сільпо…) має лого, але це джерело покупки, а не підписка.
+  const brand = getSubscriptionBrand(input.vendorKey) ?? guessSubscriptionBrand(input.supplierName, input.notes);
+  if (brand?.group === "shop") return false;
+  return Boolean(resolveSubscriptionLogo(input));
+};
 
 const faviconUrl = (domain: string) =>
   `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;

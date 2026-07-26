@@ -8,12 +8,14 @@ import {
   ChevronsUpDown,
   Cloud,
   Loader2,
+  PartyPopper,
   Pencil,
   PiggyBank,
   Pin,
   Plus,
   Receipt,
   RefreshCw,
+  Store,
   Trash2,
   X,
   type LucideIcon,
@@ -60,6 +62,7 @@ import { OrderPickerInline } from "./OrderPickerInline";
 import {
   createExpense,
   createExpenseCategory,
+  addExpenseVendorOption,
   createExpenseEntry,
   deleteExpense,
   deleteExpenseEntry,
@@ -255,11 +258,128 @@ const entryAmountLabel = (amount: number, currency: FxCurrency) =>
 
 // Спільний inline-редактор запису журналу: дата + сума + коментар.
 // Використовується і для додавання, і для редагування наявного запису.
+// Пікер «звідки»: свій список постачальників цієї витрати + логотипи брендів.
+// Нативний <datalist> тут виглядав чужорідно (системний дропдаун), тому — той самий
+// Popover+Command, що й у пікері виду витрати. Новий постачальник створюється на льоту.
+function VendorPicker({
+  value,
+  options,
+  onChange,
+  disabled,
+  placeholder = "звідки",
+  fallbackIcon = Store,
+  withLogo = true,
+  className,
+}: {
+  value: string;
+  options: string[];
+  onChange: (next: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  fallbackIcon?: LucideIcon;
+  /** false — не тягнути бренд-лого (для нетоварних списків, як типи подій). */
+  withLogo?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const q = query.trim();
+  const filtered = React.useMemo(
+    () => (q ? options.filter((o) => o.toLowerCase().includes(q.toLowerCase())) : options),
+    [options, q]
+  );
+  const exactExists = options.some((o) => o.trim().toLowerCase() === q.toLowerCase());
+
+  const pick = (next: string) => {
+    onChange(next);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cn(
+            "h-8 w-[150px] justify-between gap-1 px-2 font-normal",
+            !value && "text-muted-foreground",
+            className
+          )}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            {value && withLogo ? (
+              <SubscriptionLogo
+                logoUrl={resolveSubscriptionLogo({ supplierName: value })}
+                name={value}
+                icon={fallbackIcon}
+                size={20}
+              />
+            ) : (
+              React.createElement(fallbackIcon, { className: "h-3.5 w-3.5 shrink-0 opacity-60" })
+            )}
+            <span className="truncate text-xs">{value || placeholder}</span>
+          </span>
+          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] min-w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Пошук або новий…" value={query} onValueChange={setQuery} />
+          <CommandList>
+            {options.length === 0 && !q ? (
+              <CommandEmpty>Списку ще немає — введіть назву, щоб додати.</CommandEmpty>
+            ) : null}
+            <CommandGroup>
+              {filtered.map((option) => (
+                <CommandItem key={option} value={option} onSelect={() => pick(option)}>
+                  {withLogo ? (
+                    <SubscriptionLogo
+                      logoUrl={resolveSubscriptionLogo({ supplierName: option })}
+                      name={option}
+                      icon={fallbackIcon}
+                      size={24}
+                      className="mr-2"
+                    />
+                  ) : (
+                    React.createElement(fallbackIcon, { className: "mr-2 h-4 w-4 shrink-0 text-muted-foreground" })
+                  )}
+                  <span className="truncate">{option}</span>
+                  <Check className={cn("ml-auto h-4 w-4 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
+                </CommandItem>
+              ))}
+              {q && !exactExists ? (
+                <CommandItem value={`__create_${q}`} onSelect={() => pick(q)}>
+                  <Plus className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">Додати «{q}»</span>
+                </CommandItem>
+              ) : null}
+              {value ? (
+                <CommandItem value="__clear" onSelect={() => pick("")}>
+                  <X className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">Прибрати</span>
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function EntryEditor({
   currency,
   initialDate,
   initialAmount,
+  initialVendor,
   initialNote,
+  vendorOptions,
+  hideDate,
   submitLabel,
   saving,
   autoFocusAmount,
@@ -269,15 +389,21 @@ function EntryEditor({
   currency: FxCurrency;
   initialDate: string;
   initialAmount: string;
+  initialVendor: string;
   initialNote: string;
+  /** Постачальники саме цієї витрати (порожньо = поле «звідки» не показуємо). */
+  vendorOptions: string[];
+  /** true = це позиція події: дата спільна (у самої події), поле не показуємо. */
+  hideDate?: boolean;
   submitLabel: string;
   saving: boolean;
   autoFocusAmount?: boolean;
-  onSubmit: (values: { entryDate: string; amount: number; note: string }) => void;
+  onSubmit: (values: { entryDate: string; amount: number; vendor: string; note: string }) => void;
   onCancel: () => void;
 }) {
   const [date, setDate] = React.useState(initialDate);
   const [amount, setAmount] = React.useState(initialAmount);
+  const [vendor, setVendor] = React.useState(initialVendor);
   const [note, setNote] = React.useState(initialNote);
 
   const trySubmit = () => {
@@ -292,7 +418,7 @@ function EntryEditor({
       });
       return;
     }
-    onSubmit({ entryDate: date, amount: parsed, note: note.trim() });
+    onSubmit({ entryDate: date, amount: parsed, vendor: vendor.trim(), note: note.trim() });
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -306,14 +432,21 @@ function EntryEditor({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background p-2">
-      <Input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        onKeyDown={onKeyDown}
-        aria-label="Дата запису"
-        className="h-8 w-[150px]"
-      />
+      {/* Порядок: дата → звідки → сума → коментар. Радіус rounded-md — як у кнопок
+          тієї ж висоти (h-8); дефолтний rounded-xl на низькому полі виглядав завеликим. */}
+      {hideDate ? null : (
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          onKeyDown={onKeyDown}
+          aria-label="Дата запису"
+          className="h-8 w-[150px] rounded-md"
+        />
+      )}
+      {vendorOptions.length > 0 || vendor ? (
+        <VendorPicker value={vendor} options={vendorOptions} onChange={setVendor} disabled={saving} />
+      ) : null}
       <div className="flex items-center gap-1">
         <Input
           value={amount}
@@ -323,7 +456,7 @@ function EntryEditor({
           placeholder="0.00"
           autoFocus={autoFocusAmount}
           aria-label="Сума"
-          className="h-8 w-24 text-right text-sm tabular-nums"
+          className="h-8 w-24 rounded-md text-right text-sm tabular-nums"
         />
         <span className="w-3 text-xs text-muted-foreground">{CURRENCY_SYMBOL[currency]}</span>
       </div>
@@ -333,7 +466,7 @@ function EntryEditor({
         onKeyDown={onKeyDown}
         placeholder="коментар (необовʼязково)"
         aria-label="Коментар"
-        className="h-8 min-w-[140px] flex-1"
+        className="h-8 min-w-[120px] flex-1 rounded-md"
       />
       <div className="flex items-center gap-1">
         <Button size="sm" className="h-8 gap-1" onClick={trySubmit} disabled={saving}>
@@ -348,12 +481,14 @@ function EntryEditor({
   );
 }
 
-// Один рядок журналу: показ (дата · сума · коментар) із перемиканням у режим редагування.
+// Один рядок журналу: показ (дата · сума · звідки · коментар) із режимом редагування.
 function JournalEntryRow({
   entry,
   currency,
   rates,
   busy,
+  vendorOptions,
+  hideDate,
   onUpdate,
   onDelete,
 }: {
@@ -361,7 +496,10 @@ function JournalEntryRow({
   currency: FxCurrency;
   rates: FxRates;
   busy: boolean;
-  onUpdate: (values: { entryDate: string; amount: number; note: string }) => void;
+  vendorOptions: string[];
+  /** У згрупованому за датою режимі дата вже є в заголовку групи. */
+  hideDate?: boolean;
+  onUpdate: (values: { entryDate: string; amount: number; vendor: string; note: string }) => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = React.useState(false);
@@ -373,7 +511,9 @@ function JournalEntryRow({
         currency={currency}
         initialDate={entry.entryDate}
         initialAmount={String(entry.amount)}
+        initialVendor={entry.vendor ?? ""}
         initialNote={entry.note ?? ""}
+        vendorOptions={vendorOptions}
         submitLabel="Зберегти"
         saving={busy}
         onSubmit={(values) => {
@@ -387,14 +527,27 @@ function JournalEntryRow({
 
   return (
     <div className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/40">
-      <span className="w-12 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-        {formatDayShort(entry.entryDate)}
-      </span>
+      {hideDate ? null : (
+        <span className="w-12 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+          {formatDayShort(entry.entryDate)}
+        </span>
+      )}
       <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">
         {entryAmountLabel(entry.amount, currency)}
       </span>
       {uah !== null ? (
         <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">≈ {formatOrderMoney(uah, "UAH")}</span>
+      ) : null}
+      {entry.vendor ? (
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-foreground/80">
+          <SubscriptionLogo
+            logoUrl={resolveSubscriptionLogo({ supplierName: entry.vendor })}
+            name={entry.vendor}
+            icon={Store}
+            size={16}
+          />
+          {entry.vendor}
+        </span>
       ) : null}
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{entry.note || "—"}</span>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -431,6 +584,8 @@ function ExpenseJournalPanel({
   rates,
   entries,
   busy,
+  vendorOptions,
+  eventDate,
   onAdd,
   onUpdate,
   onDelete,
@@ -442,15 +597,21 @@ function ExpenseJournalPanel({
   rates: FxRates;
   entries: ExpenseEntry[]; // лише за цей місяць
   busy: boolean;
-  onAdd: (values: { entryDate: string; amount: number; note: string }) => void;
-  onUpdate: (entryId: string, values: { entryDate: string; amount: number; note: string }) => void;
+  vendorOptions: string[];
+  onAdd: (values: { entryDate: string; amount: number; vendor: string; note: string }) => void;
+  /** Задано = це ПОДІЯ: усі позиції однією датою (самої події), без вибору дати. */
+  eventDate?: string;
+  onUpdate: (entryId: string, values: { entryDate: string; amount: number; vendor: string; note: string }) => void;
   onDelete: (entryId: string) => void;
 }) {
   const [adding, setAdding] = React.useState(false);
+  const isEvent = Boolean(eventDate);
   // Після кожного додавання ремаунтимо форму (зміною key), щоб очистити суму/коментар
   // для наступного запису. Дату памʼятаємо (lastDate) — зазвичай додають поспіль близькі дати.
   const [addSeq, setAddSeq] = React.useState(0);
   const [lastDate, setLastDate] = React.useState(() => defaultEntryDate(monthKey, currentKey));
+  // Останнє «звідки» підставляємо в наступний запис — часто поспіль той самий магазин.
+  const [lastVendor, setLastVendor] = React.useState("");
   React.useEffect(() => {
     setLastDate(defaultEntryDate(monthKey, currentKey));
   }, [monthKey, currentKey]);
@@ -461,11 +622,32 @@ function ExpenseJournalPanel({
     [entries]
   );
 
+  // Подія (корпоратив, ДР) = кілька позицій однією датою. Якщо таке є — групуємо
+  // за датою з підсумком; інакше (комуналка, прибирання: один запис на дату)
+  // лишаємо плаский список, щоб не плодити зайві заголовки.
+  const dateGroups = React.useMemo(() => {
+    const map = new Map<string, { date: string; label: string | null; items: ExpenseEntry[] }>();
+    for (const entry of ordered) {
+      const key = `${entry.entryDate}::${entry.eventLabel ?? ""}`;
+      const bucket = map.get(key);
+      if (bucket) bucket.items.push(entry);
+      else map.set(key, { date: entry.entryDate, label: entry.eventLabel, items: [entry] });
+    }
+    return Array.from(map.values()).map((g) => ({
+      ...g,
+      key: `${g.date}::${g.label ?? ""}`,
+      total: g.items.reduce((sum, i) => sum + i.amount, 0),
+    }));
+  }, [ordered]);
+  // Групуємо, коли є подія (назва) або кілька позицій однією датою.
+  // Усередині події дата спільна — групувати нема сенсу, показуємо плаский список.
+  const groupByDate = !isEvent && dateGroups.some((g) => g.items.length > 1 || g.label);
+
   return (
     <div className="border-t border-border/60 bg-muted/20 px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-          Журнал · {monthText}
+          {isEvent ? "Позиції" : `Журнал · ${monthText}`}
         </span>
         {ordered.length > 0 ? (
           <span className="text-2xs text-muted-foreground">
@@ -475,22 +657,66 @@ function ExpenseJournalPanel({
       </div>
 
       {ordered.length > 0 ? (
-        <div className="space-y-0.5">
-          {ordered.map((entry) => (
-            <JournalEntryRow
-              key={entry.id}
-              entry={entry}
-              currency={currency}
-              rates={rates}
-              busy={busy}
-              onUpdate={(values) => onUpdate(entry.id, values)}
-              onDelete={() => onDelete(entry.id)}
-            />
-          ))}
-        </div>
+        groupByDate ? (
+          // Одна дата = одна подія: заголовок із датою, кількістю позицій і підсумком.
+          <div className="space-y-2">
+            {dateGroups.map((group) => (
+              <div key={group.key} className="rounded-lg border border-border/50 bg-background/60 p-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 pb-1">
+                  {group.label ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <PartyPopper className="h-3.5 w-3.5 text-muted-foreground" />
+                      {group.label}
+                    </span>
+                  ) : null}
+                  <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                    {formatDate(group.date)}
+                  </span>
+                  <span className="text-2xs text-muted-foreground">
+                    {group.items.length} {group.items.length === 1 ? "позиція" : group.items.length < 5 ? "позиції" : "позицій"}
+                  </span>
+                  <span className="ml-auto text-xs font-semibold tabular-nums text-foreground">
+                    {entryAmountLabel(group.total, currency)}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {group.items.map((entry) => (
+                    <JournalEntryRow
+                      key={entry.id}
+                      entry={entry}
+                      currency={currency}
+                      rates={rates}
+                      busy={busy}
+                      vendorOptions={vendorOptions}
+                      hideDate
+                      onUpdate={(values) => onUpdate(entry.id, values)}
+                      onDelete={() => onDelete(entry.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {ordered.map((entry) => (
+              <JournalEntryRow
+                key={entry.id}
+                entry={entry}
+                currency={currency}
+                rates={rates}
+                busy={busy}
+                vendorOptions={vendorOptions}
+                hideDate={isEvent}
+                onUpdate={(values) => onUpdate(entry.id, values)}
+                onDelete={() => onDelete(entry.id)}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <p className="px-2 py-1 text-xs text-muted-foreground">
-          Ще немає записів за цей місяць. Додай перший запис нижче.
+          {isEvent ? "Ще немає позицій. Додай першу нижче." : "Ще немає записів за цей місяць. Додай перший запис нижче."}
         </p>
       )}
 
@@ -499,9 +725,12 @@ function ExpenseJournalPanel({
           <EntryEditor
             key={addSeq}
             currency={currency}
-            initialDate={lastDate}
+            initialDate={eventDate ?? lastDate}
+            hideDate={isEvent}
             initialAmount=""
+            initialVendor={lastVendor}
             initialNote=""
+            vendorOptions={vendorOptions}
             submitLabel="Додати"
             saving={busy}
             autoFocusAmount
@@ -509,6 +738,7 @@ function ExpenseJournalPanel({
               onAdd(values);
               // Форма лишається відкритою (нове key) для швидкого вводу кількох записів поспіль.
               setLastDate(values.entryDate);
+              setLastVendor(values.vendor);
               setAddSeq((n) => n + 1);
             }}
             onCancel={() => setAdding(false)}
@@ -516,7 +746,7 @@ function ExpenseJournalPanel({
         ) : (
           <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAdding(true)}>
             <Plus className="h-3.5 w-3.5" />
-            Додати запис
+            {isEvent ? "Додати позицію" : "Додати запис"}
           </Button>
         )}
       </div>
@@ -609,6 +839,16 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     return Array.from(set).sort((a, b) => a.localeCompare(b, "uk"));
   }, [expenses]);
 
+  // Типи подій: стартові + усе, що вже створювали (список сам поповнюється).
+  const eventTypeOptions = React.useMemo(() => {
+    const set = new Set<string>(DEFAULT_EVENT_TYPES);
+    for (const e of expenses) {
+      const type = e.eventType?.trim();
+      if (type) set.add(type);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "uk"));
+  }, [expenses]);
+
   // Hide expenses paid from sensitive accounts from non-top roles.
   const visibleExpenses = React.useMemo(() => {
     if (canSeeSensitive) return expenses;
@@ -670,16 +910,21 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
 
   // Дві різні природи витрат в одному блоці читались як каша: підписка на Dropbox
   // і оренда офісу — це різні рішення й різні розмови. Ділимо за наявністю бренду.
-  const { services, recurringOther } = React.useMemo(() => {
+  const { services, recurringOther, events } = React.useMemo(() => {
     const servicesList: FinanceExpense[] = [];
     const otherList: FinanceExpense[] = [];
+    const eventList: FinanceExpense[] = [];
     for (const expense of fixed) {
+      // Подія (корпоратив, ДР) — окремий світ: не платіж і не сервіс.
+      if (expense.eventType) eventList.push(expense);
       // «Сервіси та підписки» = впізнаваний бренд І СТАЛА сума. Змінні з журналом
       // (логістика, комуналка) лишаються в «Інші регулярні» навіть із лого бренду.
-      if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
+      else if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
       else otherList.push(expense);
     }
-    return { services: servicesList, recurringOther: otherList };
+    // Найсвіжіші події зверху — вони разові за природою.
+    eventList.sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? ""));
+    return { services: servicesList, recurringOther: otherList, events: eventList };
   }, [fixed]);
 
   const sumMonthly = React.useCallback(
@@ -789,6 +1034,16 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         perMonth: true,
       });
     }
+    if (events.length > 0) {
+      sections.push({
+        key: "events",
+        label: "Події та свята",
+        legend: "Події",
+        items: events,
+        total: sumMonthly(events),
+        perMonth: false,
+      });
+    }
     for (const group of otherByObject) {
       sections.push(
         group.label
@@ -816,7 +1071,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       }
     }
     return { monthSections: sections, monthBuckets: buckets, sectionColor: colors };
-  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum]);
+  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum, events, sumMonthly]);
 
   // Розгорнутість секцій: за замовчуванням відкриті, вибір живе в localStorage
   // (ключі динамічні — обʼєкти зʼявляються з даних, тому оверрайди поверх бази).
@@ -896,9 +1151,27 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     });
   }, []);
 
+  // Новий постачальник із пікера дописується у список саме цієї витрати, щоб
+  // наступного разу він уже був у списку (а не вводився щоразу заново).
+  const persistVendorOption = React.useCallback(
+    async (expenseId: string, vendor: string) => {
+      const clean = vendor.trim();
+      if (!teamId || !clean) return;
+      const expense = expenses.find((e) => e.id === expenseId);
+      if (expense?.vendorOptions.some((v) => v.trim().toLowerCase() === clean.toLowerCase())) return;
+      try {
+        await addExpenseVendorOption(teamId, expenseId, clean);
+        await reload();
+      } catch {
+        // Не критично: запис уже збережено, список поповниться наступного разу.
+      }
+    },
+    [teamId, expenses, reload]
+  );
+
   // Додати запис журналу. Реальний рядок (з id) приходить із сервера й лягає в стан.
   const addEntry = React.useCallback(
-    async (expenseId: string, values: { entryDate: string; amount: number; note: string }) => {
+    async (expenseId: string, values: { entryDate: string; amount: number; vendor: string; note: string }) => {
       if (!teamId) return;
       setExpenseBusy(expenseId, true);
       try {
@@ -906,6 +1179,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           expenseId,
           entryDate: values.entryDate,
           amount: values.amount,
+          vendor: values.vendor || null,
           note: values.note || null,
           enteredBy: userId,
         });
@@ -915,18 +1189,23 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           return next;
         });
         toast.success(`Додано за ${formatDate(values.entryDate)}`);
+        void persistVendorOption(expenseId, values.vendor);
       } catch (error) {
         toast.error("Не вдалося додати запис", { description: getErrorMessage(error, "Спробуйте ще раз.") });
       } finally {
         setExpenseBusy(expenseId, false);
       }
     },
-    [teamId, userId, setExpenseBusy]
+    [teamId, userId, setExpenseBusy, persistVendorOption]
   );
 
   // Оновити запис (оптимістично; на помилці відкочуємо до попереднього списку).
   const updateEntry = React.useCallback(
-    async (expenseId: string, entryId: string, values: { entryDate: string; amount: number; note: string }) => {
+    async (
+      expenseId: string,
+      entryId: string,
+      values: { entryDate: string; amount: number; vendor: string; note: string }
+    ) => {
       if (!teamId) return;
       const prevList = entriesByExpense.get(expenseId) ?? [];
       setEntriesByExpense((prev) => {
@@ -935,7 +1214,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           expenseId,
           (next.get(expenseId) ?? []).map((en) =>
             en.id === entryId
-              ? { ...en, entryDate: values.entryDate, amount: values.amount, note: values.note || null }
+              ? {
+                  ...en,
+                  entryDate: values.entryDate,
+                  amount: values.amount,
+                  vendor: values.vendor || null,
+                  note: values.note || null,
+                }
               : en
           )
         );
@@ -946,9 +1231,11 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         await updateExpenseEntry(teamId, entryId, {
           entryDate: values.entryDate,
           amount: values.amount,
+          vendor: values.vendor || null,
           note: values.note || null,
         });
         toast.success("Запис оновлено");
+        void persistVendorOption(expenseId, values.vendor);
       } catch (error) {
         toast.error("Не вдалося оновити запис", { description: getErrorMessage(error, "Спробуйте ще раз.") });
         setEntriesByExpense((prev) => {
@@ -960,7 +1247,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         setExpenseBusy(expenseId, false);
       }
     },
-    [teamId, entriesByExpense, setExpenseBusy]
+    [teamId, entriesByExpense, setExpenseBusy, persistVendorOption]
   );
 
   // Видалити запис (оптимістично; на помилці відкочуємо).
@@ -1065,7 +1352,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     const logo = resolveSubscriptionLogo(expense);
     const monthly = monthlyForSelected(expense);
     const overdue = expense.nextChargeDate ? daysUntil(expense.nextChargeDate) < 0 : false;
-    const monthEntries = expense.amountVaries ? entriesForMonth(expense.id, selectedMonth) : [];
+    // Подія показує ВСІ свої позиції (вона прив'язана до власної дати, а не до
+    // вибраного місяця); звичайний журнал — лише записи вибраного місяця.
+    const monthEntries = !expense.amountVaries
+      ? []
+      : expense.eventType
+        ? entriesByExpense.get(expense.id) ?? []
+        : entriesForMonth(expense.id, selectedMonth);
     const hasEntries = monthEntries.length > 0;
     const journalOpen = openJournals.has(expense.id);
 
@@ -1078,6 +1371,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
               name={title}
               categoryName={category?.name}
               categoryKind={category?.kind}
+              // Подія — завжди іконка свята, незалежно від статті витрат
+              // (без цього безкатегорійна подія падала у дефолтний «повтор»).
+              icon={expense.eventType ? PartyPopper : null}
               size={36}
             />
             <div className="min-w-0">
@@ -1099,7 +1395,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 ) : null}
               </div>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                {expense.amountVaries ? (
+                {expense.eventType ? (
+                  <span className="font-medium text-foreground/80">{formatDate(expense.expenseDate)}</span>
+                ) : expense.amountVaries ? (
                   <span className="font-medium text-foreground/80">по факту — записуй кожну дату</span>
                 ) : (
                   <span className="font-medium text-foreground/80">
@@ -1166,6 +1464,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             rates={rates}
             entries={monthEntries}
             busy={busyExpenses.has(expense.id)}
+            vendorOptions={expense.vendorOptions}
+            eventDate={expense.eventType ? expense.expenseDate : undefined}
             onAdd={(values) => void addEntry(expense.id, values)}
             onUpdate={(entryId, values) => void updateEntry(expense.id, entryId, values)}
             onDelete={(entryId) => void deleteEntry(expense.id, entryId)}
@@ -1297,6 +1597,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           orders={orders}
           ordersLoading={ordersLoading}
           objectSuggestions={objectSuggestions}
+          eventTypeOptions={eventTypeOptions}
           onSaved={reload}
         />
       ) : null}
@@ -1369,7 +1670,10 @@ type AllocRow = { quoteId: string; amount: string };
 
 // Три типи витрати в одній формі. Замість чекбокса «стала?» — явний вибір,
 // бо від нього залежить і набір полів, і група, в якій витрата опиниться в списку.
-type ExpenseFormKind = "one_off" | "service" | "recurring";
+type ExpenseFormKind = "one_off" | "service" | "recurring" | "event";
+
+// Стартові типи подій — далі список поповнюється тим, що вже створювали.
+const DEFAULT_EVENT_TYPES = ["Корпоратив", "День народження"];
 
 const EXPENSE_KIND_OPTIONS: {
   value: ExpenseFormKind;
@@ -1380,6 +1684,7 @@ const EXPENSE_KIND_OPTIONS: {
   { value: "one_off", label: "Разова", hint: "Купівля, матеріали, під замовлення", icon: Receipt },
   { value: "service", label: "Сервіс", hint: "Dropbox, Adobe, Supabase…", icon: Cloud },
   { value: "recurring", label: "Регулярний платіж", hint: "Оренда, комуналка, прибирання", icon: RefreshCw },
+  { value: "event", label: "Подія", hint: "Корпоратив, день народження", icon: PartyPopper },
 ];
 
 // Один рядок батч-вводу регулярних платежів.
@@ -1499,6 +1804,7 @@ function ExpenseDialog({
   orders,
   ordersLoading,
   objectSuggestions,
+  eventTypeOptions,
   onSaved,
 }: {
   open: boolean;
@@ -1512,6 +1818,8 @@ function ExpenseDialog({
   orders: FinanceOrderRef[];
   ordersLoading: boolean;
   objectSuggestions: string[];
+  /** Типи подій: стартові + ті, що вже створювали (список сам поповнюється). */
+  eventTypeOptions: string[];
   onSaved: () => Promise<void> | void;
 }) {
   const rates = useFxRates();
@@ -1528,6 +1836,10 @@ function ExpenseDialog({
     return isServiceExpense(editing) ? "service" : "recurring";
   });
   const isRecurring = expenseKind !== "one_off";
+  // Подія — це витрата-контейнер: позиції ведуться журналом, тож сума/періодичність
+  // у формі не потрібні (вони беруться з позицій), а бейдж періодичності ховаємо.
+  const isEvent = expenseKind === "event";
+  const [eventType, setEventType] = React.useState(editing?.eventType ?? "");
   const [billingPeriod, setBillingPeriod] = React.useState<BillingPeriod>(
     editing ? billingPeriodOf(editing) : "monthly"
   );
@@ -1606,7 +1918,7 @@ function ExpenseDialog({
 
   // Змінна сума (комуналка) при створенні — сума в формі необовʼязкова (орієнтир),
   // факт вводиться по місяцях у списку.
-  const varyingRecurring = isRecurring && amountVaries;
+  const varyingRecurring = isEvent || (isRecurring && amountVaries);
 
   const submit = async () => {
     if (!teamId) return;
@@ -1636,8 +1948,15 @@ function ExpenseDialog({
           .filter((a) => a.amount > 0)
       : [];
 
+    // Подія без явно обраної статті йде в «Події та свята» — щоб і у звітах
+    // («Витрати по статтях») вона не висіла безкатегорійною.
+    const eventCategoryId =
+      isEvent && !categoryId
+        ? categories.find((c) => c.name.trim().toLowerCase() === "події та свята")?.id ?? null
+        : null;
+
     const input: ExpenseInput = {
-      categoryId: categoryId || null,
+      categoryId: categoryId || eventCategoryId || null,
       amount: amountNum,
       currency,
       // Для разової валютної витрати фіксуємо курс дня — щоб історія не «пливла».
@@ -1652,9 +1971,12 @@ function ExpenseDialog({
       accountId: accountId || null,
       legalEntityId: legalEntityId || null,
       isRecurring,
-      recurrence: isRecurring ? billingPeriod : null,
+      // Подія технічно зберігається як «щомісячна» витрата з журналом (щоб рахунок
+      // ліг у свій місяць), але на екрані періодичність не показуємо — див. isEvent.
+      recurrence: isRecurring ? (isEvent ? "monthly" : billingPeriod) : null,
       amountVaries: varyingRecurring,
-      objectGroup: isRecurring ? objectGroup || null : null,
+      eventType: isEvent ? eventType || null : null,
+      objectGroup: isRecurring && !isEvent ? objectGroup || null : null,
       nextChargeDate: isRecurring ? nextChargeDate || null : null,
       // Нагадування зберігаємо лише коли ввімкнено й є дата (serializeExpense ще раз гейтить).
       reminderLeadDays: reminderEnabled && !varyingRecurring ? reminderLeadDays : null,
@@ -1799,6 +2121,8 @@ function ExpenseDialog({
               ? "Кілька регулярних платежів одразу: оренда, комуналка, інтернет…"
               : expenseKind === "service"
                 ? "Підписка на зовнішній сервіс. Річна оплата розіб'ється по місяцях."
+                : expenseKind === "event"
+                  ? "Подія: створи її, а потім усередині додавай позиції (алкоголь, вода, піца)."
                 : expenseKind === "recurring"
                   ? "Регулярний платіж: оренда, комуналка, прибирання."
                   : "Разова витрата. Її можна розподілити між замовленнями для коректної маржі."}
@@ -2037,6 +2361,20 @@ function ExpenseDialog({
             /* ── Одиночна витрата (разова / сервіс / редагування) ──
                Один grid: повноширинні блоки — sm:col-span-2, тож рядки завжди вирівняні. */
             <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+              {isEvent ? (
+                <div className="grid gap-2">
+                  <Label>Тип події</Label>
+                  <VendorPicker
+                    value={eventType}
+                    options={eventTypeOptions}
+                    onChange={setEventType}
+                    placeholder="Корпоратив, день народження…"
+                    fallbackIcon={PartyPopper}
+                    withLogo={false}
+                    className="h-10 w-full"
+                  />
+                </div>
+              ) : (
               <div className="grid gap-2">
                 <Label>
                   {varyingRecurring ? "Орієнтовна сума" : "Сума"}
@@ -2063,8 +2401,9 @@ function ExpenseDialog({
                   </Select>
                 </div>
               </div>
+              )}
               <div className="grid gap-2">
-                <Label>{varyingRecurring ? "Веду облік з" : isRecurring ? "Дата початку" : "Дата оплати"}</Label>
+                <Label>{isEvent ? "Дата події" : varyingRecurring ? "Веду облік з" : isRecurring ? "Дата початку" : "Дата оплати"}</Label>
                 <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-10" />
               </div>
 
@@ -2078,7 +2417,7 @@ function ExpenseDialog({
               </p>
 
               {/* Сума змінна: у списку зʼявиться журнал — кожна оплата з датою й коментарем. */}
-              {isRecurring ? (
+              {isRecurring && !isEvent ? (
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
                   <Checkbox
                     checked={amountVaries}
@@ -2110,7 +2449,7 @@ function ExpenseDialog({
                 </div>
               ) : null}
 
-              {isRecurring ? (
+              {isRecurring && !isEvent ? (
                 <>
                   <div className="grid gap-2">
                     <Label>Періодичність</Label>
@@ -2187,11 +2526,17 @@ function ExpenseDialog({
               ) : null}
 
               <div className="grid gap-2">
-                <Label>{expenseKind === "service" ? "Сервіс" : "Постачальник"}</Label>
+                <Label>{isEvent ? "Назва події" : expenseKind === "service" ? "Сервіс" : "Постачальник"}</Label>
                 <Input
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
-                  placeholder={expenseKind === "service" ? "Dropbox або dropbox.com" : "Назва постачальника"}
+                  placeholder={
+                    isEvent
+                      ? "Корпоратив Q3, День народження Ані…"
+                      : expenseKind === "service"
+                        ? "Dropbox або dropbox.com"
+                        : "Назва постачальника"
+                  }
                   className="h-10"
                 />
               </div>

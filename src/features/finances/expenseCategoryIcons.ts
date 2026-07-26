@@ -2,13 +2,16 @@ import {
   Briefcase,
   Building2,
   Car,
+  Coffee,
   CreditCard,
+  Droplet,
   Gift,
   GraduationCap,
   Landmark,
   Megaphone,
   Package,
   Palette,
+  PartyPopper,
   Receipt,
   Repeat,
   ShoppingCart,
@@ -28,6 +31,12 @@ import type { ExpenseCategoryKind } from "./types";
 const NAME_ICON_RULES: Array<{ test: RegExp; icon: LucideIcon }> = [
   { test: /маркетинг|реклам|промо|smm|таргет|\bads?\b/, icon: Megaphone },
   { test: /подарунк|квіт|презент|букет|gift|flower/, icon: Gift },
+  { test: /корпоратив|свят|поді[їя]|народженн|тімбілд/, icon: PartyPopper },
+  // Вода — ВИЩЕ за «комунал…|вода», інакше питна вода отримала б іконку електрики.
+  { test: /вода|кулер|бутильован/, icon: Droplet },
+  // Продукти/смаколики — ВИЩЕ за «оренд|офіс», інакше «продукти в офіс» → будівля.
+  { test: /продукт|смаколик|снек|кухн|бакалі/, icon: Coffee },
+  { test: /кондиціонер|клімат/, icon: Wrench },
   { test: /прибир|клінінг|чист/, icon: SprayCan },
   { test: /оренд|офіс|приміщ/, icon: Building2 },
   { test: /дизайн|програм|софт|підписк|ліценз|adobe|figma|subscription|saas/, icon: Palette },
@@ -41,7 +50,7 @@ const NAME_ICON_RULES: Array<{ test: RegExp; icon: LucideIcon }> = [
   { test: /транспорт|паливо|бензин|авто|таксі/, icon: Car },
   { test: /навчанн|курс|тренінг|освіт/, icon: GraduationCap },
   { test: /юрид|бухгалт|консульт|аутсорс/, icon: Briefcase },
-  { test: /ремонт|обладнан|інструмент|техобслуг/, icon: Wrench },
+  { test: /ремонт|обладнан|інструмент|техобслуг|технік/, icon: Wrench },
   { test: /закуп|товар|магазин/, icon: ShoppingCart },
 ];
 

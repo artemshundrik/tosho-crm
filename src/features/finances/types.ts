@@ -267,6 +267,10 @@ export type FinanceExpense = {
   objectGroup: string | null;
   /** Нагадати про платіж за N днів до nextChargeDate (null = вимкнено). */
   reminderLeadDays: number | null;
+  /** Список постачальників («звідки») для записів журналу саме цієї витрати. */
+  vendorOptions: string[];
+  /** Тип події («Корпоратив», «День народження»). Не null = ця витрата є подією. */
+  eventType: string | null;
   nextChargeDate: string | null;
   vendorKey: string | null;
   logoUrl: string | null;
@@ -308,6 +312,10 @@ export type ExpenseEntry = {
   expenseId: string;
   entryDate: string; // YYYY-MM-DD — коли фактично сталося
   amount: number;
+  /** Звідки: магазин/постачальник (Метро, Сільпо…). null = не вказано. */
+  vendor: string | null;
+  /** Назва події (корпоратив, ДР). Записи з тією ж датою+назвою — позиції однієї події. */
+  eventLabel: string | null;
   note: string | null;
 };
 
