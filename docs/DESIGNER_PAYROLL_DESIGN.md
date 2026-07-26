@@ -75,7 +75,7 @@
 -- Індивідуальні тарифи. Історія — рядками: чинний тариф на місяць M =
 -- рядок з максимальним effective_from <= першого числа M.
 -- Зміна ставки завжди набирає чинності з 1 числа наступного місяця (UI не дає інших дат).
-create table tosho.designer_pay_rates (
+create table tosho.employee_pay_rates (
   id                uuid primary key default gen_random_uuid(),
   workspace_id      uuid not null,
   user_id           uuid not null,
@@ -90,7 +90,7 @@ create table tosho.designer_pay_rates (
 );
 
 -- Дефолти команди (один рядок на workspace).
-create table tosho.designer_pay_defaults (
+create table tosho.employee_pay_defaults (
   workspace_id      uuid primary key,
   visual_norm       int not null default 250,
   over_norm_rate    numeric(12,2) not null default 100,
@@ -100,7 +100,7 @@ create table tosho.designer_pay_defaults (
 );
 
 -- Закриття місяця: знімок сум, далі не перераховується заднім числом.
-create table tosho.designer_pay_month_close (
+create table tosho.employee_pay_month_close (
   workspace_id uuid not null,
   user_id      uuid not null,
   month        date not null,                         -- 1 число
@@ -131,12 +131,12 @@ create table tosho.ua_workday_exceptions (
 
 ## 4. RLS (за [SECURITY.md](SECURITY.md), дені-бай-дефолт)
 
-- `designer_pay_rates`, `designer_pay_month_close`:
+- `employee_pay_rates`, `employee_pay_month_close`:
   - `SELECT`: `tosho.is_workspace_admin(workspace_id) OR tosho.is_workspace_owner(workspace_id) OR user_id = auth.uid()`
   - `INSERT/UPDATE/DELETE`: тільки admin/owner. Дизайнер свої ставки не пише.
   - **Жодної** політики «team member» — менеджер не читає нічого.
-- `designer_pay_defaults`: `SELECT` — admin/owner **або** той, хто сам має рядок
-  у `designer_pay_rates` (учасник pay-системи бачить правила гри); запис — admin/owner.
+- `employee_pay_defaults`: `SELECT` — admin/owner **або** той, хто сам має рядок
+  у `employee_pay_rates` (учасник pay-системи бачить правила гри); запис — admin/owner.
 - `ua_workday_exceptions`: читають члени команди (несекретне), пише admin/owner.
 - Перед мерджем — прогін чеклиста SECURITY.md «simulate the role»: менеджером
   переконатися, що `select` повертає 0 рядків.
@@ -163,7 +163,7 @@ create table tosho.ua_workday_exceptions (
 ### 6.1 Віджет у хедері (дизайнер) — макет затверджується
 
 Живе **поруч із таймер-віджетом** (`DesignerHeaderTimerWidget` в AppLayout);
-рендериться лише коли у користувача є чинний рядок `designer_pay_rates`.
+рендериться лише коли у користувача є чинний рядок `employee_pay_rates`.
 
 - Пігулка: кільце прогресу (зароблено/прогноз) + «31 304 ₴ · ≈ 44 900» + око.
 - **Око** маскує всі суми (`•••••`), стан у localStorage; **дефолт — приховано**
@@ -182,7 +182,7 @@ create table tosho.ua_workday_exceptions (
 
 - Дефолти команди — Налаштування компанії.
 - Картка дизайнера в «Команді»: базова ставка + overrides; зміни з 1 числа
-  наступного місяця; історія — рядки `designer_pay_rates`.
+  наступного місяця; історія — рядки `employee_pay_rates`.
 
 ### 6.3 Задача «Креатив» (менеджер)
 
@@ -221,7 +221,7 @@ create table tosho.ua_workday_exceptions (
    порахується як нова робота. Автовідсіву немає — тільки red-flag «⌀ час на
    візуал < 5 хв» (§7) і соціальна угода.
 2. **Норма — 250 ТЕСТОВО, рішення відкладено.** ⏳ Стартуємо з 250 (значення в
-   `designer_pay_defaults.visual_norm`, змінюється без релізу), щоб місяць-два
+   `employee_pay_defaults.visual_norm`, змінюється без релізу), щоб місяць-два
    збирати чисті цифри вже за новою логікою підрахунку. Рішення ухвалюють CEO+SEO
    разом; база для обговорення (симулятор вартості при різних нормах):
    https://claude.ai/code/artifact/11d7cfa4-7565-4ae5-9157-061c47fa2c3d

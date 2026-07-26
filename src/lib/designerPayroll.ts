@@ -18,7 +18,7 @@ import {
  * Принцип: **нічого не нараховуємо в базу під час місяця**. Сума завжди
  * рахується наживо з подій, тож відкат статусу чи видалення файлу автоматично
  * прибирає нарахування — окремого «сторно» не існує. Заморожується лише
- * підсумок місяця (`designer_pay_month_close`, Фаза 3).
+ * підсумок місяця (`employee_pay_month_close`, Фаза 3).
  *
  * ГОЛОВНИЙ ГОЧА — одиниця норми. Рахуються НЕ файли, а унікальні роботи:
  * `(задача + назва файлу без розширення)`. Один візуал перезаливають після
@@ -104,7 +104,7 @@ export async function loadVisualCount(params: {
 }
 
 export async function loadPayDefaults(workspaceId: string): Promise<DesignerPayDefaults | null> {
-  const { data, error } = await payrollTable("designer_pay_defaults")
+  const { data, error } = await payrollTable("employee_pay_defaults")
     .select("visual_norm,over_norm_rate,creative_percent,min_creative_cost")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
@@ -126,7 +126,7 @@ export async function loadPayDefaults(workspaceId: string): Promise<DesignerPayD
 
 /** RLS сама віддасть лише свої рядки дизайнеру і всі — SEO/owner. */
 export async function loadPayRates(workspaceId: string, userId?: string): Promise<DesignerPayRate[]> {
-  let query = payrollTable("designer_pay_rates")
+  let query = payrollTable("employee_pay_rates")
     .select("user_id,base_month_rate,visual_norm,over_norm_rate,creative_percent,effective_from")
     .eq("workspace_id", workspaceId)
     .order("effective_from", { ascending: false });
