@@ -56,21 +56,25 @@ export function SubscriptionLogo({
   const src = logoUrl?.trim() || null;
   const Icon = resolveIcon(icon, categoryName, categoryKind, name);
   const iconSize = Math.round(size * 0.46);
+  // Радіус масштабується з розміром плитки. Фіксований rounded-xl (14px) на дрібній
+  // плитці (16–20px) вироджувався в коло — ~26% сторони тримає «квадрат зі
+  // скругленням» на будь-якому розмірі, як у решти плиток апки.
+  const radius = Math.max(4, Math.round(size * 0.26));
 
   return (
     <Avatar
-      className={cn(
-        "shrink-0 rounded-xl border",
-        src ? "border-border/60 bg-card" : toneClass(categoryName || name),
-        className
-      )}
-      style={{ width: size, height: size }}
+      className={cn("shrink-0 border", src ? "border-border/60 bg-card" : toneClass(categoryName || name), className)}
+      style={{ width: size, height: size, borderRadius: radius }}
     >
       {src ? (
-        // object-contain + падінг: фавікони квадратні, обрізати їх по колу не можна.
-        <AvatarImage src={src} alt={name} loading="lazy" className="rounded-xl object-contain p-1" />
+        // object-contain (не cover) — лого не обрізається й не спотворюється, але
+        // займає ВСЮ плитку: падінг прибрано, інакше дрібні лого «тонули» в рамці.
+        <AvatarImage src={src} alt={name} loading="lazy" className="object-contain" style={{ borderRadius: radius }} />
       ) : null}
-      <AvatarFallback className={cn("rounded-xl bg-transparent", !src && toneClass(categoryName || name))}>
+      <AvatarFallback
+        className={cn("bg-transparent", !src && toneClass(categoryName || name))}
+        style={{ borderRadius: radius }}
+      >
         {/* createElement, а не <Icon/>: компонент береться з мапи по назві статті,
             і React Compiler інакше вважає це створенням компонента під час рендеру. */}
         {React.createElement(Icon, { style: { width: iconSize, height: iconSize }, strokeWidth: 1.9 })}
