@@ -57,6 +57,7 @@ import {
   PersonAccessHistorySection,
   PersonTimeInCrm,
 } from "@/components/team/PersonDetailSections";
+import { MemberPaySection } from "@/components/team/MemberPaySection";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -523,12 +524,13 @@ function isRecoverableTeamProfileError(message: string) {
 
 // Sections of a person's card. One surface per person: the card owns every
 // per-person view and edit, so there is no separate edit drawer or roles dialog.
-type PersonSection = "overview" | "profile" | "access" | "activity" | "hr";
+type PersonSection = "overview" | "profile" | "access" | "pay" | "activity" | "hr";
 
 const PERSON_SECTIONS: { key: PersonSection; label: string }[] = [
   { key: "overview", label: "Огляд" },
   { key: "profile", label: "Профіль" },
   { key: "access", label: "Доступи" },
+  { key: "pay", label: "Оплата" },
   { key: "activity", label: "Активність" },
   { key: "hr", label: "HR" },
 ];
@@ -1301,6 +1303,8 @@ export function TeamMembersPage() {
     !!panelMember &&
     (isSuperAdmin || (panelMember.user_id !== currentUserId && (panelMember.access_role ?? null) !== "owner"));
   const visiblePersonSections = PERSON_SECTIONS.filter((section) => {
+    // Оплата — це зарплати: показуємо лише owner/SEO, як і RLS у базі.
+    if (section.key === "pay") return isSuperAdmin || isSeo;
     if (section.key === "access" || section.key === "hr") return canOpenProfileCard;
     if (section.key === "profile") return canOpenProfileCard;
     return true;
@@ -3098,6 +3102,16 @@ export function TeamMembersPage() {
                         <PersonAccessHistorySection workspaceId={workspaceId} userId={panelMember.user_id} resolveActorName={resolveActorName} />
                       ) : null}
                     </div>
+                  ) : null}
+
+                  {activeSection === "pay" ? (
+                    <MemberPaySection
+                      workspaceId={workspaceId}
+                      userId={panelMember.user_id}
+                      memberName={getMemberDisplayName(panelMember)}
+                      isDesigner={(panelMember.job_role ?? "").toLowerCase() === "designer"}
+                      canEdit={isSuperAdmin || isSeo}
+                    />
                   ) : null}
 
                   {activeSection === "activity" ? <PersonActivitySection userId={panelMember.user_id} /> : null}
