@@ -1943,3 +1943,92 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* =========================================================================
+   ДРУК (A4) — звіт «Статистика дизайнерів»
+   -------------------------------------------------------------------------
+   Друкований звіт рендериться в портал на <body> з класом .print-portal і на
+   екрані прихований. При друку ховаємо ВСЕ інше (застосунок, сайдбар, тултипи)
+   і лишаємо тільки портал — так на папір іде рівно одна керована сторінка,
+   а не скріншот дашборда зі скролами.
+   ========================================================================= */
+.print-portal {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* Тільки прямі діти body: сам застосунок (#root) і будь-які портали. */
+  body > *:not(.print-portal) {
+    display: none !important;
+  }
+
+  body,
+  html {
+    background: #fff !important;
+    /* Друкований звіт завжди у світлій палітрі, навіть коли застосунок у темній. */
+    color: #111 !important;
+  }
+
+  .print-portal {
+    display: block !important;
+    position: static !important;
+    width: 100%;
+  }
+
+  /* Таблиці звіту не повинні розриватись між сторінками. */
+  .print-portal table,
+  .print-portal section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Палітра друкованого звіту.
+   Свідомо фіксована й «паперова»: аркуш завжди білий, тож звіт не залежить від
+   теми застосунку (інакше в темній темі на друк пішов би чорний фон або
+   невидимий текст). Тримаємо кольори тут, а не в className компонента, щоб не
+   порушувати гейт дизайн-системи хардкодом у Tailwind.
+   ------------------------------------------------------------------------- */
+.print-report {
+  color: #111;
+  background: #fff;
+}
+.print-report__sub {
+  color: #444;
+}
+.print-report__meta {
+  color: #666;
+}
+.print-report__rule {
+  border-bottom: 2px solid #111;
+}
+.print-report table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.print-report th,
+.print-report td {
+  border: 1px solid #d4d4d4;
+  padding: 3px 6px;
+  vertical-align: middle;
+}
+.print-report th {
+  background: #f2f2f2;
+  font-weight: 600;
+  /* Без цього браузери не друкують сірий фон шапки і таблиця «розсипається». */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.print-report__muted {
+  color: #555;
+}
+.print-report__footnote {
+  color: #666;
+  border-top: 1px solid #d4d4d4;
+}

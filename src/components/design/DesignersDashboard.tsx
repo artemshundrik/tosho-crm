@@ -4,10 +4,12 @@ import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
   Calendar as CalendarIcon,
+  Check,
   ChevronRight,
   ChevronsDown,
   ChevronUp,
   Clock,
+  Printer,
   FileText,
   Minus,
   RotateCcw,
@@ -26,8 +28,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { DesignersPrintReport } from "@/components/design/DesignersPrintReport";
+import {
+  firstName,
+  formatHM,
+  formatHours,
+  formatHumanMinutes,
+  formatHumanSeconds,
+  getInitials,
+  monthShort,
+  monthTitle,
+} from "@/lib/designerAnalyticsFormat";
 import {
   DESIGN_TASK_TYPE_ICONS,
+  DESIGN_TASK_TYPE_NORM_MINUTES,
   DESIGN_TASK_TYPE_OPTIONS,
   type DesignTaskType,
 } from "@/lib/designTaskType";
@@ -63,35 +77,7 @@ export type DesignersDashboardProps = {
   getMemberAvatar: (id: string | null | undefined) => string | null;
 };
 
-/* ---------- формат ---------- */
-
-const formatHM = (seconds: number) => {
-  const totalMinutes = Math.round(seconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}:${String(minutes).padStart(2, "0")}`;
-};
-
-const formatHumanMinutes = (totalMinutesRaw: number) => {
-  const totalMinutes = Math.round(totalMinutesRaw);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes} хв`;
-  if (minutes === 0) return `${hours} год`;
-  return `${hours} год ${minutes} хв`;
-};
-
-const formatHumanSeconds = (seconds: number) => formatHumanMinutes(seconds / 60);
-
-const formatHours = (seconds: number) => `${Math.round(seconds / 3600)}`;
-
-const getInitials = (name?: string | null) => {
-  if (!name) return "•";
-  const parts = name.trim().split(/\s+/).slice(0, 2);
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "•";
-};
-
-const firstName = (label: string) => label.trim().split(/\s+/)[0] || label;
+/* ---------- формат (спільний із друкованим звітом) ---------- */
 
 const revisionsWord = (count: number) => {
   const mod10 = count % 10;
@@ -99,19 +85,6 @@ const revisionsWord = (count: number) => {
   if (mod10 === 1 && mod100 !== 11) return "правка";
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "правки";
   return "правок";
-};
-
-const monthTitle = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, (month ?? 1) - 1, 1));
-  const label = date.toLocaleDateString("uk-UA", { month: "long", timeZone: "UTC" });
-  return `${label.charAt(0).toUpperCase()}${label.slice(1)} ${year}`;
-};
-
-const monthShort = (value: string) => {
-  const [year, month] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, (month ?? 1) - 1, 1));
-  return date.toLocaleDateString("uk-UA", { month: "short", timeZone: "UTC" }).replace(".", "");
 };
 
 /* ---------- кольори серій (типи задач) ---------- */
@@ -465,13 +438,28 @@ export function DesignersDashboard({
   memberInactiveById,
   getMemberAvatar,
 }: DesignersDashboardProps) {
+  const visibleDesigners = useMemo(
+    () => (canSeeAll ? designers : designers.filter((designer) => designer.id === currentUserId)),
+    [canSeeAll, designers, currentUserId]
+  );
+  // Дизайнер, що дивиться власну вкладку (є у списку дизайнерів і не адмін).
+  const isSelfDesigner = !canSeeAll && visibleDesigners.length > 0;
+
+  /**
+   * Ізоляція доступу — визначає і що вантажимо, і що показуємо:
+   *  · canSeeAll (CEO/SEO) — усі дизайнери, повна статистика;
+   *  · дизайнер — ЛИШЕ свої дані. Раніше запит ішов по всіх, а UI просто ховав
+   *    чужі рядки — статистика колег усе одно приїжджала в браузер;
+   *  · решта (менеджер) — лише «Баланс команди», без персональних цифр.
+   */
+  const loadMode: "full" | "balance" = canSeeAll || isSelfDesigner ? "full" : "balance";
   // Ключ-рядок замість масиву: `designers` пересоздається на кожному рендері
   // сторінки, і ефект на ньому перезапускав завантаження без потреби.
-  const designerIdsKey = useMemo(
-    () => designers.map((designer) => designer.id).sort().join(","),
-    [designers]
-  );
-  const cacheKey = teamId && designerIdsKey ? `${teamId}|${designerIdsKey}` : null;
+  const designerIdsKey = useMemo(() => {
+    const source = loadMode === "balance" ? designers : visibleDesigners;
+    return source.map((designer) => designer.id).sort().join(",");
+  }, [loadMode, designers, visibleDesigners]);
+  const cacheKey = teamId && designerIdsKey ? `${teamId}|${loadMode}|${designerIdsKey}` : null;
 
   const [analytics, setAnalytics] = useState<DesignerAnalytics | null>(
     () => (cacheKey ? analyticsCache.get(cacheKey)?.data ?? null : null)
@@ -485,11 +473,6 @@ export function DesignersDashboard({
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
   const { bind: bindTip, overlay: tipOverlay } = useChartTooltip();
-
-  const visibleDesigners = useMemo(
-    () => (canSeeAll ? designers : designers.filter((designer) => designer.id === currentUserId)),
-    [canSeeAll, designers, currentUserId]
-  );
 
   useEffect(() => {
     if (!canSeeAll) {
@@ -524,7 +507,7 @@ export function DesignersDashboard({
     }
     setLoadError(false);
 
-    loadDesignerAnalytics({ teamId, designerIds: designerIdsKey.split(",") })
+    loadDesignerAnalytics({ teamId, designerIds: designerIdsKey.split(","), mode: loadMode })
       .then((result) => {
         analyticsCache.set(cacheKey, { data: result, cachedAt: Date.now() });
         if (cancelled) return;
@@ -542,7 +525,7 @@ export function DesignersDashboard({
     return () => {
       cancelled = true;
     };
-  }, [teamId, cacheKey, designerIdsKey]);
+  }, [teamId, cacheKey, designerIdsKey, loadMode]);
 
   const labelById = useMemo(() => {
     const map = new Map<string, string>();
@@ -693,24 +676,35 @@ export function DesignersDashboard({
     },
   ];
 
-  /* ---------- середній час за типами ---------- */
+  /* ---------- середній час за типами ----------
+   * Дизайнеру НЕ показуємо порівняння з командою: при двох дизайнерах
+   * командне середнє арифметично розкриває колегу (колега = 2×команда − я).
+   * Замість цього орієнтир — норматив (15/30 хв), який чесніший і не залежить
+   * від того, скільки людей у команді.
+   */
   const teamAggCurrent = analytics.team[mi] ?? null;
+  const showTeamCompare = canSeeAll && !!scopedDesigner;
   const typeRows = DESIGN_TASK_TYPE_OPTIONS.map((option) => {
     const type = option.value;
     const current = currentAgg ? avgSecondsForType(currentAgg, type) : null;
-    const compare = scopedDesigner
+    const compare = showTeamCompare
       ? teamAggCurrent
         ? avgSecondsForType(teamAggCurrent, type)
         : null
-      : previousAgg
-        ? avgSecondsForType(previousAgg, type)
-        : null;
+      : scopedDesigner
+        ? null
+        : previousAgg
+          ? avgSecondsForType(previousAgg, type)
+          : null;
     const taskCount = currentAgg?.timerTaskCountByType[type] ?? 0;
-    return { type, option, current, compare, taskCount };
+    const normMinutes = DESIGN_TASK_TYPE_NORM_MINUTES[type];
+    const normSeconds = normMinutes == null ? null : normMinutes * 60;
+    const overNorm = current != null && normSeconds != null ? current > normSeconds : null;
+    return { type, option, current, compare, taskCount, normMinutes, normSeconds, overNorm };
   });
   const typeScaleMax = Math.max(
     1,
-    ...typeRows.flatMap((row) => [row.current ?? 0, row.compare ?? 0])
+    ...typeRows.flatMap((row) => [row.current ?? 0, row.compare ?? 0, row.normSeconds ?? 0])
   );
 
   /* ---------- таблиця ---------- */
@@ -904,6 +898,19 @@ export function DesignersDashboard({
                 ))}
               </SelectContent>
             </Select>
+            {/* Друк порівняння — лише тим, хто бачить усіх дизайнерів. */}
+            {canSeeAll ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={() => window.print()}
+                title={`Друк або збереження у PDF: ${monthTitle(months[mi].value)}`}
+              >
+                <Printer className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Друк / PDF</span>
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -1027,6 +1034,9 @@ export function DesignersDashboard({
               if (row.compare != null) {
                 tipRows.push({ label: compareLabel, value: formatHumanSeconds(row.compare), muted: true });
               }
+              if (row.normMinutes != null) {
+                tipRows.push({ label: "Норма", value: `до ${row.normMinutes} хв`, muted: true });
+              }
               tipRows.push({ label: "Задач у таймері", value: `${row.taskCount}`, muted: true });
               return (
                 <div
@@ -1039,7 +1049,10 @@ export function DesignersDashboard({
                     <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="min-w-0">
                       <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
-                      <span className="text-3xs tabular-nums text-muted-foreground">{row.taskCount} задач у таймері</span>
+                      <span className="text-3xs tabular-nums text-muted-foreground">
+                        {row.taskCount} задач у таймері
+                        {row.normMinutes != null ? ` · норма до ${row.normMinutes} хв` : ""}
+                      </span>
                     </span>
                   </div>
                   <div className="relative h-6">
@@ -1070,12 +1083,33 @@ export function DesignersDashboard({
                         style={{ width: `${compareWidth}%`, background: typeColor(row.type) }}
                       />
                     ) : null}
+                    {/* Норматив — пунктирна межа: усе, що правіше, вийшло за норму. */}
+                    {row.normSeconds != null ? (
+                      <span
+                        className="absolute inset-y-0 border-l-2 border-dashed border-foreground/45"
+                        style={{ left: `${Math.min(100, (row.normSeconds / typeScaleMax) * 100)}%` }}
+                        aria-hidden="true"
+                      />
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2 sm:justify-end">
                     <span className="text-[13px] font-semibold tabular-nums text-foreground">
                       {row.current == null ? "—" : formatHumanSeconds(row.current)}
                     </span>
-                    {diff != null ? (
+                    {row.overNorm != null ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold",
+                          row.overNorm ? DELTA_CLASS.bad : DELTA_CLASS.good
+                        )}
+                        title={`Норма: до ${row.normMinutes} хв на задачу`}
+                      >
+                        {row.overNorm ? <TrendingUp className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                        {row.overNorm
+                          ? `+${formatHumanMinutes(((row.current ?? 0) - (row.normSeconds ?? 0)) / 60)} понад норму`
+                          : "у нормі"}
+                      </span>
+                    ) : diff != null ? (
                       <DeltaChip
                         current={row.current}
                         previous={row.compare}
@@ -1518,30 +1552,34 @@ export function DesignersDashboard({
                       </tr>
                     );
                   })}
-                  <tr>
-                    <td className="pr-1">
-                      <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
-                          <Users className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="truncate text-xs font-semibold text-muted-foreground">
-                          Команда · {metric.teamAgg === "sum" ? "разом" : "середнє"}
-                        </span>
-                      </div>
-                    </td>
-                    {months.map((month, index) => {
-                      const teamAgg = analytics.team[index];
-                      const value = teamAgg ? metric.get(teamAgg) : null;
-                      return (
-                        <td key={month.value}>
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
-                            {value == null ? "—" : metric.format(value)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td />
-                  </tr>
+                  {/* Командний підсумок — лише для тих, хто бачить усіх: інакше він
+                      арифметично розкриває колегу (колега = 2×команда − я). */}
+                  {canSeeAll ? (
+                    <tr>
+                      <td className="pr-1">
+                        <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
+                            <Users className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate text-xs font-semibold text-muted-foreground">
+                            Команда · {metric.teamAgg === "sum" ? "разом" : "середнє"}
+                          </span>
+                        </div>
+                      </td>
+                      {months.map((month, index) => {
+                        const teamAgg = analytics.team[index];
+                        const value = teamAgg ? metric.get(teamAgg) : null;
+                        return (
+                          <td key={month.value}>
+                            <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                              {value == null ? "—" : metric.format(value)}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             ) : filesRows.length === 0 ? (
@@ -1652,36 +1690,38 @@ export function DesignersDashboard({
                       </tr>
                     );
                   })}
-                  <tr>
-                    <td className="pr-1">
-                      <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
-                          <Users className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="truncate text-xs font-semibold text-muted-foreground">Команда · разом</span>
-                      </div>
-                    </td>
-                    {fileExtColumns.map((ext) => (
-                      <td key={ext}>
-                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
-                          {teamFilesByExt(ext) || "—"}
+                  {canSeeAll ? (
+                    <tr>
+                      <td className="pr-1">
+                        <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
+                            <Users className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate text-xs font-semibold text-muted-foreground">Команда · разом</span>
                         </div>
                       </td>
-                    ))}
-                    {hasOtherExts ? (
+                      {fileExtColumns.map((ext) => (
+                        <td key={ext}>
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                            {teamFilesByExt(ext) || "—"}
+                          </div>
+                        </td>
+                      ))}
+                      {hasOtherExts ? (
+                        <td>
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
+                            {filesRows.reduce((sum, { agg }) => sum + otherFiles(agg), 0) || "—"}
+                          </div>
+                        </td>
+                      ) : null}
                       <td>
-                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-semibold tabular-nums text-muted-foreground">
-                          {filesRows.reduce((sum, { agg }) => sum + otherFiles(agg), 0) || "—"}
+                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-bold tabular-nums text-muted-foreground">
+                          {teamFilesTotal}
                         </div>
                       </td>
-                    ) : null}
-                    <td>
-                      <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-[13px] font-bold tabular-nums text-muted-foreground">
-                        {teamFilesTotal}
-                      </div>
-                    </td>
-                    <td />
-                  </tr>
+                      <td />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             )}
@@ -1871,6 +1911,17 @@ export function DesignersDashboard({
       </p>
 
       {tipOverlay}
+
+      {/* Друкований звіт: на екрані прихований (.print-portal), при друку — єдине,
+          що йде на папір. Портал на body, щоб print-CSS міг сховати весь застосунок. */}
+      {canSeeAll && typeof document !== "undefined"
+        ? createPortal(
+            <div className="print-portal">
+              <DesignersPrintReport analytics={analytics} monthIndex={mi} designers={visibleDesigners} />
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

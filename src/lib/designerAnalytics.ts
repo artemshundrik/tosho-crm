@@ -233,6 +233,13 @@ export async function loadDesignerAnalytics(params: {
   designerIds: string[];
   monthsBack?: number;
   now?: Date;
+  /**
+   * "balance" — вантажити ЛИШЕ активні задачі для «Балансу команди», без
+   * жодної персональної статистики. Для ролей, які бачать навантаження, але не
+   * мають права на цифри дизайнерів (менеджери): так чужа статистика взагалі не
+   * потрапляє в браузер, і це заразом 1 запит замість 4.
+   */
+  mode?: "full" | "balance";
 }): Promise<DesignerAnalytics> {
   const monthsBack = Math.max(2, params.monthsBack ?? 6);
   const now = params.now ?? new Date();
@@ -242,34 +249,42 @@ export async function loadDesignerAnalytics(params: {
   const last = months[months.length - 1];
   const to = new Date(Date.UTC(last.year, last.month, 1)).toISOString();
   const designerIdSet = new Set(params.designerIds);
+  const balanceOnly = params.mode === "balance";
 
+  const emptyRows = { data: [] as never[], error: null };
   const [statusRes, uploadRes, timerRes, activeRes] = await Promise.all([
-    supabase
-      .from("activity_log")
-      .select("entity_id,user_id,created_at,metadata")
-      .eq("team_id", params.teamId)
-      .eq("action", "design_task_status")
-      .gte("created_at", from)
-      .lt("created_at", to)
-      .order("created_at", { ascending: true })
-      .limit(QUERY_ROW_LIMIT),
-    supabase
-      .from("activity_log")
-      .select("id,user_id,entity_id,created_at,metadata")
-      .eq("team_id", params.teamId)
-      .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
-      .gte("created_at", from)
-      .lt("created_at", to)
-      .order("created_at", { ascending: false })
-      .limit(QUERY_ROW_LIMIT),
-    supabase
-      .from("design_task_timer_sessions")
-      .select("user_id,design_task_id,started_at,paused_at")
-      .eq("team_id", params.teamId)
-      .gte("started_at", from)
-      .lt("started_at", to)
-      .order("started_at", { ascending: true })
-      .limit(QUERY_ROW_LIMIT),
+    balanceOnly
+      ? emptyRows
+      : supabase
+          .from("activity_log")
+          .select("entity_id,user_id,created_at,metadata")
+          .eq("team_id", params.teamId)
+          .eq("action", "design_task_status")
+          .gte("created_at", from)
+          .lt("created_at", to)
+          .order("created_at", { ascending: true })
+          .limit(QUERY_ROW_LIMIT),
+    balanceOnly
+      ? emptyRows
+      : supabase
+          .from("activity_log")
+          .select("id,user_id,entity_id,created_at,metadata")
+          .eq("team_id", params.teamId)
+          .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
+          .gte("created_at", from)
+          .lt("created_at", to)
+          .order("created_at", { ascending: false })
+          .limit(QUERY_ROW_LIMIT),
+    balanceOnly
+      ? emptyRows
+      : supabase
+          .from("design_task_timer_sessions")
+          .select("user_id,design_task_id,started_at,paused_at")
+          .eq("team_id", params.teamId)
+          .gte("started_at", from)
+          .lt("started_at", to)
+          .order("started_at", { ascending: true })
+          .limit(QUERY_ROW_LIMIT),
     supabase
       .from("activity_log")
       .select("id,metadata")
@@ -335,12 +350,21 @@ export async function loadDesignerAnalytics(params: {
     perDesigner.set(id, months.map(() => emptyMonthAgg()));
   });
   const team = months.map(() => emptyMonthAgg());
+  /**
+   * Рахуємо ЛИШЕ те, що належить дизайнерам із запиту — і в персональний
+   * агрегат, і в командний.
+   *
+   * Раніше «нічийна» подія (assignee поза списком) усе одно потрапляла в team.
+   * Це давало дві проблеми: командний підсумок включав чужу роботу, а коли
+   * дизайнер вантажить лише себе — у team осідали дані колег, тобто ізоляція
+   * трималась тільки на тому, що UI їх не показує. Тепер team = сума саме тих
+   * дизайнерів, яких запитали.
+   */
   const aggFor = (designerId: string | null, monthIdx: number): DesignerMonthAgg[] => {
-    const result: DesignerMonthAgg[] = [team[monthIdx]];
-    if (designerId && perDesigner.has(designerId)) {
-      result.push(perDesigner.get(designerId)![monthIdx]);
-    }
-    return result;
+    if (!designerId) return [];
+    const personal = perDesigner.get(designerId)?.[monthIdx];
+    if (!personal) return [];
+    return [team[monthIdx], personal];
   };
 
   /* ---------- закриття: останнє approved на задачу у вікні ---------- */

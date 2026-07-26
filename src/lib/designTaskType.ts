@@ -44,6 +44,25 @@ const LEGACY_DESIGN_TASK_TYPE_ALIASES: Record<string, DesignTaskType> = {
   visualization_layout_adaptation: "visualization",
 };
 
+/**
+ * Норматив часу на ОДНУ задачу типу, у хвилинах.
+ *
+ * Домовленість із CEO: візуалізація — до 15 хв, адаптація макету — до 30 хв.
+ * Типи без норми (презентація, верстка, креатив) свідомо не нормуються: там
+ * розкид занадто великий, щоб одне число щось означало. `null` = «норми нема»,
+ * і UI тоді просто не малює мітку — не вигадуй значення за замовчуванням.
+ *
+ * Норма міряється проти СЕРЕДНЬОГО часу задачі типу за таймером (той самий
+ * показник, що в блоці «Середній час за типами»).
+ */
+export const DESIGN_TASK_TYPE_NORM_MINUTES: Record<DesignTaskType, number | null> = {
+  visualization: 15,
+  layout_adaptation: 30,
+  presentation: null,
+  layout: null,
+  creative: null,
+};
+
 export const parseDesignTaskType = (value: unknown): DesignTaskType | null => {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
