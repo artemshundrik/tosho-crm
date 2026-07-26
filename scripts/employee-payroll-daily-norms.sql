@@ -8,13 +8,17 @@
 --
 -- ЧОМУ МАКЕТИ ТЕПЕР РАХУЮТЬСЯ: попереднє рішення «макети не рахуються»
 -- разом із нормою 250 давало нуль доплати завжди (максимум за пів року —
--- 183 візуали/міс). Симуляція кві–лип 2026: 7 візуалів + 4 макети на день
--- при 100/200 ₴ дає 14 300 ₴ на двох дизайнерок за 4 місяці.
+-- 183 візуали/міс).
+--
+-- ЧИСЛА НОРМИ: CEO обрав 8 візуалів + 5 макетів на день (симуляція кві–лип
+-- 2026 на цих числах дає 1 900 ₴ на двох дизайнерок за 4 місяці; на 7/4 було
+-- б 14 300 ₴ — різниця майже вся на макетах). Змінюються без релізу — це
+-- рядок у employee_pay_defaults.
 --
 -- ЩО ЗМІНЮЄТЬСЯ В КОЛОНКАХ:
---   visual_norm (міс.)  → visual_norm_per_day   (7)
+--   visual_norm (міс.)  → visual_norm_per_day   (8)
 --   over_norm_rate      → visual_over_rate      (100 ₴)
---   +                     layout_norm_per_day   (4)
+--   +                     layout_norm_per_day   (5)
 --   +                     layout_over_rate      (200 ₴)
 --
 -- Дані не мігруються: на момент запуску в employee_pay_rates один рядок і всі
@@ -46,9 +50,15 @@ alter table tosho.employee_pay_defaults
   drop constraint if exists employee_pay_defaults_sane;
 
 alter table tosho.employee_pay_defaults
-  add column if not exists visual_norm_per_day int           not null default 7,
-  add column if not exists layout_norm_per_day int           not null default 4,
+  add column if not exists visual_norm_per_day int           not null default 8,
+  add column if not exists layout_norm_per_day int           not null default 5,
   add column if not exists layout_over_rate    numeric(12,2) not null default 200;
+
+-- Дефолти колонок для воркспейсів, створених до цієї міграції, лишились би
+-- старими — вирівнюємо явно.
+alter table tosho.employee_pay_defaults
+  alter column visual_norm_per_day set default 8,
+  alter column layout_norm_per_day set default 5;
 
 alter table tosho.employee_pay_defaults
   drop column if exists visual_norm;
@@ -62,11 +72,11 @@ alter table tosho.employee_pay_defaults
     and creative_percent between 0 and 100
   );
 
--- Чинні значення команди (рішення CEO): 7 візуалів + 4 макети на робочий день,
+-- Чинні значення команди (рішення CEO): 8 візуалів + 5 макетів на робочий день,
 -- 100 ₴ за візуал понад норму, 200 ₴ за макет.
 update tosho.employee_pay_defaults
-set visual_norm_per_day = 7,
-    layout_norm_per_day = 4,
+set visual_norm_per_day = 8,
+    layout_norm_per_day = 5,
     visual_over_rate    = 100,
     layout_over_rate    = 200,
     updated_at          = now();

@@ -228,7 +228,7 @@ export function MemberPaySection({
                     value={visualNormPerDay}
                     onChange={(event) => setVisualNormPerDay(event.target.value)}
                     inputMode="numeric"
-                    placeholder={defaults ? `${defaults.visualNormPerDay} (командна)` : "7"}
+                    placeholder={defaults ? `${defaults.visualNormPerDay} (командна)` : "8"}
                     className={cn(CONTROL_BASE, "h-11")}
                   />
                   <p className="text-2xs text-muted-foreground">
@@ -242,7 +242,7 @@ export function MemberPaySection({
                     value={layoutNormPerDay}
                     onChange={(event) => setLayoutNormPerDay(event.target.value)}
                     inputMode="numeric"
-                    placeholder={defaults ? `${defaults.layoutNormPerDay} (командна)` : "4"}
+                    placeholder={defaults ? `${defaults.layoutNormPerDay} (командна)` : "5"}
                     className={cn(CONTROL_BASE, "h-11")}
                   />
                 </div>
