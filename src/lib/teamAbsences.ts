@@ -32,11 +32,17 @@ export const TEAM_ABSENCE_KIND_LABELS: Record<TeamAbsenceKind, string> = {
 };
 
 // Tone classes match the availability badges in teamAvailability.ts so the
-// same concept reads the same everywhere (sick = danger, vacation = warning).
+// same concept reads the same everywhere: sick = warning, vacation = info.
+//
+// Лікарняний свідомо НЕ danger (рішення CEO 2026-07-26): червоний тут читався
+// надто тривожно як на буденну відсутність, і його лишили за справжніми
+// проблемами. Відгул забрав нейтральний тон, бо синій пішов під відпустку.
+// Змінюючи тут — міняй і teamAvailability.ts, інакше одне поняття отримає
+// два кольори на сусідніх екранах.
 export const TEAM_ABSENCE_KIND_BADGE_CLASSES: Record<TeamAbsenceKind, string> = {
-  sick_leave: "bg-danger-soft text-danger-foreground border-danger-soft-border",
-  day_off: "bg-info-soft text-info-foreground border-info-soft-border",
-  vacation: "bg-warning-soft text-warning-foreground border-warning-soft-border",
+  sick_leave: "bg-warning-soft text-warning-foreground border-warning-soft-border",
+  day_off: "bg-neutral-soft text-neutral-foreground border-neutral-soft-border",
+  vacation: "bg-info-soft text-info-foreground border-info-soft-border",
   other: "bg-muted text-muted-foreground border-border",
 };
 

@@ -3,6 +3,7 @@ import {
   computeEarnings,
   countWorkdays,
   creativePayout,
+  listWorkdays,
   monthKeyOf,
   pickRateForMonth,
   resolveTerms,
@@ -22,7 +23,67 @@ const DEFAULTS: DesignerPayDefaults = {
   minCreativeCost: 4500,
 };
 
+/**
+ * Реальний лікарняний Лєни з tosho.team_absences: понеділок 13 липня 2026,
+ * «Отруїлась». Це 9-й робочий день місяця (1-е — середа).
+ */
+const SICK_13_07 = [{ start: "2026-07-13", end: "2026-07-13", kind: "sick_leave", comment: "Отруїлась" }];
+
+describe("listWorkdays", () => {
+  it("повертає всі робочі дні місяця, включно з днями відсутності", () => {
+    const cells = listWorkdays({
+      monthKey: "2026-07",
+      asOf: new Date("2026-07-26T12:00:00Z"),
+      absences: SICK_13_07,
+    });
+    // Сітка показує всі 23 квадратики — день хвороби не зникає, а фарбується.
+    expect(cells).toHaveLength(23);
+    expect(cells.filter((cell) => cell.passed)).toHaveLength(18);
+  });
+
+  it("позначає день хвороби типом і коментарем", () => {
+    const cells = listWorkdays({
+      monthKey: "2026-07",
+      asOf: new Date("2026-07-26T12:00:00Z"),
+      absences: SICK_13_07,
+    });
+    const sick = cells.filter((cell) => cell.absence);
+    expect(sick).toHaveLength(1);
+    expect(sick[0].day).toBe("2026-07-13");
+    expect(sick[0].absence).toEqual({ kind: "sick_leave", comment: "Отруїлась" });
+    // 9-й робочий день липня.
+    expect(cells.indexOf(sick[0])).toBe(8);
+  });
+
+  it("без відсутностей жоден день не позначений", () => {
+    const cells = listWorkdays({ monthKey: "2026-07", asOf: new Date("2026-07-26T12:00:00Z") });
+    expect(cells.every((cell) => cell.absence === null)).toBe(true);
+  });
+});
+
 describe("countWorkdays", () => {
+  /**
+   * Рішення CEO 2026-07-26: лікарняний поки НЕ зменшує базу, тому
+   * loadDesignerEarnings навмисно не передає absences у розрахунок. Ці два
+   * тести фіксують обидві гілки, щоб зміна рішення була свідомою, а не
+   * випадковою.
+   */
+  it("без переданих відсутностей день хвороби рахується як відпрацьований", () => {
+    const { total, passed } = countWorkdays({ monthKey: "2026-07", asOf: new Date("2026-07-26T12:00:00Z") });
+    expect(total).toBe(23);
+    expect(passed).toBe(18);
+  });
+
+  it("з переданими відсутностями день хвороби випадає з бази", () => {
+    const { total, passed } = countWorkdays({
+      monthKey: "2026-07",
+      asOf: new Date("2026-07-26T12:00:00Z"),
+      absences: SICK_13_07,
+    });
+    expect(total).toBe(22);
+    expect(passed).toBe(17);
+  });
+
   it("рахує пн–пт у липні 2026 (23 робочі дні)", () => {
     const { total } = countWorkdays({ monthKey: "2026-07", asOf: new Date("2026-07-31T12:00:00Z") });
     expect(total).toBe(23);

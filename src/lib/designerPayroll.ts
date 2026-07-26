@@ -1,11 +1,14 @@
 import { supabase } from "@/lib/supabaseClient";
+import { normalizeTeamAbsenceKind } from "@/lib/teamAbsences";
 import {
   computeEarnings,
   countWorkdays,
   creativePayout,
+  listWorkdays,
   monthKeyOf,
   pickRateForMonth,
   resolveTerms,
+  type AbsenceRange,
   type CreativePay,
   type DesignerEarnings,
   type DesignerPayDefaults,
@@ -166,6 +169,41 @@ export async function loadWorkdayExceptions(workspaceId: string, monthKey: strin
 }
 
 /**
+ * Відсутності людини за місяць — лише щоб розфарбувати сітку днів.
+ *
+ * На гроші НЕ впливають (рішення CEO 2026-07-26: лікарняний поки не зменшує
+ * базу) — `loadDesignerEarnings` навмисно не передає їх у `countWorkdays`.
+ * Якщо рішення зміниться, достатньо передати цей самий масив туди.
+ *
+ * Живе в tosho, ключується workspace_id; читати може будь-який учасник
+ * воркспейсу (політика team_absences_select).
+ */
+export async function loadAbsences(params: {
+  workspaceId: string;
+  userId: string;
+  monthKey: string;
+}): Promise<AbsenceRange[]> {
+  const { from, to } = monthBounds(params.monthKey);
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("team_absences")
+    .select("start_date,end_date,kind,comment")
+    .eq("workspace_id", params.workspaceId)
+    .eq("user_id", params.userId)
+    // Діапазон може починатись до 1-го числа й тягнутись у місяць — тому
+    // перетин діапазонів, а не «початок усередині місяця».
+    .lte("start_date", to.toISOString().slice(0, 10))
+    .gte("end_date", from.toISOString().slice(0, 10));
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    start: row.start_date,
+    end: row.end_date,
+    kind: normalizeTeamAbsenceKind(row.kind),
+    comment: row.comment,
+  }));
+}
+
+/**
  * Платні креативи дизайнера за місяць.
  *
  * Місяць визначається за ЗАКРИТТЯМ (подія переходу в approved), а не за датою
@@ -252,9 +290,15 @@ export async function loadDesignerEarnings(params: {
   if (!rate || !defaults) return null;
 
   const terms = resolveTerms(rate, defaults);
-  const [exceptions, visualData, creatives] = await Promise.all([
+  const [exceptions, visualData, absences, creatives] = await Promise.all([
     loadWorkdayExceptions(params.workspaceId, monthKey),
     loadVisualCount({ teamId: params.teamId, userId: params.userId, monthKey }),
+    loadAbsences({ workspaceId: params.workspaceId, userId: params.userId, monthKey }).catch((error) => {
+      // Відсутності — суто оформлення сітки: без них квадратики просто всі
+      // однакові, а суми не змінюються. Падати через це віджету нема сенсу.
+      console.warn("Failed to load absences", error);
+      return [] as AbsenceRange[];
+    }),
     loadCreativePays({
       teamId: params.teamId,
       userId: params.userId,
@@ -268,11 +312,22 @@ export async function loadDesignerEarnings(params: {
     }),
   ]);
 
+  // Гроші рахуємо БЕЗ відсутностей: лікарняний поки не зменшує базу (рішення
+  // CEO 2026-07-26, питання відкрите). Щоб почати віднімати — досить додати
+  // сюди `absences`, решта вже готова.
   const { total, passed } = countWorkdays({
     monthKey,
     asOf: params.asOf,
     exceptions,
     absences: params.absences,
+  });
+  // А сітку малюємо З відсутностями — інакше день хвороби виглядав би як
+  // звичайний відпрацьований.
+  const workdays = listWorkdays({
+    monthKey,
+    asOf: params.asOf,
+    exceptions,
+    absences: [...absences, ...(params.absences ?? [])],
   });
 
   return computeEarnings({
@@ -280,6 +335,7 @@ export async function loadDesignerEarnings(params: {
     terms,
     workdaysTotal: total,
     workdaysPassed: passed,
+    workdays,
     visuals: visualData.works,
     visualFiles: visualData.files,
     creatives,
