@@ -165,6 +165,8 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 import { DesignTaskProductCard } from "@/components/design/DesignTaskProductCard";
+import { CreativePayControl } from "@/components/design/CreativePayControl";
+import { loadPayDefaults } from "@/lib/designerPayroll";
 import { designTaskTypeShowsProduct, parseDesignTaskProduct } from "@/lib/designTaskProduct";
 import { calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
 import { formatTelegramHandle } from "@/lib/telegramContact";
@@ -1438,6 +1440,11 @@ export default function DesignTaskPage() {
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [headerTypePopoverOpen, setHeaderTypePopoverOpen] = useState(false);
+  // Умови оплати креативу — щоб показати менеджеру, скільки отримає дизайнер.
+  // Читаються з employee_pay_defaults; ролям без доступу RLS поверне null,
+  // і прев'ю просто не показується (сама вартість зберігається однаково).
+  const [creativePayDefaults, setCreativePayDefaults] = useState<{ percent: number; minCost: number } | null>(null);
+  const [creativePaySaving, setCreativePaySaving] = useState(false);
   const [headerDeadlinePopoverOpen, setHeaderDeadlinePopoverOpen] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [typeSaving, setTypeSaving] = useState(false);
@@ -5412,6 +5419,75 @@ export default function DesignTaskPage() {
     }
   };
 
+  // Умови оплати креативу вантажимо лише для задач типу «Креатив» — решті вони не потрібні.
+  useEffect(() => {
+    let cancelled = false;
+    if (task?.designTaskType !== "creative" || !userId) return;
+    (async () => {
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (!workspaceId || cancelled) return;
+      const defaults = await loadPayDefaults(workspaceId);
+      if (!defaults || cancelled) return;
+      setCreativePayDefaults({ percent: defaults.creativePercent, minCost: defaults.minCreativeCost });
+    })().catch(() => {
+      // Немає доступу до payroll-дефолтів — прев'ю суми просто не показуємо.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [task?.designTaskType, userId]);
+
+  /** Платний/безкоштовний креатив + вартість проєкту. Пише менеджер. */
+  const applyCreativePay = async (next: { paid: boolean; projectCost: number | null }) => {
+    if (!task || !effectiveTeamId || creativePaySaving) return;
+    if (!ensureCanEdit()) return;
+
+    const nextMetadata: Record<string, unknown> = {
+      ...(task.metadata ?? {}),
+      design_creative_paid: next.paid,
+      design_creative_project_cost: next.paid ? next.projectCost : null,
+    };
+    const previousTask = task;
+    setCreativePaySaving(true);
+    setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+
+    try {
+      const { error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata as Json })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId);
+      if (updateError) throw updateError;
+
+      const actorLabel = userId ? getMemberLabel(userId) : "System";
+      await logDesignTaskActivity({
+        teamId: effectiveTeamId,
+        designTaskId: task.id,
+        quoteId: task.quoteId,
+        userId,
+        actorName: actorLabel,
+        action: "design_task_event",
+        title: next.paid
+          ? `Креатив: платний, ${Math.round(next.projectCost ?? 0).toLocaleString("uk-UA")} ₴`
+          : "Креатив: безкоштовний",
+        metadata: {
+          source: "design_creative_pay",
+          design_creative_paid: next.paid,
+          design_creative_project_cost: next.projectCost,
+        },
+      }).catch(() => {
+        // Лог — допоміжний; сама зміна вже збережена.
+      });
+      toast.success(next.paid ? "Креатив позначено платним" : "Креатив позначено безкоштовним");
+    } catch (saveError) {
+      console.error("Failed to save creative pay", saveError);
+      setTask(previousTask);
+      toast.error("Не вдалося зберегти оплату креативу");
+    } finally {
+      setCreativePaySaving(false);
+    }
+  };
+
   const applyTaskType = async (nextType: DesignTaskType) => {
     if (!task || !effectiveTeamId || typeSaving) return;
     if (!ensureCanEdit()) return;
@@ -9044,6 +9120,22 @@ export default function DesignTaskPage() {
                 </div>
               </PopoverContent>
             </Popover>
+            {/* Оплата — лише для креативів: решті типів це поле не має сенсу. */}
+            {task.designTaskType === "creative" ? (
+              <CreativePayControl
+                paid={Boolean(task.metadata?.design_creative_paid)}
+                projectCost={
+                  Number.isFinite(Number(task.metadata?.design_creative_project_cost))
+                    ? Number(task.metadata?.design_creative_project_cost)
+                    : null
+                }
+                creativePercent={creativePayDefaults?.percent ?? null}
+                minCreativeCost={creativePayDefaults?.minCost ?? null}
+                disabled={creativePaySaving || designTaskLockedByOther}
+                saving={creativePaySaving}
+                onSave={applyCreativePay}
+              />
+            ) : null}
             <Popover open={headerDeadlinePopoverOpen} onOpenChange={setHeaderDeadlinePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button

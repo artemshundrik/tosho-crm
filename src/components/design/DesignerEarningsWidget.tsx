@@ -232,6 +232,42 @@ export function DesignerEarningsWidget({
             ) : null}
           </div>
 
+          {earnings.creatives.length > 0 ? (
+            <div className="border-t border-border/50 px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Креативи</span>
+                {earnings.creativesPay > 0 ? (
+                  <span className="ml-auto font-semibold tabular-nums text-foreground">
+                    <Money value={`+${uahShort(earnings.creativesPay)}`} masked={masked} />
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {earnings.creatives.map((creative) => (
+                  <div key={creative.taskId} className="flex items-start gap-2 text-xs">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-foreground">
+                        {creative.taskNumber ? `${creative.taskNumber} · ` : ""}
+                        {creative.title ?? "Креатив"}
+                      </span>
+                      {!creative.earned ? (
+                        <span className="text-3xs text-muted-foreground">чекає затвердження</span>
+                      ) : null}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 font-semibold tabular-nums",
+                        creative.earned ? "text-success-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      <Money value={`+${uahShort(creative.payout)}`} masked={masked} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="border-t border-border/50 px-3.5 py-2 text-3xs leading-snug text-muted-foreground/80">
             Рахуються унікальні візуали (перезаливи одного файлу не додають). Макети в норму не входять.
           </div>

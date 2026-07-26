@@ -31,6 +31,21 @@ export type EffectivePayTerms = {
   creativePercent: number;
 };
 
+/**
+ * Платний креатив у розрахунку.
+ * `earned` = гроші вже зароблені (задача «Затверджено»); інакше сума лише в
+ * прогнозі. Відкат статусу автоматично прибирає нарахування, бо розрахунок
+ * завжди читає поточний стан задачі.
+ */
+export type CreativePay = {
+  taskId: string;
+  taskNumber: string | null;
+  title: string | null;
+  projectCost: number;
+  payout: number;
+  earned: boolean;
+};
+
 export type DesignerEarnings = {
   month: string;                 // "2026-07"
   terms: EffectivePayTerms;
@@ -44,6 +59,10 @@ export type DesignerEarnings = {
   visualFiles: number;           // сирі файли — довідково, показує масштаб перезаливів
   visualsOverNorm: number;
   overNormPay: number;
+  /** Платні креативи: зараховані (approved) і ті, що чекають затвердження. */
+  creatives: CreativePay[];
+  creativesPay: number;
+  creativesPendingPay: number;
   /** Разом на сьогодні + прогноз на кінець місяця. */
   earnedTotal: number;
   forecastTotal: number;
@@ -129,20 +148,30 @@ export function computeEarnings(input: {
   workdaysPassed: number;
   visuals: number;
   visualFiles: number;
+  creatives?: CreativePay[];
 }): DesignerEarnings {
   const { terms, workdaysTotal, workdaysPassed, visuals, visualFiles } = input;
+  const creatives = input.creatives ?? [];
   const ratio = workdaysTotal > 0 ? workdaysPassed / workdaysTotal : 0;
   const baseAccrued = Math.round(terms.baseMonthRate * ratio);
 
   const visualsOverNorm = Math.max(0, visuals - terms.visualNorm);
   const overNormPay = Math.round(visualsOverNorm * terms.overNormRate);
 
+  // Креативи: у «зароблено» йдуть лише затверджені; решта — тільки в прогноз.
+  const creativesPay = creatives.filter((item) => item.earned).reduce((sum, item) => sum + item.payout, 0);
+  const creativesPendingPay = creatives.filter((item) => !item.earned).reduce((sum, item) => sum + item.payout, 0);
+
   // Прогноз: лінійна екстраполяція темпу візуалів на повний місяць.
   // Поки жодного робочого дня не минуло — прогнозувати нема з чого.
   const forecastVisuals =
     workdaysPassed > 0 ? Math.round((visuals / workdaysPassed) * workdaysTotal) : visuals;
   const forecastOverNorm = Math.max(0, forecastVisuals - terms.visualNorm);
-  const forecastTotal = Math.round(terms.baseMonthRate + forecastOverNorm * terms.overNormRate);
+  // Прогноз включає і те, що чекає затвердження: менеджер уже назвав суму,
+  // тож дизайнеру чесно показати, на що він виходить.
+  const forecastTotal = Math.round(
+    terms.baseMonthRate + forecastOverNorm * terms.overNormRate + creativesPay + creativesPendingPay
+  );
 
   return {
     month: input.monthKey,
@@ -154,8 +183,17 @@ export function computeEarnings(input: {
     visualFiles,
     visualsOverNorm,
     overNormPay,
-    earnedTotal: baseAccrued + overNormPay,
+    creatives,
+    creativesPay,
+    creativesPendingPay,
+    earnedTotal: baseAccrued + overNormPay + creativesPay,
     forecastTotal,
     forecastVisuals,
   };
+}
+
+/** Скільки дизайнер отримає з платного креативу. Єдина точка правди для UI і розрахунку. */
+export function creativePayout(projectCost: number, creativePercent: number) {
+  if (!Number.isFinite(projectCost) || projectCost <= 0) return 0;
+  return Math.round((projectCost * creativePercent) / 100);
 }

@@ -2,9 +2,11 @@ import { supabase } from "@/lib/supabaseClient";
 import {
   computeEarnings,
   countWorkdays,
+  creativePayout,
   monthKeyOf,
   pickRateForMonth,
   resolveTerms,
+  type CreativePay,
   type DesignerEarnings,
   type DesignerPayDefaults,
   type DesignerPayRate,
@@ -163,6 +165,73 @@ export async function loadWorkdayExceptions(workspaceId: string, monthKey: strin
   return map;
 }
 
+/**
+ * Платні креативи дизайнера за місяць.
+ *
+ * Місяць визначається за ЗАКРИТТЯМ (подія переходу в approved), а не за датою
+ * створення задачі: гроші нараховуються тоді, коли клієнт погодив. Для задач,
+ * які ще чекають погодження, беремо ті, що зараз у pm_review/client_review —
+ * вони йдуть лише в прогноз (`earned: false`).
+ */
+export async function loadCreativePays(params: {
+  teamId: string;
+  userId: string;
+  monthKey: string;
+  creativePercent: number;
+}): Promise<CreativePay[]> {
+  const { from, to } = monthBounds(params.monthKey);
+
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("id,title,metadata")
+    .eq("team_id", params.teamId)
+    .eq("action", "design_task")
+    .eq("metadata->>design_task_type", "creative")
+    .eq("metadata->>design_creative_paid", "true")
+    .eq("metadata->>assignee_user_id", params.userId)
+    .limit(500);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{
+    id: string;
+    title?: string | null;
+    metadata?: {
+      status?: string | null;
+      design_task_number?: string | null;
+      design_creative_project_cost?: number | string | null;
+      status_changed_at?: string | null;
+    } | null;
+  }>;
+
+  const result: CreativePay[] = [];
+  rows.forEach((row) => {
+    const meta = row.metadata ?? {};
+    const cost = Number(meta.design_creative_project_cost);
+    if (!Number.isFinite(cost) || cost <= 0) return;
+
+    const status = meta.status ?? "";
+    const approved = status === "approved";
+    const pending = status === "pm_review" || status === "client_review";
+    if (!approved && !pending) return;
+
+    // Затверджений креатив зараховуємо в місяць затвердження, а не створення.
+    if (approved) {
+      const changedAt = meta.status_changed_at ? new Date(meta.status_changed_at) : null;
+      if (!changedAt || changedAt < from || changedAt >= to) return;
+    }
+
+    result.push({
+      taskId: row.id,
+      taskNumber: meta.design_task_number ?? null,
+      title: row.title ?? null,
+      projectCost: cost,
+      payout: creativePayout(cost, params.creativePercent),
+      earned: approved,
+    });
+  });
+  return result;
+}
+
 /** Повний цикл для віджета: умови + дані місяця → готові суми. */
 export async function loadDesignerEarnings(params: {
   workspaceId: string;
@@ -182,9 +251,21 @@ export async function loadDesignerEarnings(params: {
   // Немає ставки на цей місяць — людина не в pay-системі, віджет не показуємо.
   if (!rate || !defaults) return null;
 
-  const [exceptions, visualData] = await Promise.all([
+  const terms = resolveTerms(rate, defaults);
+  const [exceptions, visualData, creatives] = await Promise.all([
     loadWorkdayExceptions(params.workspaceId, monthKey),
     loadVisualCount({ teamId: params.teamId, userId: params.userId, monthKey }),
+    loadCreativePays({
+      teamId: params.teamId,
+      userId: params.userId,
+      monthKey,
+      creativePercent: terms.creativePercent,
+    }).catch((error) => {
+      // Креативи — додаткова частина: якщо їх не вдалось порахувати, віджет
+      // усе одно показує базу й візуали, а не падає цілком.
+      console.warn("Failed to load creative pays", error);
+      return [] as CreativePay[];
+    }),
   ]);
 
   const { total, passed } = countWorkdays({
@@ -196,10 +277,11 @@ export async function loadDesignerEarnings(params: {
 
   return computeEarnings({
     monthKey,
-    terms: resolveTerms(rate, defaults),
+    terms,
     workdaysTotal: total,
     workdaysPassed: passed,
     visuals: visualData.works,
     visualFiles: visualData.files,
+    creatives,
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeEarnings,
   countWorkdays,
+  creativePayout,
   monthKeyOf,
   pickRateForMonth,
   resolveTerms,
@@ -175,6 +176,76 @@ describe("computeEarnings", () => {
       monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 260, visualFiles: 262,
     });
     expect(many.earnedTotal).toBe(few.earnedTotal);
+  });
+});
+
+describe("платні креативи", () => {
+  const terms = resolveTerms(
+    { baseMonthRate: 40000, visualNorm: null, overNormRate: null, creativePercent: null, effectiveFrom: "2026-07-01" },
+    DEFAULTS
+  );
+  const base = { monthKey: "2026-07", terms, workdaysTotal: 23, workdaysPassed: 23, visuals: 100, visualFiles: 100 };
+
+  it("creativePayout = вартість × відсоток", () => {
+    expect(creativePayout(6000, 30)).toBe(1800);
+    expect(creativePayout(4500, 30)).toBe(1350);
+  });
+
+  it("некоректна вартість не дає нарахування", () => {
+    expect(creativePayout(0, 30)).toBe(0);
+    expect(creativePayout(-100, 30)).toBe(0);
+    expect(creativePayout(Number.NaN, 30)).toBe(0);
+  });
+
+  it("затверджений креатив іде в «зароблено»", () => {
+    const result = computeEarnings({
+      ...base,
+      creatives: [{ taskId: "t1", taskNumber: "DZ-1", title: "Набір", projectCost: 6000, payout: 1800, earned: true }],
+    });
+    expect(result.creativesPay).toBe(1800);
+    expect(result.creativesPendingPay).toBe(0);
+    expect(result.earnedTotal).toBe(40000 + 1800);
+  });
+
+  it("незатверджений — лише в прогнозі, не в «зароблено»", () => {
+    const result = computeEarnings({
+      ...base,
+      creatives: [{ taskId: "t1", taskNumber: "DZ-1", title: "Набір", projectCost: 6000, payout: 1800, earned: false }],
+    });
+    expect(result.creativesPay).toBe(0);
+    expect(result.creativesPendingPay).toBe(1800);
+    expect(result.earnedTotal).toBe(40000);
+    expect(result.forecastTotal).toBe(40000 + 1800);
+  });
+
+  it("відкат статусу прибирає нарахування (earned: true → false)", () => {
+    const approved = computeEarnings({
+      ...base,
+      creatives: [{ taskId: "t1", taskNumber: null, title: null, projectCost: 6000, payout: 1800, earned: true }],
+    });
+    const rolledBack = computeEarnings({
+      ...base,
+      creatives: [{ taskId: "t1", taskNumber: null, title: null, projectCost: 6000, payout: 1800, earned: false }],
+    });
+    expect(approved.earnedTotal - rolledBack.earnedTotal).toBe(1800);
+  });
+
+  it("кілька креативів підсумовуються окремо за станом", () => {
+    const result = computeEarnings({
+      ...base,
+      creatives: [
+        { taskId: "a", taskNumber: null, title: null, projectCost: 6000, payout: 1800, earned: true },
+        { taskId: "b", taskNumber: null, title: null, projectCost: 10000, payout: 3000, earned: true },
+        { taskId: "c", taskNumber: null, title: null, projectCost: 5000, payout: 1500, earned: false },
+      ],
+    });
+    expect(result.creativesPay).toBe(4800);
+    expect(result.creativesPendingPay).toBe(1500);
+    expect(result.forecastTotal).toBe(40000 + 4800 + 1500);
+  });
+
+  it("без креативів поведінка не змінюється", () => {
+    expect(computeEarnings(base).earnedTotal).toBe(computeEarnings({ ...base, creatives: [] }).earnedTotal);
   });
 });
 
