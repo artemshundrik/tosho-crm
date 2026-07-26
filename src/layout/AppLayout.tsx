@@ -77,6 +77,7 @@ import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
 import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
 import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidget";
+import { ViewAsBar } from "@/components/app/ViewAsBar";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import {
   DesignerFloatingTimerWidget,
@@ -746,7 +747,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session, permissions, jobRole } = useAuth();
+  const { userId, teamId, session, permissions, jobRole, viewUserId } = useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
@@ -1939,7 +1940,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
               {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
                   (рендерить null, якщо в людини немає чинної ставки). */}
-              {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={userId} /> : null}
+              {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={viewUserId} /> : null}
               {showDesignerTimerWidget ? (
                 <DesignerHeaderTimerWidget
                   controller={designerTimerController}
@@ -2213,6 +2214,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}
         >
+          {/* Нагадування про режим «Дивитись як» — над усім контентом, щоб
+              випадково не сплутати чужий вигляд зі своїм. */}
+          <ViewAsBar />
           {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
               до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
               <main>, інакше роздільник обрізався б по краях max-width. */}

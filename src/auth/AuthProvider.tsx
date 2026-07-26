@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
 import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
+import { readViewAs, VIEW_AS_CHANGED_EVENT, type ViewAsTarget } from '@/auth/viewAs';
 
 type AuthState = {
   session: Session | null;
@@ -12,6 +13,17 @@ type AuthState = {
   accessRole: AccessRole;
   jobRole: JobRole;
   permissions: AppPermissions;
+  /** Активна ціль режиму «Дивитись як» (лише owner); null — звичайний режим. */
+  viewAs: ViewAsTarget | null;
+  /** Чи має право вмикати режим (owner). */
+  canUseViewAs: boolean;
+  /**
+   * Чиї дані ПОКАЗУВАТИ. У режимі «Дивитись як» — id обраної людини, інакше
+   * власний. Навмисно окремо від `userId`: той лишається справжнім, бо на ньому
+   * будуються записи (автор задачі, коментаря), і підміна зробила б фальшиве
+   * авторство. Використовуй лише для читання/відображення.
+   */
+  viewUserId: string | null;
   loading: boolean;
   refreshTeamContext: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -247,9 +259,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refreshTeamContext, userId]);
 
-  const permissions = useMemo(
+  /**
+   * Режим «Дивитись як» (тільки owner): підміняємо ролі в ОДНІЙ точці, тому
+   * весь застосунок автоматично рендериться очима обраної людини — окремих
+   * перевірок по компонентах не треба. Сесія Supabase не змінюється, тож RLS
+   * лишається owner-івською: це UI-режим, не безпека (див. src/auth/viewAs.ts).
+   */
+  const [viewAs, setViewAs] = useState<ViewAsTarget | null>(() => readViewAs());
+  useEffect(() => {
+    const sync = () => setViewAs(readViewAs());
+    window.addEventListener(VIEW_AS_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(VIEW_AS_CHANGED_EVENT, sync);
+  }, []);
+
+  const realPermissions = useMemo(
     () => buildPermissions({ role, accessRole, jobRole }),
     [role, accessRole, jobRole],
+  );
+  // Вмикати може лише owner — інакше режим став би дірою в правах.
+  const activeViewAs = realPermissions.isSuperAdmin ? viewAs : null;
+
+  const effectiveRole = activeViewAs ? mapAccessRoleToTeamRole(activeViewAs.accessRole) : role;
+  const effectiveAccessRole = (activeViewAs ? activeViewAs.accessRole : accessRole) as AccessRole | null;
+  const effectiveJobRole = (activeViewAs ? activeViewAs.jobRole : jobRole) as JobRole | null;
+
+  const permissions = useMemo(
+    () =>
+      activeViewAs
+        ? buildPermissions({
+            role: effectiveRole,
+            accessRole: effectiveAccessRole,
+            jobRole: effectiveJobRole,
+          })
+        : realPermissions,
+    [activeViewAs, effectiveRole, effectiveAccessRole, effectiveJobRole, realPermissions],
   );
 
   const value = useMemo<AuthState>(
@@ -257,15 +300,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       userId,
       teamId,
-      role,
-      accessRole,
-      jobRole,
+      role: effectiveRole,
+      accessRole: effectiveAccessRole,
+      jobRole: effectiveJobRole,
       permissions,
       loading,
       refreshTeamContext,
       signOut,
+      viewAs: activeViewAs,
+      canUseViewAs: realPermissions.isSuperAdmin,
+      viewUserId: activeViewAs?.userId ?? userId,
     }),
-    [session, userId, teamId, role, accessRole, jobRole, permissions, loading, refreshTeamContext],
+    [
+      session,
+      userId,
+      teamId,
+      effectiveRole,
+      effectiveAccessRole,
+      effectiveJobRole,
+      permissions,
+      loading,
+      refreshTeamContext,
+      activeViewAs,
+      realPermissions.isSuperAdmin,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

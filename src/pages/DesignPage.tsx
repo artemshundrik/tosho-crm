@@ -812,7 +812,7 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
 };
 
 export default function DesignPage() {
-  const { teamId, userId, permissions, session, jobRole } = useAuth();
+  const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
@@ -5568,7 +5568,7 @@ export default function DesignPage() {
       {viewMode === "assignee" ? (
         <DesignersDashboard
           teamId={effectiveTeamId}
-          currentUserId={userId ?? null}
+          currentUserId={viewUserId ?? null}
           canSeeAll={canSeeAllDesignerFiles}
           designers={designerMembers}
           memberInactiveById={memberInactiveById}

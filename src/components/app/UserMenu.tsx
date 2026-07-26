@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, MoreVertical, User } from "lucide-react";
+import { Eye, LogOut, MoreVertical, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { ViewAsDialog } from "@/components/app/ViewAsDialog";
+import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +43,10 @@ let cachedUserData: UserState | null = null;
 
 export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMenuProps) {
   const navigate = useNavigate();
+  // Режим «Дивитись як» — лише для owner (canUseViewAs рахується від РЕАЛЬНИХ
+  // прав, тож із увімкненого режиму його не можна «загубити»).
+  const { canUseViewAs, viewAs } = useAuth();
+  const [viewAsOpen, setViewAsOpen] = useState(false);
   const [loading, setLoading] = useState(!cachedUserData);
   const [userData, setUserData] = useState<UserState>(
     cachedUserData ?? {
@@ -278,6 +284,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               ),
               onSelect: () => navigate("/profile"),
             },
+            ...(canUseViewAs
+              ? ([
+                  { type: "separator" as const },
+                  {
+                        label: (
+                          <>
+                            <Eye className="mr-2 h-4 w-4" />
+                            {viewAs ? "Змінити перегляд" : "Дивитись як…"}
+                          </>
+                        ),
+                        onSelect: () => setViewAsOpen(true),
+                  },
+                ])
+              : []),
             { type: "separator" },
             {
               label: (
@@ -296,6 +316,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   }
 
   return (
+    <>
     <AppDropdown
       align="start"
       side="top"
@@ -354,6 +375,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           ),
           onSelect: () => navigate("/profile"),
         },
+        ...(canUseViewAs
+          ? ([
+              { type: "separator" as const },
+              {
+                label: (
+                  <>
+                    <Eye className="mr-2 h-4 w-4" />
+                    {viewAs ? "Змінити перегляд" : "Дивитись як…"}
+                  </>
+                ),
+                onSelect: () => setViewAsOpen(true),
+              },
+            ])
+          : []),
         { type: "separator" },
         {
           label: (
@@ -367,5 +402,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
         },
       ]}
     />
+    <ViewAsDialog open={viewAsOpen} onOpenChange={setViewAsOpen} />
+    </>
   );
 }
