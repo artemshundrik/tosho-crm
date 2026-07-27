@@ -4255,6 +4255,19 @@ export default function DesignTaskPage() {
       } else {
         toast.success(`Додано файлів: ${uploaded.length}`);
       }
+      // Правило команди: таймер ведеться на кожній задачі. Нагадуємо саме тут —
+      // у момент здачі результату видно, що по задачі не набігло ні секунди, і
+      // ця робота випаде з середнього часу та зі структури часу.
+      if (designTimerBreakdown && !designTimerBreakdown.hasActive) {
+        const trackedSeconds =
+          designTimerBreakdown.generalSeconds +
+          Object.values(designTimerBreakdown.byChangeRequestSeconds).reduce((sum, value) => sum + value, 0);
+        if (trackedSeconds === 0) {
+          toast.warning("Таймер по цій задачі не вівся — вона не потрапить у статистику часу", {
+            description: "Роботи рахуються, а час — ні. Далі вмикайте таймер на початку роботи.",
+          });
+        }
+      }
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося завантажити файли");
       toast.error(message);
@@ -4623,6 +4636,35 @@ export default function DesignTaskPage() {
         delete next[key];
         return next;
       });
+      // Видалення ЛОГУЄМО. Без цієї події неможливо відрізнити «залив помилково
+      // і прибрав за хвилину» від «здав, показав клієнту й прибрав через місяць»
+      // — а саме від цієї різниці залежить, чи має робота рахуватись у виробітку.
+      try {
+        await logDesignTaskActivity({
+          teamId: effectiveTeamId as string,
+          designTaskId: task?.id as string,
+          quoteId: task?.quoteId ?? null,
+          userId,
+          actorName: actorLabel,
+          action: "design_output_delete",
+          title: `Видалено з «Результату»: ${target.file_name}`,
+          metadata: {
+            source: "design_output_delete",
+            output_kind: target.output_kind ?? null,
+            deleted_files: [
+              {
+                id: target.id,
+                file_name: target.file_name,
+                storage_bucket: target.storage_bucket ?? null,
+                storage_path: target.storage_path ?? null,
+              },
+            ],
+          },
+        });
+      } catch (logError) {
+        // Лог — не привід валити саме видалення: файла вже немає.
+        console.warn("Failed to log design output delete", logError);
+      }
       toast.success("Файл видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити файл"));

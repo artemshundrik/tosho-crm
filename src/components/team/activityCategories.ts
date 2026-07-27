@@ -66,6 +66,7 @@ const ACTION_LABELS: Record<string, string> = {
   design_task_duplicated: "Дублювання задачі",
   design_task_timer: "Таймер",
   design_output_upload: "Завантаження макета",
+  design_output_delete: "Видалення з «Результату»",
   design_output_selection: "Вибір макета",
   design_task: "Дизайн-задача",
   comment: "Коментар",
