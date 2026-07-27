@@ -135,12 +135,15 @@ function pickBooleanFlags(value: unknown): Record<string, boolean> {
   return result;
 }
 
-const resolveAppUrl = () => process.env.APP_URL || process.env.URL || process.env.SITE_URL || undefined;
+// Домен беремо так само, як решта функцій (_notificationDelivery, daily-digest,
+// telegram-webhook, *Assistant): PUBLIC_APP_URL із запасним tosho.pro. Раніше
+// тут був власний ланцюжок APP_URL || URL || SITE_URL, і на рантаймі Netlify
+// підставляв URL = tosho-crm.netlify.app. Посилання вели на інший origin, а
+// сесія живе під конкретним доменом — людина заходила за посиланням і на
+// робочому tosho.pro все одно виглядала незалогіненою.
+const resolveAppUrl = () => process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
-const buildInviteRedirect = (token: string) => {
-  const appUrl = resolveAppUrl();
-  return appUrl ? `${appUrl}/invite?token=${token}` : undefined;
-};
+const buildInviteRedirect = (token: string) => `${resolveAppUrl()}/invite?token=${token}`;
 
 type ActionLinkResult =
   | { ok: true; actionLink: string }
@@ -179,13 +182,6 @@ async function issueActionLink(params: {
   }
 
   const redirectTo = buildInviteRedirect(inviteToken);
-  if (!redirectTo) {
-    return {
-      ok: false,
-      status: 500,
-      error: "APP_URL не налаштовано — посиланню нема куди вести після входу.",
-    };
-  }
 
   const { data: stateData, error: stateError } = await adminClient
     .schema("tosho")
