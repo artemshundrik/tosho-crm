@@ -1371,15 +1371,17 @@ export function TeamMembersPage() {
 
       if (canManage) {
         try {
-          const currentDirectoryRow = directoryRows.find((row) => row.userId === editProfileMember.user_id);
           await upsertWorkspaceMemberProfile({
             workspaceId,
             userId: editProfileMember.user_id,
             firstName,
             lastName,
             fullName,
-            avatarUrl: currentDirectoryRow?.avatarPath ?? currentDirectoryRow?.avatarUrl ?? null,
-            avatarPath: currentDirectoryRow?.avatarPath ?? null,
+            // Аватарку СВІДОМО не передаємо: ця картка її не редагує, а раніше
+            // пересилала назад значення з кешу директорії. Якщо людина завантажила
+            // аватарку після того, як сторінка прочитала директорію, збереження
+            // ролей затирало її на null — саме так зникла аватарка 27.07.2026.
+            // Поля, яких немає в payload, upsert не чіпає.
             birthDate,
             phone,
             availabilityStatus,
@@ -1710,15 +1712,14 @@ export function TeamMembersPage() {
       const availabilityEndDate =
         status === "available" ? "" : (options?.availabilityEndDate ?? currentMeta.availabilityEndDate ?? "");
       try {
-        const currentDirectoryRow = directoryRows.find((row) => row.userId === member.user_id);
         await upsertWorkspaceMemberProfile({
           workspaceId,
           userId: member.user_id,
           firstName: currentMeta.firstName,
           lastName: currentMeta.lastName,
           fullName: currentMeta.fullName,
-          avatarUrl: currentDirectoryRow?.avatarPath ?? currentDirectoryRow?.avatarUrl ?? null,
-          avatarPath: currentDirectoryRow?.avatarPath ?? null,
+          // Аватарку не передаємо — див. коментар у збереженні картки профілю:
+          // пересилання значення з кешу затирало щойно завантажену аватарку.
           birthDate: currentMeta.birthDate,
           phone: currentMeta.phone,
           availabilityStatus: status,
