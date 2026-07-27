@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
-import { loadPayrollEntries, periodKey, type PayrollEntry } from "@/lib/payroll";
+import { loadEffectiveBaseRates, loadPayrollEntries, periodKey, type PayrollEntry } from "@/lib/payroll";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   listWorkspaceMembersForDisplay,
@@ -268,14 +268,21 @@ export function usePayrollPeriodData(
   workspaceId: string | null,
   period: string
 ) {
-  return useQuery<{ entries: Map<string, PayrollEntry>; meta: Map<string, FinancePayoutMeta> }>({
+  return useQuery<{
+    entries: Map<string, PayrollEntry>;
+    meta: Map<string, FinancePayoutMeta>;
+    rates: Map<string, number>;
+  }>({
     queryKey: financeKeys.payrollPeriod(teamId ?? "", workspaceId, period),
     queryFn: async () => {
-      const [entries, meta] = await Promise.all([
+      // Ставки з картки співробітника їдуть тим самим запитом: редактор
+      // підставляє їх у порожню «Ставку», тож без них гідратація неповна.
+      const [entries, meta, rates] = await Promise.all([
         loadPayrollEntries(workspaceId as string, period),
         listPayoutMeta(teamId as string, period),
+        loadEffectiveBaseRates(workspaceId as string, period),
       ]);
-      return { entries, meta };
+      return { entries, meta, rates };
     },
     enabled: !!teamId && !!workspaceId,
     ...FINANCE_SHARED_OPTIONS,

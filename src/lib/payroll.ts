@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { pickRateForMonth } from "@/lib/designerPayrollMath";
 
 // Payroll sheet (зарплатна відомість) data access.
 // One entry = one employee's pay for one month: ставка + премія − утримання.
@@ -10,6 +11,9 @@ export type PayrollEntry = {
   baseAmount: number;
   bonusAmount: number;
   deductionAmount: number;
+  /** Уже виданий аванс. Довідковий факт — у totalAmount НЕ входить (рішення власника). */
+  advanceAmount: number;
+  advanceDate: string | null; // YYYY-MM-DD
   totalAmount: number;
   note: string | null;
 };
@@ -18,6 +22,8 @@ export type PayrollValues = {
   baseAmount: number;
   bonusAmount: number;
   deductionAmount: number;
+  advanceAmount: number;
+  advanceDate: string | null;
   note: string | null;
 };
 
@@ -27,6 +33,8 @@ type PayrollRow = {
   base_amount: number | string | null;
   bonus_amount: number | string | null;
   deduction_amount: number | string | null;
+  advance_amount: number | string | null;
+  advance_date: string | null;
   total_amount: number | string | null;
   note: string | null;
 };
@@ -99,7 +107,7 @@ export async function loadPayrollEntries(
     .schema("tosho")
     .from("payroll_entries")
     .select(
-      "user_id, period, base_amount, bonus_amount, deduction_amount, total_amount, note"
+      "user_id, period, base_amount, bonus_amount, deduction_amount, advance_amount, advance_date, total_amount, note"
     )
     .eq("workspace_id", workspaceId)
     .eq("period", period);
@@ -114,11 +122,55 @@ export async function loadPayrollEntries(
       baseAmount: toNumber(row.base_amount),
       bonusAmount: toNumber(row.bonus_amount),
       deductionAmount: toNumber(row.deduction_amount),
+      advanceAmount: toNumber(row.advance_amount),
+      advanceDate: row.advance_date,
       totalAmount: toNumber(row.total_amount),
       note: row.note,
     });
   }
   return map;
+}
+
+/**
+ * Чинна на цей місяць базова ставка кожного, з картки співробітника
+ * (вкладка «Оплата» → «Базова ставка, ₴/міс», tosho.employee_pay_rates).
+ *
+ * Ставки датовані: чинна на місяць — найпізніша з тих, що набрали чинності не
+ * пізніше 1 числа цього місяця. Нуль не повертаємо: у відомості порожня ставка
+ * і ставка «0» виглядають однаково, тож підставляти нуль немає сенсу.
+ */
+export async function loadEffectiveBaseRates(
+  workspaceId: string,
+  period: string
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    // employee_pay_rates немає в згенерованих типах — той самий каст, що і в
+    // картці співробітника (MemberPaySection).
+    .from("employee_pay_rates" as never)
+    .select("user_id, base_month_rate, effective_from")
+    .eq("workspace_id", workspaceId);
+
+  if (error) throw error;
+
+  const byUser = new Map<string, Array<{ effectiveFrom: string; baseMonthRate: number }>>();
+  for (const row of (data ?? []) as unknown as Array<{
+    user_id: string;
+    base_month_rate: number | string | null;
+    effective_from: string;
+  }>) {
+    const list = byUser.get(row.user_id) ?? [];
+    list.push({ effectiveFrom: row.effective_from, baseMonthRate: toNumber(row.base_month_rate) });
+    byUser.set(row.user_id, list);
+  }
+
+  const monthKey = period.slice(0, 7); // YYYY-MM-01 → YYYY-MM
+  const rates = new Map<string, number>();
+  for (const [uid, list] of byUser) {
+    const picked = pickRateForMonth(list, monthKey);
+    if (picked && picked.baseMonthRate > 0) rates.set(uid, picked.baseMonthRate);
+  }
+  return rates;
 }
 
 /** Upsert one employee's pay for one month. total_amount is generated in the DB. */
@@ -141,6 +193,9 @@ export async function upsertPayrollEntry(params: {
         base_amount: values.baseAmount,
         bonus_amount: values.bonusAmount,
         deduction_amount: values.deductionAmount,
+        advance_amount: values.advanceAmount,
+        // Дата без суми заборонена перевіркою в БД — тримаємо це й тут.
+        advance_date: values.advanceAmount > 0 ? values.advanceDate : null,
         note: values.note,
         updated_by: updatedBy,
         updated_at: new Date().toISOString(),

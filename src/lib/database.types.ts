@@ -2336,6 +2336,8 @@ export type Database = {
       }
       payroll_entries: {
         Row: {
+          advance_amount: number
+          advance_date: string | null
           base_amount: number
           bonus_amount: number
           created_at: string
@@ -2349,6 +2351,8 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          advance_amount?: number
+          advance_date?: string | null
           base_amount?: number
           bonus_amount?: number
           created_at?: string
@@ -2362,6 +2366,8 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          advance_amount?: number
+          advance_date?: string | null
           base_amount?: number
           bonus_amount?: number
           created_at?: string

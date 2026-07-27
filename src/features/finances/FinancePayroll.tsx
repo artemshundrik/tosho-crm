@@ -65,7 +65,9 @@ type Person = {
   departed: boolean;
 };
 
-type Draft = { base: string; bonus: string; deduction: string };
+type Draft = { base: string; bonus: string; deduction: string; advance: string; advanceDate: string };
+
+const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", advance: "", advanceDate: "" };
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -141,7 +143,19 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         base: amountToInput(entry.baseAmount),
         bonus: amountToInput(entry.bonusAmount),
         deduction: amountToInput(entry.deductionAmount),
+        advance: amountToInput(entry.advanceAmount),
+        advanceDate: entry.advanceDate ?? "",
       };
+    });
+    // Ставка з картки співробітника підставляється ЛИШЕ у порожню клітинку.
+    // «Заповнено» = у відомості вже стоїть ненульова ставка: саме її не можна
+    // перетирати. Нуль порожній і візуально (amountToInput(0) === ""), і по суті
+    // — рядок місяця часто вже існує з нулями, і вимога «рядка нема» не
+    // спрацювала б узагалі.
+    data.rates.forEach((rate, uid) => {
+      const existing = nextDrafts[uid];
+      if (existing?.base) return;
+      nextDrafts[uid] = { ...(existing ?? EMPTY_DRAFT), base: amountToInput(rate) };
     });
     setDrafts(nextDrafts);
   }, [periodQuery.data, periodQuery.dataUpdatedAt, periodDataKey]);
@@ -174,8 +188,50 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     return [...real, ...manual];
   }, [members, entries]);
 
-  const draftFor = (uid: string): Draft =>
-    drafts[uid] ?? { base: "", bonus: "", deduction: "" };
+  const draftFor = (uid: string): Draft => drafts[uid] ?? EMPTY_DRAFT;
+
+  // Підставлену ставку одразу закріплюємо в базі. Інакше у відомості видно одні
+  // числа, а збережено інші: людину можна позначити виплаченою (це пише в іншу
+  // таблицю), і ставка так і лишилась би нулем, а підсумок минулого місяця
+  // рахується вже зі збереженого.
+  const prefillSavedRef = React.useRef("");
+  React.useEffect(() => {
+    const data = periodQuery.data;
+    if (!data || !workspaceId || people.length === 0) return;
+    if (prefillSavedRef.current === periodDataKey) return;
+    prefillSavedRef.current = periodDataKey;
+
+    const pending = people.filter((p) => {
+      if (!data.rates.has(p.userId)) return false;
+      const stored = data.entries.get(p.userId);
+      return !stored || stored.baseAmount <= 0;
+    });
+    if (pending.length === 0) return;
+
+    void Promise.all(
+      pending.map((p) => {
+        // Рядок місяця може вже існувати з бонусом чи нотаткою — переписуємо в
+        // ньому РІВНО ставку, решту лишаємо як є.
+        const stored = data.entries.get(p.userId);
+        return upsertPayrollEntry({
+          workspaceId,
+          userId: p.userId,
+          period,
+          updatedBy: userId,
+          values: {
+            baseAmount: data.rates.get(p.userId) as number,
+            bonusAmount: stored?.bonusAmount ?? 0,
+            deductionAmount: stored?.deductionAmount ?? 0,
+            advanceAmount: stored?.advanceAmount ?? 0,
+            advanceDate: stored?.advanceDate ?? null,
+            note: stored?.note ?? null,
+          },
+        });
+      })
+    ).catch((error) =>
+      toast.error("Не вдалося підставити ставки", { description: getErrorMessage(error, "") })
+    );
+  }, [periodQuery.data, periodDataKey, people, workspaceId, period, userId]);
 
   const totalFor = (uid: string): number => {
     const d = draftFor(uid);
@@ -185,6 +241,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const totals = React.useMemo(() => {
     let base = 0;
     let bonus = 0;
+    let advance = 0;
     let total = 0;
     let paid = 0;
     for (const person of people) {
@@ -194,10 +251,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       const t = b + bo - parsePayrollAmount(d.deduction);
       base += b;
       bonus += bo;
+      advance += parsePayrollAmount(d.advance);
       total += t;
       if (meta.get(person.userId)?.status === "paid") paid += t;
     }
-    return { base, bonus, total, paid };
+    return { base, bonus, advance, total, paid };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [people, drafts, entries, meta]);
 
@@ -218,6 +276,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           baseAmount: parsePayrollAmount(d.base),
           bonusAmount: parsePayrollAmount(d.bonus),
           deductionAmount: parsePayrollAmount(d.deduction),
+          advanceAmount: parsePayrollAmount(d.advance),
+          advanceDate: d.advanceDate || null,
           note: entry?.note ?? null,
         },
       }).catch((error) => toast.error("Не збереглося", { description: getErrorMessage(error, "") }));
@@ -233,6 +293,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     const baseAmount = parsePayrollAmount(d.base);
     const bonusAmount = parsePayrollAmount(d.bonus);
     const deductionAmount = parsePayrollAmount(d.deduction);
+    const advanceAmount = parsePayrollAmount(d.advance);
+    const advanceDate = d.advanceDate || null;
     // Optimistic — keep the shared payroll_entries snapshot in sync so the cell
     // reflects the saved note immediately.
     setEntries((prev) => {
@@ -243,6 +305,9 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         baseAmount,
         bonusAmount,
         deductionAmount,
+        advanceAmount,
+        advanceDate,
+        // Аванс у підсумок не входить — він лише фіксує вже видані гроші.
         totalAmount: baseAmount + bonusAmount - deductionAmount,
         note: nextNote,
       });
@@ -254,7 +319,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         userId: uid,
         period,
         updatedBy: userId,
-        values: { baseAmount, bonusAmount, deductionAmount, note: nextNote },
+        values: { baseAmount, bonusAmount, deductionAmount, advanceAmount, advanceDate, note: nextNote },
       });
     } catch (error) {
       toast.error("Не вдалося зберегти нотатку", { description: getErrorMessage(error, "") });
@@ -339,6 +404,12 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
             <span>
               Бонуси: <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.bonus)}</span>
             </span>
+            {totals.advance > 0 ? (
+              <span>
+                З них аванс:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.advance)}</span>
+              </span>
+            ) : null}
           </>
         }
       />
@@ -354,13 +425,14 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           <Table size="sm" className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[24%]">Співробітник</TableHead>
-                <TableHead className="w-[12%] text-right">Ставка</TableHead>
-                <TableHead className="w-[12%] text-right">Бонус</TableHead>
-                <TableHead className="w-[14%] text-right">Офіційна ЗП</TableHead>
-                <TableHead className="w-[14%] text-right">До виплати</TableHead>
-                <TableHead className="w-[13%]">Нотатка</TableHead>
-                <TableHead className="w-[11%] text-center">Статус</TableHead>
+                <TableHead className="w-[21%]">Співробітник</TableHead>
+                <TableHead className="w-[11%] text-right">Ставка</TableHead>
+                <TableHead className="w-[10%] text-right">Бонус</TableHead>
+                <TableHead className="w-[12%] text-right">Офіційна ЗП</TableHead>
+                <TableHead className="w-[15%] text-right">Аванс</TableHead>
+                <TableHead className="w-[12%] text-right">До виплати</TableHead>
+                <TableHead className="w-[10%]">Нотатка</TableHead>
+                <TableHead className="w-[9%] text-center">Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -423,6 +495,26 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         placeholder="0"
                         className="h-8 w-full text-right"
                       />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        value={d.advance}
+                        onChange={(e) => queueSaveAmount(person.userId, { advance: e.target.value })}
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="h-8 w-full text-right"
+                      />
+                      {/* Дата з'являється лише коли аванс справді ввели: порожнє
+                          поле дати без суми БД усе одно не прийме. */}
+                      {parsePayrollAmount(d.advance) > 0 ? (
+                        <Input
+                          type="date"
+                          value={d.advanceDate}
+                          onChange={(e) => queueSaveAmount(person.userId, { advanceDate: e.target.value })}
+                          className="mt-1 h-7 w-full text-2xs"
+                          title="Дата видачі авансу"
+                        />
+                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
                       {formatUAH(totalFor(person.userId))}

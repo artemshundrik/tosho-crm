@@ -220,7 +220,14 @@ export function resolveTerms(rate: DesignerPayRate, defaults: DesignerPayDefault
 }
 
 /** Чинна на місяць ставка = найпізніша з effective_from <= 1 число місяця. */
-export function pickRateForMonth(rates: DesignerPayRate[], monthKey: string): DesignerPayRate | null {
+// Узагальнена по типу навмисно: те саме правило потрібне зарплатній відомості
+// («Виплати команді» підставляє чинну базову ставку), а їй вистачає пари
+// {effectiveFrom, baseMonthRate}. Дублювати правило вибору ставки в двох місцях
+// не можна — розійдуться.
+export function pickRateForMonth<T extends { effectiveFrom: string }>(
+  rates: T[],
+  monthKey: string
+): T | null {
   const firstDay = `${monthKey}-01`;
   const applicable = rates
     .filter((rate) => rate.effectiveFrom <= firstDay)
