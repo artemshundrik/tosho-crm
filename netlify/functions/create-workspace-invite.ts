@@ -980,9 +980,12 @@ export const handler = async (event: HttpEvent) => {
     reusedExistingInvite = true;
   }
 
-  // Один інвайт — один канал доставки. Обидва спираються на один і той самий
-  // одноразовий токен у auth.users, тож кожна нова видача гасить попередню:
-  // мовчки робити і лист, і посилання не можна — вижило б лише останнє.
+  // Канал доставки обираємо явно. Лист і посилання лежать у РІЗНИХ слотах
+  // auth.one_time_tokens (confirmation_token проти recovery_token), тож
+  // спокійно співіснують. А от повторна видача того самого способу перезаписує
+  // свій слот — індекс one_time_tokens_user_id_token_type_key унікальний по
+  // (user_id, token_type) — і гасить попереднє. Посилання для входу ділить слот
+  // із «Забув пароль», тож вони гасять одне одного.
   if (payload.delivery === "link") {
     const linkResult = await issueActionLink({
       adminClient,
