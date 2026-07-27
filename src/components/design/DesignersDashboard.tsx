@@ -17,6 +17,7 @@ import {
   Star,
   Target,
   Timer,
+  TimerOff,
   TrendingDown,
   TrendingUp,
   Users,
@@ -504,6 +505,8 @@ export function DesignersDashboard({
   const [tableMode, setTableMode] = useState<"month" | "trend" | "files">("month");
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
+  /** Фільтр списку робіт за наявністю таймера. */
+  const [worksFilter, setWorksFilter] = useState<"all" | "timed" | "untimed">("all");
   /** Що міряє картка типів: середній час чи кількість зроблених робіт. */
   const [typesMetric, setTypesMetric] = useState<"time" | "count">("time");
   /** userId → monthKey → норма. Порожня, якщо глядач не має доступу до ставок. */
@@ -813,6 +816,10 @@ export function DesignersDashboard({
     };
     return {
       people: plans.length,
+      // Скільки людей у скоупі взагалі: якщо комусь не призначено ставку, його
+      // роботи в чисельнику є, а норми в знаменнику немає — і команда показала
+      // б фальшиве «понад норму». Тому різницю треба назвати вголос.
+      totalPeople: ids.length,
       normDays: sum((plan) => plan.normDays),
       visualNorm: sum((plan) => plan.visualNorm),
       layoutNorm: sum((plan) => plan.layoutNorm),
@@ -936,7 +943,24 @@ export function DesignersDashboard({
   const worksList: DesignerWorkGroup[] = scopedDesigner
     ? analytics.works.get(`${scopedDesigner.id}:${mi}`) ?? []
     : [];
-  const worksVisible = worksExpanded ? worksList : worksList.slice(0, WORKS_PREVIEW);
+  /**
+   * Робота без таймера — не помилка й не «нічого не робив»: файли залиті, а
+   * час не міряли. Але саме ці задачі випадають із «⌀ часу» й «структури
+   * часу», тому їх треба бачити явно, а не здогадуватись про різницю.
+   */
+  const scopeWorkGroups = scopedDesigner
+    ? worksList
+    : visibleDesigners.flatMap((designer) => analytics.works.get(`${designer.id}:${mi}`) ?? []);
+  const untimedInScope = scopeWorkGroups.filter((group) => group.taskTrackedSeconds === 0).length;
+  const worksTimed = worksList.filter((group) => group.taskTrackedSeconds > 0).length;
+  const worksUntimed = worksList.length - worksTimed;
+  const worksFiltered =
+    worksFilter === "timed"
+      ? worksList.filter((group) => group.taskTrackedSeconds > 0)
+      : worksFilter === "untimed"
+        ? worksList.filter((group) => group.taskTrackedSeconds === 0)
+        : worksList;
+  const worksVisible = worksExpanded ? worksFiltered : worksFiltered.slice(0, WORKS_PREVIEW);
 
   // Баланс — парність зі старою вкладкою: навантаження команди бачать усі ролі.
   const balanceSorted = [...analytics.balance].sort((a, b) => a.workload.score - b.workload.score);
@@ -1094,6 +1118,15 @@ export function DesignersDashboard({
                   ? `немає активності таймера за ${monthShort(months[mi].value)}`
                   : `середні рахуємо по ${timerTaskCount} ${timerTaskCount === 1 ? "задачі" : "задачах"} із таймером`}
               </span>
+              {untimedInScope > 0 ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    <TimerOff className="h-3 w-3" />
+                    {untimedInScope} робіт без таймера
+                  </span>
+                </>
+              ) : null}
             </>
           ) : (
             <>
@@ -1102,6 +1135,15 @@ export function DesignersDashboard({
               <span>{visibleDesigners.length} дизайнерів</span>
               <span aria-hidden="true">·</span>
               <span>{timerTaskCount} задач у таймері за {monthShort(months[mi].value)}</span>
+              {untimedInScope > 0 ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    <TimerOff className="h-3 w-3" />
+                    {untimedInScope} робіт без таймера
+                  </span>
+                </>
+              ) : null}
             </>
           )}
         </div>
@@ -1229,6 +1271,9 @@ export function DesignersDashboard({
                       Норма — за {currentNorm.normDays}{" "}
                       {currentNorm.people > 1 ? `нормо-днів на ${currentNorm.people} людей` : "нормо-днів"} (відпустки й
                       лікарняні норму зменшують).
+                      {currentNorm.people < currentNorm.totalPeople
+                        ? ` Ставку призначено ${currentNorm.people} з ${currentNorm.totalPeople} — роботи решти в цифрах є, норми немає.`
+                        : ""}
                     </span>
                   ) : null}
                 </>
@@ -2315,8 +2360,45 @@ export function DesignersDashboard({
             </h3>
             <span className="text-2xs tabular-nums text-muted-foreground">
               {worksList.length} задач · {worksList.reduce((sum, group) => sum + group.files.length, 0)} файлів
+              {worksUntimed > 0 ? ` · ${worksUntimed} без таймера` : ""}
             </span>
           </div>
+          {/* Фільтр з'являється лише коли є що фільтрувати: якщо таймер вівся
+              скрізь, три кнопки просто шумлять. */}
+          {worksUntimed > 0 && worksTimed > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  { key: "all" as const, label: "Усі", count: worksList.length },
+                  { key: "timed" as const, label: "З таймером", count: worksTimed },
+                  { key: "untimed" as const, label: "Без таймера", count: worksUntimed },
+                ]
+              ).map((option) => {
+                const active = worksFilter === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setWorksFilter(option.key);
+                      setWorksExpanded(false);
+                    }}
+                    className={cn(
+                      "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors",
+                      active
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {option.key === "untimed" ? <TimerOff className="h-3 w-3" /> : null}
+                    {option.label}
+                    <span className="tabular-nums opacity-70">{option.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {worksList.length === 0 ? (
             <div className="mt-3 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
               За цей місяць немає завантажених файлів.
@@ -2360,7 +2442,18 @@ export function DesignersDashboard({
                             <Timer className="h-3 w-3" />
                             {formatHumanSeconds(group.taskTrackedSeconds)}
                           </span>
-                        ) : null}
+                        ) : (
+                          /* Не жовтим: таймер не вівся — це прогалина в обліку,
+                             а не аварія. Але позначка мусить бути, інакше така
+                             картка виглядає як задача без роботи. */
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/70 bg-background/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+                            title="Таймер не вівся — ця задача не входить у середній час і структуру часу"
+                          >
+                            <TimerOff className="h-3 w-3" />
+                            без таймера
+                          </span>
+                        )}
                         {group.revisions > 0 ? (
                           <span className="inline-flex items-center gap-1 rounded-full border border-neutral-soft-border bg-neutral-soft px-2 py-0.5 text-3xs font-medium tabular-nums text-neutral-foreground">
                             <RotateCcw className="h-3 w-3" />
@@ -2405,7 +2498,7 @@ export function DesignersDashboard({
                   );
                 })}
               </div>
-              {worksList.length > WORKS_PREVIEW ? (
+              {worksFiltered.length > WORKS_PREVIEW ? (
                 <div className="mt-3 flex justify-center">
                   <Button variant="outline" size="sm" onClick={() => setWorksExpanded((value) => !value)}>
                     {worksExpanded ? (
@@ -2416,7 +2509,7 @@ export function DesignersDashboard({
                     ) : (
                       <>
                         <ChevronsDown className="h-3.5 w-3.5" />
-                        Показати всі {worksList.length} задач
+                        Показати всі {worksFiltered.length} задач
                       </>
                     )}
                   </Button>
