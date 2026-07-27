@@ -38,6 +38,14 @@ function formatYears(value: number) {
   return `${value} ${pluralize(value, "рік", "роки", "років")}`;
 }
 
+/**
+ * Родовий відмінок для конструкції «До …»: до 1 року, до 2 років, до 5 років.
+ * Називний тут не годиться — виходило «До 1 рік».
+ */
+function formatYearsGenitive(value: number) {
+  return `${value} ${value % 10 === 1 && value % 100 !== 11 ? "року" : "років"}`;
+}
+
 function formatDays(value: number) {
   return `${value} ${pluralize(value, "день", "дні", "днів")}`;
 }
@@ -174,7 +182,15 @@ export function getWorkAnniversaryInsight(
     anniversary.setFullYear(start.getFullYear() + nextYears);
   }
 
-  if (nextYears <= 0) nextYears = 1;
+  // nextYears === 0 означає, що «річниця», яку ми порахували, — це сам день
+  // виходу на роботу. Річницею він не є: перша буде рівно через рік. Раніше тут
+  // просто підмінявся лічильник (`nextYears = 1`), а дата лишалась днем старту —
+  // і людина, яка вийшла сьогодні, отримувала в картці «Сьогодні 1 рік».
+  if (nextYears <= 0) {
+    nextYears = 1;
+    anniversary = new Date(start);
+    anniversary.setFullYear(start.getFullYear() + 1);
+  }
   const daysUntil = diffDays(today, anniversary);
   const dateLabel = anniversary.toLocaleDateString("uk-UA", {
     day: "2-digit",
@@ -196,7 +212,7 @@ export function getWorkAnniversaryInsight(
     dateLabel,
     daysUntil,
     years: nextYears,
-    label: `До ${formatYears(nextYears)}`,
+    label: `До ${formatYearsGenitive(nextYears)}`,
     caption: `Через ${formatDays(daysUntil)} • ${dateLabel}`,
   };
 }
