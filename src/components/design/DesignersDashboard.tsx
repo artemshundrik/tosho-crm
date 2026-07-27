@@ -840,6 +840,9 @@ export function DesignersDashboard({
     };
     return {
       people: plans.length,
+      normDaysTotal: sum((plan) => plan.normDaysTotal),
+      visualNormFull: sum((plan) => plan.visualNormFull),
+      layoutNormFull: sum((plan) => plan.layoutNormFull),
       // Скільки людей у скоупі взагалі: якщо комусь не призначено ставку, його
       // роботи в чисельнику є, а норми в знаменнику немає — і команда показала
       // б фальшиве «понад норму». Тому різницю треба назвати вголос.
@@ -863,6 +866,7 @@ export function DesignersDashboard({
           label: "Візуали",
           done: currentAgg?.worksByKind.visualization ?? 0,
           norm: currentNorm.visualNorm,
+          normFull: currentNorm.visualNormFull,
           perDay: currentNorm.visualNormPerDay,
           rate: currentNorm.visualOverRate,
           // Тінь попереднього місяця — «сам проти себе», як у режимі часу.
@@ -874,6 +878,7 @@ export function DesignersDashboard({
           label: "Макети",
           done: currentAgg?.worksByKind.layout ?? 0,
           norm: currentNorm.layoutNorm,
+          normFull: currentNorm.layoutNormFull,
           perDay: currentNorm.layoutNormPerDay,
           rate: currentNorm.layoutOverRate,
           prevDone: previousAgg?.worksByKind.layout ?? 0,
@@ -1524,6 +1529,14 @@ export function DesignersDashboard({
                   const doneLeft = Math.min(100, (Math.min(row.done, row.norm) / scale) * 100);
                   const prevWidth = row.prevDone === 0 ? 0 : Math.max(2, (row.prevDone / scale) * 100);
                   const pace = currentNorm && currentNorm.normDays > 0 ? row.done / currentNorm.normDays : null;
+                  /**
+                   * Прогноз — лише для поточного місяця: у закритому місяці
+                   * екстраполювати нема чого, там уже підсумок. Темп беремо за
+                   * нормо-днями, що минули, тож відпустка його не занижує.
+                   */
+                  const forecastWorks =
+                    isCurrentMonth && pace != null && currentNorm ? Math.round(pace * currentNorm.normDaysTotal) : null;
+                  const forecastOver = forecastWorks == null ? 0 : Math.max(0, forecastWorks - row.normFull);
                   const normTip = (): TipModel => {
                     const rows: TipRow[] = [
                       {
@@ -1555,6 +1568,16 @@ export function DesignersDashboard({
                           }
                         : { label: "До норми", value: `ще ${row.norm - row.done}`, muted: true }
                     );
+                    if (forecastWorks != null) {
+                      rows.push({
+                        label: "Прогноз на місяць",
+                        value:
+                          forecastOver > 0
+                            ? `≈ ${forecastWorks} з ${row.normFull} · +${forecastOver} понад`
+                            : `≈ ${forecastWorks} з ${row.normFull}`,
+                        muted: forecastOver === 0,
+                      });
+                    }
                     if (prevIdx != null) {
                       rows.push({
                         label: monthShort(months[prevIdx].value),
@@ -1613,19 +1636,36 @@ export function DesignersDashboard({
                           aria-hidden="true"
                         />
                       </div>
-                      <div className="flex items-center gap-2 sm:justify-end">
-                        <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
-                          {row.done} <span className="font-normal text-muted-foreground">з {row.norm}</span>
-                        </span>
-                        {over > 0 ? (
-                          <span className={cn(CHIP_BASE, DELTA_CLASS.good)}>
-                            <TrendingUp className="h-3 w-3" />
-                            +{over}
-                            {row.rate != null ? ` · ${Math.round(over * row.rate).toLocaleString("uk-UA")} ₴` : ""}
+                      <div className="flex flex-col gap-1 sm:items-end">
+                        <div className="flex items-center gap-2">
+                          <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                            {row.done} <span className="font-normal text-muted-foreground">з {row.norm}</span>
                           </span>
-                        ) : (
-                          <span className={cn(CHIP_BASE, DELTA_CLASS.flat)}>ще {row.norm - row.done}</span>
-                        )}
+                          {over > 0 ? (
+                            <span className={cn(CHIP_BASE, DELTA_CLASS.good)}>
+                              <TrendingUp className="h-3 w-3" />
+                              +{over}
+                              {row.rate != null ? ` · ${Math.round(over * row.rate).toLocaleString("uk-UA")} ₴` : ""}
+                            </span>
+                          ) : (
+                            <span className={cn(CHIP_BASE, DELTA_CLASS.flat)}>ще {row.norm - row.done}</span>
+                          )}
+                        </div>
+                        {/* Прогноз до кінця місяця: у закритому місяці його немає,
+                            бо там уже підсумок, а не темп. */}
+                        {forecastWorks != null ? (
+                          <span
+                            className={cn(
+                              "whitespace-nowrap text-3xs tabular-nums",
+                              forecastOver > 0 ? "font-semibold text-success-foreground" : "text-muted-foreground"
+                            )}
+                          >
+                            за темпом ≈ {forecastWorks} з {row.normFull}
+                            {forecastOver > 0
+                              ? ` · +${forecastOver}${row.rate != null ? ` = ${Math.round(forecastOver * row.rate).toLocaleString("uk-UA")} ₴` : ""}`
+                              : ""}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   );

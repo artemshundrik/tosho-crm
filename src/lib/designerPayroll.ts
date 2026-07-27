@@ -345,9 +345,15 @@ export async function loadCreativePays(params: {
  * не має права, мапа просто порожня, і дашборд малює лічильники без норм.
  */
 export type MonthNormPlan = {
+  /** Нормо-дні, що вже минули — за ними рахується норма «на сьогодні». */
   normDays: number;
+  /** Нормо-дні всього місяця — потрібні для прогнозу до кінця місяця. */
+  normDaysTotal: number;
   visualNorm: number;
   layoutNorm: number;
+  /** Норма на повний місяць (perDay × normDaysTotal). */
+  visualNormFull: number;
+  layoutNormFull: number;
   visualNormPerDay: number;
   layoutNormPerDay: number;
   visualOverRate: number;
@@ -414,7 +420,7 @@ export async function loadNormPlans(params: {
       const rate = pickRateForMonth(userRates, monthKey);
       if (!rate) return;
       const terms = resolveTerms(rate, defaults);
-      const { passed } = countWorkdays({
+      const { passed, total } = countWorkdays({
         monthKey,
         asOf: params.asOf,
         exceptions,
@@ -422,8 +428,11 @@ export async function loadNormPlans(params: {
       });
       byMonth.set(monthKey, {
         normDays: passed,
+        normDaysTotal: total,
         visualNorm: terms.visualNormPerDay * passed,
         layoutNorm: terms.layoutNormPerDay * passed,
+        visualNormFull: terms.visualNormPerDay * total,
+        layoutNormFull: terms.layoutNormPerDay * total,
         visualNormPerDay: terms.visualNormPerDay,
         layoutNormPerDay: terms.layoutNormPerDay,
         visualOverRate: terms.visualOverRate,
