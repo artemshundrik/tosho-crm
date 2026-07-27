@@ -6,9 +6,10 @@
 -- action link (one-time login link) for a pending invite, so onboarding
 -- no longer depends on transactional email delivery. Such a link is a
 -- bearer credential — whoever holds it lands inside that account — so the
--- backend may only ever issue one for an account that has never been
--- activated: no password set AND no sign-in on record. Such an account is
--- an empty shell whose only privilege is the pending invite itself.
+-- backend may only ever issue one for an account that cannot yet stand on
+-- its own: no password, no external identity provider. Paired with the
+-- caller-side membership check, that leaves an empty shell whose only
+-- privilege is the pending invite itself.
 --
 -- Without this gate an admin could ask for a magic link for an existing
 -- teammate's (or the owner's) email and take over their session, which is
@@ -31,11 +32,21 @@ as $$
       select jsonb_build_object(
         'userId', u.id,
         'accountExists', true,
-        -- "Activated" = the human has proven they hold this account.
-        -- Either state alone is enough to refuse issuing a login link.
+        -- "Activated" = the account is independently usable, so a login link
+        -- would hand over something its owner already relies on.
+        --
+        -- Deliberately NOT keyed on last_sign_in_at: consuming a magic link
+        -- sets it, yet leaves an account with no password and no membership —
+        -- an empty shell that still cannot log in on its own. Treating that as
+        -- activated locks the invitee out of the only path back in (observed
+        -- 2026-07-27: signed in via link, never set a password, and the gate
+        -- then refused to reissue one).
         'activated',
           (u.encrypted_password is not null and u.encrypted_password <> '')
-          or u.last_sign_in_at is not null
+          or exists (
+            select 1 from auth.identities i
+            where i.user_id = u.id and i.provider <> 'email'
+          )
       )
       from auth.users u
       where lower(u.email) = lower(_email)

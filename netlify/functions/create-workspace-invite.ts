@@ -150,22 +150,25 @@ type ActionLinkResult =
  * Видає одноразове посилання входу для запрошення.
  *
  * Таке посилання — носій доступу: хто ним перейшов, той опинився всередині
- * акаунта. Тому воно дозволене ЛИШЕ для акаунта, який ще жодного разу не
- * активували (без пароля й без жодного входу) і який ще не є учасником
+ * акаунта. Тому воно дозволене ЛИШЕ для акаунта, який ще не стоїть на власних
+ * ногах (без пароля і без зовнішнього провайдера) і не є учасником жодного
  * воркспейсу — тобто для порожньої оболонки, чиї єдині права дає саме це
- * запрошення. Для активованого акаунта правильний шлях — «Забув пароль?»:
+ * запрошення. Для самостійного акаунта правильний шлях — «Забув пароль?»:
  * лист іде у власну пошту людини, а не адміну в руки.
+ *
+ * Свідомо НЕ дивимось на last_sign_in_at: перехід за посиланням його виставляє,
+ * але акаунт без пароля й без членства лишається порожнім і сам увійти не може.
+ * Якщо вважати це «активованим», людина застрягає без жодного шляху назад.
  */
 async function issueActionLink(params: {
   adminClient: ReturnType<typeof createClient>;
   email: string;
   inviteToken: string;
-  workspaceId: string;
   /** Роль САМОГО запрошення, до якого прив'яжеться посилання, а не та, що просили в запиті. */
   inviteAccessRole: string | null;
   actorIsOwner: boolean;
 }): Promise<ActionLinkResult> {
-  const { adminClient, email, inviteToken, workspaceId, inviteAccessRole, actorIsOwner } = params;
+  const { adminClient, email, inviteToken, inviteAccessRole, actorIsOwner } = params;
 
   // Перевірка ролі живе тут, а не на місцях виклику: посилання прив'язується до
   // конкретного запрошення, і саме його роль отримає той, хто ним скористається.
@@ -208,12 +211,15 @@ async function issueActionLink(params: {
   }
 
   if (state.userId) {
+    // Навмисно БЕЗ фільтра по workspace_id: акаунт, що вже є учасником
+    // будь-де, не порожня оболонка, і адмін одного воркспейсу не має
+    // отримувати вхід у нього через запрошення в свій.
     const { data: existingMembership, error: membershipError } = await adminClient
       .schema("tosho")
       .from("memberships_view")
       .select("user_id")
-      .eq("workspace_id", workspaceId)
       .eq("user_id", state.userId)
+      .limit(1)
       .maybeSingle<{ user_id?: string | null }>();
 
     if (membershipError) {
@@ -860,7 +866,6 @@ export const handler = async (event: HttpEvent) => {
         adminClient,
         email: inviteEmail,
         inviteToken: invite.token,
-        workspaceId,
         inviteAccessRole: invite.access_role ?? null,
         actorIsOwner,
       });
@@ -991,7 +996,6 @@ export const handler = async (event: HttpEvent) => {
       adminClient,
       email,
       inviteToken: finalToken,
-      workspaceId,
       inviteAccessRole: finalAccessRole,
       actorIsOwner: (actorMembership?.access_role ?? null) === "owner",
     });
