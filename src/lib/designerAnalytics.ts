@@ -66,6 +66,12 @@ export type DesignerMonthAgg = {
   timerTaskCountByType: Partial<Record<DesignTaskType, number>>;
   /** Скільки різних задач дизайнер тримав у таймері цього місяця (знаменник ⌀/задачу). */
   timerTaskCount: number;
+  /**
+   * Скільки різних задач людина реально торкалась: таймер АБО завантаження в
+   * «Результат». `timerTaskCount` для цього не годиться — 43% задач ідуть без
+   * таймера, і KPI «Задач у роботі» показував лише половину роботи.
+   */
+  tasksTouched: number;
   /** Сума правок по timer-активних задачах (для ⌀ правок/задачу). */
   revisionsTotal: number;
   /** Закриті задачі з естімейтом і таймером (для точності естімейту — тільки завершені). */
@@ -91,6 +97,12 @@ export type DesignerWorkGroup = {
   designTaskType: DesignTaskType | null;
   files: DesignerWorkFileItem[];
   taskTrackedSeconds: number;
+  /** Таймер по цій задачі досі йде (сесію не зупинили). */
+  timerRunning: boolean;
+  /** Найдовша сесія БЕЗ обрізки — понад робочий день майже завжди «забули зупинити». */
+  longestSessionSeconds: number;
+  /** Задача вже закрита (затверджена або скасована) — тоді живий таймер це точно аномалія. */
+  taskClosed: boolean;
   revisions: number;
   lastUploadAt: string;
 };
@@ -135,6 +147,7 @@ export const emptyMonthAgg = (): DesignerMonthAgg => ({
   secondsByType: { visualization: 0, presentation: 0, layout_adaptation: 0, layout: 0, creative: 0, none: 0 },
   timerTaskCountByType: {},
   timerTaskCount: 0,
+  tasksTouched: 0,
   revisionsTotal: 0,
   estimateEligible: 0,
   estimateHit: 0,
@@ -170,6 +183,7 @@ type TaskMetaLite = {
   taskNumber: string | null;
   customerName: string | null;
   designTaskType: DesignTaskType | null;
+  status: string | null;
   estimateMinutes: number | null;
   revisions: number;
   assigneeUserId: string | null;
@@ -221,7 +235,7 @@ type ActiveTaskRow = {
 // Один таймер рідко перевищує робочий день; сесія понад це — майже завжди
 // забутий (незупинений) таймер. Обрізаємо кожну сесію, щоб один «застряглий»
 // таймер (у проді траплялись сесії на 200+ год) не отруював суми й середні.
-const MAX_SESSION_SECONDS = 8 * 3600;
+export const MAX_SESSION_SECONDS = 8 * 3600;
 
 const sessionSeconds = (row: TimerSessionRow, nowMs: number) => {
   const startMs = new Date(row.started_at).getTime();
@@ -244,6 +258,7 @@ const parseTaskMeta = (row: { id: string; title?: string | null; metadata?: Reco
     taskNumber: typeof metadata.design_task_number === "string" ? metadata.design_task_number : null,
     customerName: typeof metadata.customer_name === "string" ? metadata.customer_name : null,
     designTaskType: parseDesignTaskType(metadata.design_task_type),
+    status: typeof metadata.status === "string" ? metadata.status : null,
     estimateMinutes: Number.isFinite(estimateParsed) && estimateParsed > 0 ? Math.round(estimateParsed) : null,
     revisions: Array.isArray(revisionsRaw) ? revisionsRaw.length : 0,
     assigneeUserId: typeof metadata.assignee_user_id === "string" && metadata.assignee_user_id ? metadata.assignee_user_id : null,
@@ -363,11 +378,26 @@ export async function loadDesignerAnalytics(params: {
   /* ---------- час: по задачах і по користувачах ---------- */
   const taskTotalSeconds = new Map<string, number>();
   const taskUserSeconds = new Map<string, number>(); // `${taskId}:${userId}`
+  /**
+   * Аномалії таймера по задачі: сесія, яку не зупинили, або яка тривала довше
+   * за робочий день. Обидва випадки означають «таймер забули», і саме такі
+   * задачі отруюють середній час — їх треба вміти показати окремо.
+   */
+  const taskUserTimerFlags = new Map<string, { running: boolean; longestSeconds: number }>();
   timerRows.forEach((row) => {
+    const key = `${row.design_task_id}:${row.user_id}`;
+    const rawSeconds = Math.max(
+      0,
+      Math.floor(((row.paused_at ? new Date(row.paused_at).getTime() : nowMs) - new Date(row.started_at).getTime()) / 1000)
+    );
+    const flags = taskUserTimerFlags.get(key) ?? { running: false, longestSeconds: 0 };
+    if (!row.paused_at) flags.running = true;
+    if (rawSeconds > flags.longestSeconds) flags.longestSeconds = rawSeconds;
+    taskUserTimerFlags.set(key, flags);
+
     const seconds = sessionSeconds(row, nowMs);
     if (seconds <= 0) return;
     taskTotalSeconds.set(row.design_task_id, (taskTotalSeconds.get(row.design_task_id) ?? 0) + seconds);
-    const key = `${row.design_task_id}:${row.user_id}`;
     taskUserSeconds.set(key, (taskUserSeconds.get(key) ?? 0) + seconds);
   });
 
@@ -449,6 +479,7 @@ export async function loadDesignerAnalytics(params: {
   const uploadKind = (value?: string | null): "visualization" | "layout" | "attachment" =>
     value === "visualization" ? "visualization" : value === "layout" ? "layout" : "attachment";
   const seenWorkByBucket = new Map<string, Set<string>>(); // `${scopeKey}:${kind}` → «задача:назва»
+  const seenTouchedByBucket = new Map<string, Set<string>>(); // `${scopeKey}` → задачі з таймером або заливкою
   uploadRows.forEach((row) => {
     if (!row.user_id || !designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.created_at);
@@ -467,6 +498,7 @@ export async function loadDesignerAnalytics(params: {
     targets.forEach(({ agg, scopeKey }) => {
       agg.files += uploaded.length;
       agg.filesByKind[kind] += uploaded.length;
+      if (taskId && firstSeen(seenTouchedByBucket, scopeKey, taskId)) agg.tasksTouched += 1;
       uploaded.forEach((file) => {
         const name = typeof file?.file_name === "string" ? file.file_name : "";
         const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
@@ -513,6 +545,7 @@ export async function loadDesignerAnalytics(params: {
         agg.timerTaskCount += 1;
         agg.revisionsTotal += meta?.revisions ?? 0;
       }
+      if (firstSeen(seenTouchedByBucket, scopeKey, taskId)) agg.tasksTouched += 1;
       if (type && firstSeen(seenTaskByBucketType, `${scopeKey}:${type}`, taskId)) {
         agg.timerTaskCountByType[type] = (agg.timerTaskCountByType[type] ?? 0) + 1;
       }
@@ -542,6 +575,9 @@ export async function loadDesignerAnalytics(params: {
         designTaskType: meta?.designTaskType ?? null,
         files: [],
         taskTrackedSeconds: taskUserSeconds.get(`${taskId}:${row.user_id}`) ?? 0,
+        timerRunning: taskUserTimerFlags.get(`${taskId}:${row.user_id}`)?.running ?? false,
+        longestSessionSeconds: taskUserTimerFlags.get(`${taskId}:${row.user_id}`)?.longestSeconds ?? 0,
+        taskClosed: meta?.status === "approved" || meta?.status === "cancelled",
         revisions: meta?.revisions ?? 0,
         lastUploadAt: row.created_at,
       };

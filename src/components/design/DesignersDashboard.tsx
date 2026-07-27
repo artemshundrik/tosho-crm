@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMous
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowUpRight,
   BarChart3,
   Calendar as CalendarIcon,
@@ -23,6 +24,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AppDropdown } from "@/components/app/AppDropdown";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { loadNormPlans, type MonthNormPlan } from "@/lib/designerPayroll";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
-import { DesignersPrintReport } from "@/components/design/DesignersPrintReport";
+import { DesignersPrintReport, type PrintReportVariant } from "@/components/design/DesignersPrintReport";
 import {
   firstName,
   formatHM,
@@ -52,7 +54,7 @@ import {
 import {
   avgSecondsForType,
   avgSecondsPerTask,
-  estimateHitPercent,
+  MAX_SESSION_SECONDS,
   loadDesignerAnalytics,
   revisionsPerTask,
   type DesignerAnalytics,
@@ -321,7 +323,7 @@ const MATRIX_METRICS: MatrixMetric[] = [
     label: "Задачі у роботі",
     lowerBetter: false,
     teamAgg: "sum",
-    get: (agg) => agg.timerTaskCount,
+    get: (agg) => agg.tasksTouched,
     format: (value) => `${Math.round(value)}`,
     formatLong: (value) => `${Math.round(value)} задач у таймері`,
   },
@@ -378,7 +380,6 @@ const MATRIX_METRICS: MatrixMetric[] = [
  */
 type AnalyticsCacheEntry = { data: DesignerAnalytics; cachedAt: number };
 const analyticsCache = new Map<string, AnalyticsCacheEntry>();
-const ANALYTICS_TTL_MS = 5 * 60 * 1000;
 
 /** Скелетон у формі дашборду — щоб перший показ не «стрибав» після завантаження. */
 function DashboardSkeleton() {
@@ -506,11 +507,18 @@ export function DesignersDashboard({
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
   /** Фільтр списку робіт за наявністю таймера. */
-  const [worksFilter, setWorksFilter] = useState<"all" | "timed" | "untimed">("all");
+  const [worksFilter, setWorksFilter] = useState<"all" | "timed" | "untimed" | "stuck">("all");
   /** Що міряє картка типів: середній час чи кількість зроблених робіт. */
   const [typesMetric, setTypesMetric] = useState<"time" | "count">("time");
   /** userId → monthKey → норма. Порожня, якщо глядач не має доступу до ставок. */
   const [normPlans, setNormPlans] = useState<Map<string, Map<string, MonthNormPlan>>>(() => new Map());
+  /** Коли дані востаннє приїхали з БД — щоб чесно підписати «оновлено … тому». */
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  /** Який зі звітів піде на друк. Друкуємо після коміту React — див. ефект нижче. */
+  const [printVariant, setPrintVariant] = useState<PrintReportVariant>("time");
+  const [printPending, setPrintPending] = useState(false);
   const { bind: bindTip, overlay: tipOverlay } = useChartTooltip();
 
   useEffect(() => {
@@ -518,6 +526,17 @@ export function DesignersDashboard({
       setScope(visibleDesigners[0]?.id ?? "team");
     }
   }, [canSeeAll, visibleDesigners]);
+
+  /**
+   * Друк запускаємо в ефекті, а не одразу в onClick: на момент кліку в DOM ще
+   * стоїть попередній варіант звіту, і діалог друку показав би не той аркуш.
+   * Ефект виконується вже після коміту React, тож на папір іде обраний звіт.
+   */
+  useEffect(() => {
+    if (!printPending) return;
+    setPrintPending(false);
+    window.print();
+  }, [printPending]);
 
   useEffect(() => {
     let cancelled = false;
@@ -534,17 +553,16 @@ export function DesignersDashboard({
       // Показуємо кеш миттєво (навіть протухлий) — жодного порожнього екрана.
       setAnalytics(cached.data);
       setMonthIdx((current) => current ?? cached.data.months.length - 1);
+      setFetchedAt(cached.cachedAt);
       setLoading(false);
-      if (Date.now() - cached.cachedAt < ANALYTICS_TTL_MS) {
-        return () => {
-          cancelled = true;
-        };
-      }
-      // Протухло — оновлюємо у фоні, без скелетона поверх живих даних.
     } else {
       setLoading(true);
     }
     setLoadError(false);
+    // Оновлюємо ЗАВЖДИ, навіть якщо кеш свіжий: дизайнер щойно залив файли й
+    // одразу йде дивитись цифри — п'ятихвилинна пауза читалась як «не
+    // порахувало». Кеш лишається лише для миттєвого першого кадру.
+    setRefreshing(true);
 
     loadDesignerAnalytics({ teamId, designerIds: designerIdsKey.split(","), mode: loadMode })
       .then((result) => {
@@ -552,6 +570,7 @@ export function DesignersDashboard({
         if (cancelled) return;
         setAnalytics(result);
         setMonthIdx((current) => current ?? result.months.length - 1);
+        setFetchedAt(Date.now());
       })
       .catch((error) => {
         console.warn("Failed to load designer analytics", error);
@@ -559,12 +578,15 @@ export function DesignersDashboard({
         if (!cancelled && !cached) setLoadError(true);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [teamId, cacheKey, designerIdsKey, loadMode]);
+  }, [teamId, cacheKey, designerIdsKey, loadMode, refreshNonce]);
 
   /**
    * Норми виробітку — окремим запитом від аналітики: вони живуть у pay-таблицях
@@ -659,21 +681,23 @@ export function DesignersDashboard({
     seriesFmt: (value: number) => string;
   }> = [
     {
-      // Первинний обсяг = задачі, над якими дизайнер працював (таймер), а не approved:
-      // закриття роблять PM/клієнт і часто = 0, тому «закрито» лишається вторинним підписом.
+      // Задачі, яких людина торкалась: таймер АБО заливка в «Результат».
+      // Раніше рахувались лише таймерні — це половина роботи (43% задач без
+      // таймера). «Закрито» звідси прибрано: у «Затверджено» переводять PM і
+      // клієнт, тому в дизайнера там майже завжди 0 — підпис лише шумів.
       label: "Задач у роботі",
       icon: Target,
-      value: `${currentAgg?.timerTaskCount ?? 0}`,
-      sub: `${currentAgg?.tasksClosed ?? 0} закрито`,
+      value: `${currentAgg?.tasksTouched ?? 0}`,
+      sub: currentAgg && currentAgg.tasksTouched > 0 ? `${currentAgg.timerTaskCount} із таймером` : undefined,
       delta: (
         <DeltaChip
-          current={currentAgg?.timerTaskCount ?? null}
-          previous={previousAgg?.timerTaskCount ?? null}
+          current={currentAgg?.tasksTouched ?? null}
+          previous={previousAgg?.tasksTouched ?? null}
           lowerBetter={false}
           format={(diff) => `${Math.round(diff)}`}
         />
       ),
-      series: kpiSeries((agg) => agg.timerTaskCount),
+      series: kpiSeries((agg) => agg.tasksTouched),
       seriesFmt: (value) => `${value} задач`,
     },
     {
@@ -906,13 +930,6 @@ export function DesignersDashboard({
     return (aggB?.trackedSeconds ?? 0) - (aggA?.trackedSeconds ?? 0);
   });
 
-  const hitTone = (value: number) =>
-    value >= 85
-      ? "border-success-soft-border bg-success-soft text-success-foreground"
-      : value >= 70
-        ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
-        : "border-danger-soft-border bg-danger-soft text-danger-foreground";
-
   /* ---------- режим «Файли»: матриця дизайнери × розширення за обраний місяць ---------- */
   const filesRows = [...visibleDesigners]
     .map((designer) => ({ designer, agg: analytics.perDesigner.get(designer.id)?.[mi] ?? null }))
@@ -954,12 +971,22 @@ export function DesignersDashboard({
   const untimedInScope = scopeWorkGroups.filter((group) => group.taskTrackedSeconds === 0).length;
   const worksTimed = worksList.filter((group) => group.taskTrackedSeconds > 0).length;
   const worksUntimed = worksList.length - worksTimed;
+  /**
+   * Забутий таймер: сесію не зупинили (особливо коли задачу вже закрито) або
+   * вона тривала довше за робочий день. Такий час обрізається до 8 год і все
+   * одно тягне середні вгору, тому ці задачі треба вміти дістати списком.
+   */
+  const isStuckTimer = (group: DesignerWorkGroup) =>
+    group.timerRunning || group.longestSessionSeconds > MAX_SESSION_SECONDS;
+  const worksStuck = worksList.filter(isStuckTimer).length;
   const worksFiltered =
     worksFilter === "timed"
       ? worksList.filter((group) => group.taskTrackedSeconds > 0)
       : worksFilter === "untimed"
         ? worksList.filter((group) => group.taskTrackedSeconds === 0)
-        : worksList;
+        : worksFilter === "stuck"
+          ? worksList.filter(isStuckTimer)
+          : worksList;
   const worksVisible = worksExpanded ? worksFiltered : worksFiltered.slice(0, WORKS_PREVIEW);
 
   // Баланс — парність зі старою вкладкою: навантаження команди бачать усі ролі.
@@ -1079,6 +1106,27 @@ export function DesignersDashboard({
                 поточний місяць
               </span>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setRefreshNonce((value) => value + 1)}
+              disabled={refreshing}
+              className={cn(
+                "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
+                "hover:text-foreground disabled:cursor-default disabled:opacity-60"
+              )}
+              title="Перерахувати з бази"
+            >
+              <RotateCcw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+              <span className="hidden tabular-nums sm:inline">
+                {refreshing
+                  ? "оновлюємо…"
+                  : fetchedAt == null
+                    ? "оновити"
+                    : Date.now() - fetchedAt < 60_000
+                      ? "щойно"
+                      : `${Math.round((Date.now() - fetchedAt) / 60_000)} хв тому`}
+              </span>
+            </button>
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>
               <SelectTrigger className="h-9 w-[180px] text-sm font-medium">
                 <SelectValue />
@@ -1093,16 +1141,47 @@ export function DesignersDashboard({
             </Select>
             {/* Друк порівняння — лише тим, хто бачить усіх дизайнерів. */}
             {canSeeAll ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9"
-                onClick={() => window.print()}
-                title={`Друк або збереження у PDF: ${monthTitle(months[mi].value)}`}
-              >
-                <Printer className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Друк / PDF</span>
-              </Button>
+              <AppDropdown
+                align="end"
+                contentClassName="w-[260px] p-1.5"
+                trigger={
+                  <Button variant="outline" size="sm" className="h-9" title={`Друк за ${monthTitle(months[mi].value)}`}>
+                    <Printer className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Друк / PDF</span>
+                  </Button>
+                }
+                content={
+                  <div className="flex flex-col">
+                    {(
+                      [
+                        {
+                          key: "time" as const,
+                          title: "Звіт по часу",
+                          hint: "Задачі, години, середній час за типами",
+                        },
+                        {
+                          key: "output" as const,
+                          title: "Звіт по виробітку",
+                          hint: "Роботи проти норми, з чого складаються",
+                        },
+                      ]
+                    ).map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => {
+                          setPrintVariant(option.key);
+                          setPrintPending(true);
+                        }}
+                        className="cursor-pointer rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/60"
+                      >
+                        <span className="block text-xs font-semibold text-foreground">{option.title}</span>
+                        <span className="block text-3xs text-muted-foreground">{option.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                }
+              />
             ) : null}
           </div>
         </div>
@@ -1907,7 +1986,7 @@ export function DesignersDashboard({
           <div className="overflow-x-auto px-3 pb-2 pt-2">
             {tableMode === "month" ? (
               <div className="min-w-[960px] px-2">
-                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_128px_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
+                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
                   <span>#</span>
                   <span>Дизайнер</span>
                   <span>У роботі</span>
@@ -1915,14 +1994,12 @@ export function DesignersDashboard({
                   <span>Час</span>
                   <span>⌀ / задачу</span>
                   <span>Структура часу</span>
-                  <span>Естімейти</span>
                   <span />
                 </div>
                 {monthRows.map((designer, index) => {
                   const agg = analytics.perDesigner.get(designer.id)?.[mi];
                   if (!agg) return null;
                   const avg = avgSecondsPerTask(agg);
-                  const hit = estimateHitPercent(agg);
                   const structureTotal = agg.trackedSeconds;
                   const selected = scope === designer.id;
                   return (
@@ -1931,7 +2008,7 @@ export function DesignersDashboard({
                       type="button"
                       onClick={() => selectScope(selected ? "team" : designer.id)}
                       className={cn(
-                        "grid w-full cursor-pointer grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_128px_22px] items-center gap-3 rounded-xl border border-transparent px-2 py-2.5 text-left transition-colors",
+                        "grid w-full cursor-pointer grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 rounded-xl border border-transparent px-2 py-2.5 text-left transition-colors",
                         "hover:bg-muted/10",
                         selected && "border-primary/25 bg-primary/5 hover:bg-primary/5"
                       )}
@@ -1951,7 +2028,8 @@ export function DesignersDashboard({
                         <span className="min-w-0">
                           <span className="block truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
                           <span className="text-3xs text-muted-foreground">
-                            {agg.tasksClosed} закрито · {agg.files} файлів → {agg.works} робіт
+                            {agg.works} робіт · {agg.files} файлів
+                            {agg.tasksClosed > 0 ? ` · ${agg.tasksClosed} закрито` : ""}
                           </span>
                         </span>
                       </span>
@@ -1990,16 +2068,6 @@ export function DesignersDashboard({
                           })
                         ) : (
                           <span className="h-full w-full rounded bg-muted/40" aria-hidden="true" />
-                        )}
-                      </span>
-                      <span>
-                        {hit == null ? (
-                          <span className="text-3xs text-muted-foreground">без естімейтів</span>
-                        ) : (
-                          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold", hitTone(hit))}>
-                            <Target className="h-3 w-3" />
-                            {hit}% в естімейт
-                          </span>
                         )}
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
@@ -2365,13 +2433,15 @@ export function DesignersDashboard({
           </div>
           {/* Фільтр з'являється лише коли є що фільтрувати: якщо таймер вівся
               скрізь, три кнопки просто шумлять. */}
-          {worksUntimed > 0 && worksTimed > 0 ? (
+          {(worksUntimed > 0 && worksTimed > 0) || worksStuck > 0 ? (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {(
                 [
                   { key: "all" as const, label: "Усі", count: worksList.length },
                   { key: "timed" as const, label: "З таймером", count: worksTimed },
                   { key: "untimed" as const, label: "Без таймера", count: worksUntimed },
+                  // Аномалію показуємо, лише якщо вона є — це не постійна вкладка.
+                  ...(worksStuck > 0 ? [{ key: "stuck" as const, label: "Забутий таймер", count: worksStuck }] : []),
                 ]
               ).map((option) => {
                 const active = worksFilter === option.key;
@@ -2392,6 +2462,7 @@ export function DesignersDashboard({
                     )}
                   >
                     {option.key === "untimed" ? <TimerOff className="h-3 w-3" /> : null}
+                    {option.key === "stuck" ? <AlertTriangle className="h-3 w-3" /> : null}
                     {option.label}
                     <span className="tabular-nums opacity-70">{option.count}</span>
                   </button>
@@ -2458,6 +2529,28 @@ export function DesignersDashboard({
                           <span className="inline-flex items-center gap-1 rounded-full border border-neutral-soft-border bg-neutral-soft px-2 py-0.5 text-3xs font-medium tabular-nums text-neutral-foreground">
                             <RotateCcw className="h-3 w-3" />
                             {group.revisions} {revisionsWord(group.revisions)}
+                          </span>
+                        ) : null}
+                        {isStuckTimer(group) ? (
+                          /* Ось це вже червоне: незупинена сесія на закритій
+                             задачі — не стиль роботи, а зламаний облік часу. */
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-semibold",
+                              group.timerRunning && group.taskClosed
+                                ? "border-danger-soft-border bg-danger-soft text-danger-foreground"
+                                : "border-warning-soft-border bg-warning-soft text-warning-foreground"
+                            )}
+                            title={
+                              group.timerRunning
+                                ? group.taskClosed
+                                  ? "Задача закрита, а таймер досі йде — час рахується далі"
+                                  : "Таймер досі йде"
+                                : `Сесія тривала ${formatHumanSeconds(group.longestSessionSeconds)} — у розрахунку обрізана до 8 год`
+                            }
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            {group.timerRunning ? "таймер іде" : "забутий таймер"}
                           </span>
                         ) : null}
                       </div>
@@ -2534,7 +2627,13 @@ export function DesignersDashboard({
       {canSeeAll && typeof document !== "undefined"
         ? createPortal(
             <div className="print-portal">
-              <DesignersPrintReport analytics={analytics} monthIndex={mi} designers={visibleDesigners} />
+              <DesignersPrintReport
+                analytics={analytics}
+                monthIndex={mi}
+                designers={visibleDesigners}
+                variant={printVariant}
+                normPlans={normPlans}
+              />
             </div>,
             document.body
           )
