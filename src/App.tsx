@@ -550,7 +550,10 @@ function LoginPage() {
   const next = rawNext.startsWith("/") ? rawNext : "/overview";
   const isInviteFlow = next.startsWith("/invite");
 
-  const [mode] = useState<"password" | "magic">(isInviteFlow ? "magic" : "password");
+  // Інвайт-флоу раніше жорстко вмикав "magic" і ховав поле пароля: людина, яка
+  // вже задала пароль, не могла увійти взагалі, а єдина кнопка слала лист —
+  // і цим гасила посилання, видане адміністратором (спільний слот recovery).
+  const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -656,7 +659,7 @@ function LoginPage() {
             />
           </div>
 
-          {mode === "password" && !isInviteFlow && (
+          {mode === "password" && (
             <div>
               <label className="text-sm font-medium text-foreground">Пароль</label>
               <PasswordInput
@@ -679,13 +682,40 @@ function LoginPage() {
           </Button>
         </form>
 
-        {!isInviteFlow ? (
-          <div className="mt-4 text-center text-xs text-muted-foreground">
-            <Link className="underline hover:text-primary transition-colors" to="/reset-password">
-              Забув пароль?
-            </Link>
-          </div>
-        ) : null}
+        <div className="mt-4 space-y-3 text-center text-xs text-muted-foreground">
+          {mode === "password" ? (
+            <>
+              <div>
+                <Link className="underline hover:text-primary transition-colors" to="/reset-password">
+                  Забув пароль?
+                </Link>
+              </div>
+              {isInviteFlow ? (
+                <button
+                  type="button"
+                  onClick={() => setMode("magic")}
+                  className="underline hover:text-primary transition-colors"
+                >
+                  Ще немає пароля? Надіслати лист для входу
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border border-warning-soft-border bg-warning-soft p-3 text-left text-warning-foreground">
+                Лист скасує посилання, яке міг дати адміністратор. Якщо воно у тебе вже є —
+                краще відкрий його, а не замовляй новий лист.
+              </div>
+              <button
+                type="button"
+                onClick={() => setMode("password")}
+                className="underline hover:text-primary transition-colors"
+              >
+                Увійти паролем
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

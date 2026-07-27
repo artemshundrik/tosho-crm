@@ -33,7 +33,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function InvitePage() {
-  const { session, signOut } = useAuth();
+  const { session, loading: authLoading, signOut } = useAuth();
   const user = session?.user;
 
   const [params] = useSearchParams();
@@ -157,6 +157,18 @@ export default function InvitePage() {
     }
   };
 
+  // Поки AuthProvider відновлює сесію, session ще null. Без цієї гілки сторінка
+  // на мить показувала «увійдіть», і людина, яка щойно перейшла за робочим
+  // посиланням, тиснула кнопку входу — та відправляла її по новий лист, гасячи
+  // посилання, за яким вона вже фактично зайшла.
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
+        <InlineLoading label="Перевіряємо вхід..." />
+      </div>
+    );
+  }
+
   if (!session) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
@@ -165,18 +177,19 @@ export default function InvitePage() {
             <User className="w-10 h-10" />
           </div>
 
-          <h1 className="text-2xl font-extrabold text-foreground">Вас запросили у workspace!</h1>
+          <h1 className="text-2xl font-extrabold text-foreground">Потрібно увійти</h1>
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-            Щоб прийняти запрошення, увійдіть у свій обліковий запис або зареєструйтеся.
+            Посилання для входу одноразове — схоже, ним уже скористалися або воно
+            протерміноване. Попросіть адміністратора надіслати нове.
           </p>
 
           <div className="mt-6 bg-muted/50 rounded-inner p-4 border border-border text-sm text-muted-foreground">
-            Це запрошення буде прив’язано до вашого акаунту після входу.
+            Запрошення нікуди не зникло — воно прив’яжеться до акаунту одразу після входу.
           </div>
 
           <Button asChild className="mt-6 w-full">
             <Link to={linkToAuth}>
-              Увійти або Створити акаунт <ArrowRight className="ml-2 w-4 h-4" />
+              Увійти паролем <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </Button>
         </div>
