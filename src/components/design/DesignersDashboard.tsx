@@ -823,6 +823,7 @@ export function DesignersDashboard({
     };
   };
   const currentNorm = normForScope(mi);
+  const previousNorm = prevIdx == null ? null : normForScope(prevIdx);
 
   const normRows = currentNorm
     ? ([
@@ -833,6 +834,9 @@ export function DesignersDashboard({
           norm: currentNorm.visualNorm,
           perDay: currentNorm.visualNormPerDay,
           rate: currentNorm.visualOverRate,
+          // Тінь попереднього місяця — «сам проти себе», як у режимі часу.
+          prevDone: previousAgg?.worksByKind.visualization ?? 0,
+          prevNorm: previousNorm?.visualNorm ?? null,
         },
         {
           kind: "layout" as const,
@@ -841,6 +845,8 @@ export function DesignersDashboard({
           norm: currentNorm.layoutNorm,
           perDay: currentNorm.layoutNormPerDay,
           rate: currentNorm.layoutOverRate,
+          prevDone: previousAgg?.worksByKind.layout ?? 0,
+          prevNorm: previousNorm?.layoutNorm ?? null,
         },
       ] as const)
     : [];
@@ -1147,7 +1153,7 @@ export function DesignersDashboard({
       {/* ---------- типи + баланс/динаміка ---------- */}
       <div className="grid gap-3 lg:grid-cols-3">
         <section className="rounded-2xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               {typesMetric === "time" ? (
                 <Clock className="h-4 w-4 text-primary" />
@@ -1162,28 +1168,10 @@ export function DesignersDashboard({
                   ? `Зроблено робіт за типами — ${firstName(scopedDesigner.label)}`
                   : "Зроблено робіт — за типами"}
             </h3>
-            {/* Перемикач метрики: та сама картка, ті самі рядки — інша величина. */}
-            <div className={SEGMENTED_GROUP_SM} aria-label="Метрика картки типів">
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={typesMetric === "time"}
-                onClick={() => setTypesMetric("time")}
-                className={SEGMENTED_TRIGGER_SM}
-              >
-                ⌀ час
-              </Button>
-              <Button
-                variant="segmented"
-                size="xs"
-                aria-pressed={typesMetric === "count"}
-                onClick={() => setTypesMetric("count")}
-                className={SEGMENTED_TRIGGER_SM}
-              >
-                Кількість
-              </Button>
-            </div>
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+            {/* Легенда з ml-auto, перемикач — останній: так він приклеєний до
+                правого краю картки й НЕ їздить, коли міняється ширина заголовка
+                («Середній час…» ↔ «Зроблено робіт…») чи набір міток легенди. */}
+            <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-2 w-4 rounded-sm bg-foreground/80" aria-hidden="true" />
                 {monthShort(months[mi].value)}
@@ -1207,6 +1195,27 @@ export function DesignersDashboard({
                 </span>
               ) : null}
             </span>
+            {/* Перемикач метрики: та сама картка, ті самі рядки — інша величина. */}
+            <div className={SEGMENTED_GROUP_SM} aria-label="Метрика картки типів">
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={typesMetric === "time"}
+                onClick={() => setTypesMetric("time")}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                ⌀ час
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={typesMetric === "count"}
+                onClick={() => setTypesMetric("count")}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                Кількість
+              </Button>
+            </div>
             <p className="w-full text-xs text-muted-foreground">
               {typesMetric === "time" ? (
                 "Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять."
@@ -1382,14 +1391,62 @@ export function DesignersDashboard({
               <div className="divide-y divide-border/50">
                 {normRows.map((row) => {
                   const color = row.kind === "visualization" ? FILE_KIND_META[0].color : FILE_KIND_META[1].color;
-                  const scale = Math.max(1, row.done, row.norm);
+                  // Тінь попереднього місяця теж має влазити у трек, інакше вона
+                  // впиралась би в правий край і брехала про масштаб.
+                  const scale = Math.max(1, row.done, row.norm, row.prevDone);
                   const over = Math.max(0, row.done - row.norm);
                   const normLeft = Math.min(100, (row.norm / scale) * 100);
                   const doneLeft = Math.min(100, (Math.min(row.done, row.norm) / scale) * 100);
+                  const prevWidth = row.prevDone === 0 ? 0 : Math.max(2, (row.prevDone / scale) * 100);
+                  const pace = currentNorm && currentNorm.normDays > 0 ? row.done / currentNorm.normDays : null;
+                  const normTip = (): TipModel => {
+                    const rows: TipRow[] = [
+                      {
+                        color,
+                        label: `${scopedDesigner ? firstName(scopedDesigner.label) : "Команда"} · ${monthShort(months[mi].value)}`,
+                        value: `${row.done} робіт`,
+                        strong: true,
+                      },
+                      {
+                        label: "Норма",
+                        value:
+                          row.perDay != null && currentNorm
+                            ? `${row.norm} = ${row.perDay}/день × ${currentNorm.normDays}`
+                            : `${row.norm}`,
+                        muted: true,
+                      },
+                    ];
+                    if (pace != null) {
+                      rows.push({ label: "Темп", value: `${pace.toFixed(1)}/день`, muted: true });
+                    }
+                    rows.push(
+                      over > 0
+                        ? {
+                            label: "Понад норму",
+                            value:
+                              row.rate != null
+                                ? `+${over} · ${Math.round(over * row.rate).toLocaleString("uk-UA")} ₴`
+                                : `+${over}`,
+                          }
+                        : { label: "До норми", value: `ще ${row.norm - row.done}`, muted: true }
+                    );
+                    if (prevIdx != null) {
+                      rows.push({
+                        label: monthShort(months[prevIdx].value),
+                        value:
+                          row.prevNorm != null
+                            ? `${row.prevDone} робіт · норма ${row.prevNorm}`
+                            : `${row.prevDone} робіт`,
+                        muted: true,
+                      });
+                    }
+                    return { title: row.label, rows };
+                  };
                   return (
                     <div
                       key={row.kind}
-                      className="grid items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]"
+                      className="grid cursor-help items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]"
+                      {...bindTip(normTip)}
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
@@ -1414,8 +1471,19 @@ export function DesignersDashboard({
                             style={{ left: `${normLeft}%`, width: `${100 - normLeft}%` }}
                           />
                         ) : null}
+                        {prevWidth > 0 ? (
+                          <div
+                            className="absolute top-[19px] h-1.5 rounded-r opacity-30"
+                            style={{ width: `${prevWidth}%`, background: color }}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        {/* Пунктир накриває лише смугу поточного місяця: у
+                            попереднього норма своя (інша кількість нормо-днів),
+                            і лінія через тінь читалася б як його норма. Норму
+                            минулого місяця називає підказка. */}
                         <span
-                          className="absolute inset-y-0 border-l-2 border-dashed border-foreground/45"
+                          className="absolute top-0 h-[18px] border-l-2 border-dashed border-foreground/45"
                           style={{ left: `${normLeft}%` }}
                           aria-hidden="true"
                         />
