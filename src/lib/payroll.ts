@@ -11,7 +11,7 @@ export type PayrollEntry = {
   baseAmount: number;
   bonusAmount: number;
   deductionAmount: number;
-  /** Уже виданий аванс. Довідковий факт — у totalAmount НЕ входить (рішення власника). */
+  /** Уже виданий аванс. Віднімається від totalAmount — у ньому лишається залишок. */
   advanceAmount: number;
   advanceDate: string | null; // YYYY-MM-DD
   totalAmount: number;

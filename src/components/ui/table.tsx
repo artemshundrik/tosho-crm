@@ -7,8 +7,19 @@ const Table = React.forwardRef<
   React.HTMLAttributes<HTMLTableElement> & {
     variant?: "list" | "analytics" | "compact";
     size?: "sm" | "md" | "lg";
+    /**
+     * Прибирає обгортку з `overflow-auto` навколо таблиці.
+     *
+     * Навіщо: ця обгортка стає найближчим предком зі скролом, і `position:
+     * sticky` на комірках заголовка починає рахуватись від НЕЇ. Оскільки
+     * висоти вона не має і ніколи не скролиться, липкий заголовок просто не
+     * працює. Таблицям із фіксованими відсотковими колонками горизонтальний
+     * скрол не потрібен, тож вони вимикають обгортку і заголовок липне до
+     * справжнього скрол-контейнера сторінки.
+     */
+    stickyHeader?: boolean;
   }
->(({ className, variant = "list", size = "md", ...props }, ref) => {
+>(({ className, variant = "list", size = "md", stickyHeader = false, ...props }, ref) => {
   const sizeClasses = {
     sm: "[&_tbody_tr]:h-12 [&_th]:h-10 [&_th]:px-4 [&_td]:px-4 [&_td]:py-2.5",
     md: "[&_tbody_tr]:h-14 [&_th]:h-11 [&_th]:px-6 [&_td]:px-6 [&_td]:py-3.5",
@@ -34,22 +45,24 @@ const Table = React.forwardRef<
     ].join(" "),
   };
 
-  return (
-    <div className="relative w-full overflow-auto">
-      <table
-        ref={ref}
-        className={cn(
-          "w-full caption-bottom text-sm",
-          variantClasses[variant],
-          sizeClasses[size],
-          className
-        )}
-        data-variant={variant}
-        data-size={size}
-        {...props}
-      />
-    </div>
+  const table = (
+    <table
+      ref={ref}
+      className={cn(
+        "w-full caption-bottom text-sm",
+        variantClasses[variant],
+        sizeClasses[size],
+        className
+      )}
+      data-variant={variant}
+      data-size={size}
+      {...props}
+    />
   );
+
+  if (stickyHeader) return table;
+
+  return <div className="relative w-full overflow-auto">{table}</div>;
 })
 Table.displayName = "Table"
 

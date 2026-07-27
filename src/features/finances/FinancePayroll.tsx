@@ -1,12 +1,13 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Loader2, StickyNote } from "lucide-react";
+import { CalendarDays, Circle, CircleCheck, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
@@ -45,6 +46,61 @@ const formatUAH = (value: number) => {
 };
 const amountToInput = (value: number) => (value ? String(value) : "");
 
+// Розряди в полях сум: «22500» читається гірше, ніж «22 500». Intl для uk-UA
+// ставить нерозривний пробіл, а parsePayrollAmount його зчищає (\s покриває
+// U+00A0), тож відформатоване значення парситься назад без втрат.
+const fmtAmountGrouped = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 2 });
+const groupAmount = (raw: string) => {
+  const parsed = parsePayrollAmount(raw);
+  return parsed ? fmtAmountGrouped.format(parsed) : "";
+};
+
+const DATE_SHORT = new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit" });
+const formatDayMonth = (iso: string) => {
+  const parsed = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? iso : DATE_SHORT.format(parsed);
+};
+const formatFullDate = (iso: string) => {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime())
+    ? iso
+    : parsed.toLocaleDateString("uk-UA", { day: "2-digit", month: "long", year: "numeric" });
+};
+
+/**
+ * Поле суми у відомості.
+ *
+ * Розряди показуємо лише поки поле не у фокусі: під час набору форматування
+ * перескакувало б каретку («2|2500» → «22 5|00»), тож у фокусі лишається сире
+ * значення, а в спокої — згруповане.
+ */
+function AmountInput({
+  value,
+  onChange,
+  label,
+  className,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  label: string;
+  className?: string;
+}) {
+  const [focused, setFocused] = React.useState(false);
+  return (
+    <Input
+      controlSize="sm"
+      value={focused ? value : groupAmount(value)}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      inputMode="decimal"
+      placeholder="0"
+      aria-label={label}
+      className={cn("w-full text-right tabular-nums", className)}
+    />
+  );
+}
+
 // Compact display name for the payout table: «Тетяна Карандюк» → «Тетяна К.».
 // Keeps the given name and abbreviates the surname to a single initial so the
 // column stays narrow. Single-word names are returned as-is.
@@ -68,6 +124,17 @@ type Person = {
 type Draft = { base: string; bonus: string; deduction: string; advance: string; advanceDate: string };
 
 const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", advance: "", advanceDate: "" };
+
+/**
+ * Рядок заголовків тримається верху при скролі, контент їде під ним.
+ *
+ * Липкість вішаємо на самі <th>, а не на <thead>: у таблиць sticky на секції
+ * стабільно працює не в усіх рушіях. Зсув зверху — під липкий бар місяця
+ * (FinanceMonthBar: висота ~49px, а на lg він зміщений на -24px).
+ * Непрозорий фон обов'язковий, інакше рядки просвічують крізь заголовок.
+ */
+const STICKY_HEAD =
+  "sticky top-12 z-10 border-b border-border/40 bg-background/95 backdrop-blur-sm lg:top-6";
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -233,9 +300,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     );
   }, [periodQuery.data, periodDataKey, people, workspaceId, period, userId]);
 
+  // Аванс віднімається: це вже видані гроші, тож у колонці лишається залишок.
+  // Той самий вираз зашитий у generated-колонку total_amount (див.
+  // scripts/payroll-advance-subtracts.sql) — тримаємо їх однаковими.
   const totalFor = (uid: string): number => {
     const d = draftFor(uid);
-    return parsePayrollAmount(d.base) + parsePayrollAmount(d.bonus) - parsePayrollAmount(d.deduction);
+    return (
+      parsePayrollAmount(d.base) +
+      parsePayrollAmount(d.bonus) -
+      parsePayrollAmount(d.deduction) -
+      parsePayrollAmount(d.advance)
+    );
   };
 
   const totals = React.useMemo(() => {
@@ -248,10 +323,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       const d = draftFor(person.userId);
       const b = parsePayrollAmount(d.base);
       const bo = parsePayrollAmount(d.bonus);
-      const t = b + bo - parsePayrollAmount(d.deduction);
+      const adv = parsePayrollAmount(d.advance);
+      const t = b + bo - parsePayrollAmount(d.deduction) - adv;
       base += b;
       bonus += bo;
-      advance += parsePayrollAmount(d.advance);
+      advance += adv;
       total += t;
       if (meta.get(person.userId)?.status === "paid") paid += t;
     }
@@ -307,8 +383,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         deductionAmount,
         advanceAmount,
         advanceDate,
-        // Аванс у підсумок не входить — він лише фіксує вже видані гроші.
-        totalAmount: baseAmount + bonusAmount - deductionAmount,
+        totalAmount: baseAmount + bonusAmount - deductionAmount - advanceAmount,
         note: nextNote,
       });
       return next;
@@ -406,7 +481,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
             </span>
             {totals.advance > 0 ? (
               <span>
-                З них аванс:{" "}
+                Видано авансом:{" "}
                 <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.advance)}</span>
               </span>
             ) : null}
@@ -422,17 +497,22 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         <div className="rounded-xl border border-border/60">
           {/* table-fixed + % widths: columns stretch to fill the width and scale
               down on narrower screens without a horizontal scrollbar. */}
-          <Table size="sm" className="table-fixed">
+          <Table size="sm" stickyHeader className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[21%]">Співробітник</TableHead>
-                <TableHead className="w-[11%] text-right">Ставка</TableHead>
-                <TableHead className="w-[10%] text-right">Бонус</TableHead>
-                <TableHead className="w-[12%] text-right">Офіційна ЗП</TableHead>
-                <TableHead className="w-[15%] text-right">Аванс</TableHead>
-                <TableHead className="w-[12%] text-right">До виплати</TableHead>
-                <TableHead className="w-[10%]">Нотатка</TableHead>
-                <TableHead className="w-[9%] text-center">Статус</TableHead>
+                {/* Колонки з полями вводу вирівняні ліворуч: поле займає всю
+                    ширину клітинки, тож заголовок мусить стояти над його лівим
+                    краєм. Праворуч лишається тільки «До виплати» — там у
+                    клітинці звичайне число, притиснуте вправо, і заголовок
+                    тримається з ним в одній лінії. */}
+                <TableHead className={cn(STICKY_HEAD, "w-[19%]")}>Співробітник</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[11%]")}>Ставка</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[10%]")}>Бонус</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[12%]")}>Офіційна ЗП</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[16%]")}>Аванс</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[13%] text-right")}>До виплати</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[11%]")}>Нотатка</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[8%] text-center")}>Статус</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -442,16 +522,16 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 const isPaid = m?.status === "paid";
                 return (
                   <TableRow key={person.userId}>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                    <TableCell>
+                      <div className="flex min-w-0 items-center gap-2">
                         <AvatarBase
                           src={person.avatarUrl}
                           name={person.name}
                           fallback={person.initials ?? person.name.slice(0, 2)}
                           size={28}
-                          className={cn("border-border/60", person.departed && "grayscale opacity-80")}
+                          className={cn("shrink-0 border-border/60", person.departed && "grayscale opacity-80")}
                         />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div
                             className={cn(
                               "truncate text-sm font-medium",
@@ -462,7 +542,12 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                             {shortenName(person.name)}
                           </div>
                           {person.jobRole ? (
-                            <div className="truncate text-2xs text-muted-foreground">
+                            // Довгі посади («Начальник відділу логістики») інакше
+                            // розпирали колонку і лізли в сусідні.
+                            <div
+                              className="truncate text-2xs text-muted-foreground"
+                              title={formatJobRole(person.jobRole)}
+                            >
                               {formatJobRole(person.jobRole)}
                             </div>
                           ) : null}
@@ -470,51 +555,33 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input
+                      <AmountInput
                         value={d.base}
-                        onChange={(e) => queueSaveAmount(person.userId, { base: e.target.value })}
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="h-8 w-full text-right"
+                        onChange={(next) => queueSaveAmount(person.userId, { base: next })}
+                        label="Ставка"
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input
+                      <AmountInput
                         value={d.bonus}
-                        onChange={(e) => queueSaveAmount(person.userId, { bonus: e.target.value })}
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="h-8 w-full text-right"
+                        onChange={(next) => queueSaveAmount(person.userId, { bonus: next })}
+                        label="Бонус"
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input
+                      <AmountInput
                         value={d.deduction}
-                        onChange={(e) => queueSaveAmount(person.userId, { deduction: e.target.value })}
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="h-8 w-full text-right"
+                        onChange={(next) => queueSaveAmount(person.userId, { deduction: next })}
+                        label="Офіційна ЗП"
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input
-                        value={d.advance}
-                        onChange={(e) => queueSaveAmount(person.userId, { advance: e.target.value })}
-                        inputMode="decimal"
-                        placeholder="0"
-                        className="h-8 w-full text-right"
+                      <AdvanceCell
+                        amount={d.advance}
+                        date={d.advanceDate}
+                        onAmountChange={(next) => queueSaveAmount(person.userId, { advance: next })}
+                        onDateChange={(next) => queueSaveAmount(person.userId, { advanceDate: next })}
                       />
-                      {/* Дата з'являється лише коли аванс справді ввели: порожнє
-                          поле дати без суми БД усе одно не прийме. */}
-                      {parsePayrollAmount(d.advance) > 0 ? (
-                        <Input
-                          type="date"
-                          value={d.advanceDate}
-                          onChange={(e) => queueSaveAmount(person.userId, { advanceDate: e.target.value })}
-                          className="mt-1 h-7 w-full text-2xs"
-                          title="Дата видачі авансу"
-                        />
-                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
                       {formatUAH(totalFor(person.userId))}
@@ -526,16 +593,18 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                       />
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
-                        type="button"
-                        variant={isPaid ? "secondary" : "outline"}
-                        size="sm"
-                        className={cn("h-8 gap-1.5", isPaid && "text-success-foreground")}
-                        onClick={() => void saveMeta(person.userId, { status: isPaid ? "pending" : "paid" })}
-                      >
-                        {isPaid ? <Check className="h-3.5 w-3.5" /> : null}
-                        {isPaid ? "Виплачено" : "Позначити"}
-                      </Button>
+                      <PayoutStatusButton
+                        paid={isPaid}
+                        paidAt={m?.paidAt ?? null}
+                        onToggle={() =>
+                          void saveMeta(person.userId, {
+                            status: isPaid ? "pending" : "paid",
+                            // Дата фіксується разом зі статусом — саме вона потім
+                            // пояснює в підказці, коли гроші пішли.
+                            paidAt: isPaid ? null : new Date().toISOString(),
+                          })
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -545,6 +614,121 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Аванс: сума + дата видачі.
+ *
+ * Дата живе в поповері, а не окремим полем під сумою: інлайнове поле
+ * з'являлось лише при заповненій сумі й від того стрибала висота рядка, а вся
+ * таблиця «дихала». Кнопка-тригер тієї ж висоти, що й поле (h-8), і присутня
+ * завжди, тож рядок не змінює висоту ні за яких значень.
+ *
+ * Без суми дата недоступна — цього ж вимагає перевірка в БД
+ * (payroll_entries_advance_date_needs_amount).
+ */
+function AdvanceCell({
+  amount,
+  date,
+  onAmountChange,
+  onDateChange,
+}: {
+  amount: string;
+  date: string;
+  onAmountChange: (next: string) => void;
+  onDateChange: (next: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const hasAmount = parsePayrollAmount(amount) > 0;
+
+  return (
+    <div className="flex items-center gap-1">
+      <AmountInput value={amount} onChange={onAmountChange} label="Аванс" className="flex-1" />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!hasAmount}
+            aria-label={date ? `Дата авансу: ${formatDayMonth(date)}` : "Вказати дату авансу"}
+            title={hasAmount ? "Дата видачі авансу" : "Спершу вкажіть суму авансу"}
+            className={cn(
+              "h-8 shrink-0 px-2 text-2xs tabular-nums",
+              date ? "text-foreground" : "text-muted-foreground"
+            )}
+          >
+            {date ? formatDayMonth(date) : <CalendarDays className="h-3.5 w-3.5" />}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" side="bottom" className="w-auto space-y-2 p-2">
+          <Input
+            type="date"
+            controlSize="sm"
+            value={date}
+            onChange={(e) => onDateChange(e.target.value)}
+            aria-label="Дата видачі авансу"
+            className="w-[9.5rem]"
+          />
+          {date ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="w-full text-muted-foreground"
+              onClick={() => {
+                onDateChange("");
+                setOpen(false);
+              }}
+            >
+              Прибрати дату
+            </Button>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/**
+ * Статус виплати — іконка, а не кнопка з текстом: у рядку це вузька колонка,
+ * і напис «Позначити» з'їдав місце, нічого не додаючи. Стан читається і формою
+ * (порожнє коло проти галочки в колі), і кольором, тож не тримається лише на
+ * кольорі. Пояснення — у підказці по наведенню.
+ */
+function PayoutStatusButton({
+  paid,
+  paidAt,
+  onToggle,
+}: {
+  paid: boolean;
+  paidAt: string | null;
+  onToggle: () => void;
+}) {
+  const label = paid
+    ? `Виплачено${paidAt ? ` ${formatFullDate(paidAt)}` : ""}. Натисніть, щоб зняти позначку.`
+    : "Ще не виплачено. Натисніть, щоб позначити виплату.";
+
+  return (
+    <HoverTip label={label} className="justify-center">
+      <Button
+        type="button"
+        variant="ghost"
+        size="iconSm"
+        aria-label={paid ? "Виплачено" : "Позначити виплаченим"}
+        aria-pressed={paid}
+        onClick={onToggle}
+        className={cn(
+          "cursor-pointer transition-colors",
+          paid
+            ? "tone-text-success hover:bg-success-soft/50"
+            : "text-muted-foreground/50 hover:text-foreground"
+        )}
+      >
+        {paid ? <CircleCheck className="h-[18px] w-[18px]" /> : <Circle className="h-[18px] w-[18px]" />}
+      </Button>
+    </HoverTip>
   );
 }
 
