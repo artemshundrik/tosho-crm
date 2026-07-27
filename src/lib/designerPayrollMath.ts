@@ -28,6 +28,8 @@ export type DesignerPayDefaults = {
 };
 
 export type DesignerPayRate = {
+  /** Заповнюється, коли ставки читаються пачкою на кількох людей. */
+  userId?: string | null;
   baseMonthRate: number;
   /** null у будь-якому полі = «беремо командний дефолт». */
   visualNormPerDay: number | null;
@@ -112,6 +114,23 @@ export type DesignerEarnings = {
   earnedTotal: number;
   forecastTotal: number;
 };
+
+/**
+ * ОДИНИЦЯ ВИРОБІТКУ — спільна для зарплати і для дашборда «Дизайнери».
+ *
+ * Робота = (задача + назва файлу без розширення), у нижньому регістрі. Саме тому
+ * `макет.ai` + `макет.pdf` — одна робота, а не дві, і перезалив після правок під
+ * тією самою назвою нової роботи не додає.
+ *
+ * Живе тут, а не в кожному місці окремо: якщо дашборд і зарплата порахують
+ * по-різному, дизайнер побачить одну цифру у віджеті й іншу на сторінці.
+ */
+export const outputWorkKey = (taskId: string | null | undefined, fileName: string) =>
+  `${taskId ?? "?"}:${fileName.toLowerCase().replace(/\.[a-z0-9]+$/, "")}`;
+
+/** Вид роботи за подією завантаження: усе, що не `visualization`, — макет. */
+export const outputWorkKind = (outputKind: string | null | undefined): "visualization" | "layout" =>
+  outputKind === "visualization" ? "visualization" : "layout";
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 export const monthKeyOf = (date: Date) => `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;

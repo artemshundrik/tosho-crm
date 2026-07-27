@@ -6,6 +6,8 @@ import {
   creativePayout,
   listWorkdays,
   monthKeyOf,
+  outputWorkKey,
+  outputWorkKind,
   pickRateForMonth,
   resolveTerms,
   type AbsenceRange,
@@ -37,8 +39,6 @@ import {
 
 export * from "@/lib/designerPayrollMath";
 
-const OUTPUT_KIND_VISUALIZATION = "visualization";
-
 /**
  * Таблиці payroll створені міграцією `scripts/designer-payroll.sql` і ще не
  * потрапили у згенерований `database.types.ts`, тому типізуємо доступ до них
@@ -67,8 +67,6 @@ const monthBounds = (monthKey: string) => {
     to: new Date(Date.UTC(year, month, 1)),
   };
 };
-
-const baseNameOf = (fileName: string) => fileName.toLowerCase().replace(/\.[a-z0-9]+$/, "");
 
 /**
  * Унікальні роботи дизайнера за місяць, розведені на візуали й макети.
@@ -108,13 +106,13 @@ export async function loadOutputCounts(params: {
     } | null;
   }>).forEach((row) => {
     const taskId = row.entity_id ?? row.metadata?.design_task_id ?? "?";
-    const bucket = row.metadata?.output_kind === OUTPUT_KIND_VISUALIZATION ? "visuals" : "layouts";
+    const bucket = outputWorkKind(row.metadata?.output_kind) === "visualization" ? "visuals" : "layouts";
     const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
     uploaded.forEach((file) => {
       const name = typeof file?.file_name === "string" ? file.file_name : "";
       if (!name) return;
       files[bucket] += 1;
-      seen[bucket].add(`${taskId}:${baseNameOf(name)}`);
+      seen[bucket].add(outputWorkKey(taskId, name));
     });
   });
   return {
@@ -160,6 +158,7 @@ export async function loadPayRates(workspaceId: string, userId?: string): Promis
   const { data, error } = await query;
   if (error) throw error;
   return ((data ?? []) as Array<{
+    user_id?: string | null;
     base_month_rate: number | string;
     visual_norm_per_day: number | null;
     layout_norm_per_day: number | null;
@@ -168,6 +167,7 @@ export async function loadPayRates(workspaceId: string, userId?: string): Promis
     creative_percent: number | string | null;
     effective_from: string;
   }>).map((row) => ({
+    userId: row.user_id ?? null,
     baseMonthRate: Number(row.base_month_rate),
     visualNormPerDay: row.visual_norm_per_day == null ? null : Number(row.visual_norm_per_day),
     layoutNormPerDay: row.layout_norm_per_day == null ? null : Number(row.layout_norm_per_day),
@@ -292,6 +292,110 @@ export async function loadCreativePays(params: {
       earned: approved,
     });
   });
+  return result;
+}
+
+/**
+ * Норма виробітку на місяць — для дашборда «Дизайнери» (вкладка «Кількість»).
+ *
+ * Це та сама норма, що в зарплаті, але без грошей: скільки візуалів і макетів
+ * людина мала зробити станом на сьогодні. Для минулих місяців нормо-дні
+ * набрані повністю, для поточного — лише ті, що минули (`countWorkdays.passed`
+ * сам це розрулює за `asOf`).
+ *
+ * Читається пачкою на всіх видимих дизайнерів і всі місяці вікна: 3 запити
+ * замість 3×людей×місяців. RLS сама вирішує, чиї ставки віддати — якщо глядач
+ * не має права, мапа просто порожня, і дашборд малює лічильники без норм.
+ */
+export type MonthNormPlan = {
+  normDays: number;
+  visualNorm: number;
+  layoutNorm: number;
+  visualNormPerDay: number;
+  layoutNormPerDay: number;
+  visualOverRate: number;
+  layoutOverRate: number;
+};
+
+export async function loadNormPlans(params: {
+  workspaceId: string;
+  userIds: string[];
+  monthKeys: string[];
+  asOf?: Date;
+}): Promise<Map<string, Map<string, MonthNormPlan>>> {
+  const result = new Map<string, Map<string, MonthNormPlan>>();
+  if (params.userIds.length === 0 || params.monthKeys.length === 0) return result;
+
+  const first = monthBounds(params.monthKeys[0]).from;
+  const last = monthBounds(params.monthKeys[params.monthKeys.length - 1]).to;
+  const fromDay = first.toISOString().slice(0, 10);
+  const toDay = last.toISOString().slice(0, 10);
+
+  const [defaults, rates, exceptionRows, absenceRows] = await Promise.all([
+    loadPayDefaults(params.workspaceId),
+    loadPayRates(params.workspaceId),
+    payrollTable("ua_workday_exceptions")
+      .select("day,is_workday")
+      .eq("workspace_id", params.workspaceId)
+      .gte("day", fromDay)
+      .lt("day", toDay),
+    supabase
+      .schema("tosho")
+      .from("team_absences")
+      .select("user_id,start_date,end_date,kind")
+      .eq("workspace_id", params.workspaceId)
+      .lte("start_date", toDay)
+      .gte("end_date", fromDay),
+  ]);
+  if (!defaults) return result;
+
+  const exceptions = new Map<string, boolean>();
+  ((exceptionRows.data ?? []) as Array<{ day: string; is_workday: boolean }>).forEach((row) => {
+    exceptions.set(row.day, row.is_workday);
+  });
+
+  const absencesByUser = new Map<string, AbsenceRange[]>();
+  (absenceRows.data ?? []).forEach((row) => {
+    const list = absencesByUser.get(row.user_id) ?? [];
+    list.push({ start: row.start_date, end: row.end_date, kind: normalizeTeamAbsenceKind(row.kind) });
+    absencesByUser.set(row.user_id, list);
+  });
+
+  const ratesByUser = new Map<string, DesignerPayRate[]>();
+  rates.forEach((rate) => {
+    if (!rate.userId) return;
+    const list = ratesByUser.get(rate.userId) ?? [];
+    list.push(rate);
+    ratesByUser.set(rate.userId, list);
+  });
+
+  params.userIds.forEach((userId) => {
+    const userRates = ratesByUser.get(userId);
+    if (!userRates || userRates.length === 0) return;
+    const byMonth = new Map<string, MonthNormPlan>();
+    params.monthKeys.forEach((monthKey) => {
+      const rate = pickRateForMonth(userRates, monthKey);
+      if (!rate) return;
+      const terms = resolveTerms(rate, defaults);
+      const { passed } = countWorkdays({
+        monthKey,
+        asOf: params.asOf,
+        exceptions,
+        absences: absencesByUser.get(userId) ?? [],
+      });
+      byMonth.set(monthKey, {
+        normDays: passed,
+        visualNorm: terms.visualNormPerDay * passed,
+        layoutNorm: terms.layoutNormPerDay * passed,
+        visualNormPerDay: terms.visualNormPerDay,
+        layoutNormPerDay: terms.layoutNormPerDay,
+        visualOverRate: terms.visualOverRate,
+        layoutOverRate: terms.layoutOverRate,
+      });
+    });
+    if (byMonth.size > 0) result.set(userId, byMonth);
+  });
+
   return result;
 }
 

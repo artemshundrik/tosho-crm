@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
+  BarChart3,
   Calendar as CalendarIcon,
   Check,
   ChevronRight,
@@ -21,6 +22,8 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveWorkspaceId } from "@/lib/workspace";
+import { loadNormPlans, type MonthNormPlan } from "@/lib/designerPayroll";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -331,6 +334,26 @@ const MATRIX_METRICS: MatrixMetric[] = [
     format: (value) => `${Math.round(value)}`,
     formatLong: (value) => `${Math.round(value)} файлів`,
   },
+  {
+    key: "works_visualization",
+    group: "Обсяг",
+    label: "Візуали",
+    lowerBetter: false,
+    teamAgg: "sum",
+    get: (agg) => agg.worksByKind.visualization,
+    format: (value) => `${Math.round(value)}`,
+    formatLong: (value) => `${Math.round(value)} візуалів`,
+  },
+  {
+    key: "works_layout",
+    group: "Обсяг",
+    label: "Макети",
+    lowerBetter: false,
+    teamAgg: "sum",
+    get: (agg) => agg.worksByKind.layout,
+    format: (value) => `${Math.round(value)}`,
+    formatLong: (value) => `${Math.round(value)} макетів`,
+  },
   ...DESIGN_TASK_TYPE_OPTIONS.map((option): MatrixMetric => ({
     key: `avg_${option.value}`,
     group: "⌀ час",
@@ -481,6 +504,10 @@ export function DesignersDashboard({
   const [tableMode, setTableMode] = useState<"month" | "trend" | "files">("month");
   const [metricKey, setMetricKey] = useState<string>("avg_visualization");
   const [worksExpanded, setWorksExpanded] = useState(false);
+  /** Що міряє картка типів: середній час чи кількість зроблених робіт. */
+  const [typesMetric, setTypesMetric] = useState<"time" | "count">("time");
+  /** userId → monthKey → норма. Порожня, якщо глядач не має доступу до ставок. */
+  const [normPlans, setNormPlans] = useState<Map<string, Map<string, MonthNormPlan>>>(() => new Map());
   const { bind: bindTip, overlay: tipOverlay } = useChartTooltip();
 
   useEffect(() => {
@@ -535,6 +562,33 @@ export function DesignersDashboard({
       cancelled = true;
     };
   }, [teamId, cacheKey, designerIdsKey, loadMode]);
+
+  /**
+   * Норми виробітку — окремим запитом від аналітики: вони живуть у pay-таблицях
+   * (інша схема, інша RLS). Якщо глядач не має на них права, мапа лишається
+   * порожньою і картка «Кількість» просто малює лічильники без норм.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const months = analytics?.months;
+    if (!currentUserId || !months || months.length === 0 || visibleDesigners.length === 0) return;
+    (async () => {
+      const workspaceId = await resolveWorkspaceId(currentUserId);
+      if (cancelled || !workspaceId) return;
+      const plans = await loadNormPlans({
+        workspaceId,
+        userIds: visibleDesigners.map((designer) => designer.id),
+        monthKeys: months.map((month) => month.value),
+      });
+      if (!cancelled) setNormPlans(plans);
+    })().catch((error) => {
+      // Норми — надбудова: без них картка показує самі лічильники.
+      console.warn("Failed to load norm plans", error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, analytics?.months, visibleDesigners]);
 
   const labelById = useMemo(() => {
     const map = new Map<string, string>();
@@ -620,19 +674,24 @@ export function DesignersDashboard({
       seriesFmt: (value) => `${value} задач`,
     },
     {
-      label: "Файлів залито",
+      // Не файли: перезаливи після правок і другий формат (.ai+.pdf) роздували
+      // лічильник у півтора-два рази. Роботи — та сама одиниця, що в зарплаті.
+      label: "Робіт залито",
       icon: FileText,
-      value: `${currentAgg?.files ?? 0}`,
+      value: `${currentAgg?.works ?? 0}`,
+      sub: currentAgg
+        ? `${currentAgg.worksByKind.visualization} віз · ${currentAgg.worksByKind.layout} мак`
+        : undefined,
       delta: (
         <DeltaChip
-          current={currentAgg?.files ?? null}
-          previous={previousAgg?.files ?? null}
+          current={currentAgg?.works ?? null}
+          previous={previousAgg?.works ?? null}
           lowerBetter={false}
           format={(diff) => `${Math.round(diff)}`}
         />
       ),
-      series: kpiSeries((agg) => agg.files),
-      seriesFmt: (value) => `${value} файлів`,
+      series: kpiSeries((agg) => agg.works),
+      seriesFmt: (value) => `${value} робіт`,
     },
     {
       label: "Годин у таймері",
@@ -728,6 +787,84 @@ export function DesignersDashboard({
       row.current ?? 0,
       row.compare ?? 0,
       row.normSeconds ?? 0,
+      ...row.peers.map((peer) => peer.value),
+    ])
+  );
+
+  /* ---------- та сама картка, метрика «Кількість» ----------
+   * Норма прив'язана до ВИДУ файлу (візуал/макет), а не до типу задачі — креатив
+   * теж заливає візуали, і вони йдуть у норму візуалів. Тому норми окремим
+   * блоком зверху, а нижче — ті самі п'ять типів, що й у режимі часу.
+   */
+  const normForScope = (index: number) => {
+    const monthKey = months[index]?.value;
+    if (!monthKey) return null;
+    const ids = scopedDesigner ? [scopedDesigner.id] : visibleDesigners.map((designer) => designer.id);
+    const plans = ids
+      .map((id) => normPlans.get(id)?.get(monthKey))
+      .filter((plan): plan is MonthNormPlan => !!plan);
+    if (plans.length === 0) return null;
+    const sum = (pick: (plan: MonthNormPlan) => number) => plans.reduce((total, plan) => total + pick(plan), 0);
+    // Спільне значення показуємо, лише якщо воно в усіх однакове: інакше
+    // «норма 8/день» для команди з різними умовами була б неправдою.
+    const shared = (pick: (plan: MonthNormPlan) => number) => {
+      const values = new Set(plans.map(pick));
+      return values.size === 1 ? [...values][0] : null;
+    };
+    return {
+      people: plans.length,
+      normDays: sum((plan) => plan.normDays),
+      visualNorm: sum((plan) => plan.visualNorm),
+      layoutNorm: sum((plan) => plan.layoutNorm),
+      visualNormPerDay: shared((plan) => plan.visualNormPerDay),
+      layoutNormPerDay: shared((plan) => plan.layoutNormPerDay),
+      visualOverRate: shared((plan) => plan.visualOverRate),
+      layoutOverRate: shared((plan) => plan.layoutOverRate),
+    };
+  };
+  const currentNorm = normForScope(mi);
+
+  const normRows = currentNorm
+    ? ([
+        {
+          kind: "visualization" as const,
+          label: "Візуали",
+          done: currentAgg?.worksByKind.visualization ?? 0,
+          norm: currentNorm.visualNorm,
+          perDay: currentNorm.visualNormPerDay,
+          rate: currentNorm.visualOverRate,
+        },
+        {
+          kind: "layout" as const,
+          label: "Макети",
+          done: currentAgg?.worksByKind.layout ?? 0,
+          norm: currentNorm.layoutNorm,
+          perDay: currentNorm.layoutNormPerDay,
+          rate: currentNorm.layoutOverRate,
+        },
+      ] as const)
+    : [];
+
+  const countRows = DESIGN_TASK_TYPE_OPTIONS.map((option) => {
+    const type = option.value;
+    const current = currentAgg?.worksByType[type] ?? null;
+    const compare = previousAgg?.worksByType[type] ?? null;
+    const peers = showPeers
+      ? peerDesigners
+          .map((designer) => {
+            const agg = analytics.perDesigner.get(designer.id)?.[mi] ?? null;
+            const value = agg?.worksByType[type].works ?? 0;
+            return value > 0 ? { designer, value } : null;
+          })
+          .filter((entry): entry is { designer: (typeof peerDesigners)[number]; value: number } => !!entry)
+      : [];
+    return { type, option, current, compare, peers };
+  });
+  const countScaleMax = Math.max(
+    1,
+    ...countRows.flatMap((row) => [
+      row.current?.works ?? 0,
+      row.compare?.works ?? 0,
       ...row.peers.map((peer) => peer.value),
     ])
   );
@@ -1012,11 +1149,40 @@ export function DesignersDashboard({
         <section className="rounded-2xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-              <Clock className="h-4 w-4 text-primary" />
-              {scopedDesigner
-                ? `Середній час за типами — ${firstName(scopedDesigner.label)}`
-                : "Середній час на задачу — за типами"}
+              {typesMetric === "time" ? (
+                <Clock className="h-4 w-4 text-primary" />
+              ) : (
+                <BarChart3 className="h-4 w-4 text-primary" />
+              )}
+              {typesMetric === "time"
+                ? scopedDesigner
+                  ? `Середній час за типами — ${firstName(scopedDesigner.label)}`
+                  : "Середній час на задачу — за типами"
+                : scopedDesigner
+                  ? `Зроблено робіт за типами — ${firstName(scopedDesigner.label)}`
+                  : "Зроблено робіт — за типами"}
             </h3>
+            {/* Перемикач метрики: та сама картка, ті самі рядки — інша величина. */}
+            <div className={SEGMENTED_GROUP_SM} aria-label="Метрика картки типів">
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={typesMetric === "time"}
+                onClick={() => setTypesMetric("time")}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                ⌀ час
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={typesMetric === "count"}
+                onClick={() => setTypesMetric("count")}
+                className={SEGMENTED_TRIGGER_SM}
+              >
+                Кількість
+              </Button>
+            </div>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block h-2 w-4 rounded-sm bg-foreground/80" aria-hidden="true" />
@@ -1028,10 +1194,12 @@ export function DesignersDashboard({
                   {monthShort(months[prevIdx].value)}
                 </span>
               ) : null}
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-3 border-l-2 border-dashed border-foreground/45" aria-hidden="true" />
-                норма
-              </span>
+              {typesMetric === "time" || normRows.length > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 border-l-2 border-dashed border-foreground/45" aria-hidden="true" />
+                  норма
+                </span>
+              ) : null}
               {showPeers ? (
                 <span className="inline-flex items-center gap-1.5">
                   <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-border/70 bg-muted/40" aria-hidden="true" />
@@ -1040,9 +1208,25 @@ export function DesignersDashboard({
               ) : null}
             </span>
             <p className="w-full text-xs text-muted-foreground">
-              Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять.
+              {typesMetric === "time" ? (
+                "Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять."
+              ) : (
+                <>
+                  Унікальні роботи з розділу «Результат»: перезаливи одного файлу нової роботи не додають, .ai+.pdf
+                  одного макета — це одна робота.
+                  {currentNorm ? (
+                    <span className="text-muted-foreground/70">
+                      {" "}
+                      Норма — за {currentNorm.normDays}{" "}
+                      {currentNorm.people > 1 ? `нормо-днів на ${currentNorm.people} людей` : "нормо-днів"} (відпустки й
+                      лікарняні норму зменшують).
+                    </span>
+                  ) : null}
+                </>
+              )}
             </p>
           </div>
+          {typesMetric === "time" ? (
           <div className="mt-2 divide-y divide-border/50">
             {typeRows.map((row) => {
               const Icon = DESIGN_TASK_TYPE_ICONS[row.type];
@@ -1191,6 +1375,209 @@ export function DesignersDashboard({
               );
             })}
           </div>
+          ) : (
+          <div className="mt-2">
+            {/* Блок норм: тільки для тих, кому RLS віддала ставки. */}
+            {normRows.length > 0 ? (
+              <div className="divide-y divide-border/50">
+                {normRows.map((row) => {
+                  const color = row.kind === "visualization" ? FILE_KIND_META[0].color : FILE_KIND_META[1].color;
+                  const scale = Math.max(1, row.done, row.norm);
+                  const over = Math.max(0, row.done - row.norm);
+                  const normLeft = Math.min(100, (row.norm / scale) * 100);
+                  const doneLeft = Math.min(100, (Math.min(row.done, row.norm) / scale) * 100);
+                  return (
+                    <div
+                      key={row.kind}
+                      className="grid items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} aria-hidden="true" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-medium text-foreground">{row.label}</span>
+                          <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
+                            {row.perDay != null ? `норма ${row.perDay}/день` : "норма індивідуальна"}
+                            {row.rate != null ? ` · ${row.rate} ₴ понад` : ""}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="relative h-7">
+                        <div className="absolute inset-0 flex justify-between" aria-hidden="true">
+                          {[0, 1, 2, 3, 4].map((line) => (
+                            <span key={line} className="w-px bg-foreground/5" />
+                          ))}
+                        </div>
+                        <div className="absolute top-1 h-3.5 rounded-r" style={{ width: `${doneLeft}%`, background: color }} />
+                        {over > 0 ? (
+                          <div
+                            className="absolute top-1 h-3.5 rounded-r bg-success-solid"
+                            style={{ left: `${normLeft}%`, width: `${100 - normLeft}%` }}
+                          />
+                        ) : null}
+                        <span
+                          className="absolute inset-y-0 border-l-2 border-dashed border-foreground/45"
+                          style={{ left: `${normLeft}%` }}
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                          {row.done} <span className="font-normal text-muted-foreground">з {row.norm}</span>
+                        </span>
+                        {over > 0 ? (
+                          <span className={cn(CHIP_BASE, DELTA_CLASS.good)}>
+                            <TrendingUp className="h-3 w-3" />
+                            +{over}
+                            {row.rate != null ? ` · ${Math.round(over * row.rate).toLocaleString("uk-UA")} ₴` : ""}
+                          </span>
+                        ) : (
+                          <span className={cn(CHIP_BASE, DELTA_CLASS.flat)}>ще {row.norm - row.done}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className={cn(normRows.length > 0 && "mt-3 border-t border-border/50 pt-2")}>
+              <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">
+                За типами задач
+              </span>
+              <div className="divide-y divide-border/50">
+                {countRows.map((row) => {
+                  const Icon = DESIGN_TASK_TYPE_ICONS[row.type];
+                  const works = row.current?.works ?? 0;
+                  const prevWorks = row.compare?.works ?? 0;
+                  const currentWidth = works === 0 ? 0 : Math.max(2, (works / countScaleMax) * 100);
+                  const compareWidth = prevWorks === 0 ? 0 : Math.max(2, (prevWorks / countScaleMax) * 100);
+                  const tipRows: TipRow[] = [
+                    {
+                      color: typeColor(row.type),
+                      label: `${scopedDesigner ? firstName(scopedDesigner.label) : "Команда"} · ${monthShort(months[mi].value)}`,
+                      value: `${works} робіт`,
+                      strong: true,
+                    },
+                    {
+                      label: "З них",
+                      value: `${row.current?.visualization ?? 0} візуалів · ${row.current?.layout ?? 0} макетів`,
+                      muted: true,
+                    },
+                  ];
+                  if (prevIdx != null) {
+                    tipRows.push({ label: monthShort(months[prevIdx].value), value: `${prevWorks} робіт`, muted: true });
+                  }
+                  row.peers.forEach((peer) => {
+                    tipRows.push({ label: firstName(peer.designer.label), value: `${peer.value} робіт`, muted: true });
+                  });
+                  return (
+                    <div
+                      key={row.type}
+                      className="grid cursor-help items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]"
+                      {...bindTip(() => ({ title: row.option.label, rows: tipRows }))}
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: typeColor(row.type) }} aria-hidden="true" />
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-medium text-foreground">{row.option.label}</span>
+                          <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
+                            {works > 0
+                              ? `${row.current?.visualization ?? 0} віз · ${row.current?.layout ?? 0} мак`
+                              : "робіт немає"}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="relative h-7">
+                        <div className="absolute inset-0 flex justify-between" aria-hidden="true">
+                          {[0, 1, 2, 3, 4].map((line) => (
+                            <span key={line} className="w-px bg-foreground/5" />
+                          ))}
+                        </div>
+                        {works > 0 ? (
+                          <div
+                            className="absolute top-1 h-3.5 rounded-r"
+                            style={{ width: `${currentWidth}%`, background: typeColor(row.type) }}
+                          />
+                        ) : null}
+                        {prevWorks > 0 ? (
+                          <div
+                            className="absolute top-[19px] h-1.5 rounded-r opacity-30"
+                            style={{ width: `${compareWidth}%`, background: typeColor(row.type) }}
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        {row.peers.map((peer) => (
+                          <span
+                            key={peer.designer.id}
+                            className="absolute inset-y-0 flex -translate-x-1/2 cursor-help items-center"
+                            style={{ left: `${Math.min(100, (peer.value / countScaleMax) * 100)}%` }}
+                            {...bindTip(() => ({
+                              title: `${peer.designer.label} · ${row.option.label}`,
+                              rows: [{ color: typeColor(row.type), label: "Зроблено", value: `${peer.value} робіт`, strong: true }],
+                            }))}
+                          >
+                            <span className="absolute inset-y-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground/45" aria-hidden="true" />
+                            <AvatarBase
+                              src={getMemberAvatar(peer.designer.id)}
+                              name={peer.designer.label}
+                              fallback={getInitials(peer.designer.label)}
+                              size={18}
+                              className="relative z-10 shrink-0 ring-2 ring-background"
+                              inactive={memberInactiveById[peer.designer.id] ?? false}
+                            />
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span className="whitespace-nowrap text-[13px] font-semibold tabular-nums text-foreground">
+                          {works}
+                        </span>
+                        {works > 0 || prevWorks > 0 ? (
+                          <DeltaChip
+                            current={works}
+                            previous={prevIdx == null ? null : prevWorks}
+                            lowerBetter={false}
+                            format={(value) => `${Math.round(value)}`}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Роботи в задачах без типу: інакше сума рядків не сходилася б
+                    із блоком норм — а це перше, що перевіряють очима. */}
+                {(currentAgg?.worksByType.none.works ?? 0) > 0 ? (
+                  <div className="grid items-center gap-3 py-2.5 sm:grid-cols-[210px_minmax(0,1fr)_170px]">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-sm bg-muted-foreground/40" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-medium text-muted-foreground">Без типу</span>
+                        <span className="block truncate whitespace-nowrap text-3xs tabular-nums text-muted-foreground">
+                          {currentAgg?.worksByType.none.visualization ?? 0} віз ·{" "}
+                          {currentAgg?.worksByType.none.layout ?? 0} мак
+                        </span>
+                      </span>
+                    </div>
+                    <div className="relative h-7">
+                      <div
+                        className="absolute top-1 h-3.5 rounded-r bg-muted-foreground/30"
+                        style={{
+                          width: `${Math.max(2, ((currentAgg?.worksByType.none.works ?? 0) / countScaleMax) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center sm:justify-end">
+                      <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
+                        {currentAgg?.worksByType.none.works ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-border/60 bg-background/70 p-5">
@@ -1411,7 +1798,7 @@ export function DesignersDashboard({
                   <span>#</span>
                   <span>Дизайнер</span>
                   <span>У роботі</span>
-                  <span>Файли</span>
+                  <span>Роботи</span>
                   <span>Час</span>
                   <span>⌀ / задачу</span>
                   <span>Структура часу</span>
@@ -1451,12 +1838,12 @@ export function DesignersDashboard({
                         <span className="min-w-0">
                           <span className="block truncate text-[13px] font-semibold text-foreground">{designer.label}</span>
                           <span className="text-3xs text-muted-foreground">
-                            {agg.tasksClosed} закрито · {agg.files} файлів
+                            {agg.tasksClosed} закрито · {agg.files} файлів → {agg.works} робіт
                           </span>
                         </span>
                       </span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.timerTaskCount}</span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.files}</span>
+                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.works}</span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">
                         {formatHours(agg.trackedSeconds)}
                         <span className="text-3xs font-medium text-muted-foreground"> год</span>

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
+import { outputWorkKey } from "@/lib/designerPayrollMath";
 import {
   ACTIVE_DESIGN_STATUSES,
   calculateDesignWorkload,
@@ -29,6 +30,9 @@ export const DESIGNER_FILE_UPLOAD_ACTIONS = ["design_output_upload", "design_tas
 
 export type MonthKey = { year: number; month: number; value: string };
 
+/** Унікальні роботи в розрізі виду завантаження. */
+export type WorksBreakdown = { works: number; visualization: number; layout: number };
+
 export type DesignerMonthAgg = {
   /** Закриті (approved) задачі за місяць — окрема productivity-метрика. */
   tasksClosed: number;
@@ -38,6 +42,17 @@ export type DesignerMonthAgg = {
   filesByExt: Record<string, number>;
   /** Розподіл файлів за видом завантаження (output_kind). */
   filesByKind: { visualization: number; layout: number; attachment: number };
+  /**
+   * Унікальні РОБОТИ з розділу «Результат» — одиниця = (задача + назва файлу без
+   * розширення), рівно як у зарплаті (`designerPayroll.loadOutputCounts`).
+   * Перезалив того самого файлу після правок нової роботи не додає, а .ai+.pdf
+   * одного макета — це одна робота. Кріплення до задач (`attachment`) сюди не
+   * входять: вони не мають норми й не оплачуються.
+   */
+  works: number;
+  worksByKind: { visualization: number; layout: number };
+  /** Ті самі унікальні роботи в розрізі типу задачі. */
+  worksByType: Record<DesignTaskType | "none", WorksBreakdown>;
   /** Секунди у таймері (сесії користувача, за started_at; кожна сесія обрізана до MAX_SESSION_SECONDS). */
   trackedSeconds: number;
   /** Розподіл секунд користувача за типами задач (для стека структури часу). */
@@ -99,11 +114,23 @@ export type DesignerAnalytics = {
   truncated: boolean;
 };
 
+const emptyWorks = (): WorksBreakdown => ({ works: 0, visualization: 0, layout: 0 });
+
 export const emptyMonthAgg = (): DesignerMonthAgg => ({
   tasksClosed: 0,
   files: 0,
   filesByExt: {},
   filesByKind: { visualization: 0, layout: 0, attachment: 0 },
+  works: 0,
+  worksByKind: { visualization: 0, layout: 0 },
+  worksByType: {
+    visualization: emptyWorks(),
+    presentation: emptyWorks(),
+    layout_adaptation: emptyWorks(),
+    layout: emptyWorks(),
+    creative: emptyWorks(),
+    none: emptyWorks(),
+  },
   trackedSeconds: 0,
   secondsByType: { visualization: 0, presentation: 0, layout_adaptation: 0, layout: 0, creative: 0, none: 0 },
   timerTaskCountByType: {},
@@ -367,6 +394,18 @@ export async function loadDesignerAnalytics(params: {
     return [team[monthIdx], personal];
   };
 
+  /** true — цей ключ у цьому відрі бачимо вперше (дедуп задач і робіт). */
+  const firstSeen = (map: Map<string, Set<string>>, key: string, id: string) => {
+    let set = map.get(key);
+    if (!set) {
+      set = new Set();
+      map.set(key, set);
+    }
+    if (set.has(id)) return false;
+    set.add(id);
+    return true;
+  };
+
   /* ---------- закриття: останнє approved на задачу у вікні ---------- */
   const lastApprovedByTask = new Map<string, { monthIdx: number; designerId: string | null }>();
   statusRows.forEach((row) => {
@@ -401,9 +440,15 @@ export async function loadDesignerAnalytics(params: {
     });
   });
 
-  /* ---------- файли (усього + по розширеннях + по виду) ---------- */
+  /* ---------- файли (усього + по розширеннях + по виду) і унікальні роботи ----------
+   * Файли й роботи рахуються в одному проході, але це РІЗНІ величини:
+   * файл — кожне завантаження, робота — унікальна (задача + назва без розширення).
+   * Дедуп ведеться окремо для команди й для людини, бо та сама робота має
+   * порахуватись один раз у кожному зі скоупів.
+   */
   const uploadKind = (value?: string | null): "visualization" | "layout" | "attachment" =>
     value === "visualization" ? "visualization" : value === "layout" ? "layout" : "attachment";
+  const seenWorkByBucket = new Map<string, Set<string>>(); // `${scopeKey}:${kind}` → «задача:назва»
   uploadRows.forEach((row) => {
     if (!row.user_id || !designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.created_at);
@@ -411,7 +456,15 @@ export async function loadDesignerAnalytics(params: {
     const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
     if (uploaded.length === 0) return;
     const kind = uploadKind(row.metadata?.output_kind ?? null);
-    aggFor(row.user_id, monthIdx).forEach((agg) => {
+    const taskId = eventTaskId(row);
+    const taskType = (taskId ? taskMetaById.get(taskId)?.designTaskType : null) ?? "none";
+    const personal = perDesigner.get(row.user_id)?.[monthIdx];
+    const targets: Array<{ agg: DesignerMonthAgg; scopeKey: string }> = [
+      { agg: team[monthIdx], scopeKey: `team:${monthIdx}` },
+    ];
+    if (personal) targets.push({ agg: personal, scopeKey: `${row.user_id}:${monthIdx}` });
+
+    targets.forEach(({ agg, scopeKey }) => {
       agg.files += uploaded.length;
       agg.filesByKind[kind] += uploaded.length;
       uploaded.forEach((file) => {
@@ -419,6 +472,13 @@ export async function loadDesignerAnalytics(params: {
         const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
         const ext = match ? match[1] : "інше";
         agg.filesByExt[ext] = (agg.filesByExt[ext] ?? 0) + 1;
+        // Кріплення до задач роботами не рахуються — норми й оплати в них немає.
+        if (kind === "attachment" || !name) return;
+        if (!firstSeen(seenWorkByBucket, `${scopeKey}:${kind}`, outputWorkKey(taskId, name))) return;
+        agg.works += 1;
+        agg.worksByKind[kind] += 1;
+        agg.worksByType[taskType].works += 1;
+        agg.worksByType[taskType][kind] += 1;
       });
     });
   });
@@ -431,16 +491,6 @@ export async function loadDesignerAnalytics(params: {
    */
   const seenTaskByBucket = new Map<string, Set<string>>(); // `${scopeKey}` → різні taskId
   const seenTaskByBucketType = new Map<string, Set<string>>(); // `${scopeKey}:${type}` → різні taskId
-  const firstSeen = (map: Map<string, Set<string>>, key: string, taskId: string) => {
-    let set = map.get(key);
-    if (!set) {
-      set = new Set();
-      map.set(key, set);
-    }
-    if (set.has(taskId)) return false;
-    set.add(taskId);
-    return true;
-  };
   timerRows.forEach((row) => {
     if (!designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.started_at);

@@ -5,6 +5,8 @@ import {
   creativePayout,
   listWorkdays,
   monthKeyOf,
+  outputWorkKey,
+  outputWorkKind,
   pickRateForMonth,
   resolveTerms,
   type DesignerPayDefaults,
@@ -398,6 +400,35 @@ describe("платні креативи", () => {
 
   it("без креативів поведінка не змінюється", () => {
     expect(computeEarnings(base).earnedTotal).toBe(computeEarnings({ ...base, creatives: [] }).earnedTotal);
+  });
+});
+
+/**
+ * Одиниця виробітку спільна для зарплати і для дашборда «Дизайнери» — якщо вона
+ * розійдеться, дизайнер побачить одну цифру у віджеті й іншу на сторінці.
+ */
+describe("одиниця виробітку", () => {
+  it("два формати одного макета — одна робота", () => {
+    expect(outputWorkKey("t1", "Візитка_Ощад.ai")).toBe(outputWorkKey("t1", "Візитка_Ощад.pdf"));
+  });
+
+  it("перезалив під тією самою назвою нової роботи не додає", () => {
+    expect(outputWorkKey("t1", "візуал-04.png")).toBe(outputWorkKey("t1", "ВІЗУАЛ-04.PNG"));
+  });
+
+  it("та сама назва в різних задачах — різні роботи", () => {
+    expect(outputWorkKey("t1", "візуал-01.png")).not.toBe(outputWorkKey("t2", "візуал-01.png"));
+  });
+
+  it("перейменований перезалив рахується як нова робота (відомий залишковий ризик)", () => {
+    expect(outputWorkKey("t1", "візуал-01.png")).not.toBe(outputWorkKey("t1", "візуал-01_v2.png"));
+  });
+
+  it("вид: усе, що не visualization, — макет", () => {
+    expect(outputWorkKind("visualization")).toBe("visualization");
+    expect(outputWorkKind("layout")).toBe("layout");
+    expect(outputWorkKind(null)).toBe("layout");
+    expect(outputWorkKind(undefined)).toBe("layout");
   });
 });
 
