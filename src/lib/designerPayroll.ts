@@ -6,6 +6,7 @@ import {
   creativePayout,
   listWorkdays,
   monthKeyOf,
+  isDeletedWorksRuleActive,
   outputWorkKey,
   outputWorkKind,
   pickRateForMonth,
@@ -86,35 +87,71 @@ export async function loadOutputCounts(params: {
   const { from, to } = monthBounds(params.monthKey);
   const { data, error } = await supabase
     .from("activity_log")
-    .select("entity_id,metadata")
+    .select("action,entity_id,metadata")
     .eq("team_id", params.teamId)
     .eq("user_id", params.userId)
-    .eq("action", "design_output_upload")
+    .in("action", ["design_output_upload", "design_output_delete"])
     .gte("created_at", from.toISOString())
     .lt("created_at", to.toISOString())
     .limit(5000);
   if (error) throw error;
 
-  const seen = { visuals: new Set<string>(), layouts: new Set<string>() };
-  const files = { visuals: 0, layouts: 0 };
-  ((data ?? []) as Array<{
+  const rows = (data ?? []) as Array<{
+    action?: string | null;
     entity_id?: string | null;
     metadata?: {
       design_task_id?: string | null;
       output_kind?: string | null;
-      uploaded_files?: Array<{ file_name?: string | null }>;
+      uploaded_files?: Array<{ id?: string | null; file_name?: string | null }>;
+      deleted_files?: Array<{ id?: string | null }>;
     } | null;
-  }>).forEach((row) => {
+  }>;
+
+  /**
+   * Файли, видалені В ЦЬОМУ Ж місяці й ЦИМ САМИМ користувачем. Чуже видалення
+   * не забирає в дизайнера роботу — інакше менеджер, прибираючи зайвий файл,
+   * мовчки зменшував би комусь зарплату.
+   */
+  const deletedThisMonth = new Set<string>();
+  if (isDeletedWorksRuleActive(params.monthKey)) {
+    rows.forEach((row) => {
+      if (row.action !== "design_output_delete") return;
+      (Array.isArray(row.metadata?.deleted_files) ? row.metadata.deleted_files : []).forEach((file) => {
+        if (typeof file?.id === "string" && file.id) deletedThisMonth.add(file.id);
+      });
+    });
+  }
+
+  const seen = { visuals: new Set<string>(), layouts: new Set<string>() };
+  const files = { visuals: 0, layouts: 0 };
+  // Робота = хоч один живий файл. Тому спершу збираємо файли по роботах і лише
+  // потім рахуємо — інакше робота, у якої вижив другий файл, губилася б.
+  const workFiles = { visuals: new Map<string, string[]>(), layouts: new Map<string, string[]>() };
+  rows.forEach((row) => {
+    if (row.action !== "design_output_upload") return;
     const taskId = row.entity_id ?? row.metadata?.design_task_id ?? "?";
     const bucket = outputWorkKind(row.metadata?.output_kind) === "visualization" ? "visuals" : "layouts";
     const uploaded = Array.isArray(row.metadata?.uploaded_files) ? row.metadata.uploaded_files : [];
     uploaded.forEach((file) => {
       const name = typeof file?.file_name === "string" ? file.file_name : "";
       if (!name) return;
+      // «Файлів залито» лишається чесним лічильником усіх заливок, включно з
+      // видаленими: він показує масштаб перезаливів, а не гроші.
       files[bucket] += 1;
-      seen[bucket].add(outputWorkKey(taskId, name));
+      const key = outputWorkKey(taskId, name);
+      const list = workFiles[bucket].get(key) ?? [];
+      list.push(typeof file?.id === "string" ? file.id : "");
+      workFiles[bucket].set(key, list);
     });
   });
+
+  (["visuals", "layouts"] as const).forEach((bucket) => {
+    workFiles[bucket].forEach((fileIds, key) => {
+      if (fileIds.every((id) => id && deletedThisMonth.has(id))) return;
+      seen[bucket].add(key);
+    });
+  });
+
   return {
     visuals: { works: seen.visuals.size, files: files.visuals },
     layouts: { works: seen.layouts.size, files: files.layouts },

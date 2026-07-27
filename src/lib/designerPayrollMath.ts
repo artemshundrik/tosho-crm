@@ -132,6 +132,34 @@ export const outputWorkKey = (taskId: string | null | undefined, fileName: strin
 export const outputWorkKind = (outputKind: string | null | undefined): "visualization" | "layout" =>
   outputKind === "visualization" ? "visualization" : "layout";
 
+/**
+ * З якого місяця діє правило «видалене того ж місяця не рахується»
+ * (рішення CEO: з нового місяця, 2026-08).
+ *
+ * Раніше застосувати його неможливо технічно: видалення почали логуватись лише
+ * 27.07.2026, тож для попередніх місяців даних про них просто немає.
+ *
+ * ЧОМУ САМЕ «ТОГО Ж МІСЯЦЯ», а не «видалене будь-коли»:
+ *  · місяць застигає сам. Видалення у жовтні не має права переписати серпень,
+ *    який уже виплачено — інакше зарплата стає заднім числом мінливою, і без
+ *    снапшотів це небезпечно;
+ *  · так збігається зі змістом. Перезалив під новою назвою після правок
+ *    трапляється за дні (TS-0526-0041: залито 15.05, замінено 27–28.05) — це
+ *    і є подвійний рахунок. А прибирання зданої роботи через місяць-два
+ *    (TS-0426-0055) — це вже наведення ладу, і воно лишається зарахованим.
+ */
+export const DELETED_WORKS_RULE_FROM_MONTH = "2026-08";
+
+/** Порівняння рядків "YYYY-MM" працює лексикографічно — окремий парсер не потрібен. */
+export const isDeletedWorksRuleActive = (monthKey: string) => monthKey >= DELETED_WORKS_RULE_FROM_MONTH;
+
+/**
+ * Чи зараховується робота: хоч один її файл пережив місяць.
+ * Порожній список файлів роботою не є.
+ */
+export const workSurvivedMonth = (fileIds: string[], deletedInMonth: Set<string>) =>
+  fileIds.some((id) => !deletedInMonth.has(id));
+
 const pad2 = (value: number) => String(value).padStart(2, "0");
 export const monthKeyOf = (date: Date) => `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;
 

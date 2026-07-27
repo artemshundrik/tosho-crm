@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
-import { outputWorkKey } from "@/lib/designerPayrollMath";
+import { isDeletedWorksRuleActive, outputWorkKey } from "@/lib/designerPayrollMath";
 import {
   ACTIVE_DESIGN_STATUSES,
   calculateDesignWorkload,
@@ -26,7 +26,14 @@ import type { DesignStatus } from "@/lib/designTaskStatus";
  * обрізана до MAX_SESSION_SECONDS, щоб забутий таймер не отруював суми.
  */
 
-export const DESIGNER_FILE_UPLOAD_ACTIONS = ["design_output_upload", "design_task_attachment"];
+export const DESIGNER_FILE_UPLOAD_ACTIONS = [
+  "design_output_upload",
+  "design_task_attachment",
+  // Видалення потрібне для правила «видалене того ж місяця не рахується»
+  // (діє з DELETED_WORKS_RULE_FROM_MONTH). Рядки з цією дією не є заливками —
+  // усі цикли нижче їх пропускають.
+  "design_output_delete",
+];
 
 export type MonthKey = { year: number; month: number; value: string };
 
@@ -205,6 +212,7 @@ type StatusEventRow = {
 
 type UploadEventRow = {
   id: string;
+  action?: string | null;
   user_id?: string | null;
   entity_id?: string | null;
   created_at: string;
@@ -217,6 +225,7 @@ type UploadEventRow = {
       storage_bucket?: string | null;
       storage_path?: string | null;
     }>;
+    deleted_files?: Array<{ id?: string | null }>;
   } | null;
 };
 
@@ -310,7 +319,7 @@ export async function loadDesignerAnalytics(params: {
       ? emptyRows
       : supabase
           .from("activity_log")
-          .select("id,user_id,entity_id,created_at,metadata")
+          .select("id,action,user_id,entity_id,created_at,metadata")
           .eq("team_id", params.teamId)
           .in("action", DESIGNER_FILE_UPLOAD_ACTIONS)
           .gte("created_at", from)
@@ -478,9 +487,27 @@ export async function loadDesignerAnalytics(params: {
    */
   const uploadKind = (value?: string | null): "visualization" | "layout" | "attachment" =>
     value === "visualization" ? "visualization" : value === "layout" ? "layout" : "attachment";
+  /**
+   * Видалені того ж місяця й тією ж людиною — такі роботи не рахуються
+   * (правило діє з DELETED_WORKS_RULE_FROM_MONTH). Ключ: `${userId}:${monthIdx}`.
+   */
+  const deletedByUserMonth = new Map<string, Set<string>>();
+  uploadRows.forEach((row) => {
+    if (row.action !== "design_output_delete" || !row.user_id) return;
+    const monthIdx = monthIndexOf(months, row.created_at);
+    if (monthIdx < 0 || !isDeletedWorksRuleActive(months[monthIdx].value)) return;
+    const key = `${row.user_id}:${monthIdx}`;
+    const set = deletedByUserMonth.get(key) ?? new Set<string>();
+    (Array.isArray(row.metadata?.deleted_files) ? row.metadata.deleted_files : []).forEach((file) => {
+      if (typeof file?.id === "string" && file.id) set.add(file.id);
+    });
+    deletedByUserMonth.set(key, set);
+  });
+
   const seenWorkByBucket = new Map<string, Set<string>>(); // `${scopeKey}:${kind}` → «задача:назва»
   const seenTouchedByBucket = new Map<string, Set<string>>(); // `${scopeKey}` → задачі з таймером або заливкою
   uploadRows.forEach((row) => {
+    if (row.action === "design_output_delete") return;
     if (!row.user_id || !designerIdSet.has(row.user_id)) return;
     const monthIdx = monthIndexOf(months, row.created_at);
     if (monthIdx < 0) return;
@@ -489,6 +516,7 @@ export async function loadDesignerAnalytics(params: {
     const kind = uploadKind(row.metadata?.output_kind ?? null);
     const taskId = eventTaskId(row);
     const taskType = (taskId ? taskMetaById.get(taskId)?.designTaskType : null) ?? "none";
+    const deletedThisMonth = deletedByUserMonth.get(`${row.user_id}:${monthIdx}`);
     const personal = perDesigner.get(row.user_id)?.[monthIdx];
     const targets: Array<{ agg: DesignerMonthAgg; scopeKey: string }> = [
       { agg: team[monthIdx], scopeKey: `team:${monthIdx}` },
@@ -506,6 +534,11 @@ export async function loadDesignerAnalytics(params: {
         agg.filesByExt[ext] = (agg.filesByExt[ext] ?? 0) + 1;
         // Кріплення до задач роботами не рахуються — норми й оплати в них немає.
         if (kind === "attachment" || !name) return;
+        // Видалений того ж місяця файл роботу не створює. Якщо у роботи є ще
+        // й живий файл — вона порахується на ньому, тож достатньо пропустити
+        // саме видалені, нічого не відкочуючи назад.
+        const fileId = typeof file?.id === "string" ? file.id : "";
+        if (fileId && deletedThisMonth?.has(fileId)) return;
         if (!firstSeen(seenWorkByBucket, `${scopeKey}:${kind}`, outputWorkKey(taskId, name))) return;
         agg.works += 1;
         agg.worksByKind[kind] += 1;
@@ -556,6 +589,7 @@ export async function loadDesignerAnalytics(params: {
   const works = new Map<string, DesignerWorkGroup[]>();
   const workGroupIndex = new Map<string, DesignerWorkGroup>(); // `${uid}:${mIdx}:${taskId}`
   uploadRows.forEach((row) => {
+    if (row.action === "design_output_delete") return;
     if (!row.user_id || !designerIdSet.has(row.user_id)) return;
     const taskId = eventTaskId(row);
     if (!taskId) return;

@@ -4,9 +4,11 @@ import {
   countWorkdays,
   creativePayout,
   listWorkdays,
+  isDeletedWorksRuleActive,
   monthKeyOf,
   outputWorkKey,
   outputWorkKind,
+  workSurvivedMonth,
   pickRateForMonth,
   resolveTerms,
   type DesignerPayDefaults,
@@ -429,6 +431,37 @@ describe("одиниця виробітку", () => {
     expect(outputWorkKind("layout")).toBe("layout");
     expect(outputWorkKind(null)).toBe("layout");
     expect(outputWorkKind(undefined)).toBe("layout");
+  });
+});
+
+/**
+ * Правило «видалене того ж місяця не рахується» (з серпня 2026). Головне, що
+ * тут зафіксовано: липень і раніші місяці ним НЕ зачіпаються — інакше вже
+ * виплачені суми поїхали б заднім числом.
+ */
+describe("видалені роботи", () => {
+  it("діє з серпня 2026, липень і раніше — за старим правилом", () => {
+    expect(isDeletedWorksRuleActive("2026-06")).toBe(false);
+    expect(isDeletedWorksRuleActive("2026-07")).toBe(false);
+    expect(isDeletedWorksRuleActive("2026-08")).toBe(true);
+    expect(isDeletedWorksRuleActive("2026-12")).toBe(true);
+    expect(isDeletedWorksRuleActive("2027-01")).toBe(true);
+  });
+
+  it("робота з єдиним видаленим файлом не рахується", () => {
+    expect(workSurvivedMonth(["f1"], new Set(["f1"]))).toBe(false);
+  });
+
+  it("робота живе, поки живий хоч один її файл (.ai видалили, .pdf лишився)", () => {
+    expect(workSurvivedMonth(["f1", "f2"], new Set(["f1"]))).toBe(true);
+  });
+
+  it("нічого не видаляли — рахується як і раніше", () => {
+    expect(workSurvivedMonth(["f1", "f2"], new Set())).toBe(true);
+  });
+
+  it("робота без файлів роботою не є", () => {
+    expect(workSurvivedMonth([], new Set())).toBe(false);
   });
 });
 
