@@ -105,6 +105,7 @@ import {
   resolveSubscriptionLogo,
   SUBSCRIPTION_BRANDS,
 } from "./subscriptionBrands";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceExpensesProps = {
   teamId: string | null;
@@ -435,7 +436,7 @@ function EntryEditor({
       {/* Порядок: дата → звідки → сума → коментар. Радіус rounded-md — як у кнопок
           тієї ж висоти (h-8); дефолтний rounded-xl на низькому полі виглядав завеликим. */}
       {hideDate ? null : (
-        <Input
+        <Input controlSize="sm"
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
@@ -448,7 +449,7 @@ function EntryEditor({
         <VendorPicker value={vendor} options={vendorOptions} onChange={setVendor} disabled={saving} />
       ) : null}
       <div className="flex items-center gap-1">
-        <Input
+        <Input controlSize="sm"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onKeyDown={onKeyDown}
@@ -460,7 +461,7 @@ function EntryEditor({
         />
         <span className="w-3 text-xs text-muted-foreground">{CURRENCY_SYMBOL[currency]}</span>
       </div>
-      <Input
+      <Input controlSize="sm"
         value={note}
         onChange={(e) => setNote(e.target.value)}
         onKeyDown={onKeyDown}
@@ -1478,9 +1479,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   return (
     <div className="space-y-4">
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-        </div>
+        <FinanceSkeleton variant="stats" />
       ) : visibleExpenses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
@@ -2672,7 +2671,7 @@ function ExpenseDialog({
                               placeholder="Замовлення"
                             />
                           </div>
-                          <Input
+                          <Input controlSize="md"
                             value={row.amount}
                             onChange={(e) => updateAllocation(index, { amount: e.target.value })}
                             inputMode="decimal"

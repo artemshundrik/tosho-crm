@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Loader2, ScrollText } from "lucide-react";
+import { FileDown, FileSpreadsheet, ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,6 +29,7 @@ import {
   openPrintableDocument,
   type ReconOperation,
 } from "./documentHtml";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceReconciliationProps = { teamId: string | null; userId: string | null };
 
@@ -155,9 +156,7 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-      </div>
+      <FinanceSkeleton variant="stats" />
     );
   }
 

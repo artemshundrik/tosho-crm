@@ -6,6 +6,7 @@ import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -136,6 +137,27 @@ const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", advance: "", ad
  */
 const STICKY_HEAD =
   "sticky top-12 z-10 border-b border-border/40 bg-background/95 backdrop-blur-sm lg:top-6";
+
+/**
+ * Опис колонок — один на таблицю і на її скелетон.
+ *
+ * Скелетон малюється тією ж <Table> з тими ж відсотками, тож повторити розкладку
+ * «на око» неможливо в принципі: колонка може змінитись лише тут, і змінюється
+ * одразу в обох. Заголовки в скелетоні справжні, не сірі смужки — вони не
+ * залежать від даних, тож коли дані приходять, нічого не стрибає.
+ *
+ * `cell` каже, чим заповнити клітинку в скелетоні: поле вводу, число, тощо.
+ */
+const PAYROLL_COLUMNS = [
+  { key: "person", label: "Співробітник", width: "w-[21%]", align: "", cell: "person" },
+  { key: "base", label: "Ставка", width: "w-[11%]", align: "", cell: "input" },
+  { key: "bonus", label: "Бонус", width: "w-[10%]", align: "", cell: "input" },
+  { key: "official", label: "Офіційна ЗП", width: "w-[12%]", align: "", cell: "input" },
+  { key: "advance", label: "Аванс", width: "w-[12%]", align: "", cell: "input" },
+  { key: "total", label: "До виплати", width: "w-[13%]", align: "text-right", cell: "amount" },
+  { key: "note", label: "Нотатка", width: "w-[13%]", align: "", cell: "note" },
+  { key: "status", label: "Статус", width: "w-[8%]", align: "text-center", cell: "status" },
+] as const;
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -450,10 +472,6 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         showReset={year !== now.getFullYear() || month !== now.getMonth() + 1}
       />
 
-      <p className="text-sm text-muted-foreground">
-        Ставка, бонус, офіційна ЗП та статус виплати по кожному за місяць. Дані спільні зі сторінкою зарплат.
-      </p>
-
       {/* Bento-підсумок місяця (спільний із Витратами): скільки платимо, прогрес
           виплат смугою (виплачено/лишилось) і склад суми у виносці. */}
       <FinanceBentoSummary
@@ -491,9 +509,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       />
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-        </div>
+        <PayrollTableSkeleton />
       ) : (
         <div className="rounded-xl border border-border/60">
           {/* table-fixed + % widths: columns stretch to fill the width and scale
@@ -506,14 +522,11 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     краєм. Праворуч лишається тільки «До виплати» — там у
                     клітинці звичайне число, притиснуте вправо, і заголовок
                     тримається з ним в одній лінії. */}
-                <TableHead className={cn(STICKY_HEAD, "w-[21%]")}>Співробітник</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[11%]")}>Ставка</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[10%]")}>Бонус</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[12%]")}>Офіційна ЗП</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[12%]")}>Аванс</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[13%] text-right")}>До виплати</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[13%]")}>Нотатка</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[8%] text-center")}>Статус</TableHead>
+                {PAYROLL_COLUMNS.map((column) => (
+                  <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
+                    {column.label}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -614,6 +627,65 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           </Table>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Заглушка таблиці виплат.
+ *
+ * Малюється тією ж <Table> і тими ж PAYROLL_COLUMNS, що й справжня, тож
+ * ширини колонок, висота рядків і форма клітинок збігаються точно. Попередня
+ * версія була узагальненою сіткою однакових пігулок і з таблицею не мала
+ * нічого спільного.
+ */
+function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="rounded-xl border border-border/60" role="status" aria-busy="true" aria-label="Завантаження виплат">
+      <Table size="sm" stickyHeader className="table-fixed">
+        <TableHeader>
+          <TableRow>
+            {PAYROLL_COLUMNS.map((column) => (
+              <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
+                {column.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: rows }).map((_, index) => (
+            <TableRow key={index}>
+              {PAYROLL_COLUMNS.map((column) => (
+                <TableCell key={column.key} className={column.align}>
+                  {column.cell === "person" ? (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <Skeleton className={cn("h-3 rounded-full", index % 3 === 0 ? "w-[64%]" : "w-[52%]")} />
+                        <Skeleton
+                          className={cn("h-2.5 rounded-full opacity-70", index % 2 === 0 ? "w-[42%]" : "w-[56%]")}
+                        />
+                      </div>
+                    </div>
+                  ) : column.cell === "input" ? (
+                    // Та сама висота й радіус, що в поля вводу — рядок не стрибне.
+                    <Skeleton className="h-8 w-full rounded-md" />
+                  ) : column.cell === "amount" ? (
+                    <Skeleton className="ml-auto h-3.5 w-16 rounded-full" />
+                  ) : column.cell === "note" ? (
+                    <div className="flex items-center gap-1.5">
+                      <Skeleton className="h-3.5 w-3.5 shrink-0 rounded" />
+                      <Skeleton className="h-3 w-14 rounded-full opacity-70" />
+                    </div>
+                  ) : (
+                    <Skeleton className="mx-auto h-5 w-9 rounded-full" />
+                  )}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

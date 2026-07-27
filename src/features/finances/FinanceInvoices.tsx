@@ -52,6 +52,7 @@ import { hasModuleAccess } from "@/lib/moduleAccess";
 import { listVchasnoStatusesByCrmIds, vchasnoStatusBadge, type VchasnoDocStatus } from "./vchasnoStatus";
 import { ActionButton, EditIconButton, DeleteIconButton } from "./financeRowActions";
 import vchasnoLogo from "@/assets/vchasno-logo.png";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceInvoicesProps = {
   teamId: string | null;
@@ -307,9 +308,7 @@ export function FinanceInvoices({ teamId, userId }: FinanceInvoicesProps) {
       ) : null}
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-        </div>
+        <FinanceSkeleton variant="stats" />
       ) : invoices.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
@@ -557,13 +556,13 @@ function InvoiceDialog({
             </div>
             <div className="grid gap-2">
               <Label>Номер рахунку</Label>
-              <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Напр. 0001" className="h-9" />
+              <Input controlSize="md" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="Напр. 0001" className="h-9" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Сума (грн) <span className="text-destructive">*</span></Label>
-              <Input
+              <Input controlSize="md"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
@@ -573,7 +572,7 @@ function InvoiceDialog({
             </div>
             <div className="grid gap-2">
               <Label>Ставка ПДВ, %</Label>
-              <Input
+              <Input controlSize="md"
                 value={vatRate}
                 onChange={(e) => setVatRate(e.target.value)}
                 inputMode="decimal"
@@ -585,11 +584,11 @@ function InvoiceDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Дата виставлення</Label>
-              <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="h-9" />
+              <Input controlSize="md" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-2">
               <Label>Оплатити до</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
+              <Input controlSize="md" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -680,7 +679,7 @@ function InvoiceOrderPicker({
       <PopoverContent className="w-[380px] p-2" align="start">
         <div className="relative mb-2">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <Input controlSize="md"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Номер або замовник…"

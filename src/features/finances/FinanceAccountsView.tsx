@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldAlert, Wallet } from "lucide-react";
+import { ShieldAlert, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
@@ -15,6 +15,7 @@ import {
   type FinanceExpense,
   type FinancePayment,
 } from "./types";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceAccountsViewProps = { teamId: string | null; canSeeSensitive: boolean };
 
@@ -97,9 +98,7 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-      </div>
+      <FinanceSkeleton variant="bento" />
     );
   }
 

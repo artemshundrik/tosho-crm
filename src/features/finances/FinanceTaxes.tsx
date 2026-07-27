@@ -29,6 +29,7 @@ import {
   type TaxStatus,
   type TaxType,
 } from "./types";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceTaxesProps = { teamId: string | null };
 
@@ -200,9 +201,7 @@ export function FinanceTaxes({ teamId }: FinanceTaxesProps) {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-        </div>
+        <FinanceSkeleton variant="rows" />
       ) : taxes.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
@@ -380,7 +379,7 @@ function TaxDialog({
             </div>
             <div className="grid gap-2">
               <Label>Звітний місяць</Label>
-              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9" />
+              <Input controlSize="md" type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9" />
             </div>
           </div>
           <div className="grid gap-2">
@@ -402,7 +401,7 @@ function TaxDialog({
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-2">
               <Label>База, грн</Label>
-              <Input
+              <Input controlSize="md"
                 value={baseAmount}
                 onChange={(e) => setBaseAmount(e.target.value)}
                 onBlur={suggestAmount}
@@ -413,7 +412,7 @@ function TaxDialog({
             </div>
             <div className="grid gap-2">
               <Label>Ставка %</Label>
-              <Input
+              <Input controlSize="md"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
                 onBlur={suggestAmount}
@@ -423,7 +422,7 @@ function TaxDialog({
             </div>
             <div className="grid gap-2">
               <Label>Сума <span className="text-destructive">*</span></Label>
-              <Input
+              <Input controlSize="md"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
@@ -435,7 +434,7 @@ function TaxDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Сплатити до</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
+              <Input controlSize="md" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-2">
               <Label>Статус</Label>

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
@@ -27,6 +27,7 @@ import {
   type FinancePayment,
   type FinanceTax,
 } from "./types";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceReportsProps = { teamId: string | null; canSeeSensitive: boolean };
 
@@ -166,9 +167,7 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-      </div>
+      <FinanceSkeleton variant="stats" />
     );
   }
 

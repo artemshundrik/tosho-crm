@@ -61,6 +61,7 @@ import {
   type LegalEntityKind,
 } from "./types";
 import { getExpenseCategoryIcon } from "./expenseCategoryIcons";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceSettingsProps = {
   teamId: string | null;
@@ -156,9 +157,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-        </div>
+        <FinanceSkeleton variant="stats" />
       ) : tab === "entities" ? (
         <LegalEntitiesPanel teamId={teamId} entities={entities} onChanged={reload} />
       ) : tab === "accounts" ? (
@@ -328,7 +327,7 @@ function LegalEntitiesPanel({
           <div className="space-y-3">
             <div className="grid gap-2">
               <Label>Назва <span className="text-destructive">*</span></Label>
-              <Input
+              <Input controlSize="md"
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Напр. ТОВ «Тошо» або ФОП Іваненко І.І."
@@ -353,7 +352,7 @@ function LegalEntitiesPanel({
               </div>
               <div className="grid gap-2">
                 <Label>Група податку</Label>
-                <Input
+                <Input controlSize="md"
                   value={form.taxGroup ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, taxGroup: e.target.value }))}
                   placeholder="Напр. 3"
@@ -371,7 +370,7 @@ function LegalEntitiesPanel({
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label>ЄДРПОУ</Label>
-                <Input
+                <Input controlSize="md"
                   value={form.edrpou ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, edrpou: e.target.value }))}
                   className="h-9"
@@ -379,7 +378,7 @@ function LegalEntitiesPanel({
               </div>
               <div className="grid gap-2">
                 <Label>ІПН</Label>
-                <Input
+                <Input controlSize="md"
                   value={form.ipn ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, ipn: e.target.value }))}
                   className="h-9"
@@ -388,7 +387,7 @@ function LegalEntitiesPanel({
             </div>
             <div className="grid gap-2">
               <Label>IBAN</Label>
-              <Input
+              <Input controlSize="md"
                 value={form.iban ?? ""}
                 onChange={(e) => setForm((p) => ({ ...p, iban: e.target.value }))}
                 placeholder="UA…"
@@ -564,7 +563,7 @@ function AccountsPanel({
           <div className="space-y-3">
             <div className="grid gap-2">
               <Label>Назва <span className="text-destructive">*</span></Label>
-              <Input
+              <Input controlSize="md"
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="Напр. Райфайзен ТОВ, Каса готівка"
@@ -589,7 +588,7 @@ function AccountsPanel({
               </div>
               <div className="grid gap-2">
                 <Label>Валюта</Label>
-                <Input
+                <Input controlSize="md"
                   value={form.currency ?? "UAH"}
                   onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
                   placeholder="UAH"
@@ -726,7 +725,7 @@ function CategoriesPanel({
       <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/60 bg-muted/10 p-3">
         <div className="grid min-w-[180px] flex-1 gap-1.5">
           <Label className="text-xs">Назва статті</Label>
-          <Input
+          <Input controlSize="md"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Напр. Оренда офісу"

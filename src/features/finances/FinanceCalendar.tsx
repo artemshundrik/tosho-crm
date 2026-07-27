@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarClock, Landmark, Loader2, RefreshCw, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, Landmark, RefreshCw, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { formatCurrencyAmount, useFxRates } from "@/lib/fxRates";
@@ -23,6 +23,7 @@ import {
   type FinanceLegalEntity,
   type FinanceTax,
 } from "./types";
+import { FinanceSkeleton } from "./FinanceSkeleton";
 
 type FinanceCalendarProps = { teamId: string | null; userId: string | null };
 
@@ -208,9 +209,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
-      </div>
+      <FinanceSkeleton variant="bento" />
     );
   }
 
