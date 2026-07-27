@@ -12,6 +12,7 @@ import {
   Link as LinkIcon,
   Clock,
   Copy,
+  Mail,
   Trash2,
   Loader2,
   AlertTriangle,
@@ -172,6 +173,16 @@ type Invite = {
   created_at: string;
   expires_at: string;
   accepted_at: string | null;
+};
+
+/** email — Supabase шле лист; link — отримуємо посилання й передаємо самі. */
+type InviteDelivery = "email" | "link";
+
+type InviteResult = {
+  delivery: InviteDelivery;
+  email: string;
+  /** Лише для delivery=link: одноразове посилання входу від Supabase. */
+  actionLink?: string;
 };
 
 type TeamMembersPageCache = {
@@ -548,8 +559,9 @@ export function TeamMembersPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteAccessRole, setInviteAccessRole] = useState("member");
   const [inviteJobRole, setInviteJobRole] = useState("none");
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteResult, setInviteResult] = useState<InviteResult | null>(null);
+  const [inviteBusy, setInviteBusy] = useState<InviteDelivery | null>(null);
+  const [inviteRowBusy, setInviteRowBusy] = useState<string | null>(null);
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
@@ -1244,7 +1256,6 @@ export function TeamMembersPage() {
   const panelSeniority = formatEmploymentDuration(panelMeta?.startDate) || "—";
   const panelStartedOn = panelMeta?.startDate ? formatEmploymentDate(panelMeta.startDate) : "";
 
-  const getInviteLink = (token: string) => `${window.location.origin}/invite?token=${token}`;
   const localProfileFallbackHint =
     "Локально fallback-функція недоступна. Запусти через `netlify dev` або застосуй SQL зі scripts/team-member-profiles.sql.";
   const selectedEmploymentDuration = formatEmploymentDuration(editProfileStartDate);
@@ -2076,7 +2087,42 @@ export function TeamMembersPage() {
     }
   };
 
-  const createInvite = async () => {
+  const callInviteFunction = async (body: Record<string, unknown>) => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Не вдалося підтвердити авторизацію");
+    }
+
+    const response = await fetch("/.netlify/functions/create-workspace-invite", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = await parseJsonSafe<{ error?: string; token?: string; actionLink?: string }>(response);
+    if (!response.ok) {
+      throw new Error(payload?.error || `Invite failed (HTTP ${response.status})`);
+    }
+    return payload;
+  };
+
+  const reloadInvites = async () => {
+    if (!workspaceId) return;
+    const { data: invitesData } = await supabase
+      .schema("tosho")
+      .from("workspace_invites")
+      .select("id,email,access_role,job_role,token,created_at,expires_at,accepted_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+
+    setInvites((invitesData as Invite[]) ?? []);
+  };
+
+  const createInvite = async (delivery: InviteDelivery) => {
     if (!workspaceId) return;
     if (!inviteEmail) {
       toast.error("Вкажіть email для інвайту");
@@ -2087,53 +2133,63 @@ export function TeamMembersPage() {
       return;
     }
 
-    setInviteBusy(true);
+    setInviteBusy(delivery);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) {
-        toast.error("Не вдалося підтвердити авторизацію");
-        return;
-      }
-
-      const response = await fetch("/.netlify/functions/create-workspace-invite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          email: inviteEmail,
-          accessRole: inviteAccessRole,
-          jobRole: normalizeJobRoleInput(inviteJobRole),
-          expiresInDays: 7,
-        }),
+      const payload = await callInviteFunction({
+        email: inviteEmail,
+        accessRole: inviteAccessRole,
+        jobRole: normalizeJobRoleInput(inviteJobRole),
+        expiresInDays: 7,
+        delivery,
       });
 
-      const payload = await parseJsonSafe<{ error?: string; token?: string }>(response);
-      if (!response.ok) {
-        throw new Error(payload?.error || `Invite failed (HTTP ${response.status})`);
+      setInviteResult({
+        delivery,
+        email: inviteEmail.trim().toLowerCase(),
+        actionLink: payload?.actionLink,
+      });
+
+      if (delivery === "link" && payload?.actionLink) {
+        await navigator.clipboard.writeText(payload.actionLink).catch(() => undefined);
       }
 
-      const token = payload?.token as string | undefined;
-      if (token) {
-        setGeneratedLink(getInviteLink(token));
-      } else {
-        setGeneratedLink(null);
-      }
-
-      const { data: invitesData } = await supabase
-        .schema("tosho")
-        .from("workspace_invites")
-        .select("id,email,access_role,job_role,token,created_at,expires_at,accepted_at")
-        .eq("workspace_id", workspaceId)
-        .order("created_at", { ascending: false });
-
-      setInvites((invitesData as Invite[]) ?? []);
+      await reloadInvites();
     } catch (e: unknown) {
       toast.error("Не вдалося створити інвайт", { description: getErrorMessage(e, "") });
     } finally {
-      setInviteBusy(false);
+      setInviteBusy(null);
+    }
+  };
+
+  /** Перевидає вже створене запрошення: свіже посилання або ще один лист. */
+  const deliverInvite = async (invite: Invite, delivery: InviteDelivery) => {
+    setInviteRowBusy(`${invite.id}:${delivery}`);
+    try {
+      const payload = await callInviteFunction({
+        mode: "deliver_invite",
+        inviteId: invite.id,
+        delivery,
+      });
+
+      if (delivery === "link") {
+        const actionLink = payload?.actionLink;
+        if (!actionLink) throw new Error("Функція не повернула посилання");
+        await navigator.clipboard.writeText(actionLink);
+        toast.success("Посилання для входу скопійовано", {
+          description: "Одноразове, діє близько доби. Надішли в особисті, не в спільний чат.",
+        });
+      } else {
+        toast.success(`Лист надіслано на ${invite.email}`, {
+          description: "Попередні посилання з листів більше не діють.",
+        });
+      }
+    } catch (e: unknown) {
+      toast.error(
+        delivery === "link" ? "Не вдалося видати посилання" : "Не вдалося надіслати лист",
+        { description: getErrorMessage(e, "") }
+      );
+    } finally {
+      setInviteRowBusy(null);
     }
   };
 
@@ -2144,7 +2200,7 @@ export function TeamMembersPage() {
   const openInviteDialog = () => {
     setActiveTab("invites");
     setInviteOpen(true);
-    setGeneratedLink(null);
+    setInviteResult(null);
     setInviteEmail("");
     setInviteAccessRole("member");
     setInviteJobRole("none");
@@ -3309,24 +3365,42 @@ export function TeamMembersPage() {
                               Прострочено
                             </Badge>
                           ) : (
-                            <Badge variant="default" className="bg-success-soft text-success-foreground border-success-soft-border hover:bg-success-soft shadow-none">
-                              Активне
+                            <Badge variant="default" className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft shadow-none">
+                              Очікує входу
                             </Badge>
                           )}
                         </div>
                         <div className="mt-3 text-xs text-muted-foreground">Створено: {formatDate(inv.created_at)}</div>
                         <div className="mt-3 flex gap-2">
                           {!expired && !used ? (
-                            <Button
-                              size="iconXs"
-                              variant="control"
-                              onClick={() => {
-                                navigator.clipboard.writeText(getInviteLink(inv.token));
-                                toast.success("Посилання скопійовано");
-                              }}
-                            >
-                              <Copy className="w-4 h-4" />
-                            </Button>
+                            <>
+                              <Button
+                                size="iconXs"
+                                variant="control"
+                                title="Скопіювати посилання для входу"
+                                disabled={inviteRowBusy !== null}
+                                onClick={() => deliverInvite(inv, "link")}
+                              >
+                                {inviteRowBusy === `${inv.id}:link` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
+                              </Button>
+                              <Button
+                                size="iconXs"
+                                variant="control"
+                                title="Надіслати лист ще раз"
+                                disabled={inviteRowBusy !== null}
+                                onClick={() => deliverInvite(inv, "email")}
+                              >
+                                {inviteRowBusy === `${inv.id}:email` ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Mail className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </>
                           ) : null}
                           <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
                             <Trash2 className="w-4 h-4" />
@@ -3411,9 +3485,9 @@ export function TeamMembersPage() {
                           ) : (
                             <Badge
                               variant="default"
-                              className="bg-success-soft text-success-foreground border-success-soft-border hover:bg-success-soft shadow-none"
+                              className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft shadow-none"
                             >
-                              Активне
+                              Очікує входу
                             </Badge>
                           )}
                         </TableCell>
@@ -3426,16 +3500,34 @@ export function TeamMembersPage() {
                         <TableActionCell className="pr-6">
                           <div className="flex items-center justify-end gap-2">
                             {!expired && !used ? (
-                              <Button
-                                size="iconXs"
-                                variant="control"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(getInviteLink(inv.token));
-                                  toast.success("Посилання скопійовано");
-                                }}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
+                              <>
+                                <Button
+                                  size="iconXs"
+                                  variant="control"
+                                  title="Скопіювати посилання для входу"
+                                  disabled={inviteRowBusy !== null}
+                                  onClick={() => deliverInvite(inv, "link")}
+                                >
+                                  {inviteRowBusy === `${inv.id}:link` ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Copy className="w-4 h-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="iconXs"
+                                  variant="control"
+                                  title="Надіслати лист ще раз"
+                                  disabled={inviteRowBusy !== null}
+                                  onClick={() => deliverInvite(inv, "email")}
+                                >
+                                  {inviteRowBusy === `${inv.id}:email` ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Mail className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </>
                             ) : null}
                             <Button size="iconXs" variant="controlDestructive" onClick={() => confirmRevoke(inv.id)}>
                               <Trash2 className="w-4 h-4" />
@@ -3531,7 +3623,7 @@ export function TeamMembersPage() {
         open={inviteOpen}
         onOpenChange={(open) => {
           setInviteOpen(open);
-          if (!open) setGeneratedLink(null);
+          if (!open) setInviteResult(null);
         }}
       >
         <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
@@ -3539,12 +3631,12 @@ export function TeamMembersPage() {
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Запросити в workspace</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
-                Створити посилання для доступу до workspace.
+                Дати новій людині доступ до workspace.
               </DialogDescription>
             </DialogHeader>
           </div>
           <div className="p-6">
-            {!generatedLink ? (
+            {!inviteResult ? (
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground">Email</Label>
@@ -3585,32 +3677,68 @@ export function TeamMembersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={createInvite} disabled={inviteBusy} className="w-full h-11">
-                  {inviteBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Створити інвайт"}
-                </Button>
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => createInvite("link")}
+                    disabled={inviteBusy !== null}
+                    className="w-full h-11"
+                  >
+                    {inviteBusy === "link" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <LinkIcon className="mr-2 h-4 w-4" /> Отримати посилання для входу
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => createInvite("email")}
+                    disabled={inviteBusy !== null}
+                    className="w-full h-11"
+                  >
+                    {inviteBusy === "email" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" /> Надіслати лист-запрошення
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Посилання працює одразу — передаєш його людині сам. Лист залежить від доставки
+                    пошти й нерідко потрапляє у спам. Обидва способи спираються на один одноразовий
+                    вхід, тож кожна нова видача гасить попередню.
+                  </p>
+                </div>
               </div>
-            ) : (
+            ) : inviteResult.delivery === "link" ? (
               <div className="space-y-6">
-              <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
+                <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
                   <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
-                    <ShieldAlert className="w-6 h-6" />
+                    <LinkIcon className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-lg text-foreground">Посилання готове!</span>
                   <span className="text-sm opacity-80 mt-1 text-center max-w-xs text-muted-foreground">
-                    Надішли його новому учаснику.
+                    Уже в буфері обміну. Надішли його {inviteResult.email} — воно і впустить в
+                    акаунт, і відкриє сторінку, де людина задасть свій пароль.
                   </span>
                 </div>
                 <div className="space-y-2">
                   <Label className="font-medium text-foreground">Посилання для копіювання</Label>
                   <div className="flex gap-2">
-                    <Input value={generatedLink} readOnly className="font-mono text-sm bg-muted/50 h-11 border-dashed text-foreground" />
+                    <Input
+                      value={inviteResult.actionLink ?? ""}
+                      readOnly
+                      className="font-mono text-sm bg-muted/50 h-11 border-dashed text-foreground"
+                    />
                     <Button
                       size="icon"
                       variant="outline"
                       className="h-11 w-11 shrink-0"
                       onClick={() => {
-                        if (!generatedLink) return;
-                        navigator.clipboard.writeText(generatedLink);
+                        if (!inviteResult.actionLink) return;
+                        navigator.clipboard.writeText(inviteResult.actionLink);
                         toast.success("Скопійовано в буфер обміну");
                       }}
                     >
@@ -3618,6 +3746,43 @@ export function TeamMembersPage() {
                     </Button>
                   </div>
                 </div>
+                <div className="flex items-start gap-3 rounded-inner border border-warning-soft-border bg-warning-soft p-4 text-warning-foreground">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-xs leading-relaxed">
+                    Це ключ від акаунта: хто перейде за ним, той і зайде. Одноразове, діє близько
+                    доби. Надсилай в особисті, не в спільний чат.
+                  </p>
+                </div>
+                <Button variant="ghost" className="w-full h-11" onClick={() => setInviteOpen(false)}>
+                  Закрити
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
+                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-lg text-foreground">Лист надіслано</span>
+                  <span className="text-sm opacity-80 mt-1 text-center max-w-xs text-muted-foreground">
+                    На {inviteResult.email}. Хай відкриє лист — і одразу потрапить на сторінку, де
+                    задасть пароль. Якщо не дійшов, варто пошукати у спамі.
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full h-11"
+                  disabled={inviteBusy !== null}
+                  onClick={() => createInvite("link")}
+                >
+                  {inviteBusy === "link" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <LinkIcon className="mr-2 h-4 w-4" /> Отримати посилання замість листа
+                    </>
+                  )}
+                </Button>
                 <Button variant="ghost" className="w-full h-11" onClick={() => setInviteOpen(false)}>
                   Закрити
                 </Button>

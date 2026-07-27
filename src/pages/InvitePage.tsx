@@ -47,6 +47,10 @@ export default function InvitePage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  // Майже всі, хто сюди потрапляє, — нові люди без пароля: у них він
+  // обов'язковий, інакше акаунт лишається без способу увійти вдруге.
+  // Виняток (діючий співробітник, якого запросили ще раз) вмикає його сам.
+  const [keepExistingPassword, setKeepExistingPassword] = useState(false);
 
   const linkToAuth = useMemo(() => {
     const nextPath = token ? `/invite?token=${token}` : "/";
@@ -102,7 +106,7 @@ export default function InvitePage() {
     setBusy(true);
     setError(null);
     try {
-      if (password || passwordConfirm) {
+      if (!keepExistingPassword) {
         if (password.length < 8) {
           throw new Error("Пароль має бути мінімум 8 символів.");
         }
@@ -257,23 +261,45 @@ export default function InvitePage() {
             </div>
 
             <div className="mt-4 text-left">
-              <label className="text-xs font-semibold text-muted-foreground">Пароль</label>
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Вигадайте пароль"
-                wrapperClassName="mt-2"
-              />
-              <label className="mt-3 block text-xs font-semibold text-muted-foreground">Підтвердження пароля</label>
-              <PasswordInput
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                placeholder="Повторіть пароль"
-                wrapperClassName="mt-2"
-              />
-              <div className="mt-2 text-xs text-muted-foreground">
-                Якщо ви вже маєте пароль, можете залишити поля порожніми.
-              </div>
+              {keepExistingPassword ? (
+                <div className="rounded-inner border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Заходите зі своїм теперішнім паролем — новий не задаємо.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setKeepExistingPassword(false)}
+                    className="font-semibold text-foreground underline underline-offset-2"
+                  >
+                    Задати пароль
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="text-xs font-semibold text-muted-foreground">Придумайте пароль</label>
+                  <PasswordInput
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Мінімум 8 символів"
+                    wrapperClassName="mt-2"
+                  />
+                  <label className="mt-3 block text-xs font-semibold text-muted-foreground">Підтвердження пароля</label>
+                  <PasswordInput
+                    value={passwordConfirm}
+                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                    placeholder="Повторіть пароль"
+                    wrapperClassName="mt-2"
+                  />
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Це ваш пароль для наступних входів у CRM.{" "}
+                    <button
+                      type="button"
+                      onClick={() => setKeepExistingPassword(true)}
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      У мене вже є пароль
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {error && (
@@ -284,7 +310,13 @@ export default function InvitePage() {
 
             <Button
               onClick={acceptInvite}
-              disabled={busy || emailMismatch || inviteAccepted || isInviteExpired}
+              disabled={
+                busy ||
+                emailMismatch ||
+                inviteAccepted ||
+                isInviteExpired ||
+                (!keepExistingPassword && (password.length < 8 || password !== passwordConfirm))
+              }
               className="mt-6 w-full"
             >
               {busy ? (

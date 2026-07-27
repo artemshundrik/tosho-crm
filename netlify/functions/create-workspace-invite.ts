@@ -1,12 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+type InviteDelivery = "email" | "link";
+
 type InviteRequest = {
-  mode?: "create_invite" | "update_member_roles" | "list_workspace_member_profiles" | "update_member_profile";
+  mode?:
+    | "create_invite"
+    | "deliver_invite"
+    | "update_member_roles"
+    | "list_workspace_member_profiles"
+    | "update_member_profile";
   email?: string;
   accessRole?: string;
   jobRole?: string | null;
   expiresInDays?: number;
+  /** email — Supabase шле лист; link — повертаємо посилання, адмін передає його сам. */
+  delivery?: InviteDelivery;
+  /** Для mode=deliver_invite: рядок tosho.workspace_invites, який перевидаємо. */
+  inviteId?: string;
   userId?: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -122,6 +133,137 @@ function pickBooleanFlags(value: unknown): Record<string, boolean> {
     if (typeof raw === "boolean") result[key] = raw;
   }
   return result;
+}
+
+const resolveAppUrl = () => process.env.APP_URL || process.env.URL || process.env.SITE_URL || undefined;
+
+const buildInviteRedirect = (token: string) => {
+  const appUrl = resolveAppUrl();
+  return appUrl ? `${appUrl}/invite?token=${token}` : undefined;
+};
+
+type ActionLinkResult =
+  | { ok: true; actionLink: string }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Видає одноразове посилання входу для запрошення.
+ *
+ * Таке посилання — носій доступу: хто ним перейшов, той опинився всередині
+ * акаунта. Тому воно дозволене ЛИШЕ для акаунта, який ще жодного разу не
+ * активували (без пароля й без жодного входу) і який ще не є учасником
+ * воркспейсу — тобто для порожньої оболонки, чиї єдині права дає саме це
+ * запрошення. Для активованого акаунта правильний шлях — «Забув пароль?»:
+ * лист іде у власну пошту людини, а не адміну в руки.
+ */
+async function issueActionLink(params: {
+  adminClient: ReturnType<typeof createClient>;
+  email: string;
+  inviteToken: string;
+  workspaceId: string;
+  /** Роль САМОГО запрошення, до якого прив'яжеться посилання, а не та, що просили в запиті. */
+  inviteAccessRole: string | null;
+  actorIsOwner: boolean;
+}): Promise<ActionLinkResult> {
+  const { adminClient, email, inviteToken, workspaceId, inviteAccessRole, actorIsOwner } = params;
+
+  // Перевірка ролі живе тут, а не на місцях виклику: посилання прив'язується до
+  // конкретного запрошення, і саме його роль отримає той, хто ним скористається.
+  // Роль із тіла запиту для цього не показник — при збігу email функція
+  // перевикористовує вже наявне запрошення разом з його роллю.
+  if (!actorIsOwner && (inviteAccessRole ?? null) === "owner") {
+    return { ok: false, status: 403, error: "Admin cannot deliver a Super Admin invite" };
+  }
+
+  const redirectTo = buildInviteRedirect(inviteToken);
+  if (!redirectTo) {
+    return {
+      ok: false,
+      status: 500,
+      error: "APP_URL не налаштовано — посиланню нема куди вести після входу.",
+    };
+  }
+
+  const { data: stateData, error: stateError } = await adminClient
+    .schema("tosho")
+    .rpc("invite_account_state", { _email: email });
+
+  if (stateError) {
+    return { ok: false, status: 500, error: stateError.message };
+  }
+
+  const state = (stateData ?? {}) as {
+    userId?: string | null;
+    accountExists?: boolean;
+    activated?: boolean;
+  };
+
+  if (state.activated) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        "У цієї людини вже активований акаунт — посилання для входу не видаємо. Хай скористається «Забув пароль?» на сторінці входу.",
+    };
+  }
+
+  if (state.userId) {
+    const { data: existingMembership, error: membershipError } = await adminClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", state.userId)
+      .maybeSingle<{ user_id?: string | null }>();
+
+    if (membershipError) {
+      return { ok: false, status: 500, error: membershipError.message };
+    }
+    if (existingMembership) {
+      return { ok: false, status: 409, error: "Ця людина вже учасник workspace." };
+    }
+  }
+
+  // Акаунта ще нема — тип invite його й створить. Якщо акаунт уже є (лист
+  // колись надсилали, але людина так і не увійшла) — invite впаде на
+  // email_exists, тож для нього беремо magiclink.
+  const generated = state.accountExists
+    ? await adminClient.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo },
+      })
+    : await adminClient.auth.admin.generateLink({
+        type: "invite",
+        email,
+        options: { redirectTo, data: { workspace_invite_token: inviteToken } },
+      });
+
+  if (generated.error) {
+    return { ok: false, status: 500, error: generated.error.message };
+  }
+
+  const actionLink = generated.data?.properties?.action_link;
+  if (!actionLink) {
+    return { ok: false, status: 500, error: "Supabase не повернув посилання для входу." };
+  }
+
+  // Якщо redirectTo немає у списку дозволених у Supabase Auth, GoTrue МОВЧКИ
+  // підставляє Site URL — посилання спрацює, але викине людину на корінь без
+  // токена запрошення, і збоку це виглядає як «нічого не сталося». Краще впасти
+  // тут з чіткою причиною, ніж віддати адміну посилання в нікуди.
+  const returnedRedirect = new URL(actionLink).searchParams.get("redirect_to");
+  if (returnedRedirect !== redirectTo) {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        `Supabase підмінив адресу повернення на «${returnedRedirect ?? "порожньо"}». ` +
+        `Додай ${redirectTo.split("?")[0]} у Authentication → URL Configuration → Redirect URLs.`,
+    };
+  }
+
+  return { ok: true, actionLink };
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -655,6 +797,104 @@ export const handler = async (event: HttpEvent) => {
     });
   }
 
+  // Перевидача вже створеного запрошення: або лист ще раз, або посилання.
+  if (payload.mode === "deliver_invite") {
+    const inviteId = payload.inviteId?.trim();
+    if (!inviteId) {
+      return jsonResponse(400, { error: "Missing inviteId" });
+    }
+
+    const { data: actorMembership, error: actorMembershipError } = await userClient
+      .schema("tosho")
+      .from("memberships_view")
+      .select("access_role,job_role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userData.user.id)
+      .maybeSingle<{ access_role?: string | null; job_role?: string | null }>();
+
+    if (actorMembershipError) {
+      return jsonResponse(500, { error: actorMembershipError.message });
+    }
+    if (!canManageTeam(actorMembership)) {
+      return jsonResponse(403, { error: "Only Super Admin or Admin can manage invites" });
+    }
+    const actorIsOwner = (actorMembership?.access_role ?? null) === "owner";
+
+    // Фільтр по workspace_id обов'язковий: без нього адмін одного воркспейсу
+    // перевидав би доступ у чужий за самим лише id запрошення.
+    const { data: invite, error: inviteLoadError } = await adminClient
+      .schema("tosho")
+      .from("workspace_invites")
+      .select("id,email,token,access_role,accepted_at,expires_at")
+      .eq("id", inviteId)
+      .eq("workspace_id", workspaceId)
+      .maybeSingle<{
+        id?: string | null;
+        email?: string | null;
+        token?: string | null;
+        access_role?: string | null;
+        accepted_at?: string | null;
+        expires_at?: string | null;
+      }>();
+
+    if (inviteLoadError) {
+      return jsonResponse(500, { error: inviteLoadError.message });
+    }
+    if (!invite?.token || !invite.email) {
+      return jsonResponse(404, { error: "Запрошення не знайдено" });
+    }
+    if (invite.accepted_at) {
+      return jsonResponse(409, { error: "Запрошення вже використано" });
+    }
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      return jsonResponse(409, { error: "Термін дії запрошення минув" });
+    }
+    if (!actorIsOwner && (invite.access_role ?? null) === "owner") {
+      return jsonResponse(403, { error: "Admin cannot deliver a Super Admin invite" });
+    }
+
+    const inviteEmail = invite.email.trim().toLowerCase();
+
+    if (payload.delivery === "link") {
+      const linkResult = await issueActionLink({
+        adminClient,
+        email: inviteEmail,
+        inviteToken: invite.token,
+        workspaceId,
+        inviteAccessRole: invite.access_role ?? null,
+        actorIsOwner,
+      });
+
+      if (!linkResult.ok) {
+        return jsonResponse(linkResult.status, { error: linkResult.error });
+      }
+
+      return jsonResponse(200, {
+        success: true,
+        delivery: "link",
+        email: inviteEmail,
+        token: invite.token,
+        actionLink: linkResult.actionLink,
+      });
+    }
+
+    const { error: resendError } = await adminClient.auth.admin.inviteUserByEmail(inviteEmail, {
+      redirectTo: buildInviteRedirect(invite.token),
+      data: { workspace_invite_token: invite.token },
+    });
+
+    if (resendError) {
+      return jsonResponse(500, { error: resendError.message });
+    }
+
+    return jsonResponse(200, {
+      success: true,
+      delivery: "email",
+      email: inviteEmail,
+      token: invite.token,
+    });
+  }
+
   const email = payload.email?.trim().toLowerCase();
   if (!email) {
     return jsonResponse(400, { error: "Missing email" });
@@ -704,6 +944,7 @@ export const handler = async (event: HttpEvent) => {
 
   let finalToken = tokenValue;
   let finalExpiresAt = expiresAt;
+  let finalAccessRole: string | null = accessRole;
   let reusedExistingInvite = false;
 
   if (inviteInsertError) {
@@ -719,7 +960,7 @@ export const handler = async (event: HttpEvent) => {
     const { data: existingInvite, error: existingInviteError } = await adminClient
       .schema("tosho")
       .from("workspace_invites")
-      .select("token,expires_at")
+      .select("token,expires_at,access_role")
       .eq("workspace_id", workspaceId)
       .eq("email", email)
       .is("accepted_at", null)
@@ -734,15 +975,40 @@ export const handler = async (event: HttpEvent) => {
 
     finalToken = existingInvite.token as string;
     finalExpiresAt = (existingInvite.expires_at as string) ?? expiresAt;
+    // Роль беремо з наявного рядка: вона може бути вищою за ту, що просили зараз.
+    finalAccessRole = (existingInvite.access_role as string | null) ?? null;
     reusedExistingInvite = true;
   }
 
-  const appUrl =
-    process.env.APP_URL || process.env.URL || process.env.SITE_URL || undefined;
-  const redirectTo = appUrl ? `${appUrl}/invite?token=${finalToken}` : undefined;
+  // Один інвайт — один канал доставки. Обидва спираються на один і той самий
+  // одноразовий токен у auth.users, тож кожна нова видача гасить попередню:
+  // мовчки робити і лист, і посилання не можна — вижило б лише останнє.
+  if (payload.delivery === "link") {
+    const linkResult = await issueActionLink({
+      adminClient,
+      email,
+      inviteToken: finalToken,
+      workspaceId,
+      inviteAccessRole: finalAccessRole,
+      actorIsOwner: (actorMembership?.access_role ?? null) === "owner",
+    });
+
+    if (!linkResult.ok) {
+      return jsonResponse(linkResult.status, { error: linkResult.error });
+    }
+
+    return jsonResponse(200, {
+      token: finalToken,
+      email,
+      expiresAt: finalExpiresAt,
+      reusedExistingInvite,
+      delivery: "link",
+      actionLink: linkResult.actionLink,
+    });
+  }
 
   const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    redirectTo,
+    redirectTo: buildInviteRedirect(finalToken),
     data: { workspace_invite_token: finalToken },
   });
 
@@ -755,5 +1021,6 @@ export const handler = async (event: HttpEvent) => {
     email,
     expiresAt: finalExpiresAt,
     reusedExistingInvite,
+    delivery: "email",
   });
 };
