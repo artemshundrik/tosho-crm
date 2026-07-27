@@ -51,6 +51,7 @@ function lazyWithRetry<T extends { default: React.ComponentType<unknown> }>(
 }
 
 const InvitePage = lazyWithRetry(() => import("./pages/InvitePage"));
+const EnterPage = lazyWithRetry(() => import("./pages/EnterPage"));
 const TeamMembersPage = lazyWithRetry(() =>
   import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
 );
@@ -829,6 +830,16 @@ function AppRoutes() {
         element={
           <RouteSuspense>
             <UpdatePasswordPage />
+          </RouteSuspense>
+        }
+      />
+      {/* Проміжна сторінка посилань входу: токен їде в hash, щоб краулери
+          прев'ю в месенджерах не спалювали його до людини. */}
+      <Route
+        path="/enter"
+        element={
+          <RouteSuspense>
+            <EnterPage />
           </RouteSuspense>
         }
       />

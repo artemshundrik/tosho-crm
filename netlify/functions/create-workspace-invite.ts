@@ -265,7 +265,14 @@ async function issueActionLink(params: {
     };
   }
 
-  return { ok: true, actionLink };
+  // Віддаємо не сире посилання Supabase, а нашу сторінку /enter із токеном у
+  // hash. Месенджери самі відкривають кожен надісланий URL заради прев'ю і цим
+  // спалюють одноразовий токен ще до людини — у нас сесію буквально тримав
+  // user_agent «TelegramBot (like TwitterBot)». Фрагмент після # на сервер не
+  // надсилається, тож краулер його не бачить, а перехід робить лише людина.
+  const wrapped = `${resolveAppUrl()}/enter#link=${encodeURIComponent(actionLink)}`;
+
+  return { ok: true, actionLink: wrapped };
 }
 
 export const handler = async (event: HttpEvent) => {
