@@ -1989,7 +1989,7 @@ export function DesignersDashboard({
                 <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground/80">
                   <span>#</span>
                   <span>Дизайнер</span>
-                  <span>У роботі</span>
+                  <span title="Усі задачі / з них із таймером">У роботі</span>
                   <span>Роботи</span>
                   <span>Час</span>
                   <span>⌀ / задачу</span>
@@ -2033,7 +2033,18 @@ export function DesignersDashboard({
                           </span>
                         </span>
                       </span>
-                      <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.timerTaskCount}</span>
+                      {/* Те саме число, що в KPI «Задач у роботі»: усі задачі, яких
+                          торкались. Показувати тут лише таймерні означало б дві
+                          різні цифри під однією назвою на одному екрані. */}
+                      <span
+                        className="text-[13px] font-semibold tabular-nums text-foreground"
+                        title={`${agg.tasksTouched} задач, з них ${agg.timerTaskCount} із таймером`}
+                      >
+                        {agg.tasksTouched}
+                        {agg.tasksTouched > agg.timerTaskCount ? (
+                          <span className="text-3xs font-medium text-muted-foreground"> / {agg.timerTaskCount}</span>
+                        ) : null}
+                      </span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">{agg.works}</span>
                       <span className="text-[13px] font-semibold tabular-nums text-foreground">
                         {formatHours(agg.trackedSeconds)}
