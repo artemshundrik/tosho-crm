@@ -174,32 +174,30 @@ function notifyWorkspaceMemberDirectoryUpdated(workspaceId: string, userId: stri
   );
 }
 
-function updateCachedWorkspaceMemberProfile(
-  workspaceId: string,
-  userId: string,
-  updates: Partial<Pick<WorkspaceMemberDirectoryRow, "moduleAccess">>
-) {
-  const cached = workspaceDirectoryCache.get(workspaceId);
-  if (!cached) return;
-
-  workspaceDirectoryCache.set(
-    workspaceId,
-    cached.map((row) =>
-      row.userId === userId
-        ? {
-            ...row,
-            ...(updates.moduleAccess ? { moduleAccess: normalizeModuleAccess(updates.moduleAccess) } : {}),
-          }
-        : row
-    )
-  );
+/**
+ * Скидає кешовану директорію після запису профілю.
+ *
+ * ГОЧА, через яку це переписано: тут патчився ЛИШЕ moduleAccess — сигнатура так
+ * і була, `Pick<WorkspaceMemberDirectoryRow, "moduleAccess">`. Дата старту,
+ * випробувальний, телефон, дата народження, імена, керівник і статус зайнятості
+ * лишалися в кеші старими. Запис у базу проходив, але listWorkspaceMemberDirectory
+ * віддає кеш як є, тож після переходу на іншу сторінку картка знову показувала
+ * старі значення — виглядало як «не зберігає».
+ *
+ * Скидаємо запис цілком, а не патчимо по полях: наступне читання візьме дані з
+ * бази, і жодне нове поле більше не доведеться сюди дописувати.
+ */
+function invalidateCachedWorkspaceMemberProfile(workspaceId: string, userId: string) {
+  workspaceDirectoryCache.delete(workspaceId);
   workspaceDisplayDirectoryCache.delete(workspaceId);
 
-  if (currentWorkspaceMemberDirectoryEntryCache?.workspaceId === workspaceId && currentWorkspaceMemberDirectoryEntryCache.userId === userId) {
-    currentWorkspaceMemberDirectoryEntryCache = {
-      ...currentWorkspaceMemberDirectoryEntryCache,
-      ...(updates.moduleAccess ? { moduleAccess: normalizeModuleAccess(updates.moduleAccess) } : {}),
-    };
+  if (
+    currentWorkspaceMemberDirectoryEntryCache?.workspaceId === workspaceId &&
+    currentWorkspaceMemberDirectoryEntryCache.userId === userId
+  ) {
+    // undefined — «ще не читали», саме це змушує перечитати з бази (null означало б
+    // «читали, запису немає» і кешувалося б як відповідь).
+    currentWorkspaceMemberDirectoryEntryCache = undefined;
   }
 }
 
@@ -648,11 +646,7 @@ export async function upsertWorkspaceMemberProfile(input: UpsertWorkspaceMemberP
       .upsert(variant as never, { onConflict: "workspace_id,user_id" });
 
     if (!error) {
-      updateCachedWorkspaceMemberProfile(input.workspaceId, input.userId, {
-        // Ролі тут не потрібні: збережений payload містить усі ключі явно,
-        // тож до дефолтів за роллю нормалізація не дійде.
-        moduleAccess: payload.module_access ? normalizeModuleAccess(payload.module_access) : undefined,
-      });
+      invalidateCachedWorkspaceMemberProfile(input.workspaceId, input.userId);
       notifyWorkspaceMemberDirectoryUpdated(input.workspaceId, input.userId);
       return;
     }
