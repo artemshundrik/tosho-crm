@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { CalendarDays, Circle, CircleCheck, Loader2, StickyNote } from "lucide-react";
+import { Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
@@ -8,6 +8,7 @@ import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
@@ -505,13 +506,13 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     краєм. Праворуч лишається тільки «До виплати» — там у
                     клітинці звичайне число, притиснуте вправо, і заголовок
                     тримається з ним в одній лінії. */}
-                <TableHead className={cn(STICKY_HEAD, "w-[19%]")}>Співробітник</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[21%]")}>Співробітник</TableHead>
                 <TableHead className={cn(STICKY_HEAD, "w-[11%]")}>Ставка</TableHead>
                 <TableHead className={cn(STICKY_HEAD, "w-[10%]")}>Бонус</TableHead>
                 <TableHead className={cn(STICKY_HEAD, "w-[12%]")}>Офіційна ЗП</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[16%]")}>Аванс</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[12%]")}>Аванс</TableHead>
                 <TableHead className={cn(STICKY_HEAD, "w-[13%] text-right")}>До виплати</TableHead>
-                <TableHead className={cn(STICKY_HEAD, "w-[11%]")}>Нотатка</TableHead>
+                <TableHead className={cn(STICKY_HEAD, "w-[13%]")}>Нотатка</TableHead>
                 <TableHead className={cn(STICKY_HEAD, "w-[8%] text-center")}>Статус</TableHead>
               </TableRow>
             </TableHeader>
@@ -643,50 +644,57 @@ function AdvanceCell({
   const hasAmount = parsePayrollAmount(amount) > 0;
 
   return (
-    <div className="flex items-center gap-1">
-      <AmountInput value={amount} onChange={onAmountChange} label="Аванс" className="flex-1" />
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!hasAmount}
-            aria-label={date ? `Дата авансу: ${formatDayMonth(date)}` : "Вказати дату авансу"}
-            title={hasAmount ? "Дата видачі авансу" : "Спершу вкажіть суму авансу"}
-            className={cn(
-              "h-8 shrink-0 px-2 text-2xs tabular-nums",
-              date ? "text-foreground" : "text-muted-foreground"
-            )}
-          >
-            {date ? formatDayMonth(date) : <CalendarDays className="h-3.5 w-3.5" />}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" side="bottom" className="w-auto space-y-2 p-2">
-          <Input
-            type="date"
-            controlSize="sm"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-            aria-label="Дата видачі авансу"
-            className="w-[9.5rem]"
-          />
-          {date ? (
-            <Button
+    <div className="relative">
+      {/* Місце під дату звільняємо лише тоді, коли вона взагалі може бути:
+          без суми клітинка нічим не відрізняється від «Ставки» чи «Бонуса». */}
+      <AmountInput
+        value={amount}
+        onChange={onAmountChange}
+        label="Аванс"
+        className={cn(hasAmount && "pl-[3.25rem]")}
+      />
+      {hasAmount ? (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
               type="button"
-              variant="ghost"
-              size="xs"
-              className="w-full text-muted-foreground"
-              onClick={() => {
-                onDateChange("");
-                setOpen(false);
-              }}
+              aria-label={date ? `Дата авансу: ${formatDayMonth(date)}` : "Вказати дату авансу"}
+              className={cn(
+                "absolute left-1.5 top-1/2 -translate-y-1/2 rounded px-1 py-0.5 text-2xs tabular-nums",
+                "transition-colors hover:bg-muted hover:text-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                date ? "text-muted-foreground" : "text-muted-foreground/70"
+              )}
             >
-              Прибрати дату
-            </Button>
-          ) : null}
-        </PopoverContent>
-      </Popover>
+              {date ? formatDayMonth(date) : "дата"}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" side="bottom" className="w-auto space-y-2 p-2">
+            <Input
+              type="date"
+              controlSize="sm"
+              value={date}
+              onChange={(e) => onDateChange(e.target.value)}
+              aria-label="Дата видачі авансу"
+              className="w-[9.5rem]"
+            />
+            {date ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="w-full text-muted-foreground"
+                onClick={() => {
+                  onDateChange("");
+                  setOpen(false);
+                }}
+              >
+                Прибрати дату
+              </Button>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      ) : null}
     </div>
   );
 }
@@ -707,28 +715,21 @@ function PayoutStatusButton({
   onToggle: () => void;
 }) {
   const label = paid
-    ? `Виплачено${paidAt ? ` ${formatFullDate(paidAt)}` : ""}. Натисніть, щоб зняти позначку.`
-    : "Ще не виплачено. Натисніть, щоб позначити виплату.";
+    ? `Виплачено${paidAt ? ` ${formatFullDate(paidAt)}` : ""}. Перемкніть, щоб зняти позначку.`
+    : "Ще не виплачено. Перемкніть, щоб позначити виплату.";
 
   return (
-    <HoverTip label={label} className="justify-center">
-      <Button
-        type="button"
-        variant="ghost"
-        size="iconSm"
-        aria-label={paid ? "Виплачено" : "Позначити виплаченим"}
-        aria-pressed={paid}
-        onClick={onToggle}
-        className={cn(
-          "cursor-pointer transition-colors",
-          paid
-            ? "tone-text-success hover:bg-success-soft/50"
-            : "text-muted-foreground/50 hover:text-foreground"
-        )}
-      >
-        {paid ? <CircleCheck className="h-[18px] w-[18px]" /> : <Circle className="h-[18px] w-[18px]" />}
-      </Button>
-    </HoverTip>
+    <div className="flex items-center justify-center">
+      <HoverTip label={label}>
+        <Switch
+          checked={paid}
+          onCheckedChange={onToggle}
+          label={paid ? "Виплачено" : "Позначити виплаченим"}
+          size="sm"
+          tone="success"
+        />
+      </HoverTip>
+    </div>
   );
 }
 

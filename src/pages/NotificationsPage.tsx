@@ -29,6 +29,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -158,42 +159,6 @@ function renderInAppToastContent({
         </div>
       </div>
     </div>
-  );
-}
-
-function Toggle({
-  checked,
-  disabled = false,
-  onClick,
-  label,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors",
-        checked && "border-primary/35 bg-primary",
-        !checked && "border-border bg-muted/80",
-        disabled && "cursor-not-allowed opacity-50"
-      )}
-    >
-      <span
-        className={cn(
-          "pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-sm transition-transform",
-          checked ? "translate-x-6" : "translate-x-1"
-        )}
-      />
-    </button>
   );
 }
 
@@ -1110,10 +1075,10 @@ export default function NotificationsPage() {
                           Тест push
                         </Button>
                         <div className="flex items-center gap-3">
-                          <Toggle
+                          <Switch
                             checked={push.enabled}
                             disabled={push.busy}
-                            onClick={push.enabled ? push.disable : push.enable}
+                            onCheckedChange={() => (push.enabled ? push.disable() : push.enable())}
                             label="Перемкнути push у браузері"
                           />
                           <span className="text-sm font-medium text-foreground">
@@ -1162,9 +1127,9 @@ export default function NotificationsPage() {
                     {inAppStatusLabel}
                   </span>
                   <div className="flex w-full items-center gap-3 md:min-w-[280px] md:justify-end">
-                    <Toggle
+                    <Switch
                       checked={inAppNotificationsEnabled}
-                      onClick={() => updateInAppNotificationPreferences({ enabled: !inAppNotificationsEnabled })}
+                      onCheckedChange={() => updateInAppNotificationPreferences({ enabled: !inAppNotificationsEnabled })}
                       label="Перемкнути in-app popup"
                     />
                     <span className="text-sm font-medium text-foreground">
@@ -1225,10 +1190,10 @@ export default function NotificationsPage() {
                         Тест звуку
                       </Button>
                       <div className="flex items-center gap-3">
-                        <Toggle
+                        <Switch
                           checked={inAppNotificationSoundEnabled}
                           disabled={!inAppNotificationsEnabled}
-                          onClick={() =>
+                          onCheckedChange={() =>
                             updateInAppNotificationPreferences({ soundEnabled: !inAppNotificationSoundEnabled })
                           }
                           label="Перемкнути звук сповіщень"
@@ -1288,19 +1253,19 @@ export default function NotificationsPage() {
                             —
                           </span>
                         ) : (
-                          <Toggle
+                          <Switch
                             checked={isCategoryChannelOn(cat.key, "push")}
                             disabled={channelPrefsBusy}
-                            onClick={() => toggleCategoryChannel(cat.key, "push")}
+                            onCheckedChange={() => toggleCategoryChannel(cat.key, "push")}
                             label={`Push: ${cat.label}`}
                           />
                         )}
                       </div>
                       <div className="flex w-16 justify-center">
-                        <Toggle
+                        <Switch
                           checked={isCategoryChannelOn(cat.key, "telegram")}
                           disabled={channelPrefsBusy || !telegramLinked}
-                          onClick={() => toggleCategoryChannel(cat.key, "telegram")}
+                          onCheckedChange={() => toggleCategoryChannel(cat.key, "telegram")}
                           label={`Telegram: ${cat.label}`}
                         />
                       </div>
