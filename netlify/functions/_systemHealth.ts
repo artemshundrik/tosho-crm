@@ -21,7 +21,28 @@ import {
 // питань у боті («що не працює?»).
 
 export type Tone = HealthTone;
-export type Signal = { tone: Tone; text: string };
+/**
+ * Код сигналу — стабільний ідентифікатор, незалежний від тексту.
+ *
+ * Потрібен, щоб бот міг ПОЯСНИТИ конкретну проблему («що це значить?»).
+ * Матчити пояснення по тексту було б крихко: варто переписати формулювання —
+ * і довідка мовчки відвалюється.
+ */
+export type SignalCode =
+  | "backup"
+  | "storage"
+  | "database"
+  | "dead_tuples"
+  | "cron_never_ran"
+  | "cron_stale"
+  | "cron_failures"
+  | "cron_http_failures"
+  | "cron_ok"
+  | "ai_cost"
+  | "attachments"
+  | "audit_trigger";
+
+export type Signal = { tone: Tone; text: string; code?: SignalCode };
 
 export const TONE_EMOJI: Record<Tone, string> = { neutral: "⚪️", good: "🟢", warning: "🟡", danger: "🔴" };
 
@@ -76,12 +97,13 @@ function backupSignal(runs: BackupRunRow[], section: string, label: string, now:
   if (latest?.status === "failed") {
     return {
       tone,
+      code: "backup" as const,
       text: `Backup ${label}: останній run впав${latest.error_message ? ` — ${latest.error_message}` : ""}`,
     };
   }
-  if (ageHours === null) return { tone, text: `Backup ${label}: жодного успішного run-у ще не записано` };
-  if (tone === "good") return { tone, text: `${label} ✅ ${formatHoursAgo(ageHours)}` };
-  return { tone, text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
+  if (ageHours === null) return { tone, code: "backup", text: `Backup ${label}: жодного успішного run-у ще не записано` };
+  if (tone === "good") return { tone, code: "backup", text: `${label} ✅ ${formatHoursAgo(ageHours)}` };
+  return { tone, code: "backup", text: `Backup ${label}: останній успішний ${formatHoursAgo(ageHours)}` };
 }
 
 type CronJobRow = {
@@ -110,21 +132,21 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
     // Порожня історія ≠ поламаний джоб: щойно заплановане завдання ще не мало
     // першого запуску.
     if (hoursSince === null) {
-      signals.push({ tone, text: `Cron ${name}: ще жодного запуску` });
+      signals.push({ tone, code: "cron_never_ran", text: `Cron ${name}: ще жодного запуску` });
       continue;
     }
     if (failures > 0) {
-      signals.push({ tone, text: `Cron ${name}: ${failures} збоїв за добу` });
+      signals.push({ tone, code: "cron_failures", text: `Cron ${name}: ${failures} збоїв за добу` });
       continue;
     }
-    signals.push({ tone, text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
+    signals.push({ tone, code: "cron_stale", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
   }
 
   if (healthy > 0) {
-    signals.push({ tone: "good", text: `Cron: ${healthy}/${jobs.length} джобів без збоїв за добу` });
+    signals.push({ tone: "good", code: "cron_ok", text: `Cron: ${healthy}/${jobs.length} джобів без збоїв за добу` });
   }
   if (httpFailures !== null && httpFailures > 0) {
-    signals.push({ tone: "warning", text: `HTTP-помилок від cron-викликів: ${httpFailures}` });
+    signals.push({ tone: "warning", code: "cron_http_failures", text: `HTTP-помилок від cron-викликів: ${httpFailures}` });
   }
   return signals;
 }
@@ -146,6 +168,7 @@ function dataIntegritySignals(metrics: Record<string, unknown>): Signal[] {
     return [
       {
         tone: "danger",
+        code: "audit_trigger",
         text: "Тригер аудиту статусів прорахунків відсутній або вимкнений — історія змін втрачається",
       },
     ];
@@ -206,7 +229,7 @@ export async function collectSystemSignals(
   const dbBackup = backupSignal(backups, "database", "база", now);
   const filesBackup = backupSignal(backups, "storage", "файли", now);
   if (dbBackup.tone === "good" && filesBackup.tone === "good") {
-    signals.push({ tone: "good", text: `Бекапи: ${dbBackup.text} · ${filesBackup.text}` });
+    signals.push({ tone: "good", code: "backup", text: `Бекапи: ${dbBackup.text} · ${filesBackup.text}` });
   } else {
     signals.push(dbBackup, filesBackup);
   }
@@ -216,6 +239,7 @@ export async function collectSystemSignals(
   const storagePercent = (storageBytes / PRO_STORAGE_LIMIT_BYTES) * 100;
   signals.push({
     tone: classifyStorageUsage(storagePercent),
+    code: "storage",
     text: `Storage: ${storagePercent.toFixed(1)}% від ліміту Pro (${formatBytes(storageBytes)})`,
   });
 
@@ -234,14 +258,15 @@ export async function collectSystemSignals(
   });
 
   if (deadlockTone === "danger") {
-    signals.push({ tone: deadlockTone, text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
+    signals.push({ tone: deadlockTone, code: "database", text: `База: ${formatBytes(dbSize)} · deadlocks ${deadlocks}` });
   } else if (deadTupleTone === "warning") {
     signals.push({
       tone: deadTupleTone,
+      code: "dead_tuples",
       text: `Dead tuples ${deadRatio.toFixed(0)}%${deadTable ? ` у ${deadTable}` : ""} — потрібен vacuum`,
     });
   } else {
-    signals.push({ tone: "good", text: `База: ${formatBytes(dbSize)} · deadlocks 0 · dead tuples у нормі` });
+    signals.push({ tone: "good", code: "database", text: `База: ${formatBytes(dbSize)} · deadlocks 0 · dead tuples у нормі` });
   }
 
   // 4. Cron.
@@ -257,7 +282,7 @@ export async function collectSystemSignals(
       (sum, row) => sum + num(row.cost_usd),
       0
     );
-    signals.push({ tone: classifyAiCost(aiCost), text: `AI ${options.aiLabel}: $${aiCost.toFixed(2)}` });
+    signals.push({ tone: classifyAiCost(aiCost), code: "ai_cost", text: `AI ${options.aiLabel}: $${aiCost.toFixed(2)}` });
   }
 
   // Залишок куплених кредитів OpenAI. Коли вони скінчаться, API почне віддавати
@@ -297,8 +322,8 @@ export async function collectSystemSignals(
       });
       signals.push(
         tone === "good"
-          ? { tone, text: "Вкладення: сміття не накопичується" }
-          : { tone, text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю — час прибрати` }
+          ? { tone, code: "attachments", text: "Вкладення: сміття не накопичується" }
+          : { tone, code: "attachments", text: `Вкладення: ${orphans} orphan-файлів, ${missing} без прев'ю — час прибрати` }
       );
     }
   }

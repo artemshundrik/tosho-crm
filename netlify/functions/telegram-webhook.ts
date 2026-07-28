@@ -332,8 +332,9 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
   if (isOwnerRole(role)) {
     rows.push([
       { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
-      { text: "🩺 Стан системи", callback_data: "qa:system_health" },
+      { text: "💬 Що це значить", callback_data: "qa:explain_problem" },
     ]);
+    rows.push([{ text: "🩺 Стан системи", callback_data: "qa:system_health" }]);
   }
   rows.push([{ text: "❓ Що можна питати", callback_data: "qa:help" }]);
   return rows;

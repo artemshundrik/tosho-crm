@@ -62,7 +62,7 @@ type Payload = {
 /** Інтенти, які стосуються конкретної людини — їх звужуємо до себе. */
 const PERSON_INTENTS = new Set(["designer_workload", "designer_summary", "person_summary", "time_spent"]);
 
-const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken"];
+const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken", "explain_problem"];
 const QUOTES_INTENTS: QuotesIntent[] = [
   "quotes_pipeline",
   "quotes_created",
@@ -164,7 +164,7 @@ const TOOL = {
         type: "string",
         enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -207,6 +207,7 @@ const SYSTEM_PROMPT = [
   "• «покажи», «список», «які саме» = tasks_list",
   "• «що по AI», «скільки витратили на AI» = ai_usage",
   "• «що не працює», «є проблеми?», «все ок?» = whats_broken",
+  "• «що це значить», «що за помилка», «а це погано?» = explain_problem",
   "• «як система», «стан», «бекапи», «cron» = system_health",
   "• «воронка», «скільки відкритих прорахунків» = quotes_pipeline",
   "• «скільки прорахунків завели» = quotes_created; «скільки затвердили» = quotes_approved",
@@ -327,6 +328,8 @@ export const handler = async (event: HttpEvent) => {
     if (isAdminIntent(query.intent)) {
       const allowed =
         query.intent === "ai_usage" ? canSeeAiCosts(level) : canSeeSystemHealth(level, isOwner);
+      // explain_problem пояснює ті самі сигнали, що whats_broken, тож і доступ
+      // до нього такий самий — окремої умови не треба.
       if (!allowed) {
         return "🔒 Це доступно лише керівництву. Решту — питай вільно, «що ти вмієш?».";
       }

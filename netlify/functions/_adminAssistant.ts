@@ -13,7 +13,69 @@ import { classifyAiBudget } from "../../src/lib/systemHealthThresholds";
 
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
-export type AdminIntent = "ai_usage" | "system_health" | "whats_broken";
+export type AdminIntent = "ai_usage" | "system_health" | "whats_broken" | "explain_problem";
+
+/**
+ * Пояснення сигналів: що це, чому буває і що робити.
+ *
+ * Ключ — стабільний код сигналу, а не текст: формулювання ще не раз перепишуть,
+ * і матчинг по словах мовчки відвалився б.
+ */
+const SIGNAL_EXPLANATIONS: Record<string, { what: string; why: string; todo: string }> = {
+  cron_http_failures: {
+    what: "Заплановане завдання покликало функцію на сервері, і виклик повернувся помилкою або не достукався.",
+    why: "Найчастіше це разовий збій під час деплою: функція на секунди недоступна, поки викочується нова версія. Постійні помилки означають, що якась функція справді падає.",
+    todo: "Одна-дві за добу — нормально, реагувати не треба. Якщо тримається щодня — шукати, яка саме функція відповідає помилкою.",
+  },
+  cron_never_ran: {
+    what: "Завдання щойно створене й ще жодного разу не запускалось за розкладом.",
+    why: "Так завжди виглядає новий джоб до першого спрацювання.",
+    todo: "Просто дочекатись його часу. Якщо після цього сигнал лишився — джоб не стартує, і це вже проблема.",
+  },
+  cron_stale: {
+    what: "Завдання не запускалось довше, ніж мало б за розкладом.",
+    why: "Планувальник зупинився або джоб вимкнули.",
+    todo: "Перевірити, чи він активний у планувальнику.",
+  },
+  cron_failures: {
+    what: "Завдання запускалось, але завершувалось помилкою.",
+    why: "Зазвичай падає сама функція, яку воно викликає.",
+    todo: "Подивитись, що саме повертає ця функція.",
+  },
+  attachments: {
+    what: "У сховищі лежать файли, на які вже ніхто не посилається, і прев'ю, які не згенерувались.",
+    why: "Накопичується від видалених задач і перерваних завантажень.",
+    todo: "Прибрати на вкладці «Вкладення» в Observability. Не терміново — це прибирання, а не аварія, тому сигнал жовтий.",
+  },
+  storage: {
+    what: "Скільки місця у сховищі зайнято від тарифного ліміту.",
+    why: "Росте від вкладень до задач і прорахунків.",
+    todo: "До 70% — спокійно. Далі варто прибрати сміття або планувати вищий тариф.",
+  },
+  backup: {
+    what: "Свіжість останньої успішної резервної копії.",
+    why: "Копії робить окремий процес; жовтий — давно не було, червоний — впала або дуже стара.",
+    todo: "Червоний ігнорувати не можна: без свіжої копії втрата даних незворотна.",
+  },
+  dead_tuples: {
+    what: "У таблиці накопичились «мертві» рядки — сліди оновлень і видалень.",
+    why: "Звичайна робота бази; прибирає їх autovacuum сам.",
+    todo: "Нічого. Тому сигнал ніколи не червоний.",
+  },
+  database: { what: "Розмір бази й наявність блокувань.", why: "Deadlocks — це коли дві операції взаємно заблокували одна одну.", todo: "Deadlocks — привід дивитись у логи; розмір просто для контролю." },
+  ai_cost: {
+    what: "Скільки коштували запити до AI за період.",
+    why: "Кожне питання боту й кожне розпізнавання голосу — платний виклик.",
+    todo: "Стежити за залишком кредитів; різкий стрибок означає, що щось викликає AI циклічно.",
+  },
+  audit_trigger: {
+    what: "Зник тригер у базі, який записує зміни статусів прорахунків.",
+    why: "Його могли зняти під час міграції.",
+    todo: "Відновити негайно: без нього історія змін втрачається безповоротно.",
+  },
+};
+
+
 
 function num(value: unknown): number {
   const parsed = typeof value === "string" ? Number(value) : value;
@@ -222,8 +284,44 @@ async function answerWhatsBroken(params: {
     lines.push("", "<b>Варто глянути</b>");
     for (const s of warning) lines.push(`🟡 ${escapeTelegramHtml(s.text)}`);
   }
-  lines.push("", `Деталі: ${APP_URL}/admin/observability`);
+  lines.push("", `💬 Не зрозуміло, що це — спитай «що це значить».`, `Деталі: ${APP_URL}/admin/observability`);
   return lines.join("\n");
+}
+
+/** Пояснення поточних проблем людською мовою: що це, чому і що робити. */
+async function answerExplainProblem(params: {
+  admin: SupabaseClient;
+  teamIds: string[];
+  now: Date;
+}): Promise<string> {
+  const { admin, teamIds, now } = params;
+  const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+  const signals = await collectSystemSignals(admin, now, {
+    aiFromIso: dayAgo,
+    aiToIso: now.toISOString(),
+    aiLabel: "за добу",
+    teamIds,
+  });
+
+  const problems = signals.filter(isProblem);
+  if (problems.length === 0) {
+    return "🟢 Зараз проблем немає — пояснювати нічого.";
+  }
+
+  const lines: string[] = [];
+  for (const signal of problems) {
+    const info = signal.code ? SIGNAL_EXPLANATIONS[signal.code] : null;
+    lines.push(`${TONE_EMOJI[signal.tone]} <b>${escapeTelegramHtml(signal.text)}</b>`);
+    if (info) {
+      lines.push(`   <b>Що це:</b> ${escapeTelegramHtml(info.what)}`);
+      lines.push(`   <b>Чому:</b> ${escapeTelegramHtml(info.why)}`);
+      lines.push(`   <b>Що робити:</b> ${escapeTelegramHtml(info.todo)}`);
+    } else {
+      lines.push("   <i>Пояснення для цього сигналу ще не описане.</i>");
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
 }
 
 export async function answerAdminQuery(params: {
@@ -240,6 +338,8 @@ export async function answerAdminQuery(params: {
       return answerAiUsage({ admin, workspaceId, period, now });
     case "system_health":
       return answerSystemHealth({ admin, teamIds, now });
+    case "explain_problem":
+      return answerExplainProblem({ admin, teamIds, now });
     case "whats_broken":
     default:
       return answerWhatsBroken({ admin, teamIds, now });
