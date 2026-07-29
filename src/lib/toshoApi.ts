@@ -274,6 +274,58 @@ export async function listCatalogModelsByIds(modelIds: string[]): Promise<Map<st
   return result;
 }
 
+const catalogTypeNameCache = new Map<string, string | null>();
+
+/**
+ * Категорія товару з каталогу (catalog_models → kind → type), напр. «Одяг», «Посуд».
+ * Потрібна, щоб опис вантажу в ТТН відповідав тому, що реально їде, а не був
+ * захардкодженою «друкованою продукцією».
+ */
+export async function listCatalogTypeNamesByModelIds(modelIds: string[]): Promise<Map<string, string>> {
+  const normalizedIds = Array.from(new Set(modelIds.map((id) => id.trim()).filter(Boolean)));
+  if (normalizedIds.length === 0) return new Map();
+
+  const missingIds = normalizedIds.filter((id) => !catalogTypeNameCache.has(id));
+  if (missingIds.length > 0) {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("catalog_models")
+      .select("id,kind:catalog_kinds(type:catalog_types(name))")
+      .in("id", missingIds);
+    // Категорія — прикраса опису, а не умова відправки: не змогли прочитати —
+    // мовчки лишаємось на дефолтному описі.
+    if (error) {
+      missingIds.forEach((id) => catalogTypeNameCache.set(id, null));
+    } else {
+      // PostgREST для many-to-one віддає обʼєкт, але за неоднозначного звʼязку може
+      // повернути масив — розгортаємо обидва варіанти, щоб не залежати від цього.
+      const unwrap = (value: unknown): Record<string, unknown> | null => {
+        const entry = Array.isArray(value) ? value[0] : value;
+        return entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
+      };
+      const rows = ((data ?? []) as unknown) as Array<Record<string, unknown>>;
+      const seen = new Set<string>();
+      rows.forEach((row) => {
+        const id = typeof row?.id === "string" ? row.id : "";
+        if (!id) return;
+        seen.add(id);
+        const name = unwrap(unwrap(row.kind)?.type)?.name;
+        catalogTypeNameCache.set(id, typeof name === "string" && name.trim() ? name.trim() : null);
+      });
+      missingIds.forEach((id) => {
+        if (!seen.has(id)) catalogTypeNameCache.set(id, null);
+      });
+    }
+  }
+
+  const result = new Map<string, string>();
+  normalizedIds.forEach((id) => {
+    const name = catalogTypeNameCache.get(id);
+    if (name) result.set(id, name);
+  });
+  return result;
+}
+
 export async function getCatalogModelMetadata(modelId: string): Promise<CatalogModelMetadataLookup | null> {
   const normalizedId = modelId.trim();
   if (!normalizedId) return null;

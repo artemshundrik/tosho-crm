@@ -24,6 +24,7 @@ import { DigitsInput } from "@/components/ui/digits-input";
 import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 import type { QuoteDeliveryDetails } from "@/components/quotes/QuoteDeliveryFields";
 import { listPartyDeliveryPoints, splitContactName, type DeliveryRecipientType } from "@/lib/customerDeliveryPoints";
+import { listCatalogTypeNamesByModelIds } from "@/lib/toshoApi";
 import {
   saveNpRecipient,
   getNpDocumentPrice,
@@ -144,6 +145,8 @@ type NovaPoshtaTtnDialogProps = {
   partyType: "customer" | "lead";
   partyId: string | null;
   defaultEdrpou: string;
+  /** Моделі каталогу з позицій замовлення — з їхніх категорій складається опис вантажу. */
+  catalogModelIds: string[];
   orderTotal: number;
   existingTtn: ExistingTtn | null;
   onSaved: (ttn: NpTtnResult | null) => void;
@@ -158,6 +161,7 @@ export function NovaPoshtaTtnDialog({
   partyType,
   partyId,
   defaultEdrpou,
+  catalogModelIds,
   orderTotal,
   existingTtn,
   onSaved,
@@ -196,6 +200,14 @@ export function NovaPoshtaTtnDialog({
         if (cancelled) return;
         setSettings(loaded);
 
+        // Опис вантажу = категорії товарів із каталогу («Одяг», «Одяг, Посуд»).
+        // Це те, що реально їде в коробці, а не захардкоджена «друкована продукція».
+        const typeNames = await listCatalogTypeNamesByModelIds(catalogModelIds).catch(() => new Map<string, string>());
+        const cargoDescription =
+          Array.from(new Set(catalogModelIds.map((id) => typeNames.get(id)).filter(Boolean) as string[])).join(", ") ||
+          loaded?.defaultDescription ||
+          "Друкована продукція";
+
         const book = partyId ? await listPartyDeliveryPoints({ teamId, partyType, partyId }).catch(() => []) : [];
         const point = delivery.deliveryPointId ? book.find((entry) => entry.id === delivery.deliveryPointId) : undefined;
         // Порядок джерел імені: збережена точка книги → знімок доставки → застаріла склейка.
@@ -222,7 +234,7 @@ export function NovaPoshtaTtnDialog({
           boxWidth: "",
           boxHeight: "",
           packRef: "",
-          description: loaded?.defaultDescription || "Друкована продукція",
+          description: cargoDescription,
           cost: String(Math.max(0, Math.round(orderTotal || 0))),
           payer: npPayerFromDelivery(delivery.payer) ?? loaded?.defaultPayer ?? "Recipient",
           paymentMethod: loaded?.defaultPaymentMethod || "Cash",
@@ -240,7 +252,7 @@ export function NovaPoshtaTtnDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, existingTtn, teamId, partyId, partyType, delivery, defaultEdrpou, orderTotal]);
+  }, [open, existingTtn, teamId, partyId, partyType, delivery, defaultEdrpou, catalogModelIds, orderTotal]);
 
   // Живий статус для вже створеної ТТН.
   useEffect(() => {
@@ -670,7 +682,8 @@ export function NovaPoshtaTtnDialog({
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label>Вага, кг</Label>
+                  {/* Явно «загальна»: НП тарифікує весь відправник, а не окрему коробку. */}
+                  <Label>Загальна вага, кг</Label>
                   <Input
                     value={cargo.weight}
                     onChange={(event) => updateCargo({ weight: decimalOnly(event.target.value) })}
@@ -680,7 +693,8 @@ export function NovaPoshtaTtnDialog({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Місць</Label>
+                  {/* «Місце» в НП = коробка. Окремої сутності «коробки» там немає. */}
+                  <Label>Місць (коробок)</Label>
                   <Input
                     value={cargo.seats}
                     onChange={(event) => updateCargo({ seats: digitsOnly(event.target.value) })}

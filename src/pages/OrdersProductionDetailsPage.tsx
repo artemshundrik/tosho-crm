@@ -1185,6 +1185,11 @@ export default function OrdersProductionDetailsPage() {
         : null,
     [record?.npTtnNumber, record?.npTtnRef, record?.npTtnCost, record?.npTtnEstimatedDelivery]
   );
+  // Мемо обовʼязкове: новий масив на кожен рендер перезапускав би ефект діалогу.
+  const ttnCatalogModelIds = useMemo(
+    () => (record?.items ?? []).map((item) => item.catalogModelId ?? "").filter(Boolean),
+    [record?.items]
+  );
   const [ttnStatus, setTtnStatus] = useState<string | null>(null);
   useEffect(() => {
     const number = record?.npTtnNumber;
@@ -2847,6 +2852,7 @@ export default function OrdersProductionDetailsPage() {
           partyType={record.partyType}
           partyId={record.customerId}
           defaultEdrpou={record.customerTaxId ?? ""}
+          catalogModelIds={ttnCatalogModelIds}
           orderTotal={record.total}
           existingTtn={ttnExisting}
           onSaved={(ttn) =>
