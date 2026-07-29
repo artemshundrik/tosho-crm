@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Truck, AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react";
+import { Truck, AlertTriangle, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +74,6 @@ export default function NovaPoshtaSettingsPage() {
   const [senders, setSenders] = useState<NpSender[]>([]);
   const [contacts, setContacts] = useState<NpContactPerson[]>([]);
   const [weightText, setWeightText] = useState("");
-  const [showErrors, setShowErrors] = useState(false);
 
   const update = (patch: Partial<NovaPoshtaSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
   const updateBoxSize = (index: number, patch: Partial<NovaPoshtaBoxSize>) =>
@@ -161,7 +160,6 @@ export default function NovaPoshtaSettingsPage() {
       toast.error("Не знайдено команду");
       return;
     }
-    setShowErrors(true);
     const missing: string[] = [];
     if (!settings.senderRef) missing.push("контрагент-відправник");
     if (!settings.senderContactRef) missing.push("контактна особа");
@@ -196,8 +194,16 @@ export default function NovaPoshtaSettingsPage() {
     !settings.senderWarehouseRef && "відділення відправлення",
   ].filter(Boolean) as string[];
 
+  const senderSummary = [
+    settings.senderName,
+    settings.senderContactName,
+    [settings.senderCityName, settings.senderWarehouseName].filter(Boolean).join(", "),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 space-y-6">
+    <div className="mx-auto w-full max-w-3xl space-y-5">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
           <Truck className="h-5 w-5 text-muted-foreground" />
@@ -205,10 +211,32 @@ export default function NovaPoshtaSettingsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Нова Пошта</h1>
           <p className="text-sm text-muted-foreground">
-            Відправник за замовчуванням для створення ТТН із замовлень.
+            Відправник, дефолти ТТН і власні розміри коробок.
           </p>
         </div>
       </div>
+
+      {/* Головне питання цієї сторінки — чи можна вже створювати ТТН. Раніше
+          відповідь зʼявлялась аж після натискання «Зберегти» внизу довгої форми. */}
+      {!loading && !notConfigured ? (
+        missingRequired.length === 0 ? (
+          <div className="tone-success-subtle flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">
+            <CheckCircle2 className="tone-text-success h-5 w-5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="tone-text-success text-sm font-medium">Готово до створення ТТН</div>
+              <div className="truncate text-xs text-muted-foreground">{senderSummary}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="tone-warning-subtle flex flex-wrap items-start gap-3 rounded-xl border px-4 py-3">
+            <AlertTriangle className="tone-text-warning mt-0.5 h-5 w-5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="tone-text-warning text-sm font-medium">ТТН поки створити не вийде</div>
+              <div className="text-xs text-muted-foreground">Не вистачає: {missingRequired.join(", ")}.</div>
+            </div>
+          </div>
+        )
+      ) : null}
 
       {notConfigured ? (
         <Card className="tone-warning-subtle">
@@ -230,11 +258,16 @@ export default function NovaPoshtaSettingsPage() {
         </div>
       ) : (
         <>
+          {/* «Хто» і «звідки» — одна думка, задається раз назавжди. Раніше це були
+              дві картки, хоч заповнюють їх завжди разом і за одним заходом. */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Відправник</CardTitle>
+              <CardTitle className="text-base">Хто і звідки відправляє</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Задається раз. Підставляється в кожну накладну без запитань.
+              </p>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+            <CardContent className="grid items-start gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Контрагент-відправник <span className="text-destructive">*</span></Label>
                 <Select value={settings.senderRef} onValueChange={handleSelectSender} disabled={notConfigured}>
@@ -274,14 +307,7 @@ export default function NovaPoshtaSettingsPage() {
                 <Label>Телефон відправника <span className="text-destructive">*</span></Label>
                 <PhoneInput value={settings.senderPhone} onChange={(senderPhone) => update({ senderPhone })} />
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Точка відправлення</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="hidden md:block" />
               <div className="grid gap-2">
                 <Label>Місто відправлення <span className="text-destructive">*</span></Label>
                 <NpCityCombobox
@@ -312,12 +338,12 @@ export default function NovaPoshtaSettingsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Дефолти відправлення</CardTitle>
+              <CardTitle className="text-base">Що підставляти в нову ТТН</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Необовʼязкові — лише підставляються у форму ТТН, де їх можна змінити під кожне відправлення.
+                Стартові значення. Менеджер може змінити їх у кожній накладній.
               </p>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+            <CardContent className="grid items-start gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Платник доставки</Label>
                 <Select value={settings.defaultPayer} onValueChange={(defaultPayer) => update({ defaultPayer })}>
@@ -415,15 +441,25 @@ export default function NovaPoshtaSettingsPage() {
                   placeholder="напр. Друкована продукція"
                   className="h-9"
                 />
-              </div>
-
-              {/* Свої коробки: у формі ТТН вони стають кнопками, які заповнюють Д×Ш×В. */}
-              <div className="grid gap-2 md:col-span-2">
-                <Label>Наші коробки</Label>
                 <p className="text-xs text-muted-foreground">
-                  Розміри, у які реально пакуємо. У формі ТТН вони стають кнопками — натиснув, і сторони
-                  заповнились. НП рахує з них об'ємну вагу (1 м³ = 250 кг) і тарифікує за більшою з двох.
+                  Запасний варіант. Зазвичай опис береться з категорій товарів у замовленні — «Одяг»,
+                  «Посуд». Це поле спрацює лише коли жодна позиція не привʼязана до каталогу.
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Окрема картка, а не поле в дефолтах: це список обʼєктів, і в формі ТТН
+              він працює інакше — кнопками, а не підставлянням значення. */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Наші коробки</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Розміри, у які реально пакуємо. У формі ТТН стають кнопками — натиснув, і сторони
+                заповнились. НП рахує з них обʼємну вагу (1 м³ = 250 кг) і тарифікує за більшою з двох.
+              </p>
+            </CardHeader>
+            <CardContent className="grid gap-3">
                 <div className="grid gap-2">
                   {settings.boxSizes.map((box, index) => (
                     <div key={index} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2">
@@ -472,15 +508,8 @@ export default function NovaPoshtaSettingsPage() {
                     Додати розмір
                   </Button>
                 </div>
-              </div>
             </CardContent>
           </Card>
-
-          {showErrors && missingRequired.length > 0 ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              Щоб можна було створювати ТТН, заповніть: {missingRequired.join(", ")}.
-            </div>
-          ) : null}
 
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={saving || !teamId}>
