@@ -59,7 +59,6 @@ type LeadRecord = {
 };
 
 type DesignTaskSnapshot = {
-  quoteId: string;
   status: DesignStatus;
   type: DesignTaskType | null;
   hasSelectedVisualization: boolean;
@@ -168,6 +167,49 @@ const parseOrderDesignAssets = async (
 
   return assets;
 };
+
+const isUuid = (value?: string | null) =>
+  !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+const dedupeDesignAssets = (assets: OrderDesignAsset[]) =>
+  Array.from(new Map(assets.map((asset) => [asset.id, asset] as const)).values());
+
+/** Знімок дизайн-задачі з activity_log.metadata — спільний для прорахунків і замовлень. */
+const buildDesignTaskSnapshot = async (metadata: Record<string, unknown>): Promise<DesignTaskSnapshot> => {
+  const statusRaw = typeof metadata.status === "string" ? metadata.status.trim().toLowerCase() : "new";
+  const status = (statusRaw in DESIGN_STATUS_LABELS ? statusRaw : "new") as DesignStatus;
+  const type = parseDesignTaskType(metadata.design_task_type);
+  const selectedVisualizationIds = getSelectedOutputIds(metadata, "visualization");
+  const selectedLayoutIds = getSelectedOutputIds(metadata, "layout");
+  const legacySelectedIds = getSelectedOutputIds(metadata);
+  const approvedVisualizationFiles = await parseOrderDesignAssets(metadata, "visualization");
+  const approvedLayoutFiles = await parseOrderDesignAssets(metadata, "layout");
+  return {
+    status,
+    type,
+    hasSelectedVisualization:
+      selectedVisualizationIds.length > 0 ||
+      ((type === "visualization" || !type) && selectedLayoutIds.length === 0 && legacySelectedIds.length > 0),
+    hasSelectedLayout:
+      selectedLayoutIds.length > 0 ||
+      ((type === "layout" || type === "layout_adaptation" || !type) &&
+        selectedVisualizationIds.length === 0 &&
+        legacySelectedIds.length > 0),
+    hasLegacySelectedOutput: legacySelectedIds.length > 0,
+    approvedVisualizationFiles,
+    approvedLayoutFiles,
+  };
+};
+
+const isVisualizationApprovedByTask = (task: DesignTaskSnapshot) =>
+  task.status === "approved" &&
+  (task.hasSelectedVisualization ||
+    ((!task.type || task.type === "visualization") && task.hasLegacySelectedOutput));
+
+const isLayoutApprovedByTask = (task: DesignTaskSnapshot) =>
+  task.status === "approved" &&
+  (task.hasSelectedLayout ||
+    ((!task.type || task.type === "layout" || task.type === "layout_adaptation") && task.hasLegacySelectedOutput));
 
 export type DerivedOrderItem = {
   id: string;
@@ -853,31 +895,8 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           ? row.entity_id.trim()
           : "";
     if (!quoteId || !quoteIds.includes(quoteId)) continue;
-    const statusRaw = typeof metadata.status === "string" ? metadata.status.trim().toLowerCase() : "new";
-    const status = (statusRaw in DESIGN_STATUS_LABELS ? statusRaw : "new") as DesignStatus;
-    const type = parseDesignTaskType(metadata.design_task_type);
-    const selectedVisualizationIds = getSelectedOutputIds(metadata, "visualization");
-    const selectedLayoutIds = getSelectedOutputIds(metadata, "layout");
-    const legacySelectedIds = getSelectedOutputIds(metadata);
-    const approvedVisualizationFiles = await parseOrderDesignAssets(metadata, "visualization");
-    const approvedLayoutFiles = await parseOrderDesignAssets(metadata, "layout");
     const list = designTasksByQuoteId.get(quoteId) ?? [];
-    list.push({
-      quoteId,
-      status,
-      type,
-      hasSelectedVisualization:
-        selectedVisualizationIds.length > 0 ||
-        ((type === "visualization" || !type) && selectedLayoutIds.length === 0 && legacySelectedIds.length > 0),
-      hasSelectedLayout:
-        selectedLayoutIds.length > 0 ||
-        ((type === "layout" || type === "layout_adaptation" || !type) &&
-          selectedVisualizationIds.length === 0 &&
-          legacySelectedIds.length > 0),
-      hasLegacySelectedOutput: legacySelectedIds.length > 0,
-      approvedVisualizationFiles,
-      approvedLayoutFiles,
-    });
+    list.push(await buildDesignTaskSnapshot(metadata));
     designTasksByQuoteId.set(quoteId, list);
   }
 
@@ -960,35 +979,22 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       "";
     const signatoryAuthority = primaryLegalEntity?.signatoryAuthority?.trim() || "";
     const tasks = designTasksByQuoteId.get(quote.id) ?? [];
-    // Немає жодної дизайн-задачі — орієнтуємось на нанесення: товар без друку
-    // не потребує ні візуалу, ні макета, тож і чекати на них нема на що.
     const hasImprint = hasImprintItems(items);
     const requiresVisualization = tasks.some(
       (task) => !task.type || task.type === "visualization"
-    ) || (tasks.length === 0 && hasImprint);
+    );
     // "Візуалізація/адаптація" requires a layout only when one was actually
     // produced (presence-based) — a merged task that added a layout still holds
     // the order for it; one that didn't, doesn't. Pure layout types always do.
-    const requiresLayout =
-      tasks.some(
-        (task) =>
-          !task.type ||
-          task.type === "layout" ||
-          task.type === "layout_adaptation" ||
-          (task.type === "visualization" && task.hasSelectedLayout)
-      ) || (tasks.length === 0 && hasImprint);
-    let hasApprovedVisualization = tasks.some(
+    const requiresLayout = tasks.some(
       (task) =>
-        task.status === "approved" &&
-        (task.hasSelectedVisualization ||
-          ((!task.type || task.type === "visualization") && task.hasLegacySelectedOutput))
+        !task.type ||
+        task.type === "layout" ||
+        task.type === "layout_adaptation" ||
+        (task.type === "visualization" && task.hasSelectedLayout)
     );
-    let hasApprovedLayout = tasks.some(
-      (task) =>
-        task.status === "approved" &&
-        (task.hasSelectedLayout ||
-          ((!task.type || task.type === "layout" || task.type === "layout_adaptation") && task.hasLegacySelectedOutput))
-    );
+    let hasApprovedVisualization = tasks.some(isVisualizationApprovedByTask);
+    let hasApprovedLayout = tasks.some(isLayoutApprovedByTask);
     const approvedVisualizationAssets = Array.from(
       new Map(
         tasks
@@ -1003,10 +1009,16 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           .map((asset) => [asset.id, asset] as const)
       ).values()
     );
-    if (!requiresVisualization) {
+    // Дизайн-задачі — джерело правди про потребу в дизайні. Якщо їх немає взагалі,
+    // вирішує нанесення: товар без друку не потребує ні візуалу, ні макета. Із нанесенням
+    // же без задачі вимогу не закриваємо, але й нового блокера не додаємо — інакше
+    // прорахунки зі standalone-задачею (не привʼязаною до прорахунку) перестали б
+    // переводитись у замовлення.
+    const designUnneeded = tasks.length === 0 && !hasImprint;
+    if (!requiresVisualization && (tasks.length > 0 || designUnneeded)) {
       hasApprovedVisualization = true;
     }
-    if (!requiresLayout) {
+    if (!requiresLayout && (tasks.length > 0 || designUnneeded)) {
       hasApprovedLayout = true;
     }
     const hasLegalEntityIdentity = Boolean(
@@ -1124,7 +1136,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       readinessSteps,
       blockers,
       readinessColumn,
-      requiresDesignApproval: requiresVisualization || requiresLayout,
+      requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
       approvedVisualizationAssets,
@@ -1159,12 +1171,18 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           .filter(Boolean)
       )
     );
+    // Standalone-задачі (ручні замовлення) не знайти за quote_id — тільки за soft-link на замовленні.
+    // Колонка текстова, а activity_log.id — uuid: непридатне значення завалило б увесь запит.
+    const storedDesignTaskIds = Array.from(
+      new Set(storedOrders.map((order) => order.design_task_id?.trim?.() ?? "").filter(isUuid))
+    );
     const [
       orderItems,
       storedQuoteItems,
       linkedQuotes,
       linkedQuoteRuns,
       designTaskRows,
+      linkedDesignTaskRows,
       storedCustomersResult,
       storedLeadsResult,
       approvedQuoteDerivedOrders,
@@ -1183,6 +1201,14 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             .eq("action", "design_task")
             .in("entity_id", storedQuoteIds)
             .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      storedDesignTaskIds.length > 0
+        ? supabase
+            .from("activity_log")
+            .select("id,metadata")
+            .eq("team_id", teamId)
+            .eq("action", "design_task")
+            .in("id", storedDesignTaskIds)
         : Promise.resolve({ data: [], error: null }),
       storedCustomerIds.length > 0
         ? supabase
@@ -1297,9 +1323,22 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       const visualizationAssets = await parseOrderDesignAssets(metadata, "visualization");
       const layoutAssets = await parseOrderDesignAssets(metadata, "layout");
       designAssetsByQuoteId.set(quoteId, {
-        visualization: Array.from(new Map([...existing.visualization, ...visualizationAssets].map((asset) => [asset.id, asset] as const)).values()),
-        layout: Array.from(new Map([...existing.layout, ...layoutAssets].map((asset) => [asset.id, asset] as const)).values()),
+        visualization: dedupeDesignAssets([...existing.visualization, ...visualizationAssets]),
+        layout: dedupeDesignAssets([...existing.layout, ...layoutAssets]),
       });
+    }
+
+    // Задача, привʼязана до самого замовлення (orders.design_task_id). Її поточний стан —
+    // єдине джерело правди про дизайн для ручних замовлень: колонки has_approved_* пишуться
+    // лише при створенні й після погодження задачі не оновлюються.
+    const designTaskByLinkId = new Map<string, DesignTaskSnapshot>();
+    for (const row of ((((linkedDesignTaskRows.data ?? []) as unknown) as Array<{
+      id?: string | null;
+      metadata?: Record<string, unknown> | null;
+    }>) ?? [])) {
+      const taskId = typeof row.id === "string" ? row.id.trim() : "";
+      if (!taskId) continue;
+      designTaskByLinkId.set(taskId, await buildDesignTaskSnapshot(row.metadata ?? {}));
     }
 
     const memberById = new Map(
@@ -1358,9 +1397,33 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       // нанесення дизайну не потребує взагалі — вважаємо вимогу закритою, інакше СП і
       // техкарта вічно чекали б на візуал, якого ніхто не малюватиме.
       const requiresDesignApproval = hasImprintItems(items);
-      const hasApprovedVisualization = Boolean(order.has_approved_visualization) || !requiresDesignApproval;
-      const hasApprovedLayout = Boolean(order.has_approved_layout) || !requiresDesignApproval;
-      const linkedDesignAssets = order.quote_id ? designAssetsByQuoteId.get(order.quote_id) : null;
+      const linkedDesignTaskId = order.design_task_id?.trim?.() || "";
+      const linkedDesignTask = linkedDesignTaskId ? designTaskByLinkId.get(linkedDesignTaskId) ?? null : null;
+      // Прапорець із моменту створення тільки додає, ніколи не забирає: задачу могли погодити
+      // вже після того, як замовлення завели (ручні замовлення з новою дизайн-задачею).
+      const hasApprovedVisualization =
+        Boolean(order.has_approved_visualization) ||
+        !requiresDesignApproval ||
+        Boolean(linkedDesignTask && isVisualizationApprovedByTask(linkedDesignTask));
+      const hasApprovedLayout =
+        Boolean(order.has_approved_layout) ||
+        !requiresDesignApproval ||
+        Boolean(linkedDesignTask && isLayoutApprovedByTask(linkedDesignTask));
+      const quoteDesignAssets = order.quote_id ? designAssetsByQuoteId.get(order.quote_id) : null;
+      const linkedTaskAssets =
+        linkedDesignTask?.status === "approved"
+          ? {
+              visualization: linkedDesignTask.approvedVisualizationFiles,
+              layout: linkedDesignTask.approvedLayoutFiles,
+            }
+          : null;
+      const linkedDesignAssets = {
+        visualization: dedupeDesignAssets([
+          ...(quoteDesignAssets?.visualization ?? []),
+          ...(linkedTaskAssets?.visualization ?? []),
+        ]),
+        layout: dedupeDesignAssets([...(quoteDesignAssets?.layout ?? []), ...(linkedTaskAssets?.layout ?? [])]),
+      };
       const customer =
         order.customer_id?.trim?.() ? storedCustomerById.get(order.customer_id.trim()) ?? null : null;
       const leadLookupName =
@@ -1520,7 +1583,13 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
             ? null
             : Number(order.contract_production_days) || null,
         contractAutoProlongation: order.contract_auto_prolongation === true,
-        designStatuses: Array.isArray(order.design_statuses) ? order.design_statuses : [],
+        // Ручні замовлення створюються з порожнім знімком статусів — показуємо живий стан задачі.
+        designStatuses:
+          Array.isArray(order.design_statuses) && order.design_statuses.length > 0
+            ? order.design_statuses
+            : linkedDesignTask
+              ? [DESIGN_STATUS_LABELS[linkedDesignTask.status] ?? linkedDesignTask.status]
+              : [],
         docs: {
           contract: contractReady,
           invoice: items.length > 0 || Boolean(orderDocuments.invoice),
@@ -1529,12 +1598,17 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         },
         readinessSteps: Array.isArray(order.readiness_steps) ? order.readiness_steps : [],
         blockers: Array.isArray(order.blockers) ? order.blockers : [],
-        readinessColumn: order.readiness_column ?? "ready",
+        // Колонка теж знімок: ручне замовлення лягає в «Дизайн» і саме звідти не вийде.
+        // Погодили задачу — випускаємо картку далі (у зворотний бік не рухаємо).
+        readinessColumn:
+          order.readiness_column === "design" && hasApprovedVisualization && hasApprovedLayout
+            ? "ready"
+            : order.readiness_column ?? "ready",
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,
-        approvedVisualizationAssets: linkedDesignAssets?.visualization ?? [],
-        approvedLayoutAssets: linkedDesignAssets?.layout ?? [],
+        approvedVisualizationAssets: linkedDesignAssets.visualization,
+        approvedLayoutAssets: linkedDesignAssets.layout,
       } satisfies DerivedOrderRecord;
     });
 
@@ -2036,8 +2110,6 @@ export async function listCustomerDesignTasks(teamId: string, customerId: string
   // Товар дизайн-задачі дістається ТІЛЬКИ через її прорахунок — сама задача його не
   // зберігає (перевірено: 0 із 501 задачі має metadata.product). Тож підказка «цей
   // дизайн робили для…» доступна лише для quote-linked задач.
-  const isUuid = (value?: string | null) =>
-    !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
   const linkedQuoteIds = Array.from(new Set(rows.map((row) => row.quote_id).filter(isUuid))) as string[];
 
   const productByQuoteId = new Map<string, { name: string; catalogModelId: string | null; imageUrl: string | null }>();
