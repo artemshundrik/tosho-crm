@@ -47,6 +47,10 @@ const DialogContent = React.forwardRef<
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        // НЕ додавати сюди slide-in-from-*-1/2 з рецептів shadcn: вони писані під
+        // Tailwind v3, де центрування жило в transform. У v4 воно в окремій
+        // властивості translate, тож slide-* не замінює її, а додається зверху —
+        // і модалка виїжджає з кута. Тут свідомо лише fade.
         "duration-150",
         className
       )}
