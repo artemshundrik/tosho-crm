@@ -1,5 +1,19 @@
-import { useEffect, useState } from "react";
-import { Loader2, PackageCheck, Copy, ExternalLink, Trash2, AlertTriangle, Calculator, Printer } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Loader2,
+  PackageCheck,
+  Copy,
+  ExternalLink,
+  Trash2,
+  AlertTriangle,
+  Printer,
+  RefreshCw,
+  User,
+  Box,
+  Tag,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import {
@@ -19,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { DigitsInput } from "@/components/ui/digits-input";
 import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
@@ -118,6 +133,65 @@ const decimalOnly = (value: string) => {
   return rest.length > 0 ? `${head}.${rest.join("")}` : head;
 };
 
+type RowKey = "recipient" | "cargo" | "goods" | "payment";
+
+const seatsWord = (count: number) => {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return "коробок";
+  const last = count % 10;
+  if (last === 1) return "коробка";
+  if (last >= 2 && last <= 4) return "коробки";
+  return "коробок";
+};
+
+/**
+ * Рядок-факт: згорнутий показує значення й наслідок, розгорнутий — поля.
+ * Наслідок у підзаголовку свідомо: менеджер підтверджує документ, а не заповнює
+ * форму, тож йому важливіше «тариф піде за обʼємною», ніж саме число в полі.
+ */
+function FactRow({
+  icon: Icon,
+  title,
+  subtitle,
+  incomplete = false,
+  warning = false,
+  expanded,
+  onToggle,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+  incomplete?: boolean;
+  warning?: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn(expanded && "bg-muted/20")}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <Icon
+          className={cn(
+            "h-[18px] w-[18px] shrink-0",
+            incomplete ? "text-destructive" : expanded ? "text-foreground" : "text-muted-foreground"
+          )}
+        />
+        <div className={cn("min-w-0 flex-1", !expanded && "cursor-pointer")} onClick={expanded ? undefined : onToggle}>
+          <div className="truncate text-sm text-foreground">{title}</div>
+          <div className={cn("truncate text-xs", incomplete ? "text-destructive" : warning ? "tone-text-warning" : "text-muted-foreground")}>
+            {subtitle}
+          </div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={onToggle}>
+          {expanded ? "Згорнути" : incomplete ? "Заповнити" : "Змінити"}
+        </Button>
+      </div>
+      {expanded ? <div className="px-4 pb-4 pl-[46px]">{children}</div> : null}
+    </div>
+  );
+}
+
 const toPositiveNumber = (value: string, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -178,9 +252,10 @@ export function NovaPoshtaTtnDialog({
   const [printingMarking, setPrintingMarking] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
-  // Отримувач приходить із доставки замовлення й майже завжди правильний — тримаємо
-  // його згорнутим, щоб форма не починалася з семи полів, які нікому не треба чіпати.
-  const [recipientEditing, setRecipientEditing] = useState(false);
+  // Модалка — це підтвердження, а не форма: усе вже прийшло із замовлення, тож
+  // показуємо факти рядками й розкриваємо рівно той, який менеджер вирішив чіпати.
+  const [expandedRow, setExpandedRow] = useState<RowKey | null>(null);
+  const toggleRow = (row: RowKey) => setExpandedRow((current) => (current === row ? null : row));
 
   const shownTtn = createdTtn ?? existingTtn;
 
@@ -215,6 +290,15 @@ export function NovaPoshtaTtnDialog({
         // він вгадує (перше слово = ім'я), тож справжні поля мають пріоритет над ним.
         const legacyName = splitContactName(delivery.contactName ?? "");
         if (cancelled) return;
+
+        // Неповного отримувача не ховаємо за згорнутим рядком — одразу відкриваємо,
+        // бо це єдине, що заважає створити ТТН.
+        const nextRecipientReady = Boolean(
+          (delivery.npCityRef || point?.npCityRef) &&
+            (delivery.npWarehouseRef || point?.npWarehouseRef) &&
+            (delivery.contactPhone || point?.contactPhone)
+        );
+        setExpandedRow(nextRecipientReady ? null : "recipient");
 
         setRecipient({
           recipientType: point?.recipientType ?? (defaultEdrpou ? "organization" : "private"),
@@ -276,12 +360,9 @@ export function NovaPoshtaTtnDialog({
 
   const updateRecipient = (patch: Partial<RecipientState>) =>
     setRecipient((prev) => (prev ? { ...prev, ...patch } : prev));
-  // Будь-яка зміна вантажу знецінює попередній розрахунок — інакше на екрані
-  // висить ціна, порахована зі старої ваги чи розмірів.
-  const updateCargo = (patch: Partial<CargoState>) => {
-    setPreview(null);
-    setCargo((prev) => (prev ? { ...prev, ...patch } : prev));
-  };
+  // Стару ціну не гасимо одразу — ефект нижче сам перерахує; поки він у роботі,
+  // підвал показує попереднє число притухлим із позначкою «перерахунок».
+  const updateCargo = (patch: Partial<CargoState>) => setCargo((prev) => (prev ? { ...prev, ...patch } : prev));
 
   // Поля можна лишати порожніми під час набору — до НП летять уже нормалізовані значення.
   const seatsCount = Math.max(1, Math.round(toPositiveNumber(cargo?.seats ?? "", 1)));
@@ -296,7 +377,14 @@ export function NovaPoshtaTtnDialog({
   // вони продають у відділенні, а ми возимо у власних і постачальницьких коробах.
   const boxSizes = settings?.boxSizes ?? [];
   const boxSizeLabel = (box: (typeof boxSizes)[number]) =>
-    box.label ? `${box.label} · ${box.length}×${box.width}×${box.height} см` : `${box.length}×${box.width}×${box.height} см`;
+    box.label ? `${box.label} · ${box.length}×${box.width}×${box.height}` : `${box.length}×${box.width}×${box.height}`;
+  const activeBoxLabel = boxSizes.find(
+    (box) => `${box.length}x${box.width}x${box.height}` === cargo?.packRef
+  )?.label;
+  const boxDimsLabel =
+    cargo?.boxLength && cargo?.boxWidth && cargo?.boxHeight
+      ? `${cargo.boxLength}×${cargo.boxWidth}×${cargo.boxHeight}`
+      : "";
   // Розміри передаємо, лише коли задані всі три сторони: НП рахує об'ємну вагу сама.
   const optionsSeat =
     cargo && volumetric !== null
@@ -322,37 +410,75 @@ export function NovaPoshtaTtnDialog({
     recipient?.recipientType === "organization" && !recipient.edrpou.trim() && "ЄДРПОУ",
   ].filter((entry): entry is string => typeof entry === "string");
   const recipientReady = Boolean(recipient) && missingRecipientFields.length === 0;
-  // Неповного отримувача не ховаємо: форма має бути відкрита, поки є що заповнювати.
-  const recipientCollapsed = recipientReady && !recipientEditing;
 
-  const handleCalculate = async () => {
-    if (!settings || !recipient || !cargo) return;
+  // Свіжі значення для ефекту цін — щоб він залежав лише від «відбитка» вводу,
+  // а не від масивів і обʼєктів, що народжуються заново на кожен рендер.
+  const priceInputs = { settings, recipient, cargo, optionsSeat, totalWeight, declaredCost, seatsCount };
+  const priceInputsRef = useRef(priceInputs);
+  priceInputsRef.current = priceInputs;
+
+  const canPrice = Boolean(!shownTtn && settings?.senderCityRef && recipient?.cityRef && cargo);
+  const priceKey = canPrice
+    ? [
+        recipient?.cityRef,
+        cargo?.cargoType,
+        cargo?.serviceType,
+        totalWeight,
+        seatsCount,
+        declaredCost,
+        cargo?.boxLength,
+        cargo?.boxWidth,
+        cargo?.boxHeight,
+      ].join("|")
+    : "";
+
+  // Ціна рахується сама — кнопки «Розрахувати» немає. Дебаунс, бо інакше кожне
+  // натискання в полі ваги стріляло б запитом у НП.
+  useEffect(() => {
+    if (!open || !priceKey) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
     setCalculating(true);
-    try {
-      const [cost, date] = await Promise.all([
+    const timer = window.setTimeout(() => {
+      const { settings: s, recipient: r, cargo: c, optionsSeat: seats, totalWeight: w, declaredCost: dc, seatsCount: n } =
+        priceInputsRef.current;
+      if (!s || !r || !c) return;
+      void Promise.all([
         getNpDocumentPrice({
-          citySenderRef: settings.senderCityRef,
-          cityRecipientRef: recipient.cityRef,
-          weight: String(totalWeight),
-          cost: declaredCost,
-          cargoType: cargo.cargoType,
-          serviceType: cargo.serviceType,
-          seatsAmount: String(seatsCount),
-          optionsSeat,
+          citySenderRef: s.senderCityRef,
+          cityRecipientRef: r.cityRef,
+          weight: String(w),
+          cost: dc,
+          cargoType: c.cargoType,
+          serviceType: c.serviceType,
+          seatsAmount: String(n),
+          optionsSeat: seats,
         }),
         getNpDocumentDeliveryDate({
-          citySenderRef: settings.senderCityRef,
-          cityRecipientRef: recipient.cityRef,
-          serviceType: cargo.serviceType,
+          citySenderRef: s.senderCityRef,
+          cityRecipientRef: r.cityRef,
+          serviceType: c.serviceType,
         }),
-      ]);
-      setPreview({ cost, date });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не вдалося розрахувати");
-    } finally {
-      setCalculating(false);
-    }
-  };
+      ])
+        .then(([cost, date]) => {
+          if (!cancelled) setPreview({ cost, date });
+        })
+        .catch(() => {
+          // Тихо: прорахунок — підказка, а не умова відправки. Реальну помилку
+          // менеджер побачить при створенні ТТН.
+          if (!cancelled) setPreview(null);
+        })
+        .finally(() => {
+          if (!cancelled) setCalculating(false);
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, priceKey]);
 
   const handleCreate = async () => {
     if (!settings || !recipient || !cargo) return;
@@ -449,19 +575,24 @@ export function NovaPoshtaTtnDialog({
             <PackageCheck className="h-5 w-5" />
             {shownTtn ? "Експрес-накладна" : "Створити ТТН"}
           </DialogTitle>
+          {/* Відправник не змінюється ніколи — йому досить рядка в шапці, а не картки. */}
           <DialogDescription>
-            {shownTtn ? "Накладну створено в Новій Пошті." : "Нова Пошта — відправлення замовлення."}
+            {shownTtn
+              ? "Накладну створено в Новій Пошті."
+              : senderReady
+                ? `Від ${settings?.senderName ?? "—"} · ${[settings?.senderCityName, settings?.senderWarehouseName].filter(Boolean).join(", ")}`
+                : "Нова Пошта — відправлення замовлення."}
           </DialogDescription>
         </DialogHeader>
         {/* overscroll-contain: дійшовши до краю, прокрутка не перекидається на сторінку позаду. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
 
         {loading ? (
-          <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 px-5 py-10 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Завантаження…
           </div>
         ) : shownTtn ? (
-          <div className="space-y-4">
+          <div className="space-y-4 px-5 py-4">
             <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Номер ТТН</div>
               <div className="mt-1 font-mono text-2xl font-semibold tracking-wide">{shownTtn.number}</div>
@@ -513,12 +644,12 @@ export function NovaPoshtaTtnDialog({
             </div>
           </div>
         ) : notConfigured ? (
-          <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-4 text-sm">
+          <div className="tone-warning-subtle m-5 flex items-start gap-3 rounded-xl border p-4 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
             <div>Ключ API Нової Пошти не налаштований на сервері. Додайте його в env Netlify й задеплойте функції.</div>
           </div>
         ) : !senderReady ? (
-          <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-4 text-sm">
+          <div className="tone-warning-subtle m-5 flex items-start gap-3 rounded-xl border p-4 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
             <div>
               Спершу заповни відправника в{" "}
@@ -529,18 +660,9 @@ export function NovaPoshtaTtnDialog({
             </div>
           </div>
         ) : recipient && cargo ? (
-          <div className="space-y-5">
-            {/* Відправник (read-only) */}
-            <div className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Відправник</div>
-              <div className="mt-1 font-medium">{settings?.senderName || "—"}</div>
-              <div className="text-muted-foreground">
-                {[settings?.senderCityName, settings?.senderWarehouseName].filter(Boolean).join(", ") || "—"}
-              </div>
-            </div>
-
+          <div className="divide-y divide-border/60">
             {isAddressDelivery ? (
-              <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-3 text-sm">
+              <div className="tone-warning-subtle flex items-start gap-3 border-b border-border/60 p-3 text-sm">
                 <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   У замовленні вказана <b>адресна доставка</b>, а тут поки можна оформити лише на відділення чи
@@ -550,35 +672,29 @@ export function NovaPoshtaTtnDialog({
             ) : null}
 
             {/* Отримувач */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Отримувач</div>
-                {recipientReady ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setRecipientEditing((current) => !current)}
-                  >
-                    {recipientEditing ? "Згорнути" : "Змінити"}
-                  </Button>
-                ) : null}
-              </div>
-              {recipientCollapsed ? (
-                <div className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm">
-                  <div className="font-medium">
-                    {[recipient.lastName, recipient.firstName].filter(Boolean).join(" ")}
-                    {recipient.recipientType === "organization" && recipient.edrpou ? (
-                      <span className="font-normal text-muted-foreground"> · ЄДРПОУ {recipient.edrpou}</span>
-                    ) : null}
-                  </div>
-                  <div className="text-muted-foreground">{recipient.phone}</div>
-                  <div className="mt-1 text-muted-foreground">
-                    {[recipient.cityName, recipient.warehouseName].filter(Boolean).join(", ")}
-                  </div>
-                </div>
-              ) : (
+            <FactRow
+              icon={User}
+              title={
+                [recipient.lastName, recipient.firstName].filter(Boolean).join(" ") ||
+                (recipient.phone ? recipient.phone : "Отримувач не вказаний")
+              }
+              subtitle={
+                missingRecipientFields.length > 0
+                  ? `не вистачає: ${missingRecipientFields.join(", ")}`
+                  : [
+                      recipient.phone,
+                      [recipient.cityName, recipient.warehouseName].filter(Boolean).join(" · "),
+                      recipient.recipientType === "organization" && recipient.edrpou
+                        ? `ЄДРПОУ ${recipient.edrpou}`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+              }
+              incomplete={missingRecipientFields.length > 0}
+              expanded={expandedRow === "recipient"}
+              onToggle={() => toggleRow("recipient")}
+            >
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Тип отримувача</Label>
@@ -652,23 +768,29 @@ export function NovaPoshtaTtnDialog({
                   />
                 </div>
               </div>
-              )}
-            </div>
+            </FactRow>
 
             {/* Вантаж */}
-            <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Вантаж</div>
-              {/* items-start: клітинка з підказкою не має розтягувати сусідню й зсувати поля. */}
-              <div className="grid items-start gap-3 md:grid-cols-2">
-                {/* Тип вантажу стоїть першим: під нього фільтрується список пакування нижче. */}
+            <FactRow
+              icon={Box}
+              title={`${seatsCount} ${seatsWord(seatsCount)}${activeBoxLabel ? ` «${activeBoxLabel}»` : ""}${
+                boxDimsLabel ? ` ${boxDimsLabel}` : ""
+              } · разом ${totalWeight} кг`}
+              subtitle={
+                volumetric !== null && volumetric > totalWeight
+                  ? `обʼємна вага ${volumetric.toFixed(1)} кг — тариф піде за нею`
+                  : volumetric !== null
+                    ? `обʼємна вага ${volumetric.toFixed(1)} кг — тариф за фактичною`
+                    : "розміри не вказані — тариф лише за вагою"
+              }
+              warning={volumetric !== null && volumetric > totalWeight}
+              expanded={expandedRow === "cargo"}
+              onToggle={() => toggleRow("cargo")}
+            >
+              <div className="grid items-start gap-3 md:grid-cols-3">
                 <div className="grid gap-2">
                   <Label>Тип вантажу</Label>
-                  <Select
-                    value={cargo.cargoType}
-                    // Змінили тип — обране пакування могло випасти з відфільтрованого
-                    // списку, тож знімаємо вибір (введені розміри лишаються).
-                    onValueChange={(cargoType) => updateCargo({ cargoType, packRef: "" })}
-                  >
+                  <Select value={cargo.cargoType} onValueChange={(cargoType) => updateCargo({ cargoType })}>
                     <SelectTrigger className="h-9">
                       <SelectValue />
                     </SelectTrigger>
@@ -682,7 +804,6 @@ export function NovaPoshtaTtnDialog({
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  {/* Явно «загальна»: НП тарифікує весь відправник, а не окрему коробку. */}
                   <Label>Загальна вага, кг</Label>
                   <Input
                     value={cargo.weight}
@@ -693,7 +814,6 @@ export function NovaPoshtaTtnDialog({
                   />
                 </div>
                 <div className="grid gap-2">
-                  {/* «Місце» в НП = коробка. Окремої сутності «коробки» там немає. */}
                   <Label>Місць (коробок)</Label>
                   <Input
                     value={cargo.seats}
@@ -703,81 +823,82 @@ export function NovaPoshtaTtnDialog({
                     className="h-9"
                   />
                 </div>
-                <div className="grid gap-2 md:col-span-2">
-                  <Label>Розмір коробки, см</Label>
-                  {boxSizes.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {boxSizes.map((box, index) => {
-                        const key = `${box.length}x${box.width}x${box.height}`;
-                        const active = cargo.packRef === key;
-                        return (
-                          <Button
-                            key={`${key}-${index}`}
-                            type="button"
-                            variant={active ? "secondary" : "outline"}
-                            size="sm"
-                            className="h-7 px-2.5 text-xs font-normal"
-                            onClick={() =>
-                              updateCargo({
-                                packRef: key,
-                                boxLength: String(box.length),
-                                boxWidth: String(box.width),
-                                boxHeight: String(box.height),
-                              })
-                            }
-                          >
-                            {boxSizeLabel(box)}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  <div className="grid grid-cols-3 gap-2">
+              </div>
+              <div className="mt-3 grid gap-2">
+                <Label>Розмір коробки, см</Label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {boxSizes.map((box, index) => {
+                    const key = `${box.length}x${box.width}x${box.height}`;
+                    const active = cargo.packRef === key;
+                    return (
+                      <Button
+                        key={`${key}-${index}`}
+                        type="button"
+                        variant={active ? "secondary" : "outline"}
+                        size="sm"
+                        className="h-7 rounded-full px-2.5 text-xs font-normal"
+                        onClick={() =>
+                          updateCargo({
+                            packRef: key,
+                            boxLength: String(box.length),
+                            boxWidth: String(box.width),
+                            boxHeight: String(box.height),
+                          })
+                        }
+                      >
+                        {boxSizeLabel(box)}
+                      </Button>
+                    );
+                  })}
+                  {boxSizes.length > 0 ? <span className="text-xs text-muted-foreground">або</span> : null}
+                  <div className="flex gap-1.5">
                     {(
                       [
-                        ["boxLength", "Довжина"],
-                        ["boxWidth", "Ширина"],
-                        ["boxHeight", "Висота"],
+                        ["boxLength", "Д"],
+                        ["boxWidth", "Ш"],
+                        ["boxHeight", "В"],
                       ] as const
                     ).map(([field, label]) => (
                       <Input
                         key={field}
                         value={cargo[field]}
-                        // Ручна правка розміру знімає вибір готового пакування — інакше
-                        // у списку висіла б коробка, розмірів якої вже немає в полях.
                         onChange={(event) => updateCargo({ [field]: digitsOnly(event.target.value), packRef: "" })}
                         inputMode="numeric"
                         placeholder={label}
                         aria-label={`${label}, см`}
-                        className="h-9"
+                        className="h-7 w-14 text-center text-xs"
                       />
                     ))}
                   </div>
-                  {volumetric !== null ? (
-                    <p className="text-xs text-muted-foreground">
-                      Об'ємна вага: <span className="font-medium text-foreground">{volumetric.toFixed(2)} кг</span>
-                      {volumetric > totalWeight ? (
-                        <span className="tone-text-warning"> — більша за фактичну, НП порахує тариф за нею.</span>
-                      ) : (
-                        <> — менша за фактичну, тариф піде за вагою.</>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Заповни всі три сторони — НП порахує об'ємну вагу (1 м³ = 250 кг) і візьме більшу з двох.
-                      Якщо лишити порожнім, тариф рахується тільки за вагою.
-                      {boxSizes.length === 0 ? (
-                        <>
-                          {" "}
-                          Свої часті розміри можна завести в{" "}
-                          <Link to="/settings/nova-poshta" className="underline">
-                            Налаштуваннях
-                          </Link>
-                          .
-                        </>
-                      ) : null}
-                    </p>
-                  )}
+                </div>
+                {boxSizes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Свої часті розміри можна завести в{" "}
+                    <Link to="/settings/nova-poshta" className="underline">
+                      Налаштуваннях
+                    </Link>
+                    .
+                  </p>
+                ) : null}
+              </div>
+            </FactRow>
+
+            {/* Товар і оголошена вартість */}
+            <FactRow
+              icon={Tag}
+              title={`${cargo.description.trim() || "Без опису"} · оголошено ${declaredCost} ₴`}
+              subtitle="опис підставлено з категорій каталогу; оголошена вартість впливає на страховий збір"
+              expanded={expandedRow === "goods"}
+              onToggle={() => toggleRow("goods")}
+            >
+              <div className="grid items-start gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Опис вантажу</Label>
+                  <Input
+                    value={cargo.description}
+                    onChange={(event) => updateCargo({ description: event.target.value })}
+                    className="h-9"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label>Оголошена вартість, ₴</Label>
@@ -789,6 +910,24 @@ export function NovaPoshtaTtnDialog({
                     className="h-9"
                   />
                 </div>
+              </div>
+            </FactRow>
+
+            {/* Оплата й доставка */}
+            <FactRow
+              icon={Wallet}
+              title={`${cargo.payer === "Sender" ? "Платимо ми" : PAYER_LABELS[cargo.payer] ?? cargo.payer} · ${
+                PAYMENT_LABELS[cargo.paymentMethod] ?? cargo.paymentMethod
+              }`}
+              subtitle={
+                npPayerFromDelivery(delivery.payer)
+                  ? `${SERVICE_LABELS[cargo.serviceType] ?? cargo.serviceType} · платника взято з домовленості в замовленні`
+                  : SERVICE_LABELS[cargo.serviceType] ?? cargo.serviceType
+              }
+              expanded={expandedRow === "payment"}
+              onToggle={() => toggleRow("payment")}
+            >
+              <div className="grid items-start gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Платник</Label>
                   <Select value={cargo.payer} onValueChange={(payer) => updateCargo({ payer })}>
@@ -834,40 +973,49 @@ export function NovaPoshtaTtnDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2 md:col-span-2">
-                  <Label>Опис вантажу</Label>
-                  <Input
-                    value={cargo.description}
-                    onChange={(event) => updateCargo({ description: event.target.value })}
-                    className="h-9"
-                  />
-                </div>
               </div>
-            </div>
-
+            </FactRow>
           </div>
         ) : null}
         </div>
 
         {!loading && !shownTtn && !notConfigured && senderReady && recipient && cargo ? (
-          <div className="shrink-0 border-t border-border/60 px-5 py-4">
-            {preview ? (
-              <div className="mb-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-sm">
-                Орієнтовна вартість доставки: <span className="font-semibold">{money(preview.cost)}</span>
-                {preview.date ? <> · доставка ≈ {preview.date}</> : null}
+          <div className="shrink-0 border-t border-border/60 bg-muted/20 px-5 py-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                {preview ? (
+                  <>
+                    <div className="flex items-baseline gap-2">
+                      <span className={cn("text-2xl font-semibold leading-none", calculating && "text-muted-foreground")}>
+                        {money(preview.cost)}
+                      </span>
+                      {calculating ? (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                          перерахунок…
+                        </span>
+                      ) : preview.date ? (
+                        <span className="text-xs text-muted-foreground">доставка ≈ {preview.date}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {cargo.payer === "Sender" ? "платимо ми" : "платить отримувач"}
+                      {volumetric !== null && volumetric > totalWeight
+                        ? ` · тариф за обʼємною вагою ${volumetric.toFixed(1)} кг`
+                        : ""}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    {missingRecipientFields.length > 0
+                      ? `Ціна буде після заповнення: ${missingRecipientFields.join(", ")}`
+                      : calculating
+                        ? "Рахуємо вартість…"
+                        : "Вартість зʼявиться, щойно НП відповість"}
+                  </div>
+                )}
               </div>
-            ) : null}
-            {missingRecipientFields.length > 0 ? (
-              <div className="mb-3 text-xs text-muted-foreground">
-                Щоб створити ТТН, заповни: <span className="font-medium text-foreground">{missingRecipientFields.join(", ")}</span>.
-              </div>
-            ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button type="button" variant="outline" onClick={handleCalculate} disabled={calculating || !recipient.cityRef}>
-                {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
-                Розрахувати
-              </Button>
-              <div className="flex gap-2">
+              <div className="flex shrink-0 gap-2">
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                   Скасувати
                 </Button>
