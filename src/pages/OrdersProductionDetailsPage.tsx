@@ -2175,7 +2175,13 @@ export default function OrdersProductionDetailsPage() {
           <div className="mt-3 divide-y divide-border/60">
             {documentActions.map((document) => {
               const isCreated = document.actionMode === "open" && Boolean(document.createdDateLabel);
-              const isContractParams = document.kind === "contract" && Boolean(record.contractCreatedAt);
+              // Уже створений документ можна перестворити з іншими параметрами — і договір, і СП.
+              const openParamsDialog =
+                document.kind === "contract" && record.contractCreatedAt
+                  ? openContractParamsDialog
+                  : document.kind === "specification" && record.specificationCreatedAt
+                    ? openSpecificationParamsDialog
+                    : null;
               // Лівий індикатор стану: зелена галка (створено/готово), бурштин (блокер), нейтральне коло (можна створити).
               const StatusIcon =
                 document.actionMode === "blocked" ? AlertTriangle : document.actionMode === "open" ? CheckCircle2 : Circle;
@@ -2256,20 +2262,20 @@ export default function OrdersProductionDetailsPage() {
                           <ExternalLink className="h-3.5 w-3.5" />
                           Відкрити
                         </Button>
-                        {isContractParams ? (
+                        {openParamsDialog ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
-                                aria-label="Більше дій з договором"
+                                aria-label={`Більше дій: ${document.title}`}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem onClick={openContractParamsDialog}>
+                              <DropdownMenuItem onClick={openParamsDialog}>
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Параметри й перестворити
                               </DropdownMenuItem>
