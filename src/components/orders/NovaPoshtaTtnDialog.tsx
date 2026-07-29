@@ -56,6 +56,18 @@ const SERVICE_LABELS: Record<string, string> = {
   DoorsDoors: "Адреса → Адреса",
 };
 
+/**
+ * Хто платить за доставку — це домовленість із замовлення, а не дефолт налаштувань.
+ * У `delivery.payer` лежить «company» (платимо ми) / «client» (платить замовник).
+ * Без цього мапінгу ТТН створювалась із дефолтним «Отримувач», і клієнту прилітав
+ * рахунок за доставку, яку ми пообіцяли оплатити.
+ */
+const npPayerFromDelivery = (payer: string | undefined): string | null => {
+  if (payer === "company") return "Sender";
+  if (payer === "client") return "Recipient";
+  return null;
+};
+
 const money = (value: number | null | undefined): string =>
   typeof value === "number" && !Number.isNaN(value)
     ? new Intl.NumberFormat("uk-UA", { style: "currency", currency: "UAH", maximumFractionDigits: 2 }).format(value)
@@ -165,6 +177,9 @@ export function NovaPoshtaTtnDialog({
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
   // Готові коробки з довідника НП. Порожньо = довідник недоступний, лишаються ручні поля.
   const [packTypes, setPackTypes] = useState<NpPackType[]>([]);
+  // Отримувач приходить із доставки замовлення й майже завжди правильний — тримаємо
+  // його згорнутим, щоб форма не починалася з семи полів, які нікому не треба чіпати.
+  const [recipientEditing, setRecipientEditing] = useState(false);
 
   const shownTtn = createdTtn ?? existingTtn;
 
@@ -221,7 +236,7 @@ export function NovaPoshtaTtnDialog({
           packRef: "",
           description: loaded?.defaultDescription || "Друкована продукція",
           cost: String(Math.max(0, Math.round(orderTotal || 0))),
-          payer: loaded?.defaultPayer || "Recipient",
+          payer: npPayerFromDelivery(delivery.payer) ?? loaded?.defaultPayer ?? "Recipient",
           paymentMethod: loaded?.defaultPaymentMethod || "Cash",
           cargoType: loaded?.defaultCargoType || "Parcel",
           serviceType: loaded?.defaultServiceType || "WarehouseWarehouse",
@@ -273,6 +288,10 @@ export function NovaPoshtaTtnDialog({
   const totalWeight = toPositiveNumber(cargo?.weight ?? "", 0.5);
   const declaredCost = String(Math.max(0, Math.round(toPositiveNumber(cargo?.cost ?? "", 0))));
   const volumetric = cargo ? volumetricWeightKg(cargo) : null;
+  // Тип доставки із замовлення: поштомат шукається окремим довідником, а адресна
+  // доставка тут ще не підтримується (їй потрібен Address.save, а не ref відділення).
+  const isPostomatDelivery = delivery.npDeliveryType === "locker";
+  const isAddressDelivery = delivery.npDeliveryType === "address";
   // Каталог пакування НП довгий — показуємо лише те, що підходить обраному типу вантажу.
   const allowedPackKinds = npPackKindsForCargoType(cargo?.cargoType ?? "Parcel");
   const availablePacks = packTypes.filter((pack) => allowedPackKinds.includes(pack.kind));
@@ -301,6 +320,8 @@ export function NovaPoshtaTtnDialog({
     recipient?.recipientType === "organization" && !recipient.edrpou.trim() && "ЄДРПОУ",
   ].filter((entry): entry is string => typeof entry === "string");
   const recipientReady = Boolean(recipient) && missingRecipientFields.length === 0;
+  // Неповного отримувача не ховаємо: форма має бути відкрита, поки є що заповнювати.
+  const recipientCollapsed = recipientReady && !recipientEditing;
 
   const handleCalculate = async () => {
     if (!settings || !recipient || !cargo) return;
@@ -491,9 +512,46 @@ export function NovaPoshtaTtnDialog({
               </div>
             </div>
 
+            {isAddressDelivery ? (
+              <div className="tone-warning-subtle flex items-start gap-3 rounded-xl border p-3 text-sm">
+                <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  У замовленні вказана <b>адресна доставка</b>, а тут поки можна оформити лише на відділення чи
+                  поштомат. Обери відділення нижче — або створи адресну ТТН у кабінеті Нової Пошти.
+                </div>
+              </div>
+            ) : null}
+
             {/* Отримувач */}
             <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Отримувач</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Отримувач</div>
+                {recipientReady ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setRecipientEditing((current) => !current)}
+                  >
+                    {recipientEditing ? "Згорнути" : "Змінити"}
+                  </Button>
+                ) : null}
+              </div>
+              {recipientCollapsed ? (
+                <div className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm">
+                  <div className="font-medium">
+                    {[recipient.lastName, recipient.firstName].filter(Boolean).join(" ")}
+                    {recipient.recipientType === "organization" && recipient.edrpou ? (
+                      <span className="font-normal text-muted-foreground"> · ЄДРПОУ {recipient.edrpou}</span>
+                    ) : null}
+                  </div>
+                  <div className="text-muted-foreground">{recipient.phone}</div>
+                  <div className="mt-1 text-muted-foreground">
+                    {[recipient.cityName, recipient.warehouseName].filter(Boolean).join(", ")}
+                  </div>
+                </div>
+              ) : (
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Тип отримувача</Label>
@@ -557,16 +615,17 @@ export function NovaPoshtaTtnDialog({
                   />
                 </div>
                 <div className="grid gap-2 md:col-span-2">
-                  <Label>Відділення / поштомат</Label>
+                  <Label>{isPostomatDelivery ? "Поштомат" : "Відділення"}</Label>
                   <NpWarehouseCombobox
                     cityRef={recipient.cityRef}
-                    postomat={false}
+                    postomat={isPostomatDelivery}
                     value={recipient.warehouseName}
                     onValueChange={(warehouse) => updateRecipient({ warehouseName: warehouse, warehouseRef: "" })}
                     onSelect={(warehouse) => updateRecipient({ warehouseName: warehouse.description, warehouseRef: warehouse.ref })}
                   />
                 </div>
               </div>
+              )}
             </div>
 
             {/* Вантаж */}
