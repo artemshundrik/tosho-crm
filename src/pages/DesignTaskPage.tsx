@@ -78,7 +78,6 @@ import {
   Layers,
   CircleHelp,
   History,
-  ChevronRight,
   Plus,
   SmilePlus,
   type LucideIcon,
@@ -128,7 +127,7 @@ import {
   getDesignStatusActionLabel,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
-import { designStatusBadgeClass } from "@/lib/statusTones";
+import { designStatusBadgeClass, toneSubtleClass, type Tone } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import {
   notifyDesignTaskCollaboratorsChanged,
@@ -960,6 +959,22 @@ const getSelectedDesignOutputFileIdsFromMetadata = (
   return legacy ? [legacy] : [];
 };
 
+/**
+ * Погодження зберігаються окремо по типах, але старі задачі мають лише спільні
+ * ключі (selected_design_output_file_ids). Резолвер один на всі місця: запис,
+ * зроблений без цього fallback, зносив би легасі-погодження цілком.
+ */
+const resolveSelectedOutputIdsFromMetadata = (
+  metadata: Record<string, unknown> | undefined,
+  files: Array<{ id: string; output_kind?: DesignOutputKind | null }>,
+  kind: DesignOutputKind
+) => {
+  const explicit = getSelectedDesignOutputFileIdsFromMetadata(metadata, kind);
+  if (explicit.length > 0) return explicit;
+  const legacy = getSelectedDesignOutputFileIdsFromMetadata(metadata);
+  return legacy.filter((id) => files.some((file) => file.id === id && file.output_kind === kind));
+};
+
 const getSelectedDesignOutputLabelsFromMetadata = (
   metadata?: Record<string, unknown>,
   kind?: DesignOutputKind
@@ -1361,7 +1376,7 @@ export default function DesignTaskPage() {
   const [fileAccessUrlByKey, setFileAccessUrlByKey] = useState<Record<string, string>>({});
   const [downloadPreparingKey, setDownloadPreparingKey] = useState<string | null>(null);
   const [previewPreparingKey, setPreviewPreparingKey] = useState<string | null>(null);
-  const [groupingSelectionIds, setGroupingSelectionIds] = useState<string[]>([]);
+  const [outputSelectionIds, setOutputSelectionIds] = useState<string[]>([]);
   const [clientShareSelectionIds, setClientShareSelectionIds] = useState<string[]>([]);
   const [methodLabelById, setMethodLabelById] = useState<Record<string, string>>({});
   const [positionLabelById, setPositionLabelById] = useState<Record<string, string>>({});
@@ -1416,6 +1431,8 @@ export default function DesignTaskPage() {
   const [createGroupDraft, setCreateGroupDraft] = useState("");
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [uploadTargetGroup, setUploadTargetGroup] = useState("__none__");
+  const [dropboxDetailsOpen, setDropboxDetailsOpen] = useState(false);
+  const [filesSourceFilter, setFilesSourceFilter] = useState<"all" | "quote" | "brief">("all");
   const [uploadTargetKind, setUploadTargetKind] = useState<DesignOutputKind>("layout");
   const [activeDesignOutputTab, setActiveDesignOutputTab] = useState<DesignOutputKind>("visualization");
   const [activeDesignTab, setActiveDesignTab] = useState<DesignTaskPageTab>("brief");
@@ -1527,6 +1544,10 @@ export default function DesignTaskPage() {
   const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [attachmentDeletingId, setAttachmentDeletingId] = useState<string | null>(null);
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState<{ open: boolean; keys: string[] }>({
+    open: false,
+    keys: [],
+  });
 
   const effectiveTeamId = teamId;
   const canManageAssignments = permissions.canManageAssignments;
@@ -4515,10 +4536,18 @@ export default function DesignTaskPage() {
     }
   };
 
-  const removeDesignFileInner = async (fileId: string) => {
-    if (!ensureCanEdit()) return;
+  const removeDesignFileInner = async (fileId: string, options?: { silent?: boolean }) => {
+    if (!ensureCanEdit()) {
+      // У пачці «не зміг» мусить бути помилкою, інакше файл потрапить у звіт
+      // як успішно видалений.
+      if (options?.silent) throw new Error("Задачу редагує інший користувач.");
+      return;
+    }
     const target = designOutputFiles.find((file) => file.id === fileId);
-    if (!target) return;
+    if (!target) {
+      if (options?.silent) throw new Error("Файл уже відсутній у списку.");
+      return;
+    }
     const taskQuoteId = task?.quoteId ?? null;
     setOutputSaving(true);
     try {
@@ -4567,11 +4596,44 @@ export default function DesignTaskPage() {
         return true;
       });
       const actorLabel = userId ? getMemberLabel(userId) : "System";
+      // Явний список файлів зі СВІЖИХ metadata: інакше primarySelected
+      // резолвиться у вже стертий файл і в metadata лишається його storage_path.
+      const fallbackOutputKind = parseDesignTaskType(latestMetadata.design_task_type);
+      const remainingFilesForSelection = nextFilesForMeta
+        .map((row) => ({
+          id: typeof row.id === "string" ? row.id : "",
+          file_name: typeof row.file_name === "string" ? row.file_name : "",
+          storage_bucket: typeof row.storage_bucket === "string" ? row.storage_bucket : null,
+          storage_path: typeof row.storage_path === "string" ? row.storage_path : null,
+          mime_type: typeof row.mime_type === "string" ? row.mime_type : null,
+          file_size: typeof row.file_size === "number" ? row.file_size : null,
+          output_kind: parseDesignOutputKind(row.output_kind, fallbackOutputKind),
+          created_at: typeof row.created_at === "string" ? row.created_at : "",
+          uploaded_by: typeof row.uploaded_by === "string" ? row.uploaded_by : null,
+        }))
+        .filter((row) => row.id) as DesignOutputFile[];
+      // Набір погоджених — зі свіжих metadata, а не зі стейту: при масовому
+      // видаленні всі ітерації йдуть одним замиканням, тож стейт показував би
+      // набір на момент кліку і кожна наступна ітерація повертала б у metadata
+      // id вже видаленого файла.
       const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
-        visualization: selectedVisualizationOutputFileIds.filter((id) => id !== fileId),
-        layout: selectedLayoutOutputFileIds.filter((id) => id !== fileId),
+        visualization: resolveSelectedOutputIdsFromMetadata(
+          latestMetadata,
+          remainingFilesForSelection,
+          "visualization"
+        ).filter((id) => id !== fileId),
+        layout: resolveSelectedOutputIdsFromMetadata(
+          latestMetadata,
+          remainingFilesForSelection,
+          "layout"
+        ).filter((id) => id !== fileId),
       };
-      const nextMetadataPatch = buildOutputSelectionMetadata(latestMetadata, nextSelectedByKind, actorLabel);
+      const nextMetadataPatch = buildOutputSelectionMetadata(
+        latestMetadata,
+        nextSelectedByKind,
+        actorLabel,
+        remainingFilesForSelection
+      );
       const nextMetadata: Record<string, unknown> = {
         ...latestMetadata,
         // Selection metadata FIRST: buildOutputSelectionMetadata returns a full
@@ -4589,6 +4651,9 @@ export default function DesignTaskPage() {
           created_by: link.created_by,
           group_label: normalizeOutputGroupLabel(link.group_label),
           output_kind: link.output_kind ?? null,
+          // Без цього поля кожне видалення файла стирало привʼязку всіх
+          // посилань до правок — контракт «правка ↔ результат».
+          change_request_id: link.change_request_id ?? null,
         })),
         design_output_groups: Array.from(
           new Set(
@@ -4665,8 +4730,11 @@ export default function DesignTaskPage() {
         // Лог — не привід валити саме видалення: файла вже немає.
         console.warn("Failed to log design output delete", logError);
       }
-      toast.success("Файл видалено");
+      if (!options?.silent) toast.success("Файл видалено");
     } catch (e: unknown) {
+      // У пачці помилку має побачити викликач, щоб не рапортувати успіх за
+      // файли, які насправді лишились.
+      if (options?.silent) throw e;
       toast.error(getErrorMessage(e, "Не вдалося видалити файл"));
     } finally {
       setOutputSaving(false);
@@ -4695,6 +4763,126 @@ export default function DesignTaskPage() {
       toast.success("Посилання видалено");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося видалити посилання"));
+    }
+  };
+
+  /**
+   * Пачка посилань — одним записом, і обовʼязково від СВІЖИХ metadata з БД.
+   * persistDesignOutputs пише повні списки зі знімка стану, тож у ланцюжку з
+   * видаленням файлів він повернув би вже видалені файли назад.
+   */
+  const removeDesignLinksInner = async (linkIds: string[]) => {
+    if (!task || !effectiveTeamId) return;
+    if (!ensureCanEdit()) return;
+    const removalSet = new Set(linkIds);
+    if (removalSet.size === 0) return;
+
+    setOutputSaving(true);
+    try {
+      const { data: latestRow, error: latestRowError } = await supabase
+        .from("activity_log")
+        .select("metadata")
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId)
+        .maybeSingle();
+      if (latestRowError) throw latestRowError;
+
+      const latestMetadata = ((latestRow?.metadata as Record<string, unknown> | null) ??
+        task.metadata ??
+        {}) as Record<string, unknown>;
+      const latestRawLinks = Array.isArray(latestMetadata.design_output_links)
+        ? (latestMetadata.design_output_links as Array<Record<string, unknown>>)
+        : [];
+      const nextMetadata: Record<string, unknown> = {
+        ...latestMetadata,
+        design_output_links: latestRawLinks.filter(
+          (link) => !(typeof link.id === "string" && removalSet.has(link.id))
+        ),
+      };
+
+      const { data: updatedRows, error: updateError } = await supabase
+        .from("activity_log")
+        .update({ metadata: nextMetadata as Json })
+        .eq("id", task.id)
+        .eq("team_id", effectiveTeamId)
+        .select("id");
+      if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error("Видалення не збережено (0 рядків оновлено).");
+      }
+
+      setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      setDesignOutputLinks((prev) => prev.filter((link) => !removalSet.has(link.id)));
+    } finally {
+      setOutputSaving(false);
+    }
+  };
+
+  /**
+   * Порядок важливий: спершу файли, потім посилання. removeDesignFileInner
+   * перезаписує design_output_links зі знімка стану, тож видалені раніше
+   * посилання він би відновив.
+   */
+  const handleBulkRemoveOutputs = async (keys: string[]) => {
+    if (!ensureCanEdit()) return;
+    const fileIds = keys
+      .filter((key) => key.startsWith("file:"))
+      .map((key) => key.slice("file:".length));
+    const linkIds = keys
+      .filter((key) => key.startsWith("link:"))
+      .map((key) => key.slice("link:".length));
+    const total = fileIds.length + linkIds.length;
+    if (total === 0) return;
+
+    const run = designOutputRemovalChainRef.current
+      .catch(() => {})
+      .then(async () => {
+        const removedKeys: string[] = [];
+        const failures: string[] = [];
+        for (const fileId of fileIds) {
+          try {
+            await removeDesignFileInner(fileId, { silent: true });
+            removedKeys.push(`file:${fileId}`);
+          } catch (e: unknown) {
+            failures.push(getErrorMessage(e, "Не вдалося видалити файл"));
+          }
+        }
+        if (linkIds.length > 0) {
+          try {
+            await removeDesignLinksInner(linkIds);
+            linkIds.forEach((linkId) => removedKeys.push(`link:${linkId}`));
+          } catch (e: unknown) {
+            // Посилання йдуть одним записом, але у звіті мають рахуватись
+            // поштучно — інакше «1 з 3» читається як «2 пройшли».
+            const message = getErrorMessage(e, "Не вдалося видалити посилання");
+            linkIds.forEach(() => failures.push(message));
+          }
+        }
+        return { removedKeys, failures };
+      });
+    designOutputRemovalChainRef.current = run.then(
+      () => {},
+      () => {}
+    );
+
+    const { removedKeys, failures } = await run.catch(() => ({
+      removedKeys: [] as string[],
+      failures: ["Не вдалося видалити матеріали"],
+    }));
+    const removedSet = new Set(removedKeys);
+    setOutputSelectionIds((prev) => prev.filter((key) => !removedSet.has(key)));
+
+    if (removedKeys.length > 0) {
+      toast.success(
+        removedKeys.length === 1 ? "Матеріал видалено" : `Видалено матеріалів: ${removedKeys.length}`
+      );
+    }
+    if (failures.length > 0) {
+      toast.error(
+        failures.length === total
+          ? failures[0]
+          : `Не вдалося видалити: ${failures.length} з ${total}. ${failures[0]}`
+      );
     }
   };
 
@@ -4732,8 +4920,8 @@ export default function DesignTaskPage() {
     }
   };
 
-  const toggleGroupingSelection = (entityKey: string) => {
-    setGroupingSelectionIds((prev) =>
+  const toggleOutputSelection = (entityKey: string) => {
+    setOutputSelectionIds((prev) =>
       prev.includes(entityKey) ? prev.filter((id) => id !== entityKey) : [...prev, entityKey]
     );
   };
@@ -4744,32 +4932,32 @@ export default function DesignTaskPage() {
     );
   };
 
-  const handleMoveSelectedOutputsToGroup = async () => {
-    if (!ensureCanEdit()) return;
-    if (groupingSelectionIds.length === 0) {
-      toast.error("Спочатку відмітьте файли або посилання для переміщення.");
-      return;
-    }
-    try {
-      const nextGroupLabel = normalizeOutputGroupLabel(uploadTargetGroup);
-      await moveSelectedOutputsToGroup(nextGroupLabel);
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Не вдалося перемістити матеріали у групу"));
-    }
+  /** Черга «клієнту» живе тільки в памʼяті — масова зміна без запису в БД. */
+  const applyClientShareToSelection = (entityKeys: string[], share: boolean) => {
+    setClientShareSelectionIds((prev) => {
+      const next = new Set(prev);
+      entityKeys.forEach((key) => {
+        if (share) next.add(key);
+        else next.delete(key);
+      });
+      return Array.from(next);
+    });
   };
 
-  const moveSelectedOutputsToGroup = async (groupLabel: string | null) => {
+  // scopedKeys — вибір, обмежений видимим табом. Панель масових дій завжди
+  // передає його явно, щоб дія не зачепила матеріали іншого типу.
+  const moveSelectedOutputsToGroup = async (groupLabel: string | null, selectionKeys: string[]) => {
     const nextGroupLabel = normalizeOutputGroupLabel(groupLabel);
-    if (groupingSelectionIds.length === 0) {
+    if (selectionKeys.length === 0) {
       throw new Error("Немає вибраних матеріалів.");
     }
     const fileSelectionIds = new Set(
-      groupingSelectionIds
+      selectionKeys
         .filter((entry) => entry.startsWith("file:"))
         .map((entry) => entry.slice("file:".length))
     );
     const linkSelectionIds = new Set(
-      groupingSelectionIds
+      selectionKeys
         .filter((entry) => entry.startsWith("link:"))
         .map((entry) => entry.slice("link:".length))
     );
@@ -4788,27 +4976,36 @@ export default function DesignTaskPage() {
     await persistDesignOutputs(nextFiles, nextLinks, { nextGroups });
     setDesignOutputFiles(nextFiles);
     setDesignOutputLinks(nextLinks);
-    setGroupingSelectionIds([]);
+    const movedKeys = new Set(selectionKeys);
+    setOutputSelectionIds((prev) => prev.filter((key) => !movedKeys.has(key)));
   };
 
-  const handleMoveSelectedOutputsToSpecificGroup = async (groupLabel: string | null) => {
+  const handleMoveSelectedOutputsToSpecificGroup = async (
+    groupLabel: string | null,
+    selectionKeys: string[]
+  ) => {
     if (!ensureCanEdit()) return;
-    if (groupingSelectionIds.length === 0) {
+    if (selectionKeys.length === 0) {
       toast.error("Спочатку відмітьте файли або посилання для переміщення.");
       return;
     }
     try {
-      await moveSelectedOutputsToGroup(groupLabel);
+      await moveSelectedOutputsToGroup(groupLabel, selectionKeys);
       toast.success("Матеріали переміщено у групу");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося перемістити матеріали у групу"));
     }
   };
 
-  const handleUngroupSelectedOutputsFromGroup = async (groupKey: string) => {
+  const handleUngroupSelectedOutputsFromGroup = async (groupKey: string, scopedKeys: string[]) => {
     if (!ensureCanEdit()) return;
+    // Групи спільні для «Візуалу» й «Макету», тому без скоупу дія зачепила б
+    // однойменну групу невидимого табу.
+    const scoped = new Set(scopedKeys);
     const selectedKeysInGroup = new Set(
-      selectedGroupingItems.filter((item) => item.groupKey === groupKey).map((item) => item.key)
+      selectedOutputItems
+        .filter((item) => item.groupKey === groupKey && scoped.has(item.key))
+        .map((item) => item.key)
     );
     if (selectedKeysInGroup.size === 0) {
       toast.error("У цій групі немає вибраних матеріалів.");
@@ -4824,36 +5021,34 @@ export default function DesignTaskPage() {
       await persistDesignOutputs(nextFiles, nextLinks);
       setDesignOutputFiles(nextFiles);
       setDesignOutputLinks(nextLinks);
-      setGroupingSelectionIds((prev) => prev.filter((key) => !selectedKeysInGroup.has(key)));
+      setOutputSelectionIds((prev) => prev.filter((key) => !selectedKeysInGroup.has(key)));
       toast.success("Матеріали прибрано з групи");
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося прибрати матеріали з групи"));
     }
   };
 
-  const handleSelectDesignOutputFile = async (fileId: string, kind: DesignOutputKind) => {
-    if (!task || !effectiveTeamId) return;
+  const ensureCanApproveOutputs = () => {
     if (!canManageAssignments) {
       toast.error("Тільки менеджер може зафіксувати обраний варіант замовника.");
-      return;
+      return false;
     }
-    if (!ensureCanEdit()) return;
-    if (outputSaving) return;
+    return ensureCanEdit();
+  };
 
-    const selectedIdsForKind =
-      kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
-    const selectedIdSetForKind =
-      kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
-    const alreadySelected = selectedIdSetForKind.has(fileId);
-    const nextSelectedIds = alreadySelected
-      ? selectedIdsForKind.filter((id) => id !== fileId)
-      : [...selectedIdsForKind, fileId];
-    const nextSelectedByKind: Record<DesignOutputKind, string[]> = {
-      visualization:
-        kind === "visualization" ? nextSelectedIds : [...selectedVisualizationOutputFileIds],
-      layout: kind === "layout" ? nextSelectedIds : [...selectedLayoutOutputFileIds],
-    };
-    const selectedFiles = designOutputFiles.filter((file) => nextSelectedByKind[kind].includes(file.id));
+  /**
+   * Один UPDATE на весь наступний набір погоджених. Погоджувати пачку циклом по
+   * handleSelectDesignOutputFile не можна: кожен виклик рахує наступний набір із
+   * того самого (ще не перезаписаного) task.metadata, тож усі записи, крім
+   * останнього, губляться.
+   */
+  const applyDesignOutputApproval = async (
+    nextSelectedByKind: Record<DesignOutputKind, string[]>,
+    kind: DesignOutputKind
+  ) => {
+    if (!task || !effectiveTeamId) return;
+    const nextSelectedIds = nextSelectedByKind[kind];
+    const selectedFiles = designOutputFiles.filter((file) => nextSelectedIds.includes(file.id));
     const actorLabel = userId ? getMemberLabel(userId) : "System";
 
     setOutputSaving(true);
@@ -4902,6 +5097,50 @@ export default function DesignTaskPage() {
     } finally {
       setOutputSaving(false);
     }
+  };
+
+  const buildNextApprovalByKind = (
+    nextSelectedIds: string[],
+    kind: DesignOutputKind
+  ): Record<DesignOutputKind, string[]> => ({
+    visualization: kind === "visualization" ? nextSelectedIds : [...selectedVisualizationOutputFileIds],
+    layout: kind === "layout" ? nextSelectedIds : [...selectedLayoutOutputFileIds],
+  });
+
+  const handleSelectDesignOutputFile = async (fileId: string, kind: DesignOutputKind) => {
+    if (!task || !effectiveTeamId) return;
+    if (!ensureCanApproveOutputs()) return;
+    if (outputSaving) return;
+
+    const selectedIdsForKind =
+      kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+    const selectedIdSetForKind =
+      kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
+    const nextSelectedIds = selectedIdSetForKind.has(fileId)
+      ? selectedIdsForKind.filter((id) => id !== fileId)
+      : [...selectedIdsForKind, fileId];
+
+    await applyDesignOutputApproval(buildNextApprovalByKind(nextSelectedIds, kind), kind);
+  };
+
+  const handleBulkApproveDesignOutputs = async (
+    fileIds: string[],
+    kind: DesignOutputKind,
+    approve: boolean
+  ) => {
+    if (!task || !effectiveTeamId) return;
+    if (!ensureCanApproveOutputs()) return;
+    if (outputSaving) return;
+    if (fileIds.length === 0) return;
+
+    const selectedIdsForKind =
+      kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
+    const touched = new Set(fileIds);
+    const nextSelectedIds = approve
+      ? Array.from(new Set([...selectedIdsForKind, ...fileIds]))
+      : selectedIdsForKind.filter((id) => !touched.has(id));
+
+    await applyDesignOutputApproval(buildNextApprovalByKind(nextSelectedIds, kind), kind);
   };
 
   const loadQuoteCandidates = async () => {
@@ -6890,18 +7129,14 @@ export default function DesignTaskPage() {
 
   const isStatusStartable = task?.status === "new" || task?.status === "changes";
   const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId && !isCollaboratorOnTask;
-  const selectedVisualizationOutputFileIds = useMemo(() => {
-    const explicit = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata, "visualization");
-    if (explicit.length > 0) return explicit;
-    const legacy = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata);
-    return legacy.filter((id) => designOutputFiles.some((file) => file.id === id && file.output_kind === "visualization"));
-  }, [designOutputFiles, task?.metadata]);
-  const selectedLayoutOutputFileIds = useMemo(() => {
-    const explicit = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata, "layout");
-    if (explicit.length > 0) return explicit;
-    const legacy = getSelectedDesignOutputFileIdsFromMetadata(task?.metadata);
-    return legacy.filter((id) => designOutputFiles.some((file) => file.id === id && file.output_kind === "layout"));
-  }, [designOutputFiles, task?.metadata]);
+  const selectedVisualizationOutputFileIds = useMemo(
+    () => resolveSelectedOutputIdsFromMetadata(task?.metadata, designOutputFiles, "visualization"),
+    [designOutputFiles, task?.metadata]
+  );
+  const selectedLayoutOutputFileIds = useMemo(
+    () => resolveSelectedOutputIdsFromMetadata(task?.metadata, designOutputFiles, "layout"),
+    [designOutputFiles, task?.metadata]
+  );
   const selectedVisualizationOutputFileIdSet = useMemo(
     () => new Set(selectedVisualizationOutputFileIds),
     [selectedVisualizationOutputFileIds]
@@ -7244,8 +7479,8 @@ export default function DesignTaskPage() {
       ),
     [groupedDesignOutputs]
   );
-  const selectedGroupingItems = useMemo(() => {
-    const selectedKeys = new Set(groupingSelectionIds);
+  const selectedOutputItems = useMemo(() => {
+    const selectedKeys = new Set(outputSelectionIds);
     return [
       ...designOutputFiles
         .filter((file) => selectedKeys.has(`file:${file.id}`))
@@ -7260,7 +7495,7 @@ export default function DesignTaskPage() {
           groupKey: normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__",
         })),
     ];
-  }, [designOutputFiles, designOutputLinks, groupingSelectionIds]);
+  }, [designOutputFiles, designOutputLinks, outputSelectionIds]);
   const selectedClientShareItems = useMemo(() => {
     const selectedKeys = new Set(clientShareSelectionIds);
     return [
@@ -7269,6 +7504,7 @@ export default function DesignTaskPage() {
         .map((file) => ({
           key: `file:${file.id}`,
           kind: file.output_kind,
+          label: getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type),
           groupKey: normalizeOutputGroupLabel(file.group_label) ?? "__ungrouped__",
         })),
       ...designOutputLinks
@@ -7276,10 +7512,41 @@ export default function DesignTaskPage() {
         .map((link) => ({
           key: `link:${link.id}`,
           kind: link.output_kind,
+          label: link.label,
           groupKey: normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__",
         })),
     ];
   }, [clientShareSelectionIds, designOutputFiles, designOutputLinks]);
+  // Джерело вкладення видно зі storage-шляху: файли прорахунку лежать у
+  // quote-attachments, файли до ТЗ — у design-brief-files. Окремого поля в даних
+  // немає, і заводити його заради фільтра не варто.
+  const attachmentSourceById = useMemo(() => {
+    const map = new Map<string, "quote" | "brief">();
+    attachments.forEach((file) => {
+      map.set(file.id, (file.storage_path ?? "").includes("/quote-attachments/") ? "quote" : "brief");
+    });
+    return map;
+  }, [attachments]);
+  const attachmentSourceCounts = useMemo(() => {
+    let quote = 0;
+    let brief = 0;
+    attachmentSourceById.forEach((source) => {
+      if (source === "quote") quote += 1;
+      else brief += 1;
+    });
+    return { quote, brief };
+  }, [attachmentSourceById]);
+  // Чипи-фільтри показуються лише коли є обидва джерела. Якщо після
+  // довантаження їх стало одне, старий вибір фільтра мовчки сховав би всі
+  // файли без жодного способу це скинути — тому фільтр діє тільки разом із чипами.
+  const attachmentFilterAvailable = attachmentSourceCounts.quote > 0 && attachmentSourceCounts.brief > 0;
+  const visibleAttachments = useMemo(
+    () =>
+      !attachmentFilterAvailable || filesSourceFilter === "all"
+        ? attachments
+        : attachments.filter((file) => attachmentSourceById.get(file.id) === filesSourceFilter),
+    [attachmentFilterAvailable, attachments, attachmentSourceById, filesSourceFilter]
+  );
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
       Object.entries(memberById)
@@ -8447,7 +8714,6 @@ export default function DesignTaskPage() {
   const renderDesignOutputSection = (kind: DesignOutputKind) => {
     const groupedOutputs = groupedDesignOutputsByKind[kind];
     const selectedIdSet = kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
-    const selectedIds = kind === "visualization" ? selectedVisualizationOutputFileIds : selectedLayoutOutputFileIds;
     const selectedShareItems = selectedClientShareItems.filter((item) => item.kind === kind);
     const selectedShareIds = selectedShareItems.map((item) => item.key);
     const selectedShareIdSet = new Set(selectedShareIds);
@@ -8458,6 +8724,23 @@ export default function DesignTaskPage() {
     const canSendSelectedOutputs = selectedShareIds.length > 0;
     const canSendEmail = canSendSelectedOutputs && Boolean(clientContact.email);
     const canSendViber = canSendSelectedOutputs && Boolean(clientContact.phone);
+    // Вибір рядків спільний для обох табів, тому масові дії працюють тільки з
+    // тим, що видно в поточному табі — інакше «Погодити» зачепило б приховане.
+    const kindFileIds = groupedOutputs.flatMap((group) => group.files.map((file) => file.id));
+    const kindRowKeys = new Set<string>([
+      ...kindFileIds.map((id) => `file:${id}`),
+      ...groupedOutputs.flatMap((group) => group.links.map((link) => `link:${link.id}`)),
+    ]);
+    const selectedRowKeysInKind = outputSelectionIds.filter((key) => kindRowKeys.has(key));
+    const selectedFileIdsInKind = selectedRowKeysInKind
+      .filter((key) => key.startsWith("file:"))
+      .map((key) => key.slice("file:".length));
+    const everySelectedFileApproved =
+      selectedFileIdsInKind.length > 0 && selectedFileIdsInKind.every((id) => selectedIdSet.has(id));
+    const everySelectedShared =
+      selectedRowKeysInKind.length > 0 && selectedRowKeysInKind.every((key) => selectedShareIdSet.has(key));
+    const totalFilesInKind = kindFileIds.length;
+    const approvedCount = kindFileIds.filter((id) => selectedIdSet.has(id)).length;
     const sendHint =
       clientContact.entityKind === "lead"
         ? "Відправка лідові"
@@ -8465,44 +8748,48 @@ export default function DesignTaskPage() {
           ? "Відправка замовнику"
           : "Контакт ще не визначений";
 
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {kindIcon}
-              <div className="text-sm font-semibold text-foreground">{kindLabel}</div>
-              <Badge variant={requiresThisKind ? "default" : "outline"} className="text-3xs">
-                {requiresThisKind ? "Обов'язково для погодження" : "Опціонально"}
-              </Badge>
-              {selectedIds.length > 0 ? (
-                <Badge variant="outline" className="text-3xs border-success/40 bg-success/10 text-success-foreground">
-                  Погоджено: {selectedIds.length}
-                </Badge>
-              ) : null}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {kind === "visualization"
-                ? "Тут має бути превʼю виробу або нанесення, яке погоджує замовник."
-                : "Тут має бути фінальний друкарський / виробничий макет."}
-            </div>
-          </div>
-        </div>
+    const statusTone: Tone = approvedCount > 0 ? "success" : requiresThisKind ? "warning" : "neutral";
+    const statusLine = (
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3",
+          toneSubtleClass[statusTone]
+        )}
+      >
+        {kindIcon}
+        <span className="text-sm font-semibold text-foreground">{kindLabel}</span>
+        <span className="text-sm font-medium">
+          {approvedCount > 0
+            ? `Погоджено ${approvedCount} з ${totalFilesInKind}`
+            : requiresThisKind
+              ? "Обовʼязково для погодження — ще нічого не погоджено"
+              : "Опціонально — погодження не обовʼязкове"}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {approvedCount > 0
+            ? "Погоджене піде у «Фінал» при експорті в Dropbox, решта — в «Архів»."
+            : kind === "visualization"
+              ? "Тут має бути превʼю виробу або нанесення, яке погоджує замовник."
+              : "Тут має бути фінальний друкарський / виробничий макет."}
+        </span>
+      </div>
+    );
 
+    const sendPanel = (
         <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <Send className="h-4 w-4 text-muted-foreground" />
-                <div className="text-sm font-semibold text-foreground">Відправити замовнику</div>
+                <div className="text-sm font-semibold text-foreground">Відправка клієнту</div>
                 <Badge variant="outline" className="text-3xs">
-                  Вибрано: {selectedShareIds.length}
+                  {selectedShareIds.length > 0 ? `У черзі: ${selectedShareIds.length}` : "Черга порожня"}
                 </Badge>
               </div>
               <div className="max-w-2xl text-xs text-muted-foreground">
                 {canSendSelectedOutputs
-                  ? `${sendHint}. Працює окремо від погодження — обери будь-які ${kind === "visualization" ? "візуали" : "макети"} чи посилання чекбоксом «Клієнту».`
-                  : `Познач матеріали чекбоксом «Клієнту». Це окремий список для відправки і він не впливає на «Погоджено».`}
+                  ? `${sendHint}. Черга не впливає на «Погоджено» — це окремий список для відправки.`
+                  : `Познач матеріали тегом «Клієнту» в списку вище — вони зберуться сюди.`}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
@@ -8531,11 +8818,34 @@ export default function DesignTaskPage() {
                     )
                   }
                 >
-                  Очистити вибір
+                  Очистити чергу
                 </Button>
               ) : null}
             </div>
           </div>
+
+          {selectedShareItems.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {selectedShareItems.map((item) => (
+                <span
+                  key={`share-chip-${item.key}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 py-1 pl-2.5 pr-1 text-2xs text-primary"
+                >
+                  <span className="truncate" title={item.label}>
+                    {item.label}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Прибрати з черги: ${item.label}`}
+                    className="rounded-md p-0.5 text-primary/70 transition-colors hover:bg-primary/15 hover:text-primary"
+                    onClick={() => toggleClientShareSelection(item.key)}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
 
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <Button
@@ -8547,6 +8857,9 @@ export default function DesignTaskPage() {
             >
               {sendingToClientKind === `${kind}:email` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
               Email
+              {!clientContact.email ? (
+                <span className="text-3xs font-normal text-muted-foreground">немає адреси</span>
+              ) : null}
             </Button>
             <Button
               type="button"
@@ -8567,9 +8880,17 @@ export default function DesignTaskPage() {
             >
               {sendingToClientKind === `${kind}:viber` ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
               Viber
+              {!clientContact.phone ? (
+                <span className="text-3xs font-normal text-muted-foreground">немає телефону</span>
+              ) : null}
             </Button>
           </div>
         </div>
+    );
+
+    return (
+      <div className="space-y-4">
+        {statusLine}
 
         {groupedOutputs.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center">
@@ -8616,41 +8937,52 @@ export default function DesignTaskPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-5">
             {groupedOutputs.map((group) => {
-              const selectedCountInGroup = selectedGroupingItems.filter((item) => item.groupKey === group.key).length;
-              const hasSelection = groupingSelectionIds.length > 0;
-              const allSelectedAlreadyInGroup = hasSelection && selectedCountInGroup === groupingSelectionIds.length;
+              const selectedCountInGroup = selectedOutputItems.filter(
+                (item) => item.groupKey === group.key && kindRowKeys.has(item.key)
+              ).length;
+              const hasSelection = selectedRowKeysInKind.length > 0;
+              const allSelectedAlreadyInGroup =
+                hasSelection && selectedCountInGroup === selectedRowKeysInKind.length;
               const canUngroup = group.key !== "__ungrouped__" && selectedCountInGroup > 0;
               return (
-                <div key={`${kind}:${group.key}`} className="rounded-xl border border-border/60 bg-card/60 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-semibold text-foreground">{group.label}</div>
-                      <Badge variant="outline" className="text-3xs">
-                        {group.files.length + group.links.length} матеріалів
-                      </Badge>
+                <div key={`${kind}:${group.key}`} className="space-y-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+                      {group.label}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {canUngroup ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={outputSaving}
-                          onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key)}
-                        >
-                          Забрати з групи
-                        </Button>
-                      ) : null}
+                    <span className="text-2xs tabular-nums text-muted-foreground/70">
+                      {group.files.length + group.links.length}
+                    </span>
+                    <div className="h-px flex-1 bg-border/50" />
+                    {canUngroup ? (
                       <Button
                         size="sm"
-                        variant="outline"
-                        disabled={outputSaving || groupingSelectionIds.length === 0 || allSelectedAlreadyInGroup}
-                        onClick={() => void handleMoveSelectedOutputsToSpecificGroup(group.key === "__ungrouped__" ? null : group.label)}
+                        variant="ghost"
+                        className="h-7 px-2 text-2xs"
+                        disabled={outputSaving}
+                        onClick={() => void handleUngroupSelectedOutputsFromGroup(group.key, selectedRowKeysInKind)}
+                      >
+                        Забрати з групи
+                      </Button>
+                    ) : null}
+                    {hasSelection && !allSelectedAlreadyInGroup ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-2xs"
+                        disabled={outputSaving}
+                        onClick={() =>
+                          void handleMoveSelectedOutputsToSpecificGroup(
+                            group.key === "__ungrouped__" ? null : group.label,
+                            selectedRowKeysInKind
+                          )
+                        }
                       >
                         Перемістити сюди
                       </Button>
-                    </div>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     {group.files.map((file) => {
@@ -8662,17 +8994,32 @@ export default function DesignTaskPage() {
                       const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
                       const previewKey = getStorageFileKey(file, "preview");
                       const isPreviewPreparing = Boolean(previewKey && previewPreparingKey === previewKey);
+                      const rowKey = `file:${file.id}`;
+                      const isApproved = selectedIdSet.has(file.id);
+                      const isSharedWithClient = selectedShareIdSet.has(rowKey);
+                      const isRowSelected = outputSelectionIds.includes(rowKey);
                       return (
                         <div
                           key={file.id}
                           data-anchor-id={`output:${file.id}`}
                           className={cn(
-                            "group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70",
+                            "group/item rounded-xl border p-3 transition-colors",
+                            isApproved
+                              ? "border-success/40 bg-success/5 hover:bg-success/10"
+                              : "border-border/50 bg-background/40 hover:border-border/80 hover:bg-background/70",
+                            isRowSelected && !isApproved && "border-primary/40 bg-primary/5",
                             highlightedAnchorId === `output:${file.id}` &&
                               "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
                           )}
                         >
                           <div className="flex items-start gap-3">
+                            <Checkbox
+                              className="mt-1 shrink-0"
+                              checked={isRowSelected}
+                              disabled={outputSaving}
+                              onCheckedChange={() => toggleOutputSelection(rowKey)}
+                              aria-label={`Вибрати матеріал: ${displayName}`}
+                            />
                             {isVideoFile ? (
                               <StorageObjectVideo
                                 bucket={file.storage_bucket}
@@ -8681,7 +9028,7 @@ export default function DesignTaskPage() {
                                 onClick={() => void openStorageFilePreview(file, {
                                   onMissingCleanup: () => void handleRemoveDesignFile(file.id),
                                 })}
-                                className="h-16 w-16 shrink-0 cursor-pointer rounded-lg border border-border/60"
+                                className="h-11 w-11 shrink-0 cursor-pointer rounded-lg border border-border/60"
                               />
                             ) : previewableFile ? (
                               <StorageObjectImage
@@ -8690,17 +9037,17 @@ export default function DesignTaskPage() {
                                 alt={displayName}
                                 variant="thumb"
                                 hoverPreview
-                                className="h-16 w-16 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                                className="h-11 w-11 shrink-0 rounded-lg border border-border/60 bg-muted/30"
                               />
                             ) : (
-                              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-2xs font-semibold uppercase text-muted-foreground">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-3xs font-semibold uppercase text-muted-foreground">
                                 {ext}
                               </div>
                             )}
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1 basis-48">
                                   <div className="truncate text-sm font-medium text-foreground" title={displayName}>
                                     {displayName}
                                   </div>
@@ -8722,7 +9069,50 @@ export default function DesignTaskPage() {
                                   </div>
                                 </div>
 
-                                <div className="flex shrink-0 items-center gap-0.5">
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={outputSaving}
+                                    aria-pressed={isSharedWithClient}
+                                    onClick={() => toggleClientShareSelection(rowKey)}
+                                    title={
+                                      isSharedWithClient
+                                        ? "Прибрати з добірки для клієнта"
+                                        : "Додати в добірку для клієнта"
+                                    }
+                                    className={cn(
+                                      "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-2xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                      isSharedWithClient
+                                        ? "border border-primary/40 bg-primary/10 text-primary"
+                                        : "border border-dashed border-border/70 text-muted-foreground hover:border-border hover:text-foreground"
+                                    )}
+                                  >
+                                    <Send className="h-3 w-3" />
+                                    Клієнту
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={outputSaving || !canManageAssignments}
+                                    aria-pressed={isApproved}
+                                    onClick={() => void handleSelectDesignOutputFile(file.id, kind)}
+                                    title={
+                                      !canManageAssignments
+                                        ? "Погоджувати може тільки менеджер"
+                                        : isApproved
+                                          ? "Зняти погодження"
+                                          : "Позначити як погоджене замовником"
+                                    }
+                                    className={cn(
+                                      "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-2xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                      isApproved
+                                        ? "border border-success/40 bg-success/10 text-success-foreground hover:bg-success/20"
+                                        : "border border-border/70 text-muted-foreground hover:border-success/40 hover:text-success-foreground"
+                                    )}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    {isApproved ? "Погоджено → Фінал" : "Погодити"}
+                                  </button>
+                                  <div className="flex items-center gap-0.5 border-l border-border/40 pl-1.5">
                                   {file.storage_bucket && file.storage_path ? (
                                     <>
                                       <Button
@@ -8770,87 +9160,52 @@ export default function DesignTaskPage() {
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
+                                  </div>
                                 </div>
                               </div>
-
-                              {selectedShareIdSet.has(`file:${file.id}`) || selectedIdSet.has(file.id) ? (
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                  {selectedShareIdSet.has(`file:${file.id}`) ? (
-                                    <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-3xs text-primary">
-                                      У добірці для клієнта
-                                    </Badge>
-                                  ) : null}
-                                  {selectedIdSet.has(file.id) ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="h-5 border-success/40 bg-success/10 text-3xs text-success-foreground"
-                                    >
-                                      Погоджено замовником
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                              ) : null}
 
                               {renderOutputChangeRequestControl({
                                 id: file.id,
                                 kind: "file",
                                 changeRequestId: file.change_request_id ?? null,
                               })}
-
-                              <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
-                                  <Checkbox
-                                    checked={groupingSelectionIds.includes(`file:${file.id}`)}
-                                    disabled={outputSaving}
-                                    onCheckedChange={() => toggleGroupingSelection(`file:${file.id}`)}
-                                    aria-label={`Вибрати для групи: ${file.file_name}`}
-                                  />
-                                  <span>До групи</span>
-                                </label>
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
-                                  <Checkbox
-                                    checked={selectedShareIdSet.has(`file:${file.id}`)}
-                                    disabled={outputSaving}
-                                    onCheckedChange={() => toggleClientShareSelection(`file:${file.id}`)}
-                                    aria-label={`Вибрати для відправки клієнту: ${file.file_name}`}
-                                  />
-                                  <span>Клієнту</span>
-                                </label>
-                                <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
-                                  <Checkbox
-                                    checked={selectedIdSet.has(file.id)}
-                                    disabled={outputSaving || !canManageAssignments}
-                                    onCheckedChange={() => void handleSelectDesignOutputFile(file.id, kind)}
-                                    aria-label={`Погодити ${kindLabel.toLowerCase()}: ${file.file_name}`}
-                                  />
-                                  <span className={cn(selectedIdSet.has(file.id) && "font-medium text-success-foreground")}>
-                                    Погоджено
-                                  </span>
-                                </label>
-                              </div>
                             </div>
                           </div>
                         </div>
                       );
                     })}
-                    {group.links.map((link) => (
+                    {group.links.map((link) => {
+                      const rowKey = `link:${link.id}`;
+                      const isSharedWithClient = selectedShareIdSet.has(rowKey);
+                      const isRowSelected = outputSelectionIds.includes(rowKey);
+                      return (
                       <div
                         key={link.id}
                         data-anchor-id={`output:${link.id}`}
                         className={cn(
-                          "group/item rounded-xl border border-border/50 bg-background/40 p-3 transition-colors hover:border-border/80 hover:bg-background/70",
+                          "group/item rounded-xl border p-3 transition-colors",
+                          isRowSelected
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border/50 bg-background/40 hover:border-border/80 hover:bg-background/70",
                           highlightedAnchorId === `output:${link.id}` &&
                             "ring-2 ring-primary/60 ring-offset-2 ring-offset-background"
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
-                            <Link2 className="h-5 w-5" />
+                          <Checkbox
+                            className="mt-1 shrink-0"
+                            checked={isRowSelected}
+                            disabled={outputSaving}
+                            onCheckedChange={() => toggleOutputSelection(rowKey)}
+                            aria-label={`Вибрати матеріал: ${link.label}`}
+                          />
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/30 text-muted-foreground">
+                            <Link2 className="h-4 w-4" />
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1 basis-48">
                                 <a
                                   href={link.url}
                                   target="_blank"
@@ -8876,7 +9231,28 @@ export default function DesignTaskPage() {
                                 </div>
                               </div>
 
-                              <div className="flex shrink-0 items-center gap-0.5">
+                              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={outputSaving}
+                                  aria-pressed={isSharedWithClient}
+                                  onClick={() => toggleClientShareSelection(rowKey)}
+                                  title={
+                                    isSharedWithClient
+                                      ? "Прибрати з добірки для клієнта"
+                                      : "Додати в добірку для клієнта"
+                                  }
+                                  className={cn(
+                                    "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-2xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                    isSharedWithClient
+                                      ? "border border-primary/40 bg-primary/10 text-primary"
+                                      : "border border-dashed border-border/70 text-muted-foreground hover:border-border hover:text-foreground"
+                                  )}
+                                >
+                                  <Send className="h-3 w-3" />
+                                  Клієнту
+                                </button>
+                                <div className="flex items-center gap-0.5 border-l border-border/40 pl-1.5">
                                 <Button size="icon" variant="ghost" className="h-8 w-8" asChild>
                                   <a href={link.url} target="_blank" rel="noopener noreferrer" aria-label="Відкрити посилання">
                                     <ExternalLink className="h-4 w-4" />
@@ -8901,53 +9277,119 @@ export default function DesignTaskPage() {
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
+                                </div>
                               </div>
                             </div>
-
-                            {selectedShareIdSet.has(`link:${link.id}`) ? (
-                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <Badge variant="outline" className="h-5 border-primary/30 bg-primary/10 text-3xs text-primary">
-                                  У добірці для клієнта
-                                </Badge>
-                              </div>
-                            ) : null}
 
                             {renderOutputChangeRequestControl({
                               id: link.id,
                               kind: "link",
                               changeRequestId: link.change_request_id ?? null,
                             })}
-
-                            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5">
-                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
-                                <Checkbox
-                                  checked={groupingSelectionIds.includes(`link:${link.id}`)}
-                                  disabled={outputSaving}
-                                  onCheckedChange={() => toggleGroupingSelection(`link:${link.id}`)}
-                                  aria-label={`Вибрати для групи: ${link.label}`}
-                                />
-                                <span>До групи</span>
-                              </label>
-                              <label className="inline-flex cursor-pointer items-center gap-1.5 text-2xs text-muted-foreground">
-                                <Checkbox
-                                  checked={selectedShareIdSet.has(`link:${link.id}`)}
-                                  disabled={outputSaving}
-                                  onCheckedChange={() => toggleClientShareSelection(`link:${link.id}`)}
-                                  aria-label={`Вибрати для відправки клієнту: ${link.label}`}
-                                />
-                                <span>Клієнту</span>
-                              </label>
-                            </div>
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
             })}
           </div>
         )}
+
+        {selectedRowKeysInKind.length > 0 ? (
+          <div className="sticky bottom-3 z-docked flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-card/95 px-3 py-2 shadow-elevated-md backdrop-blur">
+            <span className="px-1 text-sm font-semibold text-foreground">
+              Вибрано {selectedRowKeysInKind.length}
+            </span>
+            <div className="mx-1 h-5 w-px bg-border" />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 text-xs"
+              disabled={outputSaving}
+              onClick={() => applyClientShareToSelection(selectedRowKeysInKind, !everySelectedShared)}
+            >
+              <Send className="h-3.5 w-3.5" />
+              {everySelectedShared ? "Прибрати з добірки" : "Клієнту"}
+            </Button>
+            {selectedFileIdsInKind.length > 0 ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs"
+                disabled={outputSaving || !canManageAssignments}
+                title={canManageAssignments ? undefined : "Погоджувати може тільки менеджер"}
+                onClick={() =>
+                  void handleBulkApproveDesignOutputs(
+                    selectedFileIdsInKind,
+                    kind,
+                    !everySelectedFileApproved
+                  )
+                }
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {everySelectedFileApproved ? "Зняти погодження" : "Погодити"}
+              </Button>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" disabled={outputSaving}>
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  У групу
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem
+                  onClick={() => void handleMoveSelectedOutputsToSpecificGroup(null, selectedRowKeysInKind)}
+                >
+                  Без групи
+                </DropdownMenuItem>
+                {designOutputGroups.map((groupLabel) => (
+                  <DropdownMenuItem
+                    key={`bulk-group-${groupLabel}`}
+                    onClick={() =>
+                      void handleMoveSelectedOutputsToSpecificGroup(groupLabel, selectedRowKeysInKind)
+                    }
+                  >
+                    {groupLabel}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem
+                  onClick={() => {
+                    setCreateGroupDraft("");
+                    setCreateGroupError(null);
+                    setCreateGroupOpen(true);
+                  }}
+                >
+                  Створити групу…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+              disabled={outputSaving}
+              onClick={() => setBulkDeleteDialog({ open: true, keys: selectedRowKeysInKind })}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Видалити
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-8 text-xs text-muted-foreground"
+              onClick={() => setOutputSelectionIds((prev) => prev.filter((key) => !kindRowKeys.has(key)))}
+            >
+              Зняти вибір
+            </Button>
+          </div>
+        ) : null}
+
+        {sendPanel}
       </div>
     );
   };
@@ -9385,7 +9827,7 @@ export default function DesignTaskPage() {
 
       <div className="space-y-8 px-4 sm:px-5 md:px-6 xl:px-8 xl:pr-10">
           <details open className={cn("group pb-4", activeDesignTab !== "brief" && "hidden")}>
-            <summary className="mb-4 flex cursor-pointer list-none items-center justify-between gap-3">
+            <summary className="mb-4 flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
                   <FileText className="h-4 w-4" />
@@ -9404,8 +9846,58 @@ export default function DesignTaskPage() {
                     Опис задачі для дизайнера, версії ТЗ і правки від менеджера.
                   </div>
                 </div>
+                <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
+                  v{activeBriefVersion?.version ?? 1}
+                </Badge>
               </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              {/* Дії секції. Кнопки всередині <summary> самі згортали б блок —
+                  тому кожна глушить подію. */}
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {hasBriefHistory ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1.5 text-xs text-muted-foreground"
+                    aria-expanded={historyExpanded}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setHistoryExpanded((prev) => !prev);
+                    }}
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    Історія
+                    <span className="tabular-nums">{briefVersions.length}</span>
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setBriefEditorOpen(true);
+                  }}
+                >
+                  <PencilLine className="h-3.5 w-3.5" />
+                  Редагувати
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  disabled={changeRequestSaving || designTaskLockedByOther}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setChangeRequestOpen(true);
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Правка
+                </Button>
+                <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </div>
             </summary>
             <div className="space-y-4">
               {standaloneProduct ? (
@@ -9415,42 +9907,28 @@ export default function DesignTaskPage() {
               <Card className="border-border/50 bg-card/40 shadow-none">
                 <CardContent className="space-y-4 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">ТЗ для дизайнера</span>
-                      <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
-                        v{activeBriefVersion?.version ?? 1}
-                      </Badge>
+                    <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+                      Документ
                       {isLinkedQuote && quantityLabel !== "Не вказано" ? (
-                        <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal">
-                          {quantityLabel}
+                        <Badge variant="outline" className="h-5 px-1.5 text-3xs font-normal normal-case tracking-normal">
+                          Тираж: {quantityLabel}
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <DictationButton
-                        textareaRef={briefTextareaRef}
-                        value={briefDraft}
-                        onChange={(next) => {
-                          setBriefDraft(next);
-                          setBriefDirty(true);
-                          setBriefInlineEditing(true);
-                        }}
-                        onAfterInsert={() =>
-                          resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
-                        }
-                        context="brief"
-                        disabled={briefSaving || designTaskLockedByOther}
-                      />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 gap-1.5 text-xs text-muted-foreground"
-                        onClick={() => setBriefEditorOpen(true)}
-                      >
-                        <PencilLine className="h-3.5 w-3.5" />
-                        Відкрити редактор
-                      </Button>
-                    </div>
+                    <DictationButton
+                      textareaRef={briefTextareaRef}
+                      value={briefDraft}
+                      onChange={(next) => {
+                        setBriefDraft(next);
+                        setBriefDirty(true);
+                        setBriefInlineEditing(true);
+                      }}
+                      onAfterInsert={() =>
+                        resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
+                      }
+                      context="brief"
+                      disabled={briefSaving || designTaskLockedByOther}
+                    />
                   </div>
 
                   {briefInlineEditing || briefDirty ? (
@@ -10052,16 +10530,11 @@ export default function DesignTaskPage() {
                 </CardContent>
               </Card>
 
-              {/* CARD 3: Version history (collapsible) */}
-              {hasBriefHistory ? (
+              {/* CARD 3: Історія версій — розкривається кнопкою «Історія» в шапці секції */}
+              {hasBriefHistory && historyExpanded ? (
                 <Card className="border-border/50 bg-card/40 shadow-none">
                   <CardContent className="p-5">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between gap-2 text-left"
-                      onClick={() => setHistoryExpanded((prev) => !prev)}
-                      aria-expanded={historyExpanded}
-                    >
+                    <div className="flex w-full items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <History className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-semibold text-foreground">Історія версій</span>
@@ -10069,13 +10542,15 @@ export default function DesignTaskPage() {
                           {briefVersions.length}
                         </Badge>
                       </div>
-                      <ChevronRight
-                        className={cn(
-                          "h-4 w-4 text-muted-foreground transition-transform",
-                          historyExpanded && "rotate-90"
-                        )}
-                      />
-                    </button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-muted-foreground"
+                        onClick={() => setHistoryExpanded(false)}
+                      >
+                        Згорнути
+                      </Button>
+                    </div>
                     {historyExpanded ? (
                       <div className="mt-4 space-y-3">
                         {[...briefVersions].reverse().map((version) => {
@@ -10152,8 +10627,10 @@ export default function DesignTaskPage() {
             <div className="pb-3">
               <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">Коментарі та згадки</span>
             </div>
-            <div className="space-y-4">
-              <div className="space-y-3">
+            {/* Композер іде після стрічки (order-2): спершу читаєш обговорення,
+                потім пишеш — як у будь-якому чаті. */}
+            <div className="flex flex-col gap-4">
+              <div className="order-2 space-y-3 rounded-xl border border-border/50 bg-card/40 p-4">
                 <div className="text-sm font-medium text-foreground">Повідомити через коментар</div>
                 {managerMembers.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -10250,6 +10727,7 @@ export default function DesignTaskPage() {
                   </Button>
                 </div>
               </div>
+              <div className="order-1 space-y-3">
               {isLinkedQuote ? (
                 <>
                   {quoteMentionsLoading ? (
@@ -10262,24 +10740,29 @@ export default function DesignTaskPage() {
                   ) : quoteMentionComments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Поки немає згадок у коментарях цього прорахунку.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3.5">
                       {quoteMentionComments.slice(0, 5).map((comment) => (
-                        <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-                          <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                            <AvatarBase
-                              src={getMemberAvatar(comment.created_by)}
-                              name={getMemberLabel(comment.created_by)}
-                              fallback={getInitials(getMemberLabel(comment.created_by))}
-                              size={14}
-                              className="shrink-0 border-border/70"
-                              inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
-                            />
-                            <span>{getMemberLabel(comment.created_by)}</span>
-                            <span>·</span>
-                            <span>{formatDate(comment.created_at, true)}</span>
-                          </div>
-                          <div className="mt-1 text-sm whitespace-pre-wrap line-clamp-3 break-words">
-                            {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                        <div key={comment.id} className="flex items-start gap-2.5">
+                          <AvatarBase
+                            src={getMemberAvatar(comment.created_by)}
+                            name={getMemberLabel(comment.created_by)}
+                            fallback={getInitials(getMemberLabel(comment.created_by))}
+                            size={28}
+                            className="mt-0.5 shrink-0 border-border/70"
+                            inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="text-sm font-semibold text-foreground">
+                                {getMemberLabel(comment.created_by)}
+                              </span>
+                              <span className="text-2xs text-muted-foreground">
+                                {formatDate(comment.created_at, true)}
+                              </span>
+                            </div>
+                            <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-border/50 bg-muted/20 px-3 py-2 text-sm line-clamp-3">
+                              {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -10293,29 +10776,35 @@ export default function DesignTaskPage() {
               ) : standaloneComments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Поки немає коментарів у цій дизайн-задачі.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3.5">
                   {standaloneComments.slice(0, 10).map((comment) => (
-                    <div key={comment.id} className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
-                      <div className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
-                        <AvatarBase
-                          src={getMemberAvatar(comment.created_by)}
-                          name={getMemberLabel(comment.created_by)}
-                          fallback={getInitials(getMemberLabel(comment.created_by))}
-                          size={14}
-                          className="shrink-0 border-border/70"
-                          inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
-                        />
-                        <span>{getMemberLabel(comment.created_by)}</span>
-                        <span>·</span>
-                        <span>{formatDate(comment.created_at, true)}</span>
-                      </div>
-                      <div className="mt-1 text-sm whitespace-pre-wrap break-words">
-                        {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                    <div key={comment.id} className="flex items-start gap-2.5">
+                      <AvatarBase
+                        src={getMemberAvatar(comment.created_by)}
+                        name={getMemberLabel(comment.created_by)}
+                        fallback={getInitials(getMemberLabel(comment.created_by))}
+                        size={28}
+                        className="mt-0.5 shrink-0 border-border/70"
+                        inactive={comment.created_by ? (memberInactiveById[comment.created_by] ?? false) : false}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="text-sm font-semibold text-foreground">
+                            {getMemberLabel(comment.created_by)}
+                          </span>
+                          <span className="text-2xs text-muted-foreground">
+                            {formatDate(comment.created_at, true)}
+                          </span>
+                        </div>
+                        <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-border/50 bg-muted/20 px-3 py-2 text-sm">
+                          {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </details>
 
@@ -10342,10 +10831,38 @@ export default function DesignTaskPage() {
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
-            <div className="flex items-center justify-between gap-3 pb-3">
-              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-                {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+              {attachmentFilterAvailable ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(
+                    [
+                      { value: "all" as const, label: "Усі", count: attachments.length },
+                      { value: "quote" as const, label: "З прорахунку", count: attachmentSourceCounts.quote },
+                      { value: "brief" as const, label: "До ТЗ", count: attachmentSourceCounts.brief },
+                    ]
+                  ).map((chip) => (
+                    <button
+                      key={`files-filter-${chip.value}`}
+                      type="button"
+                      aria-pressed={filesSourceFilter === chip.value}
+                      onClick={() => setFilesSourceFilter(chip.value)}
+                      className={cn(
+                        "inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-2xs font-medium transition-colors",
+                        filesSourceFilter === chip.value
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+                      )}
+                    >
+                      {chip.label}
+                      <span className="tabular-nums opacity-70">{chip.count}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  {isLinkedQuote ? "Файли від замовника" : "Файли до ТЗ"}
+                </span>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   ref={attachmentInputRef}
@@ -10408,74 +10925,86 @@ export default function DesignTaskPage() {
                     </div>
                   ) : null}
                   {customerAttachmentsError ? <div className="text-xs text-destructive">{customerAttachmentsError}</div> : null}
-                  {attachments.map((file) => {
+                  <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleAttachments.map((file) => {
                     const displayName = getAttachmentDisplayFileName(file.file_name, file.storage_path, file.mime_type);
                     const extension = getFileExtension(displayName);
                     const isVideoFile = canPreviewVideo(extension) && Boolean(file.storage_bucket && file.storage_path);
                     const previewableImage = canRenderStoragePreview(extension) && Boolean(file.storage_bucket && file.storage_path) && !isVideoFile;
                     const downloadKey = getStorageFileKey(file);
                     const isDownloadPreparing = Boolean(downloadKey && downloadPreparingKey === downloadKey);
+                    const attachmentSource = attachmentSourceById.get(file.id) ?? "brief";
                     return (
-                      <div key={file.id} className="rounded-lg border border-border/50 bg-muted/5 p-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex items-start gap-2.5">
-                            {isVideoFile ? (
-                              <StorageObjectVideo
-                                bucket={file.storage_bucket}
-                                path={file.storage_path}
-                                label={displayName}
-                                onClick={() => void openStorageFilePreview(file)}
-                                className="h-11 w-11 shrink-0 rounded-md border border-border/60"
-                              />
-                            ) : previewableImage ? (
-                              <StorageObjectImage
-                                bucket={file.storage_bucket}
-                                path={file.storage_path}
-                                alt={displayName}
-                                variant="thumb"
-                                hoverPreview
-                                className="h-11 w-11 shrink-0 rounded-md border border-border/60"
-                              />
-                            ) : (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-3xs font-semibold text-muted-foreground">
-                                {extension}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium" title={displayName}>
-                                {displayName}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                                <span>{formatFileSize(file.file_size)}</span>
-                                <span>·</span>
-                                <span>{formatDate(file.created_at, true)}</span>
-                                {file.uploaded_by ? (
-                                  <>
-                                    <span>·</span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <AvatarBase
-                                        src={getMemberAvatar(file.uploaded_by)}
-                                        name={getMemberLabel(file.uploaded_by)}
-                                        fallback={getInitials(getMemberLabel(file.uploaded_by))}
-                                        size={14}
-                                        className="shrink-0 border-border/70"
-                                      />
-                                      <span>{getMemberLabel(file.uploaded_by)}</span>
-                                    </span>
-                                  </>
-                                ) : null}
-                              </div>
+                      <div
+                        key={file.id}
+                        className="overflow-hidden rounded-xl border border-border/50 bg-muted/5 transition-colors hover:border-border/80"
+                      >
+                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted/20">
+                          {isVideoFile ? (
+                            <StorageObjectVideo
+                              bucket={file.storage_bucket}
+                              path={file.storage_path}
+                              label={displayName}
+                              onClick={() => void openStorageFilePreview(file)}
+                              className="h-full w-full"
+                            />
+                          ) : previewableImage ? (
+                            <StorageObjectImage
+                              bucket={file.storage_bucket}
+                              path={file.storage_path}
+                              alt={displayName}
+                              variant="thumb"
+                              hoverPreview
+                              className="h-full w-full"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-sm font-semibold uppercase text-muted-foreground">
+                              {extension}
                             </div>
+                          )}
+                          <span
+                            className={cn(
+                              "absolute left-2 top-2 rounded-full border px-2 py-0.5 text-3xs font-medium",
+                              attachmentSource === "quote"
+                                ? "tone-info"
+                                : "border-border/60 bg-background/80 text-muted-foreground"
+                            )}
+                          >
+                            {attachmentSource === "quote" ? "З прорахунку" : "До ТЗ"}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 p-2.5">
+                          <div className="truncate text-sm font-medium" title={displayName}>
+                            {displayName}
                           </div>
-                          <div className="flex shrink-0 items-center gap-1">
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                            <span>{formatFileSize(file.file_size)}</span>
+                            <span aria-hidden>·</span>
+                            <span>{formatDate(file.created_at, true)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 border-t border-border/40 pt-1.5">
+                            {file.uploaded_by ? (
+                              <span className="inline-flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+                                <AvatarBase
+                                  src={getMemberAvatar(file.uploaded_by)}
+                                  name={getMemberLabel(file.uploaded_by)}
+                                  fallback={getInitials(getMemberLabel(file.uploaded_by))}
+                                  size={14}
+                                  className="shrink-0 border-border/70"
+                                />
+                                <span className="truncate">{getMemberLabel(file.uploaded_by)}</span>
+                              </span>
+                            ) : null}
+                            <span className="flex-1" />
                             {file.storage_bucket && file.storage_path ? (
                               <>
-                                <Button size="icon" variant="ghost" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Переглянути файл" onClick={() => void openStorageFilePreview(file)}>
                                   <Eye className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"
+                                  className="h-8 w-8"
                                   aria-label={isDownloadPreparing ? "Готуємо завантаження файлу" : "Завантажити файл"}
                                   title={isDownloadPreparing ? "Готуємо завантаження" : "Завантажити файл"}
                                   disabled={isDownloadPreparing}
@@ -10486,10 +11015,10 @@ export default function DesignTaskPage() {
                               </>
                             ) : (
                               <>
-                                <Button size="icon" variant="ghost" disabled>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Перегляд недоступний">
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button size="icon" variant="ghost" disabled>
+                                <Button size="icon" variant="ghost" className="h-8 w-8" disabled aria-label="Завантаження недоступне">
                                   <Download className="h-4 w-4" />
                                 </Button>
                               </>
@@ -10498,7 +11027,7 @@ export default function DesignTaskPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="text-destructive hover:text-destructive"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
                                 aria-label="Видалити файл"
                                 disabled={attachmentDeletingId === file.id}
                                 onClick={() => void handleRemoveTaskAttachment(file.id)}
@@ -10511,6 +11040,12 @@ export default function DesignTaskPage() {
                       </div>
                     );
                   })}
+                  </div>
+                  {visibleAttachments.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                      У цьому фільтрі немає файлів.
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -10607,6 +11142,9 @@ export default function DesignTaskPage() {
                 setActiveDesignOutputTab(nextKind);
                 setUploadTargetKind(nextKind);
                 setAddLinkKind(nextKind);
+                // Масові дії показуються під видимим табом, тож вибір із
+                // попереднього не має «тягнутись» у наступний невидимим.
+                setOutputSelectionIds([]);
               }}
               className="w-full"
             >
@@ -10640,7 +11178,11 @@ export default function DesignTaskPage() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Select value={uploadTargetGroup} onValueChange={setUploadTargetGroup}>
-                    <SelectTrigger className="h-9 w-full text-xs sm:w-auto sm:min-w-[150px]">
+                    <SelectTrigger
+                      className="h-9 w-full text-xs sm:w-auto sm:min-w-[150px]"
+                      aria-label="Група для нових матеріалів"
+                      title="Куди потраплять нові завантаження й посилання"
+                    >
                       <SelectValue placeholder="Без групи" />
                     </SelectTrigger>
                     <SelectContent>
@@ -10679,12 +11221,6 @@ export default function DesignTaskPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        disabled={groupingSelectionIds.length === 0}
-                        onClick={() => void handleMoveSelectedOutputsToGroup()}
-                      >
-                        Перемістити вибране{groupingSelectionIds.length > 0 ? ` (${groupingSelectionIds.length})` : ""}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
                         onClick={() => {
                           setCreateGroupDraft("");
                           setCreateGroupError(null);
@@ -10708,57 +11244,170 @@ export default function DesignTaskPage() {
 
             <Card className="overflow-hidden border border-border/50 bg-card/40 shadow-none">
               <CardContent className="p-0">
-                <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div className="space-y-5 p-5">
-                    <div className="flex items-start gap-3">
-                      <DropboxIcon className="h-10 w-10 shrink-0" />
-                      <div className="space-y-1">
-                        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-                          Dropbox Export
-                        </div>
-                        <div className="text-lg font-semibold text-foreground">
-                          Фінал і архів для папки замовлення
-                        </div>
-                        <p className="text-sm leading-5 text-muted-foreground">
-                          Затверджені файли → <span className="font-medium text-foreground">Фінал</span>, решта → <span className="font-medium text-foreground">Архів</span>.
-                        </p>
-                      </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+                  <DropboxIcon className="h-8 w-8 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-foreground">Експорт у папку замовлення</div>
+                    <div
+                      className="truncate text-xs text-muted-foreground"
+                      title={`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxDisplayedFolderName}`}
+                    >
+                      {`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxDisplayedFolderName}`}
                     </div>
+                  </div>
 
-                    <div className="grid gap-3">
-                      {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
-                        const plan = dropboxPlanByKind[kind];
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-1.5 text-center">
+                      <div className="text-base font-semibold tabular-nums text-success-foreground">
+                        {dropboxExportPlan.filter((entry) => entry.role === "final").length}
+                      </div>
+                      <div className="text-3xs uppercase tracking-caps text-muted-foreground">Фінал</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-center">
+                      <div className="text-base font-semibold tabular-nums text-foreground">
+                        {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
+                      </div>
+                      <div className="text-3xs uppercase tracking-caps text-muted-foreground">Архів</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {dropboxClientPath && dropboxSyncState === "synced" ? (
+                      <>
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
+                          onClick={() => void openDropboxOrderFolder()}
+                        >
+                          <FolderOpen className="h-4 w-4" />
+                          Відкрити папку
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          disabled={dropboxExporting || !dropboxCanExport}
+                          onClick={openDropboxExportDialog}
+                        >
+                          {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                          Оновити
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          disabled={dropboxExporting || (!dropboxCanExport && !!dropboxClientPath)}
+                          onClick={dropboxClientPath ? openDropboxExportDialog : () => void createDropboxClientFolder({ openExportDialog: true })}
+                        >
+                          {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
+                          {dropboxClientPath
+                            ? dropboxSyncState === "stale"
+                              ? "Оновити в Dropbox"
+                              : "Перенести в Dropbox"
+                            : "Створити папку і продовжити"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
+                          onClick={() => void openDropboxOrderFolder()}
+                        >
+                          <FolderOpen className="h-4 w-4" />
+                          Відкрити папку
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-xs text-muted-foreground"
+                      aria-expanded={dropboxDetailsOpen}
+                      onClick={() => setDropboxDetailsOpen((prev) => !prev)}
+                    >
+                      Деталі
+                      <ChevronDown
+                        className={cn("h-3.5 w-3.5 transition-transform", dropboxDetailsOpen && "rotate-180")}
+                      />
+                    </Button>
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    "flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 px-4 py-2 text-xs",
+                    dropboxStatusToneClass
+                  )}
+                >
+                  <span className="font-medium">{dropboxStatusLabel}</span>
+                  <span className="opacity-80">
+                    {dropboxFolderReachable === false
+                      ? "CRM більше не може відкрити цю папку або посилання в Dropbox. Експорт треба оновити."
+                      : latestDropboxExportedLabel
+                        ? `Останній експорт: ${latestDropboxExportedLabel}`
+                        : "Після першого експорту тут з’явиться стан синхронізації."}
+                  </span>
+                  {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
+                    <span className="opacity-80">Буде змінено: {dropboxPlanDiffSummary.join(", ")}.</span>
+                  ) : null}
+                </div>
+
+                {dropboxExportWarnings.length > 0 ? (
+                  <div className="flex items-start gap-2 border-t border-border/50 px-4 py-2.5 text-xs text-foreground tone-warning-subtle">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <span className="font-medium">Потрібно уточнення перед експортом. </span>
+                      {dropboxExportWarnings[0]}
+                    </span>
+                  </div>
+                ) : null}
+
+                {dropboxDetailsOpen ? (
+                  <div className="space-y-3 border-t border-border/50 bg-muted/10 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Погоджені файли → <span className="font-medium text-foreground">Фінал</span>, решта →{" "}
+                      <span className="font-medium text-foreground">Архів</span>.
+                    </p>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {(["visualization", "layout"] as DesignOutputKind[]).map((planKind) => {
+                        const plan = dropboxPlanByKind[planKind];
                         return (
                           <div
-                            key={`dropbox-plan-${kind}`}
-                            className="rounded-xl border border-border/50 bg-background/30 p-4"
+                            key={`dropbox-plan-${planKind}`}
+                            className="rounded-xl border border-border/50 bg-background/30 p-3"
                           >
-                            <div className="mb-3 flex items-center justify-between gap-2">
+                            <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                                {kind === "visualization" ? (
+                                {planKind === "visualization" ? (
                                   <ImageIcon className="h-4 w-4 tone-text-info" />
                                 ) : (
                                   <PencilLine className="h-4 w-4 tone-text-success" />
                                 )}
-                                {DESIGN_OUTPUT_KIND_LABELS[kind]}
+                                {DESIGN_OUTPUT_KIND_LABELS[planKind]}
                               </div>
                               <Badge variant="outline" className="border-border/60 bg-transparent text-3xs">
                                 Архів: {plan.archiveFiles.length}
                               </Badge>
                             </div>
                             {plan.finalFiles.length > 0 ? (
-                              <div className="rounded-lg border border-success/20 bg-success/5 p-3">
-                                <div className="mb-1 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-caps text-success-foreground">
+                              <div className="rounded-lg border border-success/20 bg-success/5 p-2.5">
+                                <div className="mb-1.5 inline-flex items-center gap-1.5 text-2xs font-medium uppercase tracking-caps text-success-foreground">
                                   <CheckCircle2 className="h-3.5 w-3.5" />
                                   Фінал: {plan.finalFiles.length}
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                   {plan.finalFiles.map((finalFile) => (
-                                    <div key={`dropbox-summary-${kind}-${finalFile.id}`} className="rounded-lg border border-success/10 bg-background/40 px-3 py-2">
-                                      <div className="truncate text-sm font-medium text-foreground" title={finalFile.file_name}>
+                                    <div
+                                      key={`dropbox-summary-${planKind}-${finalFile.id}`}
+                                      className="rounded-lg border border-success/10 bg-background/40 px-2.5 py-1.5"
+                                    >
+                                      <div className="truncate text-xs font-medium text-foreground" title={finalFile.file_name}>
                                         {finalFile.file_name}
                                       </div>
-                                      <div className="mt-1 text-xs text-muted-foreground">
+                                      <div className="mt-0.5 text-2xs text-muted-foreground">
                                         Мітка: <span className="font-medium text-foreground">{plan.finalLabels[finalFile.id]}</span>
                                       </div>
                                     </div>
@@ -10766,135 +11415,25 @@ export default function DesignTaskPage() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="rounded-lg border border-dashed border-border/60 bg-transparent p-3 text-sm text-muted-foreground">
-                                У цьому табі немає затвердженого файла. Усі матеріали підуть тільки в архів.
+                              <div className="rounded-lg border border-dashed border-border/60 p-2.5 text-xs text-muted-foreground">
+                                Немає погодженого файла — усе піде в архів.
                               </div>
                             )}
                           </div>
                         );
                       })}
                     </div>
-
-                    {dropboxExportWarnings.length > 0 ? (
-                      <div className="rounded-xl border tone-warning-subtle p-3 text-sm text-foreground">
-                        <div className="mb-1 inline-flex items-center gap-2 font-medium">
-                          <AlertTriangle className="h-4 w-4" />
-                          Потрібно уточнення перед експортом
-                        </div>
-                        <div>{dropboxExportWarnings[0]}</div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-col justify-between gap-4 border-t border-border/50 bg-muted/10 p-5 lg:border-l lg:border-t-0">
-                    <div className="space-y-4">
-                      <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                        <div className="mb-2 text-xs font-medium uppercase tracking-caps text-muted-foreground">
-                          Папка замовлення
-                        </div>
-                        <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm font-medium text-foreground">
-                          {dropboxDisplayedFolderName}
-                        </div>
-                        <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {`Tosho Team Folder/Замовники/${dropboxClientLabel}/Замовлення/${dropboxDisplayedFolderName}`}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                          <div className="text-2xs uppercase tracking-caps text-muted-foreground">У фінал</div>
-                          <div className="mt-2 text-2xl font-semibold text-foreground">
-                            {dropboxExportPlan.filter((entry) => entry.role === "final").length}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                          <div className="text-2xs uppercase tracking-caps text-muted-foreground">В архів</div>
-                          <div className="mt-2 text-2xl font-semibold text-foreground">
-                            {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className={cn("rounded-xl border px-4 py-3 text-sm", dropboxStatusToneClass)}>
-                        <div className="font-medium">{dropboxStatusLabel}</div>
-                        <div className="mt-1 text-xs opacity-80">
-                          {dropboxFolderReachable === false
-                            ? "CRM більше не може відкрити цю папку або посилання в Dropbox. Експорт треба оновити."
-                            : latestDropboxExportedLabel
-                              ? `Останній експорт: ${latestDropboxExportedLabel}`
-                              : "Після першого експорту тут з’явиться стан синхронізації."}
-                        </div>
-                        {dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0 ? (
-                          <div className="mt-2 text-xs opacity-80">
-                            Буде змінено: {dropboxPlanDiffSummary.join(", ")}.
-                          </div>
-                        ) : null}
-                      </div>
-                      {dropboxClientPath && dropboxSyncState === "synced" ? (
-                        <>
-                          <Button
-                            className="w-full gap-2"
-                            disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
-                            onClick={() => void openDropboxOrderFolder()}
-                          >
-                            <FolderOpen className="h-4 w-4" />
-                            Відкрити папку замовлення
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="w-full gap-2"
-                            disabled={dropboxExporting || !dropboxCanExport}
-                            onClick={openDropboxExportDialog}
-                          >
-                            {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
-                            Оновити в Dropbox
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            className="w-full gap-2"
-                            disabled={dropboxExporting || (!dropboxCanExport && !!dropboxClientPath)}
-                            onClick={dropboxClientPath ? openDropboxExportDialog : () => void createDropboxClientFolder({ openExportDialog: true })}
-                          >
-                            {dropboxExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
-                            {dropboxClientPath
-                              ? dropboxSyncState === "stale"
-                                ? "Оновити в Dropbox"
-                                : "Перенести в Dropbox"
-                              : "Створити папку Dropbox і продовжити"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="w-full gap-2"
-                            disabled={!latestDropboxFolderPath && !latestDropboxFolderSharedUrl}
-                            onClick={() => void openDropboxOrderFolder()}
-                          >
-                            <FolderOpen className="h-4 w-4" />
-                            Відкрити папку замовлення
-                          </Button>
-                        </>
-                      )}
-                      {!dropboxClientPath ? (
-                        <div className="text-xs leading-5 text-muted-foreground">
-                          Якщо папка замовника ще не створена, її можна підготувати прямо тут. Після цього відкриється модалка експорту.
-                        </div>
-                      ) : (
-                        <div className="text-xs leading-5 text-muted-foreground">
-                          {dropboxSyncState === "synced"
-                            ? "Dropbox вже містить актуальний фінал і архів для цієї задачі. Основна дія тепер — відкрити папку, а оновлення доступне окремо."
-                            : dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0
-                              ? `Оновлення ${dropboxPlanDiffSummary.join(", ")}.`
-                              : "Експорт підготує папку замовлення, збереже фінальні файли окремо від архіву й запам’ятає шлях у задачі."}
-                        </div>
-                      )}
+                    <div className="text-xs leading-5 text-muted-foreground">
+                      {!dropboxClientPath
+                        ? "Якщо папка замовника ще не створена, її можна підготувати прямо тут. Після цього відкриється модалка експорту."
+                        : dropboxSyncState === "synced"
+                          ? "Dropbox вже містить актуальний фінал і архів для цієї задачі. Основна дія тепер — відкрити папку, а оновлення доступне окремо."
+                          : dropboxSyncState === "stale" && dropboxPlanDiffSummary.length > 0
+                            ? `Оновлення ${dropboxPlanDiffSummary.join(", ")}.`
+                            : "Експорт підготує папку замовлення, збереже фінальні файли окремо від архіву й запам’ятає шлях у задачі."}
                     </div>
                   </div>
-                </div>
+                ) : null}
               </CardContent>
             </Card>
             </div>
@@ -12143,6 +12682,25 @@ export default function DesignTaskPage() {
           />
         </Suspense>
       ) : null}
+
+      <ConfirmDialog
+        open={bulkDeleteDialog.open}
+        onOpenChange={(open) => setBulkDeleteDialog((prev) => ({ ...prev, open }))}
+        title={
+          bulkDeleteDialog.keys.length === 1
+            ? "Видалити матеріал?"
+            : `Видалити матеріали (${bulkDeleteDialog.keys.length})?`
+        }
+        description="Файли буде стерто зі сховища — відновити їх не можна. Погодження з видалених файлів теж знімається."
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          const keys = bulkDeleteDialog.keys;
+          setBulkDeleteDialog({ open: false, keys: [] });
+          void handleBulkRemoveOutputs(keys);
+        }}
+      />
 
       <ConfirmDialog
         open={discardDialog.open}
