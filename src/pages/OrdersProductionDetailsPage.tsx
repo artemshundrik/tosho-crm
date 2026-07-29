@@ -55,6 +55,7 @@ import {
   type ContractSection,
   type ContractRenderContext,
 } from "@/features/contractRevisions/contractSections";
+import { amountInWords } from "@/lib/amountInWords";
 import { getSignedAttachmentUrl } from "@/lib/attachmentPreview";
 import { buildTelegramHref, formatTelegramHandle } from "@/lib/telegramContact";
 import { declineToGenitive } from "@/lib/nameDeclension";
@@ -1071,6 +1072,154 @@ const buildOrderDocumentHtml = (
               <p>______________________ ${escapeHtml(customerSignatureLabel)}</p>
             </div>
           </div>
+      `,
+    });
+  }
+
+  if (kind === "invoice") {
+    // Рахунок виписується в момент друку — власної дати в базі він не має,
+    // як і власного номера: береться номер замовлення. Якщо колись знадобиться
+    // наскрізна нумерація рахунків, міняти треба лише ці два рядки.
+    const invoiceDate = formatContractDateParts(null);
+    const invoiceNumber = record.quoteNumber;
+    const currencyShort =
+      record.currency === "USD" ? "дол. США" : record.currency === "EUR" ? "євро" : "грн.";
+    const wordsCurrency = record.currency === "USD" || record.currency === "EUR" ? record.currency : "UAH";
+    const vatAmount = totalWithVat - totalWithoutVat;
+    const contractReference = record.contractNumber
+      ? `№ ${record.contractNumber}${record.contractCreatedAt ? ` від ${formatOrderDate(record.contractCreatedAt)}` : ""}`
+      : null;
+
+    const invoiceRows = record.items
+      .map((item, index) => {
+        // Ціни в замовленні зберігаються З ПДВ — у рахунку колонки без ПДВ,
+        // тож ділимо, як це вже робить специфікація.
+        const unitPriceWithoutVat = Number(item.unitPrice || 0) / (1 + SPEC_VAT_RATE / 100);
+        const lineWithoutVat = unitPriceWithoutVat * Number(item.qty || 0);
+        return `
+        <tr>
+          <td class="mid">${index + 1}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
+          <td class="mid">${escapeHtml(item.unit)}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
+          <td class="num">${escapeHtml(formatPlainMoney(lineWithoutVat))}</td>
+        </tr>`;
+      })
+      .join("");
+
+    return renderPrintDocument({
+      title: `${title} ${invoiceNumber}`,
+      toolbarTitle: `Рахунок ${invoiceNumber}`,
+      styles: `
+          .notice { font-size: 11px; line-height: 1.5; text-align: center; margin: 0 0 22px; }
+          .sample-title { text-align: center; font-size: 13px; margin: 0 0 8px; }
+          .pay-box { width: 100%; border-collapse: collapse; margin-bottom: 26px; }
+          .pay-box td { border: 1px solid #111827; padding: 5px 8px; font-size: 12px; vertical-align: top; }
+          .pay-box .label { width: 150px; color: #374151; }
+          h1 { font-size: 19px; margin: 0 0 18px; font-weight: 700; }
+          .req-row { display: flex; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+          .req-label { width: 120px; flex: 0 0 120px; }
+          .req-value { flex: 1; }
+          .req-value div { margin-bottom: 2px; }
+          .items { width: 100%; border-collapse: collapse; margin: 22px 0 0; }
+          .items th, .items td { border: 1px solid #111827; padding: 6px 8px; font-size: 12px; }
+          .items th { background: #f3f4f6; font-weight: 700; text-align: center; }
+          .items .num { text-align: right; white-space: nowrap; }
+          .items .mid { text-align: center; }
+          .totals { margin-top: 10px; display: flex; justify-content: flex-end; }
+          .totals table { border-collapse: collapse; font-size: 13px; }
+          .totals td { padding: 3px 8px; }
+          .totals .cap { text-align: right; font-weight: 700; }
+          .totals .val { text-align: right; white-space: nowrap; min-width: 130px; }
+          .totals .grand td { font-size: 14px; border-top: 1px solid #111827; padding-top: 6px; }
+          .summary { margin-top: 18px; font-size: 13px; line-height: 1.6; }
+          .summary b { font-weight: 700; }
+          .sign { margin-top: 44px; display: flex; justify-content: flex-end; font-size: 13px; }
+          .sign .line { border-bottom: 1px solid #111827; width: 220px; margin-left: 10px; }
+      `,
+      bodyHtml: `
+        <div class="notice">
+          Увага! Оплата цього рахунку означає погодження з умовами поставки товарів. Повідомлення про оплату
+          є обов'язковим, в іншому випадку не гарантується наявність товарів на складі. Товар відпускається за фактом
+          надходження коштів на п/р Постачальника, самовивозом, за наявності довіреності та паспорта.
+        </div>
+
+        <div class="sample-title">Зразок заповнення платіжного доручення</div>
+        <table class="pay-box">
+          <tr>
+            <td class="label">Отримувач</td>
+            <td colspan="3">${escapeHtml(CONTRACT_EXECUTOR.companyName)}</td>
+          </tr>
+          <tr>
+            <td class="label">Код</td>
+            <td colspan="3">${escapeHtml(CONTRACT_EXECUTOR.taxId)}</td>
+          </tr>
+          <tr>
+            <td class="label">Банк отримувача</td>
+            <td>${escapeHtml(CONTRACT_EXECUTOR.bank)}</td>
+            <td class="label">КРЕДИТ рах. №</td>
+            <td>${escapeHtml(CONTRACT_EXECUTOR.iban)}</td>
+          </tr>
+        </table>
+
+        <h1>Рахунок на оплату № ${escapeHtml(invoiceNumber)} від ${escapeHtml(invoiceDate.day)} ${escapeHtml(invoiceDate.monthLabel)} ${escapeHtml(invoiceDate.year)} р.</h1>
+
+        <div class="req-row">
+          <div class="req-label"><b>Постачальник:</b></div>
+          <div class="req-value">
+            <div>${escapeHtml(CONTRACT_EXECUTOR.companyName)}</div>
+            <div>п/р ${escapeHtml(CONTRACT_EXECUTOR.iban)} у банку ${escapeHtml(CONTRACT_EXECUTOR.bank)},</div>
+            <div>${escapeHtml(CONTRACT_EXECUTOR.address)},</div>
+            <div>тел.: ${escapeHtml(CONTRACT_EXECUTOR.phone)},</div>
+            <div>код за ЄДРПОУ ${escapeHtml(CONTRACT_EXECUTOR.taxId)}, ІПН ${escapeHtml(CONTRACT_EXECUTOR.vatId)}</div>
+          </div>
+        </div>
+        <div class="req-row">
+          <div class="req-label"><b>Покупець:</b></div>
+          <div class="req-value"><div>${escapeHtml(customerTitle)}</div></div>
+        </div>
+        ${
+          contractReference
+            ? `<div class="req-row">
+                 <div class="req-label"><b>Договір:</b></div>
+                 <div class="req-value"><div>${escapeHtml(contractReference)}</div></div>
+               </div>`
+            : ""
+        }
+
+        <table class="items">
+          <thead>
+            <tr>
+              <th style="width:36px;">№</th>
+              <th>Товари (роботи, послуги)</th>
+              <th style="width:70px;">Кіл-сть</th>
+              <th style="width:52px;">Од.</th>
+              <th style="width:100px;">Ціна без ПДВ</th>
+              <th style="width:110px;">Сума без ПДВ</th>
+            </tr>
+          </thead>
+          <tbody>${invoiceRows}</tbody>
+        </table>
+
+        <div class="totals">
+          <table>
+            <tr><td class="cap">Всього:</td><td class="val">${escapeHtml(formatPlainMoney(totalWithoutVat))}</td></tr>
+            <tr><td class="cap">Сума ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(vatAmount))}</td></tr>
+            <tr class="grand"><td class="cap">Всього із ПДВ:</td><td class="val">${escapeHtml(formatPlainMoney(totalWithVat))}</td></tr>
+          </table>
+        </div>
+
+        <div class="summary">
+          <div>Всього найменувань ${record.items.length}, на суму ${escapeHtml(formatPlainMoney(totalWithVat))} ${escapeHtml(currencyShort)}</div>
+          <div><b>${escapeHtml(amountInWords(totalWithVat, wordsCurrency))}</b></div>
+          <div>У т.ч. ПДВ: ${escapeHtml(amountInWords(vatAmount, wordsCurrency))}</div>
+        </div>
+
+        <div class="sign">
+          <div>Виписав(ла):</div>
+          <div class="line"></div>
+        </div>
       `,
     });
   }

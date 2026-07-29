@@ -47,6 +47,7 @@ export const ORDER_DOCUMENT_EXECUTOR = {
   signatoryPositionDisplay: "Директор",
   authority: "Статуту",
   address: "Україна, 03035, м. Київ, вул. Монастирського Дениса, буд. 3, корпус 3",
+  phone: "+380635157037",
   taxId: "43024297",
   vatId: "430242926591",
   iban: "UA233003350000000026006645092",
