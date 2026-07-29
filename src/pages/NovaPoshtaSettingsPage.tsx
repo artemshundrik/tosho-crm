@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Truck, AlertTriangle, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,31 @@ import {
   type NovaPoshtaSettings,
   type NovaPoshtaBoxSize,
 } from "@/lib/novaPoshtaSettings";
+
+/**
+ * Секція аркуша: підпис ліворуч, поля праворуч. Ліва колонка не декоративна —
+ * вона зʼїдає ширину, тож на широкому екрані поля не розтягуються в кілометрові
+ * інпути, а сторінка має видиму межу замість «полотна».
+ */
+function Section({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-4 border-b border-border/60 p-5 md:grid-cols-[190px_minmax(0,1fr)] md:gap-6">
+      <div>
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
 const SIDE_LABELS: Record<"length" | "width" | "height", string> = {
   length: "Довж.",
@@ -74,6 +99,8 @@ export default function NovaPoshtaSettingsPage() {
   const [senders, setSenders] = useState<NpSender[]>([]);
   const [contacts, setContacts] = useState<NpContactPerson[]>([]);
   const [weightText, setWeightText] = useState("");
+  // Знімок збереженого стану — щоб підвал чесно казав, чи є що зберігати.
+  const [baseline, setBaseline] = useState(() => JSON.stringify({ settings: EMPTY_NOVA_POSHTA_SETTINGS, weightText: "" }));
 
   const update = (patch: Partial<NovaPoshtaSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
   const updateBoxSize = (index: number, patch: Partial<NovaPoshtaBoxSize>) =>
@@ -91,8 +118,10 @@ export default function NovaPoshtaSettingsPage() {
         if (teamId) {
           const loaded = await loadNovaPoshtaSettings(teamId);
           if (!cancelled && loaded) {
+            const loadedWeight = loaded.defaultWeight != null ? String(loaded.defaultWeight) : "";
             setSettings(loaded);
-            setWeightText(loaded.defaultWeight != null ? String(loaded.defaultWeight) : "");
+            setWeightText(loadedWeight);
+            setBaseline(JSON.stringify({ settings: loaded, weightText: loadedWeight }));
           }
         }
         try {
@@ -177,7 +206,9 @@ export default function NovaPoshtaSettingsPage() {
 
     setSaving(true);
     try {
-      await saveNovaPoshtaSettings(teamId, { ...settings, defaultWeight: nextWeight });
+      const saved = { ...settings, defaultWeight: nextWeight };
+      await saveNovaPoshtaSettings(teamId, saved);
+      setBaseline(JSON.stringify({ settings: saved, weightText }));
       toast.success("Налаштування Нової Пошти збережено");
     } catch (error) {
       toast.error(errMessage(error, "Не вдалося зберегти"));
@@ -194,80 +225,48 @@ export default function NovaPoshtaSettingsPage() {
     !settings.senderWarehouseRef && "відділення відправлення",
   ].filter(Boolean) as string[];
 
-  const senderSummary = [
-    settings.senderName,
-    settings.senderContactName,
-    [settings.senderCityName, settings.senderWarehouseName].filter(Boolean).join(", "),
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const isDirty = JSON.stringify({ settings, weightText }) !== baseline;
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-          <Truck className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Нова Пошта</h1>
-          <p className="text-sm text-muted-foreground">
-            Відправник, дефолти ТТН і власні розміри коробок.
-          </p>
-        </div>
-      </div>
-
-      {/* Головне питання цієї сторінки — чи можна вже створювати ТТН. Раніше
-          відповідь зʼявлялась аж після натискання «Зберегти» внизу довгої форми. */}
-      {!loading && !notConfigured ? (
-        missingRequired.length === 0 ? (
-          <div className="tone-success-subtle flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">
-            <CheckCircle2 className="tone-text-success h-5 w-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="tone-text-success text-sm font-medium">Готово до створення ТТН</div>
-              <div className="truncate text-xs text-muted-foreground">{senderSummary}</div>
+    // pb-10: AppLayout дає сторінці px і pt, але НЕ дає нижнього падінга —
+    // без цього кнопка збереження впирається в самий край вікна.
+    <div className="mx-auto w-full max-w-5xl pb-10">
+      <Card className="overflow-visible">
+        {/* Шапка аркуша: назва зліва, відповідь на головне питання — справа. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted">
+              <Truck className="h-4.5 w-4.5 text-muted-foreground" />
             </div>
+            <div>
+              <h1 className="text-base font-semibold tracking-tight">Нова Пошта</h1>
+              <p className="text-xs text-muted-foreground">Відправник, дефолти ТТН і власні розміри коробок.</p>
+            </div>
+          </div>
+          {!loading && !notConfigured ? (
+            missingRequired.length === 0 ? (
+              <span className="tone-success-subtle flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium">
+                <CheckCircle2 className="tone-text-success h-3.5 w-3.5" />
+                <span className="tone-text-success">Готово до створення ТТН</span>
+              </span>
+            ) : (
+              <span className="tone-warning-subtle flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium">
+                <AlertTriangle className="tone-text-warning h-3.5 w-3.5" />
+                <span className="tone-text-warning">Не вистачає {missingRequired.length}</span>
+              </span>
+            )
+          ) : null}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Завантаження…
           </div>
         ) : (
-          <div className="tone-warning-subtle flex flex-wrap items-start gap-3 rounded-xl border px-4 py-3">
-            <AlertTriangle className="tone-text-warning mt-0.5 h-5 w-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="tone-text-warning text-sm font-medium">ТТН поки створити не вийде</div>
-              <div className="text-xs text-muted-foreground">Не вистачає: {missingRequired.join(", ")}.</div>
-            </div>
-          </div>
-        )
-      ) : null}
-
-      {notConfigured ? (
-        <Card className="tone-warning-subtle">
-          <CardContent className="flex items-start gap-3 py-4 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 tone-text-warning" />
-            <div>
-              Ключ API Нової Пошти не налаштований на сервері. Додайте{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">NOVA_POSHTA_API_KEY</code> у змінні
-              середовища Netlify й повторно задеплойте функції — тоді список відправників підтягнеться з кабінету.
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {loading ? (
-        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Завантаження…
-        </div>
-      ) : (
-        <>
-          {/* «Хто» і «звідки» — одна думка, задається раз назавжди. Раніше це були
-              дві картки, хоч заповнюють їх завжди разом і за одним заходом. */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Хто і звідки відправляє</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Задається раз. Підставляється в кожну накладну без запитань.
-              </p>
-            </CardHeader>
-            <CardContent className="grid items-start gap-4 md:grid-cols-2">
+          <>
+            <Section label="Хто і звідки відправляє" hint="Задається раз. Підставляється в кожну накладну без запитань.">
+              <div className="grid items-start gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Контрагент-відправник <span className="text-destructive">*</span></Label>
                 <Select value={settings.senderRef} onValueChange={handleSelectSender} disabled={notConfigured}>
@@ -333,17 +332,11 @@ export default function NovaPoshtaSettingsPage() {
                   onSelect={(warehouse) => update({ senderWarehouseName: warehouse.description, senderWarehouseRef: warehouse.ref })}
                 />
               </div>
-            </CardContent>
-          </Card>
+              </div>
+            </Section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Що підставляти в нову ТТН</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Стартові значення. Менеджер може змінити їх у кожній накладній.
-              </p>
-            </CardHeader>
-            <CardContent className="grid items-start gap-4 md:grid-cols-2">
+            <Section label="Що підставляти в нову ТТН" hint="Стартові значення. Менеджер може змінити їх у кожній накладній.">
+              <div className="grid items-start gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Платник доставки</Label>
                 <Select value={settings.defaultPayer} onValueChange={(defaultPayer) => update({ defaultPayer })}>
@@ -446,20 +439,16 @@ export default function NovaPoshtaSettingsPage() {
                   «Посуд». Це поле спрацює лише коли жодна позиція не привʼязана до каталогу.
                 </p>
               </div>
-            </CardContent>
-          </Card>
+              </div>
+            </Section>
 
-          {/* Окрема картка, а не поле в дефолтах: це список обʼєктів, і в формі ТТН
-              він працює інакше — кнопками, а не підставлянням значення. */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Наші коробки</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Розміри, у які реально пакуємо. У формі ТТН стають кнопками — натиснув, і сторони
-                заповнились. НП рахує з них обʼємну вагу (1 м³ = 250 кг) і тарифікує за більшою з двох.
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-3">
+            {/* Окрема секція, а не поле в дефолтах: це список обʼєктів, і в формі
+                ТТН він працює інакше — кнопками, а не підставлянням значення. */}
+            <Section
+              label="Наші коробки"
+              hint="Розміри, у які реально пакуємо. У формі ТТН стають кнопками. НП рахує з них обʼємну вагу (1 м³ = 250 кг) і тарифікує за більшою з двох."
+            >
+              <div className="grid gap-3">
                 <div className="grid gap-2">
                   {settings.boxSizes.map((box, index) => (
                     <div key={index} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2">
@@ -508,17 +497,22 @@ export default function NovaPoshtaSettingsPage() {
                     Додати розмір
                   </Button>
                 </div>
-            </CardContent>
-          </Card>
+              </div>
+            </Section>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving || !teamId}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Зберегти
-            </Button>
-          </div>
-        </>
-      )}
+            {/* sticky: на довгій сторінці кнопка не має тікати за нижній край. */}
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-[inherit] border-t border-border/60 bg-card/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+              <span className="text-xs text-muted-foreground">
+                {isDirty ? "Є незбережені зміни" : "Усе збережено"}
+              </span>
+              <Button onClick={handleSave} disabled={saving || !teamId || !isDirty}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Зберегти
+              </Button>
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
