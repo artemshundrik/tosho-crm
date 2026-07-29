@@ -1,12 +1,14 @@
 import * as React from "react";
-import { Loader2, MapPin, Package } from "lucide-react";
+import { Loader2, MapPin, Package, Signpost } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   NovaPoshtaNotConfiguredError,
   listNpWarehouses,
   searchNpSettlements,
+  searchNpStreets,
   type NpSettlement,
+  type NpStreet,
   type NpWarehouse,
 } from "@/lib/novaPoshtaApi";
 
@@ -245,6 +247,108 @@ export function NpWarehouseCombobox({
             >
               <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0">{warehouse.description}</span>
+            </button>
+          ))}
+        </Dropdown>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Вулиця (Address.searchSettlementStreets)
+// ---------------------------------------------------------------------------
+
+type NpStreetComboboxProps = {
+  /** SettlementRef обраного населеного пункту. Порожньо → звичайне поле вводу. */
+  settlementRef: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  onSelect: (street: NpStreet) => void;
+  placeholder?: string;
+  className?: string;
+};
+
+export function NpStreetCombobox({
+  settlementRef,
+  value,
+  onValueChange,
+  onSelect,
+  placeholder,
+  className,
+}: NpStreetComboboxProps) {
+  const [open, setOpen] = React.useState(false);
+  const [results, setResults] = React.useState<NpStreet[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [unavailable, setUnavailable] = React.useState(false);
+  const debouncedValue = useDebounced(value);
+
+  React.useEffect(() => {
+    const query = debouncedValue.trim();
+    if (!open || unavailable || !settlementRef || query.length < 2) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    searchNpStreets(settlementRef, query)
+      .then((list) => {
+        if (!cancelled) setResults(list);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof NovaPoshtaNotConfiguredError) setUnavailable(true);
+        setResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedValue, open, unavailable, settlementRef]);
+
+  if (unavailable || !settlementRef) {
+    return (
+      <Input
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={placeholder ?? "Вул. Хрещатик, 1"}
+        className={cn("h-9", className)}
+      />
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(event) => {
+          onValueChange(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        placeholder={placeholder ?? "Почніть вводити вулицю…"}
+        className={cn("h-9", className)}
+        autoComplete="off"
+      />
+      {open ? (
+        <Dropdown loading={loading} loadingLabel="Шукаю вулицю…" empty={results.length === 0}>
+          {results.map((street) => (
+            <button
+              key={street.ref}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(street);
+                setResults([]);
+                setOpen(false);
+              }}
+            >
+              <Signpost className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{street.present}</span>
             </button>
           ))}
         </Dropdown>
