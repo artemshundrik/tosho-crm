@@ -147,14 +147,17 @@ export function NovaPoshtaTtnDialog({
 
         const book = partyId ? await listPartyDeliveryPoints({ teamId, partyType, partyId }).catch(() => []) : [];
         const point = delivery.deliveryPointId ? book.find((entry) => entry.id === delivery.deliveryPointId) : undefined;
-        const name = splitContactName(delivery.contactName ?? "");
+        // Порядок джерел імені: збережена точка книги → знімок доставки → застаріла склейка.
+        // splitContactName тут лишається ЛИШЕ для знімків, збережених до розділення полів:
+        // він вгадує (перше слово = ім'я), тож справжні поля мають пріоритет над ним.
+        const legacyName = splitContactName(delivery.contactName ?? "");
         if (cancelled) return;
 
         setRecipient({
           recipientType: point?.recipientType ?? (defaultEdrpou ? "organization" : "private"),
           edrpou: point?.recipientEdrpou || defaultEdrpou || "",
-          firstName: point?.contactFirstName || name.first,
-          lastName: point?.contactLastName || name.last,
+          firstName: point?.contactFirstName || delivery.contactFirstName || legacyName.first,
+          lastName: point?.contactLastName || delivery.contactLastName || legacyName.last,
           phone: delivery.contactPhone || point?.contactPhone || "",
           cityRef: delivery.npCityRef || point?.npCityRef || "",
           cityName: delivery.city || point?.city || "",
