@@ -15,7 +15,7 @@ import {
   pointTypeToNpDeliveryType,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
-import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
+import { NpCityCombobox, NpStreetCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 
 /**
  * Знімок доставки, що зберігається у quotes.delivery_details (jsonb).
@@ -128,11 +128,15 @@ export const sanitizeQuoteDeliveryDetails = (
   if (deliveryType === "taxi") {
     sanitized.city = trimDelivery(deliveryDetails.city);
     sanitized.address = trimDelivery(deliveryDetails.address);
+    sanitized.npCityRef = trimDelivery(deliveryDetails.npCityRef);
+    sanitized.npSettlementRef = trimDelivery(deliveryDetails.npSettlementRef);
   }
   if (deliveryType === "cargo") {
     sanitized.region = trimDelivery(deliveryDetails.region);
     sanitized.city = trimDelivery(deliveryDetails.city);
     sanitized.address = trimDelivery(deliveryDetails.address);
+    sanitized.npCityRef = trimDelivery(deliveryDetails.npCityRef);
+    sanitized.npSettlementRef = trimDelivery(deliveryDetails.npSettlementRef);
   }
   return sanitized;
 };
@@ -257,11 +261,15 @@ export function QuoteDeliveryFields({
             <div className="text-sm text-muted-foreground">Місто *</div>
             <NpCityCombobox
               city={details.city}
-              onCityChange={(city) => onChange({ city, npCityRef: "", npWarehouseRef: "" })}
+              onCityChange={(city) =>
+                onChange({ city, npCityRef: "", npWarehouseRef: "", npSettlementRef: "" })
+              }
               onSelect={(settlement) =>
                 onChange({
                   city: settlement.present,
                   npCityRef: settlement.ref,
+                  npSettlementRef: settlement.settlementRef,
+                  region: settlement.area || details.region,
                   address: "",
                   npWarehouseRef: "",
                 })
@@ -306,11 +314,11 @@ export function QuoteDeliveryFields({
           {details.npDeliveryType === "address" ? (
             <div className="space-y-1 md:col-span-2">
               <div className="text-sm text-muted-foreground">Вулиця *</div>
-              <Input
+              <NpStreetCombobox
+                settlementRef={details.npSettlementRef ?? ""}
                 value={details.street}
-                onChange={(e) => onChange({ street: e.target.value })}
-                placeholder="Вул. Хрещатик, 1"
-                className="h-9"
+                onValueChange={(street) => onChange({ street })}
+                onSelect={(street) => onChange({ street: `${street.present}, ` })}
               />
             </div>
           ) : (
@@ -370,11 +378,17 @@ export function QuoteDeliveryFields({
         <>
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Місто *</div>
-            <Input
-              value={details.city}
-              onChange={(e) => onChange({ city: e.target.value })}
-              placeholder="Київ"
-              className="h-9"
+            <NpCityCombobox
+              city={details.city}
+              onCityChange={(city) => onChange({ city, npCityRef: "", npSettlementRef: "" })}
+              onSelect={(settlement) =>
+                onChange({
+                  city: settlement.present,
+                  npCityRef: settlement.ref,
+                  npSettlementRef: settlement.settlementRef,
+                  address: "",
+                })
+              }
             />
           </div>
           <div className="space-y-1">
@@ -394,11 +408,11 @@ export function QuoteDeliveryFields({
           </div>
           <div className="space-y-1 md:col-span-2">
             <div className="text-sm text-muted-foreground">Адреса *</div>
-            <Input
+            <NpStreetCombobox
+              settlementRef={details.npSettlementRef ?? ""}
               value={details.address}
-              onChange={(e) => onChange({ address: e.target.value })}
-              placeholder="Вул. Хрещатик, 1"
-              className="h-9"
+              onValueChange={(address) => onChange({ address })}
+              onSelect={(street) => onChange({ address: `${street.present}, ` })}
             />
           </div>
         </>
@@ -417,20 +431,27 @@ export function QuoteDeliveryFields({
           </div>
           <div className="space-y-1">
             <div className="text-sm text-muted-foreground">Місто *</div>
-            <Input
-              value={details.city}
-              onChange={(e) => onChange({ city: e.target.value })}
-              placeholder="Київ"
-              className="h-9"
+            <NpCityCombobox
+              city={details.city}
+              onCityChange={(city) => onChange({ city, npCityRef: "", npSettlementRef: "" })}
+              onSelect={(settlement) =>
+                onChange({
+                  city: settlement.present,
+                  npCityRef: settlement.ref,
+                  npSettlementRef: settlement.settlementRef,
+                  region: settlement.area || details.region,
+                  address: "",
+                })
+              }
             />
           </div>
           <div className="space-y-1 md:col-span-2">
             <div className="text-sm text-muted-foreground">Адреса *</div>
-            <Input
+            <NpStreetCombobox
+              settlementRef={details.npSettlementRef ?? ""}
               value={details.address}
-              onChange={(e) => onChange({ address: e.target.value })}
-              placeholder="Вул. Хрещатик, 1"
-              className="h-9"
+              onValueChange={(address) => onChange({ address })}
+              onSelect={(street) => onChange({ address: `${street.present}, ` })}
             />
           </div>
           <div className="space-y-1">
