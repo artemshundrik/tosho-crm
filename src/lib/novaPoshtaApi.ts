@@ -118,6 +118,38 @@ export async function listNpWarehouses(params: {
   return parsed.filter((warehouse) => warehouse.isPostomat === params.postomat);
 }
 
+export type NpStreet = {
+  ref: string;
+  /** Готове "вул. Хрещатик" — саме це підставляється в поле. */
+  present: string;
+};
+
+/**
+ * Автокомпліт вулиці в межах населеного пункту (Address.searchSettlementStreets).
+ * ⚠️ Потрібен саме SettlementRef (Ref із searchSettlements), а не CityRef.
+ * Глобального пошуку вулиці НП не має — без міста метод не працює.
+ */
+export async function searchNpStreets(settlementRef: string, query: string, limit = 20): Promise<NpStreet[]> {
+  const trimmed = query.trim();
+  if (!settlementRef || trimmed.length < 2) return [];
+  const data = await callNovaPoshta("Address", "searchSettlementStreets", {
+    SettlementRef: settlementRef,
+    StreetName: trimmed,
+    Limit: String(limit),
+  });
+  const addresses = Array.isArray(data[0]?.Addresses) ? (data[0].Addresses as Array<Record<string, unknown>>) : [];
+  return addresses
+    .map((address) => {
+      const description = str(address.SettlementStreetDescription) || str(address.Description);
+      const type = str(address.StreetsType) || str(address.StreetsTypeDescription);
+      return {
+        ref: str(address.SettlementStreetRef) || str(address.Ref),
+        present: str(address.Present) || [type, description].filter(Boolean).join(" ").trim(),
+      };
+    })
+    .filter((street) => street.ref && street.present);
+}
+
 /* ── Phase 2: відправник ─────────────────────────────────────────────────
    Читання з кабінету НП для налаштування відправника. Побічних ефектів нема —
    лише список твоїх відправників і їхніх контактних осіб. */
