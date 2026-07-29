@@ -384,6 +384,29 @@ export async function createNpInternetDocument(params: {
   };
 }
 
+/**
+ * Наліпка-маркування 100×100 для друку на коробку. PDF тягне серверна функція:
+ * у НП ключ передається прямо в URL друку, тож саме посилання є секретом і у
+ * фронт віддавати його не можна. Повертаємо blob-URL — його треба відкликати.
+ */
+export async function fetchNpMarkingPdfUrl(ref: string): Promise<string> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Не авторизовано");
+
+  const response = await fetch("/.netlify/functions/nova-poshta-marking", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ ref }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? "Не вдалося отримати маркування");
+  }
+  return URL.createObjectURL(await response.blob());
+}
+
 /** Скасувати (видалити) ще не проскановану ТТН. */
 export async function deleteNpInternetDocument(ref: string): Promise<void> {
   if (!ref) return;

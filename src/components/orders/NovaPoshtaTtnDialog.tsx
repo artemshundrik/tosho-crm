@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, PackageCheck, Copy, ExternalLink, Trash2, AlertTriangle, Calculator } from "lucide-react";
+import { Loader2, PackageCheck, Copy, ExternalLink, Trash2, AlertTriangle, Calculator, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import {
@@ -31,6 +31,7 @@ import {
   createNpInternetDocument,
   deleteNpInternetDocument,
   trackNpDocument,
+  fetchNpMarkingPdfUrl,
   NovaPoshtaNotConfiguredError,
   type NpTtnResult,
 } from "@/lib/novaPoshtaApi";
@@ -170,6 +171,7 @@ export function NovaPoshtaTtnDialog({
   const [calculating, setCalculating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [printingMarking, setPrintingMarking] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
   // Отримувач приходить із доставки замовлення й майже завжди правильний — тримаємо
@@ -394,6 +396,21 @@ export function NovaPoshtaTtnDialog({
     }
   };
 
+  const handlePrintMarking = async () => {
+    if (!shownTtn?.ref) return;
+    setPrintingMarking(true);
+    try {
+      const url = await fetchNpMarkingPdfUrl(shownTtn.ref);
+      window.open(url, "_blank", "noopener,noreferrer");
+      // Вкладка вже тримає документ; URL звільняємо, щоб blob не висів у памʼяті.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не вдалося відкрити маркування");
+    } finally {
+      setPrintingMarking(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!shownTtn) return;
     setDeleting(true);
@@ -448,6 +465,16 @@ export function NovaPoshtaTtnDialog({
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
+              {shownTtn.ref ? (
+                <Button type="button" onClick={handlePrintMarking} disabled={printingMarking}>
+                  {printingMarking ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Printer className="mr-2 h-4 w-4" />
+                  )}
+                  Друкувати наліпку
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
