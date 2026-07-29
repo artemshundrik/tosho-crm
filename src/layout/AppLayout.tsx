@@ -624,6 +624,16 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.membersAccess,
       showPageHeader: false,
     };
+  // Без власної гілки сторінка падала у fallback і показувала шапку «Огляд ·
+  // Пульс команди», ще й із зайвим блоком заголовка, що зсував контент униз.
+  if (pathname.startsWith(ROUTES.novaPoshta))
+    return {
+      title: "Нова Пошта",
+      subtitle: "Відправник, дефолти ТТН і власні розміри коробок.",
+      breadcrumbLabel: "Нова Пошта",
+      breadcrumbTo: ROUTES.novaPoshta,
+      showPageHeader: false,
+    };
 if (pathname === ROUTES.profile)
     return {
       title: "Мій профіль",
