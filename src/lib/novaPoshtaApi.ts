@@ -269,6 +269,17 @@ export async function saveNpRecipient(params: {
   return { counterpartyRef, contactRef: str(contactPersons[0]?.Ref) };
 }
 
+/**
+ * Одне місце (коробка) у форматі НП: розміри в САНТИМЕТРАХ, вага в кілограмах.
+ * Якщо передати — НП рахує об'ємну вагу сама й тарифікує за більшою з двох.
+ */
+export type NpSeatOption = {
+  volumetricWidth: string;
+  volumetricLength: string;
+  volumetricHeight: string;
+  weight: string;
+};
+
 /** Розрахунок вартості доставки (без побічних ефектів). */
 export async function getNpDocumentPrice(params: {
   citySenderRef: string;
@@ -278,6 +289,7 @@ export async function getNpDocumentPrice(params: {
   cargoType: string;
   serviceType: string;
   seatsAmount: string;
+  optionsSeat?: NpSeatOption[];
 }): Promise<number> {
   const data = await callNovaPoshta("InternetDocument", "getDocumentPrice", {
     CitySender: params.citySenderRef,
@@ -287,6 +299,7 @@ export async function getNpDocumentPrice(params: {
     Cost: params.cost,
     CargoType: params.cargoType,
     SeatsAmount: params.seatsAmount,
+    ...(params.optionsSeat?.length ? { OptionsSeat: params.optionsSeat } : {}),
   });
   return Number(data[0]?.Cost ?? 0) || 0;
 }
@@ -336,6 +349,7 @@ export async function createNpInternetDocument(params: {
   description: string;
   cost: string;
   dateTime?: string;
+  optionsSeat?: NpSeatOption[];
 }): Promise<NpTtnResult> {
   const data = await callNovaPoshta("InternetDocument", "save", {
     PayerType: params.payerType,
@@ -345,6 +359,7 @@ export async function createNpInternetDocument(params: {
     Weight: params.weight,
     ServiceType: params.serviceType,
     SeatsAmount: params.seatsAmount,
+    ...(params.optionsSeat?.length ? { OptionsSeat: params.optionsSeat } : {}),
     Description: params.description,
     Cost: params.cost,
     CitySender: params.citySenderRef,

@@ -80,12 +80,44 @@ type RecipientState = {
 type CargoState = {
   weight: string;
   seats: string;
+  /** Розміри однієї коробки в см — НП рахує з них об'ємну вагу. Порожньо = не передаємо. */
+  boxLength: string;
+  boxWidth: string;
+  boxHeight: string;
   description: string;
   cost: string;
   payer: string;
   paymentMethod: string;
   cargoType: string;
   serviceType: string;
+};
+
+/** Ціле число без провідних нулів; порожній рядок дозволений, щоб поле можна було стерти. */
+const digitsOnly = (value: string) => value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+
+/** Десяткове з однією крапкою: «1,5» → «1.5», літери відкидаються, порожнє дозволене. */
+const decimalOnly = (value: string) => {
+  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const [head, ...rest] = normalized.split(".");
+  return rest.length > 0 ? `${head}.${rest.join("")}` : head;
+};
+
+const toPositiveNumber = (value: string, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+/**
+ * Об'ємна вага за правилом НП: 1 м³ = 250 кг, тобто Д×Ш×В(см) / 4000.
+ * Тарифікується більша з двох — фактична чи об'ємна, тож показуємо це наперед.
+ */
+const volumetricWeightKg = (cargo: CargoState) => {
+  const length = Number(cargo.boxLength);
+  const width = Number(cargo.boxWidth);
+  const height = Number(cargo.boxHeight);
+  if (![length, width, height].every((side) => Number.isFinite(side) && side > 0)) return null;
+  const seats = toPositiveNumber(cargo.seats, 1);
+  return ((length * width * height) / 4000) * seats;
 };
 
 type NovaPoshtaTtnDialogProps = {
@@ -167,6 +199,9 @@ export function NovaPoshtaTtnDialog({
         setCargo({
           weight: loaded?.defaultWeight != null ? String(loaded.defaultWeight) : "0.5",
           seats: String(loaded?.defaultSeats ?? 1),
+          boxLength: "",
+          boxWidth: "",
+          boxHeight: "",
           description: loaded?.defaultDescription || "Друкована продукція",
           cost: String(Math.max(0, Math.round(orderTotal || 0))),
           payer: loaded?.defaultPayer || "Recipient",
@@ -209,19 +244,43 @@ export function NovaPoshtaTtnDialog({
 
   const updateRecipient = (patch: Partial<RecipientState>) =>
     setRecipient((prev) => (prev ? { ...prev, ...patch } : prev));
-  const updateCargo = (patch: Partial<CargoState>) => setCargo((prev) => (prev ? { ...prev, ...patch } : prev));
+  // Будь-яка зміна вантажу знецінює попередній розрахунок — інакше на екрані
+  // висить ціна, порахована зі старої ваги чи розмірів.
+  const updateCargo = (patch: Partial<CargoState>) => {
+    setPreview(null);
+    setCargo((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  // Поля можна лишати порожніми під час набору — до НП летять уже нормалізовані значення.
+  const seatsCount = Math.max(1, Math.round(toPositiveNumber(cargo?.seats ?? "", 1)));
+  const totalWeight = toPositiveNumber(cargo?.weight ?? "", 0.5);
+  const declaredCost = String(Math.max(0, Math.round(toPositiveNumber(cargo?.cost ?? "", 0))));
+  const volumetric = cargo ? volumetricWeightKg(cargo) : null;
+  // Розміри передаємо, лише коли задані всі три сторони: НП рахує об'ємну вагу сама.
+  const optionsSeat =
+    cargo && volumetric !== null
+      ? Array.from({ length: seatsCount }, () => ({
+          volumetricLength: cargo.boxLength,
+          volumetricWidth: cargo.boxWidth,
+          volumetricHeight: cargo.boxHeight,
+          weight: (totalWeight / seatsCount).toFixed(2),
+        }))
+      : undefined;
 
   const senderReady = Boolean(
     settings?.senderRef && settings?.senderContactRef && settings?.senderCityRef && settings?.senderWarehouseRef
   );
-  const recipientReady = Boolean(
-    recipient?.cityRef &&
-      recipient?.warehouseRef &&
-      recipient?.firstName.trim() &&
-      recipient?.lastName.trim() &&
-      recipient?.phone &&
-      (recipient.recipientType !== "organization" || recipient.edrpou.trim())
-  );
+  // Список, а не просто boolean: сіра кнопка без пояснення — найгірше, що можна
+  // показати менеджеру, коли не заповнене одне поле десь угорі форми.
+  const missingRecipientFields: string[] = [
+    !recipient?.cityRef && "місто",
+    !recipient?.warehouseRef && "відділення",
+    !recipient?.firstName.trim() && "ім'я",
+    !recipient?.lastName.trim() && "прізвище",
+    !recipient?.phone && "телефон",
+    recipient?.recipientType === "organization" && !recipient.edrpou.trim() && "ЄДРПОУ",
+  ].filter((entry): entry is string => typeof entry === "string");
+  const recipientReady = Boolean(recipient) && missingRecipientFields.length === 0;
 
   const handleCalculate = async () => {
     if (!settings || !recipient || !cargo) return;
@@ -231,11 +290,12 @@ export function NovaPoshtaTtnDialog({
         getNpDocumentPrice({
           citySenderRef: settings.senderCityRef,
           cityRecipientRef: recipient.cityRef,
-          weight: cargo.weight || "0.5",
-          cost: cargo.cost || "0",
+          weight: String(totalWeight),
+          cost: declaredCost,
           cargoType: cargo.cargoType,
           serviceType: cargo.serviceType,
-          seatsAmount: cargo.seats || "1",
+          seatsAmount: String(seatsCount),
+          optionsSeat,
         }),
         getNpDocumentDeliveryDate({
           citySenderRef: settings.senderCityRef,
@@ -282,10 +342,11 @@ export function NovaPoshtaTtnDialog({
         paymentMethod: cargo.paymentMethod,
         cargoType: cargo.cargoType,
         serviceType: cargo.serviceType,
-        weight: cargo.weight || "0.5",
-        seatsAmount: cargo.seats || "1",
-        description: cargo.description || "Друкована продукція",
-        cost: cargo.cost || "0",
+        weight: String(totalWeight),
+        seatsAmount: String(seatsCount),
+        description: cargo.description.trim() || "Друкована продукція",
+        cost: declaredCost,
+        optionsSeat,
       });
       const { updateOrderNovaPoshtaTtn } = await import("@/features/orders/orderRecords");
       await updateOrderNovaPoshtaTtn({ teamId, orderId, ttn: result });
@@ -323,8 +384,9 @@ export function NovaPoshtaTtnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* Шапка й кнопки зафіксовані, скролиться лише тіло форми — вона довга. */}
+      <DialogContent className="max-w-2xl max-h-[90vh] gap-0 p-0 sm:gap-0 sm:p-0">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-5 pb-4 pt-5">
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5" />
             {shownTtn ? "Експрес-накладна" : "Створити ТТН"}
@@ -333,6 +395,7 @@ export function NovaPoshtaTtnDialog({
             {shownTtn ? "Накладну створено в Новій Пошті." : "Нова Пошта — відправлення замовлення."}
           </DialogDescription>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
 
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
@@ -493,26 +556,68 @@ export function NovaPoshtaTtnDialog({
                   <Label>Вага, кг</Label>
                   <Input
                     value={cargo.weight}
-                    onChange={(event) => updateCargo({ weight: event.target.value.replace(",", ".") })}
+                    onChange={(event) => updateCargo({ weight: decimalOnly(event.target.value) })}
                     inputMode="decimal"
+                    placeholder="0.5"
                     className="h-9"
                   />
+                  <p className="text-xs text-muted-foreground">Загальна вага всіх місць.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Місць</Label>
                   <Input
                     value={cargo.seats}
-                    onChange={(event) => updateCargo({ seats: event.target.value.replace(/\D/g, "") || "1" })}
+                    onChange={(event) => updateCargo({ seats: digitsOnly(event.target.value) })}
                     inputMode="numeric"
+                    placeholder="1"
                     className="h-9"
                   />
+                  <p className="text-xs text-muted-foreground">Скільки коробок відправляємо.</p>
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label>Розмір коробки, см</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        ["boxLength", "Довжина"],
+                        ["boxWidth", "Ширина"],
+                        ["boxHeight", "Висота"],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <Input
+                        key={field}
+                        value={cargo[field]}
+                        onChange={(event) => updateCargo({ [field]: digitsOnly(event.target.value) })}
+                        inputMode="numeric"
+                        placeholder={label}
+                        aria-label={`${label}, см`}
+                        className="h-9"
+                      />
+                    ))}
+                  </div>
+                  {volumetric !== null ? (
+                    <p className="text-xs text-muted-foreground">
+                      Об'ємна вага: <span className="font-medium text-foreground">{volumetric.toFixed(2)} кг</span>
+                      {volumetric > totalWeight ? (
+                        <span className="tone-text-warning"> — більша за фактичну, НП порахує тариф за нею.</span>
+                      ) : (
+                        <> — менша за фактичну, тариф піде за вагою.</>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Заповни всі три сторони — НП порахує об'ємну вагу (1 м³ = 250 кг) і візьме більшу з двох.
+                      Якщо лишити порожнім, тариф рахується тільки за вагою.
+                    </p>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label>Оголошена вартість, ₴</Label>
                   <Input
                     value={cargo.cost}
-                    onChange={(event) => updateCargo({ cost: event.target.value.replace(/\D/g, "") })}
+                    onChange={(event) => updateCargo({ cost: digitsOnly(event.target.value) })}
                     inputMode="numeric"
+                    placeholder="0"
                     className="h-9"
                   />
                 </div>
@@ -587,14 +692,24 @@ export function NovaPoshtaTtnDialog({
               </div>
             </div>
 
+          </div>
+        ) : null}
+        </div>
+
+        {!loading && !shownTtn && !notConfigured && senderReady && recipient && cargo ? (
+          <div className="shrink-0 border-t border-border/60 px-5 py-4">
             {preview ? (
-              <div className="rounded-lg border border-border/50 bg-muted/20 p-3 text-sm">
+              <div className="mb-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-sm">
                 Орієнтовна вартість доставки: <span className="font-semibold">{money(preview.cost)}</span>
                 {preview.date ? <> · доставка ≈ {preview.date}</> : null}
               </div>
             ) : null}
-
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            {missingRecipientFields.length > 0 ? (
+              <div className="mb-3 text-xs text-muted-foreground">
+                Щоб створити ТТН, заповни: <span className="font-medium text-foreground">{missingRecipientFields.join(", ")}</span>.
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Button type="button" variant="outline" onClick={handleCalculate} disabled={calculating || !recipient.cityRef}>
                 {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
                 Розрахувати
