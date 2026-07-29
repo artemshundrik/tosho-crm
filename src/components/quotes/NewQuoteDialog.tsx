@@ -45,7 +45,6 @@ import {
   createEmptyCustomerDeliveryPoint,
   listPartyDeliveryPoints,
   npDeliveryTypeToPointType,
-  splitContactName,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { getCatalogModelMetadata } from "@/lib/toshoApi";
@@ -873,6 +872,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       street: initialValues?.deliveryDetails?.street ?? "",
       npDeliveryType: initialValues?.deliveryDetails?.npDeliveryType ?? "",
       payer: initialValues?.deliveryDetails?.payer ?? "",
+      contactFirstName: initialValues?.deliveryDetails?.contactFirstName ?? "",
+      contactLastName: initialValues?.deliveryDetails?.contactLastName ?? "",
       contactName: initialValues?.deliveryDetails?.contactName ?? "",
       contactPhone: initialValues?.deliveryDetails?.contactPhone ?? "",
       deliveryPointId: initialValues?.deliveryDetails?.deliveryPointId ?? "",
@@ -1472,11 +1473,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         sanitizedDeliveryDetails.npDeliveryType === "address" ? trim(deliveryDetails.street) : "";
       sanitizedDeliveryDetails.address =
         sanitizedDeliveryDetails.npDeliveryType === "address" ? "" : trim(deliveryDetails.address);
-      sanitizedDeliveryDetails.contactName = trim(deliveryDetails.contactName);
+      sanitizedDeliveryDetails.contactFirstName = trim(deliveryDetails.contactFirstName);
+      sanitizedDeliveryDetails.contactLastName = trim(deliveryDetails.contactLastName);
+      sanitizedDeliveryDetails.contactName =
+        [trim(deliveryDetails.contactFirstName), trim(deliveryDetails.contactLastName)].filter(Boolean).join(" ") ||
+        trim(deliveryDetails.contactName);
       sanitizedDeliveryDetails.contactPhone = trim(deliveryDetails.contactPhone);
       sanitizedDeliveryDetails.deliveryPointId = trim(deliveryDetails.deliveryPointId);
       sanitizedDeliveryDetails.npCityRef = trim(deliveryDetails.npCityRef);
       sanitizedDeliveryDetails.npWarehouseRef = trim(deliveryDetails.npWarehouseRef);
+      sanitizedDeliveryDetails.npSettlementRef = trim(deliveryDetails.npSettlementRef);
     }
     if (deliveryType === "taxi") {
       sanitizedDeliveryDetails.city = trim(deliveryDetails.city);
@@ -1513,11 +1519,12 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 pointType === "np_courier"
                   ? sanitizedDeliveryDetails.street
                   : sanitizedDeliveryDetails.address,
-              contactFirstName: splitContactName(sanitizedDeliveryDetails.contactName ?? "").first,
-              contactLastName: splitContactName(sanitizedDeliveryDetails.contactName ?? "").last,
+              contactFirstName: sanitizedDeliveryDetails.contactFirstName ?? "",
+              contactLastName: sanitizedDeliveryDetails.contactLastName ?? "",
               contactPhone: sanitizedDeliveryDetails.contactPhone ?? "",
               npCityRef: sanitizedDeliveryDetails.npCityRef || null,
               npWarehouseRef: sanitizedDeliveryDetails.npWarehouseRef || null,
+              npSettlementRef: sanitizedDeliveryDetails.npSettlementRef || null,
             },
           });
           sanitizedDeliveryDetails.deliveryPointId = savedPointId;

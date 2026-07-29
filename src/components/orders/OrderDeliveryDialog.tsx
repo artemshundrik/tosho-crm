@@ -28,7 +28,6 @@ import {
   createEmptyCustomerDeliveryPoint,
   listPartyDeliveryPoints,
   npDeliveryTypeToPointType,
-  splitContactName,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { updateQuote } from "@/lib/toshoApi";
@@ -50,11 +49,14 @@ export const parseQuoteDeliveryDetails = (value: unknown): QuoteDeliveryDetails 
     street: toStr(raw.street),
     npDeliveryType: toStr(raw.npDeliveryType),
     payer: toStr(raw.payer),
+    contactFirstName: toStr(raw.contactFirstName),
+    contactLastName: toStr(raw.contactLastName),
     contactName: toStr(raw.contactName),
     contactPhone: toStr(raw.contactPhone),
     deliveryPointId: toStr(raw.deliveryPointId),
     npCityRef: toStr(raw.npCityRef),
     npWarehouseRef: toStr(raw.npWarehouseRef),
+    npSettlementRef: toStr(raw.npSettlementRef),
   };
 };
 
@@ -162,11 +164,16 @@ export function OrderDeliveryDialog({
       sanitized.npDeliveryType = trim(details.npDeliveryType);
       sanitized.street = sanitized.npDeliveryType === "address" ? trim(details.street) : "";
       sanitized.address = sanitized.npDeliveryType === "address" ? "" : trim(details.address);
-      sanitized.contactName = trim(details.contactName);
+      sanitized.contactFirstName = trim(details.contactFirstName);
+      sanitized.contactLastName = trim(details.contactLastName);
+      sanitized.contactName =
+        [trim(details.contactFirstName), trim(details.contactLastName)].filter(Boolean).join(" ") ||
+        trim(details.contactName);
       sanitized.contactPhone = trim(details.contactPhone);
       sanitized.deliveryPointId = trim(details.deliveryPointId);
       sanitized.npCityRef = trim(details.npCityRef);
       sanitized.npWarehouseRef = trim(details.npWarehouseRef);
+      sanitized.npSettlementRef = trim(details.npSettlementRef);
     }
     if (deliveryType === "taxi" || deliveryType === "cargo") {
       sanitized.region = deliveryType === "cargo" ? trim(details.region) : "";
@@ -195,11 +202,12 @@ export function OrderDeliveryDialog({
                 type: pointType,
                 city: sanitized.city,
                 address: pointType === "np_courier" ? sanitized.street : sanitized.address,
-                contactFirstName: splitContactName(sanitized.contactName ?? "").first,
-                contactLastName: splitContactName(sanitized.contactName ?? "").last,
+                contactFirstName: sanitized.contactFirstName ?? "",
+                contactLastName: sanitized.contactLastName ?? "",
                 contactPhone: sanitized.contactPhone ?? "",
                 npCityRef: sanitized.npCityRef || null,
                 npWarehouseRef: sanitized.npWarehouseRef || null,
+                npSettlementRef: sanitized.npSettlementRef || null,
               },
             });
           } catch (saveError) {

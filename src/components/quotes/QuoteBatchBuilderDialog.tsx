@@ -50,7 +50,6 @@ import {
   appendDeliveryPointToParty,
   createEmptyCustomerDeliveryPoint,
   npDeliveryTypeToPointType,
-  splitContactName,
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { cn } from "@/lib/utils";
@@ -1511,11 +1510,12 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 type: pointType,
                 city: details.city ?? "",
                 address: pointType === "np_courier" ? details.street ?? "" : details.address ?? "",
-                contactFirstName: splitContactName(details.contactName ?? "").first,
-                contactLastName: splitContactName(details.contactName ?? "").last,
+                contactFirstName: details.contactFirstName ?? "",
+                contactLastName: details.contactLastName ?? "",
                 contactPhone: details.contactPhone ?? "",
                 npCityRef: details.npCityRef || null,
                 npWarehouseRef: details.npWarehouseRef || null,
+                npSettlementRef: details.npSettlementRef || null,
               },
             });
             details.deliveryPointId = savedPointId;
