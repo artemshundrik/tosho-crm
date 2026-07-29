@@ -300,16 +300,21 @@ const getTechCardRequirementChecks = (record: DerivedOrderRecord): RequirementCh
     done: record.items.length > 0,
     help: "Техкарта описує позиції замовлення.",
   },
-  {
-    label: "Візуал погоджено",
-    done: record.hasApprovedVisualization,
-    help: "Потрібен затверджений візуал із дизайн-задачі.",
-  },
-  {
-    label: "Макет погоджено",
-    done: record.hasApprovedLayout,
-    help: "Потрібен затверджений макет із дизайн-задачі.",
-  },
+  // Товар без нанесення дизайну не потребує — не показуємо вимоги, яких не буде кому закрити.
+  ...(record.requiresDesignApproval
+    ? [
+        {
+          label: "Візуал погоджено",
+          done: record.hasApprovedVisualization,
+          help: "Потрібен затверджений візуал із дизайн-задачі.",
+        },
+        {
+          label: "Макет погоджено",
+          done: record.hasApprovedLayout,
+          help: "Потрібен затверджений макет із дизайн-задачі.",
+        },
+      ]
+    : []),
 ];
 
 // Коротка дата для бейджа «Створено · 12.05».
@@ -1742,12 +1747,15 @@ export default function OrdersProductionDetailsPage() {
             Погодження дизайну
           </div>
           <div className="mt-2 text-sm font-semibold text-foreground">
-            {record.hasApprovedVisualization && record.hasApprovedLayout
-              ? "Візуал і макет затверджені"
-              : "Потрібна дія по дизайну"}
+            {!record.requiresDesignApproval
+              ? "Дизайн не потрібен"
+              : record.hasApprovedVisualization && record.hasApprovedLayout
+                ? "Візуал і макет затверджені"
+                : "Потрібна дія по дизайну"}
           </div>
           <div className="mt-2 text-sm text-muted-foreground">
-            {record.designStatuses.join(", ") || "Задачі дизайну не знайдені"}
+            {record.designStatuses.join(", ") ||
+              (record.requiresDesignApproval ? "Задачі дизайну не знайдені" : "Товар без нанесення")}
           </div>
           {record.designTaskId ? (
             <div className="mt-3 border-t border-border/50 pt-3">

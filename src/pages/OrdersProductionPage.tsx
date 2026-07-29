@@ -1181,9 +1181,11 @@ export default function OrdersProductionPage() {
                                 <div className="flex items-center gap-2">
                                   <ShieldCheck className="h-3.5 w-3.5" />
                                   <span className="truncate">
-                                    {record.hasApprovedVisualization && record.hasApprovedLayout
-                                      ? "Візуал і макет погоджені"
-                                      : "Дизайн потребує підтвердження"}
+                                    {!record.requiresDesignApproval
+                                      ? "Товар без нанесення — дизайн не потрібен"
+                                      : record.hasApprovedVisualization && record.hasApprovedLayout
+                                        ? "Візуал і макет погоджені"
+                                        : "Дизайн потребує підтвердження"}
                                   </span>
                                 </div>
                               </div>

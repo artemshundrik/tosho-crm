@@ -278,6 +278,11 @@ export type DerivedOrderRecord = {
   readinessSteps: DerivedReadinessStep[];
   blockers: string[];
   readinessColumn: "counterparty" | "design" | "ready";
+  /**
+   * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
+   * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
+   */
+  requiresDesignApproval: boolean;
   hasApprovedVisualization: boolean;
   hasApprovedLayout: boolean;
   approvedVisualizationAssets: OrderDesignAsset[];
@@ -593,6 +598,13 @@ const formatQuoteItemMethodsSummary = (methods: unknown, methodNamesById: Map<st
     .filter(Boolean);
   return labels.length > 0 ? labels.join("; ") : null;
 };
+
+/**
+ * «Є нанесення» — хоч одна позиція з друком. Товар без нанесення нічого не потребує
+ * від дизайну (ні візуалу, ні макета), тож і документи не мають на них чекати.
+ */
+const hasImprintItems = (items: Array<Pick<DerivedOrderItem, "methodsSummary">>) =>
+  items.some((item) => Boolean(item.methodsSummary?.trim()));
 
 const resolveQuoteItemDescription = (
   quoteItem: QuoteItemExportRow | null | undefined,
@@ -948,19 +960,23 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       "";
     const signatoryAuthority = primaryLegalEntity?.signatoryAuthority?.trim() || "";
     const tasks = designTasksByQuoteId.get(quote.id) ?? [];
+    // Немає жодної дизайн-задачі — орієнтуємось на нанесення: товар без друку
+    // не потребує ні візуалу, ні макета, тож і чекати на них нема на що.
+    const hasImprint = hasImprintItems(items);
     const requiresVisualization = tasks.some(
       (task) => !task.type || task.type === "visualization"
-    );
+    ) || (tasks.length === 0 && hasImprint);
     // "Візуалізація/адаптація" requires a layout only when one was actually
     // produced (presence-based) — a merged task that added a layout still holds
     // the order for it; one that didn't, doesn't. Pure layout types always do.
-    const requiresLayout = tasks.some(
-      (task) =>
-        !task.type ||
-        task.type === "layout" ||
-        task.type === "layout_adaptation" ||
-        (task.type === "visualization" && task.hasSelectedLayout)
-    );
+    const requiresLayout =
+      tasks.some(
+        (task) =>
+          !task.type ||
+          task.type === "layout" ||
+          task.type === "layout_adaptation" ||
+          (task.type === "visualization" && task.hasSelectedLayout)
+      ) || (tasks.length === 0 && hasImprint);
     let hasApprovedVisualization = tasks.some(
       (task) =>
         task.status === "approved" &&
@@ -987,10 +1003,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
           .map((asset) => [asset.id, asset] as const)
       ).values()
     );
-    if (!requiresVisualization && tasks.length > 0) {
+    if (!requiresVisualization) {
       hasApprovedVisualization = true;
     }
-    if (!requiresLayout && tasks.length > 0) {
+    if (!requiresLayout) {
       hasApprovedLayout = true;
     }
     const hasLegalEntityIdentity = Boolean(
@@ -1108,6 +1124,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       readinessSteps,
       blockers,
       readinessColumn,
+      requiresDesignApproval: requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
       approvedVisualizationAssets,
@@ -1337,6 +1354,12 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         };
       });
       const computedTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+      // Прапорці погодження пишуться один раз при створенні замовлення. Замовлення без
+      // нанесення дизайну не потребує взагалі — вважаємо вимогу закритою, інакше СП і
+      // техкарта вічно чекали б на візуал, якого ніхто не малюватиме.
+      const requiresDesignApproval = hasImprintItems(items);
+      const hasApprovedVisualization = Boolean(order.has_approved_visualization) || !requiresDesignApproval;
+      const hasApprovedLayout = Boolean(order.has_approved_layout) || !requiresDesignApproval;
       const linkedDesignAssets = order.quote_id ? designAssetsByQuoteId.get(order.quote_id) : null;
       const customer =
         order.customer_id?.trim?.() ? storedCustomerById.get(order.customer_id.trim()) ?? null : null;
@@ -1502,13 +1525,14 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           contract: contractReady,
           invoice: items.length > 0 || Boolean(orderDocuments.invoice),
           specification: specificationReady,
-          techCard: (items.length > 0 && Boolean(order.has_approved_visualization) && Boolean(order.has_approved_layout)) || Boolean(orderDocuments.techCard),
+          techCard: (items.length > 0 && hasApprovedVisualization && hasApprovedLayout) || Boolean(orderDocuments.techCard),
         },
         readinessSteps: Array.isArray(order.readiness_steps) ? order.readiness_steps : [],
         blockers: Array.isArray(order.blockers) ? order.blockers : [],
         readinessColumn: order.readiness_column ?? "ready",
-        hasApprovedVisualization: Boolean(order.has_approved_visualization),
-        hasApprovedLayout: Boolean(order.has_approved_layout),
+        requiresDesignApproval,
+        hasApprovedVisualization,
+        hasApprovedLayout,
         approvedVisualizationAssets: linkedDesignAssets?.visualization ?? [],
         approvedLayoutAssets: linkedDesignAssets?.layout ?? [],
       } satisfies DerivedOrderRecord;
@@ -1840,8 +1864,9 @@ export async function createManualOrder(params: CreateManualOrderParams) {
     readiness_steps: [],
     blockers: [],
     readiness_column: designPending ? "design" : "ready",
-    has_approved_visualization: designAlreadyApproved,
-    has_approved_layout: designAlreadyApproved,
+    // Без друку дизайн не потрібен — одразу закриваємо вимогу, щоб СП/техкарта не чекали візуалу.
+    has_approved_visualization: designAlreadyApproved || !hasPrint,
+    has_approved_layout: designAlreadyApproved || !hasPrint,
     created_at: nowIso,
     updated_at: nowIso,
   };
