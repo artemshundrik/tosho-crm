@@ -32,6 +32,7 @@ import {
   deleteNpInternetDocument,
   trackNpDocument,
   listNpPackTypes,
+  npPackKindsForCargoType,
   NovaPoshtaNotConfiguredError,
   type NpTtnResult,
   type NpPackType,
@@ -272,6 +273,9 @@ export function NovaPoshtaTtnDialog({
   const totalWeight = toPositiveNumber(cargo?.weight ?? "", 0.5);
   const declaredCost = String(Math.max(0, Math.round(toPositiveNumber(cargo?.cost ?? "", 0))));
   const volumetric = cargo ? volumetricWeightKg(cargo) : null;
+  // Каталог пакування НП довгий — показуємо лише те, що підходить обраному типу вантажу.
+  const allowedPackKinds = npPackKindsForCargoType(cargo?.cargoType ?? "Parcel");
+  const availablePacks = packTypes.filter((pack) => allowedPackKinds.includes(pack.kind));
   // Розміри передаємо, лише коли задані всі три сторони: НП рахує об'ємну вагу сама.
   const optionsSeat =
     cargo && volumetric !== null
@@ -569,6 +573,27 @@ export function NovaPoshtaTtnDialog({
             <div className="space-y-3">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Вантаж</div>
               <div className="grid gap-3 md:grid-cols-2">
+                {/* Тип вантажу стоїть першим: під нього фільтрується список пакування нижче. */}
+                <div className="grid gap-2">
+                  <Label>Тип вантажу</Label>
+                  <Select
+                    value={cargo.cargoType}
+                    // Змінили тип — обране пакування могло випасти з відфільтрованого
+                    // списку, тож знімаємо вибір (введені розміри лишаються).
+                    onValueChange={(cargoType) => updateCargo({ cargoType, packRef: "" })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CARGO_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="grid gap-2">
                   <Label>Вага, кг</Label>
                   <Input
@@ -593,11 +618,11 @@ export function NovaPoshtaTtnDialog({
                 </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label>Розмір коробки, см</Label>
-                  {packTypes.length > 0 ? (
+                  {availablePacks.length > 0 ? (
                     <Select
                       value={cargo.packRef}
                       onValueChange={(ref) => {
-                        const pack = packTypes.find((entry) => entry.ref === ref);
+                        const pack = availablePacks.find((entry) => entry.ref === ref);
                         if (!pack) return;
                         updateCargo({
                           packRef: ref,
@@ -608,16 +633,12 @@ export function NovaPoshtaTtnDialog({
                       }}
                     >
                       <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Обрати пакування Нової Пошти" />
+                        <SelectValue placeholder={`Пакування НП під «${CARGO_LABELS[cargo.cargoType] ?? "вантаж"}»`} />
                       </SelectTrigger>
                       <SelectContent>
-                        {packTypes.map((pack) => (
-                          <SelectItem
-                            key={pack.ref}
-                            value={pack.ref}
-                            description={`${pack.lengthCm}×${pack.widthCm}×${pack.heightCm} см`}
-                          >
-                            {pack.description}
+                        {availablePacks.map((pack) => (
+                          <SelectItem key={pack.ref} value={pack.ref} description={pack.description}>
+                            {pack.lengthCm}×{pack.widthCm}×{pack.heightCm} см
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -669,21 +690,6 @@ export function NovaPoshtaTtnDialog({
                     placeholder="0"
                     className="h-9"
                   />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Тип вантажу</Label>
-                  <Select value={cargo.cargoType} onValueChange={(cargoType) => updateCargo({ cargoType })}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CARGO_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label>Платник</Label>

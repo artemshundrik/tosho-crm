@@ -280,42 +280,92 @@ export type NpSeatOption = {
   weight: string;
 };
 
+/** До чого належить позиція каталогу пакування — щоб фільтрувати за типом вантажу. */
+export type NpPackKind = "box" | "envelope" | "bag" | "pallet" | "tube" | "other";
+
 /** Готова коробка з довідника пакування НП. Сторони — у сантиметрах. */
 export type NpPackType = {
   ref: string;
   description: string;
+  kind: NpPackKind;
   lengthCm: number;
   widthCm: number;
   heightCm: number;
 };
 
 /**
+ * У каталозі пакування НП більшість позицій — витратка (скотч, плівка, наповнювач).
+ * Розміри в них або відсутні, або означають рулон — у полях ТТН їм не місце.
+ * Список чорний, а не білий: незнайома позиція краще залишиться, ніж зникне.
+ */
+const NP_PACK_CONSUMABLE_RE =
+  /скотч|стрейч|плівк|плëнк|наповнювач|пупирк|бабл|повітряно|маркер|ножиц|стрічк|ярлик|наклейк|шпагат|мотузк|обмотк|пломб/i;
+
+const NP_PACK_KIND_RULES: Array<{ re: RegExp; kind: NpPackKind }> = [
+  { re: /конверт/i, kind: "envelope" },
+  { re: /палет|паллет|піддон/i, kind: "pallet" },
+  { re: /тубус|труб/i, kind: "tube" },
+  { re: /пакет|мішок|мешок/i, kind: "bag" },
+  { re: /коробк|ящик|бокс|короб/i, kind: "box" },
+];
+
+const classifyNpPack = (description: string): NpPackKind =>
+  NP_PACK_KIND_RULES.find((rule) => rule.re.test(description))?.kind ?? "other";
+
+/**
  * Довідник пакування Нової Пошти (Common.getPackList) — ті самі коробки, що в них
- * на сайті. Використовується як список готових розмірів у формі ТТН.
+ * на сайті. Каталог довгий і повторюваний, тож ріжемо витратку й склеюємо позиції
+ * з однаковими сторонами: для полів ТТН має значення лише сам розмір.
  */
 export async function listNpPackTypes(): Promise<NpPackType[]> {
   const data = await callNovaPoshta("Common", "getPackList", {});
-  return data
-    .map((row) => {
-      const sides = [Number(row.Length), Number(row.Width), Number(row.Height)];
-      if (!sides.every((side) => Number.isFinite(side) && side > 0)) return null;
-      // НП віддає сторони то в сантиметрах, то в міліметрах. Коробок понад 2 м
-      // у пакуванні не буває, тож завеликі значення трактуємо як міліметри.
-      const divisor = sides.some((side) => side > 200) ? 10 : 1;
-      const [lengthCm, widthCm, heightCm] = sides.map((side) => Math.round(side / divisor));
-      const ref = str(row.Ref);
-      if (!ref) return null;
-      return {
-        ref,
-        description: str(row.Description) || `${lengthCm}×${widthCm}×${heightCm} см`,
-        lengthCm,
-        widthCm,
-        heightCm,
-      } satisfies NpPackType;
-    })
-    .filter((entry): entry is NpPackType => entry !== null)
-    .sort((a, b) => a.lengthCm * a.widthCm * a.heightCm - b.lengthCm * b.widthCm * b.heightCm);
+  const bySize = new Map<string, NpPackType>();
+
+  for (const row of data) {
+    const ref = str(row.Ref);
+    const description = str(row.Description);
+    if (!ref || NP_PACK_CONSUMABLE_RE.test(description)) continue;
+
+    const sides = [Number(row.Length), Number(row.Width), Number(row.Height)];
+    if (!sides.every((side) => Number.isFinite(side) && side > 0)) continue;
+    // НП віддає сторони то в сантиметрах, то в міліметрах. Коробок понад 2 м
+    // у пакуванні не буває, тож завеликі значення трактуємо як міліметри.
+    const divisor = sides.some((side) => side > 200) ? 10 : 1;
+    const [lengthCm, widthCm, heightCm] = sides.map((side) => Math.round(side / divisor));
+    if ([lengthCm, widthCm, heightCm].some((side) => side <= 0)) continue;
+
+    const kind = classifyNpPack(description);
+    const key = `${kind}:${lengthCm}x${widthCm}x${heightCm}`;
+    const existing = bySize.get(key);
+    // Один розмір трапляється в кількох позиціях каталогу — лишаємо з найкоротшою
+    // назвою, вона зазвичай і найзрозуміліша («Коробка 40x30x26» проти артикула).
+    if (existing && existing.description.length <= description.length) continue;
+    bySize.set(key, { ref, description: description || `${lengthCm}×${widthCm}×${heightCm} см`, kind, lengthCm, widthCm, heightCm });
+  }
+
+  return Array.from(bySize.values()).sort(
+    (a, b) => a.lengthCm * a.widthCm * a.heightCm - b.lengthCm * b.widthCm * b.heightCm
+  );
 }
+
+/**
+ * Яке пакування показувати під обраний тип вантажу. Порожній список = вибір
+ * ховаємо (для шин готового пакування НП не має).
+ */
+export const npPackKindsForCargoType = (cargoType: string): NpPackKind[] => {
+  switch (cargoType) {
+    case "Documents":
+      return ["envelope", "bag"];
+    case "Pallet":
+      return ["pallet"];
+    case "TiresWheels":
+      return [];
+    case "Cargo":
+      return ["box", "pallet", "other"];
+    default:
+      return ["box", "bag", "tube", "other"];
+  }
+};
 
 /** Розрахунок вартості доставки (без побічних ефектів). */
 export async function getNpDocumentPrice(params: {
