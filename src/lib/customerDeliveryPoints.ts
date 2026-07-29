@@ -5,10 +5,9 @@ import { supabase } from "@/lib/supabaseClient";
  * Delivery points (Логістика) for customers and leads.
  *
  * Stored as a jsonb array in `customers.delivery_points` / `leads.delivery_points`
- * (same repeatable-rows pattern as contacts and legal_entities). Manual entry for
- * now; the np* ref fields are reserved so the future Nova Poshta API integration
- * can attach City/Warehouse refs without a schema change — manual rows will get
- * refs backfilled via autocomplete once the API lands.
+ * (same repeatable-rows pattern as contacts and legal_entities). Поля np* заповнює
+ * автокомпліт Нової Пошти: npCityRef/npWarehouseRef — для ТТН, npSettlementRef —
+ * для пошуку вулиць. Старі рядки, введені руками, цих refs не мають.
  */
 
 export type CustomerDeliveryPointType = "np_branch" | "np_postomat" | "np_courier" | "other";
@@ -44,6 +43,8 @@ export type CustomerDeliveryPoint = {
   npCityRef: string | null;
   /** Майбутнє НП API: Ref відділення/поштомата з довідника. */
   npWarehouseRef: string | null;
+  /** Ref населеного пункту з довідника НП. Потрібен для пошуку вулиць. */
+  npSettlementRef: string | null;
 };
 
 export const DELIVERY_POINT_TYPE_OPTIONS: Array<{ value: CustomerDeliveryPointType; label: string }> = [
@@ -97,6 +98,7 @@ export const createEmptyCustomerDeliveryPoint = (): CustomerDeliveryPoint => ({
   isDefault: false,
   npCityRef: null,
   npWarehouseRef: null,
+  npSettlementRef: null,
 });
 
 const toTrimmedString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
@@ -140,6 +142,7 @@ export const parseCustomerDeliveryPoints = (value: unknown): CustomerDeliveryPoi
         isDefault: row.is_default === true,
         npCityRef: toTrimmedString(row.np_city_ref) || null,
         npWarehouseRef: toTrimmedString(row.np_warehouse_ref) || null,
+        npSettlementRef: toTrimmedString(row.np_settlement_ref) || null,
       };
       const hasAnyValue = point.city || point.address || point.contactName || point.contactPhone || point.comment;
       return hasAnyValue ? point : null;
@@ -190,6 +193,7 @@ export const serializeCustomerDeliveryPoints = (points: CustomerDeliveryPoint[])
     is_default: point.isDefault,
     np_city_ref: point.npCityRef,
     np_warehouse_ref: point.npWarehouseRef,
+    np_settlement_ref: point.npSettlementRef,
   }));
 
 /** "Відділення Нової Пошти · Київ, Відділення №23" — для read-only показу. */
