@@ -31,8 +31,10 @@ import {
   createNpInternetDocument,
   deleteNpInternetDocument,
   trackNpDocument,
+  listNpPackTypes,
   NovaPoshtaNotConfiguredError,
   type NpTtnResult,
+  type NpPackType,
 } from "@/lib/novaPoshtaApi";
 import { loadNovaPoshtaSettings, type NovaPoshtaSettings } from "@/lib/novaPoshtaSettings";
 
@@ -84,6 +86,8 @@ type CargoState = {
   boxLength: string;
   boxWidth: string;
   boxHeight: string;
+  /** Ref обраної коробки з довідника НП. Порожньо = розмір введений руками. */
+  packRef: string;
   description: string;
   cost: string;
   payer: string;
@@ -158,6 +162,8 @@ export function NovaPoshtaTtnDialog({
   const [deleting, setDeleting] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
+  // Готові коробки з довідника НП. Порожньо = довідник недоступний, лишаються ручні поля.
+  const [packTypes, setPackTypes] = useState<NpPackType[]>([]);
 
   const shownTtn = createdTtn ?? existingTtn;
 
@@ -176,6 +182,15 @@ export function NovaPoshtaTtnDialog({
         const loaded = await loadNovaPoshtaSettings(teamId);
         if (cancelled) return;
         setSettings(loaded);
+
+        // Довідник пакування опційний: не вийшло — просто лишаються ручні поля розмірів.
+        void listNpPackTypes()
+          .then((list) => {
+            if (!cancelled) setPackTypes(list);
+          })
+          .catch(() => {
+            /* тихо — розміри можна ввести руками */
+          });
 
         const book = partyId ? await listPartyDeliveryPoints({ teamId, partyType, partyId }).catch(() => []) : [];
         const point = delivery.deliveryPointId ? book.find((entry) => entry.id === delivery.deliveryPointId) : undefined;
@@ -202,6 +217,7 @@ export function NovaPoshtaTtnDialog({
           boxLength: "",
           boxWidth: "",
           boxHeight: "",
+          packRef: "",
           description: loaded?.defaultDescription || "Друкована продукція",
           cost: String(Math.max(0, Math.round(orderTotal || 0))),
           payer: loaded?.defaultPayer || "Recipient",
@@ -395,7 +411,8 @@ export function NovaPoshtaTtnDialog({
             {shownTtn ? "Накладну створено в Новій Пошті." : "Нова Пошта — відправлення замовлення."}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {/* overscroll-contain: дійшовши до краю, прокрутка не перекидається на сторінку позаду. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
 
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
@@ -576,6 +593,36 @@ export function NovaPoshtaTtnDialog({
                 </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label>Розмір коробки, см</Label>
+                  {packTypes.length > 0 ? (
+                    <Select
+                      value={cargo.packRef}
+                      onValueChange={(ref) => {
+                        const pack = packTypes.find((entry) => entry.ref === ref);
+                        if (!pack) return;
+                        updateCargo({
+                          packRef: ref,
+                          boxLength: String(pack.lengthCm),
+                          boxWidth: String(pack.widthCm),
+                          boxHeight: String(pack.heightCm),
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Обрати пакування Нової Пошти" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {packTypes.map((pack) => (
+                          <SelectItem
+                            key={pack.ref}
+                            value={pack.ref}
+                            description={`${pack.lengthCm}×${pack.widthCm}×${pack.heightCm} см`}
+                          >
+                            {pack.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                   <div className="grid grid-cols-3 gap-2">
                     {(
                       [
@@ -587,7 +634,9 @@ export function NovaPoshtaTtnDialog({
                       <Input
                         key={field}
                         value={cargo[field]}
-                        onChange={(event) => updateCargo({ [field]: digitsOnly(event.target.value) })}
+                        // Ручна правка розміру знімає вибір готового пакування — інакше
+                        // у списку висіла б коробка, розмірів якої вже немає в полях.
+                        onChange={(event) => updateCargo({ [field]: digitsOnly(event.target.value), packRef: "" })}
                         inputMode="numeric"
                         placeholder={label}
                         aria-label={`${label}, см`}

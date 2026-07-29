@@ -280,6 +280,43 @@ export type NpSeatOption = {
   weight: string;
 };
 
+/** Готова коробка з довідника пакування НП. Сторони — у сантиметрах. */
+export type NpPackType = {
+  ref: string;
+  description: string;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+};
+
+/**
+ * Довідник пакування Нової Пошти (Common.getPackList) — ті самі коробки, що в них
+ * на сайті. Використовується як список готових розмірів у формі ТТН.
+ */
+export async function listNpPackTypes(): Promise<NpPackType[]> {
+  const data = await callNovaPoshta("Common", "getPackList", {});
+  return data
+    .map((row) => {
+      const sides = [Number(row.Length), Number(row.Width), Number(row.Height)];
+      if (!sides.every((side) => Number.isFinite(side) && side > 0)) return null;
+      // НП віддає сторони то в сантиметрах, то в міліметрах. Коробок понад 2 м
+      // у пакуванні не буває, тож завеликі значення трактуємо як міліметри.
+      const divisor = sides.some((side) => side > 200) ? 10 : 1;
+      const [lengthCm, widthCm, heightCm] = sides.map((side) => Math.round(side / divisor));
+      const ref = str(row.Ref);
+      if (!ref) return null;
+      return {
+        ref,
+        description: str(row.Description) || `${lengthCm}×${widthCm}×${heightCm} см`,
+        lengthCm,
+        widthCm,
+        heightCm,
+      } satisfies NpPackType;
+    })
+    .filter((entry): entry is NpPackType => entry !== null)
+    .sort((a, b) => a.lengthCm * a.widthCm * a.heightCm - b.lengthCm * b.widthCm * b.heightCm);
+}
+
 /** Розрахунок вартості доставки (без побічних ефектів). */
 export async function getNpDocumentPrice(params: {
   citySenderRef: string;
