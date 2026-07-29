@@ -572,7 +572,8 @@ export function NovaPoshtaTtnDialog({
             {/* Вантаж */}
             <div className="space-y-3">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Вантаж</div>
-              <div className="grid gap-3 md:grid-cols-2">
+              {/* items-start: клітинка з підказкою не має розтягувати сусідню й зсувати поля. */}
+              <div className="grid items-start gap-3 md:grid-cols-2">
                 {/* Тип вантажу стоїть першим: під нього фільтрується список пакування нижче. */}
                 <div className="grid gap-2">
                   <Label>Тип вантажу</Label>
@@ -603,7 +604,6 @@ export function NovaPoshtaTtnDialog({
                     placeholder="0.5"
                     className="h-9"
                   />
-                  <p className="text-xs text-muted-foreground">Загальна вага всіх місць.</p>
                 </div>
                 <div className="grid gap-2">
                   <Label>Місць</Label>
@@ -614,7 +614,6 @@ export function NovaPoshtaTtnDialog({
                     placeholder="1"
                     className="h-9"
                   />
-                  <p className="text-xs text-muted-foreground">Скільки коробок відправляємо.</p>
                 </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label>Розмір коробки, см</Label>
