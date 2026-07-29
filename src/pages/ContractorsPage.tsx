@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -835,9 +836,10 @@ export default function ContractorsPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Адреса / сайт</label>
-              <Textarea
+              <AddressAutocomplete
+                as="textarea"
                 value={form.address}
-                onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                onChange={(address) => setForm((current) => ({ ...current, address }))}
                 placeholder="Адреса складу, сайт або email"
                 rows={4}
               />

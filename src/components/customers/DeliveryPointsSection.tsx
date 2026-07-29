@@ -21,7 +21,7 @@ import {
   type CustomerDeliveryPointType,
   type DeliveryRecipientType,
 } from "@/lib/customerDeliveryPoints";
-import { NpCityCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
+import { NpCityCombobox, NpStreetCombobox, NpWarehouseCombobox } from "@/components/customers/NovaPoshtaControls";
 
 type DeliveryPointsSectionProps = {
   points: CustomerDeliveryPoint[];
@@ -140,11 +140,14 @@ export function DeliveryPointsSection({
                     <Label>Місто / населений пункт</Label>
                     <NpCityCombobox
                       city={point.city}
-                      onCityChange={(city) => onUpdate(index, { city, npCityRef: null, npWarehouseRef: null })}
+                      onCityChange={(city) =>
+                        onUpdate(index, { city, npCityRef: null, npWarehouseRef: null, npSettlementRef: null })
+                      }
                       onSelect={(settlement) =>
                         onUpdate(index, {
                           city: settlement.present,
                           npCityRef: settlement.ref,
+                          npSettlementRef: settlement.settlementRef,
                           address: "",
                           npWarehouseRef: null,
                         })
@@ -166,11 +169,12 @@ export function DeliveryPointsSection({
                       }
                     />
                   ) : (
-                    <Input
+                    <NpStreetCombobox
+                      settlementRef={point.npSettlementRef ?? ""}
                       value={point.address}
-                      onChange={(e) => onUpdate(index, { address: e.target.value })}
+                      onValueChange={(address) => onUpdate(index, { address })}
+                      onSelect={(street) => onUpdate(index, { address: `${street.present}, ` })}
                       placeholder="Вулиця, будинок, квартира/офіс"
-                      className="h-9"
                     />
                   )}
                 </div>

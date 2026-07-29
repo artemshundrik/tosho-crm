@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -999,10 +1000,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>{isFopOwnership ? "Прописка" : "Юридична адреса"}</Label>
-                    <AutoTextarea
+                    <AddressAutocomplete
+                      as="textarea"
                       value={form.legalAddress}
-                      onChange={(e) => setForm((prev) => ({ ...prev, legalAddress: e.target.value }))}
+                      onChange={(legalAddress) => setForm((prev) => ({ ...prev, legalAddress }))}
                       placeholder={isFopOwnership ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
+                      rows={2}
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

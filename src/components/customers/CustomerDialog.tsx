@@ -31,6 +31,7 @@ import {
   type RfmSegment,
 } from "@/lib/customerLtv";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
@@ -1372,10 +1373,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
                     <div className="mt-4 grid gap-2">
                       <Label>{activeLegalEntityIsPerson ? "Прописка" : "Юридична адреса"}</Label>
-                      <AutoTextarea
+                      <AddressAutocomplete
+                        as="textarea"
                         value={activeLegalEntity.legalAddress}
-                        onChange={(e) => updateLegalEntity(activeLegalEntityIndex, { legalAddress: e.target.value })}
+                        onChange={(legalAddress) => updateLegalEntity(activeLegalEntityIndex, { legalAddress })}
                         placeholder={activeLegalEntityIsPerson ? "Адреса прописки ФОП" : "Юридична адреса компанії"}
+                        rows={2}
                       />
                     </div>
 
