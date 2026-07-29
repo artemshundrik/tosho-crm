@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Truck, AlertTriangle, Loader2 } from "lucide-react";
+import { Truck, AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,14 @@ import {
   saveNovaPoshtaSettings,
   EMPTY_NOVA_POSHTA_SETTINGS,
   type NovaPoshtaSettings,
+  type NovaPoshtaBoxSize,
 } from "@/lib/novaPoshtaSettings";
+
+const SIDE_LABELS: Record<"length" | "width" | "height", string> = {
+  length: "Довж.",
+  width: "Шир.",
+  height: "Вис.",
+};
 
 const PAYER_LABELS: Record<string, string> = {
   Recipient: "Отримувач",
@@ -70,6 +77,11 @@ export default function NovaPoshtaSettingsPage() {
   const [showErrors, setShowErrors] = useState(false);
 
   const update = (patch: Partial<NovaPoshtaSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
+  const updateBoxSize = (index: number, patch: Partial<NovaPoshtaBoxSize>) =>
+    setSettings((prev) => ({
+      ...prev,
+      boxSizes: prev.boxSizes.map((box, i) => (i === index ? { ...box, ...patch } : box)),
+    }));
 
   // Team + збережені налаштування + список відправників кабінету.
   useEffect(() => {
@@ -403,6 +415,63 @@ export default function NovaPoshtaSettingsPage() {
                   placeholder="напр. Друкована продукція"
                   className="h-9"
                 />
+              </div>
+
+              {/* Свої коробки: у формі ТТН вони стають кнопками, які заповнюють Д×Ш×В. */}
+              <div className="grid gap-2 md:col-span-2">
+                <Label>Наші коробки</Label>
+                <p className="text-xs text-muted-foreground">
+                  Розміри, у які реально пакуємо. У формі ТТН вони стають кнопками — натиснув, і сторони
+                  заповнились. НП рахує з них об'ємну вагу (1 м³ = 250 кг) і тарифікує за більшою з двох.
+                </p>
+                <div className="grid gap-2">
+                  {settings.boxSizes.map((box, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2">
+                      <Input
+                        value={box.label}
+                        onChange={(event) => updateBoxSize(index, { label: event.target.value })}
+                        placeholder="Назва, напр. Мала"
+                        className="h-9"
+                      />
+                      {(["length", "width", "height"] as const).map((side) => (
+                        <Input
+                          key={side}
+                          value={box[side] ? String(box[side]) : ""}
+                          onChange={(event) =>
+                            updateBoxSize(index, { [side]: Number(event.target.value.replace(/\D/g, "")) || 0 })
+                          }
+                          inputMode="numeric"
+                          aria-label={SIDE_LABELS[side]}
+                          placeholder={SIDE_LABELS[side]}
+                          className="h-9 w-20"
+                        />
+                      ))}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 text-muted-foreground"
+                        aria-label="Прибрати розмір"
+                        onClick={() => update({ boxSizes: settings.boxSizes.filter((_, i) => i !== index) })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      update({ boxSizes: [...settings.boxSizes, { label: "", length: 0, width: 0, height: 0 }] })
+                    }
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Додати розмір
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

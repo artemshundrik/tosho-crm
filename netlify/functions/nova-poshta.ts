@@ -23,8 +23,6 @@ const ALLOWED: Record<string, Set<string>> = {
   InternetDocument: new Set(["save", "delete", "getDocumentPrice", "getDocumentDeliveryDate"]),
   // Відстеження статусу (read-only).
   TrackingDocument: new Set(["getStatusDocuments"]),
-  // Довідник пакування НП — готові розміри коробок для форми ТТН (read-only).
-  Common: new Set(["getPackList"]),
 };
 
 // Фолбек для старих вкладок, що ще шлють лише calledMethod без modelName (Address-only).

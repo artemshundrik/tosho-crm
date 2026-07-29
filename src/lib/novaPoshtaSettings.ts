@@ -6,6 +6,18 @@ import { supabase } from "@/lib/supabaseClient";
  * Секрет ключа тут не зберігається (лише в env серверної функції).
  */
 
+/**
+ * Власна коробка команди. Каталог пакування НП — це те, що вони продають у
+ * відділенні; ми пакуємо у свої й постачальницькі короби, тож тримаємо свій
+ * короткий список. Сторони — у сантиметрах, як їх чекає OptionsSeat.
+ */
+export type NovaPoshtaBoxSize = {
+  label: string;
+  length: number;
+  width: number;
+  height: number;
+};
+
 export type NovaPoshtaSettings = {
   senderRef: string;
   senderName: string;
@@ -23,6 +35,7 @@ export type NovaPoshtaSettings = {
   defaultWeight: number | null;
   defaultSeats: number;
   defaultDescription: string;
+  boxSizes: NovaPoshtaBoxSize[];
 };
 
 export const EMPTY_NOVA_POSHTA_SETTINGS: NovaPoshtaSettings = {
@@ -42,6 +55,22 @@ export const EMPTY_NOVA_POSHTA_SETTINGS: NovaPoshtaSettings = {
   defaultWeight: null,
   defaultSeats: 1,
   defaultDescription: "",
+  boxSizes: [],
+};
+
+const parseBoxSizes = (value: unknown): NovaPoshtaBoxSize[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const sides = [Number(row.length), Number(row.width), Number(row.height)];
+      if (!sides.every((side) => Number.isFinite(side) && side > 0)) return null;
+      const [length, width, height] = sides.map((side) => Math.round(side));
+      const label = typeof row.label === "string" && row.label.trim() ? row.label.trim() : "";
+      return { label, length, width, height } satisfies NovaPoshtaBoxSize;
+    })
+    .filter((entry): entry is NovaPoshtaBoxSize => entry !== null);
 };
 
 const str = (value: unknown): string => (typeof value === "string" ? value : value == null ? "" : String(value));
@@ -65,6 +94,7 @@ const mapRow = (row: NovaPoshtaSettingsRow): NovaPoshtaSettings => ({
   defaultWeight: typeof row.default_weight === "number" ? row.default_weight : row.default_weight ? Number(row.default_weight) : null,
   defaultSeats: typeof row.default_seats === "number" ? row.default_seats : Number(row.default_seats ?? 1) || 1,
   defaultDescription: str(row.default_description),
+  boxSizes: parseBoxSizes(row.box_sizes),
 });
 
 /** Завантажити налаштування команди (null — ще не налаштовано). */
@@ -100,6 +130,8 @@ export async function saveNovaPoshtaSettings(teamId: string, settings: NovaPosht
     default_weight: settings.defaultWeight,
     default_seats: settings.defaultSeats || 1,
     default_description: settings.defaultDescription || null,
+    // Недозаповнені рядки редактора (щойно доданий порожній) не зберігаємо.
+    box_sizes: (settings.boxSizes ?? []).filter((box) => box.length > 0 && box.width > 0 && box.height > 0),
   };
   const { error } = await supabase
     .schema("tosho")

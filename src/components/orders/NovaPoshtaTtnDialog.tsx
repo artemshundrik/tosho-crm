@@ -31,11 +31,8 @@ import {
   createNpInternetDocument,
   deleteNpInternetDocument,
   trackNpDocument,
-  listNpPackTypes,
-  npPackKindsForCargoType,
   NovaPoshtaNotConfiguredError,
   type NpTtnResult,
-  type NpPackType,
 } from "@/lib/novaPoshtaApi";
 import { loadNovaPoshtaSettings, type NovaPoshtaSettings } from "@/lib/novaPoshtaSettings";
 
@@ -175,8 +172,6 @@ export function NovaPoshtaTtnDialog({
   const [deleting, setDeleting] = useState(false);
   const [createdTtn, setCreatedTtn] = useState<ExistingTtn | null>(null);
   const [trackStatus, setTrackStatus] = useState<string | null>(null);
-  // Готові коробки з довідника НП. Порожньо = довідник недоступний, лишаються ручні поля.
-  const [packTypes, setPackTypes] = useState<NpPackType[]>([]);
   // Отримувач приходить із доставки замовлення й майже завжди правильний — тримаємо
   // його згорнутим, щоб форма не починалася з семи полів, які нікому не треба чіпати.
   const [recipientEditing, setRecipientEditing] = useState(false);
@@ -198,15 +193,6 @@ export function NovaPoshtaTtnDialog({
         const loaded = await loadNovaPoshtaSettings(teamId);
         if (cancelled) return;
         setSettings(loaded);
-
-        // Довідник пакування опційний: не вийшло — просто лишаються ручні поля розмірів.
-        void listNpPackTypes()
-          .then((list) => {
-            if (!cancelled) setPackTypes(list);
-          })
-          .catch(() => {
-            /* тихо — розміри можна ввести руками */
-          });
 
         const book = partyId ? await listPartyDeliveryPoints({ teamId, partyType, partyId }).catch(() => []) : [];
         const point = delivery.deliveryPointId ? book.find((entry) => entry.id === delivery.deliveryPointId) : undefined;
@@ -292,9 +278,11 @@ export function NovaPoshtaTtnDialog({
   // доставка тут ще не підтримується (їй потрібен Address.save, а не ref відділення).
   const isPostomatDelivery = delivery.npDeliveryType === "locker";
   const isAddressDelivery = delivery.npDeliveryType === "address";
-  // Каталог пакування НП довгий — показуємо лише те, що підходить обраному типу вантажу.
-  const allowedPackKinds = npPackKindsForCargoType(cargo?.cargoType ?? "Parcel");
-  const availablePacks = packTypes.filter((pack) => allowedPackKinds.includes(pack.kind));
+  // Свої коробки з налаштувань команди. Каталог НП сюди не годиться — це те, що
+  // вони продають у відділенні, а ми возимо у власних і постачальницьких коробах.
+  const boxSizes = settings?.boxSizes ?? [];
+  const boxSizeLabel = (box: (typeof boxSizes)[number]) =>
+    box.label ? `${box.label} · ${box.length}×${box.width}×${box.height} см` : `${box.length}×${box.width}×${box.height} см`;
   // Розміри передаємо, лише коли задані всі три сторони: НП рахує об'ємну вагу сама.
   const optionsSeat =
     cargo && volumetric !== null
@@ -676,31 +664,32 @@ export function NovaPoshtaTtnDialog({
                 </div>
                 <div className="grid gap-2 md:col-span-2">
                   <Label>Розмір коробки, см</Label>
-                  {availablePacks.length > 0 ? (
-                    <Select
-                      value={cargo.packRef}
-                      onValueChange={(ref) => {
-                        const pack = availablePacks.find((entry) => entry.ref === ref);
-                        if (!pack) return;
-                        updateCargo({
-                          packRef: ref,
-                          boxLength: String(pack.lengthCm),
-                          boxWidth: String(pack.widthCm),
-                          boxHeight: String(pack.heightCm),
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder={`Пакування НП під «${CARGO_LABELS[cargo.cargoType] ?? "вантаж"}»`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availablePacks.map((pack) => (
-                          <SelectItem key={pack.ref} value={pack.ref} description={pack.description}>
-                            {pack.lengthCm}×{pack.widthCm}×{pack.heightCm} см
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  {boxSizes.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {boxSizes.map((box, index) => {
+                        const key = `${box.length}x${box.width}x${box.height}`;
+                        const active = cargo.packRef === key;
+                        return (
+                          <Button
+                            key={`${key}-${index}`}
+                            type="button"
+                            variant={active ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-7 px-2.5 text-xs font-normal"
+                            onClick={() =>
+                              updateCargo({
+                                packRef: key,
+                                boxLength: String(box.length),
+                                boxWidth: String(box.width),
+                                boxHeight: String(box.height),
+                              })
+                            }
+                          >
+                            {boxSizeLabel(box)}
+                          </Button>
+                        );
+                      })}
+                    </div>
                   ) : null}
                   <div className="grid grid-cols-3 gap-2">
                     {(
@@ -736,6 +725,16 @@ export function NovaPoshtaTtnDialog({
                     <p className="text-xs text-muted-foreground">
                       Заповни всі три сторони — НП порахує об'ємну вагу (1 м³ = 250 кг) і візьме більшу з двох.
                       Якщо лишити порожнім, тариф рахується тільки за вагою.
+                      {boxSizes.length === 0 ? (
+                        <>
+                          {" "}
+                          Свої часті розміри можна завести в{" "}
+                          <Link to="/settings/nova-poshta" className="underline">
+                            Налаштуваннях
+                          </Link>
+                          .
+                        </>
+                      ) : null}
                     </p>
                   )}
                 </div>
