@@ -129,6 +129,14 @@ export type DeliveryDetailsForm = {
   street: string;
   npDeliveryType: string;
   payer: string;
+  contactFirstName?: string;
+  contactLastName?: string;
+  contactName?: string;
+  contactPhone?: string;
+  deliveryPointId?: string;
+  npCityRef?: string;
+  npWarehouseRef?: string;
+  npSettlementRef?: string;
 };
 
 export const emptyDeliveryDetails = (): DeliveryDetailsForm => ({

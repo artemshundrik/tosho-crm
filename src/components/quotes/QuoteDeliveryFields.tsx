@@ -30,12 +30,16 @@ export type QuoteDeliveryDetails = {
   street: string;
   npDeliveryType: string;
   payer: string;
+  /** Отримувач: НП вимагає ім'я та прізвище нарізно. contactName — похідна склейка. */
+  contactFirstName?: string;
+  contactLastName?: string;
   contactName?: string;
   contactPhone?: string;
   deliveryPointId?: string;
   /** НП refs довідника (заповнюються автокомплітом) — для збереження в книгу й ТТН. */
   npCityRef?: string;
   npWarehouseRef?: string;
+  npSettlementRef?: string;
 };
 
 export const createEmptyQuoteDeliveryDetails = (): QuoteDeliveryDetails => ({
@@ -45,14 +49,21 @@ export const createEmptyQuoteDeliveryDetails = (): QuoteDeliveryDetails => ({
   street: "",
   npDeliveryType: "",
   payer: "",
+  contactFirstName: "",
+  contactLastName: "",
   contactName: "",
   contactPhone: "",
   deliveryPointId: "",
   npCityRef: "",
   npWarehouseRef: "",
+  npSettlementRef: "",
 });
 
 const trimDelivery = (value?: string | null) => value?.trim() ?? "";
+
+/** "Іван" + "Петренко" → "Іван Петренко". Похідне поле для старих читачів. */
+const joinContactName = (first?: string, last?: string) =>
+  [trimDelivery(first), trimDelivery(last)].filter(Boolean).join(" ");
 
 /**
  * Обовʼязкові поля логістики за типом доставки. Спільне джерело правди для
@@ -103,11 +114,16 @@ export const sanitizeQuoteDeliveryDetails = (
     sanitized.npDeliveryType = trimDelivery(deliveryDetails.npDeliveryType);
     sanitized.street = sanitized.npDeliveryType === "address" ? trimDelivery(deliveryDetails.street) : "";
     sanitized.address = sanitized.npDeliveryType === "address" ? "" : trimDelivery(deliveryDetails.address);
-    sanitized.contactName = trimDelivery(deliveryDetails.contactName);
+    sanitized.contactFirstName = trimDelivery(deliveryDetails.contactFirstName);
+    sanitized.contactLastName = trimDelivery(deliveryDetails.contactLastName);
+    sanitized.contactName =
+      joinContactName(deliveryDetails.contactFirstName, deliveryDetails.contactLastName) ||
+      trimDelivery(deliveryDetails.contactName);
     sanitized.contactPhone = trimDelivery(deliveryDetails.contactPhone);
     sanitized.deliveryPointId = trimDelivery(deliveryDetails.deliveryPointId);
     sanitized.npCityRef = trimDelivery(deliveryDetails.npCityRef);
     sanitized.npWarehouseRef = trimDelivery(deliveryDetails.npWarehouseRef);
+    sanitized.npSettlementRef = trimDelivery(deliveryDetails.npSettlementRef);
   }
   if (deliveryType === "taxi") {
     sanitized.city = trimDelivery(deliveryDetails.city);
@@ -138,11 +154,14 @@ export const patchFromDeliveryPoint = (point: CustomerDeliveryPoint): Partial<Qu
   npDeliveryType: pointTypeToNpDeliveryType(point.type),
   address: point.type === "np_courier" ? "" : point.address,
   street: point.type === "np_courier" ? point.address : "",
+  contactFirstName: point.contactFirstName,
+  contactLastName: point.contactLastName,
   contactName: point.contactName,
   contactPhone: point.contactPhone,
   deliveryPointId: point.id,
   npCityRef: point.npCityRef ?? "",
   npWarehouseRef: point.npWarehouseRef ?? "",
+  npSettlementRef: point.npSettlementRef ?? "",
 });
 
 const MANUAL_POINT_VALUE = "__manual__";
