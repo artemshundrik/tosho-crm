@@ -328,11 +328,20 @@ export function QuoteDeliveryFields({
             </div>
           )}
           <div className="space-y-1">
-            <div className="text-sm text-muted-foreground">Отримувач</div>
+            <div className="text-sm text-muted-foreground">Ім'я отримувача</div>
             <Input
-              value={details.contactName ?? ""}
-              onChange={(e) => onChange({ contactName: e.target.value })}
-              placeholder="Хто приймає вантаж"
+              value={details.contactFirstName ?? ""}
+              onChange={(e) => onChange({ contactFirstName: e.target.value })}
+              placeholder="Іван"
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="text-sm text-muted-foreground">Прізвище отримувача</div>
+            <Input
+              value={details.contactLastName ?? ""}
+              onChange={(e) => onChange({ contactLastName: e.target.value })}
+              placeholder="Петренко"
               className="h-9"
             />
           </div>
