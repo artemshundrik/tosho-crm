@@ -578,6 +578,62 @@ const formatPlainMoney = (value: number) =>
 const SPEC_VAT_RATE = 20;
 /** Строк виробництва, коли його ще не задавали в договорі. Збігається з дефолтом поля в модалі. */
 const DEFAULT_PRODUCTION_WORK_DAYS = 50;
+const DEFAULT_INCOTERMS = "FCA";
+
+// Живе поруч із полем Incoterms у модалі СП — саме там менеджер обирає базис поставки.
+const IncotermsHint = () => (
+  <InfoHint title="Як обрати Incoterms" widthClass="w-[440px]">
+    <div className="space-y-3">
+      <div>
+        <div className="font-semibold text-foreground">CPT — підходить, якщо:</div>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+          <li>ми самостійно оформлюємо відправку (Нова Пошта / Meest / Укрпошта);</li>
+          <li>ми сплачуємо за доставку;</li>
+          <li>
+            Замовник погоджується, що після передачі товару Перевізнику відповідальність за
+            транспортування переходить до нього;
+          </li>
+          <li>у договорі або СП це чітко зазначено — претензії по транспортуванню вирішуються через Перевізника.</li>
+        </ul>
+        <div className="mt-2 font-medium text-foreground">У Специфікації, пункт 3.2:</div>
+        <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
+          3.2 Умови доставки: CPT, адресна доставка Нова Пошта: &lt;адреса Замовника з картки клієнта&gt;, Incoterms® 2020
+        </div>
+      </div>
+      <div className="border-t border-border/60 pt-3">
+        <div className="font-semibold text-foreground">CIP — підходить, якщо:</div>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+          <li>товар дорогий;</li>
+          <li>велика партія подарункових наборів;</li>
+          <li>техніка (павери, bluetooth-колонки, EcoFlow), дорогий мерч, преміальна продукція;</li>
+          <li>оформлюємо відправку з великою оголошеною вартістю (страхуванням);</li>
+          <li>
+            ми несемо всі витрати по доставці та страхуванню (компенсаційний захист доставки),
+            поки товар не отримав Замовник.
+          </li>
+        </ul>
+        <div className="mt-2 font-medium text-foreground">У Специфікації:</div>
+        <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
+          Умови поставки: CIP, &lt;місце доставки&gt;, згідно Incoterms® 2020. Доставка товару
+          здійснюється за рахунок Постачальника через службу доставки Нова Пошта (або Укрпошта /
+          Meest Express) із оформленням страхування (оголошеної вартості відправлення) за наш
+          рахунок. Ризик випадкової втрати або пошкодження товару переходить до Замовника
+          відповідно до погоджених умов поставки.
+        </div>
+      </div>
+    </div>
+  </InfoHint>
+);
+
+/** Людський опис умов оплати для зведення: «70% перед запуском / 30% по готовності». */
+const formatPaymentBreakdown = (record: DerivedOrderRecord) => {
+  if (record.prepaymentPct === null || record.balancePct === null) return record.paymentTerms;
+  const balanceWhen =
+    record.balanceTiming === "after_shipment"
+      ? `після відвантаження${record.balanceDaysAfterShipment ? `, до ${record.balanceDaysAfterShipment} р.д.` : ""}`
+      : "по готовності, до відвантаження";
+  return `${record.prepaymentPct}% перед запуском / ${record.balancePct}% ${balanceWhen}`;
+};
 
 const getPaymentTermsParts = (terms: string, total: number) => {
   const option = ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === terms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
@@ -591,7 +647,7 @@ const getPaymentTermsParts = (terms: string, total: number) => {
 };
 
 const formatIncotermsLabel = (record: Pick<DerivedOrderRecord, "incotermsCode" | "incotermsPlace">) => {
-  const code = record.incotermsCode?.trim() || "FCA";
+  const code = record.incotermsCode?.trim() || DEFAULT_INCOTERMS;
   const place = record.incotermsPlace?.trim();
   return `${code} (Incoterms 2020)${place ? `, ${place}` : ""}`;
 };
@@ -1081,7 +1137,6 @@ export default function OrdersProductionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [record, setRecord] = useState<DerivedOrderRecord | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
-  const [documentSettingsSaving, setDocumentSettingsSaving] = useState(false);
   const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
   // Параметри модала створення Договору (відкривається на кнопці "PDF" біля рядка "Договір").
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
@@ -1097,6 +1152,18 @@ export default function OrdersProductionDetailsPage() {
   const [contractNumberInput, setContractNumberInput] = useState("");
   const [contractDateInput, setContractDateInput] = useState("");
   const [contractDialogSubmitting, setContractDialogSubmitting] = useState(false);
+  // Параметри модала СП. Договір підписується раз, а специфікація — під кожне замовлення,
+  // тож умови партії (оплата, строки, доставка) задаються саме тут.
+  const [specDialogOpen, setSpecDialogOpen] = useState(false);
+  const [specDialogSubmitting, setSpecDialogSubmitting] = useState(false);
+  const [specPaymentMethodId, setSpecPaymentMethodId] = useState("bank_uah");
+  const [specPrepaymentPctInput, setSpecPrepaymentPctInput] = useState("70");
+  const [specBalancePctInput, setSpecBalancePctInput] = useState("30");
+  const [specBalanceTiming, setSpecBalanceTiming] = useState<"before_shipment" | "after_shipment">("before_shipment");
+  const [specBalanceDaysInput, setSpecBalanceDaysInput] = useState("3");
+  const [specProductionDaysInput, setSpecProductionDaysInput] = useState(String(DEFAULT_PRODUCTION_WORK_DAYS));
+  const [specIncotermsCode, setSpecIncotermsCode] = useState(DEFAULT_INCOTERMS);
+  const [specIncotermsPlaceInput, setSpecIncotermsPlaceInput] = useState("");
   // Доставка живе на прорахунку (quotes.delivery_type/delivery_details);
   // замовлення читає і редагує саме її, щоб обидва екрани показували одне.
   const [orderDelivery, setOrderDelivery] = useState<OrderDeliverySnapshot | null>(null);
@@ -1270,34 +1337,6 @@ export default function OrdersProductionDetailsPage() {
     }
   };
 
-  const handleDocumentSettingChange = async (
-    patch: Partial<
-      Pick<DerivedOrderRecord, "paymentMethodId" | "paymentRail" | "paymentTerms" | "incotermsCode" | "incotermsPlace">
-    >
-  ) => {
-    if (!record || record.source !== "stored" || !teamId) return;
-    const previous = record;
-    const next = { ...record, ...patch };
-    setRecord({ ...next, docs: normalizeDocumentDocs(next) });
-    setDocumentSettingsSaving(true);
-    try {
-      await updateOrderDocumentSettings({
-        teamId,
-        orderId: record.id,
-        paymentMethodId: patch.paymentMethodId,
-        paymentMethodLabel: patch.paymentRail,
-        paymentTerms: patch.paymentTerms,
-        incotermsCode: patch.incotermsCode,
-        incotermsPlace: patch.incotermsPlace,
-      });
-    } catch (settingsError: unknown) {
-      setRecord(previous);
-      setError(settingsError instanceof Error ? settingsError.message : "Не вдалося зберегти умови СП.");
-    } finally {
-      setDocumentSettingsSaving(false);
-    }
-  };
-
   const handleOpenDesignAsset = async (asset: OrderDesignAsset) => {
     if (asset.kind === "link") {
       if (asset.url) window.open(asset.url, "_blank", "noopener,noreferrer");
@@ -1337,30 +1376,36 @@ export default function OrdersProductionDetailsPage() {
       | "contractSections"
       | "contractNumberOverride"
       | "contractDateOverride"
-    > = {}
+    > = {},
+    // Модалка параметрів зберігає значення й одразу друкує: `record` у замиканні на цей
+    // момент ще старий, тож вона передає вже оновлений запис явно.
+    recordOverride?: DerivedOrderRecord
   ) => {
-    if (!record) return;
+    const activeRecord = recordOverride ?? record;
+    if (!activeRecord) return;
     if (kind === "specification") {
-      const blocker = getSpecificationBlocker(record);
+      const blocker = getSpecificationBlocker(activeRecord);
       if (blocker) {
         setError(blocker);
         return;
       }
     }
-    if (kind === "contract" && !record.docs.contract) {
+    if (kind === "contract" && !activeRecord.docs.contract) {
       setError("Для договору не вистачає реквізитів замовника.");
       return;
     }
     // Відмінюємо ПІБ та посаду замовника у родовий відмінок через OpenAI (з кешем у Supabase).
     // Якщо API недоступний — fallback на оригінал, документ не зламається.
     const [customerSignatoryNameGenitive, customerSignatoryRoleGenitive] = await Promise.all([
-      record.customerSignatoryName ? declineToGenitive(record.customerSignatoryName) : Promise.resolve(""),
-      record.customerSignatoryPosition ? declineToGenitive(record.customerSignatoryPosition) : Promise.resolve(""),
+      activeRecord.customerSignatoryName ? declineToGenitive(activeRecord.customerSignatoryName) : Promise.resolve(""),
+      activeRecord.customerSignatoryPosition
+        ? declineToGenitive(activeRecord.customerSignatoryPosition)
+        : Promise.resolve(""),
     ]);
     // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
     const visualizationImageUrls =
-      kind === "specification" ? await resolveVisualizationImageUrls(record.approvedVisualizationAssets) : [];
-    const html = buildOrderDocumentHtml(record, kind, {
+      kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
+    const html = buildOrderDocumentHtml(activeRecord, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
       visualizationImageUrls,
@@ -1394,19 +1439,24 @@ export default function OrdersProductionDetailsPage() {
     // не має зсувати дату створення (раніше contract_created_at перезаписувався на сьогодні).
     const alreadyCreated =
       kind === "contract"
-        ? Boolean(record.contractCreatedAt)
+        ? Boolean(activeRecord.contractCreatedAt)
         : kind === "specification"
-          ? Boolean(record.specificationCreatedAt)
+          ? Boolean(activeRecord.specificationCreatedAt)
           : true;
-    if (record.source === "stored" && teamId && (kind === "contract" || kind === "specification") && !alreadyCreated) {
+    if (
+      activeRecord.source === "stored" &&
+      teamId &&
+      (kind === "contract" || kind === "specification") &&
+      !alreadyCreated
+    ) {
       try {
         const createdAt = await markOrderDocumentCreated({
           teamId,
-          orderId: record.id,
+          orderId: activeRecord.id,
           documentKind: kind,
         });
         setRecord((current) => {
-          if (!current || current.id !== record.id) return current;
+          if (!current || current.id !== activeRecord.id) return current;
           const next =
             kind === "contract"
               ? { ...current, contractCreatedAt: createdAt }
@@ -1443,6 +1493,27 @@ export default function OrdersProductionDetailsPage() {
     setContractDialogOpen(true);
   };
 
+  // Модал параметрів СП. Сидиться з поточних умов замовлення — а вони, якщо на цьому
+  // замовленні ще нічого не задавали, успадковані з договору замовника.
+  // Блокер СП тут свідомо НЕ перевіряємо: саме в цій модалці міняється тип оплати,
+  // а готівка — один із блокерів. Інакше заблоковану СП не було б чим розблокувати.
+  const openSpecificationParamsDialog = () => {
+    if (!record) return;
+    setSpecPaymentMethodId(record.paymentMethodId);
+    setSpecPrepaymentPctInput(record.prepaymentPct !== null ? String(record.prepaymentPct) : "70");
+    setSpecBalancePctInput(record.balancePct !== null ? String(record.balancePct) : "30");
+    setSpecBalanceTiming(record.balanceTiming ?? "before_shipment");
+    setSpecBalanceDaysInput(record.balanceDaysAfterShipment !== null ? String(record.balanceDaysAfterShipment) : "3");
+    setSpecProductionDaysInput(
+      record.contractProductionDays !== null
+        ? String(record.contractProductionDays)
+        : String(DEFAULT_PRODUCTION_WORK_DAYS)
+    );
+    setSpecIncotermsCode(record.incotermsCode || DEFAULT_INCOTERMS);
+    setSpecIncotermsPlaceInput(record.incotermsPlace ?? "");
+    setSpecDialogOpen(true);
+  };
+
   // Перегенерувати вже створений договір одним кліком — без модалки, з раніше збережених параметрів.
   const regenerateContract = () => {
     if (!record) return;
@@ -1463,6 +1534,12 @@ export default function OrdersProductionDetailsPage() {
       } else {
         openContractParamsDialog();
       }
+      return;
+    }
+    // СП — свій набір умов на кожну партію. Перше створення йде через модал,
+    // далі одразу PDF (умови міняються кнопкою «Змінити» в картці «Умови СП»).
+    if (kind === "specification" && !record?.specificationCreatedAt) {
+      openSpecificationParamsDialog();
       return;
     }
     void openDocumentPrint(kind);
@@ -1910,162 +1987,39 @@ export default function OrdersProductionDetailsPage() {
               СП доступна тільки для безготівки і після створення договору.
             </div>
           </div>
-          {documentSettingsSaving ? (
-            <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-2xs">
-              Зберігаємо...
-            </Badge>
+          {record.source === "stored" ? (
+            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={openSpecificationParamsDialog}>
+              <Pencil className="h-3.5 w-3.5" />
+              Змінити умови
+            </Button>
           ) : null}
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-2">
-            <div className="flex h-5 items-center gap-1.5">
-              <Label>Тип оплати</Label>
-            </div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.paymentMethodId}
-                onValueChange={(value) => {
-                  const option = ORDER_PAYMENT_METHOD_OPTIONS.find((item) => item.id === value);
-                  void handleDocumentSettingChange({
-                    paymentMethodId: value,
-                    paymentRail: option?.label ?? value,
-                  });
-                }}
-                disabled={documentSettingsSaving}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORDER_PAYMENT_METHOD_OPTIONS.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm text-muted-foreground">{record.paymentRail}</div>
-            )}
+          <div className="space-y-1">
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Тип оплати</div>
+            <div className="text-sm font-medium text-foreground">{record.paymentRail}</div>
           </div>
-          <div className="space-y-2">
-            <div className="flex h-5 items-center gap-1.5">
-              <Label>Умови оплати</Label>
-            </div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.paymentTerms}
-                onValueChange={(value) => void handleDocumentSettingChange({ paymentTerms: value })}
-                disabled={documentSettingsSaving}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORDER_PAYMENT_TERMS_OPTIONS.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm text-muted-foreground">{record.paymentTerms}</div>
-            )}
+          <div className="space-y-1">
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Умови оплати</div>
+            <div className="text-sm font-medium text-foreground">{formatPaymentBreakdown(record)}</div>
           </div>
-          <div className="space-y-2">
-            <div className="flex h-5 items-center gap-1.5">
-              <Label>Incoterms 2020</Label>
-              <InfoHint title="Як обрати Incoterms" widthClass="w-[440px]">
-                <div className="space-y-3">
-                  <div>
-                    <div className="font-semibold text-foreground">CPT — підходить, якщо:</div>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                      <li>ми самостійно оформлюємо відправку (Нова Пошта / Meest / Укрпошта);</li>
-                      <li>ми сплачуємо за доставку;</li>
-                      <li>
-                        Замовник погоджується, що після передачі товару Перевізнику відповідальність за
-                        транспортування переходить до нього;
-                      </li>
-                      <li>у договорі або СП це чітко зазначено — претензії по транспортуванню вирішуються через Перевізника.</li>
-                    </ul>
-                    <div className="mt-2 font-medium text-foreground">У Специфікації, пункт 3.2:</div>
-                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
-                      3.2 Умови доставки: CPT, адресна доставка Нова Пошта: &lt;адреса Замовника з картки клієнта&gt;, Incoterms® 2020
-                    </div>
-                  </div>
-                  <div className="border-t border-border/60 pt-3">
-                    <div className="font-semibold text-foreground">CIP — підходить, якщо:</div>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                      <li>товар дорогий;</li>
-                      <li>велика партія подарункових наборів;</li>
-                      <li>техніка (павери, bluetooth-колонки, EcoFlow), дорогий мерч, преміальна продукція;</li>
-                      <li>оформлюємо відправку з великою оголошеною вартістю (страхуванням);</li>
-                      <li>
-                        ми несемо всі витрати по доставці та страхуванню (компенсаційний захист доставки),
-                        поки товар не отримав Замовник.
-                      </li>
-                    </ul>
-                    <div className="mt-2 font-medium text-foreground">У Специфікації:</div>
-                    <div className="mt-1 rounded-md border border-border/60 bg-muted/40 p-2 font-mono text-2xs leading-4 text-foreground">
-                      Умови поставки: CIP, &lt;місце доставки&gt;, згідно Incoterms® 2020. Доставка товару
-                      здійснюється за рахунок Постачальника через службу доставки Нова Пошта (або Укрпошта /
-                      Meest Express) із оформленням страхування (оголошеної вартості відправлення) за наш
-                      рахунок. Ризик випадкової втрати або пошкодження товару переходить до Замовника
-                      відповідно до погоджених умов поставки.
-                    </div>
-                  </div>
-                </div>
-              </InfoHint>
+          <div className="space-y-1">
+            <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Строки виробництва</div>
+            <div className="text-sm font-medium text-foreground">
+              {record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS} р.д.
             </div>
-            {record.source === "stored" ? (
-              <Select
-                value={record.incotermsCode}
-                onValueChange={(value) => void handleDocumentSettingChange({ incotermsCode: value })}
-                disabled={documentSettingsSaving}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORDER_INCOTERMS_OPTIONS.map((item) => (
-                    <SelectItem key={item.id} value={item.id} description={item.description}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm text-muted-foreground">{record.incotermsCode}</div>
-            )}
           </div>
-          <div className="space-y-2">
-            <div className="flex h-5 items-center gap-1.5">
-              <Label>Місце поставки</Label>
+          <div className="space-y-1">
+            <div className="flex h-4 items-center gap-1.5">
+              <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Умови доставки</div>
+              <IncotermsHint />
             </div>
-            {record.source === "stored" ? (
-              <Input
-                value={record.incotermsPlace ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setRecord((current) => {
-                    if (!current) return current;
-                    const next = { ...current, incotermsPlace: value };
-                    return { ...next, docs: normalizeDocumentDocs(next) };
-                  });
-                }}
-                onBlur={(event) =>
-                  void handleDocumentSettingChange({
-                    incotermsPlace: event.target.value.trim() || null,
-                  })
-                }
-                placeholder="Напр. склад НП, Київ"
-                className="h-9"
-                disabled={documentSettingsSaving}
-              />
-            ) : (
-              <div className="text-sm text-muted-foreground">{record.incotermsPlace || "Не вказано"}</div>
-            )}
+            <div className="text-sm font-medium text-foreground">
+              {record.incotermsCode || DEFAULT_INCOTERMS}
+              {record.incotermsPlace ? (
+                <span className="font-normal text-muted-foreground">, {record.incotermsPlace}</span>
+              ) : null}
+            </div>
           </div>
         </div>
         {specificationBlocker ? (
@@ -2232,14 +2186,21 @@ export default function OrdersProductionDetailsPage() {
                     ? "tone-text-success"
                     : "text-muted-foreground/70";
               // Тихий вторинний рядок під назвою (для blocked — окремо нижче, з лінком виправлення).
+              // Договір підписується раз на замовника — на наступних замовленнях він
+              // успадковується, і це має бути видно, щоб ніхто не шукав «другий договір».
+              const inheritedContractLabel =
+                document.kind === "contract" && record.inheritedContractOrderNumber
+                  ? `Успадковано з ${record.inheritedContractOrderNumber}`
+                  : null;
               const secondaryText =
-                document.actionMode === "open"
+                inheritedContractLabel ??
+                (document.actionMode === "open"
                   ? isCreated
                     ? `Створено · ${document.createdDateLabel}`
                     : document.statusLabel
                   : document.actionMode === "create"
                     ? "Можна створити"
-                    : null;
+                    : null);
               return (
                 <div
                   key={document.kind}
@@ -2630,6 +2591,226 @@ export default function OrdersProductionDetailsPage() {
               disabled={contractDialogSubmitting}
             >
               {contractDialogSubmitting ? "Створення..." : "Створити PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Умови партії для СП: договір один на замовника, а специфікація — під кожне замовлення. */}
+      <Dialog
+        open={specDialogOpen}
+        onOpenChange={(open) => {
+          if (specDialogSubmitting) return;
+          setSpecDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Параметри специфікації</DialogTitle>
+            <DialogDescription>
+              Умови цієї партії. Дефолти підтягнуті з договору замовника — зміни, якщо для цього замовлення вони інші.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="text-sm font-medium">Умови оплати</div>
+              <div className="grid gap-2">
+                <Label>Тип оплати</Label>
+                <Select value={specPaymentMethodId} onValueChange={setSpecPaymentMethodId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORDER_PAYMENT_METHOD_OPTIONS.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">СП формується тільки для безготівкового розрахунку.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="spec-prepayment-pct">Передоплата, %</Label>
+                  <Input
+                    id="spec-prepayment-pct"
+                    inputMode="numeric"
+                    value={specPrepaymentPctInput}
+                    onChange={(e) => setSpecPrepaymentPctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 70"
+                    className="h-9"
+                  />
+                  <p className="text-xs text-muted-foreground">Перед запуском у виробництво.</p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="spec-balance-pct">Доплата, %</Label>
+                  <Input
+                    id="spec-balance-pct"
+                    inputMode="numeric"
+                    value={specBalancePctInput}
+                    onChange={(e) => setSpecBalancePctInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 30"
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label>Доплата — коли</Label>
+                <Select
+                  value={specBalanceTiming}
+                  onValueChange={(value) => setSpecBalanceTiming(value as "before_shipment" | "after_shipment")}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="before_shipment">По факту готовності, до відвантаження</SelectItem>
+                    <SelectItem value="after_shipment">По факту готовності, після відвантаження</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {specBalanceTiming === "after_shipment" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="spec-balance-days">Протягом скількох робочих днів</Label>
+                  <Input
+                    id="spec-balance-days"
+                    inputMode="numeric"
+                    value={specBalanceDaysInput}
+                    onChange={(e) => setSpecBalanceDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+                    placeholder="Напр. 5"
+                    className="h-9"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="spec-production-days">Строки виробництва (робочих днів)</Label>
+              <Input
+                id="spec-production-days"
+                inputMode="numeric"
+                value={specProductionDaysInput}
+                onChange={(e) => setSpecProductionDaysInput(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+                placeholder={`Напр. ${DEFAULT_PRODUCTION_WORK_DAYS}`}
+                className="h-9"
+              />
+              <p className="text-xs text-muted-foreground">
+                Іде в колонку «Строки виконання робіт» і в п. 2.2 СП. Це ж число використовує договір.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-md border border-border/60 p-3">
+              <div className="text-sm font-medium">Умови доставки</div>
+              <div className="grid gap-2">
+                <div className="flex h-5 items-center gap-1.5">
+                  <Label>Incoterms 2020</Label>
+                  <IncotermsHint />
+                </div>
+                <Select value={specIncotermsCode} onValueChange={setSpecIncotermsCode}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORDER_INCOTERMS_OPTIONS.map((item) => (
+                      <SelectItem key={item.id} value={item.id} description={item.description}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="spec-incoterms-place">Місце поставки</Label>
+                <Input
+                  id="spec-incoterms-place"
+                  value={specIncotermsPlaceInput}
+                  onChange={(e) => setSpecIncotermsPlaceInput(e.target.value)}
+                  placeholder="Напр. склад НП, Київ"
+                  className="h-9"
+                />
+                <p className="text-xs text-muted-foreground">Іде в п. 3.2 СП разом із базисом Incoterms.</p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSpecDialogOpen(false)} disabled={specDialogSubmitting}>
+              Скасувати
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!record) return;
+                const parsedProductionDays = Number(specProductionDaysInput);
+                const productionWorkingDays =
+                  Number.isFinite(parsedProductionDays) && parsedProductionDays > 0
+                    ? Math.round(parsedProductionDays)
+                    : DEFAULT_PRODUCTION_WORK_DAYS;
+                const parsedPrepayment = Number(specPrepaymentPctInput);
+                const prepaymentPct =
+                  Number.isFinite(parsedPrepayment) && parsedPrepayment >= 0 && parsedPrepayment <= 100
+                    ? parsedPrepayment
+                    : null;
+                const parsedBalance = Number(specBalancePctInput);
+                const balancePct =
+                  Number.isFinite(parsedBalance) && parsedBalance >= 0 && parsedBalance <= 100 ? parsedBalance : null;
+                const parsedBalanceDays = Number(specBalanceDaysInput);
+                const balanceDaysAfterShipment =
+                  specBalanceTiming === "after_shipment" && Number.isFinite(parsedBalanceDays) && parsedBalanceDays > 0
+                    ? Math.round(parsedBalanceDays)
+                    : null;
+                const paymentMethodLabel =
+                  ORDER_PAYMENT_METHOD_OPTIONS.find((item) => item.id === specPaymentMethodId)?.label ??
+                  record.paymentRail;
+                const incotermsPlace = specIncotermsPlaceInput.trim() || null;
+
+                setSpecDialogSubmitting(true);
+                try {
+                  // Оновлений запис будуємо один раз: він іде і в state, і одразу в генерацію
+                  // (у замиканні `record` ще старий, а СП читає з нього і доставку, і оплату).
+                  const patched: DerivedOrderRecord = {
+                    ...record,
+                    paymentMethodId: specPaymentMethodId,
+                    paymentRail: paymentMethodLabel,
+                    prepaymentPct,
+                    balancePct,
+                    balanceTiming: specBalanceTiming,
+                    balanceDaysAfterShipment,
+                    contractProductionDays: productionWorkingDays,
+                    incotermsCode: specIncotermsCode,
+                    incotermsPlace,
+                  };
+                  const nextRecord = { ...patched, docs: normalizeDocumentDocs(patched) };
+                  if (record.source === "stored" && teamId) {
+                    await updateOrderDocumentSettings({
+                      teamId,
+                      orderId: record.id,
+                      paymentMethodId: specPaymentMethodId,
+                      paymentMethodLabel,
+                      prepaymentPct,
+                      balancePct,
+                      balanceTiming: specBalanceTiming,
+                      balanceDaysAfterShipment,
+                      contractProductionDays: productionWorkingDays,
+                      incotermsCode: specIncotermsCode,
+                      incotermsPlace,
+                    });
+                    setRecord((current) => (current && current.id === record.id ? nextRecord : current));
+                  }
+                  // Умови збережені — закриваємо модалку в будь-якому разі. Якщо СП усе ще
+                  // заблокована (напр. лишили готівку), генерація покаже причину на сторінці.
+                  setSpecDialogOpen(false);
+                  await openDocumentPrint("specification", {}, nextRecord);
+                } catch (submitError: unknown) {
+                  setError(
+                    submitError instanceof Error ? submitError.message : "Не вдалося зберегти умови специфікації."
+                  );
+                } finally {
+                  setSpecDialogSubmitting(false);
+                }
+              }}
+              disabled={specDialogSubmitting}
+            >
+              {specDialogSubmitting ? "Створення..." : "Створити PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>

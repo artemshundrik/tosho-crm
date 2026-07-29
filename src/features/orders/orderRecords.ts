@@ -171,6 +171,60 @@ const parseOrderDesignAssets = async (
 const isUuid = (value?: string | null) =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
+/**
+ * Договір із замовником підписується ОДИН раз, а специфікація — окрема на кожне
+ * замовлення. Тому замовлення без власного договору успадковує реквізити й умови
+ * найсвіжішого договору того самого замовника. Рахується у памʼяті зі списку
+ * замовлень, який і так завантажено, — без міграції та зайвих запитів.
+ */
+type InheritedContract = {
+  orderNumber: string;
+  createdAt: string;
+  number: string | null;
+  date: string | null;
+  productionDays: number | null;
+  prepaymentPct: number | null;
+  balancePct: number | null;
+  balanceTiming: "before_shipment" | "after_shipment" | null;
+  balanceDaysAfterShipment: number | null;
+  autoProlongation: boolean;
+};
+
+const parseNullableNumber = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseBalanceTiming = (value: unknown) =>
+  value === "before_shipment" || value === "after_shipment" ? value : null;
+
+const buildContractByCustomerId = (orders: StoredOrderRow[]) => {
+  const byCustomerId = new Map<string, InheritedContract>();
+  for (const order of orders) {
+    const customerId = order.customer_id?.trim?.() || "";
+    const createdAt = order.contract_created_at ?? null;
+    if (!customerId || !createdAt) continue;
+    const candidate: InheritedContract = {
+      orderNumber: order.quote_number?.trim() || order.id.slice(0, 8),
+      createdAt,
+      number: order.contract_number?.trim?.() || null,
+      date: order.contract_date?.trim?.() || null,
+      productionDays: parseNullableNumber(order.contract_production_days),
+      prepaymentPct: parseNullableNumber(order.prepayment_pct),
+      balancePct: parseNullableNumber(order.balance_pct),
+      balanceTiming: parseBalanceTiming(order.balance_timing),
+      balanceDaysAfterShipment: parseNullableNumber(order.balance_days_after_shipment),
+      autoProlongation: order.contract_auto_prolongation === true,
+    };
+    const current = byCustomerId.get(customerId);
+    // Найсвіжіший договір виграє: якщо з замовником переукладали — нові замовлення йдуть за новим.
+    const sortKey = (contract: InheritedContract) => contract.date || contract.createdAt;
+    if (!current || sortKey(candidate) > sortKey(current)) byCustomerId.set(customerId, candidate);
+  }
+  return byCustomerId;
+};
+
 const dedupeDesignAssets = (assets: OrderDesignAsset[]) =>
   Array.from(new Map(assets.map((asset) => [asset.id, asset] as const)).values());
 
@@ -320,6 +374,11 @@ export type DerivedOrderRecord = {
   readinessSteps: DerivedReadinessStep[];
   blockers: string[];
   readinessColumn: "counterparty" | "design" | "ready";
+  /**
+   * Номер замовлення, з якого успадковано договір (договір підписується один раз на
+   * замовника). null — договір власний або його ще немає.
+   */
+  inheritedContractOrderNumber: string | null;
   /**
    * Чи замовлення взагалі потребує погодження дизайну. false — товар без нанесення:
    * ні візуал, ні макет не потрібні, документи не блокуються дизайном.
@@ -1136,6 +1195,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       readinessSteps,
       blockers,
       readinessColumn,
+      inheritedContractOrderNumber: null,
       requiresDesignApproval: hasImprint || requiresVisualization || requiresLayout,
       hasApprovedVisualization,
       hasApprovedLayout,
@@ -1348,6 +1408,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       ])
     );
 
+    const contractByCustomerId = buildContractByCustomerId(storedOrders);
+
     const storedRecords = storedOrders.map((order) => {
       const manager = order.manager_user_id ? memberById.get(order.manager_user_id) : null;
       const baseItems = itemsByOrderId.get(order.id) ?? [];
@@ -1473,7 +1535,12 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         (isCashlessPaymentMethod(null, order.payment_method_label) ? "bank_uah" : "cash");
       const paymentMethodLabel =
         order.payment_method_label?.trim() || PAYMENT_METHOD_LABELS[paymentMethodId] || "Не вказано";
-      const contractCreatedAt = order.contract_created_at ?? null;
+      // Власний договір завжди виграє; успадкований підставляється лише там, де порожньо.
+      const ownContractCreatedAt = order.contract_created_at ?? null;
+      const inheritedContract = ownContractCreatedAt
+        ? null
+        : (order.customer_id?.trim?.() ? contractByCustomerId.get(order.customer_id.trim()) ?? null : null);
+      const contractCreatedAt = ownContractCreatedAt ?? inheritedContract?.createdAt ?? null;
       const orderDocuments = getOrderDocuments(order);
       const contractReady = Boolean(
         order.party_type !== "lead" &&
@@ -1523,24 +1590,13 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         paymentMethodId,
         paymentRail: paymentMethodLabel,
         paymentTerms: order.payment_terms?.trim() || DEFAULT_PAYMENT_TERMS,
-        prepaymentPct:
-          order.prepayment_pct === null || order.prepayment_pct === undefined || order.prepayment_pct === ""
-            ? null
-            : Number(order.prepayment_pct),
-        balancePct:
-          order.balance_pct === null || order.balance_pct === undefined || order.balance_pct === ""
-            ? null
-            : Number(order.balance_pct),
-        balanceTiming:
-          order.balance_timing === "before_shipment" || order.balance_timing === "after_shipment"
-            ? order.balance_timing
-            : null,
+        prepaymentPct: parseNullableNumber(order.prepayment_pct) ?? inheritedContract?.prepaymentPct ?? null,
+        balancePct: parseNullableNumber(order.balance_pct) ?? inheritedContract?.balancePct ?? null,
+        balanceTiming: parseBalanceTiming(order.balance_timing) ?? inheritedContract?.balanceTiming ?? null,
         balanceDaysAfterShipment:
-          order.balance_days_after_shipment === null ||
-          order.balance_days_after_shipment === undefined ||
-          order.balance_days_after_shipment === ""
-            ? null
-            : Number(order.balance_days_after_shipment) || null,
+          parseNullableNumber(order.balance_days_after_shipment) ??
+          inheritedContract?.balanceDaysAfterShipment ??
+          null,
         incotermsCode: order.incoterms_code?.trim() || DEFAULT_INCOTERMS_CODE,
         incotermsPlace: order.incoterms_place?.trim?.() || (linkedQuote ? resolveDeliveryPlace(linkedQuote) : null),
         orderStatus: order.order_status?.trim() || "new",
@@ -1566,8 +1622,8 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         signatoryLabel: buildSignatoryLabel(customerSignatoryName, customerSignatoryPosition),
         contractCreatedAt,
         specificationCreatedAt: order.specification_created_at ?? null,
-        contractNumber: order.contract_number?.trim?.() || null,
-        contractDate: order.contract_date?.trim?.() || null,
+        contractNumber: order.contract_number?.trim?.() || inheritedContract?.number || null,
+        contractDate: order.contract_date?.trim?.() || inheritedContract?.date || null,
         npTtnNumber: order.np_ttn_number?.trim?.() || null,
         npTtnRef: order.np_ttn_ref?.trim?.() || null,
         npTtnCost:
@@ -1577,12 +1633,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         npTtnEstimatedDelivery: order.np_ttn_estimated_delivery?.trim?.() || null,
         npTtnCreatedAt: order.np_ttn_created_at ?? null,
         contractProductionDays:
-          order.contract_production_days === null ||
-          order.contract_production_days === undefined ||
-          order.contract_production_days === ""
-            ? null
-            : Number(order.contract_production_days) || null,
-        contractAutoProlongation: order.contract_auto_prolongation === true,
+          parseNullableNumber(order.contract_production_days) || inheritedContract?.productionDays || null,
+        contractAutoProlongation:
+          order.contract_auto_prolongation === true || inheritedContract?.autoProlongation === true,
         // Ручні замовлення створюються з порожнім знімком статусів — показуємо живий стан задачі.
         designStatuses:
           Array.isArray(order.design_statuses) && order.design_statuses.length > 0
@@ -1604,6 +1657,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
           order.readiness_column === "design" && hasApprovedVisualization && hasApprovedLayout
             ? "ready"
             : order.readiness_column ?? "ready",
+        inheritedContractOrderNumber: inheritedContract?.orderNumber ?? null,
         requiresDesignApproval,
         hasApprovedVisualization,
         hasApprovedLayout,
