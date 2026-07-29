@@ -576,7 +576,8 @@ const formatPlainMoney = (value: number) =>
   }).format(value || 0);
 
 const SPEC_VAT_RATE = 20;
-const SPEC_DEFAULT_WORK_DAYS = 15;
+/** Строк виробництва, коли його ще не задавали в договорі. Збігається з дефолтом поля в модалі. */
+const DEFAULT_PRODUCTION_WORK_DAYS = 50;
 
 const getPaymentTermsParts = (terms: string, total: number) => {
   const option = ORDER_PAYMENT_TERMS_OPTIONS.find((item) => item.id === terms) ?? ORDER_PAYMENT_TERMS_OPTIONS[1];
@@ -615,7 +616,7 @@ const buildContractRenderContextFromRecord = (record: DerivedOrderRecord): Contr
       ? "після відвантаження продукції (отримання Замовником)"
       : "після готовності продукції, до відвантаження";
   return {
-    productionWorkingDays: 50,
+    productionWorkingDays: record.contractProductionDays ?? DEFAULT_PRODUCTION_WORK_DAYS,
     contractEndDate: formatContractEndDate(record.contractCreatedAt ?? null),
     hasPaymentBreakdown: hasBreakdown,
     paymentAdvancePct: advance ?? 0,
@@ -733,11 +734,15 @@ const buildOrderDocumentHtml = (
     return `Є платником ПДВ за ставкою ${numeric}%.`;
   };
   const customerVatStatus = buildVatStatusLabel(record.customerVatRate);
-  // Параметри з модала створення Договору. Дефолти збігаються зі старим хардкодом.
+  // Строк виробництва — одне число на всі документи замовлення: спершу те, що прийшло
+  // з модала Договору, інакше збережене на замовленні, інакше дефолт. Специфікація бере
+  // його звідси ж, щоб не розходитися з підписаним договором.
   const productionWorkingDays =
     typeof options.productionWorkingDays === "number" && Number.isFinite(options.productionWorkingDays) && options.productionWorkingDays > 0
       ? Math.round(options.productionWorkingDays)
-      : 50;
+      : typeof record.contractProductionDays === "number" && record.contractProductionDays > 0
+        ? Math.round(record.contractProductionDays)
+        : DEFAULT_PRODUCTION_WORK_DAYS;
   const contractAutoProlongation = options.contractAutoProlongation === true;
   const specificationNumber = record.quoteNumber;
   const specificationDateLong = formatContractDateParts(record.specificationCreatedAt ?? null);
@@ -804,7 +809,7 @@ const buildOrderDocumentHtml = (
           <td class="num">${escapeHtml(item.qty.toLocaleString("uk-UA"))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithVat))}</td>
           <td class="num">${escapeHtml(formatPlainMoney(unitPriceWithoutVat))}</td>
-          <td class="num">${escapeHtml(`${SPEC_DEFAULT_WORK_DAYS} р.д.`)}</td>
+          <td class="num">${escapeHtml(`${productionWorkingDays} р.д.`)}</td>
         </tr>`;
     })
     .join("");
@@ -970,7 +975,7 @@ const buildOrderDocumentHtml = (
           </ul>
           <div class="subsection-title">2.2. Терміни поставки Продукції</div>
           <ul>
-            <li>Термін виготовлення продукції складає ${SPEC_DEFAULT_WORK_DAYS} робочих днів з дати затвердження оригінал-макету до друку.</li>
+            <li>Термін виготовлення продукції складає ${productionWorkingDays} робочих днів з дати затвердження оригінал-макету до друку.</li>
           </ul>
 
           <div class="section-title">3. ПОРЯДОК ОПЛАТИ ВАРТОСТІ ПРОДУКЦІЇ</div>
@@ -1080,7 +1085,9 @@ export default function OrdersProductionDetailsPage() {
   const [openingAssetId, setOpeningAssetId] = useState<string | null>(null);
   // Параметри модала створення Договору (відкривається на кнопці "PDF" біля рядка "Договір").
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
-  const [contractProductionDaysInput, setContractProductionDaysInput] = useState("50");
+  const [contractProductionDaysInput, setContractProductionDaysInput] = useState(
+    String(DEFAULT_PRODUCTION_WORK_DAYS)
+  );
   const [contractAutoProlongation, setContractAutoProlongation] = useState(false);
   const [contractPrepaymentPctInput, setContractPrepaymentPctInput] = useState("70");
   const [contractBalancePctInput, setContractBalancePctInput] = useState("30");
@@ -1417,7 +1424,11 @@ export default function OrdersProductionDetailsPage() {
   const openContractParamsDialog = () => {
     if (!record) return;
     setContractAutoProlongation(record.contractAutoProlongation);
-    setContractProductionDaysInput(record.contractProductionDays !== null ? String(record.contractProductionDays) : "50");
+    setContractProductionDaysInput(
+      record.contractProductionDays !== null
+        ? String(record.contractProductionDays)
+        : String(DEFAULT_PRODUCTION_WORK_DAYS)
+    );
     setContractPrepaymentPctInput(record.prepaymentPct !== null ? String(record.prepaymentPct) : "70");
     setContractBalancePctInput(record.balancePct !== null ? String(record.balancePct) : "30");
     setContractBalanceTiming(record.balanceTiming ?? "before_shipment");
