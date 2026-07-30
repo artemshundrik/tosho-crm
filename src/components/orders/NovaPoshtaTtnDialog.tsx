@@ -7,6 +7,7 @@ import {
   Trash2,
   AlertTriangle,
   Printer,
+  Plus,
   RefreshCw,
   User,
   Box,
@@ -106,15 +107,27 @@ type RecipientState = {
   warehouseName: string;
 };
 
-type CargoState = {
+/**
+ * Група однакових місць: «2 × велика по 6 кг». НП у OptionsSeat чекає рядок на
+ * КОЖНЕ місце, але вбивати шість однакових коробок руками — знущання, тож
+ * тримаємо групи й розгортаємо їх перед відправкою.
+ */
+type CargoSeatGroup = {
+  id: string;
+  /** Скільки таких коробок. */
+  count: string;
+  /** Сторони в см. Порожньо — розміри не передаємо, тариф піде лише за вагою. */
+  length: string;
+  width: string;
+  height: string;
+  /** Вага ОДНІЄЇ коробки цієї групи, кг. */
   weight: string;
-  seats: string;
-  /** Розміри однієї коробки в см — НП рахує з них об'ємну вагу. Порожньо = не передаємо. */
-  boxLength: string;
-  boxWidth: string;
-  boxHeight: string;
-  /** Ref обраної коробки з довідника НП. Порожньо = розмір введений руками. */
+  /** Ключ обраного пресета з налаштувань. Порожньо = розмір введений руками. */
   packRef: string;
+};
+
+type CargoState = {
+  seatGroups: CargoSeatGroup[];
   description: string;
   cost: string;
   payer: string;
@@ -134,6 +147,12 @@ const decimalOnly = (value: string) => {
 };
 
 type RowKey = "recipient" | "cargo" | "goods" | "payment";
+
+const SIDE_PLACEHOLDERS: Record<"length" | "width" | "height", string> = {
+  length: "Д",
+  width: "Ш",
+  height: "В",
+};
 
 const seatsWord = (count: number) => {
   const tail = count % 100;
@@ -197,18 +216,35 @@ const toPositiveNumber = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const groupCount = (group: CargoSeatGroup) => Math.max(1, Math.round(toPositiveNumber(group.count, 1)));
+const groupWeight = (group: CargoSeatGroup) => toPositiveNumber(group.weight, 0.5);
+const groupHasSides = (group: CargoSeatGroup) =>
+  [group.length, group.width, group.height].every((side) => Number(side) > 0);
+
 /**
  * Об'ємна вага за правилом НП: 1 м³ = 250 кг, тобто Д×Ш×В(см) / 4000.
  * Тарифікується більша з двох — фактична чи об'ємна, тож показуємо це наперед.
+ * Рахуємо по групах: різні коробки дають різний обʼєм, і саме тому «один розмір
+ * на все» давав НП неправдиву картину.
  */
-const volumetricWeightKg = (cargo: CargoState) => {
-  const length = Number(cargo.boxLength);
-  const width = Number(cargo.boxWidth);
-  const height = Number(cargo.boxHeight);
-  if (![length, width, height].every((side) => Number.isFinite(side) && side > 0)) return null;
-  const seats = toPositiveNumber(cargo.seats, 1);
-  return ((length * width * height) / 4000) * seats;
+const volumetricWeightKg = (groups: CargoSeatGroup[]) => {
+  if (groups.length === 0 || !groups.every(groupHasSides)) return null;
+  return groups.reduce(
+    (sum, group) =>
+      sum + ((Number(group.length) * Number(group.width) * Number(group.height)) / 4000) * groupCount(group),
+    0
+  );
 };
+
+const createSeatGroup = (weight: string): CargoSeatGroup => ({
+  id: crypto.randomUUID(),
+  count: "1",
+  length: "",
+  width: "",
+  height: "",
+  weight,
+  packRef: "",
+});
 
 type NovaPoshtaTtnDialogProps = {
   open: boolean;
@@ -312,12 +348,12 @@ export function NovaPoshtaTtnDialog({
           warehouseName: delivery.address || point?.address || "",
         });
         setCargo({
-          weight: loaded?.defaultWeight != null ? String(loaded.defaultWeight) : "0.5",
-          seats: String(loaded?.defaultSeats ?? 1),
-          boxLength: "",
-          boxWidth: "",
-          boxHeight: "",
-          packRef: "",
+          seatGroups: [
+            {
+              ...createSeatGroup(loaded?.defaultWeight != null ? String(loaded.defaultWeight) : "0.5"),
+              count: String(loaded?.defaultSeats ?? 1),
+            },
+          ],
           description: cargoDescription,
           cost: String(Math.max(0, Math.round(orderTotal || 0))),
           payer: npPayerFromDelivery(delivery.payer) ?? loaded?.defaultPayer ?? "Recipient",
@@ -365,10 +401,19 @@ export function NovaPoshtaTtnDialog({
   const updateCargo = (patch: Partial<CargoState>) => setCargo((prev) => (prev ? { ...prev, ...patch } : prev));
 
   // Поля можна лишати порожніми під час набору — до НП летять уже нормалізовані значення.
-  const seatsCount = Math.max(1, Math.round(toPositiveNumber(cargo?.seats ?? "", 1)));
-  const totalWeight = toPositiveNumber(cargo?.weight ?? "", 0.5);
+  const seatGroups = cargo?.seatGroups ?? [];
+  const seatsCount = seatGroups.reduce((sum, group) => sum + groupCount(group), 0) || 1;
+  const totalWeight =
+    Math.round(seatGroups.reduce((sum, group) => sum + groupWeight(group) * groupCount(group), 0) * 100) / 100 || 0.5;
   const declaredCost = String(Math.max(0, Math.round(toPositiveNumber(cargo?.cost ?? "", 0))));
-  const volumetric = cargo ? volumetricWeightKg(cargo) : null;
+  const volumetric = volumetricWeightKg(seatGroups);
+
+  const updateSeatGroup = (id: string, patch: Partial<CargoSeatGroup>) =>
+    updateCargo({ seatGroups: seatGroups.map((group) => (group.id === id ? { ...group, ...patch } : group)) });
+  const addSeatGroup = () =>
+    updateCargo({ seatGroups: [...seatGroups, createSeatGroup(seatGroups.at(-1)?.weight ?? "0.5")] });
+  const removeSeatGroup = (id: string) =>
+    updateCargo({ seatGroups: seatGroups.filter((group) => group.id !== id) });
   // Тип доставки із замовлення: поштомат шукається окремим довідником, а адресна
   // доставка тут ще не підтримується (їй потрібен Address.save, а не ref відділення).
   const isPostomatDelivery = delivery.npDeliveryType === "locker";
@@ -378,22 +423,26 @@ export function NovaPoshtaTtnDialog({
   const boxSizes = settings?.boxSizes ?? [];
   const boxSizeLabel = (box: (typeof boxSizes)[number]) =>
     box.label ? `${box.label} · ${box.length}×${box.width}×${box.height}` : `${box.length}×${box.width}×${box.height}`;
-  const activeBoxLabel = boxSizes.find(
-    (box) => `${box.length}x${box.width}x${box.height}` === cargo?.packRef
-  )?.label;
-  const boxDimsLabel =
-    cargo?.boxLength && cargo?.boxWidth && cargo?.boxHeight
-      ? `${cargo.boxLength}×${cargo.boxWidth}×${cargo.boxHeight}`
-      : "";
-  // Розміри передаємо, лише коли задані всі три сторони: НП рахує об'ємну вагу сама.
+  /** «2 × Велика 60×40×40» — коротко, для згорнутого рядка. */
+  const describeSeatGroup = (group: CargoSeatGroup) => {
+    const preset = boxSizes.find((box) => `${box.length}x${box.width}x${box.height}` === group.packRef)?.label;
+    const dims = groupHasSides(group) ? `${group.length}×${group.width}×${group.height}` : "розмір не вказано";
+    return `${groupCount(group)} × ${preset ? `${preset} ${dims}` : dims}`;
+  };
+
+  // Розгортаємо групи в рядок на кожне місце — саме цього чекає OptionsSeat.
+  // Розміри передаємо, лише коли ВСІ групи мають три сторони: часткові дані НП
+  // прийме, але порахує обʼєм не по всьому відправленню.
   const optionsSeat =
-    cargo && volumetric !== null
-      ? Array.from({ length: seatsCount }, () => ({
-          volumetricLength: cargo.boxLength,
-          volumetricWidth: cargo.boxWidth,
-          volumetricHeight: cargo.boxHeight,
-          weight: (totalWeight / seatsCount).toFixed(2),
-        }))
+    volumetric !== null
+      ? seatGroups.flatMap((group) =>
+          Array.from({ length: groupCount(group) }, () => ({
+            volumetricLength: group.length,
+            volumetricWidth: group.width,
+            volumetricHeight: group.height,
+            weight: groupWeight(group).toFixed(2),
+          }))
+        )
       : undefined;
 
   const senderReady = Boolean(
@@ -426,9 +475,8 @@ export function NovaPoshtaTtnDialog({
         totalWeight,
         seatsCount,
         declaredCost,
-        cargo?.boxLength,
-        cargo?.boxWidth,
-        cargo?.boxHeight,
+        // Групи в ключі цілком: зміна розміру однієї коробки міняє тариф.
+        seatGroups.map((g) => `${g.count}/${g.length}x${g.width}x${g.height}/${g.weight}`).join(","),
       ].join("|")
     : "";
 
@@ -773,9 +821,7 @@ export function NovaPoshtaTtnDialog({
             {/* Вантаж */}
             <FactRow
               icon={Box}
-              title={`${seatsCount} ${seatsWord(seatsCount)}${activeBoxLabel ? ` «${activeBoxLabel}»` : ""}${
-                boxDimsLabel ? ` ${boxDimsLabel}` : ""
-              } · разом ${totalWeight} кг`}
+              title={`${seatGroups.map(describeSeatGroup).join(" + ") || "Немає місць"} · разом ${totalWeight} кг`}
               subtitle={
                 volumetric !== null && volumetric > totalWeight
                   ? `обʼємна вага ${volumetric.toFixed(1)} кг — тариф піде за нею`
@@ -787,97 +833,126 @@ export function NovaPoshtaTtnDialog({
               expanded={expandedRow === "cargo"}
               onToggle={() => toggleRow("cargo")}
             >
-              <div className="grid items-start gap-3 md:grid-cols-3">
-                <div className="grid gap-2">
-                  <Label>Тип вантажу</Label>
-                  <Select value={cargo.cargoType} onValueChange={(cargoType) => updateCargo({ cargoType })}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CARGO_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Загальна вага, кг</Label>
-                  <Input
-                    value={cargo.weight}
-                    onChange={(event) => updateCargo({ weight: decimalOnly(event.target.value) })}
-                    inputMode="decimal"
-                    placeholder="0.5"
-                    className="h-9"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Місць (коробок)</Label>
-                  <Input
-                    value={cargo.seats}
-                    onChange={(event) => updateCargo({ seats: digitsOnly(event.target.value) })}
-                    inputMode="numeric"
-                    placeholder="1"
-                    className="h-9"
-                  />
-                </div>
-              </div>
-              <div className="mt-3 grid gap-2">
-                <Label>Розмір коробки, см</Label>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {boxSizes.map((box, index) => {
-                    const key = `${box.length}x${box.width}x${box.height}`;
-                    const active = cargo.packRef === key;
-                    return (
-                      <Button
-                        key={`${key}-${index}`}
-                        type="button"
-                        variant={active ? "secondary" : "outline"}
-                        size="sm"
-                        className="h-7 rounded-full px-2.5 text-xs font-normal"
-                        onClick={() =>
-                          updateCargo({
-                            packRef: key,
-                            boxLength: String(box.length),
-                            boxWidth: String(box.width),
-                            boxHeight: String(box.height),
-                          })
-                        }
-                      >
-                        {boxSizeLabel(box)}
-                      </Button>
-                    );
-                  })}
-                  {boxSizes.length > 0 ? <span className="text-xs text-muted-foreground">або</span> : null}
-                  <div className="flex gap-1.5">
-                    {(
-                      [
-                        ["boxLength", "Д"],
-                        ["boxWidth", "Ш"],
-                        ["boxHeight", "В"],
-                      ] as const
-                    ).map(([field, label]) => (
-                      <Input
-                        key={field}
-                        value={cargo[field]}
-                        onChange={(event) => updateCargo({ [field]: digitsOnly(event.target.value), packRef: "" })}
-                        inputMode="numeric"
-                        placeholder={label}
-                        aria-label={`${label}, см`}
-                        className="h-7 w-14 text-center text-xs"
-                      />
+              <div className="grid gap-2 sm:max-w-[220px]">
+                <Label>Тип вантажу</Label>
+                <Select value={cargo.cargoType} onValueChange={(cargoType) => updateCargo({ cargoType })}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CARGO_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Рядок на кожен тип коробки, як у кабінеті НП. «2 великі + 1 мала»
+                  тепер їде своїми розмірами, а не трьома усередненими. */}
+              <div className="mt-4 grid gap-2">
+                <Label>Місця</Label>
+                {seatGroups.map((group, index) => (
+                  <div key={group.id} className="rounded-lg border border-border/60 p-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        value={group.count}
+                        onChange={(event) => updateSeatGroup(group.id, { count: digitsOnly(event.target.value) })}
+                        inputMode="numeric"
+                        aria-label="Скільки коробок"
+                        className="h-8 w-12 text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">×</span>
+                      <div className="flex items-center gap-1">
+                        {(["length", "width", "height"] as const).map((side, sideIndex) => (
+                          <div key={side} className="flex items-center gap-1">
+                            {sideIndex > 0 ? <span className="text-2xs text-muted-foreground">×</span> : null}
+                            <Input
+                              value={group[side]}
+                              onChange={(event) =>
+                                updateSeatGroup(group.id, { [side]: digitsOnly(event.target.value), packRef: "" })
+                              }
+                              inputMode="numeric"
+                              placeholder={SIDE_PLACEHOLDERS[side]}
+                              aria-label={`${SIDE_PLACEHOLDERS[side]}, см`}
+                              className="h-8 w-14 text-center text-xs"
+                            />
+                          </div>
+                        ))}
+                        <span className="text-2xs text-muted-foreground">см</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={group.weight}
+                          onChange={(event) => updateSeatGroup(group.id, { weight: decimalOnly(event.target.value) })}
+                          inputMode="decimal"
+                          placeholder="0.5"
+                          aria-label="Вага однієї коробки, кг"
+                          className="h-8 w-16 text-center text-xs"
+                        />
+                        <span className="text-2xs text-muted-foreground">кг / шт</span>
+                      </div>
+                      {seatGroups.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="ml-auto h-8 w-8 p-0 text-muted-foreground"
+                          aria-label={`Прибрати місце ${index + 1}`}
+                          onClick={() => removeSeatGroup(group.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    {boxSizes.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {boxSizes.map((box, boxIndex) => {
+                          const key = `${box.length}x${box.width}x${box.height}`;
+                          return (
+                            <Button
+                              key={`${key}-${boxIndex}`}
+                              type="button"
+                              variant={group.packRef === key ? "secondary" : "outline"}
+                              size="sm"
+                              className="h-6 rounded-full px-2 text-2xs font-normal"
+                              onClick={() =>
+                                updateSeatGroup(group.id, {
+                                  packRef: key,
+                                  length: String(box.length),
+                                  width: String(box.width),
+                                  height: String(box.height),
+                                })
+                              }
+                            >
+                              {boxSizeLabel(box)}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
+                ))}
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addSeatGroup}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Ще коробка іншого розміру
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Разом {seatsCount} {seatsWord(seatsCount)} · {totalWeight} кг
+                    {volumetric !== null ? ` · обʼємна ${volumetric.toFixed(1)} кг` : ""}
+                  </span>
                 </div>
+
                 {boxSizes.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
                     Свої часті розміри можна завести в{" "}
                     <Link to="/settings/nova-poshta" className="underline">
                       Налаштуваннях
                     </Link>
-                    .
+                    — тоді вони зʼявляться тут кнопками.
                   </p>
                 ) : null}
               </div>
