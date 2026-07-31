@@ -123,8 +123,15 @@ async function refreshAccessToken() {
 
   const payload = (await response.json().catch(() => null)) as DropboxTokenResponse | { error_description?: string } | null;
   if (!response.ok || !payload || !("access_token" in payload)) {
+    // Звужуємо явно: у гілці помилки payload — це вже НЕ DropboxTokenResponse,
+    // але TS цього не виводить, і звертання до error_description на об'єднанні
+    // типів не компілюється.
+    const description =
+      payload && "error_description" in payload && typeof payload.error_description === "string"
+        ? payload.error_description
+        : null;
     throw toDropboxError(
-      `Dropbox token refresh failed${typeof payload?.error_description === "string" ? `: ${payload.error_description}` : ""}`,
+      `Dropbox token refresh failed${description ? `: ${description}` : ""}`,
       response.status,
       payload
     );

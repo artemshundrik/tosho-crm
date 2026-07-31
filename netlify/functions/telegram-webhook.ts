@@ -14,6 +14,7 @@ import {
   type RoleContext,
 } from "./_notificationCategories";
 import { canSeeAiCosts, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
+import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dropboxHealth";
 
 // Telegram webhook:
 //  - /start <nonce> — прив'язка акаунта, /stop — відписка (фаза 1)
@@ -203,6 +204,43 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
         "Налаштувати, що саме слати — /settings. Вимкнути все — /stop.",
       isAssistantAllowed(role) ? { replyMarkup: PERSISTENT_MENU } : undefined
     );
+    return;
+  }
+
+  /**
+   * Стан зв'язку CRM ↔ Dropbox однією командою.
+   *
+   * Лише власнику: у звіті видно назви всіх замовників і лідів, а це не та
+   * інформація, яку варто віддавати кожному, хто підключив бота.
+   *
+   * Рахуємо на льоту, а не з кешу: перевірку відкривають, коли щось запідозрили,
+   * і тоді вчорашній знімок гірший за відсутність відповіді. Один запит у
+   * Dropbox і два в базу — вкладаємось у ліміт функції.
+   */
+  if (command === "/dropbox") {
+    const settings = await loadSettingsByChat(adminClient, chatId);
+    if (!settings) {
+      await sendTelegramMessage(chatId, NOT_LINKED);
+      return;
+    }
+    if (!(await isActiveMember(adminClient, settings.user_id))) {
+      await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
+      return;
+    }
+    const role = await loadRole(adminClient, settings.user_id);
+    if (!isOwnerRole(role)) {
+      await sendTelegramMessage(chatId, "Ця команда доступна лише керівнику.");
+      return;
+    }
+
+    await sendTelegramChatAction(chatId, "typing");
+    try {
+      const health = await collectDropboxHealth(adminClient as never);
+      await sendTelegramMessage(chatId, formatDropboxHealthForTelegram(health));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "невідома помилка";
+      await sendTelegramMessage(chatId, `Не вдалося зібрати стан Dropbox: ${message}`);
+    }
     return;
   }
 

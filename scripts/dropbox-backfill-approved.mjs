@@ -49,6 +49,28 @@ await loadEnvFile(path.resolve(".env.local"));
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes("--dry");
+/**
+ * Які статуси доливати. За замовчуванням лише approved.
+ *
+ * Доливати можна ЛИШЕ те, що вже не поїде через звичайний експорт: інакше в
+ * «Архіві» буде дві копії одного файлу під різними іменами — скрипт кладе під
+ * оригінальною назвою, а інтерфейс під складеною (клієнт-замовлення-дата).
+ * Тому cancelled безпечний (термінальний статус), а свіжий pm_review — ні.
+ */
+const STATUSES = (() => {
+  const i = args.indexOf("--status");
+  if (i === -1) return ["approved"];
+  return (args[i + 1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+})();
+
+/** Не чіпати задачі, що рухались останні N днів: вони ще живі. */
+const MIN_IDLE_DAYS = (() => {
+  const i = args.indexOf("--idle-days");
+  if (i === -1) return 0;
+  const value = Number(args[i + 1]);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+})();
+
 const LIMIT = (() => {
   const i = args.indexOf("--limit");
   if (i === -1) return Infinity;
@@ -150,6 +172,27 @@ async function createDropbox() {
       "\\u" + ch.charCodeAt(0).toString(16).padStart(4, "0")
     );
 
+  /**
+   * Dropbox throttlить запис: при кількох операціях поспіль (а надто якщо
+   * паралельно йде інший прогін) віддає too_many_write_operations. Це НЕ збій —
+   * запит просто треба повторити. Без цього задача помилково потрапляла
+   * в «не вдалося», хоча з нею все гаразд.
+   */
+  const withRetry = async (label, fn, attempts = 5) => {
+    let wait = 700;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await fn();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const transient = /too_many_write_operations|too_many_requests|rate.?limit|429/i.test(message);
+        if (!transient || attempt >= attempts) throw error;
+        await new Promise((r) => setTimeout(r, wait));
+        wait *= 2;
+      }
+    }
+  };
+
   const createFolder = async (folderPath) => {
     const res = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
       method: "POST",
@@ -215,7 +258,12 @@ async function createDropbox() {
     return body.entries ?? [];
   };
 
-  return { createFolder, uploadFile, sharedLink, listFolder };
+  return {
+    createFolder: (p) => withRetry("createFolder", () => createFolder(p)),
+    uploadFile: (b, p) => withRetry("uploadFile", () => uploadFile(b, p)),
+    sharedLink: (p) => withRetry("sharedLink", () => sharedLink(p)),
+    listFolder,
+  };
 }
 
 // ── Головне ────────────────────────────────────────────────────────────────
@@ -237,19 +285,27 @@ log(`Наявних тек замовників: ${existingClientFolders.size}`)
 
 const { data: rows, error } = await supabase
   .from("activity_log")
-  .select("id,team_id,title,metadata")
+  .select("id,team_id,title,metadata,created_at")
   .eq("action", "design_task")
   .limit(2000);
 if (error) throw new Error(`activity_log: ${error.message}`);
 
+const idleCutoffMs = MIN_IDLE_DAYS > 0 ? Date.now() - MIN_IDLE_DAYS * 86_400_000 : null;
+
 const tasks = (rows ?? []).filter((row) => {
   const meta = row.metadata ?? {};
-  if (meta.status !== "approved") return false;
+  if (!STATUSES.includes(meta.status)) return false;
   if (meta.dropbox_last_exported_at) return false;
-  return Array.isArray(meta.design_output_files) && meta.design_output_files.length > 0;
+  if (!Array.isArray(meta.design_output_files) || meta.design_output_files.length === 0) return false;
+  if (idleCutoffMs) {
+    const movedAt = Date.parse(meta.status_changed_at ?? "") || Date.parse(row.created_at ?? "") || 0;
+    if (movedAt > idleCutoffMs) return false;
+  }
+  return true;
 });
 
-log(`Затверджених задач без Dropbox: ${tasks.length}`);
+log(`Статуси: ${STATUSES.join(", ")}${MIN_IDLE_DAYS ? ` | без руху ≥ ${MIN_IDLE_DAYS} дн` : ""}`);
+log(`Задач без Dropbox: ${tasks.length}`);
 if (DRY_RUN) log("РЕЖИМ ПЕРЕВІРКИ: нічого не заливаємо\n");
 
 const stats = { done: 0, files: 0, bytes: 0, skipped: 0, failed: 0 };
