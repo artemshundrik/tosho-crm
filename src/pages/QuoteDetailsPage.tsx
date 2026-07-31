@@ -6915,7 +6915,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <Input
                                     type="number"
                                     controlSize="sm"
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.quantity ?? ""}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -6931,7 +6931,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <Input
                                     type="number"
                                     controlSize="sm"
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.unit_price_model ?? ""}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -6947,7 +6947,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   <Input
                                     type="number"
                                     controlSize="sm"
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
                                     value={run.unit_price_print ?? ""}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -7238,7 +7238,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <Input
                               type="time"
                               controlSize="md"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                          className="w-full border-border/40 bg-muted/[0.03]"
                               value={customerDeadlineTime}
                               onChange={(e) => setCustomerDeadlineTime(e.target.value)}
                             />
@@ -7309,7 +7309,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <Input
                               type="time"
                               controlSize="md"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                          className="w-full border-border/40 bg-muted/[0.03]"
                               value={deadlineTime}
                               onChange={(e) => setDeadlineTime(e.target.value)}
                             />
@@ -7326,7 +7326,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               }}
                             >
                               <SelectTrigger
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                          controlSize="md"
+                          className="w-full border-border/40 bg-muted/[0.03]">
                                 <SelectValue placeholder="Коли нагадати" />
                               </SelectTrigger>
                               <SelectContent>
@@ -7342,7 +7343,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <div className={DEADLINE_FIELD_LABEL_CLASS}>Текст нагадування</div>
                             <Input
                               controlSize="md"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                          className="w-full border-border/40 bg-muted/[0.03]"
                               placeholder="Напр. передзвонити клієнту"
                               value={deadlineReminderComment}
                               onChange={(e) => setDeadlineReminderComment(e.target.value)}
@@ -7354,7 +7355,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div className={DEADLINE_FIELD_LABEL_CLASS}>Коментар</div>
                           <Input
                             controlSize="md"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                          className="w-full border-border/40 bg-muted/[0.03]"
                             placeholder="Внутрішня примітка до дедлайну"
                             value={deadlineNote}
                             onChange={(e) => setDeadlineNote(e.target.value)}
@@ -7419,7 +7420,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <Input
                               type="time"
                               controlSize="md"
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]"
+                          className="w-full border-border/40 bg-muted/[0.03]"
                               value={designDeadlineTime}
                               onChange={(e) => setDesignDeadlineTime(e.target.value)}
                             />
@@ -7731,7 +7732,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             disabled={designTaskSaving}
                           >
                             <SelectTrigger
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                          controlSize="md"
+                          className="w-full border-border/40 bg-muted/[0.03]">
                               {designAssigneeId ? (
                                 <div className="flex min-w-0 items-center gap-2">
                                   <AvatarBase
@@ -7806,7 +7808,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             disabled={designTaskSaving}
                           >
                             <SelectTrigger
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                          controlSize="md"
+                          className="w-full border-border/40 bg-muted/[0.03]">
                               <SelectValue placeholder="Оберіть тип задачі">
                                 {designTaskType ? (
                                   <span className="inline-flex items-center gap-2">
@@ -7845,7 +7848,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             disabled={designTaskSaving}
                           >
                             <SelectTrigger
-                          className="h-9 w-full border-border/40 bg-muted/[0.03]">
+                          controlSize="md"
+                          className="w-full border-border/40 bg-muted/[0.03]">
                               {designAssigneeId ? (
                                 <div className="flex min-w-0 items-center gap-2">
                                   <AvatarBase

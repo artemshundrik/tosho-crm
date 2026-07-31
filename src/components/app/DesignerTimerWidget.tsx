@@ -213,7 +213,7 @@ export function useDesignerTimerController({
       setBusyTaskId(task.taskId);
       setBusyAction("pause");
       try {
-        const paused = await pauseDesignTaskTimer({ teamId, taskId: task.taskId });
+        const paused = await pauseDesignTaskTimer({ teamId, taskId: task.taskId, userId });
         await refresh();
         if (paused) toast.success("Таймер на паузі");
       } catch (pauseError) {
@@ -223,7 +223,7 @@ export function useDesignerTimerController({
         setBusyAction(null);
       }
     },
-    [busyTaskId, enabled, refresh, teamId]
+    [busyTaskId, enabled, refresh, teamId, userId]
   );
 
   const startTask = useCallback(
@@ -238,11 +238,13 @@ export function useDesignerTimerController({
       setBusyAction("start");
       try {
         if (activeTask && activeTask.taskId !== task.taskId) {
-          await pauseDesignTaskTimer({ teamId, taskId: activeTask.taskId });
+          await pauseDesignTaskTimer({ teamId, taskId: activeTask.taskId, userId });
         }
-        await startDesignTaskTimer({ teamId, taskId: task.taskId, userId });
+        const { pausedOtherTaskId } = await startDesignTaskTimer({ teamId, taskId: task.taskId, userId });
         await refresh();
-        toast.success("Таймер запущено");
+        toast.success("Таймер запущено", {
+          description: pausedOtherTaskId ? "Таймер на попередній задачі зупинено." : undefined,
+        });
       } catch (startError) {
         toast.error(getErrorMessage(startError, "Не вдалося запустити таймер"));
       } finally {

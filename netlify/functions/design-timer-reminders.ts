@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
 
-// Нагадування про забутий таймер дизайн-задачі.
+// Забутий таймер дизайн-задачі: закриваємо на межі 8 год і повідомляємо людину.
 //
 // ЧОМУ ЦЕ ВАЖЛИВО, а не просто «охайно». Аналітика обрізає кожну сесію до 8
 // годин (MAX_SESSION_SECONDS) — інакше забуті таймери отруюють усю статистику
@@ -10,6 +10,11 @@ import { deliverNotifications } from "./_notificationDelivery";
 // Тобто забутий таймер б'є не по звітах, а по самому дизайнеру.
 //
 // На проді знайдено сесію, яка йшла 247 годин — 10 діб поспіль.
+//
+// Раніше функція лише нагадувала, а сесія лишалась відкритою й нагадувала
+// щодня. Тепер вона ще й закривається: часу це не забирає (понад 8 год не
+// рахується в будь-якому разі), зате прибирає вічне нагадування і таймер, що
+// у віджеті вдає активний. Це «стеля» — межа, після якої сесія точно забута.
 
 type HttpEvent = {
   httpMethod?: string;
@@ -110,6 +115,26 @@ export const handler = async (event: HttpEvent) => {
         .map((p) => p.user_id as string)
     );
 
+    // Стеля: сесію не просто позначаємо як застряглу, а ЗАКРИВАЄМО на межі 8 год.
+    //
+    // Раніше вона лишалась відкритою й нагадувала щодня — на проді так висіла
+    // сесія на 247 годин. Часу від цього не додавалось: аналітика все одно
+    // обрізає до MAX_SESSION_SECONDS, тобто до тих самих 8 год. Тож закриття
+    // нічого не забирає, зате прибирає вічне нагадування і фальшиво «активний»
+    // таймер у віджеті.
+    //
+    // paused_at ставимо саме на started_at + 8 год, а не на «зараз»: інакше в
+    // базі лишиться 70-годинна сесія, яку кожен звіт муситиме обрізати сам.
+    const capMs = STUCK_AFTER_HOURS * 3_600_000;
+    for (const session of liveSessions) {
+      const cappedAt = new Date(new Date(session.started_at).getTime() + capMs).toISOString();
+      await admin
+        .from("design_task_timer_sessions")
+        .update({ paused_at: cappedAt })
+        .eq("id", session.id)
+        .is("paused_at", null);
+    }
+
     const todayKey = now.toISOString().slice(0, 10);
     const rows = liveSessions
       .filter((s) => !inactive.has(s.user_id))
@@ -118,11 +143,11 @@ export const handler = async (event: HttpEvent) => {
         const title = titleById.get(session.design_task_id) || "дизайн-задача";
         return {
           user_id: session.user_id,
-          title: "⏱ Таймер досі йде",
+          title: "⏱ Таймер зупинено автоматично",
           body:
-            `«${title}» — ${formatHours(hours)} без зупинки. ` +
-            `У статистику зараховується щонайбільше ${STUCK_AFTER_HOURS} год за сесію, ` +
-            `тож решта часу просто не порахується.`,
+            `«${title}» — таймер ішов ${formatHours(hours)} без зупинки, ми зупинили його на ${STUCK_AFTER_HOURS} год. ` +
+            `Більше за ${STUCK_AFTER_HOURS} год за сесію в статистику й так не зараховується. ` +
+            `Якщо ти ще працюєш над задачею — просто запусти таймер знову.`,
           // ОБОВ'ЯЗКОВО «reminder=» у href: унікальний індекс, на якому тримається
           // dedupeByHref, часткий і діє ЛИШЕ для таких адрес. З будь-яким іншим
           // параметром дедуплікація мовчки не працює і сповіщення дублюються.

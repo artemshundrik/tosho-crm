@@ -45,8 +45,14 @@ import {
   getDesignTasksTimerSummaryMap,
   getTimerElapsedSeconds,
   pauseDesignTaskTimer,
+  startDesignTaskTimer,
   type DesignTaskTimerSummary,
 } from "@/lib/designTaskTimer";
+import {
+  pickNewestChangeRequestId,
+  shouldPauseTimerForStatusChange,
+  shouldStartTimerForStatusChange,
+} from "@/lib/designTimerStatusRules";
 import {
   getDesignTaskCollaboratorIds,
   resolveDesignTaskCollaborators,
@@ -3198,8 +3204,38 @@ export default function DesignPage() {
         .eq("team_id", effectiveTeamId);
       if (updateError) throw updateError;
 
-      if (previousStatus === "in_progress" && next !== "in_progress") {
+      if (shouldPauseTimerForStatusChange(previousStatus, next)) {
         await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
+      }
+
+      // Дизайнери забувають тиснути «старт», тож беремо це на себе: узяв задачу
+      // в роботу — час пішов. Збій таймера не має валити зміну статусу, вона
+      // тут головна, тому ловимо помилку окремо й лише повідомляємо.
+      if (
+        shouldStartTimerForStatusChange({
+          previousStatus,
+          nextStatus: next,
+          actorUserId: userId,
+          assigneeUserId: task.assigneeUserId,
+          collaboratorUserIds: getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId),
+        })
+      ) {
+        try {
+          await startDesignTaskTimer({
+            teamId: effectiveTeamId,
+            taskId: task.id,
+            userId: userId as string,
+            changeRequestId: pickNewestChangeRequestId(task.metadata),
+          });
+        } catch (timerError) {
+          // «Таймер вже запущено» тепер означає рівно одне: ця сама людина вже
+          // веде цю задачу. Мовчимо. Колега з власним таймером більше не заважає —
+          // перевірка стала по людині, не по задачі.
+          const message = getErrorMessage(timerError, "");
+          if (!/вже запущено/i.test(message)) {
+            toast.error("Статус змінено, але таймер не запустився", { description: message });
+          }
+        }
       }
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";

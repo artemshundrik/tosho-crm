@@ -145,6 +145,11 @@ import {
   type DesignTaskTimerSummary,
   type DesignTaskTimerBreakdown,
 } from "@/lib/designTaskTimer";
+import {
+  pickNewestChangeRequestId,
+  shouldPauseTimerForStatusChange,
+  shouldStartTimerForStatusChange,
+} from "@/lib/designTimerStatusRules";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
@@ -5312,14 +5317,18 @@ export default function DesignTaskPage() {
       // The newest правка is the "active round": attribute time to it automatically.
       // Before any правка (or before the migration loads the breakdown) it stays general/ТЗ.
       const changeRequestId = designTimerBreakdown ? newestChangeRequestId : null;
-      await startDesignTaskTimer({
+      const { pausedOtherTaskId } = await startDesignTaskTimer({
         teamId: effectiveTeamId,
         taskId: task.id,
         userId,
         changeRequestId,
       });
       await loadTimerSummary(task.id);
-      toast.success(changeRequestId ? "Таймер запущено для останньої правки" : "Таймер запущено");
+      toast.success(changeRequestId ? "Таймер запущено для останньої правки" : "Таймер запущено", {
+        // Мовчки зупинити чужий рахунок часу не можна — людина має розуміти,
+        // чому попередня задача більше не тікає.
+        description: pausedOtherTaskId ? "Таймер на попередній задачі зупинено." : undefined,
+      });
     } catch (e: unknown) {
       toast.error(getErrorMessage(e, "Не вдалося запустити таймер"));
     } finally {
@@ -5327,7 +5336,7 @@ export default function DesignTaskPage() {
     }
   };
 
-  const handlePauseTimer = async (options?: { silent?: boolean }) => {
+  const handlePauseTimer = async (options?: { silent?: boolean; allUsers?: boolean }) => {
     if (!task || !effectiveTeamId || timerBusy) return false;
     if (!ensureCanEdit()) return false;
     setTimerBusy("pause");
@@ -5335,6 +5344,8 @@ export default function DesignTaskPage() {
       const wasPaused = await pauseDesignTaskTimer({
         teamId: effectiveTeamId,
         taskId: task.id,
+        // Ручна пауза зупиняє СВІЙ таймер: задачу може паралельно вести колега.
+        userId: options?.allUsers ? null : userId,
       });
       await loadTimerSummary(task.id);
       if (wasPaused && !options?.silent) {
@@ -5369,7 +5380,7 @@ export default function DesignTaskPage() {
     try {
       // One active session per task — pause whatever is running before switching правку.
       if (timerSummary.activeSessionId) {
-        await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id });
+        await pauseDesignTaskTimer({ teamId: effectiveTeamId, taskId: task.id, userId });
       }
       await startDesignTaskTimer({
         teamId: effectiveTeamId,
@@ -5471,8 +5482,35 @@ export default function DesignTaskPage() {
 
       setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
 
-      if (previousStatus === "in_progress" && nextStatus !== "in_progress") {
-        await handlePauseTimer({ silent: true });
+      if (shouldPauseTimerForStatusChange(previousStatus, nextStatus)) {
+        await handlePauseTimer({ silent: true, allUsers: true });
+      }
+
+      // Дзеркало канбану: узяв задачу в роботу — таймер стартує сам. Правило
+      // спільне (designTimerStatusRules), щоб дві сторінки не розійшлися.
+      if (
+        shouldStartTimerForStatusChange({
+          previousStatus,
+          nextStatus,
+          actorUserId: userId,
+          assigneeUserId: task.assigneeUserId,
+          collaboratorUserIds: getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId),
+        })
+      ) {
+        try {
+          await startDesignTaskTimer({
+            teamId: effectiveTeamId,
+            taskId: task.id,
+            userId: userId as string,
+            changeRequestId: pickNewestChangeRequestId(liveMetadata ?? task.metadata),
+          });
+          await loadTimerSummary(task.id);
+        } catch (timerError) {
+          const message = getErrorMessage(timerError, "");
+          if (!/вже запущено/i.test(message)) {
+            toast.error("Статус змінено, але таймер не запустився", { description: message });
+          }
+        }
       }
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
@@ -6544,7 +6582,7 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       if (previousAssignee !== nextAssigneeUserId) {
-        await handlePauseTimer({ silent: true });
+        await handlePauseTimer({ silent: true, allUsers: true });
       }
 
       const actorLabel = userId ? getMemberLabel(userId) : "System";
@@ -6882,7 +6920,7 @@ export default function DesignTaskPage() {
       if (updateError) throw updateError;
 
       if (previousAssignee && previousAssignee !== userId) {
-        await handlePauseTimer({ silent: true });
+        await handlePauseTimer({ silent: true, allUsers: true });
       }
 
       const actorLabel = getMemberLabel(userId);

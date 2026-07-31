@@ -341,23 +341,65 @@ export async function getDesignerTimerTaskOverview(params: {
   }).slice(0, limit);
 }
 
+/**
+ * Запускає таймер задачі.
+ *
+ * Повертає `pausedOtherTaskId`, якщо довелося зупинити таймер цієї ж людини на
+ * ІНШІЙ задачі: раніше дві сесії могли йти одночасно, і час рахувався двічі
+ * (у даних знайшлося 7 таких перетинів у 3 людей). Людині про це треба сказати,
+ * тому id повертаємо, а не глушимо мовчки.
+ */
 export async function startDesignTaskTimer(params: {
   teamId: string;
   taskId: string;
   userId: string;
   changeRequestId?: string | null;
-}) {
+}): Promise<{ pausedOtherTaskId: string | null }> {
+  // Свій же таймер на ЦІЙ задачі — просто нічого не робимо.
   const { data: activeRows, error: activeError } = await supabase
     .from("design_task_timer_sessions")
     .select("id")
     .eq("team_id", params.teamId)
     .eq("design_task_id", params.taskId)
+    .eq("user_id", params.userId)
     .is("paused_at", null)
     .limit(1);
   const activeRow = ((activeRows ?? []) as Array<{ id?: string | null }>)[0] ?? null;
   if (activeError) throw activeError;
   if (activeRow) {
     throw new Error("Таймер вже запущено.");
+  }
+
+  // Одна людина — один таймер, але задачу можуть вести двоє одночасно.
+  //
+  // Раніше перевірка стояла на ЗАДАЧУ без огляду на людину: поки таймер тримав
+  // один дизайнер, другий не міг запустити свій. Спільні задачі в нас є (16 із
+  // них мають співвиконавців), тож робота другого просто не записувалась —
+  // дірка в даних, гірша за завищену суму. Аналітика й так рахує за user_id,
+  // а підсумок задачі підписаний «Витрачено», тобто людино-години.
+  //
+  // Що лишається під забороною — власна друга сесія: її закриваємо нижче.
+  let pausedOtherTaskId: string | null = null;
+  const { data: otherRows, error: otherError } = await supabase
+    .from("design_task_timer_sessions")
+    .select("id,design_task_id")
+    .eq("team_id", params.teamId)
+    .eq("user_id", params.userId)
+    .is("paused_at", null)
+    .neq("design_task_id", params.taskId)
+    .order("started_at", { ascending: false })
+    .limit(5);
+  if (otherError) throw otherError;
+
+  for (const row of ((otherRows ?? []) as Array<{ id?: string | null; design_task_id?: string | null }>)) {
+    if (!row.id) continue;
+    const { error: pauseError } = await supabase
+      .from("design_task_timer_sessions")
+      .update({ paused_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .is("paused_at", null);
+    if (pauseError) throw pauseError;
+    if (!pausedOtherTaskId && row.design_task_id) pausedOtherTaskId = row.design_task_id;
   }
 
   const insertPayload: Record<string, unknown> = {
@@ -376,30 +418,47 @@ export async function startDesignTaskTimer(params: {
   const { error } = await supabase.from("design_task_timer_sessions").insert(insertPayload as never);
   if (error) throw error;
   dispatchTimerUpdated({ teamId: params.teamId, taskId: params.taskId, userId: params.userId });
+  return { pausedOtherTaskId };
 }
 
+/**
+ * Зупиняє таймер задачі.
+ *
+ * `userId` ОБОВ'ЯЗКОВИЙ для ручної паузи: відколи задачу можуть вести двоє
+ * одночасно, пауза без огляду на людину зупиняла б чужий таймер — раніше
+ * бралася просто найновіша активна сесія на задачі.
+ *
+ * Без `userId` зупиняємо ВСІ активні сесії задачі. Це потрібно рівно там, де
+ * задача виходить зі стану «В роботі» (зміна статусу, зміна виконавця): тоді
+ * не має рахувати час ніхто, незалежно від того, хто натиснув.
+ */
 export async function pauseDesignTaskTimer(params: {
   teamId: string;
   taskId: string;
+  userId?: string | null;
 }) {
-  const { data: activeRows, error: activeError } = await supabase
+  let query = supabase
     .from("design_task_timer_sessions")
-    .select("id,paused_at")
+    .select("id")
     .eq("team_id", params.teamId)
     .eq("design_task_id", params.taskId)
-    .is("paused_at", null)
-    .order("started_at", { ascending: false })
-    .limit(1);
-  const activeRow = ((activeRows ?? []) as Array<{ id?: string | null; paused_at?: string | null }>)[0] ?? null;
+    .is("paused_at", null);
+  if (params.userId) query = query.eq("user_id", params.userId);
+
+  const { data: activeRows, error: activeError } = await query.order("started_at", { ascending: false });
   if (activeError) throw activeError;
-  if (!activeRow?.id) return false;
+
+  const ids = ((activeRows ?? []) as Array<{ id?: string | null }>)
+    .map((row) => row.id)
+    .filter((id): id is string => !!id);
+  if (ids.length === 0) return false;
 
   const { error: updateError } = await supabase
     .from("design_task_timer_sessions")
     .update({ paused_at: new Date().toISOString() })
-    .eq("id", activeRow.id)
+    .in("id", ids)
     .is("paused_at", null);
   if (updateError) throw updateError;
-  dispatchTimerUpdated({ teamId: params.teamId, taskId: params.taskId });
+  dispatchTimerUpdated({ teamId: params.teamId, taskId: params.taskId, userId: params.userId ?? undefined });
   return true;
 }
