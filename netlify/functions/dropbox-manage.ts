@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { dropboxService } from "./_lib/dropbox.service";
+import { collectDropboxHealth } from "./_lib/dropboxHealth";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -80,6 +81,36 @@ export const handler = async (event: HttpEvent) => {
   const action = payload.action?.trim() || "inspect";
 
   try {
+    /**
+     * Стан зв'язку CRM ↔ Dropbox для картки в Observability.
+     *
+     * Лише власнику, на відміну від решти дій: у звіті перелічені назви всіх
+     * замовників і лідів разом із тим, у кого тека загубилась. Решта дій цієї
+     * функції працюють зі своїм клієнтом і такого зрізу не дають.
+     *
+     * Рахуємо службовим ключем: перевірка має бачити ВСІ картки, інакше
+     * «прив'язок без теки» буде рівно стільки, скільки бачить конкретний
+     * користувач, і звіт брехатиме.
+     */
+    if (action === "health") {
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceKey) return jsonResponse(500, { error: "Missing SUPABASE_SERVICE_ROLE_KEY" });
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+      const { data: membership } = await admin
+        .schema("tosho")
+        .from("memberships_view")
+        .select("access_role")
+        .eq("user_id", userData.user.id)
+        .maybeSingle();
+      if ((membership?.access_role ?? "").trim().toLowerCase() !== "owner") {
+        return jsonResponse(403, { error: "Forbidden" });
+      }
+
+      const health = await collectDropboxHealth(admin as never);
+      return jsonResponse(200, { ok: true, action, health });
+    }
+
     if (action === "create-client") {
       const clientName = payload.clientName?.trim();
       if (!clientName) return jsonResponse(400, { error: "clientName is required" });

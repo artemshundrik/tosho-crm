@@ -283,6 +283,29 @@ for (const entry of await dropbox.listFolder(CLIENTS_ROOT)) {
 }
 log(`Наявних тек замовників: ${existingClientFolders.size}`);
 
+/**
+ * Тека, вже прив'язана до картки — за id замовника чи ліда.
+ *
+ * ДЖЕРЕЛО ПРАВДИ саме цей шлях, а не назва із задачі. Назва в metadata — це
+ * знімок на момент створення задачі: перейменували клієнта в CRM, і збіг за
+ * назвою більше не спрацьовує. Так «LG (Limagrain)» отримав три теки — «LG»,
+ * «LG (Limagrain)» і «Лімагрейн Україна», — бо кожна доливка бачила чергову
+ * назву як нового клієнта.
+ */
+const folderByPartyId = new Map();
+for (const [table, nameCol] of [["customers", "name"], ["leads", "company_name"]]) {
+  const { data, error: partyError } = await supabase
+    .schema("tosho")
+    .from(table)
+    .select(`id,${nameCol},dropbox_client_path`);
+  if (partyError) throw new Error(`${table}: ${partyError.message}`);
+  for (const row of data ?? []) {
+    const segment = (row.dropbox_client_path ?? "").split("/").filter(Boolean).pop();
+    if (segment) folderByPartyId.set(row.id, segment);
+  }
+}
+log(`Карток із прив'язаною текою: ${folderByPartyId.size}`);
+
 const { data: rows, error } = await supabase
   .from("activity_log")
   .select("id,team_id,title,metadata,created_at")
@@ -318,9 +341,15 @@ for (const [index, task] of tasks.slice(0, LIMIT === Infinity ? tasks.length : L
   const customerName = (meta.customer_name ?? "").trim();
 
   const desiredClientSegment = customerName ? sanitizeSegment(customerName, NO_CUSTOMER_FOLDER) : NO_CUSTOMER_FOLDER;
-  // Точний збіг після нормалізації — беремо наявну теку. Схожі назви НЕ вгадуємо:
-  // пів бази — агрокомпанії, і вгадування поклало б файли не тому клієнту.
-  const clientSegment = existingClientFolders.get(normalizeForMatch(desiredClientSegment)) ?? desiredClientSegment;
+  // Порядок важливий:
+  // 1) тека, прив'язана до картки — переживає будь-яке перейменування клієнта;
+  // 2) точний збіг за назвою після нормалізації;
+  // 3) нова тека.
+  // Схожі назви НЕ вгадуємо: пів бази — агрокомпанії, і вгадування поклало б
+  // файли не тому клієнту.
+  const linkedSegment = folderByPartyId.get(meta.customer_id) ?? folderByPartyId.get(meta.lead_id);
+  const clientSegment =
+    linkedSegment ?? existingClientFolders.get(normalizeForMatch(desiredClientSegment)) ?? desiredClientSegment;
   const orderSegment = sanitizeSegment(task.title || taskNumber, taskNumber || "Замовлення");
   const clientPath = `${CLIENTS_ROOT}/${clientSegment}`;
   const orderPath = `${clientPath}/Замовлення/${orderSegment}`;

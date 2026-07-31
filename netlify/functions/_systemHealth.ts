@@ -16,6 +16,7 @@ import {
   worstHealthTone,
   type HealthTone,
 } from "../../src/lib/systemHealthThresholds";
+import { collectDropboxHealth, hasDropboxProblems } from "./_lib/dropboxHealth";
 
 // Сигнали здоров'я системи — ЄДИНЕ джерело для ранкового тех-дайджесту і для
 // питань у боті («що не працює?»).
@@ -40,7 +41,8 @@ export type SignalCode =
   | "cron_ok"
   | "ai_cost"
   | "attachments"
-  | "audit_trigger";
+  | "audit_trigger"
+  | "dropbox";
 
 export type Signal = { tone: Tone; text: string; code?: SignalCode };
 
@@ -331,5 +333,36 @@ export async function collectSystemSignals(
   // 7. Цілісність даних.
   signals.push(...dataIntegritySignals(metrics));
 
+  // 8. Зв'язок CRM ↔ Dropbox.
+  signals.push(await dropboxSignal(admin));
+
   return signals;
+}
+
+/**
+ * Одна річ, яку тут перевіряємо: чи не розірвався зв'язок карток CRM із теками.
+ * Прив'язка в нікуди або дві теки на одного клієнта означають, що файли тихо
+ * розповзаються по різних місцях, і помічають це зазвичай через півроку.
+ *
+ * Статистику по задачах свідомо не рахуємо: вона тягне metadata всіх дизайн-
+ * задач, а сигнали збираються щогодини. Повні числа — у команді /dropbox.
+ *
+ * Dropbox — зовнішній сервіс, і його недоступність не привід валити весь звіт
+ * про стан системи. Тому будь-яка помилка тут гаситься в сірий сигнал.
+ */
+async function dropboxSignal(admin: SupabaseClient): Promise<Signal> {
+  try {
+    const health = await collectDropboxHealth(admin as never, { includeTaskStats: false });
+    const linked = health.linkedCustomers + health.linkedLeads;
+    if (!hasDropboxProblems(health)) {
+      return { tone: "good", code: "dropbox", text: `Dropbox: ${health.folders} тек, ${linked} прив'язок — зв'язок цілий` };
+    }
+    const parts: string[] = [];
+    if (health.brokenLinks.length > 0) parts.push(`${health.brokenLinks.length} прив'язок веде в нікуди`);
+    if (health.duplicateFolders.length > 0) parts.push(`${health.duplicateFolders.length} дублів тек`);
+    return { tone: "warning", code: "dropbox", text: `Dropbox: ${parts.join(", ")}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "невідома помилка";
+    return { tone: "neutral", code: "dropbox", text: `Dropbox: стан недоступний (${message})` };
+  }
 }

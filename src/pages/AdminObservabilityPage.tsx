@@ -16,6 +16,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
+import { DropboxHealthCard } from "@/features/observability/DropboxHealthCard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSignedAttachmentUrl, removeAttachmentWithVariants } from "@/lib/attachmentPreview";
@@ -1173,6 +1174,11 @@ export default function AdminObservabilityPage() {
                 operationalPriorityRows={operationalPriorityRows}
               />
             </Suspense>
+
+            {/* Dropbox читаємо з живого API, а не зі снапшота, тому монтуємо лише
+                на «Огляді» — інакше кожен вхід на будь-яку вкладку смикав би
+                зовнішній сервіс. */}
+            {activeTab === "overview" ? <DropboxHealthCard /> : null}
 
             <Suspense
               fallback={

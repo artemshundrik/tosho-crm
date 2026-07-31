@@ -55,6 +55,18 @@ export type DropboxHealth = {
   /** Затверджені задачі, де менеджер не відмітив жодного файлу. */
   approvedWithoutMarkedFiles: number;
   approvedTotal: number;
+  /** Чи рахували статистику по задачах — див. `includeTaskStats`. */
+  taskStatsIncluded: boolean;
+};
+
+export type DropboxHealthOptions = {
+  /**
+   * Статистика по задачах вимагає прочитати metadata всіх дизайн-задач — це
+   * кілька мегабайтів. Для звіту на вимогу це нормально, а для щогодинної
+   * перевірки — марна витрата: числа там міняються раз на день, не раз на
+   * годину. Гарячі шляхи вимикають її і рахують лише структуру тек.
+   */
+  includeTaskStats?: boolean;
 };
 
 type SupabaseLike = {
@@ -70,7 +82,11 @@ type SupabaseLike = {
   };
 };
 
-export async function collectDropboxHealth(admin: SupabaseLike): Promise<DropboxHealth> {
+export async function collectDropboxHealth(
+  admin: SupabaseLike,
+  options: DropboxHealthOptions = {}
+): Promise<DropboxHealth> {
+  const includeTaskStats = options.includeTaskStats ?? true;
   const listing = await dropboxService.listFolder(CLIENTS_ROOT);
   const folderNames = listing.entries
     .filter((entry) => entry[".tag"] === "folder" && typeof entry.name === "string")
@@ -142,17 +158,12 @@ export async function collectDropboxHealth(admin: SupabaseLike): Promise<Dropbox
     .filter(([, group]) => group.length > 1)
     .map(([, group]) => group);
 
-  const { data: taskRows, error: tasksError } = await admin
-    .from("activity_log")
-    .select("metadata")
-    .eq("action", "design_task");
-  if (tasksError) throw new Error(`activity_log: ${tasksError.message}`);
-
   let approvedTotal = 0;
   let approvedNotInDropbox = 0;
   let approvedWithoutMarkedFiles = 0;
 
-  for (const row of (taskRows ?? []) as Array<{ metadata?: Record<string, unknown> | null }>) {
+  const taskRows = includeTaskStats ? await loadDesignTaskMetadata(admin) : [];
+  for (const row of taskRows) {
     const meta = row.metadata ?? {};
     if (meta.status !== "approved") continue;
     const files = Array.isArray(meta.design_output_files) ? meta.design_output_files : [];
@@ -161,17 +172,7 @@ export async function collectDropboxHealth(admin: SupabaseLike): Promise<Dropbox
     approvedTotal += 1;
     if (!meta.dropbox_last_exported_at) approvedNotInDropbox += 1;
 
-    const marked =
-      (Array.isArray(meta.selected_visual_output_file_ids) ? meta.selected_visual_output_file_ids.length : 0) +
-      (Array.isArray(meta.selected_layout_output_file_ids) ? meta.selected_layout_output_file_ids.length : 0) +
-      (Array.isArray(meta.selected_design_output_file_ids) ? meta.selected_design_output_file_ids.length : 0);
-    // ВАЖЛИВО: перевіряємо ЗНАЧЕННЯ, а не наявність ключа. Ключ
-    // selected_design_output_file_id існує в 79 задачах зі значенням null —
-    // перша версія цієї перевірки рахувала їх як відмічені й давала 51% замість
-    // справжніх 18%.
-    const legacySingle =
-      typeof meta.selected_design_output_file_id === "string" && meta.selected_design_output_file_id.trim();
-    if (marked === 0 && !legacySingle) approvedWithoutMarkedFiles += 1;
+    if (!hasMarkedFiles(meta)) approvedWithoutMarkedFiles += 1;
   }
 
   return {
@@ -185,19 +186,50 @@ export async function collectDropboxHealth(admin: SupabaseLike): Promise<Dropbox
     approvedNotInDropbox,
     approvedWithoutMarkedFiles,
     approvedTotal,
+    taskStatsIncluded: includeTaskStats,
   };
 }
 
 /**
- * Червоне — те, що ламає зв'язок і не розсмокчеться саме.
- * Решта (теки без власника, розбіжність назв) — жовте: неприємно, але працює.
+ * Чи відмітив менеджер хоч один затверджений файл у задачі.
+ *
+ * Перевіряємо ЗНАЧЕННЯ, а не наявність ключа. Ключ
+ * `selected_design_output_file_id` існує в 79 задачах зі значенням null —
+ * перша версія рахувала їх як відмічені й давала 51% замість справжніх 18%.
+ * Помилка втричі занизила масштаб проблеми, тому перевірка винесена окремо
+ * й покрита тестом.
+ */
+export function hasMarkedFiles(meta: Record<string, unknown>): boolean {
+  const listed =
+    (Array.isArray(meta.selected_visual_output_file_ids) ? meta.selected_visual_output_file_ids.length : 0) +
+    (Array.isArray(meta.selected_layout_output_file_ids) ? meta.selected_layout_output_file_ids.length : 0) +
+    (Array.isArray(meta.selected_design_output_file_ids) ? meta.selected_design_output_file_ids.length : 0);
+  if (listed > 0) return true;
+  return typeof meta.selected_design_output_file_id === "string" && meta.selected_design_output_file_id.trim() !== "";
+}
+
+async function loadDesignTaskMetadata(
+  admin: SupabaseLike
+): Promise<Array<{ metadata?: Record<string, unknown> | null }>> {
+  const { data, error } = await admin.from("activity_log").select("metadata").eq("action", "design_task");
+  if (error) throw new Error(`activity_log: ${error.message}`);
+  return (data ?? []) as Array<{ metadata?: Record<string, unknown> | null }>;
+}
+
+/**
+ * Червоне — лише те, що ЗЛАМАНЕ: прив'язка веде в нікуди або на одного клієнта
+ * завелося дві теки. Таке саме не розсмокчеться і мовчки розводить файли по
+ * різних місцях.
+ *
+ * «Затверджені поза Dropbox» сюди НЕ входить, хоч і виглядає тривожно.
+ * Перенесення поки ручне, тож щойно затверджена задача законно висить без
+ * копії, доки менеджер не натисне кнопку. Якби це світило червоним, сигнал
+ * горів би завжди — і його б перестали читати. Коли зробимо автоперенесення
+ * (фаза 2), ненульове значення стане справжньою ознакою збою, і тоді його сюди
+ * треба додати.
  */
 export function hasDropboxProblems(health: DropboxHealth): boolean {
-  return (
-    health.brokenLinks.length > 0 ||
-    health.duplicateFolders.length > 0 ||
-    health.approvedNotInDropbox > 0
-  );
+  return health.brokenLinks.length > 0 || health.duplicateFolders.length > 0;
 }
 
 export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
@@ -220,11 +252,11 @@ export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
     for (const group of health.duplicateFolders.slice(0, 5)) lines.push(`   ${group.join(" ↔ ")}`);
   }
 
-  if (health.approvedNotInDropbox > 0) {
-    lines.push(`❗️ Затверджених задач поза Dropbox: <b>${health.approvedNotInDropbox}</b>`);
-  }
+  if (!hasDropboxProblems(health)) lines.push("✅ Зв'язок цілий");
 
-  if (!hasDropboxProblems(health)) lines.push("✅ Проблем немає");
+  if (health.taskStatsIncluded && health.approvedNotInDropbox > 0) {
+    lines.push(`Затверджених задач ще не перенесено: ${health.approvedNotInDropbox}`);
+  }
 
   lines.push("");
   if (health.orphanFolders.length > 0) {
@@ -238,9 +270,11 @@ export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
     }
   }
 
-  const marked = health.approvedTotal - health.approvedWithoutMarkedFiles;
-  const percent = health.approvedTotal > 0 ? Math.round((marked / health.approvedTotal) * 100) : 0;
-  lines.push(`Затверджено з відміткою файлів: ${marked} з ${health.approvedTotal} (${percent}%)`);
+  if (health.taskStatsIncluded) {
+    const marked = health.approvedTotal - health.approvedWithoutMarkedFiles;
+    const percent = health.approvedTotal > 0 ? Math.round((marked / health.approvedTotal) * 100) : 0;
+    lines.push(`Затверджено з відміткою файлів: ${marked} з ${health.approvedTotal} (${percent}%)`);
+  }
 
   return lines.join("\n");
 }
