@@ -104,6 +104,31 @@ export const handler = async (event: HttpEvent) => {
       });
     }
 
+    // Посилання на теку «Бренд» замовника — матеріали ВІД клієнта (брендбук,
+    // лого, шрифти). Тека створюється разом із клієнтською, але у старих
+    // замовників її могло не бути, тож перед видачею посилання переконуємось,
+    // що вона існує: createFolder ідемпотентний.
+    if (action === "brand-link") {
+      const clientPath = payload.clientPath?.trim();
+      const clientName = payload.clientName?.trim();
+      if (!clientPath && !clientName) {
+        return jsonResponse(400, { error: "clientPath or clientName is required" });
+      }
+
+      const basePath = clientPath || (await dropboxService.createClientFolder(clientName as string)).clientPath;
+      const brandPath = dropboxService.joinDropboxPath(basePath, "Бренд");
+      await dropboxService.createFolder(brandPath);
+      const brandSharedLink = await dropboxService.getOrCreateSharedLink(brandPath);
+
+      return jsonResponse(200, {
+        ok: true,
+        action,
+        clientPath: basePath,
+        brandPath,
+        brandSharedUrl: brandSharedLink.url,
+      });
+    }
+
     if (action === "create-project") {
       const clientPath = payload.clientPath?.trim();
       const projectName = payload.projectName?.trim();

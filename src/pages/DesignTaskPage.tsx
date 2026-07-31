@@ -1400,6 +1400,11 @@ export default function DesignTaskPage() {
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
   const [dropboxClientPath, setDropboxClientPath] = useState<string | null>(null);
+  // Посилання на теку «Бренд» замовника — матеріали ВІД клієнта. Тримаємо
+  // збережений url, щоб кнопка була справжнім <a> (середній клік, «копіювати
+  // посилання»), а не async-обробником.
+  const [dropboxBrandUrl, setDropboxBrandUrl] = useState<string | null>(null);
+  const [brandLinkBusy, setBrandLinkBusy] = useState(false);
   const [dropboxFolderDialogOpen, setDropboxFolderDialogOpen] = useState(false);
   const [dropboxFolderDraft, setDropboxFolderDraft] = useState("");
   const [dropboxFolderError, setDropboxFolderError] = useState<string | null>(null);
@@ -2409,12 +2414,12 @@ export default function DesignTaskPage() {
         const { data, error } = await supabase
           .schema("tosho")
           .from("customers")
-          .select("dropbox_client_path")
+          .select("dropbox_client_path,dropbox_brand_shared_url")
           .eq("id", task.customerId)
           .maybeSingle();
         if (error) {
           const message = error.message ?? "";
-          if (/column/i.test(message) && /dropbox_client_path/i.test(message)) {
+          if (/column/i.test(message) && /dropbox_(client_path|brand_shared_url)/i.test(message)) {
             if (active) setDropboxClientPath(null);
             return;
           }
@@ -2426,6 +2431,8 @@ export default function DesignTaskPage() {
             ? (data as { dropbox_client_path: string }).dropbox_client_path.trim()
             : "";
         setDropboxClientPath(nextPath || metadataPath || null);
+        const brandUrl = (data as { dropbox_brand_shared_url?: string | null } | null)?.dropbox_brand_shared_url;
+        setDropboxBrandUrl(typeof brandUrl === "string" && brandUrl.trim() ? brandUrl.trim() : null);
       } catch (loadError) {
         console.warn("Failed to load Dropbox client path", loadError);
         if (active) setDropboxClientPath(metadataPath || null);
@@ -7985,6 +7992,76 @@ export default function DesignTaskPage() {
     setDropboxFolderDialogOpen(true);
   }, [dropboxDisplayedFolderName]);
 
+  /**
+   * Відкриває теку «Бренд» замовника — матеріали ВІД клієнта (брендбук, лого,
+   * шрифти). Якщо посилання ще немає, бекенд створює теку й видає його, і ми
+   * зберігаємо його на замовнику, щоб далі це був звичайний <a>.
+   *
+   * Вікно відкриваємо ДО запиту: браузер блокує window.open, викликаний після
+   * await, бо це вже не реакція на клік.
+   */
+  const openBrandFolder = useCallback(async () => {
+    if (!task) return;
+    if (dropboxBrandUrl) {
+      window.open(dropboxBrandUrl, "_blank", "noopener");
+      return;
+    }
+    const customerName = (task.customerName ?? "").trim();
+    if (!dropboxClientPath && !customerName) {
+      toast.error("Не вдалося визначити замовника для теки матеріалів.");
+      return;
+    }
+
+    const pending = window.open("", "_blank", "noopener");
+    setBrandLinkBusy(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/.netlify/functions/dropbox-manage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: "brand-link",
+          clientPath: dropboxClientPath ?? undefined,
+          clientName: dropboxClientPath ? undefined : customerName,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; brandSharedUrl?: string | null; clientPath?: string | null; error?: string | null }
+        | null;
+      if (!response.ok || !payload?.ok || !payload.brandSharedUrl) {
+        throw new Error(payload?.error || "Не вдалося відкрити теку матеріалів.");
+      }
+
+      const nextUrl = payload.brandSharedUrl.trim();
+      setDropboxBrandUrl(nextUrl);
+      if (payload.clientPath) setDropboxClientPath(payload.clientPath.trim());
+
+      if (task.customerId) {
+        const { error: saveError } = await supabase
+          .schema("tosho")
+          .from("customers")
+          .update({ dropbox_brand_shared_url: nextUrl })
+          .eq("id", task.customerId);
+        // Не зберегли посилання — не привід не відкрити теку: наступного разу
+        // просто буде ще один запит.
+        if (saveError) console.warn("Failed to store brand folder link", saveError);
+      }
+
+      if (pending) pending.location.href = nextUrl;
+      else window.open(nextUrl, "_blank", "noopener");
+    } catch (error) {
+      pending?.close();
+      toast.error(getErrorMessage(error, "Не вдалося відкрити теку матеріалів."));
+    } finally {
+      setBrandLinkBusy(false);
+    }
+  }, [dropboxBrandUrl, dropboxClientPath, task]);
+
+
   const createDropboxClientFolder = useCallback(
     async (options?: { openExportDialog?: boolean }) => {
       const currentTask = task;
@@ -11282,6 +11359,37 @@ export default function DesignTaskPage() {
 
             <Card className="overflow-hidden border border-border/50 bg-card/40 shadow-none">
               <CardContent className="p-0">
+                {/* Матеріали ВІД замовника живуть у теці «Бренд», а не у вкладеннях
+                    задачі: брендбук належить клієнту, а не одній роботі, і не має
+                    роздувати наше сховище. Досі теки були порожні у всіх 12
+                    замовників — просто тому, що дороги до них з CRM не існувало. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border/50 p-4">
+                  <DropboxIcon className="h-8 w-8 shrink-0 opacity-80" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-foreground">Матеріали замовника</div>
+                    <div
+                      className="truncate text-xs text-muted-foreground"
+                      title={`Tosho Team Folder/Замовники/${dropboxClientLabel}/Бренд`}
+                    >
+                      Брендбук, лого, шрифти — {`Замовники/${dropboxClientLabel}/Бренд`}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={brandLinkBusy}
+                    onClick={() => void openBrandFolder()}
+                  >
+                    {brandLinkBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4" />
+                    )}
+                    {dropboxBrandUrl ? "Відкрити теку" : "Створити й відкрити"}
+                  </Button>
+                </div>
+
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
                   <DropboxIcon className="h-8 w-8 shrink-0" />
                   <div className="min-w-0 flex-1">

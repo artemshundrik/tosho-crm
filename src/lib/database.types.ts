@@ -1125,6 +1125,7 @@ export type Database = {
           customer_type: Database["tosho"]["Enums"]["customer_type"]
           delivery_points: Json
           dropbox_brand_path: string | null
+          dropbox_brand_shared_url: string | null
           dropbox_client_path: string | null
           dropbox_shared_url: string | null
           email: string | null
@@ -1168,6 +1169,7 @@ export type Database = {
           customer_type?: Database["tosho"]["Enums"]["customer_type"]
           delivery_points?: Json
           dropbox_brand_path?: string | null
+          dropbox_brand_shared_url?: string | null
           dropbox_client_path?: string | null
           dropbox_shared_url?: string | null
           email?: string | null
@@ -1211,6 +1213,7 @@ export type Database = {
           customer_type?: Database["tosho"]["Enums"]["customer_type"]
           delivery_points?: Json
           dropbox_brand_path?: string | null
+          dropbox_brand_shared_url?: string | null
           dropbox_client_path?: string | null
           dropbox_shared_url?: string | null
           email?: string | null

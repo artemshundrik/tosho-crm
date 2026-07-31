@@ -864,6 +864,52 @@ function CustomersPage({ teamId }: { teamId: string }) {
     return payload;
   }, []);
 
+  /**
+   * Тека «Бренд» замовника — матеріали ВІД клієнта (брендбук, лого, шрифти).
+   * Окремо від теки клієнта: саме туди їх треба класти, а не у вкладення задач.
+   * Бекенд ідемпотентно створює теку й видає посилання.
+   */
+  const openCustomerBrandFolder = useCallback(async (customerId: string, clientName: string) => {
+    const normalizedClientName = clientName.trim();
+    if (!normalizedClientName || typeof window === "undefined") return;
+
+    // Вікно відкриваємо ДО запиту: після await браузер вважає це не кліком.
+    const pending = window.open("", "_blank", "noopener");
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch("/.netlify/functions/dropbox-manage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          action: "brand-link",
+          clientPath: customerDropboxLinks[customerId]?.clientPath || undefined,
+          clientName: normalizedClientName,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; brandSharedUrl?: string | null; error?: string | null }
+        | null;
+      if (!response.ok || !payload?.ok || !payload.brandSharedUrl) {
+        throw new Error(payload?.error || "Не вдалося відкрити теку матеріалів.");
+      }
+      const url = payload.brandSharedUrl.trim();
+      await supabase
+        .schema("tosho")
+        .from("customers")
+        .update({ dropbox_brand_shared_url: url })
+        .eq("id", customerId);
+      if (pending) pending.location.href = url;
+      else window.open(url, "_blank", "noopener");
+    } catch (error) {
+      pending?.close();
+      throw error;
+    }
+  }, [customerDropboxLinks]);
+
   const openCustomerDropboxFolder = useCallback(async (customerId: string, clientName: string) => {
     const normalizedClientName = clientName.trim();
     if (!normalizedClientName || typeof window === "undefined") return;
@@ -3423,6 +3469,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
                                       <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "open", () => openCustomerDropboxFolder(row.id, row.name ?? row.legal_name ?? ""))}>
                                         <ExternalLink className="mr-2 h-4 w-4" />
                                         Відкрити папку Dropbox
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "open", () => openCustomerBrandFolder(row.id, row.name ?? row.legal_name ?? ""))}>
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Матеріали замовника (Бренд)
                                       </DropdownMenuItem>
                                       <DropdownMenuItem onClick={() => void runCustomerDropboxAction(row.id, "detach", () => detachCustomerDropboxFolder(row.id), "Папку Dropbox відв'язано")}>
                                         <Unlink className="mr-2 h-4 w-4" />
