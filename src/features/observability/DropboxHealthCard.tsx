@@ -31,6 +31,9 @@ type DropboxHealth = {
   approvedWithoutMarkedFiles: number;
   approvedTotal: number;
   taskStatsIncluded: boolean;
+  unsorted: Array<{ folder: string; files: number; bytes: number }>;
+  deadLinks: Array<{ name: string; kind: "customer" | "lead"; which: "folder" | "brand" }>;
+  linksChecked: number;
 };
 
 const TONE_CLASS: Record<HealthTone, string> = {
@@ -41,7 +44,9 @@ const TONE_CLASS: Record<HealthTone, string> = {
 };
 
 function toneOf(health: DropboxHealth): HealthTone {
-  if (health.brokenLinks.length > 0 || health.duplicateFolders.length > 0) return "danger";
+  if (health.brokenLinks.length > 0 || health.duplicateFolders.length > 0 || (health.deadLinks ?? []).length > 0) {
+    return "danger";
+  }
   if (health.orphanFolders.length > 0 || health.drifted.length > 0) return "warning";
   return "good";
 }
@@ -139,9 +144,13 @@ export function DropboxHealthCard() {
               hint={health.brokenLinks.length > 0 ? "теку видалили або перейменували" : "усі шляхи ведуть у теку"}
             />
             <Stat
-              label="Теки без власника"
-              value={String(health.orphanFolders.length)}
-              hint={health.orphanFolders.length > 0 ? "немає картки в CRM" : "усі теки мають картку"}
+              label="Кнопка веде в нікуди"
+              value={String((health.deadLinks ?? []).length)}
+              hint={
+                health.linksChecked
+                  ? `перевірено ${health.linksChecked} посилань — тека є, посилання мертве`
+                  : "посилання не перевірялись"
+              }
             />
           </div>
 
@@ -160,6 +169,19 @@ export function DropboxHealthCard() {
             </div>
           ) : null}
 
+          {(health.unsorted ?? []).some((pile) => pile.files > 0) ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(health.unsorted ?? []).filter((pile) => pile.files > 0).map((pile) => (
+                <Stat
+                  key={pile.folder}
+                  label={`Чекає на розбір · ${pile.folder}`}
+                  value={String(pile.files)}
+                  hint={`${Math.round(pile.bytes / 1024 / 1024)} МБ — теки без замовника, до яких треба повернутись`}
+                />
+              ))}
+            </div>
+          ) : null}
+
           {health.brokenLinks.length > 0 ? (
             <div className="mt-4 rounded-2xl border border-danger-soft-border bg-danger-soft p-4">
               <div className="text-sm font-semibold text-danger-foreground">Прив'язка веде в нікуди</div>
@@ -168,6 +190,22 @@ export function DropboxHealthCard() {
                   <li key={`${item.kind}:${item.path}`}>
                     {item.name}
                     {item.kind === "lead" ? " (лід)" : ""} — <span className="text-muted-foreground">{item.path}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {(health.deadLinks ?? []).length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-danger-soft-border bg-danger-soft p-4">
+              <div className="text-sm font-semibold text-danger-foreground">
+                Тека на місці, а посилання мертве — кнопка в картці не працює
+              </div>
+              <ul className="mt-2 space-y-1 text-sm text-foreground">
+                {health.deadLinks.map((item) => (
+                  <li key={`${item.kind}:${item.name}:${item.which}`}>
+                    {item.name}
+                    {item.which === "brand" ? " — тека «Бренд»" : ""}
                   </li>
                 ))}
               </ul>

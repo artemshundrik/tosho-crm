@@ -235,7 +235,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
 
     await sendTelegramChatAction(chatId, "typing");
     try {
-      const health = await collectDropboxHealth(adminClient as never);
+      const health = await collectDropboxHealth(adminClient as never, { verifyLinks: true });
       await sendTelegramMessage(chatId, formatDropboxHealthForTelegram(health));
     } catch (error) {
       const message = error instanceof Error ? error.message : "невідома помилка";

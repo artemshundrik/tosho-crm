@@ -107,7 +107,7 @@ export const handler = async (event: HttpEvent) => {
         return jsonResponse(403, { error: "Forbidden" });
       }
 
-      const health = await collectDropboxHealth(admin as never);
+      const health = await collectDropboxHealth(admin as never, { verifyLinks: true });
       return jsonResponse(200, { ok: true, action, health });
     }
 

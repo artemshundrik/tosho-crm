@@ -20,6 +20,9 @@ function health(overrides: Partial<DropboxHealth> = {}): DropboxHealth {
     approvedWithoutMarkedFiles: 0,
     approvedTotal: 238,
     taskStatsIncluded: true,
+    unsorted: [],
+    deadLinks: [],
+    linksChecked: 0,
     ...overrides,
   };
 }
@@ -78,6 +81,14 @@ describe("hasDropboxProblems", () => {
   it("бачить розірвану прив'язку", () => {
     expect(
       hasDropboxProblems(health({ brokenLinks: [{ name: "Belok.ua", path: "…/Belok.ua", kind: "customer" }] }))
+    ).toBe(true);
+  });
+
+  it("бачить мертве посилання при живій теці", () => {
+    // Тека на місці, шлях валідний — а кнопка в картці каже «об'єкт видалено».
+    // Саме цього перша версія перевірки не бачила взагалі.
+    expect(
+      hasDropboxProblems(health({ deadLinks: [{ name: "ToSho", kind: "customer", which: "folder" }] }))
     ).toBe(true);
   });
 

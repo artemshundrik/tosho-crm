@@ -44,6 +44,18 @@ export type DropboxHealth = {
   linkedLeads: number;
   /** Прив'язка є, а теки в Dropbox немає — хтось видалив або посунув її руками. */
   brokenLinks: Array<{ name: string; path: string; kind: "customer" | "lead" }>;
+  /**
+   * Тека на місці, а збережене shared-посилання Dropbox уже не знає.
+   *
+   * Окрема категорія, бо ламається окремо: посилання — це самостійний об'єкт.
+   * Видалили теку й створили заново з тією ж назвою — шлях знову валідний,
+   * а посилання мертве назавжди, і кнопка в картці каже «цей об'єкт видалено».
+   * Перша версія перевірки цього не питала взагалі: ми звіряли шлях і
+   * доповідали «прив'язано», хоча кнопка не працювала.
+   */
+  deadLinks: Array<{ name: string; kind: "customer" | "lead"; which: "folder" | "brand" }>;
+  /** Скільки посилань перевірено (0, якщо перевірка вимкнена). */
+  linksChecked: number;
   /** Тека є, власника в CRM немає. */
   orphanFolders: string[];
   /** Дві теки на одного клієнта після нормалізації назви. */
@@ -57,6 +69,15 @@ export type DropboxHealth = {
   approvedTotal: number;
   /** Чи рахували статистику по задачах — див. `includeTaskStats`. */
   taskStatsIncluded: boolean;
+  /**
+   * Службові купи «на потім»: `_Розібрати` і `_Без замовника`.
+   *
+   * Навмисно виведені в окреме поле. Вони не рахуються серед «тек без
+   * власника», бо це не помилка зв'язку, — але саме тому їх ніхто й не бачив:
+   * у «_Без замовника» тихо накопичилось 172 файли, і за весь час туди ніхто
+   * не повернувся. Число, яке нікому не показують, не розбирають ніколи.
+   */
+  unsorted: Array<{ folder: string; files: number; bytes: number }>;
 };
 
 export type DropboxHealthOptions = {
@@ -67,6 +88,12 @@ export type DropboxHealthOptions = {
    * годину. Гарячі шляхи вимикають її і рахують лише структуру тек.
    */
   includeTaskStats?: boolean;
+  /**
+   * Чи перевіряти, що збережені shared-посилання ще живі. Це близько 230
+   * запитів до Dropbox, тож для щогодинної перевірки задорого — вмикаємо там,
+   * де звіт відкривають руками.
+   */
+  verifyLinks?: boolean;
 };
 
 type SupabaseLike = {
@@ -105,27 +132,39 @@ export async function collectDropboxHealth(
   const { data: customerRows, error: customersError } = await admin
     .schema("tosho")
     .from("customers")
-    .select("name,dropbox_client_path");
+    .select("name,dropbox_client_path,dropbox_shared_url,dropbox_brand_shared_url");
   if (customersError) throw new Error(`customers: ${customersError.message}`);
 
   const { data: leadRows, error: leadsError } = await admin
     .schema("tosho")
     .from("leads")
-    .select("company_name,dropbox_client_path");
+    .select("company_name,dropbox_client_path,dropbox_shared_url,dropbox_brand_shared_url");
   if (leadsError) throw new Error(`leads: ${leadsError.message}`);
 
-  type Party = { name: string; path: string | null; kind: "customer" | "lead" };
+  type LinkRow = {
+    dropbox_client_path?: string | null;
+    dropbox_shared_url?: string | null;
+    dropbox_brand_shared_url?: string | null;
+  };
+  type Party = {
+    name: string;
+    path: string | null;
+    kind: "customer" | "lead";
+    folderUrl: string | null;
+    brandUrl: string | null;
+  };
+  const toParty = (name: string, row: LinkRow, kind: "customer" | "lead"): Party => ({
+    name: name.trim(),
+    path: (row.dropbox_client_path ?? "").trim() || null,
+    kind,
+    folderUrl: (row.dropbox_shared_url ?? "").trim() || null,
+    brandUrl: (row.dropbox_brand_shared_url ?? "").trim() || null,
+  });
   const parties: Party[] = [
-    ...((customerRows ?? []) as Array<{ name?: string | null; dropbox_client_path?: string | null }>).map((row) => ({
-      name: (row.name ?? "").trim(),
-      path: (row.dropbox_client_path ?? "").trim() || null,
-      kind: "customer" as const,
-    })),
-    ...((leadRows ?? []) as Array<{ company_name?: string | null; dropbox_client_path?: string | null }>).map((row) => ({
-      name: (row.company_name ?? "").trim(),
-      path: (row.dropbox_client_path ?? "").trim() || null,
-      kind: "lead" as const,
-    })),
+    ...((customerRows ?? []) as Array<LinkRow & { name?: string | null }>).map((row) =>
+      toParty(row.name ?? "", row, "customer")),
+    ...((leadRows ?? []) as Array<LinkRow & { company_name?: string | null }>).map((row) =>
+      toParty(row.company_name ?? "", row, "lead")),
   ].filter((party) => party.name);
 
   const linkedByNorm = new Set<string>();
@@ -175,6 +214,47 @@ export async function collectDropboxHealth(
     if (!hasMarkedFiles(meta)) approvedWithoutMarkedFiles += 1;
   }
 
+  // Живі посилання. Перевіряємо пачками: послідовно 230 запитів не вкладаються
+  // в ліміт функції, а всі разом Dropbox почне різати за частоту.
+  const deadLinks: DropboxHealth["deadLinks"] = [];
+  let linksChecked = 0;
+  if (options.verifyLinks) {
+    const targets: Array<{ party: Party; url: string; which: "folder" | "brand" }> = [];
+    for (const party of parties) {
+      if (party.folderUrl) targets.push({ party, url: party.folderUrl, which: "folder" });
+      if (party.brandUrl) targets.push({ party, url: party.brandUrl, which: "brand" });
+    }
+    const BATCH = 10;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      const batch = targets.slice(i, i + BATCH);
+      const alive = await Promise.all(batch.map((item) => dropboxService.isSharedLinkAlive(item.url)));
+      batch.forEach((item, index) => {
+        linksChecked += 1;
+        if (!alive[index]) deadLinks.push({ name: item.party.name, kind: item.party.kind, which: item.which });
+      });
+    }
+  }
+
+  // Купи «на потім» рахуємо лише в повному звіті: це два рекурсивні обходи,
+  // а числа там міняються раз на тиждень, не раз на годину.
+  const unsorted: DropboxHealth["unsorted"] = [];
+  if (includeTaskStats) {
+    for (const name of ["_Розібрати", "_Без замовника"]) {
+      if (!folderNames.includes(name)) continue;
+      try {
+        const listed = await dropboxService.listFolderRecursive(`${CLIENTS_ROOT}/${name}`);
+        const files = listed.entries.filter((entry) => entry[".tag"] === "file");
+        unsorted.push({
+          folder: name,
+          files: files.length,
+          bytes: files.reduce((sum, file) => sum + (typeof file.size === "number" ? file.size : 0), 0),
+        });
+      } catch {
+        // Недоступна службова тека не має валити весь звіт.
+      }
+    }
+  }
+
   return {
     folders: customerFolders.length,
     linkedCustomers,
@@ -187,6 +267,9 @@ export async function collectDropboxHealth(
     approvedWithoutMarkedFiles,
     approvedTotal,
     taskStatsIncluded: includeTaskStats,
+    unsorted,
+    deadLinks,
+    linksChecked,
   };
 }
 
@@ -229,7 +312,7 @@ async function loadDesignTaskMetadata(
  * треба додати.
  */
 export function hasDropboxProblems(health: DropboxHealth): boolean {
-  return health.brokenLinks.length > 0 || health.duplicateFolders.length > 0;
+  return health.brokenLinks.length > 0 || health.duplicateFolders.length > 0 || health.deadLinks.length > 0;
 }
 
 export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
@@ -245,6 +328,14 @@ export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
       lines.push(`   ${item.name}${item.kind === "lead" ? " (лід)" : ""}`);
     }
     if (health.brokenLinks.length > 5) lines.push(`   …ще ${health.brokenLinks.length - 5}`);
+  }
+
+  if (health.deadLinks.length > 0) {
+    lines.push(`❗️ <b>Кнопка веде в нікуди: ${health.deadLinks.length}</b>`);
+    for (const item of health.deadLinks.slice(0, 5)) {
+      lines.push(`   ${item.name}${item.which === "brand" ? " · Бренд" : ""}`);
+    }
+    if (health.deadLinks.length > 5) lines.push(`   …ще ${health.deadLinks.length - 5}`);
   }
 
   if (health.duplicateFolders.length > 0) {
@@ -268,6 +359,12 @@ export function formatDropboxHealthForTelegram(health: DropboxHealth): string {
     for (const item of health.drifted.slice(0, 5)) {
       lines.push(`   ${item.crmName} → теку названо «${item.folderName}»`);
     }
+  }
+
+  for (const pile of health.unsorted) {
+    if (pile.files === 0) continue;
+    const mb = Math.round(pile.bytes / 1024 / 1024);
+    lines.push(`Чекає на розбір у «${pile.folder}»: ${pile.files} файлів, ${mb} МБ`);
   }
 
   if (health.taskStatsIncluded) {

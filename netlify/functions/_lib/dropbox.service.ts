@@ -267,6 +267,35 @@ async function listFolder(dropboxPath: string) {
   });
 }
 
+/**
+ * Рекурсивний лістинг із пагінацією.
+ *
+ * `listFolder` вище навмисно неглибокий і без курсора — цього досить, щоб
+ * показати вміст однієї теки. Але для підрахунку («скільки лежить у
+ * «_Розібрати»») потрібне все дерево, а `list_folder` без
+ * `list_folder/continue` обрізає його МОВЧКИ на перших 2000 елементах.
+ */
+async function listFolderRecursive(dropboxPath: string) {
+  const normalizedPath = normalizeDropboxPath(dropboxPath);
+  const entries: DropboxListFolderEntry[] = [];
+  let result = await dropboxApiRequest<DropboxListFolderResult>("/files/list_folder", {
+    path: normalizedPath,
+    recursive: true,
+    limit: 2000,
+    include_deleted: false,
+    include_mounted_folders: true,
+    include_non_downloadable_files: true,
+  }, { usePathRoot: true });
+  entries.push(...(result.entries ?? []));
+  while (result.has_more && result.cursor) {
+    result = await dropboxApiRequest<DropboxListFolderResult>("/files/list_folder/continue", {
+      cursor: result.cursor,
+    }, { usePathRoot: true });
+    entries.push(...(result.entries ?? []));
+  }
+  return { entries };
+}
+
 async function listFolderBySharedLink(sharedUrl: string, path = "") {
   const trimmedUrl = sharedUrl.trim();
   if (!trimmedUrl) throw new Error("Dropbox shared URL is required");
@@ -375,6 +404,23 @@ async function getExistingSharedLink(dropboxPath: string) {
   return Array.isArray(result.links) ? result.links[0] ?? null : null;
 }
 
+/**
+ * Чи живе ще це shared-посилання.
+ *
+ * Посилання — самостійний об'єкт: тека може бути на місці, а посилання на неї
+ * померти. Так сталося з чотирма замовниками — теки існували, а кнопка в
+ * картці казала «цей об'єкт видалено», і жодна перевірка цього не бачила, бо
+ * всі вони звіряли шлях.
+ */
+async function isSharedLinkAlive(url: string) {
+  try {
+    await dropboxApiRequest<DropboxSharedLinkMetadata>("/sharing/get_shared_link_metadata", { url });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function getOrCreateSharedLink(dropboxPath: string) {
   const existing = await getExistingSharedLink(dropboxPath);
   if (existing) return existing;
@@ -413,10 +459,12 @@ export const dropboxService = {
   createClientFolder,
   createProjectFolder,
   listFolder,
+  listFolderRecursive,
   listFolderBySharedLink,
   uploadFile,
   deleteFile,
   createSharedLink,
+  isSharedLinkAlive,
   getOrCreateSharedLink,
   normalizeDropboxName,
   joinDropboxPath,
