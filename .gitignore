@@ -36,3 +36,8 @@ CLAUDE.local.md
 
 # one-off backfill backups (contain prod data)
 scripts/.backfill-quote-totals.backup.*.json
+
+# Робочі артефакти міграції Dropbox-інбоксу: журнал прогону, звіт звірки,
+# заповнена таблиця рішень. Це стан конкретного запуску, не код.
+dropbox-inbox-*.json
+inbox-plan.csv
