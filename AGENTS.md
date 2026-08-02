@@ -9,12 +9,35 @@ This repository has project-specific Codex guidance. Start here before broad exp
 3. For implementation and verification patterns, read [docs/CODEX_WORKFLOWS.md](/Users/artem/Projects/tosho-crm/docs/CODEX_WORKFLOWS.md).
 4. If the task touches RLS, storage buckets, Netlify functions, auth, privileged Supabase writes, secrets, or webhooks, read [docs/SECURITY.md](/Users/artem/Projects/tosho-crm/docs/SECURITY.md) and run its pre-merge checklist.
 
+## Deploy Rule — Never Push Unasked
+
+**`git push` costs real money. Committing does not.**
+
+Every push to `origin/main` triggers a Netlify production deploy billed at a flat ~15 credits,
+regardless of how many commits it carries or how long the build takes. The monthly budget is
+**≈40 deploys** — roughly one per day. Full policy and the measured numbers behind it:
+[docs/DEPLOY_POLICY.md](/Users/artem/Projects/tosho-crm/docs/DEPLOY_POLICY.md).
+
+- **Commit freely, locally.** Verify with `npx tsc --noEmit` + `npm run lint` before each commit. Free.
+- **Never push on your own initiative.** Not "to be safe", not "so it isn't forgotten", not after a
+  successful verification. Batching many commits into one push costs the same as pushing one.
+- **Push only when** (a) Artem explicitly says so in the current conversation — «пушимо», «викочуй»,
+  «деплой» — or (b) it is a hotfix for a broken production that is blocking people. Report (b) in the
+  same reply.
+- **Otherwise, end the turn with the batch report:** how many commits are staged for release and what
+  they are. Then wait. Do not push, do not argue for pushing.
+- Local review happens on `npm run dev`, never by deploying to prod "to take a look".
+
+Enforced in `.claude/settings.json`: a `PreToolUse` hook (`.claude/hooks/confirm-push.sh`) intercepts
+`git push` and forces a confirmation prompt, plus a `permissions.ask` rule. Do not re-add
+`Bash(git push *)` to any `allow` list — that disables the guard.
+
 ## Trust Order
 
 When sources disagree, use this order:
 
 1. `AGENTS.md`
-2. `docs/CODEX_PROJECT_GUIDE.md`, `docs/DB_MAP.md`, `docs/CODEX_WORKFLOWS.md`, `docs/SECURITY.md`
+2. `docs/CODEX_PROJECT_GUIDE.md`, `docs/DB_MAP.md`, `docs/CODEX_WORKFLOWS.md`, `docs/SECURITY.md`, `docs/DEPLOY_POLICY.md`
 3. current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
 4. tracked SQL scripts in `scripts/*.sql`
 5. operational or handoff docs such as `docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, `docs/DIRECTOR_ACCESS_HANDOFF.md`, `docs/HANDOFF_SIMPLE_TEMPLATE_UA.md`, `docs/ONEPASSWORD_FILL_CHECKLIST.md`
@@ -35,6 +58,7 @@ When sources disagree, use this order:
 - Be conservative around permissions, route/module access, quote workflow state, design-task metadata contracts, attachment deletion, and admin observability queries.
 - Treat performance as a required review dimension for every change. Reuse caches/directories before adding queries, avoid N+1 lookups or broad unbounded reads, and sanity-check whether the first render now does more work than before.
 - Treat backup/ops automation as a partially legacy zone. Verify actual tracked files and local machine state before relying on old doc snippets.
+- Finishing a task means committed + verified, never pushed. "Done" is a batch report, not a deploy — see the `Deploy Rule` above and [docs/DEPLOY_POLICY.md](/Users/artem/Projects/tosho-crm/docs/DEPLOY_POLICY.md).
 
 ## Task Workflows — Fix And Feature
 

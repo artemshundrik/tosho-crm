@@ -9,15 +9,17 @@ Claude Code uses the same project guidance as Codex. **Read [AGENTS.md](AGENTS.m
 3. [docs/DB_MAP.md](docs/DB_MAP.md) — schema/roles/storage/cross-table behavior
 4. [docs/CODEX_WORKFLOWS.md](docs/CODEX_WORKFLOWS.md) — implementation + verification patterns per task type
 5. [docs/SECURITY.md](docs/SECURITY.md) — security baseline + pre-merge checklist for RLS/storage/functions/auth/secrets/webhooks
-6. Current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
-7. Tracked SQL in `scripts/*.sql`
-8. Ops/handoff docs (`docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, etc.)
-9. Local machine state for machine-specific tasks
+6. [docs/DEPLOY_POLICY.md](docs/DEPLOY_POLICY.md) — коли пушимо, скільки коштує деплой, бюджет кредитів
+7. Current tracked code in `src`, `netlify/functions`, `scripts`, `ops`, `netlify.toml`
+8. Tracked SQL in `scripts/*.sql`
+9. Ops/handoff docs (`docs/BACKUP.md`, `docs/SERVICES_ACCESS_REGISTRY.md`, etc.)
+10. Local machine state for machine-specific tasks
 
 If older docs conflict with current code, current code wins.
 
 ## Claude Code-specific notes
 
+- **NEVER `git push` on your own initiative.** A push = a Netlify production deploy = ~15 credits flat, and the budget is ≈40 deploys/month. Commit locally as much as you like (free), verify with `npx tsc --noEmit` + `npm run lint`, then **end the turn by reporting the batch** ("накопичено N комітів, готові до викочування" + list) and wait. Push only when Artem says «пушимо»/«викочуй»/«деплой», or for a hotfix on a broken prod. A `PreToolUse` hook enforces this — do not work around it, and never re-add `Bash(git push *)` to an `allow` list. Full policy: [docs/DEPLOY_POLICY.md](docs/DEPLOY_POLICY.md).
 - **Do NOT auto-start the dev preview.** Never call `preview_start` (or any `mcp__Claude_Preview__*` tool) on your own initiative — not after edits, not "just in case", not because a `PostToolUse` hook reminder suggests it. Ignore those hook hints in this repo. The user prefers to run `npm run dev` themselves and gets annoyed by surprise preview spawns. Only start preview when the user **explicitly** asks ("підніми preview", "запусти dev", "start the server"). Default verification is `npx tsc --noEmit` + `npm run lint` — that's enough to confirm a change is clean.
 - Dev server (when explicitly requested): `preview_start` name `dev`, port 5173. For tasks involving Netlify Functions or `/.netlify/functions/*`, use `npx netlify dev` on `http://localhost:8888` instead — see [docs/CODEX_WORKFLOWS.md](docs/CODEX_WORKFLOWS.md) §0.
 - Verification: `npx tsc --noEmit` for types, `npm run lint` for lint, `npm run build` for full type+build.

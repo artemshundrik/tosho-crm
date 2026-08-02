@@ -2,6 +2,14 @@
 command = "npm run build"
 publish = "dist"
 
+# Пропустити білд, якщо пуш зачепив тільки те, що не потрапляє в зібраний сайт.
+# Exit 0 = пропустити, exit 1 = білдити. Кожен білд коштує ~15 кредитів — див. docs/DEPLOY_POLICY.md.
+# Немає кешованого коміта (перший білд) — білдимо, щоб не пропустити реальні зміни.
+ignore = '''
+[ -z "$CACHED_COMMIT_REF" ] && exit 1
+git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exclude)ops' ':(exclude)*.md' ':(exclude)scripts/*.sql'
+'''
+
 [build.environment]
 NODE_VERSION = "20"
 
