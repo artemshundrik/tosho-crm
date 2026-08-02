@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, Printer } from "lucide-react";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { countBusinessDaysInYear, QUOTA_ABSENCE_KINDS } from "@/lib/teamAbsenceCalendar";
+import { eachDateKey, isBusinessDay, QUOTA_ABSENCE_KINDS } from "@/lib/teamAbsenceCalendar";
 import { TEAM_ABSENCE_KIND_LABELS, type TeamAbsence } from "@/lib/teamAbsences";
-import type { AbsenceBalance } from "@/lib/teamAbsenceQuotas";
+import { fallbackBalance, type AbsenceBalance } from "@/lib/teamAbsenceQuotas";
 
 /**
  * Річний звіт по відсутностях — для бухгалтерії.
@@ -62,29 +62,46 @@ export function AbsenceYearReportDialog({
 
   const rows = useMemo<ReportRow[]>(() => {
     const approved = absences.filter((absence) => absence.status === "approved");
+    const yearFrom = `${year}-01-01`;
+    const yearTo = `${year}-12-31`;
+
+    /**
+     * УНІКАЛЬНІ робочі дні, а не сума по записах. Сума подвоювала б дні на
+     * перетинах, і звіт для бухгалтерії розходився б із залишком на картці
+     * людини — там (і в гарді квоти) рахунок теж по унікальних днях.
+     */
+    const countDistinct = (list: TeamAbsence[]) => {
+      const days = new Set<string>();
+      list.forEach((absence) => {
+        const from = absence.startDate < yearFrom ? yearFrom : absence.startDate;
+        const to = absence.endDate > yearTo ? yearTo : absence.endDate;
+        eachDateKey(from, to).forEach((day) => {
+          if (isBusinessDay(day, exceptions)) days.add(day);
+        });
+      });
+      return days.size;
+    };
 
     return people
       .map((person) => {
         const own = approved.filter((absence) => absence.userId === person.userId);
-        const balance = balances.get(person.userId);
+        // Немає рядка балансу — беремо дефолти, а не нулі: інакше звіт
+        // друкував би «12 / 0» і фарбував усіх як порушників ліміту.
+        const balance = balances.get(person.userId) ?? fallbackBalance(person.userId);
         const used: Record<string, number> = {};
         const quota: Record<string, number> = {};
         let total = 0;
 
         QUOTA_ABSENCE_KINDS.forEach((kind) => {
-          const days = own
-            .filter((absence) => absence.kind === kind)
-            .reduce((sum, absence) => sum + countBusinessDaysInYear(absence, year, exceptions), 0);
+          const days = countDistinct(own.filter((absence) => absence.kind === kind));
           used[kind] = days;
-          quota[kind] = balance?.[kind].quota ?? 0;
+          quota[kind] = balance[kind].quota;
           total += days;
         });
 
         // «Інше» до квот не входить, але в звіті має бути — бухгалтерія
         // рахує всі дні відсутності, а не лише лімітовані.
-        const otherDays = own
-          .filter((absence) => absence.kind === "other")
-          .reduce((sum, absence) => sum + countBusinessDaysInYear(absence, year, exceptions), 0);
+        const otherDays = countDistinct(own.filter((absence) => absence.kind === "other"));
         used.other = otherDays;
         total += otherDays;
 
@@ -161,7 +178,7 @@ export function AbsenceYearReportDialog({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">
-                    За цей рік відсутностей не записано.
+                    Немає кого показати.
                   </td>
                 </tr>
               ) : (
@@ -209,10 +226,6 @@ export function AbsenceYearReportDialog({
           <span className="mr-auto text-2xs text-muted-foreground">
             {rows.length} {rows.length === 1 ? "людина" : "людей"}
           </span>
-          <Button variant="outline" onClick={() => window.print()} className="gap-2">
-            <Printer className="h-4 w-4" aria-hidden />
-            Друк
-          </Button>
           <Button onClick={handleCopy} disabled={copying || rows.length === 0} className="gap-2">
             <Copy className="h-4 w-4" aria-hidden />
             Скопіювати для таблиці

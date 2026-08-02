@@ -21,6 +21,8 @@ type TeamProfileRow = {
 type MembershipRow = {
   workspace_id: string;
   user_id: string;
+  access_role?: string | null;
+  job_role?: string | null;
 };
 
 type NotificationRow = {
@@ -28,7 +30,7 @@ type NotificationRow = {
   href?: string | null;
 };
 
-type TeamEventKind = "birthday" | "anniversary" | "absence-start" | "absence-end";
+type TeamEventKind = "birthday" | "anniversary" | "absence-start" | "absence-end" | "absence-single";
 
 /**
  * Відсутність, що стосується сьогодні, — із ЖУРНАЛУ `tosho.team_absences`.
@@ -189,6 +191,15 @@ function buildEventNotification(
   const label = absenceLabel(absence.kind);
   const range = formatAbsenceRange(absence);
 
+  if (kind === "absence-single") {
+    return {
+      title: `Сьогодні ${label} у ${name}`,
+      body: "Один день. Завтра на місці.",
+      href: `/team?reminder=${encodeURIComponent(`team-event:absence-single:${absence.id}:${todayKey}`)}`,
+      type: "info",
+    };
+  }
+
   if (kind === "absence-start") {
     return {
       title: `Сьогодні починається ${label} у ${name}`,
@@ -278,7 +289,7 @@ export const handler = async (event: HttpEvent) => {
       adminClient
         .schema("tosho")
         .from("memberships_view")
-        .select("workspace_id,user_id")
+        .select("workspace_id,user_id,access_role,job_role")
         .in("workspace_id", workspaceIds)
         .limit(10000),
       adminClient
@@ -297,6 +308,8 @@ export const handler = async (event: HttpEvent) => {
     const existingNotifications = (existingNotificationsResult.data ?? []) as NotificationRow[];
     const profileByUserKey = new Map(profileRows.map((profile) => [`${profile.workspace_id}:${profile.user_id}`, profile]));
     const recipientIdsByWorkspace = new Map<string, string[]>();
+    /** Вужча аудиторія для лікарняних — owner і SEO. */
+    const approverIdsByWorkspace = new Map<string, string[]>();
 
     for (const membership of memberships) {
       const workspaceId = membership.workspace_id?.trim();
@@ -309,6 +322,14 @@ export const handler = async (event: HttpEvent) => {
       const list = recipientIdsByWorkspace.get(workspaceId) ?? [];
       list.push(userId);
       recipientIdsByWorkspace.set(workspaceId, list);
+
+      const accessRole = (membership.access_role ?? "").trim().toLowerCase();
+      const jobRole = (membership.job_role ?? "").trim().toLowerCase();
+      if (accessRole === "owner" || jobRole === "seo") {
+        const approvers = approverIdsByWorkspace.get(workspaceId) ?? [];
+        approvers.push(userId);
+        approverIdsByWorkspace.set(workspaceId, approvers);
+      }
     }
 
     const existingKeys = new Set(
@@ -340,6 +361,13 @@ export const handler = async (event: HttpEvent) => {
       const absenceEvents: Array<{ kind: TeamEventKind; absence: AbsenceRow }> = [];
       for (const absence of absencesByUser.get(profile.user_id) ?? []) {
         if (absence.workspace_id !== profile.workspace_id) continue;
+        // Одноденна відсутність — ОДНА подія. Інакше день-офф на одну дату
+        // давав два протилежні сповіщення поспіль: «сьогодні починається» і
+        // «сьогодні завершується, завтра на місці».
+        if (absence.start_date === todayKey && absence.end_date === todayKey) {
+          absenceEvents.push({ kind: "absence-single", absence });
+          continue;
+        }
         if (absence.start_date === todayKey) absenceEvents.push({ kind: "absence-start", absence });
         if (absence.end_date === todayKey) absenceEvents.push({ kind: "absence-end", absence });
       }
@@ -365,7 +393,14 @@ export const handler = async (event: HttpEvent) => {
         if (!baseNotification) continue;
         emittedEvents += 1;
 
-        for (const recipientId of workspaceRecipients) {
+        // Лікарняний — медична річ: команді достатньо календаря, а пуш про
+        // нього отримують лише ті, хто ним оперує.
+        const audience =
+          (absence.kind ?? "").trim() === "sick_leave"
+            ? (approverIdsByWorkspace.get(profile.workspace_id) ?? [])
+            : workspaceRecipients;
+
+        for (const recipientId of audience) {
           const dedupeKey = `${recipientId}::${baseNotification.href}`;
           if (existingKeys.has(dedupeKey)) continue;
           existingKeys.add(dedupeKey);

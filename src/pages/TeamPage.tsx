@@ -74,7 +74,11 @@ import {
 } from "@/lib/teamAbsenceQuotas";
 import { toneBadgeClass, toneTextClass, type Tone } from "@/lib/statusTones";
 import { getInitialsFromName } from "@/lib/userName";
-import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
+import {
+  invalidateWorkspaceMemberDirectory,
+  listWorkspaceMembersForDisplay,
+  type WorkspaceMemberDisplayRow,
+} from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   notifyAbsenceRecorded,
@@ -308,6 +312,10 @@ export function TeamPage() {
       ]);
       setBalances(balanceMap);
       setDecisionComments(comments);
+      // Бейджі доступності на інших сторінках виводяться з цього ж журналу, а
+      // директорія кешується в модулі — без скидання вони лишились би старими
+      // до кінця життя вкладки.
+      invalidateWorkspaceMemberDirectory(workspaceId);
     } catch (error) {
       console.error("[team] absences load failed", error);
       toast.error("Не вдалося завантажити відсутності");
@@ -472,6 +480,18 @@ export function TeamPage() {
   );
 
   const plannerPeople = useMemo(() => activeMembers.map(toPlannerPerson), [activeMembers, toPlannerPerson]);
+
+  const quotaPeopleMemo = useMemo(
+    () =>
+      activeMembers.map((member) => ({
+        userId: member.userId,
+        name: member.label,
+        roleLabel: formatRoleLabel(member.jobRole),
+        avatarUrl: member.avatarDisplayUrl,
+        initials: getInitialsFromName(member.label, member.email),
+      })),
+    [activeMembers]
+  );
 
   /** У стрічку на два тижні беремо лише тих, кого в цьому вікні не буде. */
   const stripPeople = useMemo(() => {
@@ -757,12 +777,19 @@ export function TeamPage() {
             absence.startDate <= endDate &&
             absence.endDate >= startDate
         )
-        .map((absence) => ({
-          userId: absence.userId,
-          name: memberById.get(absence.userId)?.label ?? "Колега",
-          rangeLabel: `${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()} ${formatRange(absence)}`,
-          pending: absence.status === "pending",
-        }))
+        .reduce<AbsenceOverlap[]>((acc, absence) => {
+          // Одна людина = один рядок, навіть якщо в неї два записи в цьому
+          // вікні: інакше заголовок рахував записи й казав «відсутні ще 2»
+          // про одного колегу.
+          if (acc.some((item) => item.userId === absence.userId)) return acc;
+          acc.push({
+            userId: absence.userId,
+            name: memberById.get(absence.userId)?.label ?? "Колега",
+            rangeLabel: `${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()} ${formatRange(absence)}`,
+            pending: absence.status === "pending",
+          });
+          return acc;
+        }, [])
         .sort((a, b) => a.name.localeCompare(b.name, "uk")),
     [liveAbsences, memberById]
   );
@@ -956,13 +983,7 @@ export function TeamPage() {
     return names.length > 0 ? names.join(" або ") : "";
   })();
 
-  const quotaPeople = activeMembers.map((member) => ({
-    userId: member.userId,
-    name: member.label,
-    roleLabel: formatRoleLabel(member.jobRole),
-    avatarUrl: member.avatarDisplayUrl,
-    initials: getInitialsFromName(member.label, member.email),
-  }));
+  const quotaPeople = quotaPeopleMemo;
 
   return (
     <div className="space-y-4 pb-8">
@@ -1402,15 +1423,17 @@ export function TeamPage() {
         }}
       />
 
-      <AbsenceYearReportDialog
-        open={reportDialogOpen}
-        onOpenChange={setReportDialogOpen}
-        year={year}
-        people={quotaPeople}
-        absences={absences ?? []}
-        balances={balances}
-        exceptions={exceptions}
-      />
+      {reportDialogOpen ? (
+        <AbsenceYearReportDialog
+          open={reportDialogOpen}
+          onOpenChange={setReportDialogOpen}
+          year={year}
+          people={quotaPeople}
+          absences={absences ?? []}
+          balances={balances}
+          exceptions={exceptions}
+        />
+      ) : null}
 
       <QuotaEditorDialog
         open={quotaDialogOpen}

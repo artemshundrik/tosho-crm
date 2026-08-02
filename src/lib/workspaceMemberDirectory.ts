@@ -7,6 +7,12 @@ import { defaultModuleAccess, normalizeModuleAccess, type ModuleAccess } from "@
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const workspaceDirectoryCache = new Map<string, WorkspaceMemberDirectoryRow[]>();
+/**
+ * День, на який порахована доступність у кеші. Вона похідна від «сьогодні»,
+ * тож вкладка, залишена відкритою через північ, інакше показувала б учорашню
+ * картину: людина, що повернулась, лишалась «у відпустці».
+ */
+let workspaceDirectoryCacheDay: string | null = null;
 const workspaceDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDirectoryRow[]>>();
 const workspaceDisplayDirectoryCache = new Map<string, WorkspaceMemberDisplayRow[]>();
 const workspaceDisplayDirectoryInFlight = new Map<string, Promise<WorkspaceMemberDisplayRow[]>>();
@@ -199,6 +205,25 @@ function invalidateCachedWorkspaceMemberProfile(workspaceId: string, userId: str
     // «читали, запису немає» і кешувалося б як відповідь).
     currentWorkspaceMemberDirectoryEntryCache = undefined;
   }
+}
+
+/**
+ * Скидає директорію повністю — після будь-якої зміни у журналі відсутностей.
+ *
+ * Доступність тепер ПОХІДНА від журналу, а директорія кешується в модулі без
+ * TTL. Без цього виклику погоджена сьогодні відпустка оновлювала картки на
+ * «Команді» (вона тримає свій стан), але бейджі на аватарках у «Дизайні» до
+ * кінця життя вкладки казали «доступний» — той самий розсинхрон, тільки
+ * переїхав у кеш.
+ */
+export function invalidateWorkspaceMemberDirectory(workspaceId?: string) {
+  if (workspaceId) {
+    workspaceDirectoryCache.delete(workspaceId);
+    workspaceDisplayDirectoryCache.delete(workspaceId);
+    return;
+  }
+  workspaceDirectoryCache.clear();
+  workspaceDisplayDirectoryCache.clear();
 }
 
 function normalizeAvailabilityStatus(value?: string | null): WorkspaceMemberDirectoryRow["availabilityStatus"] {
@@ -512,11 +537,15 @@ const ABSENCE_KIND_TO_AVAILABILITY: Record<string, TodayAbsenceStatus> = {
   other: "offline",
 };
 
-async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string, TodayAbsenceStatus>> {
+function currentDateKey() {
   const today = new Date();
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
     today.getDate()
   ).padStart(2, "0")}`;
+}
+
+async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string, TodayAbsenceStatus>> {
+  const todayKey = currentDateKey();
 
   const byUser = new Map<string, TodayAbsenceStatus>();
   try {
@@ -563,6 +592,11 @@ function applyTodayAbsence(
 }
 
 export async function listWorkspaceMemberDirectory(workspaceId: string): Promise<WorkspaceMemberDirectoryRow[]> {
+  const today = currentDateKey();
+  if (workspaceDirectoryCacheDay !== today) {
+    workspaceDirectoryCacheDay = today;
+    invalidateWorkspaceMemberDirectory();
+  }
   if (workspaceDirectoryCache.has(workspaceId)) {
     return workspaceDirectoryCache.get(workspaceId) ?? [];
   }
@@ -572,10 +606,14 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
   const promise = (async () => {
   // Доступність накладаємо ТУТ, а не в кожній гілці: так і в'юха, і fallback
   // дають один і той самий бейдж, і ніхто не забуде продублювати правило.
-  const absenceToday = await loadTodayAbsenceStatuses(workspaceId);
+  //
+  // Паралельно з основним запитом навмисно: через цю функцію резолвиться
+  // moduleAccess на старті застосунку, і косметичний запит бейджів не має
+  // затримувати гейт прав ще на один round-trip.
+  const absencePromise = loadTodayAbsenceStatuses(workspaceId);
 
   try {
-    const rows = await listFromUnifiedView(workspaceId);
+    const [rows, absenceToday] = await Promise.all([listFromUnifiedView(workspaceId), absencePromise]);
     if (rows.length > 0) {
       const resolved = applyTodayAbsence(rows, absenceToday).sort((a, b) =>
         a.displayName.localeCompare(b.displayName, "uk")
@@ -589,7 +627,7 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
     }
   }
 
-  const rows = await listFromFallback(workspaceId);
+  const [rows, absenceToday] = await Promise.all([listFromFallback(workspaceId), absencePromise]);
   const resolved = applyTodayAbsence(rows, absenceToday).sort((a, b) =>
     a.displayName.localeCompare(b.displayName, "uk")
   );

@@ -625,7 +625,10 @@ export function TeamMembersPage() {
     setEditProfileBirthDate(meta?.birthDate ?? "");
     setEditProfilePhone(meta?.phone ?? "");
     setEditProfileManagerRate(String(meta?.managerRate ?? DEFAULT_MANAGER_RATE));
-    setEditProfileAvailabilityStatus(meta?.availabilityStatus ?? "available");
+    // ЛИШЕ ручний статус: журнальні vacation/sick_leave сюди не потрапляють,
+    // інакше в селекті стояло б значення, якого немає у списку, і будь-яке
+    // збереження профілю писало б його назад у team_member_profiles.
+    setEditProfileAvailabilityStatus(meta?.availabilityStatus === "offline" ? "offline" : "available");
     setEditProfileAvailabilityStartDate(meta?.availabilityStartDate ?? "");
     setEditProfileAvailabilityEndDate(meta?.availabilityEndDate ?? "");
     setEditProfileStartDate(meta?.startDate ?? "");
