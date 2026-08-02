@@ -1,10 +1,11 @@
 import React from "react";
-import { AtSign, Check, Loader2, Mic, Paperclip, Send, X } from "lucide-react";
+import { AtSign, Check, FileText, Loader2, Mic, Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useDictation } from "@/lib/useDictation";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
+import { formatFileSize, isImageFile, withReadableName } from "./threadFiles";
 
 export type MentionCandidate = {
   userId: string;
@@ -18,11 +19,11 @@ type Props = {
   sending: boolean;
   candidates: MentionCandidate[];
   onSend: (body: string) => void;
-  /**
-   * Завантаження файлу. Свого сховища чат не заводить: файл іде тим самим
-   * шляхом, що й вкладення задачі, а в розмові лишається повідомлення про нього.
-   */
-  onAttachFiles?: (files: FileList) => Promise<void> | void;
+  /** Файли, які чекають надсилання — показані прев'ю над полем вводу. */
+  pendingFiles: File[];
+  onAddFiles: (files: File[]) => void;
+  onRemoveFile: (index: number) => void;
+  canAttach: boolean;
   attaching?: boolean;
 };
 
@@ -37,28 +38,6 @@ const WAVE_BARS = [
   { height: 7, delay: "60ms" },
 ];
 
-/**
- * Скріншот із буфера приходить із порожнім або службовим іменем на кшталт
- * "image.png". Даємо йому людську назву з датою — інакше у «Файлах» назбирується
- * десяток однакових "image.png", які потім неможливо розрізнити.
- */
-function withReadableName(file: File): File {
-  const generic = !file.name || /^(image|screenshot|знімок)[\s._-]*\d*\.[a-z]+$/i.test(file.name);
-  if (!generic) return file;
-  const stamp = new Date()
-    .toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-    .replace(/[^\d.:]+/g, "-");
-  const extension = file.name.split(".").pop() || (file.type.split("/")[1] ?? "png");
-  return new File([file], `Скріншот ${stamp}.${extension}`, { type: file.type });
-}
-
-/** FileList зі звичайного масиву — саме його чекає обробник завантаження. */
-function toFileList(files: File[]): FileList {
-  const transfer = new DataTransfer();
-  files.forEach((file) => transfer.items.add(file));
-  return transfer.files;
-}
-
 /** Стеля росту поля вводу — приблизно чотири рядки. */
 const MAX_INPUT_HEIGHT = 92;
 
@@ -70,7 +49,16 @@ const MAX_INPUT_HEIGHT = 92;
  * прямокутник — три різні форми, через що рядок читався як панель
  * інструментів, а не як поле чату.
  */
-export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, attaching }: Props) {
+export function ThreadComposer({
+  sending,
+  candidates,
+  onSend,
+  pendingFiles,
+  onAddFiles,
+  onRemoveFile,
+  canAttach,
+  attaching,
+}: Props) {
   const [body, setBody] = React.useState("");
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
@@ -91,12 +79,11 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
   }, [dictation.state, dictation.error]);
 
   const acceptFiles = React.useCallback(
-    async (incoming: FileList | null) => {
-      if (!onAttachFiles || !incoming || incoming.length === 0) return false;
-      await onAttachFiles(toFileList(Array.from(incoming).map(withReadableName)));
-      return true;
+    (incoming: FileList | null) => {
+      if (!canAttach || !incoming || incoming.length === 0) return;
+      onAddFiles(Array.from(incoming).map(withReadableName));
     },
-    [onAttachFiles]
+    [canAttach, onAddFiles]
   );
 
   const isRecording = dictation.state === "recording";
@@ -106,7 +93,7 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
 
   const submit = () => {
     const text = body.trim();
-    if (!text || sending) return;
+    if ((!text && pendingFiles.length === 0) || sending) return;
     onSend(text);
     setBody("");
     setMentionQuery(null);
@@ -146,6 +133,19 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
 
   return (
     <div className="border-t border-border/40 bg-card p-2.5">
+      {pendingFiles.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {pendingFiles.map((file, index) => (
+            <PendingFileChip
+              key={`${file.name}-${index}`}
+              file={file}
+              onRemove={() => onRemoveFile(index)}
+              disabled={attaching}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {matches.length > 0 ? (
         <div className="mb-2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
           {matches.map((candidate, index) => (
@@ -229,7 +229,7 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
           className="hidden"
           onChange={async (event) => {
             const files = event.target.files;
-            if (files && files.length > 0) await onAttachFiles?.(files);
+            if (files && files.length > 0) acceptFiles(files);
             event.target.value = "";
           }}
         />
@@ -237,7 +237,7 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
           type="button"
           aria-label="Прикріпити файл"
           title="Файл ляже у «Файли», а тут стане повідомленням"
-          disabled={!onAttachFiles || attaching}
+          disabled={!canAttach || attaching}
           onClick={() => fileInputRef.current?.click()}
           className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
         >
@@ -276,9 +276,9 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
             // Cmd+V зі скріншотом: найшвидший шлях для дизайнера — не треба
             // нічого зберігати на диск.
             const files = event.clipboardData?.files;
-            if (!onAttachFiles || !files || files.length === 0) return;
+            if (!canAttach || !files || files.length === 0) return;
             event.preventDefault();
-            void acceptFiles(files);
+            acceptFiles(files);
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -293,11 +293,11 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
         <button
           type="button"
           onClick={submit}
-          disabled={sending || body.trim().length === 0}
+          disabled={sending || (body.trim().length === 0 && pendingFiles.length === 0)}
           aria-label="Надіслати"
           className={cn(
             "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
-            sending || body.trim().length === 0
+            sending || (body.trim().length === 0 && pendingFiles.length === 0)
               ? "bg-muted text-muted-foreground"
               : "bg-primary text-primary-foreground hover:opacity-90"
           )}
@@ -307,5 +307,50 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
       </div>
       )}
     </div>
+  );
+}
+
+/** Прев'ю файла в черзі: картинка — мініатюрою, решта — назвою й розміром. */
+function PendingFileChip({
+  file,
+  onRemove,
+  disabled,
+}: {
+  file: File;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  const [preview, setPreview] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isImageFile(file)) return;
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  return (
+    <span className="group relative flex items-center gap-2 rounded-xl border border-border/60 bg-muted/40 py-1 pl-1 pr-2">
+      {preview ? (
+        <img src={preview} alt="" className="h-9 w-9 rounded-lg object-cover" />
+      ) : (
+        <span className="grid h-9 w-9 place-items-center rounded-lg bg-background text-muted-foreground">
+          <FileText className="h-4 w-4" />
+        </span>
+      )}
+      <span className="flex min-w-0 max-w-[120px] flex-col">
+        <span className="truncate text-2xs font-medium">{file.name}</span>
+        <span className="text-3xs tabular-nums text-muted-foreground">{formatFileSize(file.size)}</span>
+      </span>
+      <button
+        type="button"
+        aria-label={`Прибрати ${file.name}`}
+        onClick={onRemove}
+        disabled={disabled}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-destructive disabled:opacity-40"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   );
 }

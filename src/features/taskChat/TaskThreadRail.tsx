@@ -6,6 +6,7 @@ import { countUnread, threadKeyForQuote, type ThreadAttachment } from "@/lib/tas
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { cn } from "@/lib/utils";
+import { toFileList, withReadableName } from "./threadFiles";
 import { ThreadComposer, type MentionCandidate } from "./ThreadComposer";
 import { ThreadFeed, ThreadNoAccess, ThreadSkeleton } from "./ThreadFeed";
 import { ThreadHistory } from "./ThreadHistory";
@@ -123,35 +124,37 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     [quoteId, session?.access_token]
   );
 
-  const handleSend = (body: string) => {
+  const handleSend = async (body: string) => {
     if (!userId) return;
+
+    // Файли з черги вантажимо саме зараз — до цього моменту вони лише лежали
+    // в прев'ю, як у Telegram: спочатку бачиш, що надсилаєш, потім надсилаєш.
+    let attachments: ThreadAttachment[] = [];
+    if (pendingFiles.length > 0 && onAttachFiles) {
+      const uploaded = await onAttachFiles(toFileList(pendingFiles));
+      attachments = uploaded || [];
+      if (attachments.length === 0) return;
+      setPendingFiles([]);
+    }
+
     sendMutation.mutate(
-      { body, visibility: "team", teamId, quoteId, userId },
+      { body, visibility: "team", teamId, quoteId, userId, attachments },
       { onSuccess: () => void notifyMentions(body) }
     );
-  };
-
-  /**
-   * Файл вантажимо наявним шляхом сторінки (він кладе його у «Файли»), а в
-   * розмові лишаємо повідомлення — щоб було видно, хто і що приніс.
-   */
-  const handleAttach = async (files: FileList) => {
-    if (!onAttachFiles || !userId) return;
-    const uploaded = (await onAttachFiles(files)) || [];
-    if (uploaded.length === 0) return;
-    sendMutation.mutate({
-      body: uploaded.length === 1 ? "" : `Файлів: ${uploaded.length}`,
-      visibility: "team",
-      teamId,
-      quoteId,
-      userId,
-      attachments: uploaded,
-    });
   };
 
   // Перетягування працює на всю картку обговорення, а не лише на поле вводу —
   // саме так поводиться Telegram, і саме туди людина цілиться файлом.
   const [dragOver, setDragOver] = React.useState(false);
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+
+  const addFiles = React.useCallback((files: File[]) => {
+    setPendingFiles((previous) => [...previous, ...files]);
+  }, []);
+
+  const removeFile = React.useCallback((index: number) => {
+    setPendingFiles((previous) => previous.filter((_, position) => position !== index));
+  }, []);
 
   const accessDenied =
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
@@ -161,8 +164,7 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     // картка без цього сідає по вмісту — і під нею лишається порожнє тло.
     <section
       className={cn(
-        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-inner border bg-card transition-colors",
-        dragOver ? "border-primary/60 bg-primary/[0.04]" : "border-border/40"
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-inner border border-border/40 bg-card"
       )}
       onDragOver={(event) => {
         if (!onAttachFiles || !event.dataTransfer.types.includes("Files")) return;
@@ -177,7 +179,8 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
         if (!onAttachFiles) return;
         event.preventDefault();
         setDragOver(false);
-        if (event.dataTransfer.files.length > 0) void handleAttach(event.dataTransfer.files);
+        if (event.dataTransfer.files.length > 0)
+          addFiles(Array.from(event.dataTransfer.files).map(withReadableName));
       }}
     >
       {dragOver ? (
@@ -235,10 +238,13 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
 
       {accessDenied ? null : (
         <ThreadComposer
-          sending={sendMutation.isPending}
+          sending={sendMutation.isPending || Boolean(attaching)}
           candidates={mentionCandidates}
-          onSend={handleSend}
-          onAttachFiles={onAttachFiles ? handleAttach : undefined}
+          onSend={(body) => void handleSend(body)}
+          pendingFiles={pendingFiles}
+          onAddFiles={addFiles}
+          onRemoveFile={removeFile}
+          canAttach={Boolean(onAttachFiles)}
           attaching={attaching}
         />
       )}

@@ -9265,7 +9265,7 @@ export default function DesignTaskPage() {
 
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
-      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
+      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px-var(--app-chrome-offset,0px))] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
