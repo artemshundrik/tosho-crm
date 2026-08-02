@@ -49,9 +49,13 @@ import {
   type WorkAnniversaryInsight,
 } from "@/lib/employment";
 import {
+  cancelOwnAbsenceRequest,
+  createOwnAbsenceRequest,
   createTeamAbsence,
+  decideAbsenceRequest,
   deleteTeamAbsence,
   listTeamAbsencesInRange,
+  loadAbsenceDecisionComments,
   updateTeamAbsence,
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_TONE,
@@ -71,7 +75,13 @@ import { toneBadgeClass, toneTextClass, type Tone } from "@/lib/statusTones";
 import { getInitialsFromName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import {
+  notifyAbsenceRecorded,
+  notifyAbsenceRequestCancelled,
+  notifyAbsenceRequestSubmitted,
+} from "@/lib/workflowNotifications";
 import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
 import { AbsenceDialog, type AbsenceDialogValue } from "@/components/team/AbsenceDialog";
 import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/components/team/AbsencePlanner";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
@@ -222,6 +232,12 @@ export function TeamPage() {
   const [absenceSaving, setAbsenceSaving] = useState(false);
   const [absenceDeletingId, setAbsenceDeletingId] = useState<string | null>(null);
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
+  const [decisionComments, setDecisionComments] = useState<Map<string, string>>(new Map());
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [declineTarget, setDeclineTarget] = useState<TeamAbsence | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  /** Режим діалогу: заявка за себе чи адмінське внесення факту. */
+  const [absenceDialogMode, setAbsenceDialogMode] = useState<"manage" | "request">("manage");
 
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const selectedMonth = useMemo(() => addMonths(startOfMonth(new Date()), monthOffset), [monthOffset]);
@@ -277,12 +293,14 @@ export function TeamPage() {
       ]);
       setAbsences(rows);
       setExceptions(exceptionMap);
-      const balanceMap = await loadAbsenceBalances({
-        year,
-        pendingAbsences: rows,
-        exceptions: exceptionMap,
-      });
+      const [balanceMap, comments] = await Promise.all([
+        loadAbsenceBalances({ year, pendingAbsences: rows, exceptions: exceptionMap }),
+        // Причини рішень лежать за окремим RPC: колонку знято з табличного
+        // select, бо журнал читає вся команда.
+        loadAbsenceDecisionComments(year).catch(() => new Map<string, string>()),
+      ]);
       setBalances(balanceMap);
+      setDecisionComments(comments);
     } catch (error) {
       console.error("[team] absences load failed", error);
       toast.error("Не вдалося завантажити відсутності");
@@ -541,9 +559,10 @@ export function TeamPage() {
   /* ------------------------------ Дії -------------------------------- */
 
   const openAbsenceDialog = useCallback(
-    (preset?: { userId?: string; dateKey?: string; absence?: TeamAbsence }) => {
+    (preset?: { userId?: string; dateKey?: string; absence?: TeamAbsence; mode?: "manage" | "request" }) => {
       const absence = preset?.absence;
       setAbsenceEditingId(absence?.id ?? null);
+      setAbsenceDialogMode(preset?.mode ?? (canManageAbsences ? "manage" : "request"));
       setAbsenceDialogInitial({
         userId: absence?.userId ?? preset?.userId ?? userId ?? "",
         startDate: absence?.startDate ?? preset?.dateKey ?? todayKey,
@@ -553,7 +572,7 @@ export function TeamPage() {
       });
       setAbsenceDialogOpen(true);
     },
-    [todayKey, userId]
+    [canManageAbsences, todayKey, userId]
   );
 
   const handleAbsenceSubmit = useCallback(
@@ -561,6 +580,52 @@ export function TeamPage() {
       if (!workspaceId) return;
       setAbsenceSaving(true);
       try {
+        if (absenceDialogMode === "request" && !absenceEditingId) {
+          const kind = value.kind === "other" ? "vacation" : value.kind;
+          const created = await createOwnAbsenceRequest({
+            workspaceId,
+            userId: value.userId,
+            startDate: value.startDate,
+            endDate: value.endDate,
+            kind,
+            comment: value.comment.trim() || null,
+          });
+
+          const businessDays = countBusinessDaysInYear(created, year, exceptions);
+          const rangeLabel = formatRange(created);
+          const myName = memberById.get(value.userId)?.label ?? "Співробітник";
+
+          // Сповіщення не має валити саму заявку: вона вже в базі.
+          try {
+            if (kind === "sick_leave") {
+              await notifyAbsenceRecorded({
+                workspaceId,
+                userId: value.userId,
+                userName: myName,
+                kindLabel: TEAM_ABSENCE_KIND_LABELS[kind],
+                rangeLabel,
+              });
+            } else {
+              await notifyAbsenceRequestSubmitted({
+                workspaceId,
+                requesterUserId: value.userId,
+                requesterName: myName,
+                kindLabel: TEAM_ABSENCE_KIND_LABELS[kind],
+                rangeLabel,
+                businessDays,
+                comment: value.comment.trim() || null,
+              });
+            }
+          } catch (notifyError) {
+            console.warn("[team] absence notify failed", notifyError);
+          }
+
+          toast.success(kind === "sick_leave" ? "Лікарняний зафіксовано" : "Заявку надіслано");
+          setAbsenceDialogOpen(false);
+          await reloadAbsenceData();
+          return;
+        }
+
         if (absenceEditingId) {
           await updateTeamAbsence({
             workspaceId,
@@ -594,7 +659,16 @@ export function TeamPage() {
         setAbsenceSaving(false);
       }
     },
-    [absenceEditingId, reloadAbsenceData, userId, workspaceId]
+    [
+      absenceDialogMode,
+      absenceEditingId,
+      exceptions,
+      memberById,
+      reloadAbsenceData,
+      userId,
+      workspaceId,
+      year,
+    ]
   );
 
   const handleAbsenceDelete = useCallback(
@@ -613,6 +687,57 @@ export function TeamPage() {
       }
     },
     [reloadAbsenceData, workspaceId]
+  );
+
+  const handleCancelRequest = useCallback(
+    async (absence: TeamAbsence) => {
+      if (!workspaceId) return;
+      setCancellingId(absence.id);
+      try {
+        await cancelOwnAbsenceRequest({ workspaceId, id: absence.id });
+        try {
+          await notifyAbsenceRequestCancelled({
+            workspaceId,
+            requesterUserId: absence.userId,
+            requesterName: memberById.get(absence.userId)?.label ?? "Співробітник",
+            kindLabel: TEAM_ABSENCE_KIND_LABELS[absence.kind],
+            rangeLabel: formatRange(absence),
+          });
+        } catch (notifyError) {
+          console.warn("[team] cancel notify failed", notifyError);
+        }
+        toast.success("Заявку скасовано");
+        await reloadAbsenceData();
+      } catch (error) {
+        console.error("[team] cancel failed", error);
+        toast.error(error instanceof Error ? error.message : "Не вдалося скасувати заявку");
+      } finally {
+        setCancellingId(null);
+      }
+    },
+    [memberById, reloadAbsenceData, workspaceId]
+  );
+
+  /**
+   * Рішення йде через серверну функцію: там і аудит, і сповіщення заявнику,
+   * і перевірка «свою заявку вирішує інший».
+   */
+  const handleDecide = useCallback(
+    async (absence: TeamAbsence, decision: "approved" | "declined", comment?: string) => {
+      setDecidingId(absence.id);
+      try {
+        await decideAbsenceRequest({ absenceId: absence.id, decision, comment: comment ?? null });
+        toast.success(decision === "approved" ? "Заявку погоджено" : "Заявку відхилено");
+        setDeclineTarget(null);
+        await reloadAbsenceData();
+      } catch (error) {
+        console.error("[team] decision failed", error);
+        toast.error(error instanceof Error ? error.message : "Не вдалося зберегти рішення");
+      } finally {
+        setDecidingId(null);
+      }
+    },
+    [reloadAbsenceData]
   );
 
   const handlePlannerPick = useCallback(
@@ -684,11 +809,22 @@ export function TeamPage() {
               </Button>
             ) : null}
             {canManageAbsences ? (
-              <Button onClick={() => openAbsenceDialog()} className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}>
+              <Button
+                variant="outline"
+                onClick={() => openAbsenceDialog({ mode: "manage" })}
+                className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+              >
                 <Plus className="h-4 w-4" aria-hidden />
-                Додати відсутність
+                Внести за когось
               </Button>
             ) : null}
+            <Button
+              onClick={() => openAbsenceDialog({ mode: "request", userId: userId ?? undefined })}
+              className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Запросити відсутність
+            </Button>
           </div>
         }
         search={
@@ -765,12 +901,23 @@ export function TeamPage() {
       search,
       sortMode,
       tab,
+      userId,
     ]
   );
 
   usePageHeaderActions(headerActions, [headerActions]);
 
   if (loading || showSkeleton) return <AppPageLoader title="Завантаження" subtitle="Готуємо команду." />;
+
+  // Хто вирішує заявки — показуємо людині в діалозі, щоб «піде на погодження»
+  // не було безадресним.
+  const approverLabel = (() => {
+    const seo = activeMembers.filter((member) => (member.jobRole ?? "").toLowerCase() === "seo");
+    const names = (seo.length > 0 ? seo : activeMembers.filter((m) => m.userId !== userId))
+      .slice(0, 2)
+      .map((member) => member.label.split(" ")[0]);
+    return names.length > 0 ? names.join(" або ") : "";
+  })();
 
   const quotaPeople = activeMembers.map((member) => ({
     userId: member.userId,
@@ -1021,6 +1168,44 @@ export function TeamPage() {
         </Card>
       ) : null}
 
+      {/* Смуга погодження просто під планером: рішення приймається в контексті
+          того, хто ще відсутній у ці ж дні. */}
+      {tab === "calendar" && canManageAbsences && pendingRequests.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <CalendarRange className="h-4 w-4 text-primary" aria-hidden />
+              Очікують погодження
+              <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
+                {pendingRequests.length}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-border/40">
+              {pendingRequests.map((absence) => (
+                <AbsenceRow
+                  key={absence.id}
+                  absence={absence}
+                  name={memberById.get(absence.userId)?.label ?? "—"}
+                  exceptions={exceptions}
+                  year={year}
+                  canManage={false}
+                  deleting={false}
+                  onEdit={() => openAbsenceDialog({ absence })}
+                  onDelete={() => handleAbsenceDelete(absence)}
+                  balance={balances.get(absence.userId) ?? null}
+                  canDecide={absence.userId !== userId}
+                  deciding={decidingId === absence.id}
+                  onApprove={() => void handleDecide(absence, "approved")}
+                  onDecline={() => setDeclineTarget(absence)}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {tab === "requests" ? (
         <div className="space-y-4">
           {canManageAbsences ? (
@@ -1037,8 +1222,7 @@ export function TeamPage() {
               <CardContent>
                 {pendingRequests.length === 0 ? (
                   <p className="py-2 text-xs text-muted-foreground">
-                    Запитів немає. Самостійні заявки від співробітників вмикаємо наступною фазою —
-                    поки відсутності вносять owner і SEO.
+                    Заявок на погодженні немає.
                   </p>
                 ) : (
                   <div className="divide-y divide-border/40">
@@ -1055,6 +1239,12 @@ export function TeamPage() {
                           deleting={absenceDeletingId === absence.id}
                           onEdit={() => openAbsenceDialog({ absence })}
                           onDelete={() => handleAbsenceDelete(absence)}
+                          decisionComment={decisionComments.get(absence.id) ?? null}
+                          balance={balances.get(absence.userId) ?? null}
+                          canDecide={canManageAbsences && absence.userId !== userId}
+                          deciding={decidingId === absence.id}
+                          onApprove={() => void handleDecide(absence, "approved")}
+                          onDecline={() => setDeclineTarget(absence)}
                         />
                       );
                     })}
@@ -1091,6 +1281,10 @@ export function TeamPage() {
                       onEdit={() => openAbsenceDialog({ absence })}
                       onDelete={() => handleAbsenceDelete(absence)}
                       hideName
+                      decisionComment={decisionComments.get(absence.id) ?? null}
+                      canCancel={absence.status === "pending"}
+                      cancelling={cancellingId === absence.id}
+                      onCancel={() => void handleCancelRequest(absence)}
                     />
                   ))}
                 </div>
@@ -1125,6 +1319,7 @@ export function TeamPage() {
                         deleting={absenceDeletingId === absence.id}
                         onEdit={() => openAbsenceDialog({ absence })}
                         onDelete={() => handleAbsenceDelete(absence)}
+                        decisionComment={decisionComments.get(absence.id) ?? null}
                       />
                     ))}
                   </div>
@@ -1144,14 +1339,30 @@ export function TeamPage() {
           }}
           initial={absenceDialogInitial}
           people={activeMembers.map((member) => ({ userId: member.userId, name: member.label }))}
-          canPickPerson={canManageAbsences}
+          canPickPerson={canManageAbsences && absenceDialogMode === "manage"}
           balanceOf={(id) => balances.get(id) ?? null}
           exceptions={exceptions}
           saving={absenceSaving}
           editing={Boolean(absenceEditingId)}
+          mode={absenceDialogMode}
+          approverLabel={approverLabel}
+          todayKey={todayKey}
           onSubmit={handleAbsenceSubmit}
         />
       ) : null}
+
+      <AbsenceDeclineDialog
+        open={Boolean(declineTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeclineTarget(null);
+        }}
+        personName={declineTarget ? (memberById.get(declineTarget.userId)?.label ?? "—") : ""}
+        rangeLabel={declineTarget ? formatRange(declineTarget) : ""}
+        saving={Boolean(declineTarget && decidingId === declineTarget.id)}
+        onConfirm={(comment) => {
+          if (declineTarget) void handleDecide(declineTarget, "declined", comment || undefined);
+        }}
+      />
 
       <QuotaEditorDialog
         open={quotaDialogOpen}
@@ -1180,6 +1391,15 @@ function AbsenceRow({
   onEdit,
   onDelete,
   hideName,
+  decisionComment,
+  balance,
+  canDecide,
+  deciding,
+  onApprove,
+  onDecline,
+  canCancel,
+  cancelling,
+  onCancel,
 }: {
   absence: TeamAbsence;
   name: string;
@@ -1190,9 +1410,21 @@ function AbsenceRow({
   onEdit: () => void;
   onDelete: () => void;
   hideName?: boolean;
+  /** Причина рішення — приходить окремим RPC, видна лише заявнику й owner/SEO. */
+  decisionComment?: string | null;
+  /** Баланс заявника — щоб рішення приймалось із цифрами перед очима. */
+  balance?: AbsenceBalance | null;
+  canDecide?: boolean;
+  deciding?: boolean;
+  onApprove?: () => void;
+  onDecline?: () => void;
+  canCancel?: boolean;
+  cancelling?: boolean;
+  onCancel?: () => void;
 }) {
   const businessDays = countBusinessDaysInYear(absence, year, exceptions);
   const restOnly = businessDays === 0;
+  const bucket = balance && absence.kind !== "other" ? balance[absence.kind] : null;
 
   return (
     <div className="group flex items-center gap-3 py-2.5">
@@ -1212,8 +1444,22 @@ function AbsenceRow({
             {restOnly ? "вихідні — квота не списується" : `${businessDays} ${pluralDays(businessDays)} робочих`}
           </span>
         </div>
+        {bucket && absence.status === "pending" ? (
+          <div className="mt-0.5 text-2xs text-muted-foreground">
+            після погодження залишиться{" "}
+            <b className="font-medium tabular-nums text-foreground">
+              {Math.max(0, bucket.remaining - businessDays)}
+            </b>{" "}
+            із {bucket.quota}
+          </div>
+        ) : null}
         {absence.comment ? (
-          <div className="mt-0.5 truncate text-2xs text-muted-foreground">{absence.comment}</div>
+          <div className="mt-0.5 truncate text-2xs text-muted-foreground">«{absence.comment}»</div>
+        ) : null}
+        {decisionComment ? (
+          <div className={cn("mt-0.5 truncate text-2xs", toneTextClass.danger)}>
+            Причина: {decisionComment}
+          </div>
         ) : null}
       </div>
       {absence.status !== "approved" ? (
@@ -1225,6 +1471,35 @@ function AbsenceRow({
         >
           {TEAM_ABSENCE_STATUS_LABELS[absence.status]}
         </span>
+      ) : null}
+      {canDecide && absence.status === "pending" ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="sm"
+            variant="successTonal"
+            onClick={onApprove}
+            disabled={deciding}
+            className="h-8"
+          >
+            {deciding ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+            Погодити
+          </Button>
+          <Button size="sm" variant="destructive" onClick={onDecline} disabled={deciding} className="h-8">
+            Відхилити
+          </Button>
+        </div>
+      ) : null}
+      {canCancel ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onCancel}
+          disabled={cancelling}
+          className="h-8 shrink-0"
+        >
+          {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+          Скасувати
+        </Button>
       ) : null}
       {canManage ? (
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

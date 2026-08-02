@@ -8,6 +8,7 @@ export type NotificationCategoryKey =
   | "design"
   | "contractor"
   | "team_events"
+  | "team_absences"
   | "probation"
   | "employment"
   | "finance_payment"
@@ -26,6 +27,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "design", label: "Дизайн-задачі" },
   { key: "contractor", label: "Контрагенти" },
   { key: "team_events", label: "Події команди" },
+  { key: "team_absences", label: "Заявки на відсутність" },
   { key: "probation", label: "Випробувальний термін" },
   { key: "employment", label: "Працевлаштування" },
   { key: "finance_payment", label: "Платежі та підписки" },
@@ -47,6 +49,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   const isFinance = access === "owner" || access === "admin" || ["seo", "accountant", "chief_accountant"].includes(job);
   switch (key) {
     case "team_events":
+    case "team_absences":
     case "probation":
     case "employment":
       return true;

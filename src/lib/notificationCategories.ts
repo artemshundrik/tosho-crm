@@ -10,6 +10,7 @@ export type NotificationCategoryKey =
   | "design"
   | "contractor"
   | "team_events"
+  | "team_absences"
   | "probation"
   | "employment"
   | "finance_payment"
@@ -54,6 +55,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     key: "team_events",
     label: "Події команди",
     description: "Дні народження, річниці, відпустки",
+  },
+  {
+    key: "team_absences",
+    label: "Заявки на відсутність",
+    description: "Запити на відпустку / day-off, рішення по них і лікарняні",
   },
   {
     key: "probation",
@@ -101,6 +107,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
   switch (key) {
     // Універсальні / персональні — бачать усі.
     case "team_events":
+    case "team_absences":
     case "probation":
     case "employment":
       return true;

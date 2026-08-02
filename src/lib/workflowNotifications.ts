@@ -520,3 +520,99 @@ export async function notifyCustomerLeadManagerAssigned(params: {
     type: "info",
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Заявки на відсутність                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Хто вирішує заявки: owner + SEO. Резолвимо по workspace_id, а не по teamId,
+ * бо відсутності ключуються воркспейсом (див. tosho.team_absences).
+ */
+async function resolveAbsenceApproverUserIds(workspaceId: string): Promise<string[]> {
+  if (!isUuid(workspaceId)) return [];
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("memberships_view")
+    .select("user_id,access_role,job_role")
+    .eq("workspace_id", workspaceId);
+  if (error) {
+    console.warn("Failed to resolve absence approvers", error);
+    return [];
+  }
+  return ((data as TeamMemberRoleRow[] | null) ?? [])
+    .filter((row) => normalizeRole(row.access_role) === "owner" || normalizeRole(row.job_role) === "seo")
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
+/** Нова заявка чекає на рішення — летить owner і SEO, окрім самого заявника. */
+export async function notifyAbsenceRequestSubmitted(params: {
+  workspaceId: string;
+  requesterUserId: string;
+  requesterName: string;
+  kindLabel: string;
+  rangeLabel: string;
+  businessDays: number;
+  comment?: string | null;
+}) {
+  const recipients = new Set(await resolveAbsenceApproverUserIds(params.workspaceId));
+  recipients.delete(params.requesterUserId);
+  if (recipients.size === 0) return;
+
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `Заявка: ${params.kindLabel.toLowerCase()} — ${params.requesterName}`,
+    body: `${params.rangeLabel} · ${params.businessDays} роб. дн.${params.comment ? ` — «${params.comment}»` : ""}`,
+    href: "/team",
+    type: "info",
+    category: "team_absences",
+  });
+}
+
+/**
+ * Лікарняний погодження не потребує, але команда має знати одразу —
+ * інакше про відсутність людини дізнаються з порожнього стільця.
+ */
+export async function notifyAbsenceRecorded(params: {
+  workspaceId: string;
+  userId: string;
+  userName: string;
+  kindLabel: string;
+  rangeLabel: string;
+}) {
+  const recipients = new Set(await resolveAbsenceApproverUserIds(params.workspaceId));
+  recipients.delete(params.userId);
+  if (recipients.size === 0) return;
+
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `${params.kindLabel}: ${params.userName}`,
+    body: `${params.rangeLabel} — зафіксовано без погодження.`,
+    href: "/team",
+    type: "warning",
+    category: "team_absences",
+  });
+}
+
+/** Заявку відкликано самим заявником — щоб approver не тримав її в голові. */
+export async function notifyAbsenceRequestCancelled(params: {
+  workspaceId: string;
+  requesterUserId: string;
+  requesterName: string;
+  kindLabel: string;
+  rangeLabel: string;
+}) {
+  const recipients = new Set(await resolveAbsenceApproverUserIds(params.workspaceId));
+  recipients.delete(params.requesterUserId);
+  if (recipients.size === 0) return;
+
+  await notifyUsers({
+    userIds: Array.from(recipients),
+    title: `Заявку скасовано — ${params.requesterName}`,
+    body: `${params.kindLabel} ${params.rangeLabel} більше не потребує рішення.`,
+    href: "/team",
+    type: "info",
+    category: "team_absences",
+  });
+}

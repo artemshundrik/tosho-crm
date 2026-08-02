@@ -37,7 +37,8 @@ export type TeamAbsence = {
   requestedBy: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
-  decisionComment: string | null;
+  // Причини рішення тут НЕМАЄ навмисно: колонку знято з табличного select,
+  // бо журнал читає вся команда. Беремо її окремо — loadAbsenceDecisionComments().
 };
 
 export const TEAM_ABSENCE_KIND_OPTIONS: Array<{ value: TeamAbsenceKind; label: string }> = [
@@ -117,11 +118,12 @@ type TeamAbsenceRow = {
   requested_by: string | null;
   decided_by: string | null;
   decided_at: string | null;
-  decision_comment: string | null;
 };
 
 const ABSENCE_COLUMNS =
-  "id, user_id, start_date, end_date, kind, status, comment, requested_by, decided_by, decided_at, decision_comment";
+  // decision_comment свідомо відсутній: грант на цю колонку відкликано
+  // (scripts/team-absences-selfservice.sql), і запит із нею впаде.
+  "id, user_id, start_date, end_date, kind, status, comment, requested_by, decided_by, decided_at";
 
 /** Статуси, які взагалі мають потрапляти на планер і в списки за замовчуванням. */
 export const LIVE_ABSENCE_STATUSES: TeamAbsenceStatus[] = ["approved", "pending"];
@@ -138,7 +140,6 @@ function mapAbsenceRow(row: TeamAbsenceRow): TeamAbsence {
     requestedBy: row.requested_by,
     decidedBy: row.decided_by,
     decidedAt: row.decided_at,
-    decisionComment: row.decision_comment,
   };
 }
 
@@ -272,6 +273,129 @@ export async function updateTeamAbsence(params: {
   if (error) throw error;
 
   return mapAbsenceRow(data as TeamAbsenceRow);
+}
+
+/**
+ * Створити ВЛАСНУ заявку.
+ *
+ * Статус визначає тип, а не клієнт: відпустка й day-off ідуть на погодження,
+ * лікарняний фіксується фактом. RLS перевіряє те саме (політика
+ * team_absences_insert_self), тож підмінити статус з фронта не вийде — тут
+ * лише дзеркало правила, щоб UI не показував недосяжних станів.
+ */
+export async function createOwnAbsenceRequest(params: {
+  workspaceId: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  kind: Exclude<TeamAbsenceKind, "other">;
+  comment: string | null;
+}): Promise<TeamAbsence> {
+  const status: TeamAbsenceStatus = params.kind === "sick_leave" ? "approved" : "pending";
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("team_absences")
+    .insert({
+      workspace_id: params.workspaceId,
+      user_id: params.userId,
+      start_date: params.startDate,
+      end_date: params.endDate,
+      kind: params.kind,
+      status,
+      comment: params.comment,
+      created_by: params.userId,
+      requested_by: params.userId,
+    })
+    .select(ABSENCE_COLUMNS)
+    .single();
+
+  if (error) throw error;
+
+  return mapAbsenceRow(data as TeamAbsenceRow);
+}
+
+/**
+ * Скасувати власну заявку, поки вона на погодженні.
+ *
+ * Оновлюємо ТІЛЬКИ статус: тригер у БД відхилить спробу заодно посунути дати
+ * чи змінити тип (scripts/team-absences-selfservice.sql).
+ */
+export async function cancelOwnAbsenceRequest(params: {
+  workspaceId: string;
+  id: string;
+}): Promise<void> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("team_absences")
+    .update({ status: "cancelled" })
+    .eq("workspace_id", params.workspaceId)
+    .eq("id", params.id)
+    .eq("status", "pending")
+    .select("id");
+
+  if (error) throw error;
+  // .select() навмисно: update, що не зачепив рядків, повертає error === null,
+  // і UI показав би «скасовано» на заявці, яка лишилась на погодженні.
+  if (!data || data.length === 0) {
+    throw new Error("Заявку вже опрацьовано — оновіть сторінку");
+  }
+}
+
+/**
+ * Рішення по заявці — лише через серверну функцію: там і аудит, і сповіщення,
+ * і перевірка «свою заявку вирішує інший».
+ */
+export async function decideAbsenceRequest(params: {
+  absenceId: string;
+  decision: "approved" | "declined";
+  comment?: string | null;
+}): Promise<void> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Сесія завершилась — увійдіть знову");
+
+  const response = await fetch("/.netlify/functions/team-absence-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      absenceId: params.absenceId,
+      decision: params.decision,
+      comment: params.comment ?? null,
+    }),
+  });
+
+  const raw = await response.text();
+  let parsed: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!response.ok) {
+    throw new Error(typeof parsed.error === "string" ? parsed.error : `HTTP ${response.status}`);
+  }
+}
+
+/**
+ * Причини рішень. Колонку `decision_comment` знято з табличного select
+ * (вона видна всій команді), тож читаємо її окремим RPC: заявник бачить свої,
+ * owner/SEO — усі.
+ */
+export async function loadAbsenceDecisionComments(year: number): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .rpc("team_absence_decisions", { p_year: year });
+
+  if (error) throw error;
+
+  const map = new Map<string, string>();
+  (data ?? []).forEach((row) => {
+    if (row.decision_comment) map.set(row.absence_id, row.decision_comment);
+  });
+  return map;
 }
 
 /** Delete one absence entry. Owner/SEO only (enforced by RLS). */

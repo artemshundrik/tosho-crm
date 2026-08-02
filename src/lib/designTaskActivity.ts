@@ -20,6 +20,12 @@ type NotifyUsersParams = {
   href?: string | null;
   type?: "info" | "success" | "warning";
   dedupeByHref?: boolean;
+  /**
+   * Ключ із notificationCategories.ts. Керує тим, у які канали (push/telegram)
+   * піде сповіщення за налаштуваннями людини. Без нього доставка вважає
+   * категорію невідомою і шле всюди — тож для нових продюсерів вказуємо явно.
+   */
+  category?: string;
 };
 
 const toActorName = (user: { email?: string | null; user_metadata?: Record<string, unknown> } | null) => {
@@ -78,6 +84,7 @@ export async function notifyUsers(params: NotifyUsersParams) {
     href: params.href ?? null,
     type: params.type ?? "info",
     dedupeByHref: params.dedupeByHref === true,
+    ...(params.category ? { category: params.category } : {}),
   };
 
   const { data: sessionData } = await supabase.auth.getSession();

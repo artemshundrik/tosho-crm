@@ -4666,6 +4666,13 @@ export type Database = {
           vacation_used: number
         }[]
       }
+      team_absence_decisions: {
+        Args: { p_year: number }
+        Returns: {
+          absence_id: string
+          decision_comment: string
+        }[]
+      }
     }
     Enums: {
       crm_job_role:

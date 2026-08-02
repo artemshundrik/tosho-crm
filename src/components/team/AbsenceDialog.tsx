@@ -43,6 +43,12 @@ export type AbsenceDialogValue = {
 
 export type AbsenceDialogPerson = { userId: string; name: string };
 
+function addDaysKey(dateKey: string, delta: number) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
 function pluralDays(count: number) {
   const mod100 = count % 100;
   const mod10 = count % 10;
@@ -51,6 +57,9 @@ function pluralDays(count: number) {
   if (mod10 >= 2 && mod10 <= 4) return "дні";
   return "днів";
 }
+
+/** Скільки днів назад можна самому зафіксувати лікарняний (дзеркало RLS). */
+export const SELF_SICK_BACKDATE_DAYS = 7;
 
 export function AbsenceDialog({
   open,
@@ -62,6 +71,9 @@ export function AbsenceDialog({
   exceptions,
   saving,
   editing,
+  mode = "manage",
+  approverLabel,
+  todayKey,
   onSubmit,
 }: {
   open: boolean;
@@ -75,6 +87,10 @@ export function AbsenceDialog({
   exceptions?: Map<string, boolean>;
   saving?: boolean;
   editing?: boolean;
+  /** `request` — співробітник просить за себе; `manage` — owner/SEO вносить факт. */
+  mode?: "manage" | "request";
+  approverLabel?: string;
+  todayKey?: string;
   onSubmit: (value: AbsenceDialogValue) => void;
 }) {
   const [value, setValue] = useState<AbsenceDialogValue>(initial);
@@ -94,16 +110,42 @@ export function AbsenceDialog({
   const bucket = balance && isQuotaAbsenceKind(value.kind) ? balance[value.kind] : null;
   const remainingAfter = bucket ? bucket.remaining - businessDays : null;
 
+  const isRequest = mode === "request";
+  // «Інше» — керований тип (відрядження, форс-мажор), його вносить лише
+  // owner/SEO, тож у режимі заявки він зі списку зникає.
+  const kindOptions = isRequest
+    ? TEAM_ABSENCE_KIND_OPTIONS.filter((option) => option.value !== "other")
+    : TEAM_ABSENCE_KIND_OPTIONS;
+
+  const sickAsFact = isRequest && value.kind === "sick_leave";
+
+  // Дзеркало RLS-правила: самостійний лікарняний не можна вносити глибоко
+  // заднім числом (інакше ним можна різати норму за минулий місяць).
+  const earliestSelfSick = todayKey ? addDaysKey(todayKey, -SELF_SICK_BACKDATE_DAYS) : null;
+  const sickTooOld = Boolean(
+    sickAsFact && earliestSelfSick && value.startDate && value.startDate < earliestSelfSick
+  );
+
   const canSubmit =
-    Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !saving;
+    Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !sickTooOld && !saving;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{editing ? "Редагувати відсутність" : "Додати відсутність"}</DialogTitle>
+          <DialogTitle>
+            {editing
+              ? "Редагувати відсутність"
+              : isRequest
+                ? "Запросити відсутність"
+                : "Додати відсутність"}
+          </DialogTitle>
           <DialogDescription>
-            Вихідні та свята всередині діапазону квоту не списують.
+            {isRequest
+              ? sickAsFact
+                ? "Лікарняний погодження не потребує — фіксуємо одразу і повідомляємо керівництво."
+                : `Заявка піде на погодження${approverLabel ? ` — ${approverLabel}` : ""}. Скасувати можна, поки її не вирішили.`
+              : "Вихідні та свята всередині діапазону квоту не списують."}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,7 +181,7 @@ export function AbsenceDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TEAM_ABSENCE_KIND_OPTIONS.map((option) => (
+                {kindOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -219,6 +261,13 @@ export function AbsenceDialog({
             </div>
           )}
 
+          {sickTooOld ? (
+            <p className="text-xs text-destructive">
+              Лікарняний заднім числом можна вносити не глибше ніж на {SELF_SICK_BACKDATE_DAYS} днів.
+              Давнішу дату може поставити керівництво.
+            </p>
+          ) : null}
+
           <div className="space-y-1.5">
             <Label htmlFor="absence-comment">Коментар</Label>
             <Textarea
@@ -237,7 +286,7 @@ export function AbsenceDialog({
           </Button>
           <Button onClick={() => onSubmit(value)} disabled={!canSubmit}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {editing ? "Зберегти" : "Додати"}
+            {editing ? "Зберегти" : isRequest ? (sickAsFact ? "Зафіксувати" : "Надіслати заявку") : "Додати"}
           </Button>
         </DialogFooter>
       </DialogContent>
