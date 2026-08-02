@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDayDigests,
   buildThreadBlocks,
   countUnread,
   designTaskKpi,
@@ -155,6 +156,94 @@ describe("лічильник непрочитаного", () => {
       entry({ id: "e", createdAt: "2026-08-02T11:30:00Z", createdBy: "u2", kind: "event" }),
     ];
     expect(countUnread(withEvent, "2026-08-02T09:30:00Z", "u1")).toBe(1);
+  });
+});
+
+describe("дайджест подій по днях", () => {
+  const event = (id: string, createdAt: string, eventType: string, body = "подія"): ThreadEntry =>
+    entry({ id, createdAt, kind: "event", eventType, body });
+
+  it("складає підсумок дня з правок, дедлайну й візуалів", () => {
+    // Реальний день 23.06 із задачі «Візуал футболки Теплекс»: 2 правки,
+    // дедлайн зсунуто двічі, 1 візуал, решта — зміни статусу.
+    const [digest] = buildDayDigests(
+      [
+        event("a", "2026-06-23T08:58:00Z", "design_task_brief_change_request"),
+        event("b", "2026-06-23T08:58:00Z", "design_task_status"),
+        event("c", "2026-06-23T08:58:00Z", "design_task_deadline"),
+        event("d", "2026-06-23T11:13:00Z", "design_task_status"),
+        event("e", "2026-06-23T11:13:00Z", "design_output_upload"),
+        event("f", "2026-06-23T11:13:00Z", "design_task_status"),
+        event("g", "2026-06-23T12:52:00Z", "design_task_brief_change_request"),
+        event("h", "2026-06-23T12:52:00Z", "design_task_status"),
+        event("i", "2026-06-23T12:52:00Z", "design_task_deadline"),
+      ],
+      NOW
+    );
+
+    expect(digest.count).toBe(9);
+    expect(digest.summary).toBe("2 правки · дедлайн зсунуто ×2 · 1 візуал");
+    expect(digest.marks).toEqual(["rev", "rev", "dl", "dl", "vis"]);
+  });
+
+  it("правильно відмінює числівники", () => {
+    const [one] = buildDayDigests([event("a", "2026-08-02T09:00:00Z", "design_task_brief_change_request")], NOW);
+    expect(one.summary).toBe("1 правка");
+
+    const [five] = buildDayDigests(
+      Array.from({ length: 5 }, (_, index) =>
+        event(`r${index}`, `2026-08-02T09:0${index}:00Z`, "design_task_brief_change_request")
+      ),
+      NOW
+    );
+    expect(five.summary).toBe("5 правок");
+  });
+
+  it("день із самих лише статусів показує останній статус, а не порожній рядок", () => {
+    const [digest] = buildDayDigests(
+      [
+        event("a", "2026-08-02T09:00:00Z", "design_task_status", "Статус: Правки → В роботі"),
+        event("b", "2026-08-02T10:00:00Z", "design_task_status", "Статус: В роботі → Дизайн готовий"),
+      ],
+      NOW
+    );
+    expect(digest.summary).toBe("Статус: В роботі → Дизайн готовий");
+  });
+
+  it("повідомлення в дайджест не потрапляють", () => {
+    const digests = buildDayDigests(
+      [
+        entry({ id: "m", createdAt: "2026-08-02T09:00:00Z" }),
+        event("e", "2026-08-02T09:05:00Z", "design_output_upload"),
+      ],
+      NOW
+    );
+    expect(digests).toHaveLength(1);
+    expect(digests[0].count).toBe(1);
+  });
+
+  it("дні йдуть від найновішого", () => {
+    const digests = buildDayDigests(
+      [
+        event("a", "2026-07-20T09:00:00Z", "design_output_upload"),
+        event("b", "2026-08-01T09:00:00Z", "design_output_upload"),
+      ],
+      NOW
+    );
+    expect(digests.map((item) => item.count)).toHaveLength(2);
+    expect(digests[0].entries[0].id).toBe("b");
+  });
+
+  it("сесії таймера показуються окремо — саме їх не видно в лічильнику шапки", () => {
+    const [digest] = buildDayDigests(
+      [
+        event("t1", "2026-08-02T09:00:00Z", "design_task_timer"),
+        event("t2", "2026-08-02T12:00:00Z", "design_task_timer"),
+        event("t3", "2026-08-02T15:00:00Z", "design_task_timer"),
+      ],
+      NOW
+    );
+    expect(digest.summary).toBe("3 сесії");
   });
 });
 

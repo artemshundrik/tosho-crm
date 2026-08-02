@@ -30,6 +30,7 @@ import {
   ORDER_STATUS_SECTIONS,
 } from "@/features/orders/config";
 import {
+  assignOrderInvoiceNumber,
   formatOrderDate,
   formatOrderMoney,
   isCashlessPaymentMethod,
@@ -1077,11 +1078,11 @@ const buildOrderDocumentHtml = (
   }
 
   if (kind === "invoice") {
-    // Рахунок виписується в момент друку — власної дати в базі він не має,
-    // як і власного номера: береться номер замовлення. Якщо колись знадобиться
-    // наскрізна нумерація рахунків, міняти треба лише ці два рядки.
-    const invoiceDate = formatContractDateParts(null);
-    const invoiceNumber = record.quoteNumber;
+    // Номер рахунку — з наскрізного лічильника команди, проставляється атомарно при
+    // ПЕРШІЙ генерації і далі не змінюється. Фолбек на номер замовлення потрібен для
+    // похідних замовлень: у них немає збереженого рядка, тож і номер закріпити нема де.
+    const invoiceNumber = record.invoiceNumber?.trim() || record.quoteNumber;
+    const invoiceDate = formatContractDateParts(record.invoiceCreatedAt ?? null);
     const currencyShort =
       record.currency === "USD" ? "дол. США" : record.currency === "EUR" ? "євро" : "грн.";
     const wordsCurrency = record.currency === "USD" || record.currency === "EUR" ? record.currency : "UAH";
@@ -1177,7 +1178,9 @@ const buildOrderDocumentHtml = (
         </div>
         <div class="req-row">
           <div class="req-label"><b>Покупець:</b></div>
-          <div class="req-value"><div>${escapeHtml(customerTitle)}</div></div>
+          <div class="req-value"><div>${escapeHtml(customerTitle)}${
+            record.customerTaxId?.trim() ? ` (код ЄДРПОУ ${escapeHtml(record.customerTaxId.trim())})` : ""
+          }</div></div>
         </div>
         ${
           contractReference
@@ -1187,6 +1190,10 @@ const buildOrderDocumentHtml = (
                </div>`
             : ""
         }
+        <div class="req-row">
+          <div class="req-label"><b>Замовлення:</b></div>
+          <div class="req-value"><div>${escapeHtml(record.quoteNumber)}</div></div>
+        </div>
 
         <table class="items">
           <thead>
@@ -1559,7 +1566,41 @@ export default function OrdersProductionDetailsPage() {
     // Готуємо URL-и зображень погодженої візуалізації для вставки у Специфікацію.
     const visualizationImageUrls =
       kind === "specification" ? await resolveVisualizationImageUrls(activeRecord.approvedVisualizationAssets) : [];
-    const html = buildOrderDocumentHtml(activeRecord, kind, {
+    // Номер рахунку закріплюємо з наскрізного лічильника ЛИШЕ при першій генерації —
+    // до того, як будуємо html, бо шаблон рахунку вже читає record.invoiceNumber.
+    // Похідні (ще не збережені) замовлення й уже пронумеровані рахунки пропускаємо.
+    let recordForDocument = activeRecord;
+    if (kind === "invoice" && activeRecord.source === "stored" && teamId && !activeRecord.invoiceNumber) {
+      try {
+        const invoiceAssignment = await assignOrderInvoiceNumber({ teamId, orderId: activeRecord.id });
+        if (invoiceAssignment) {
+          recordForDocument = {
+            ...activeRecord,
+            invoiceNumber: invoiceAssignment.invoiceNumber,
+            invoiceCreatedAt: invoiceAssignment.invoiceCreatedAt,
+          };
+          setRecord((current) => {
+            if (!current || current.id !== activeRecord.id) return current;
+            const next = {
+              ...current,
+              invoiceNumber: invoiceAssignment.invoiceNumber,
+              invoiceCreatedAt: invoiceAssignment.invoiceCreatedAt,
+            };
+            return { ...next, docs: normalizeDocumentDocs(next) };
+          });
+        }
+        // invoiceAssignment === null: міграція ще не застосована — друкуємо зі
+        // старою поведінкою, шаблон сам підставить номер замовлення.
+      } catch (invoiceError: unknown) {
+        // Рахунок має надрукуватись у будь-якому разі — лічильник тут «бонус», а не блокер.
+        setError(
+          invoiceError instanceof Error
+            ? invoiceError.message
+            : "Не вдалося отримати номер рахунку з лічильника — надруковано з номером замовлення."
+        );
+      }
+    }
+    const html = buildOrderDocumentHtml(recordForDocument, kind, {
       customerSignatoryNameGenitive,
       customerSignatoryRoleGenitive,
       visualizationImageUrls,

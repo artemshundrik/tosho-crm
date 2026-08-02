@@ -24,8 +24,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus, MessageSquare } from "lucide-react";
-import { useOptionalTaskChat } from "@/features/taskChat/TaskChatProvider";
+import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
@@ -826,9 +825,6 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
-  // Необов'язковий: якщо сторінку колись відрендерять поза AppLayout, кнопка
-  // обговорення просто не спрацює, а не вб'є всю сторінку.
-  const taskChat = useOptionalTaskChat();
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
@@ -1140,41 +1136,6 @@ export default function DesignPage() {
     next.setHours(hours, minutes, 0, 0);
     setCreateDeadline(next);
   }, [createDeadline]);
-  /**
-   * Відкрити обговорення справи в бічній панелі. Нитка одна на прорахунок,
-   * тож із дизайн-задачі й зі сторінки прорахунку відкриється те саме.
-   */
-  const openTaskThread = useCallback(
-    (task: DesignTask, event?: React.MouseEvent) => {
-      event?.stopPropagation();
-      if (!teamId || !taskChat) return;
-      const changeRequests = task.metadata?.design_brief_change_requests;
-      taskChat.openThread({
-        kind: "quote",
-        ref: task.quoteId,
-        title: task.title ?? task.designTaskNumber ?? "Дизайн-задача",
-        teamId,
-        number: task.designTaskNumber ?? task.quoteNumber ?? null,
-        party: task.customerName
-          ? {
-              name: task.customerName,
-              logoUrl: task.customerLogoUrl ?? null,
-              kind: task.partyType === "lead" ? "lead" : "customer",
-            }
-          : null,
-        href: `/design/${task.id}`,
-        facts: {
-          revisions: Array.isArray(changeRequests) ? changeRequests.length : 0,
-          revisionNorm: 3,
-          previousRevisions: null,
-          assignedAt: task.assignedAt ?? null,
-          deadline: task.designDeadline ?? null,
-        },
-      });
-    },
-    [taskChat, teamId]
-  );
-
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -4705,16 +4666,6 @@ export default function DesignPage() {
               ) : null}
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground"
-            aria-label="Обговорення задачі"
-            title="Обговорення"
-            onClick={(event) => openTaskThread(task, event)}
-          >
-            <MessageSquare className="h-4 w-4" />
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

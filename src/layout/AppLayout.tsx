@@ -36,8 +36,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
 import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
-import { TaskChatProvider } from "@/features/taskChat/TaskChatProvider";
-import { TaskChatPanel } from "@/features/taskChat/TaskChatPanel";
 import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
@@ -1605,7 +1603,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
   return (
     <WorkspacePresenceProvider value={workspacePresence}>
-      <TaskChatProvider>
       <div
         className={cn(
           "min-h-screen min-h-[100dvh] text-foreground selection:bg-primary/20 selection:text-primary",
@@ -2310,9 +2307,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       ) : null}
       <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
       <TelegramPromoModal />
-      <TaskChatPanel />
       </div>
-      </TaskChatProvider>
     </WorkspacePresenceProvider>
   );
 }

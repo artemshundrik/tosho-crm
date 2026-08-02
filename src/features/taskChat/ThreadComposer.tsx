@@ -1,33 +1,32 @@
 import React from "react";
-import { Lock, Send } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Mic, Paperclip, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type MentionCandidate = { userId: string; name: string; role: string | null };
 
 type Props = {
-  canWriteInternal: boolean;
   sending: boolean;
   candidates: MentionCandidate[];
-  onSend: (body: string, visibility: "team" | "finance") => void;
+  onSend: (body: string) => void;
 };
 
 /**
- * Композер — вбудований редактор у рамці, а не поле чату на всю ширину:
- * підказує, що це запис у нитку справи. Прапорець «Внутрішня» показуємо лише
- * тим, хто має доступ до Фінансів — інакше людина писала б нотатку, якої сама
- * потім не побачить (RLS її відсіче).
+ * Композер у стилі месенджера: одна капсула, іконки-привиди всередині,
+ * кругла кнопка надсилання.
+ *
+ * Попередній варіант ставив у ряд прямокутник, пігулку з текстом і синій
+ * прямокутник — три різні форми, через що рядок читався як панель
+ * інструментів, а не як поле чату.
  */
-export function ThreadComposer({ canWriteInternal, sending, candidates, onSend }: Props) {
+export function ThreadComposer({ sending, candidates, onSend }: Props) {
   const [body, setBody] = React.useState("");
-  const [internal, setInternal] = React.useState(false);
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
     const text = body.trim();
     if (!text || sending) return;
-    onSend(text, internal ? "finance" : "team");
+    onSend(text);
     setBody("");
     setMentionQuery(null);
   };
@@ -47,23 +46,17 @@ export function ThreadComposer({ canWriteInternal, sending, candidates, onSend }
   }, [candidates, mentionQuery]);
 
   const applyMention = (name: string) => {
-    setBody((previous) => previous.replace(/(?:^|\s)@([^\s@]*)$/u, (whole) => {
-      const prefix = whole.startsWith("@") ? "" : " ";
-      return `${prefix}@${name} `;
-    }));
+    setBody((previous) =>
+      previous.replace(/(?:^|\s)@([^\s@]*)$/u, (whole) => `${whole.startsWith("@") ? "" : " "}@${name} `)
+    );
     setMentionQuery(null);
     inputRef.current?.focus();
   };
 
   return (
-    <div
-      className={cn(
-        "m-2.5 flex flex-col gap-2 rounded-xl border p-2 transition-colors",
-        internal ? "border-warning-soft-border bg-warning-soft" : "border-border/60 bg-card"
-      )}
-    >
+    <div className="border-t border-border/40 bg-card p-2.5">
       {matches.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-[var(--shadow-menu)]">
+        <div className="mb-2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
           {matches.map((candidate, index) => (
             <button
               key={candidate.userId}
@@ -83,50 +76,53 @@ export function ThreadComposer({ canWriteInternal, sending, candidates, onSend }
         </div>
       ) : null}
 
-      <textarea
-        ref={inputRef}
-        value={body}
-        rows={2}
-        placeholder="Написати…"
-        aria-label="Текст повідомлення"
-        onChange={(event) => handleChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-        className="resize-none bg-transparent text-xs leading-snug outline-none placeholder:text-muted-foreground"
-      />
-
-      <div className="flex items-center gap-1.5">
-        {canWriteInternal ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            aria-pressed={internal}
-            onClick={() => setInternal((value) => !value)}
-            className={cn(
-              "gap-1.5",
-              internal && "border-warning-soft-border bg-warning-soft text-warning-foreground"
-            )}
-          >
-            <Lock className="h-3 w-3" /> Внутрішня
-          </Button>
-        ) : null}
-
-        <span className="flex-1" />
-
-        <Button
+      <div className="flex items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+        <button
           type="button"
-          size="xs"
-          className="gap-1.5"
-          disabled={sending || body.trim().length === 0}
-          onClick={submit}
+          aria-label="Прикріпити файл"
+          title="Файл ляже у «Файли», а тут стане повідомленням"
+          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
-          <Send className="h-3 w-3" /> Надіслати
-        </Button>
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label="Продиктувати голосом"
+          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Mic className="h-3.5 w-3.5" />
+        </button>
+
+        <textarea
+          ref={inputRef}
+          value={body}
+          rows={1}
+          placeholder="Написати…"
+          aria-label="Текст повідомлення"
+          onChange={(event) => handleChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submit();
+            }
+          }}
+          className="min-w-0 flex-1 resize-none bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
+        />
+
+        <button
+          type="button"
+          onClick={submit}
+          disabled={sending || body.trim().length === 0}
+          aria-label="Надіслати"
+          className={cn(
+            "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
+            sending || body.trim().length === 0
+              ? "bg-muted text-muted-foreground"
+              : "bg-primary text-primary-foreground hover:opacity-90"
+          )}
+        >
+          <Send className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );

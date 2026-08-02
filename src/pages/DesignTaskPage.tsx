@@ -44,7 +44,6 @@ import {
   Download,
   Palette,
   UserRound,
-  UserPlus,
   ChevronDown,
   Image as ImageIcon,
   MoreVertical,
@@ -70,7 +69,6 @@ import {
   Mail,
   PhoneCall,
   Send,
-  RotateCcw,
   Users,
   FileText,
   Paperclip,
@@ -84,6 +82,10 @@ import {
 } from "lucide-react";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
+import { threadKeys } from "@/features/taskChat/queries";
+import { threadKeyForQuote } from "@/lib/taskThread";
+import { useQueryClient } from "@tanstack/react-query";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StorageObjectVideo } from "@/components/app/StorageObjectVideo";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
@@ -117,7 +119,7 @@ import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
-import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
+import { type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
@@ -227,15 +229,7 @@ type DesignTaskClientContact = {
   telegram: string | null;
 };
 
-type SidebarActionTone = "neutral" | "info" | "warning" | "success";
 
-const SIDEBAR_STATUS_ACTION_META: Partial<Record<DesignStatus, { icon: typeof Play; tone: SidebarActionTone; description: string }>> = {
-  in_progress: { icon: RotateCcw, tone: "info", description: "Поверне задачу в активну роботу." },
-  pm_review: { icon: CheckCircle2, tone: "info", description: "Зафіксує, що дизайн готовий до внутрішньої перевірки." },
-  client_review: { icon: Send, tone: "info", description: "Переведе задачу в етап погодження із замовником." },
-  approved: { icon: CheckCircle2, tone: "success", description: "Закриє задачу як фінально погоджену." },
-  changes: { icon: AlertTriangle, tone: "warning", description: "Поверне задачу на правки та доопрацювання." },
-};
 
 type QuoteItemRow = {
   id?: string;
@@ -718,16 +712,6 @@ function renderBriefRichText(value: string | null | undefined) {
   return renderRichTextBlocks(value, { emptyFallback: <span>Порожнє ТЗ</span> });
 }
 
-type DesignTaskHistoryEvent = {
-  id: string;
-  created_at: string;
-  title: string;
-  actorLabel: string;
-  actorUserId?: string | null;
-  description?: string;
-  icon: typeof Clock;
-  accentClass: string;
-};
 
 type DesignBriefVersion = {
   id: string;
@@ -861,7 +845,6 @@ const statusColors = designStatusBadgeClass;
 
 const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
-const DESIGN_TASK_HISTORY_PAGE_SIZE = 50;
 const CHANGE_REQUEST_AUTO_CHANGES_STATUSES = new Set<DesignStatus>(["pm_review", "client_review"]);
 
 const parseDesignStatus = (value: unknown, fallback: DesignStatus = "new"): DesignStatus => {
@@ -1414,11 +1397,6 @@ export default function DesignTaskPage() {
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null);
   const [partyCardOpen, setPartyCardOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<ActivityRow[]>([]);
-  const [historyVisibleCount, setHistoryVisibleCount] = useState(5);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyLoadedAll, setHistoryLoadedAll] = useState(false);
-  const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [quoteMentionComments, setQuoteMentionComments] = useState<QuoteMentionComment[]>([]);
   const [quoteMentionsLoading, setQuoteMentionsLoading] = useState(false);
   const [quoteMentionsError, setQuoteMentionsError] = useState<string | null>(null);
@@ -1560,6 +1538,7 @@ export default function DesignTaskPage() {
   });
 
   const effectiveTeamId = teamId;
+  const threadQueryClient = useQueryClient();
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canEditBriefChangeRequests = permissions.canEditDesignBriefChangeRequests;
@@ -1955,8 +1934,6 @@ export default function DesignTaskPage() {
     setDesignOutputLinks(nextInitialCache?.designOutputLinks ?? []);
     setDesignOutputGroups(nextInitialCache?.designOutputGroups ?? []);
     setHistoryRows([]);
-    setHistoryError(null);
-    setHistoryLoadedAll(false);
     setQuoteMentionComments([]);
     setQuoteMentionsError(null);
     setLoading(!nextInitialCache?.task);
@@ -2544,57 +2521,21 @@ export default function DesignTaskPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.quoteId]);
 
-  const loadHistory = useCallback(async (taskId: string, options?: { full?: boolean }) => {
-    if (!effectiveTeamId) return;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const createdQuery = supabase
-        .from("activity_log")
-        .select("id,team_id,user_id,actor_name,action,entity_type,entity_id,title,href,metadata,created_at")
-        .eq("team_id", effectiveTeamId)
-        .eq("id", taskId)
-        .maybeSingle();
-
-      const eventsQuery = supabase
-        .from("activity_log")
-        .select("id,team_id,user_id,actor_name,action,entity_type,entity_id,title,href,metadata,created_at")
-        .eq("team_id", effectiveTeamId)
-        .eq("entity_type", "design_task")
-        .eq("entity_id", taskId)
-        .neq("action", "design_task_timer")
-        .order("created_at", { ascending: false });
-
-      if (!options?.full) {
-        eventsQuery.limit(DESIGN_TASK_HISTORY_PAGE_SIZE);
-      }
-
-      const [{ data: createdRow, error: createdError }, { data: eventRows, error: eventsError }] = await Promise.all([
-        createdQuery,
-        eventsQuery,
-      ]);
-      if (createdError) throw createdError;
-      if (eventsError) throw eventsError;
-
-      const rows = [
-        ...(createdRow ? [createdRow as ActivityRow] : []),
-        ...(((eventRows as ActivityRow[] | null) ?? []).filter((row) => row.id !== createdRow?.id)),
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      setHistoryRows(rows);
-      setHistoryLoadedAll(options?.full ?? ((eventRows as ActivityRow[] | null)?.length ?? 0) < DESIGN_TASK_HISTORY_PAGE_SIZE);
-    } catch (e: unknown) {
-      setHistoryRows([]);
-      setHistoryError(getErrorMessage(e, "Не вдалося завантажити історію задачі."));
-      setHistoryLoadedAll(false);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [effectiveTeamId]);
+  /**
+   * Раніше тут вантажилась історія для секції правої колонки. Секцію замінено
+   * на обговорення (TaskThreadRail), яке має власний запит подій, тож замість
+   * другого завантаження просто скидаємо кеш нитки — усі 8 місць виклику після
+   * зміни статусу/дедлайну далі працюють, але тепер оновлюють саме те, що видно.
+   */
+  const loadHistory = useCallback(async () => {
+    const quoteRef = task?.quoteId ? String(task.quoteId) : null;
+    if (!quoteRef) return;
+    await threadQueryClient.invalidateQueries({ queryKey: threadKeys.entries(threadKeyForQuote(quoteRef)) });
+  }, [threadQueryClient, task?.quoteId]);
 
   useEffect(() => {
     if (!task?.id) return;
-    void loadHistory(task.id);
+    void loadHistory();
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id, effectiveTeamId]);
 
@@ -3026,7 +2967,7 @@ export default function DesignTaskPage() {
           setQuoteMentionComments((prev) => [savedComment, ...prev].slice(0, 30));
         } else {
           void (async () => {
-            if (task?.id) await loadHistory(task.id);
+            if (task?.id) await loadHistory();
           })();
         }
         if (payload?.mentionError) {
@@ -3057,7 +2998,7 @@ export default function DesignTaskPage() {
             type: "info",
           });
         }
-        await loadHistory(task.id);
+        await loadHistory();
       }
       setQuoteCommentDraft("");
       toast.success(
@@ -3141,19 +3082,6 @@ export default function DesignTaskPage() {
     !!userId &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
-  const startTimerBlockedReason = !task
-    ? "Задача не завантажена"
-    : !userId
-      ? "Потрібна авторизація"
-      : task.status !== "in_progress" && task.status !== "new" && task.status !== "changes"
-        ? "Таймер доступний у статусах «Новий», «Правки» та «В роботі»"
-        : !task.assigneeUserId
-          ? "Спочатку призначте виконавця"
-          : task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments
-            ? "Запускати таймер може виконавець або співвиконавець задачі"
-            : isTimerRunning
-              ? "Таймер уже запущено"
-              : null;
   const pauseTimerBlockedReason = !task
     ? "Задача не завантажена"
     : !userId
@@ -3345,12 +3273,6 @@ export default function DesignTaskPage() {
     }
   };
 
-  const formatDeadlineLabel = (value: string | null | undefined) => {
-    if (!value) return "Без дедлайну";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Без дедлайну";
-    return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", year: "numeric" });
-  };
 
   const formatDeadlineDateTime = (value: string | null | undefined) => {
     if (!value) return "Без дедлайну";
@@ -3391,209 +3313,8 @@ export default function DesignTaskPage() {
 
   const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
-  const historyEvents = useMemo<DesignTaskHistoryEvent[]>(() => {
-    return historyRows.map((row) => {
-      const metadata = parseActivityMetadata(row.metadata);
-      const source = typeof metadata.source === "string" ? metadata.source : "";
-      const actorLabel =
-        row.user_id && memberById[row.user_id] ? memberById[row.user_id] : row.actor_name?.trim() || "Користувач";
 
-      if (source === "design_task_assignment") {
-        const fromLabel = typeof metadata.from_assignee_label === "string" ? metadata.from_assignee_label : "Без виконавця";
-        const toLabel = typeof metadata.to_assignee_label === "string" ? metadata.to_assignee_label : "";
-        const title = toLabel ? `Виконавець: ${fromLabel} → ${toLabel}` : `Виконавця знято (${fromLabel})`;
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title,
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: UserRound,
-          accentClass:
-            "bg-primary/10 text-primary border-primary/20",
-        };
-      }
 
-      if (source === "design_task_manager") {
-        const fromLabel = typeof metadata.from_manager_label === "string" ? metadata.from_manager_label : "Не вказано";
-        const toLabel = typeof metadata.to_manager_label === "string" ? metadata.to_manager_label : "Не вказано";
-        const roleLabel = typeof metadata.role_label === "string" && metadata.role_label.trim()
-          ? metadata.role_label.trim()
-          : "Менеджер";
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: `${roleLabel}: ${fromLabel} → ${toLabel}`,
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: UserRound,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_status") {
-        const fromStatusRaw = typeof metadata.from_status === "string" ? metadata.from_status : "";
-        const toStatusRaw = typeof metadata.to_status === "string" ? metadata.to_status : "";
-        const fromLabel = statusLabels[fromStatusRaw as DesignStatus] ?? fromStatusRaw;
-        const toLabel = statusLabels[toStatusRaw as DesignStatus] ?? toStatusRaw;
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: fromLabel && toLabel ? `Статус: ${fromLabel} → ${toLabel}` : row.title?.trim() || "Оновлено статус задачі",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: CalendarClock,
-          accentClass: "quote-activity-accent-deadline",
-        };
-      }
-
-      if (source === "design_task_deadline") {
-        const fromDeadline = typeof metadata.from_deadline === "string" ? metadata.from_deadline : null;
-        const toDeadline = typeof metadata.to_deadline === "string" ? metadata.to_deadline : null;
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: `Дедлайн: ${formatDeadlineLabel(fromDeadline)} → ${formatDeadlineLabel(toDeadline)}`,
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: CalendarClock,
-          accentClass: "quote-activity-accent-deadline",
-        };
-      }
-
-      if (source === "design_task_brief_version") {
-        const versionRaw = typeof metadata.brief_version === "number" ? metadata.brief_version : Number(metadata.brief_version);
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: Number.isFinite(versionRaw) ? `Оновлено ТЗ до v${Math.round(versionRaw)}` : "Оновлено ТЗ",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: Check,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_brief_change_request") {
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: "Додано правку до ТЗ",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: Clock,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_brief_change_request_edit") {
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: "Оновлено правку до ТЗ",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: PencilLine,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_comment") {
-        const body =
-          typeof metadata.comment_body === "string" && metadata.comment_body.trim()
-            ? metadata.comment_body.trim()
-            : row.title?.trim() || "";
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: "Коментар",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          description: body || undefined,
-          icon: Check,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_estimate") {
-        const raw = metadata.estimate_minutes;
-        const estimateMinutes =
-          typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: `Естімейт: ${formatEstimateMinutes(Number.isFinite(estimateMinutes) ? estimateMinutes : null)}`,
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: Clock,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_timer") {
-        const timerAction = typeof metadata.timer_action === "string" ? metadata.timer_action : "";
-        const title =
-          timerAction === "start"
-            ? "Запущено таймер"
-            : timerAction === "pause"
-              ? "Таймер на паузі"
-              : timerAction.startsWith("auto_pause")
-                ? "Таймер зупинено автоматично"
-                : row.title?.trim() || "Оновлено таймер";
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title,
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          icon: Timer,
-          accentClass: "quote-activity-accent-comment",
-        };
-      }
-
-      if (source === "design_task_created" || row.action === "design_task") {
-        return {
-          id: row.id,
-          created_at: row.created_at,
-          title: "Створено дизайн-задачу",
-          actorLabel,
-          actorUserId: row.user_id ?? null,
-          description: row.title?.trim() || undefined,
-          icon: Palette,
-          accentClass: "quote-activity-accent-runs",
-        };
-      }
-
-      return {
-        id: row.id,
-        created_at: row.created_at,
-        title: row.title?.trim() || "Оновлено задачу",
-        actorLabel,
-        actorUserId: row.user_id ?? null,
-        icon: Clock,
-        accentClass: "bg-muted/30 text-muted-foreground border-border",
-      };
-    });
-  }, [historyRows, memberById]);
-
-  const historyGroups = useMemo(() => {
-    const groups: { label: string; items: DesignTaskHistoryEvent[] }[] = [];
-    for (const event of historyEvents.slice(0, historyVisibleCount)) {
-      const label = formatActivityDayLabel(event.created_at);
-      const lastGroup = groups[groups.length - 1];
-      if (!lastGroup || lastGroup.label !== label) {
-        groups.push({ label, items: [event] });
-      } else {
-        lastGroup.items.push(event);
-      }
-    }
-    return groups;
-  }, [historyEvents, historyVisibleCount]);
-
-  useEffect(() => {
-    setHistoryVisibleCount(5);
-    setHistoryCollapsed(true);
-  }, [task?.id]);
 
   const standaloneComments = useMemo<DesignTaskComment[]>(
     () =>
@@ -4253,7 +3974,7 @@ export default function DesignTaskPage() {
             })),
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design output upload", logError);
       }
@@ -4414,7 +4135,7 @@ export default function DesignTaskPage() {
             })),
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log task attachment upload", logError);
       }
@@ -5098,7 +4819,7 @@ export default function DesignTaskPage() {
           selected_design_output_file_ids: nextSelectedIds,
         },
       });
-      await loadHistory(task.id);
+      await loadHistory();
       toast.success(
         nextSelectedIds.length > 0
           ? `Погоджені ${kind === "visualization" ? "візуали" : "макети"} оновлено`
@@ -5553,7 +5274,7 @@ export default function DesignTaskPage() {
             design_task_type: task.designTaskType ?? null,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task status event", logError);
       }
@@ -5633,7 +5354,7 @@ export default function DesignTaskPage() {
           to_title: normalizedTitle,
         },
       });
-      await loadHistory(previousTask.id);
+      await loadHistory();
 
       if (typeof window !== "undefined" && id) {
         sessionStorage.setItem(
@@ -5727,7 +5448,7 @@ export default function DesignTaskPage() {
             to_deadline: nextDeadline,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task deadline event", logError);
       }
@@ -5858,7 +5579,7 @@ export default function DesignTaskPage() {
             to_design_task_type: nextType,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task type update", logError);
       }
@@ -6004,7 +5725,7 @@ export default function DesignTaskPage() {
             brief_version_id: nextVersion.id,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task brief event", logError);
       }
@@ -6142,7 +5863,7 @@ export default function DesignTaskPage() {
             },
           });
         }
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task brief change request event", logError);
       }
@@ -6366,7 +6087,7 @@ export default function DesignTaskPage() {
             change_request_id: request.id,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log change request delete", logError);
       }
@@ -6490,7 +6211,7 @@ export default function DesignTaskPage() {
             to_request_text: nextText,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task brief change request edit", logError);
       }
@@ -6663,7 +6384,7 @@ export default function DesignTaskPage() {
         console.warn("Failed to send design task assignment notification", notifyError);
       }
 
-      await loadHistory(task.id);
+      await loadHistory();
       toast.success(nextAssigneeUserId ? `Виконавця змінено: ${getMemberLabel(nextAssigneeUserId)}` : "Виконавця знято");
     } catch (e: unknown) {
       setTask(previousTask);
@@ -6747,7 +6468,7 @@ export default function DesignTaskPage() {
           addedUserIds,
           removedUserIds,
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log design task collaborator update", logError);
       }
@@ -6821,7 +6542,7 @@ export default function DesignTaskPage() {
             to_manager_label: nextManagerLabel,
           },
         });
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log manager update", logError);
       }
@@ -7000,7 +6721,7 @@ export default function DesignTaskPage() {
           });
         }
 
-        await loadHistory(task.id);
+        await loadHistory();
       } catch (logError) {
         console.warn("Failed to log/notify assignment", logError);
       }
@@ -7079,7 +6800,7 @@ export default function DesignTaskPage() {
           to_estimate_minutes: estimateMinutes,
         },
       });
-      await loadHistory(task.id);
+      await loadHistory();
       toast.success(previousEstimate ? "Естімейт оновлено" : "Естімейт встановлено");
     } catch (e: unknown) {
       setTask(previousTask);
@@ -7718,27 +7439,8 @@ export default function DesignTaskPage() {
 
   const mobileSecondaryAction =
     quickActions.find((action) => !(isStatusStartable && action.next === "in_progress")) ?? null;
-  const statusQuickActionsWithoutStart = quickActions.filter(
-    (action) => !(isStatusStartable && action.next === "in_progress")
-  );
   const mobileSecondaryActionDisabled =
     !!statusSaving || (mobileSecondaryAction?.next === "client_review" && !canSendToClientNow);
-  const showSidebarPrimaryAction = !!primaryActionClick || primaryActionLoading;
-  const SidebarPrimaryActionIcon =
-    !task?.assigneeUserId || primaryActionLabel.includes("себе") ? UserPlus : task?.status === "changes" ? AlertTriangle : Play;
-  const timerCardTone: SidebarActionTone = isTimerRunning ? "success" : isTimerPaused ? "warning" : "neutral";
-  const timerHelperText = isTimerRunning
-    ? `Активний${timerSummary.activeUserId ? ` · ${getMemberLabel(timerSummary.activeUserId)}` : ""}. Постав на паузу після завершення роботи.`
-    : isTimerPaused
-      ? "На паузі. Запусти таймер, коли продовжуєш роботу."
-      : startTimerBlockedReason ?? "Запускай таймер на старті роботи і став на паузу одразу після завершення.";
-  const timerActionLabel = isTimerRunning
-    ? "Поставити на паузу"
-    : isTimerPaused
-      ? "Продовжити таймер"
-      : task && (task.status === "new" || task.status === "changes")
-        ? "Почати роботу"
-        : "Запустити таймер";
 
   const dropboxFolderNameDefault = useMemo(
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
@@ -8393,7 +8095,7 @@ export default function DesignTaskPage() {
           exported_count: filesPayload.length,
         },
       });
-      await loadHistory(task.id);
+      await loadHistory();
       toast.success(`Експортовано в Dropbox: ${filesPayload.length} файлів`);
     } catch (error) {
       const message = getErrorMessage(error, "Не вдалося експортувати файли в Dropbox");
@@ -8598,12 +8300,6 @@ export default function DesignTaskPage() {
   };
 
   // Live time on initial/general work (sessions not attributed to a правка).
-  const getGeneralTimerSeconds = () => {
-    const breakdown = designTimerBreakdown;
-    const base = breakdown?.generalSeconds ?? 0;
-    if (!breakdown || !breakdown.activeIsGeneral || !breakdown.activeStartedAt) return base;
-    return base + Math.max(0, Math.floor((timerNowMs - new Date(breakdown.activeStartedAt).getTime()) / 1000));
-  };
 
   // Правка card → time chip (accumulated time + play/pause for the designer).
   const renderChangeRequestTimerChip = (request: DesignBriefChangeRequest) => {
@@ -9521,7 +9217,6 @@ export default function DesignTaskPage() {
   );
 
   const designResultCount = designOutputFiles.length + designOutputLinks.length;
-  const discussionCount = isLinkedQuote ? quoteMentionComments.length : standaloneComments.length;
   const designTaskTabs: Array<{
     value: DesignTaskPageTab;
     label: string;
@@ -9564,13 +9259,6 @@ export default function DesignTaskPage() {
       icon: Paperclip,
       badge: attachments.length || null,
       attention: Boolean(customerAttachmentsError),
-    },
-    {
-      value: "discussion",
-      label: "Обговорення",
-      icon: MessageSquare,
-      badge: discussionCount || null,
-      attention: Boolean(quoteMentionsError),
     },
   ];
 
@@ -9812,16 +9500,51 @@ export default function DesignTaskPage() {
                 </div>
               </PopoverContent>
             </Popover>
-            <Badge
-              variant="outline"
+            {/* Керування таймером живе тут, у шапці: картку з правої колонки
+                прибрано, і це тепер єдине місце старт/паузи загального таймера. */}
+            <span
               className={cn(
-                "px-2.5 py-1 text-xs gap-1",
-                isTimerRunning ? "border-success-soft-border text-success-foreground bg-success-soft" : ""
+                "inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-0.5 text-xs font-medium tabular-nums",
+                isTimerRunning
+                  ? "border-success-soft-border bg-success-soft text-success-foreground"
+                  : isTimerPaused
+                    ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
+                    : "border-border/60 text-muted-foreground"
               )}
             >
               <Timer className="h-3.5 w-3.5" />
               {timerElapsedLabel}
-            </Badge>
+              {isTimerRunning ? (
+                <button
+                  type="button"
+                  aria-label="Поставити таймер на паузу"
+                  title={pauseTimerBlockedReason ?? "Пауза"}
+                  disabled={!canPauseTimer || timerBusy === "pause"}
+                  onClick={() => void handlePauseTimer()}
+                  className="grid h-6 w-6 place-items-center rounded-full transition-colors hover:bg-background/60 disabled:opacity-40"
+                >
+                  {timerBusy === "pause" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Pause className="h-3 w-3" />
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Запустити таймер"
+                  disabled={!canStartTimer || timerBusy === "start"}
+                  onClick={() => void handleStartTimer()}
+                  className="grid h-6 w-6 place-items-center rounded-full transition-colors hover:bg-muted/60 disabled:opacity-40"
+                >
+                  {timerBusy === "start" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Play className="h-3 w-3" />
+                  )}
+                </button>
+              )}
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -11834,287 +11557,14 @@ export default function DesignTaskPage() {
                 <span className="design-task-detail-value">{formatDate(task.createdAt, true)}</span>
               </div>
 
-              <div className="group design-task-detail-row" data-interactive="true">
-                <span className="design-task-detail-label">
-                  <CalendarClock className="h-4 w-4 text-muted-foreground/70" />
-                  Дедлайн
-                </span>
-                <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "design-task-detail-value cursor-pointer",
-                        deadlineSaving && "opacity-50 pointer-events-none"
-                      )}
-                    >
-                      <span className={cn("whitespace-nowrap text-right", task.designDeadline ? deadlineLabel.className : "text-muted-foreground/50 italic")}>
-                        {task.designDeadline ? formatDeadlineDateTime(task.designDeadline) : "Не встановлено"}
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
-                    <Calendar mode="single" selected={deadlineDraftDate} onSelect={(date) => setDeadlineDraftDate(date ?? undefined)} captionLayout="dropdown-buttons" fromYear={new Date().getFullYear() - 3} toYear={new Date().getFullYear() + 5} initialFocus />
-                    <div className="space-y-2 border-t border-border/50 px-2 py-3">
-                      <Input value={deadlineTime} onChange={(event) => setDeadlineTime(normalizeDeadlineTimeInput(event.target.value))} onBlur={() => setDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"))} placeholder="HH:MM" className="h-9 text-sm" />
-                      <div className="grid w-full grid-cols-4 gap-1.5">
-                        {DEADLINE_PRESET_TIMES.map((time) => (
-                          <Button key={time} type="button" size="xs" variant={deadlineTime === time ? "secondary" : "outline"} className="w-full justify-center" onClick={() => setDeadlineTime(time)}>{time}</Button>
-                        ))}
-                      </div>
-                    </div>
-                    <DateQuickActions fullWidth onSelect={(date) => setDeadlineDraftDate(date ?? undefined)} />
-                    <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setDeadlinePopoverOpen(false)} disabled={deadlineSaving}>Скасувати</Button>
-                      <Button type="button" size="sm" onClick={applyDeadlineDraft} disabled={deadlineSaving}>Зберегти</Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition group-hover:opacity-100">
-                  <PencilLine className="h-3.5 w-3.5" />
-                </span>
-              </div>
             </div>
 
-            <div className="mt-4">
-              <div className="design-task-panel-card" data-tone={timerCardTone}>
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <div className="design-task-side-heading flex items-center gap-2 text-foreground/70">
-                      <Timer className="h-3.5 w-3.5" />
-                      Таймер
-                      {isTimerPaused ? (
-                        <span className="rounded-full border border-warning-soft-border bg-warning-soft px-1.5 py-0.5 text-3xs font-semibold uppercase text-warning-foreground">
-                          На паузі
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      className={cn(
-                        "design-task-timer-value mt-3",
-                        isTimerRunning
-                          ? "text-success-foreground"
-                          : isTimerPaused
-                            ? "text-warning-foreground"
-                            : "text-foreground"
-                      )}
-                    >
-                      {timerElapsedLabel}
-                    </div>
-                    {designTimerBreakdown &&
-                    (getGeneralTimerSeconds() > 0 ||
-                      Object.keys(designTimerBreakdown.byChangeRequestSeconds).length > 0) ? (
-                      <div className="mt-3 space-y-1 border-t border-border/40 pt-3 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-muted-foreground">По ТЗ</span>
-                          <span className="tabular-nums text-foreground/80">
-                            {formatElapsedSeconds(getGeneralTimerSeconds())}
-                          </span>
-                        </div>
-                        {briefChangeRequests.map((request) => {
-                          const seconds = getChangeRequestTimerSeconds(request.id);
-                          if (seconds <= 0) return null;
-                          const active =
-                            designTimerBreakdown?.activeChangeRequestId === request.id &&
-                            designTimerBreakdown?.hasActive;
-                          return (
-                            <button
-                              key={request.id}
-                              type="button"
-                              onClick={() => jumpToChangeRequest(request.id)}
-                              className="flex w-full items-center justify-between gap-2 text-left transition-colors hover:text-foreground"
-                              title="Перейти до правки"
-                            >
-                              <span className="truncate text-muted-foreground">
-                                {changeRequestSnippet(request.request_text, 20)}
-                              </span>
-                              <span
-                                className={cn(
-                                  "tabular-nums",
-                                  active ? "text-success-foreground" : "text-foreground/80"
-                                )}
-                              >
-                                {formatElapsedSeconds(seconds)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                  {!isTimerRunning ? (
-                    <Button
-                      size="sm"
-                      className="h-10 w-full text-[16px] [&_svg]:size-5"
-                      disabled={!canStartTimer || !!timerBusy}
-                      onClick={() => void handleStartTimer()}
-                      title={startTimerBlockedReason ?? "Запустити таймер"}
-                    >
-                      {timerBusy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                      {timerActionLabel}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-10 w-full text-[16px] [&_svg]:size-5"
-                      disabled={!canPauseTimer || !!timerBusy}
-                      onClick={() => void handlePauseTimer()}
-                      title={pauseTimerBlockedReason ?? "Поставити на паузу"}
-                    >
-                      {timerBusy === "pause" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
-                      {timerActionLabel}
-                    </Button>
-                  )}
-                </div>
-                {!isTimerRunning && (isTimerPaused || startTimerBlockedReason) ? (
-                  <div className="mt-3 text-xs leading-5 text-muted-foreground">
-                    {isTimerPaused ? timerHelperText : startTimerBlockedReason}
-                  </div>
-                ) : null}
-              </div>
-            </div>
 
-            {showSidebarPrimaryAction || statusQuickActionsWithoutStart.length > 0 ? (
-              <div className="mt-4 space-y-2.5">
-                {showSidebarPrimaryAction ? (
-                  <Button
-                    variant="outline"
-                    className="design-task-side-action-plain"
-                    disabled={primaryActionDisabled || designTaskLockedByOther}
-                    onClick={primaryActionClick ?? undefined}
-                  >
-                    <span className="design-task-side-action-icon">
-                      {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SidebarPrimaryActionIcon className="h-4 w-4" />}
-                    </span>
-                    <span className="truncate text-sm font-semibold leading-5 text-foreground">{primaryActionLabel}</span>
-                  </Button>
-                ) : null}
-                {statusQuickActionsWithoutStart.map((action) => {
-                  const meta = SIDEBAR_STATUS_ACTION_META[action.next] ?? {
-                    icon: ArrowLeft,
-                    tone: "neutral" as const,
-                    description: `Переведе задачу в статус «${DESIGN_STATUS_LABELS[action.next]}».`,
-                  };
-                  const ActionIcon = meta.icon;
-                  const blocked = action.next === "client_review" && !canSendToClientNow;
-                  return (
-                    <Button
-                      key={`${task.status}-${action.next}`}
-                      variant="outline"
-                      className="design-task-side-action-plain"
-                      disabled={!!statusSaving || blocked}
-                      onClick={() => void updateTaskStatus(action.next)}
-                    >
-                      <span className="design-task-side-action-icon">
-                        {statusSaving === action.next ? <Loader2 className="h-4 w-4 animate-spin" /> : <ActionIcon className="h-4 w-4" />}
-                      </span>
-                      <span className="truncate text-sm font-semibold leading-5 text-foreground">{action.label}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            ) : null}
           </section>
 
-          <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
-            <div className="flex items-center justify-between pb-3">
-              <button
-                type="button"
-                className="flex items-center gap-2 text-left"
-                onClick={() => setHistoryCollapsed((prev) => !prev)}
-                aria-expanded={!historyCollapsed}
-              >
-                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", historyCollapsed ? "-rotate-90" : "rotate-0")} />
-                <span className="design-task-side-heading">Історія</span>
-              </button>
-              {historyEvents.length > 0 ? (
-                <span className="design-task-side-heading normal-case tracking-normal text-muted-foreground/60">
-                  {Math.min(historyVisibleCount, historyEvents.length)} / {historyEvents.length}
-                </span>
-              ) : null}
-            </div>
-
-            {!historyCollapsed ? (
-              <div className="space-y-3">
-                {historyLoading && historyEvents.length === 0 ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Завантаження...
-                  </div>
-                ) : historyGroups.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Подій ще немає</div>
-                ) : (
-                  <div className="space-y-4">
-                    {historyError ? <div className="text-xs text-destructive">{historyError}</div> : null}
-                    {historyGroups.map((group) => (
-                      <div key={group.label} className="space-y-2.5">
-                        <div className="inline-flex rounded-full border border-border/50 bg-muted/20 px-2.5 py-1 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
-                          {group.label}
-                        </div>
-                        <div className="space-y-4">
-                          {group.items.map((event, eventIndex) => {
-                            const Icon = event.icon;
-                            return (
-                              <div key={event.id} className="flex items-stretch gap-3">
-                                <div className="flex w-4 shrink-0 flex-col items-center">
-                                  <Icon className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-                                  {eventIndex < group.items.length - 1 ? (
-                                    <div className="mt-2 w-px flex-1 bg-border/45" />
-                                  ) : null}
-                                </div>
-                                <div className="min-w-0 flex-1 pb-1">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="text-sm font-medium">{event.title}</div>
-                                    <div className="whitespace-nowrap text-xs text-muted-foreground">
-                                      {formatActivityClock(event.created_at)}
-                                    </div>
-                                  </div>
-                                  <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                    <AvatarBase
-                                      src={event.actorUserId ? getMemberAvatar(event.actorUserId) : null}
-                                      name={event.actorLabel}
-                                      fallback={getInitials(event.actorLabel)}
-                                      inactive={event.actorUserId ? (memberInactiveById[event.actorUserId] ?? false) : false}
-                                      size={14}
-                                      className="shrink-0 border-border/70"
-                                    />
-                                    <span>{event.actorLabel}</span>
-                                  </div>
-                                  {event.description ? (
-                                    <div className="mt-1 text-xs text-muted-foreground">{event.description}</div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                    {historyVisibleCount < historyEvents.length ? (
-                      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setHistoryVisibleCount((prev) => prev + 5)}>
-                        Показати ще 5
-                      </Button>
-                    ) : !historyLoadedAll ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        disabled={historyLoading || !task?.id}
-                        onClick={() => {
-                          if (task?.id) {
-                            void loadHistory(task.id, { full: true });
-                          }
-                        }}
-                      >
-                        {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Завантажити ще з історії
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
-              </div>
+          <section className="flex h-[520px] min-h-0 flex-col border-t border-[hsl(var(--app-structure-divider))] pt-6">
+            {effectiveTeamId ? (
+              <TaskThreadRail quoteRef={String(task.quoteId)} teamId={effectiveTeamId} />
             ) : null}
           </section>
           </div>

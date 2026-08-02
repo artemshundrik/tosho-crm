@@ -358,6 +358,13 @@ export type DerivedOrderRecord = {
   contractProductionDays: number | null;
   /** Persisted contract generation param: auto-prolongation clause (p.8.5). */
   contractAutoProlongation: boolean;
+  /**
+   * Номер рахунку з наскрізного лічильника команди. Проставляється один раз при
+   * першій генерації і далі не змінюється — як contractCreatedAt. На відміну від
+   * договору, ніколи не успадковується від іншого замовлення того самого клієнта.
+   */
+  invoiceNumber: string | null;
+  invoiceCreatedAt: string | null;
   /** Nova Poshta ТТН (Phase 2). null → ще не створено. */
   npTtnNumber: string | null;
   npTtnRef: string | null;
@@ -432,6 +439,8 @@ type StoredOrderRow = {
   contract_date?: string | null;
   contract_production_days?: number | string | null;
   contract_auto_prolongation?: boolean | null;
+  invoice_number?: string | null;
+  invoice_created_at?: string | null;
   np_ttn_number?: string | null;
   np_ttn_ref?: string | null;
   np_ttn_cost?: number | string | null;
@@ -632,6 +641,16 @@ const isMissingOrdersColumnMessage = (message?: string | null) => {
   return normalized.includes("column") || normalized.includes("schema cache") || normalized.includes("could not find");
 };
 
+/** Той самий детектор «функції ще немає», що й у lib/designTaskNumber.ts і lib/workspace.ts. */
+const isMissingFunctionError = (message?: string | null) => {
+  const normalized = (message ?? "").toLowerCase();
+  return (
+    normalized.includes("does not exist") ||
+    normalized.includes("not found in the schema cache") ||
+    normalized.includes("could not find the function")
+  );
+};
+
 const parseCustomerContacts = (row?: CustomerRecord | null): CustomerContact[] => {
   const raw = Array.isArray(row?.contacts) ? row.contacts : [];
   const normalized = raw
@@ -756,7 +775,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
   const baseColumns =
     "id,team_id,quote_id,quote_number,customer_id,customer_name,customer_logo_url,party_type,manager_user_id,manager_label,created_at,updated_at,currency,total,payment_method_label,order_status,payment_status,delivery_status,contact_email,contact_phone,legal_entity_label,signatory_label,design_statuses,documents,readiness_steps,blockers,readiness_column,has_approved_visualization,has_approved_layout";
   const extendedColumns =
-    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
+    `${baseColumns},payment_method_id,payment_terms,prepayment_pct,balance_pct,balance_timing,balance_days_after_shipment,incoterms_code,incoterms_place,customer_tax_id,customer_iban,customer_bank_details,customer_legal_address,customer_signatory_authority,contract_created_at,specification_created_at,contract_number,contract_date,contract_production_days,contract_auto_prolongation,invoice_number,invoice_created_at,np_ttn_number,np_ttn_ref,np_ttn_cost,np_ttn_estimated_delivery,np_ttn_created_at,delivery_type,delivery_details,packaging,design_task_id,design_task_number`;
   const readRows = async (columns: string) =>
     await supabase
       .schema("tosho")
@@ -1180,6 +1199,9 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       contractDate: null,
       contractProductionDays: null,
       contractAutoProlongation: false,
+      // Замовлення ще навіть не створене (це прорахунок), тож рахунку теж немає.
+      invoiceNumber: null,
+      invoiceCreatedAt: null,
       npTtnNumber: null,
       npTtnRef: null,
       npTtnCost: null,
@@ -1624,6 +1646,9 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
         specificationCreatedAt: order.specification_created_at ?? null,
         contractNumber: order.contract_number?.trim?.() || inheritedContract?.number || null,
         contractDate: order.contract_date?.trim?.() || inheritedContract?.date || null,
+        // На відміну від договору, номер рахунку належить лише цьому замовленню — ніколи не успадковується.
+        invoiceNumber: order.invoice_number?.trim?.() || null,
+        invoiceCreatedAt: order.invoice_created_at ?? null,
         npTtnNumber: order.np_ttn_number?.trim?.() || null,
         npTtnRef: order.np_ttn_ref?.trim?.() || null,
         npTtnCost:
@@ -2443,4 +2468,130 @@ export async function markOrderDocumentCreated(params: {
   }
 
   return nowIso;
+}
+
+/**
+ * next_document_number (scripts/document-counters-schema.sql) ще не потрапила в
+ * database.types.ts — міграцію не застосовано в проді, типи не перегенеровані.
+ * Каст мінімальний і живе на рівні виклику (як rpcName у lib/workspace.ts); сам
+ * .rpc лишається викликом на тому самому обʼєкті — винести його в окрему змінну
+ * означає загубити this і отримати тихий рантайм-фейл (див. lib/toshoRpc.ts).
+ */
+type DocumentCounterRpcClient = {
+  rpc: (
+    fn: "next_document_number",
+    args: { p_team_id: string; p_kind: string; p_entity_key: string; p_period: string }
+  ) => PromiseLike<{ data: number | string | null; error: { message: string } | null }>;
+};
+
+/**
+ * Юрособа, від імені якої виписуються рахунки по замовленнях. Нумерація ТОВ і ФОП
+ * незалежні, а замовлення поки завжди йдуть від ТОВ (ORDER_DOCUMENT_EXECUTOR).
+ */
+const INVOICE_COUNTER_ENTITY_KEY = "avanprint";
+
+/** Номер рахунку — три розряди з провідними нулями: 1 → «001», 300 → «300». */
+export const formatInvoiceNumber = (value: number | string): string => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 1) return "";
+  return String(Math.trunc(numeric)).padStart(3, "0");
+};
+
+/**
+ * Закріпити за замовленням номер рахунку з наскрізного лічильника команди.
+ *
+ * Номер видає атомарна RPC — паралельні генерації не отримають однакових номерів.
+ * Викликати ЛИШЕ коли invoice_number ще порожній. Оновлення захищене умовою
+ * `is("invoice_number", null)`: якщо номер устиг проставити паралельний виклик,
+ * ми не перетираємо його, а повертаємо той, що вже закріпився (виданий нами номер
+ * при цьому згорає — розрив у нумерації краще за два різні номери на одному рахунку).
+ *
+ * Якщо міграція ще не застосована (немає RPC або колонок) — повертає null, і
+ * рахунок друкується зі старою поведінкою, з номером замовлення.
+ */
+export async function assignOrderInvoiceNumber(params: { teamId: string; orderId: string }): Promise<{
+  invoiceNumber: string;
+  invoiceCreatedAt: string;
+} | null> {
+  // Нумерація обнуляється 1 січня, тож рік — частина ключа лічильника.
+  // Юрособа теж: у ТОВ і ФОП нумерація незалежна. Замовлення завжди виписуються
+  // від ТОВ (див. ORDER_DOCUMENT_EXECUTOR), тож ключ поки сталий — коли зʼявиться
+  // вибір юрособи на замовленні, сюди піде він.
+  const period = String(new Date().getFullYear());
+  const { data: nextNumber, error: rpcError } = await (
+    supabase.schema("tosho") as unknown as DocumentCounterRpcClient
+  ).rpc("next_document_number", {
+    p_team_id: params.teamId,
+    p_kind: "invoice",
+    p_entity_key: INVOICE_COUNTER_ENTITY_KEY,
+    p_period: period,
+  });
+
+  if (rpcError) {
+    if (isMissingFunctionError(rpcError.message)) return null;
+    throw rpcError;
+  }
+  if (nextNumber === null || nextNumber === undefined) return null;
+  const invoiceNumber = formatInvoiceNumber(nextNumber);
+  if (!invoiceNumber) return null;
+
+  const nowIso = new Date().toISOString();
+  const payload: Record<string, unknown> = {
+    invoice_number: invoiceNumber,
+    invoice_created_at: nowIso,
+    updated_at: nowIso,
+  };
+  const selectColumns: string = "id,invoice_number,invoice_created_at";
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .update(payload)
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId)
+    .is("invoice_number", null)
+    .select(selectColumns);
+
+  if (error) {
+    if (isMissingOrdersRelationMessage(error.message) || isMissingOrdersColumnMessage(error.message)) {
+      return null;
+    }
+    throw error;
+  }
+
+  const updatedRows = ((data ?? []) as unknown) as Array<{
+    id: string;
+    invoice_number: string | null;
+    invoice_created_at: string | null;
+  }>;
+  if (updatedRows.length > 0) {
+    const row = updatedRows[0];
+    if (row.invoice_number && row.invoice_created_at) {
+      return { invoiceNumber: row.invoice_number, invoiceCreatedAt: row.invoice_created_at };
+    }
+    return null;
+  }
+
+  // 0 рядків: умову is("invoice_number", null) не пройдено — паралельний виклик
+  // устиг проставити номер першим. Читаємо, що вже закріпилось за замовленням.
+  const { data: existingRow, error: readError } = await supabase
+    .schema("tosho")
+    .from("orders")
+    .select(selectColumns)
+    .eq("team_id", params.teamId)
+    .eq("id", params.orderId)
+    .maybeSingle<{ id: string; invoice_number: string | null; invoice_created_at: string | null }>();
+
+  if (readError) {
+    if (isMissingOrdersRelationMessage(readError.message) || isMissingOrdersColumnMessage(readError.message)) {
+      return null;
+    }
+    throw readError;
+  }
+
+  if (existingRow?.invoice_number && existingRow?.invoice_created_at) {
+    return { invoiceNumber: existingRow.invoice_number, invoiceCreatedAt: existingRow.invoice_created_at };
+  }
+
+  return null;
 }

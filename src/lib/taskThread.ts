@@ -133,6 +133,87 @@ export function countUnread(
   }).length;
 }
 
+export type ThreadDayDigest = {
+  key: string;
+  label: string;
+  /** Скільки сирих подій згорнуто в цей рядок. */
+  count: number;
+  /** «2 правки · дедлайн зсунуто · 2 візуали» */
+  summary: string;
+  marks: Array<"rev" | "vis" | "dl">;
+  entries: ThreadEntry[];
+};
+
+const plural = (n: number, one: string, few: string, many: string) => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+};
+
+/**
+ * Згортка подій у рядок на день.
+ *
+ * Навіщо: у важкій задачі буває 75 подій за 18 днів (перевірено на проді,
+ * «Візуал футболки Теплекс»). Сирим списком це стіна однакових рядків, у якій
+ * нічого не видно. Дайджест дає 18 рядків, де історія читається з першого
+ * погляду: те саме коло «правка · дедлайн · візуал», повторене дванадцять разів.
+ */
+export function buildDayDigests(events: ThreadEntry[], now: Date): ThreadDayDigest[] {
+  const byDay = new Map<string, ThreadEntry[]>();
+
+  for (const event of events) {
+    if (event.kind !== "event") continue;
+    const key = dayKey(new Date(event.createdAt));
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(event);
+    else byDay.set(key, [event]);
+  }
+
+  const digests: ThreadDayDigest[] = [];
+
+  for (const [key, dayEvents] of byDay) {
+    const sorted = [...dayEvents].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const count = (type: string) => sorted.filter((item) => item.eventType === type).length;
+
+    const revisions = count("design_task_brief_change_request");
+    const deadlines = count("design_task_deadline");
+    const visuals = count("design_output_upload");
+    const timers = count("design_task_timer");
+    const estimates = count("design_task_estimate");
+
+    const parts: string[] = [];
+    if (revisions > 0) parts.push(`${revisions} ${plural(revisions, "правка", "правки", "правок")}`);
+    if (deadlines > 0) parts.push(deadlines > 1 ? `дедлайн зсунуто ×${deadlines}` : "дедлайн зсунуто");
+    if (visuals > 0) parts.push(`${visuals} ${plural(visuals, "візуал", "візуали", "візуалів")}`);
+    if (timers > 0) parts.push(`${timers} ${plural(timers, "сесія", "сесії", "сесій")}`);
+    if (estimates > 0) parts.push("оцінено");
+
+    // Якщо за день були самі лише зміни статусу — показуємо останню, інакше
+    // рядок був би порожній і день виглядав би поламаним.
+    const summary = parts.length > 0 ? parts.join(" · ") : (sorted[sorted.length - 1]?.body ?? "");
+
+    const marks: ThreadDayDigest["marks"] = [
+      ...Array.from({ length: Math.min(revisions, 3) }, () => "rev" as const),
+      ...Array.from({ length: Math.min(deadlines, 2) }, () => "dl" as const),
+      ...Array.from({ length: Math.min(visuals, 3) }, () => "vis" as const),
+    ];
+
+    digests.push({
+      key,
+      label: dayLabel(sorted[0].createdAt, now),
+      count: sorted.length,
+      summary,
+      marks,
+      entries: sorted,
+    });
+  }
+
+  // Найновіші дні зверху — читають зазвичай саме їх.
+  return digests.sort((a, b) => (a.entries[0].createdAt < b.entries[0].createdAt ? 1 : -1));
+}
+
 export type KpiCell = {
   label: string;
   value: string;
