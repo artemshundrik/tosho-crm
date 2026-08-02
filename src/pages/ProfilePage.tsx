@@ -902,9 +902,11 @@ export function ProfilePage() {
 
               <div className="rounded-inner border border-border bg-background/70 p-5">
                 <div className="mb-5">
-                  <div className="text-lg font-semibold text-foreground">Telegram-сповіщення</div>
+                  <div className="text-lg font-semibold text-foreground">Telegram-бот</div>
                   <div className="mt-1 text-sm text-muted-foreground">
-                    Отримуй сповіщення CRM у Telegram через бота @{TELEGRAM_BOT_USERNAME}.
+                    Сповіщення CRM у Telegram через бота @{TELEGRAM_BOT_USERNAME}. А ще там можна
+                    спитати «хто сьогодні відсутній», написати «хворію» чи «day-off 15.08» — і
+                    лікарняний або заявка оформляться без відкриття CRM (команда /absence).
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">

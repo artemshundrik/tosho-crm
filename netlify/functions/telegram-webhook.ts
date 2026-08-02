@@ -2,12 +2,24 @@ import { timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   answerTelegramCallback,
+  editTelegramMessageText,
   editTelegramReplyMarkup,
   sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
   type PersistentKeyboard,
 } from "./_telegram";
+import {
+  confirmScreen,
+  countBusinessDaysForUser,
+  isAbsenceBotKind,
+  kindMenuScreen,
+  parseAbsenceText,
+  presetMenuScreen,
+  presetRange,
+  submitAbsenceFromBot,
+} from "./_absenceBotFlow";
+import { resolveMemberWorkspaceId } from "./_lib/absenceSubmit";
 import {
   visibleNotificationCategories,
   type NotificationCategory,
@@ -244,6 +256,31 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
+  // Оформлення відсутності: лікарняний / day-off / відпустка (_absenceBotFlow).
+  if (command === "/absence") {
+    const settings = await loadSettingsByChat(adminClient, chatId);
+    if (!settings) {
+      await sendTelegramMessage(chatId, NOT_LINKED);
+      return;
+    }
+    if (!(await isActiveMember(adminClient, settings.user_id))) {
+      await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
+      return;
+    }
+    const screen = kindMenuScreen();
+    await sendTelegramMessage(chatId, screen.text, {
+      parseMode: "HTML",
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+    return;
+  }
+
+  // «Хто сьогодні відсутній» — той самий інтент, що й кнопка/вільне питання.
+  if (command === "/away") {
+    await handleAssistantQuestion(adminClient, chatId, { directIntent: "who_is_absent" });
+    return;
+  }
+
   if (command === "/settings") {
     const row = await loadSettingsByChat(adminClient, chatId);
     if (!row) {
@@ -294,6 +331,39 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       chatId,
       "Відключено. Сповіщення більше не надходитимуть. Підключити знову — у профілі CRM."
     );
+    return;
+  }
+
+  // «лікарняний 05.08–08.08», «хворію», «day-off 15.08» — форма подання, а не
+  // питання: перехоплюємо ДО асистента, щоб не палити виклик моделі. Ловить
+  // лише тексти, що ПОЧИНАЮТЬСЯ з ключового слова: «хто у відпустці?» піде
+  // асистенту як who_is_absent.
+  const absenceDraft = parseAbsenceText(text, new Date());
+  if (absenceDraft) {
+    const settings = await loadSettingsByChat(adminClient, chatId);
+    if (!settings) {
+      await sendTelegramMessage(chatId, NOT_LINKED);
+      return;
+    }
+    if (!(await isActiveMember(adminClient, settings.user_id))) {
+      await sendTelegramMessage(chatId, DEACTIVATED_MESSAGE);
+      return;
+    }
+    if (!absenceDraft.start || !absenceDraft.end) {
+      const screen = presetMenuScreen(absenceDraft.kind);
+      await sendTelegramMessage(chatId, screen.text, {
+        parseMode: "HTML",
+        replyMarkup: { inline_keyboard: screen.keyboard },
+      });
+      return;
+    }
+    const workspaceId = await resolveMemberWorkspaceId(adminClient, settings.user_id);
+    const days = await countBusinessDaysForUser(adminClient, workspaceId, absenceDraft.start, absenceDraft.end);
+    const screen = confirmScreen(absenceDraft.kind, absenceDraft.start, absenceDraft.end, days);
+    await sendTelegramMessage(chatId, screen.text, {
+      parseMode: "HTML",
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
     return;
   }
 
@@ -358,6 +428,10 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
       { text: "🟢 Хто в системі", callback_data: "qa:who_is_online" },
     ],
     [{ text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" }],
+    [
+      { text: "🏝 Хто відсутній", callback_data: "qa:who_is_absent" },
+      { text: "📝 Оформити відсутність", callback_data: "abs:open" },
+    ],
   ];
   // Кнопки показуємо тільки ті, що людина справді може натиснути: кнопка, яка
   // відповідає «немає доступу», дратує більше, ніж її відсутність.
@@ -489,6 +563,18 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     return;
   }
 
+  // Флоу оформлення відсутності (_absenceBotFlow): кнопки редагують одне
+  // повідомлення, подання йде через RPC-перевтілення з усіма RLS/квотами.
+  if (data.startsWith("abs:")) {
+    if (!(await isActiveMember(adminClient, row.user_id))) {
+      await answerTelegramCallback(cb.id, "Доступ призупинено");
+      return;
+    }
+    await answerTelegramCallback(cb.id);
+    await handleAbsenceCallback(adminClient, chatId, messageId, row.user_id, data);
+    return;
+  }
+
   const cats = visibleNotificationCategories(await loadRole(adminClient, row.user_id));
   const nowIso = new Date().toISOString();
   let toastText = "Збережено";
@@ -520,6 +606,79 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
 
   await editTelegramReplyMarkup(chatId, messageId, buildSettingsKeyboard(row, cats));
   await answerTelegramCallback(cb.id, toastText);
+}
+
+/**
+ * Кроки флоу відсутності. Стан їде в callback_data (тип + дати), тож сервер
+ * нічого не тримає, а кожен крок — це editMessageText того самого повідомлення.
+ */
+async function handleAbsenceCallback(
+  adminClient: AdminClient,
+  chatId: number,
+  messageId: number,
+  userId: string,
+  data: string
+) {
+  const parts = data.split(":"); // ["abs", verb, ...]
+  const verb = parts[1];
+
+  if (verb === "open") {
+    const screen = kindMenuScreen();
+    await sendTelegramMessage(chatId, screen.text, {
+      parseMode: "HTML",
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+    return;
+  }
+
+  if (verb === "menu") {
+    const screen = kindMenuScreen();
+    await editTelegramMessageText(chatId, messageId, screen.text, {
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+    return;
+  }
+
+  if (verb === "k" && parts[2] && isAbsenceBotKind(parts[2])) {
+    const screen = presetMenuScreen(parts[2]);
+    await editTelegramMessageText(chatId, messageId, screen.text, {
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+    return;
+  }
+
+  if (verb === "s" && parts[2] && isAbsenceBotKind(parts[2]) && parts[3] && parts[4]) {
+    const kind = parts[2];
+    const range = presetRange({ a: parts[3], b: parts[4] }, new Date());
+    if (!range) {
+      await editTelegramMessageText(chatId, messageId, "⚠️ Не зрозумів дати — спробуй /absence ще раз.");
+      return;
+    }
+    const workspaceId = await resolveMemberWorkspaceId(adminClient, userId);
+    const days = await countBusinessDaysForUser(adminClient, workspaceId, range.start, range.end);
+    const screen = confirmScreen(kind, range.start, range.end, days);
+    await editTelegramMessageText(chatId, messageId, screen.text, {
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+    return;
+  }
+
+  if (verb === "c" && parts[2] && isAbsenceBotKind(parts[2]) && parts[3] && parts[4]) {
+    const result = await submitAbsenceFromBot({
+      admin: adminClient,
+      userId,
+      kind: parts[2],
+      start: parts[3],
+      end: parts[4],
+    });
+    await editTelegramMessageText(chatId, messageId, result.text);
+    return;
+  }
+
+  if (verb === "x") {
+    await editTelegramMessageText(chatId, messageId, "Скасовано. Оформити знову — /absence.");
+    return;
+  }
 }
 
 function secretMatches(expected: string, got: string | undefined): boolean {

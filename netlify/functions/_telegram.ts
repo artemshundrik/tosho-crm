@@ -87,6 +87,26 @@ export async function sendTelegramChatAction(
   return callTelegram("sendChatAction", { chat_id: chatId, action });
 }
 
+/**
+ * Заміна тексту повідомлення разом із кнопками — багатокрокові флоу (як-от
+ * оформлення відсутності) живуть в ОДНОМУ повідомленні замість простирадла.
+ */
+export async function editTelegramMessageText(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  options?: { replyMarkup?: { inline_keyboard: InlineKeyboard } }
+): Promise<TelegramApiResult> {
+  return callTelegram("editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: options?.replyMarkup,
+  });
+}
+
 export async function editTelegramReplyMarkup(
   chatId: number | string,
   messageId: number,

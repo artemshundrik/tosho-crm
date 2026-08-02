@@ -1,13 +1,24 @@
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
+import {
+  ABSENCE_DATE_KEY,
+  ABSENCE_KIND_LABELS,
+  SELF_SERVICE_ABSENCE_KINDS,
+  formatAbsenceRange,
+  humanizeAbsenceInsertError,
+  isOwnerMembership,
+  isSeoMembership,
+  notifySubmittedAbsence,
+  type SubmittedAbsenceRow,
+} from "./_lib/absenceSubmit";
 
 /**
- * Рішення по заявці на відсутність: погодити / відхилити.
+ * Заявки на відсутність: подання (action: "submit") і рішення (approve/decline).
  *
- * Чому це серверна функція, а не RLS-політика: рішення мусить бути
- * атомарним пакетом «змінити статус + записати аудит + сповістити заявника»,
- * і жодну з частин не можна лишити на совість клієнта. RLS дозволяє
- * співробітнику лише створити свою заявку й скасувати її (див.
+ * Чому це серверна функція, а не RLS-політика: і подання, і рішення мусять
+ * бути атомарним пакетом «запис + аудит + сповіщення», і жодну з частин не
+ * можна лишити на совість клієнта — вкладку закривають одразу після кліку.
+ * RLS дозволяє співробітнику лише створити свою заявку й скасувати її (див.
  * scripts/team-absences-selfservice.sql) — статусом approved/declined керує
  * тільки цей ендпоїнт.
  *
@@ -46,13 +57,6 @@ type AbsenceRow = {
   status: string;
 };
 
-const KIND_LABELS: Record<string, string> = {
-  vacation: "Відпустка",
-  day_off: "Day-off",
-  sick_leave: "Лікарняний",
-  other: "Відсутність",
-};
-
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -64,21 +68,6 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   };
-}
-
-const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
-
-const isOwner = (membership?: MembershipRow | null) => normalize(membership?.access_role) === "owner";
-const isSeo = (membership?: MembershipRow | null) => normalize(membership?.job_role) === "seo";
-
-function formatShort(dateKey: string) {
-  return `${dateKey.slice(8, 10)}.${dateKey.slice(5, 7)}`;
-}
-
-function formatRange(row: AbsenceRow) {
-  return row.start_date === row.end_date
-    ? formatShort(row.start_date)
-    : `${formatShort(row.start_date)} – ${formatShort(row.end_date)}`;
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -138,7 +127,7 @@ export const handler = async (event: HttpEvent) => {
   if (actorError) return jsonResponse(500, { error: actorError.message });
   const workspaceId = actorMembership?.workspace_id ?? null;
   if (!workspaceId) return jsonResponse(403, { error: "Немає доступу до воркспейсу" });
-  if (!isOwner(actorMembership) && !isSeo(actorMembership)) {
+  if (!isOwnerMembership(actorMembership) && !isSeoMembership(actorMembership)) {
     return jsonResponse(403, { error: "Рішення по заявках приймає SEO або власник" });
   }
 
@@ -161,7 +150,7 @@ export const handler = async (event: HttpEvent) => {
   if (absence.user_id === actorId) {
     return jsonResponse(403, { error: "Свою заявку вирішує інша людина" });
   }
-  if (!isOwner(actorMembership)) {
+  if (!isOwnerMembership(actorMembership)) {
     const { data: targetMembership } = await adminClient
       .schema("tosho")
       .from("memberships_view")
@@ -169,7 +158,7 @@ export const handler = async (event: HttpEvent) => {
       .eq("workspace_id", workspaceId)
       .eq("user_id", absence.user_id)
       .maybeSingle<MembershipRow>();
-    if (isSeo(targetMembership) || isOwner(targetMembership)) {
+    if (isSeoMembership(targetMembership) || isOwnerMembership(targetMembership)) {
       return jsonResponse(403, { error: "Заявку SEO або власника вирішує власник" });
     }
   }
@@ -211,8 +200,8 @@ export const handler = async (event: HttpEvent) => {
     },
   });
 
-  const kindLabel = KIND_LABELS[absence.kind] ?? "Відсутність";
-  const range = formatRange(absence);
+  const kindLabel = ABSENCE_KIND_LABELS[absence.kind] ?? "Відсутність";
+  const range = formatAbsenceRange(absence);
   const approved = decision === "approved";
 
   await deliverNotifications(
@@ -238,73 +227,7 @@ export const handler = async (event: HttpEvent) => {
 
 /* ====================== Подання власної заявки ======================= */
 
-const SELF_SERVICE_KINDS = new Set(["vacation", "day_off", "sick_leave"]);
-const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
-
 type SupabaseLike = ReturnType<typeof createClient>;
-
-type MemberRecipientRow = { user_id?: string | null; access_role?: string | null; job_role?: string | null };
-type ProfileStatusRow = { user_id?: string | null; employment_status?: string | null };
-
-/**
- * Кому летить сповіщення. `approvers` — лише owner/SEO (заявку на погодженні
- * бачить той, хто її закриває), `workspace` — уся команда.
- *
- * Відключених пропускаємо: людина поза грою не має отримувати пуші про чужі
- * відпустки.
- */
-async function resolveRecipients(
-  adminClient: SupabaseLike,
-  workspaceId: string,
-  scope: "approvers" | "workspace"
-): Promise<string[]> {
-  const { data: memberships, error } = await adminClient
-    .schema("tosho")
-    .from("memberships_view")
-    .select("user_id,access_role,job_role")
-    .eq("workspace_id", workspaceId)
-    .limit(500);
-
-  if (error) return [];
-
-  const ids = Array.from(
-    new Set(
-      ((memberships ?? []) as MemberRecipientRow[])
-        .filter((row) => row.user_id && (scope === "workspace" || isOwner(row) || isSeo(row)))
-        .map((row) => row.user_id as string)
-    )
-  );
-  if (ids.length === 0) return [];
-
-  const { data: profiles } = await adminClient
-    .schema("tosho")
-    .from("team_member_profiles")
-    .select("user_id,employment_status")
-    .eq("workspace_id", workspaceId)
-    .in("user_id", ids);
-
-  const offboarded = new Set(
-    ((profiles ?? []) as ProfileStatusRow[])
-      .filter((row) => ["inactive", "rejected"].includes(normalize(row.employment_status)))
-      .map((row) => row.user_id)
-      .filter((value): value is string => Boolean(value))
-  );
-
-  return ids.filter((id) => !offboarded.has(id));
-}
-
-async function resolveActorName(adminClient: SupabaseLike, workspaceId: string, userId: string) {
-  const { data } = await adminClient
-    .schema("tosho")
-    .from("team_member_profiles")
-    .select("full_name,first_name,last_name")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .maybeSingle<{ full_name?: string | null; first_name?: string | null; last_name?: string | null }>();
-
-  const composed = [data?.first_name?.trim(), data?.last_name?.trim()].filter(Boolean).join(" ");
-  return data?.full_name?.trim() || composed || "Співробітник";
-}
 
 /**
  * Подати власну заявку на відсутність.
@@ -331,10 +254,10 @@ async function handleSubmit(params: {
   const startDate = (payload.startDate ?? "").trim();
   const endDate = (payload.endDate ?? "").trim();
 
-  if (!SELF_SERVICE_KINDS.has(kind)) {
+  if (!SELF_SERVICE_ABSENCE_KINDS.has(kind)) {
     return jsonResponse(400, { error: "Невідомий тип відсутності" });
   }
-  if (!DATE_KEY.test(startDate) || !DATE_KEY.test(endDate) || endDate < startDate) {
+  if (!ABSENCE_DATE_KEY.test(startDate) || !ABSENCE_DATE_KEY.test(endDate) || endDate < startDate) {
     return jsonResponse(400, { error: "Невірний діапазон дат" });
   }
 
@@ -369,80 +292,13 @@ async function handleSubmit(params: {
       requested_by: actorId,
     })
     .select("id,workspace_id,user_id,start_date,end_date,kind,status")
-    .maybeSingle<AbsenceRow>();
+    .maybeSingle<SubmittedAbsenceRow>();
 
   if (insertError || !inserted) {
-    // Тригери БД пояснюють відмову людською мовою («лікарняних на рік
-    // лишилось N») — цей текст і призначений заявнику, віддаємо як є.
-    // А відмова RLS-політики приходить службовою англійською про назву
-    // таблиці, тож її перекладаємо в те, що людині справді треба зробити.
-    const blockedByPolicy =
-      insertError?.code === "42501" || /row-level security/i.test(insertError?.message ?? "");
-    return jsonResponse(400, {
-      error: blockedByPolicy
-        ? "Такі дати недоступні для самостійної заявки — попросіть SEO внести вручну"
-        : insertError?.message || "Не вдалося зберегти заявку",
-    });
+    return jsonResponse(400, { error: humanizeAbsenceInsertError(insertError) });
   }
 
-  const kindLabel = KIND_LABELS[kind] ?? "Відсутність";
-  const range = formatRange(inserted);
-
-  try {
-    const [recipients, actorName, todayResult, daysResult] = await Promise.all([
-      // Лікарняний — уже факт, і команді треба знати, хто сьогодні поза грою:
-      // інакше на людину поставлять задачу. Заявка ж на погодженні цікавить
-      // лише тих, хто її закриває.
-      resolveRecipients(adminClient, workspaceId, status === "approved" ? "workspace" : "approvers"),
-      resolveActorName(adminClient, workspaceId, actorId),
-      adminClient.schema("tosho").rpc("absence_today"),
-      adminClient.schema("tosho").rpc("count_absence_business_days", {
-        _workspace: workspaceId,
-        _from: startDate,
-        _to: endDate,
-      }),
-    ]);
-
-    const audience = recipients.filter((id) => id !== actorId);
-    if (audience.length > 0) {
-      const todayKey = typeof todayResult.data === "string" ? todayResult.data : "";
-      const businessDays = typeof daysResult.data === "number" ? daysResult.data : null;
-
-      // Якщо відсутність стартує сьогодні, беремо ТОЙ САМИЙ href, який за
-      // годину згенерує team-events-reminders: його дедуплікація по href
-      // тоді проковтне повтор, і людина не отримає дві новини про одне.
-      const eventKey =
-        inserted.start_date === todayKey
-          ? inserted.end_date === todayKey
-            ? `team-event:absence-single:${inserted.id}:${todayKey}`
-            : `team-event:absence-start:${inserted.id}:${todayKey}`
-          : null;
-
-      await deliverNotifications(
-        adminClient,
-        audience.map((userId) => ({
-          user_id: userId,
-          title:
-            status === "approved"
-              ? `${kindLabel}: ${actorName}`
-              : `Заявка: ${kindLabel.toLowerCase()} — ${actorName}`,
-          // Коментар іде ЛИШЕ в заявці, тобто лише owner/SEO. У широкому
-          // сповіщенні його немає навмисно: команді треба знати, що людини
-          // не буде, а не чому — там може бути медична деталь.
-          body:
-            status === "approved"
-              ? `${range} — зафіксовано без погодження.`
-              : `${range}${businessDays ? ` · ${businessDays} роб. дн.` : ""}${comment ? ` — «${comment}»` : ""}`,
-          href: eventKey ? `/team?reminder=${encodeURIComponent(eventKey)}` : "/team",
-          type: status === "approved" ? "warning" : "info",
-        })),
-        { category: status === "approved" ? "team_events" : "team_absences" }
-      );
-    }
-  } catch (notifyError) {
-    // Сповіщення не має валити заявку: вона вже в базі.
-    console.warn("[team-absence-request] notify failed", notifyError);
-  }
+  await notifySubmittedAbsence(adminClient, { absence: inserted, comment, actorId });
 
   return jsonResponse(200, {
     success: true,

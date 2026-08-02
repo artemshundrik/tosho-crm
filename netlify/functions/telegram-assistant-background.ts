@@ -17,6 +17,7 @@ import {
   renderPersonSummary,
   renderPresence,
   renderTeamList,
+  renderWhoIsAbsent,
   type TeamIntent,
 } from "./_teamAssistant";
 import { loadDesignMembers, matchMember } from "./_designAssistant";
@@ -79,7 +80,7 @@ function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
 }
 
-const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary", "who_is_online"];
+const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary", "who_is_online", "who_is_absent"];
 
 function isTeamIntent(value: string): value is TeamIntent {
   return (TEAM_INTENTS as string[]).includes(value);
@@ -164,7 +165,7 @@ const TOOL = {
         type: "string",
         enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -216,6 +217,7 @@ const SYSTEM_PROMPT = [
   "• «дай список менеджерів», «хто в команді» = team_list, слово «менеджерів»/«дизайнерів» клади в query",
   "• «дай статистику по Владиславу», «що робив Антон» = person_summary, ім'я клади в designer",
   "• «хто зараз у системі», «хто онлайн», «коли Лєна востаннє заходила» = who_is_online",
+  "• «хто відсутній», «хто у відпустці», «хто хворіє», «кого сьогодні нема» = who_is_absent",
   "• для ДИЗАЙНЕРА глибша відповідь — designer_summary; для менеджера й решти — person_summary",
   "• «хто чим завантажений», «розподіл по дизайнерах» = team_workload",
   "• якщо питання поза цим — intent help",
@@ -349,6 +351,9 @@ export const handler = async (event: HttpEvent) => {
       }
       if (query.intent === "who_is_online") {
         return renderPresence(members, presence, now);
+      }
+      if (query.intent === "who_is_absent") {
+        return renderWhoIsAbsent({ admin, workspaceId, members, now });
       }
       // Без права на чужу статистику — завжди про себе.
       const selfMember = members.find((m) => m.userId === userId) ?? null;

@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // показує інтерфейс. Своя копія тут рано чи пізно розійшлася б із UI.
 
 import { escapeTelegramHtml } from "./_telegram";
+import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import { formatJobRole } from "../../src/lib/jobRoles";
 // Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
 // Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
@@ -13,7 +14,7 @@ import { actionLabel, isNoiseActivity } from "../../src/components/team/activity
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
 import { resolvePeriod, type DesignPeriod } from "./_designAssistant";
 
-export type TeamIntent = "team_list" | "person_summary" | "who_is_online";
+export type TeamIntent = "team_list" | "person_summary" | "who_is_online" | "who_is_absent";
 
 // Групи посад для фільтра «дай список менеджерів».
 const ROLE_GROUPS: Record<string, string[]> = {
@@ -51,6 +52,16 @@ function roleEmoji(jobRole: string | null): string {
 }
 
 const TIME_ZONE = "Europe/Kiev";
+
+/** YYYY-MM-DD за Києвом зі зсувом у днях — журнал відсутностей живе в датах. */
+export function kyivDateKey(now: Date, offsetDays = 0): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(now.getTime() + offsetDays * 86_400_000));
+}
 
 export type Presence = { lastSeenAt: string | null; where: string | null };
 
@@ -404,6 +415,126 @@ export async function renderPersonSummary(params: {
   if (lines.length === 3) {
     lines.push("", `😴 Активності ${escapeTelegramHtml(resolved.label)} не знайшов.`);
   }
+  return lines.join("\n");
+}
+
+const ABSENCE_EMOJI: Record<string, string> = {
+  vacation: "🏖",
+  day_off: "🌤",
+  sick_leave: "🤒",
+  other: "📌",
+};
+
+type AbsenceJournalRow = {
+  user_id?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  kind?: string | null;
+  status?: string | null;
+};
+
+/**
+ * «Хто сьогодні відсутній» — з журналу tosho.team_absences, того самого, що
+ * живить планер у CRM. Доступно всій команді: тип відсутності й так видно
+ * кожному в календарі, а от коментарі-причини сюди не потрапляють ніколи.
+ */
+export async function renderWhoIsAbsent(params: {
+  admin: SupabaseClient;
+  workspaceId: string;
+  members: TeamMember[];
+  now: Date;
+}): Promise<string> {
+  const { admin, workspaceId, members, now } = params;
+  const todayKey = kyivDateKey(now);
+  const tomorrowKey = kyivDateKey(now, 1);
+
+  const [currentResult, pendingResult] = await Promise.all([
+    admin
+      .schema("tosho")
+      .from("team_absences")
+      .select("user_id,start_date,end_date,kind,status")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "approved")
+      .lte("start_date", tomorrowKey)
+      .gte("end_date", todayKey)
+      .limit(200),
+    admin
+      .schema("tosho")
+      .from("team_absences")
+      .select("user_id,start_date,end_date,kind,status")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending")
+      .gte("end_date", todayKey)
+      .order("start_date", { ascending: true })
+      .limit(50),
+  ]);
+  if (currentResult.error) throw new Error(`team_absences: ${currentResult.error.message}`);
+
+  const nameByUser = new Map(members.filter((m) => m.isActive !== false).map((m) => [m.userId, m.name]));
+  const label = (userId?: string | null) => {
+    const name = userId ? nameByUser.get(userId) : null;
+    return name ? shortName(name) : null;
+  };
+  const kindOf = (row: AbsenceJournalRow) => (row.kind ?? "other").trim() || "other";
+  const emojiOf = (row: AbsenceJournalRow) => ABSENCE_EMOJI[kindOf(row)] ?? "📌";
+  const kindLabel = (row: AbsenceJournalRow) => ABSENCE_KIND_LABELS[kindOf(row)] ?? "Відсутність";
+
+  const rows = ((currentResult.data ?? []) as AbsenceJournalRow[]).filter(
+    (row) => row.start_date && row.end_date && label(row.user_id)
+  );
+
+  const today = rows
+    .filter((row) => row.start_date! <= todayKey)
+    .sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
+  const startTomorrow = rows.filter((row) => row.start_date === tomorrowKey);
+  const backTomorrow = today.filter((row) => row.end_date === todayKey);
+
+  const lines: string[] = [];
+
+  if (today.length === 0) {
+    lines.push("💪 <b>Сьогодні всі на місці</b>");
+  } else {
+    lines.push(`🏝 <b>Сьогодні відсутні — ${today.length}</b>`, "");
+    for (const row of today) {
+      const until =
+        row.end_date === todayKey
+          ? "останній день"
+          : `до ${formatAbsenceShort(row.end_date!)}`;
+      lines.push(
+        `${emojiOf(row)} ${escapeTelegramHtml(label(row.user_id)!)} — ${kindLabel(row).toLowerCase()}, ${until}`
+      );
+    }
+  }
+
+  const tomorrow: string[] = [];
+  for (const row of backTomorrow) {
+    tomorrow.push(`↩️ повертається ${escapeTelegramHtml(label(row.user_id)!)}`);
+  }
+  for (const row of startTomorrow) {
+    tomorrow.push(
+      `${emojiOf(row)} ${escapeTelegramHtml(label(row.user_id)!)} — ${kindLabel(row).toLowerCase()} з завтра` +
+        (row.end_date && row.end_date !== tomorrowKey ? ` (до ${formatAbsenceShort(row.end_date)})` : "")
+    );
+  }
+  if (tomorrow.length > 0) lines.push("", "<b>Завтра</b>", ...tomorrow);
+
+  const pending = ((pendingResult.data ?? []) as AbsenceJournalRow[]).filter(
+    (row) => row.start_date && row.end_date && label(row.user_id)
+  );
+  if (pending.length > 0) {
+    const parts = pending
+      .slice(0, 5)
+      .map(
+        (row) =>
+          `${escapeTelegramHtml(label(row.user_id)!)} (${kindLabel(row).toLowerCase()} ` +
+          `${formatAbsenceShort(row.start_date!)}–${formatAbsenceShort(row.end_date!)})`
+      );
+    lines.push(
+      "",
+      `⏳ На погодженні: ${parts.join(" · ")}${pending.length > 5 ? ` …і ще ${pending.length - 5}` : ""}`
+    );
+  }
+
   return lines.join("\n");
 }
 
