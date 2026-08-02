@@ -4,7 +4,7 @@
 
 **Мета:** глобальна панель, що з будь-якої сторінки CRM відкриває одну нитку обговорення справи — розмову бабблами плюс події задачі, зі смужкою показників, згортанням днів і лічильниками непрочитаного.
 
-**Архітектура:** одна таблиця `tosho.quote_comments` тримає і повідомлення, і події (`kind`), події дописує тригер БД на `public.activity_log`. Панель — `Sheet`, змонтований один раз в `AppLayout`, керований React-контекстом; дані — React Query; жива доставка — Supabase Realtime.
+**Архітектура:** повідомлення живуть у `tosho.quote_comments`, події беремо з наявних рядків `public.activity_log` (тригер не потрібен — історія вже ведеться), два джерела зливаються на читанні. Панель — `Sheet`, змонтований один раз в `AppLayout`, керований React-контекстом; дані — React Query; жива доставка — Supabase Realtime.
 
 **Стек:** React 19 + Vite, Tailwind + shadcn/ui, Supabase (schema `tosho`), React Query, vitest.
 
@@ -19,7 +19,7 @@
 | Файл | Відповідальність |
 |---|---|
 | `scripts/task-chat-schema.sql` | Створити: міграція — колонки, `thread_reads`, індекс, RLS, публікація realtime |
-| `scripts/task-chat-events-trigger.sql` | Створити: тригер, що перетворює зміни `activity_log` на події нитки |
+| `src/features/taskChat/threadEvents.ts` | Створити: читання подій із наявного `activity_log` (тригер НЕ потрібен) |
 | `src/lib/taskThread.ts` | Створити: чиста логіка — ключ нитки, групування в дні/баббли, лічильник непрочитаного, підписи подій |
 | `src/lib/taskThread.test.ts` | Створити: тести чистої логіки |
 | `src/features/taskChat/queries.ts` | Створити: React Query — читання нитки, надсилання, позначка прочитання, лічильники |
@@ -35,11 +35,18 @@
 
 ---
 
-### Задача 1: Розвідка наявної схеми (перед будь-яким DDL)
+### Задача 1: Розвідка наявної схеми ✅ ВИКОНАНО 2026-08-02
 
-Ми не знаємо напевно поточних обмежень і політик `quote_comments` — трекованого SQL для неї немає. Пишемо DDL лише після того, як побачили факти.
+**Файли:** нічого не змінюємо. Нижче — фактичні результати; перезапускати не треба, але команди лишено для звірки.
 
-**Файли:** нічого не змінюємо.
+**Що знайшли (усе враховано в задачах 2–3):**
+
+1. `quote_comments`: `quote_id`, `created_by`, `body`, `comment_type` — усі `not null`. Enum `tosho.quote_comment_type` = `internal | client`, усі 118 рядків — `internal`. **`internal` тут означає «не для клієнта», а не «лише фінанси»** — тому нова колонка зветься `visibility` зі значеннями `team|finance`.
+2. RLS **увімкнено**, політики: `select using (is_team_member(team_id))`, `insert with check (is_team_member(team_id))`, `delete` для `super_admin|manager` або автора. Переписуємо лише `select`, зберігаючи helper.
+3. **Публікація `supabase_realtime` порожня — нуль таблиць.** Крок 3 задачі 2 обов'язковий. Побічний наслідок: наявні підписки в `AppLayout` теж нічого не отримують.
+4. На таблиці висить тригер `trg_quote_lock_quote_comments` → `assert_quote_lock_from_quote_id()`, що падає з `Quote is locked by another user`. Має ранній вихід при `quote_id is null`.
+5. `activity_log` **уже містить історію подій**: `design_task_status` (3029), `design_output_upload` (1063), `design_task_estimate` (535), `design_task_deadline` (534), `design_task_brief_change_request` (437), `design_task_timer` (385), `design_task_assignment` (77) — із готовими заголовками українською. **Тригер не потрібен.**
+6. `metadata->>'quote_id'` буває виду `standalone-<uuid>` — приведення до `uuid` кине помилку.
 
 - [ ] **Крок 1: Витягнути поточну структуру таблиці**
 
@@ -110,7 +117,7 @@ alter table tosho.quote_comments
   drop constraint if exists quote_comments_kind_check,
   add constraint quote_comments_kind_check check (kind in ('message','event')),
   drop constraint if exists quote_comments_visibility_check,
-  add constraint quote_comments_visibility_check check (visibility in ('team','internal')),
+  add constraint quote_comments_visibility_check check (visibility in ('team','finance')),
   drop constraint if exists quote_comments_source_check,
   add constraint quote_comments_source_check check (source in ('crm','telegram'));
 
@@ -139,17 +146,16 @@ commit;
 
 Політику `select` переписуємо на основі того, що побачили в задачі 1, крок 2 — **зберігши наявну умову за `team_id`** і додавши гейт видимості. Додати в кінець того самого файлу, підставивши реальну назву політики:
 
+Наявна політика (знято з проду в задачі 1): `for select using (is_team_member(team_id))`. Зберігаємо **той самий helper** — він тримає гейт заблокованих користувачів (`project_access_lockout`) — і лише додаємо видимість. Підміна на сирий `exists` по `public.team_members` цей гейт обійшла б.
+
 ```sql
 begin;
 
 drop policy if exists quote_comments_select on tosho.quote_comments;
 create policy quote_comments_select on tosho.quote_comments
   for select using (
-    exists (
-      select 1 from public.team_members tm
-      where tm.team_id = quote_comments.team_id and tm.user_id = auth.uid()
-    )
-    and (visibility = 'team' or tosho.has_finance_access(quote_comments.team_id))
+    is_team_member(team_id)
+    and (visibility = 'team' or tosho.has_finance_access(team_id))
   );
 
 commit;
@@ -188,110 +194,88 @@ git commit -m "feat(chat): міграція нитки обговорення с
 
 ---
 
-### Задача 3: Тригер подій
+### Задача 3: Джерело подій — наявний activity_log
+
+> **Ревізовано після розвідки.** Тригер писати **не треба**: історія вже ведеться окремими рядками `activity_log` із готовими українськими заголовками (див. §2 і §5 дизайн-документа). Ця задача — про читання, не про DDL.
 
 **Файли:**
-- Створити: `scripts/task-chat-events-trigger.sql`
+- Створити: `src/features/taskChat/threadEvents.ts`
 
-- [ ] **Крок 1: Написати тригер**
+- [ ] **Крок 1: Білий список подій**
 
-```sql
--- Події дизайн-задачі → рядки нитки. Див. docs/TASK_CHAT_DESIGN.md §5.
--- Safe to run multiple times.
-
-create or replace function tosho.log_design_task_thread_events()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public', 'tosho'
-as $$
-declare
-  _quote_id text := new.metadata->>'quote_id';
-  _thread   text;
-begin
-  if new.action is distinct from 'design_task' or _quote_id is null then
-    return new;
-  end if;
-
-  _thread := 'quote:' || _quote_id;
-
-  if coalesce(old.metadata->>'status','') is distinct from coalesce(new.metadata->>'status','') then
-    insert into tosho.quote_comments (team_id, quote_id, thread_key, kind, event_type, body, created_by, metadata)
-    values (new.team_id, _quote_id::uuid, _thread, 'event', 'status',
-            new.metadata->>'status', auth.uid(),
-            jsonb_build_object('from', old.metadata->>'status', 'to', new.metadata->>'status'));
-  end if;
-
-  if coalesce(old.metadata->>'assignee_user_id','') is distinct from coalesce(new.metadata->>'assignee_user_id','') then
-    insert into tosho.quote_comments (team_id, quote_id, thread_key, kind, event_type, body, created_by, metadata)
-    values (new.team_id, _quote_id::uuid, _thread, 'event', 'assignee',
-            new.metadata->>'assignee_user_id', auth.uid(),
-            jsonb_build_object('to', new.metadata->>'assignee_user_id'));
-  end if;
-
-  if coalesce(old.metadata->>'design_deadline','') is distinct from coalesce(new.metadata->>'design_deadline','') then
-    insert into tosho.quote_comments (team_id, quote_id, thread_key, kind, event_type, body, created_by, metadata)
-    values (new.team_id, _quote_id::uuid, _thread, 'event', 'deadline',
-            new.metadata->>'design_deadline', auth.uid(),
-            jsonb_build_object('to', new.metadata->>'design_deadline'));
-  end if;
-
-  if jsonb_array_length(coalesce(new.metadata->'revisions','[]'::jsonb))
-     > jsonb_array_length(coalesce(old.metadata->'revisions','[]'::jsonb)) then
-    insert into tosho.quote_comments (team_id, quote_id, thread_key, kind, event_type, body, created_by, metadata)
-    values (new.team_id, _quote_id::uuid, _thread, 'event', 'revision',
-            jsonb_array_length(new.metadata->'revisions')::text, auth.uid(),
-            jsonb_build_object('count', jsonb_array_length(new.metadata->'revisions')));
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists design_task_thread_events on public.activity_log;
-create trigger design_task_thread_events
-  after update on public.activity_log
-  for each row
-  execute function tosho.log_design_task_thread_events();
+```ts
+/** Дії activity_log, які показуємо в нитці. Заголовок беремо з title — він уже українською. */
+export const THREAD_EVENT_ACTIONS = [
+  "design_task_status",
+  "design_task_deadline",
+  "design_task_assignment",
+  "design_task_estimate",
+  "design_task_brief_change_request",
+  "design_output_upload",
+  "design_task_attachment",
+] as const;
 ```
 
-> `created_by` навмисно приймає `null` від `auth.uid()` — запис із Netlify-функції йде під service-role. Це прямий урок із `quote-status-audit-trigger`, який ламався об `NOT NULL changed_by`.
+- [ ] **Крок 2: Запит подій нитки**
 
-- [ ] **Крок 2: Звірити назву ключа правок**
+`quote_id` у метаданих буває виду `standalone-<uuid>`, тож порівнюємо як **текст, без приведення до uuid**.
 
-Перед застосуванням переконатись, що правки в metadata лежать саме в `revisions`:
+```ts
+import { supabase } from "@/lib/supabaseClient";
+import type { ThreadEntry } from "@/lib/taskThread";
+import { THREAD_EVENT_ACTIONS } from "./threadEvents";
+
+export async function fetchThreadEvents(quoteRef: string, teamId: string): Promise<ThreadEntry[]> {
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("id,action,title,created_at,user_id,metadata")
+    .eq("team_id", teamId)
+    .in("action", [...THREAD_EVENT_ACTIONS])
+    .eq("metadata->>quote_id", quoteRef)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+
+  return ((data as Array<{
+    id: string; action: string; title: string | null; created_at: string;
+    user_id: string | null; metadata: Record<string, unknown> | null;
+  }> | null) ?? []).map((row) => ({
+    id: `event-${row.id}`,
+    kind: "event" as const,
+    body: row.title ?? row.action,
+    createdAt: row.created_at,
+    createdBy: row.user_id,
+    visibility: "team" as const,
+    source: "crm" as const,
+    eventType: row.action,
+    isPinned: false,
+    metadata: row.metadata ?? {},
+  }));
+}
+```
+
+- [ ] **Крок 3: Злити два джерела**
+
+У `useThreadEntries` (задача 5) виконати обидва запити паралельно й повернути єдиний масив — `buildThreadBlocks` уже сортує за часом:
+
+```ts
+const [messages, events] = await Promise.all([fetchThreadMessages(threadKey), fetchThreadEvents(quoteRef, teamId)]);
+return [...messages, ...events];
+```
+
+- [ ] **Крок 4: Перевірити на реальних даних**
 
 ```bash
-set -a && source .env.backup && set +a && psql "$BACKUP_DB_URL" -c "select jsonb_object_keys(metadata) k, count(*) from public.activity_log where action='design_task' group by 1 order by 2 desc limit 25"
+set -a && source .env.backup && set +a && psql "$BACKUP_DB_URL" -c "select action, title, created_at from public.activity_log where action = any(array['design_task_status','design_task_brief_change_request']) order by created_at desc limit 5"
 ```
 
-Очікуємо: перелік ключів. Якщо масив правок зветься інакше — виправити чотири згадки `revisions` у кроці 1 на справжню назву.
-
-- [ ] **Крок 3: Застосувати**
-
-```bash
-set -a && source .env.backup && set +a && psql "$BACKUP_DB_URL" -f scripts/task-chat-events-trigger.sql
-```
-
-- [ ] **Крок 4: Довести, що тригер справді пише**
-
-```bash
-set -a && source .env.backup && set +a && psql "$BACKUP_DB_URL" -c "
-begin;
-update public.activity_log set metadata = jsonb_set(metadata,'{status}','\"__probe__\"')
-where action='design_task' and metadata->>'quote_id' is not null
-order by created_at desc limit 1;
-select kind, event_type, body from tosho.quote_comments where event_type='status' order by created_at desc limit 1;
-rollback;"
-```
-
-Очікуємо: рядок `event | status | __probe__`. `rollback` прибирає і зонд, і подію.
+Очікуємо: рядки на кшталт `Статус: В роботі → Дизайн готовий` і `Додано правку до ТЗ`.
 
 - [ ] **Крок 5: Коміт**
 
 ```bash
-git add scripts/task-chat-events-trigger.sql
-git commit -m "feat(chat): тригер подій дизайн-задачі в нитку"
+git add src/features/taskChat/threadEvents.ts
+git commit -m "feat(chat): події нитки з наявного activity_log"
 ```
 
 ---
