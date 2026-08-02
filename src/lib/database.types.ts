@@ -2923,28 +2923,47 @@ export type Database = {
           body: string
           comment_type: Database["tosho"]["Enums"]["quote_comment_type"]
           created_at: string
-          created_by: string
+          created_by: string | null
           id: string
-          quote_id: string
+          is_pinned: boolean
+          kind: string
+          quote_id: string | null
+          source: string
           team_id: string
+          thread_key: string
+          thread_meta: Json
+          visibility: string
         }
         Insert: {
           body: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
           created_at?: string
-          created_by: string
+          created_by?: string | null
           id?: string
-          quote_id: string
+          is_pinned?: boolean
+          kind?: string
+          quote_id?: string | null
+          source?: string
           team_id: string
+          /** Проставляється тригером із quote_id, якщо не переданий явно. */
+          thread_key?: string
+          thread_meta?: Json
+          visibility?: string
         }
         Update: {
           body?: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           id?: string
-          quote_id?: string
+          is_pinned?: boolean
+          kind?: string
+          quote_id?: string | null
+          source?: string
           team_id?: string
+          thread_key?: string
+          thread_meta?: Json
+          visibility?: string
         }
         Relationships: [
           {
@@ -2962,6 +2981,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      thread_reads: {
+        Row: {
+          last_read_at: string
+          thread_key: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          thread_key: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          thread_key?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       quote_counters: {
         Row: {
