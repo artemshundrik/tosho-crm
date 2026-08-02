@@ -80,6 +80,7 @@ import {
   type WorkspaceMemberDisplayRow,
 } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { toAvatarAbsence } from "@/lib/absenceIndicator";
 import {
   notifyAbsenceRecorded,
   notifyAbsenceRequestCancelled,
@@ -477,6 +478,7 @@ export function TeamPage() {
       initials: getInitialsFromName(member.label, member.email),
       online: member.online,
       inactive: member.inactive,
+      absence: toAvatarAbsence(member.absenceToday),
     }),
     []
   );
@@ -1171,6 +1173,7 @@ export function TeamPage() {
                   presenceLabel: member.inactive
                     ? "Співпрацю завершено"
                     : formatPresenceText(member.lastSeenAt, member.online),
+                  absence: toAvatarAbsence(member.absenceToday),
                 };
                 // Приватність: свій баланс бачить кожен, чужі — лише owner/SEO.
                 const showBalance = canManageAbsences || member.userId === userId;

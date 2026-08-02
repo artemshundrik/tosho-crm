@@ -19,11 +19,18 @@ export function HoverTip({
   children,
   side = "top",
   className,
+  contentClassName,
 }: {
   label: React.ReactNode;
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
+  /** Класи ТРИГЕРА (обгортки навколо children). */
   className?: string;
+  /**
+   * Класи самої бульбашки. Потрібні, коли всередині не рядок, а картка:
+   * дефолтні `max-w-[240px]` і дрібні відступи їй затісні.
+   */
+  contentClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -64,7 +71,10 @@ export function HoverTip({
         sideOffset={6}
         // Підказка нічого не ловить: кліки й ховер мають лишатися в тригері.
         onOpenAutoFocus={(event) => event.preventDefault()}
-        className="pointer-events-none w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-md"
+        className={cn(
+          "pointer-events-none w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-md",
+          contentClassName
+        )}
       >
         {label}
       </PopoverContent>

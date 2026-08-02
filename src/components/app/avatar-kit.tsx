@@ -10,6 +10,17 @@ import {
   type TeamAvailabilityStatus,
   type TeamPresenceStatus,
 } from "@/lib/teamAvailability";
+import {
+  ABSENCE_KIND_ICONS,
+  formatAbsenceLabel,
+  getAbsenceRingStyle,
+  getAbsenceTone,
+  MIN_ICON_BADGE_SIZE,
+  MIN_INDICATOR_SIZE,
+  type AbsenceIndicatorLevel,
+  type AvatarAbsence,
+} from "@/lib/absenceIndicator";
+import { toneBadgeClass } from "@/lib/statusTones";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -58,6 +69,13 @@ type AvatarBaseProps = {
   showStatusIndicator?: boolean;
   /** Member is offboarded (employment inactive/rejected): desaturate + show a blocked marker. */
   inactive?: boolean;
+  /**
+   * Погоджена відсутність, що покриває сьогодні. Малює кільце в кольорі типу
+   * і приглушує аватарку — «на цю людину зараз не розраховуй».
+   */
+  absence?: AvatarAbsence | null;
+  /** `full` (кільце + іконка) лише там, де тип відсутності справді потрібен. */
+  absenceDetail?: AbsenceIndicatorLevel;
 };
 
 type PlayerAvatarProps = {
@@ -118,6 +136,8 @@ export function AvatarBase({
   presence,
   showStatusIndicator = true,
   inactive = false,
+  absence = null,
+  absenceDetail = "simple",
 }: AvatarBaseProps) {
   const avatarRef = React.useRef<HTMLSpanElement | null>(null);
   const [errored, setErrored] = React.useState(false);
@@ -209,12 +229,21 @@ export function AvatarBase({
   const initials = getInitials(name, fallback);
   const showImage = Boolean(resolvedSrc) && !errored;
   const baseStatusTitle = buildTeamStatusTitle({ name, availability, presence });
+  // Підказка несе ДАТИ, а не лише факт: «у відпустці 10.08–21.08» — саме це
+  // питають першим, дивлячись на чужу аватарку.
   const statusTitle = inactive
     ? [name, "Співпрацю завершено"].filter(Boolean).join(" • ")
-    : baseStatusTitle;
+    : absence
+      ? [name, formatAbsenceLabel(absence)].filter(Boolean).join(" · ")
+      : baseStatusTitle;
   // An offboarded member's availability/presence is irrelevant — the blocked
   // marker takes over the indicator slot.
-  const statusIndicatorClass = inactive ? null : getTeamStatusIndicatorClass({ availability, presence });
+  // Відсутність перебиває presence, звільнення перебиває все.
+  const showAbsence = !inactive && !!absence && computedSize >= MIN_INDICATOR_SIZE;
+  const showAbsenceIcon = showAbsence && absenceDetail === "full" && computedSize >= MIN_ICON_BADGE_SIZE;
+  const AbsenceIcon = showAbsenceIcon && absence ? ABSENCE_KIND_ICONS[absence.kind] : null;
+  const statusIndicatorClass =
+    inactive || showAbsence ? null : getTeamStatusIndicatorClass({ availability, presence });
   const statusIndicatorSizeClass =
     computedSize <= 18 ? "h-2 w-2 border" : computedSize <= 28 ? "h-2.5 w-2.5 border" : "h-3 w-3 border";
   const statusIndicatorEdgeClass = "bottom-0 right-0";
@@ -242,13 +271,23 @@ export function AvatarBase({
   }, [assetVariant, resolvedSrc, src]);
 
   return (
-    <span className="relative inline-flex shrink-0 align-middle" title={statusTitle || undefined}>
+    <span
+      className={cn("relative inline-flex shrink-0 align-middle", showAbsence && "rounded-full")}
+      // Кільце живе на ОБГОРТЦІ навмисно: grayscale нижче знебарвлює власну
+      // тінь елемента, тож на самій аватарці кільце виходило б сірим.
+      style={showAbsence && absence ? getAbsenceRingStyle(absence.kind, computedSize) : undefined}
+      title={statusTitle || undefined}
+    >
       <Avatar
         ref={avatarRef}
         className={cn(
           "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
           shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
-          inactive ? "opacity-60 grayscale" : getTeamAvailabilityAvatarClass(availability),
+          inactive
+            ? "opacity-60 grayscale"
+            : showAbsence
+              ? "opacity-70 grayscale"
+              : getTeamAvailabilityAvatarClass(availability),
           className
         )}
         style={{ width: computedSize, height: computedSize }}
@@ -289,6 +328,17 @@ export function AvatarBase({
             <circle cx="12" cy="12" r="9" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
+        </span>
+      ) : AbsenceIcon && absence ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 z-base grid place-items-center rounded-full border-2 border-background",
+            toneBadgeClass[getAbsenceTone(absence.kind)]
+          )}
+          style={{ width: computedSize <= 36 ? 15 : 18, height: computedSize <= 36 ? 15 : 18 }}
+        >
+          <AbsenceIcon className="h-[62%] w-[62%]" />
         </span>
       ) : showStatusIndicator && statusIndicatorClass ? (
         <span

@@ -1,12 +1,13 @@
-import { CalendarOff, Coffee, Plane, Thermometer, type LucideIcon } from "lucide-react";
-
 import { cn } from "@/lib/utils";
+import { ABSENCE_KIND_ICONS } from "@/lib/absenceIndicator";
 import { toneBadgeClass } from "@/lib/statusTones";
 import {
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_TONE,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
+
+export { ABSENCE_KIND_ICONS };
 
 /**
  * Чип типу відсутності — ОДИН на весь застосунок.
@@ -15,13 +16,6 @@ import {
  * інакше людина з дальтонізмом не відрізнить відпустку від day-off. Той самий
  * словник іконок стоїть на барах планера, тож сторінка говорить однією мовою.
  */
-
-export const ABSENCE_KIND_ICONS: Record<TeamAbsenceKind, LucideIcon> = {
-  vacation: Plane,
-  sick_leave: Thermometer,
-  day_off: Coffee,
-  other: CalendarOff,
-};
 
 export function AbsenceKindChip({
   kind,

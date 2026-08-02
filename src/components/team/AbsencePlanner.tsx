@@ -9,7 +9,7 @@ import {
   TEAM_ABSENCE_KIND_TONE,
   type TeamAbsence,
 } from "@/lib/teamAbsences";
-import { ABSENCE_KIND_ICONS } from "@/components/team/AbsenceKindChip";
+import { ABSENCE_KIND_ICONS, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 
 /**
@@ -28,6 +28,7 @@ import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 
 export type PlannerPerson = {
   userId: string;
+  absence?: AvatarAbsence | null;
   name: string;
   roleLabel: string;
   avatarUrl?: string | null;
@@ -223,6 +224,7 @@ function AbsencePlannerImpl({
                   assetVariant="xs"
                   size={26}
                   inactive={person.inactive}
+                  absence={person.absence ?? null}
                 />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">

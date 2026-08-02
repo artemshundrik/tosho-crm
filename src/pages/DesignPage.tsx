@@ -29,6 +29,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { toAvatarAbsence, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
@@ -1035,6 +1036,8 @@ export default function DesignPage() {
   );
   const [memberAvailabilityById, setMemberAvailabilityById] = useState<Record<string, "available" | "vacation" | "sick_leave" | "offline">>({});
   const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
+  /** Відсутність «сьогодні» з журналу — живить кільце на аватарці. */
+  const [memberAbsenceById, setMemberAbsenceById] = useState<Record<string, AvatarAbsence | null>>({});
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
     () => initialMemberCache?.managerMembers ?? []
   );
@@ -1238,6 +1241,7 @@ export default function DesignPage() {
           setMemberById({});
           setMemberAvatarById({});
           setMemberAvailabilityById({});
+          setMemberAbsenceById({});
           setManagerMembers([]);
           setDesignerMembers([]);
           return;
@@ -1248,17 +1252,20 @@ export default function DesignPage() {
         const avatarById: Record<string, string | null> = {};
         const availabilityById: Record<string, "available" | "vacation" | "sick_leave" | "offline"> = {};
         const inactiveById: Record<string, boolean> = {};
+        const absenceById: Record<string, AvatarAbsence | null> = {};
         rows.forEach((row) => {
           labelById[row.userId] = row.label;
           avatarById[row.userId] = row.avatarDisplayUrl;
           availabilityById[row.userId] = normalizeTeamAvailabilityStatus(row.availabilityStatus);
           inactiveById[row.userId] = isInactiveEmployment(row.employmentStatus);
+          absenceById[row.userId] = toAvatarAbsence(row.absenceToday);
         });
 
         setMemberById(labelById);
         setMemberAvatarById(avatarById);
         setMemberAvailabilityById(availabilityById);
         setMemberInactiveById(inactiveById);
+        setMemberAbsenceById(absenceById);
         const designerRows = rows.filter(
           (row) => isDesignerRole(row.jobRole) && !isInactiveEmployment(row.employmentStatus)
         );
@@ -4775,6 +4782,7 @@ export default function DesignPage() {
                   size={26}
                   className="text-3xs font-semibold ring-2 ring-background"
                   availability={getMemberAvailability(task.assigneeUserId)}
+                  absence={task.assigneeUserId ? memberAbsenceById[task.assigneeUserId] ?? null : null}
                   presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
                   inactive={memberInactiveById[task.assigneeUserId] ?? false}
                 />

@@ -12,6 +12,7 @@ import {
   type TeamAbsence,
 } from "@/lib/teamAbsences";
 import { toneBadgeClass, toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import type { AvatarAbsence } from "@/lib/absenceIndicator";
 
 /**
  * Картка людини на вкладці «Люди».
@@ -26,6 +27,7 @@ import { toneBadgeClass, toneSubtleClass, toneTextClass } from "@/lib/statusTone
 
 export type TeamMemberCardPerson = {
   userId: string;
+  absence?: AvatarAbsence | null;
   name: string;
   roleLabel: string;
   avatarUrl?: string | null;
@@ -119,6 +121,9 @@ export function TeamMemberCard({
           size={46}
           presence={person.online ? "online" : "offline"}
           inactive={person.inactive}
+          // Повний рівень: на «Команді» тип відсутності треба бачити одразу.
+          absence={person.absence ?? null}
+          absenceDetail="full"
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">

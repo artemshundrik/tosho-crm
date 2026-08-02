@@ -14,6 +14,7 @@ import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { toAvatarAbsence } from "@/lib/absenceIndicator";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -961,6 +962,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           className="border-border/60 shrink-0"
           fallbackClassName="text-3xs font-semibold"
           availability={member?.availabilityStatus ?? null}
+          absence={member?.absence ?? null}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
           inactive={isManagerInactive(value)}
         />
@@ -1077,6 +1079,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           accessRole: row.accessRole,
           jobRole: row.jobRole,
           availabilityStatus: normalizeTeamAvailabilityStatus(row.availabilityStatus),
+          absence: toAvatarAbsence(row.absenceToday),
           employmentStatus: row.employmentStatus,
         }));
         const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
@@ -6016,6 +6019,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             size={20}
                             className="text-3xs font-semibold"
                             availability={manager?.availabilityStatus ?? null}
+                            absence={manager?.absence ?? null}
                             presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                             inactive={isManagerInactive(row.assigned_to)}
                           />
@@ -6232,6 +6236,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     size={28}
                                     className="text-3xs font-semibold"
                                     availability={manager?.availabilityStatus ?? null}
+                                    absence={manager?.absence ?? null}
                                     presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                     inactive={isManagerInactive(row.assigned_to)}
                                   />
@@ -6723,6 +6728,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         size={26}
                                         className="text-3xs font-semibold"
                                         availability={manager?.availabilityStatus ?? null}
+                                        absence={manager?.absence ?? null}
                                         presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                         inactive={isManagerInactive(row.assigned_to)}
                                       />

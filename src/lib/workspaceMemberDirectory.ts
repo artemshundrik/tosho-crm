@@ -43,6 +43,12 @@ export type WorkspaceMemberDirectoryRow = {
   availabilityStatus: "available" | "vacation" | "sick_leave" | "offline";
   availabilityStartDate: string;
   availabilityEndDate: string;
+  /**
+   * Погоджена відсутність, що покриває СЬОГОДНІ — із журналу team_absences.
+   * Живить індикатор на аватарці й підказку («у відпустці 10–21.08»).
+   * null = людина на місці.
+   */
+  absenceToday: TodayAbsence | null;
   startDate: string;
   probationEndDate: string;
   employmentStatus: EmploymentStatus;
@@ -283,6 +289,8 @@ function buildRow(input: {
     fullName: names.fullName,
     displayName,
     initials: getInitialsFromName(displayName, input.email),
+    // Заповнюється пізніше, в applyTodayAbsence: сам buildRow журналу не бачить.
+    absenceToday: null,
     avatarUrl: sanitizeAvatarReference(input.avatarUrl ?? null, AVATAR_BUCKET),
     avatarPath: sanitizeAvatarReference(input.avatarPath ?? null, AVATAR_BUCKET),
     accessRole: input.accessRole ?? null,
@@ -530,6 +538,14 @@ async function listFromFallback(workspaceId: string) {
  */
 type TodayAbsenceStatus = Exclude<WorkspaceMemberDirectoryRow["availabilityStatus"], "available">;
 
+export type TodayAbsence = {
+  status: TodayAbsenceStatus;
+  /** Тип із журналу: vacation / sick_leave / day_off / other. */
+  kind: string;
+  startDate: string;
+  endDate: string;
+};
+
 const ABSENCE_KIND_TO_AVAILABILITY: Record<string, TodayAbsenceStatus> = {
   vacation: "vacation",
   sick_leave: "sick_leave",
@@ -544,25 +560,33 @@ function currentDateKey() {
   ).padStart(2, "0")}`;
 }
 
-async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string, TodayAbsenceStatus>> {
+async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string, TodayAbsence>> {
   const todayKey = currentDateKey();
 
-  const byUser = new Map<string, TodayAbsenceStatus>();
+  const byUser = new Map<string, TodayAbsence>();
   try {
     const { data, error } = await supabase
       .schema("tosho")
       .from("team_absences")
-      .select("user_id,kind")
+      .select("user_id,kind,start_date,end_date")
       .eq("workspace_id", workspaceId)
       .eq("status", "approved")
       .lte("start_date", todayKey)
       .gte("end_date", todayKey);
     if (error) throw error;
     (data ?? []).forEach((row) => {
-      const mapped = ABSENCE_KIND_TO_AVAILABILITY[row.kind ?? "other"] ?? "offline";
+      const kind = row.kind ?? "other";
+      const mapped = ABSENCE_KIND_TO_AVAILABILITY[kind] ?? "offline";
       // Відпустка/лікарняний важливіші за day-off, якщо раптом накладаються.
       const current = byUser.get(row.user_id);
-      if (!current || current === "offline") byUser.set(row.user_id, mapped);
+      if (!current || current.status === "offline") {
+        byUser.set(row.user_id, {
+          status: mapped,
+          kind,
+          startDate: row.start_date,
+          endDate: row.end_date,
+        });
+      }
     });
   } catch (error) {
     // Журнал недоступний — краще показати «доступний», ніж зламати весь довідник.
@@ -578,16 +602,14 @@ async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string
  */
 function applyTodayAbsence(
   rows: WorkspaceMemberDirectoryRow[],
-  absenceToday: Map<string, TodayAbsenceStatus>
+  absenceToday: Map<string, TodayAbsence>
 ): WorkspaceMemberDirectoryRow[] {
-  if (absenceToday.size === 0 && rows.every((row) => row.availabilityStatus === "available")) {
-    return rows;
-  }
   return rows.map((row) => {
-    const derived = absenceToday.get(row.userId);
+    const derived = absenceToday.get(row.userId) ?? null;
     const next: WorkspaceMemberDirectoryRow["availabilityStatus"] =
-      derived ?? (row.availabilityStatus === "offline" ? "offline" : "available");
-    return next === row.availabilityStatus ? row : { ...row, availabilityStatus: next };
+      derived?.status ?? (row.availabilityStatus === "offline" ? "offline" : "available");
+    if (next === row.availabilityStatus && row.absenceToday === derived) return row;
+    return { ...row, availabilityStatus: next, absenceToday: derived };
   });
 }
 

@@ -9,6 +9,7 @@ import {
 import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
+import type { AvatarAbsence } from "@/lib/absenceIndicator";
 
 type ListQuotesParams = {
   teamId: string;
@@ -132,6 +133,8 @@ export type TeamMemberRow = {
   accessRole?: string | null;
   jobRole?: string | null;
   availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
+  /** Відсутність «сьогодні» з журналу — для кільця на аватарці. */
+  absence?: AvatarAbsence | null;
   employmentStatus?: string | null;
 };
 
