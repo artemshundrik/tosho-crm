@@ -1,8 +1,16 @@
 import React from "react";
-import { Mic, Paperclip, Send } from "lucide-react";
+import { AtSign, Mic, Paperclip, Send } from "lucide-react";
+import { AvatarBase } from "@/components/app/avatar-kit";
+import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
 
-export type MentionCandidate = { userId: string; name: string; role: string | null };
+export type MentionCandidate = {
+  userId: string;
+  name: string;
+  /** Сире значення job_role — підпис форматуємо через formatJobRole. */
+  role: string | null;
+  avatarUrl: string | null;
+};
 
 type Props = {
   sending: boolean;
@@ -67,9 +75,12 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
                 index === 0 && "bg-primary/5"
               )}
             >
+              <AvatarBase size={20} src={candidate.avatarUrl} name={candidate.name} className="shrink-0" />
               <span className="truncate font-medium">{candidate.name}</span>
               {candidate.role ? (
-                <span className="ml-auto shrink-0 text-3xs text-muted-foreground">{candidate.role}</span>
+                <span className="ml-auto shrink-0 text-3xs text-muted-foreground">
+                  {formatJobRole(candidate.role)}
+                </span>
               ) : null}
             </button>
           ))}
@@ -84,6 +95,17 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
           className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <Paperclip className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label="Згадати учасника"
+          onClick={() => {
+            handleChange(`${body}${body && !body.endsWith(" ") ? " " : ""}@`);
+            inputRef.current?.focus();
+          }}
+          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <AtSign className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"

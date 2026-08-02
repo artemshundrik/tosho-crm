@@ -9264,7 +9264,7 @@ export default function DesignTaskPage() {
 
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
-      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
+      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px)] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
@@ -9500,51 +9500,16 @@ export default function DesignTaskPage() {
                 </div>
               </PopoverContent>
             </Popover>
-            {/* Керування таймером живе тут, у шапці: картку з правої колонки
-                прибрано, і це тепер єдине місце старт/паузи загального таймера. */}
-            <span
+            <Badge
+              variant="outline"
               className={cn(
-                "inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-0.5 text-xs font-medium tabular-nums",
-                isTimerRunning
-                  ? "border-success-soft-border bg-success-soft text-success-foreground"
-                  : isTimerPaused
-                    ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
-                    : "border-border/60 text-muted-foreground"
+                "px-2.5 py-1 text-xs gap-1",
+                isTimerRunning ? "border-success-soft-border text-success-foreground bg-success-soft" : ""
               )}
             >
               <Timer className="h-3.5 w-3.5" />
               {timerElapsedLabel}
-              {isTimerRunning ? (
-                <button
-                  type="button"
-                  aria-label="Поставити таймер на паузу"
-                  title={pauseTimerBlockedReason ?? "Пауза"}
-                  disabled={!canPauseTimer || timerBusy === "pause"}
-                  onClick={() => void handlePauseTimer()}
-                  className="grid h-6 w-6 place-items-center rounded-full transition-colors hover:bg-background/60 disabled:opacity-40"
-                >
-                  {timerBusy === "pause" ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Pause className="h-3 w-3" />
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  aria-label="Запустити таймер"
-                  disabled={!canStartTimer || timerBusy === "start"}
-                  onClick={() => void handleStartTimer()}
-                  className="grid h-6 w-6 place-items-center rounded-full transition-colors hover:bg-muted/60 disabled:opacity-40"
-                >
-                  {timerBusy === "start" ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Play className="h-3 w-3" />
-                  )}
-                </button>
-              )}
-            </span>
+            </Badge>
             <Button
               variant="outline"
               size="sm"
@@ -11312,8 +11277,8 @@ export default function DesignTaskPage() {
         </div>
 
         <aside className="self-start xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))]">
-          <div className="space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:px-6 xl:pr-8 xl:pt-6 xl:pb-8">
-          <section>
+          <div className="flex flex-col gap-3 px-4 py-5 xl:h-full xl:min-h-0 xl:gap-3 xl:overflow-hidden xl:px-5 xl:pr-6 xl:pt-5 xl:pb-5">
+          <section className="shrink-0 rounded-inner border border-border/40 bg-card px-3 pb-2 pt-2.5 shadow-card">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="design-task-side-heading">Деталі</div>
@@ -11562,7 +11527,61 @@ export default function DesignTaskPage() {
 
           </section>
 
-          <section className="flex h-[520px] min-h-0 flex-col border-t border-[hsl(var(--app-structure-divider))] pt-6">
+          <section className="shrink-0 rounded-inner border border-border/40 bg-card shadow-card">
+            <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
+              <span className="design-task-side-heading">Таймер</span>
+              {isTimerRunning ? (
+                <span className="rounded-full bg-success-soft px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-success-foreground">
+                  іде
+                </span>
+              ) : isTimerPaused ? (
+                <span className="rounded-full bg-warning-soft px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-warning-foreground">
+                  на паузі
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-3 px-3 pb-3">
+              <span className="flex flex-col gap-0.5">
+                <span
+                  className={cn(
+                    "text-xl font-bold leading-none tracking-tight tabular-nums",
+                    isTimerRunning ? "text-success-foreground" : isTimerPaused ? "text-warning-foreground" : "text-foreground"
+                  )}
+                >
+                  {timerElapsedLabel}
+                </span>
+                <span className="text-3xs text-muted-foreground">усього по задачі</span>
+              </span>
+              {isTimerRunning ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto h-8 gap-1.5 rounded-full border-success-soft-border bg-success-soft px-3 text-xs text-success-foreground"
+                  disabled={!canPauseTimer || timerBusy === "pause"}
+                  title={pauseTimerBlockedReason ?? undefined}
+                  onClick={() => void handlePauseTimer()}
+                >
+                  {timerBusy === "pause" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                  Пауза
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto h-8 gap-1.5 rounded-full px-3 text-xs"
+                  disabled={!canStartTimer || timerBusy === "start"}
+                  onClick={() => void handleStartTimer()}
+                >
+                  {timerBusy === "start" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                  Старт
+                </Button>
+              )}
+            </div>
+          </section>
+
+          <section className="flex min-h-0 flex-1 flex-col">
             {effectiveTeamId ? (
               <TaskThreadRail quoteRef={String(task.quoteId)} teamId={effectiveTeamId} />
             ) : null}

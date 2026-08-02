@@ -52,34 +52,35 @@ export function ThreadHistory({ events }: { events: ThreadEntry[] }) {
             const expanded = openDays.has(digest.key);
             return (
               <React.Fragment key={digest.key}>
+                {/* Один рядок: дата не переноситься, крапки — поруч, не під текстом. */}
                 <button
                   type="button"
                   onClick={() => toggleDay(digest.key)}
                   aria-expanded={expanded}
-                  className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
                 >
-                  <span className="w-10 shrink-0 pt-px text-2xs font-semibold tabular-nums text-foreground/80">
+                  <span className="w-12 shrink-0 whitespace-nowrap text-2xs font-semibold tabular-nums text-foreground/80">
                     {digest.label}
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="text-xs text-muted-foreground">{digest.summary}</span>
-                    {digest.marks.length > 0 ? (
-                      <span className="flex gap-1">
-                        {digest.marks.map((mark, index) => (
-                          <span
-                            key={`${mark}-${index}`}
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full",
-                              mark === "rev" && "bg-warning-foreground",
-                              mark === "dl" && "bg-destructive",
-                              mark === "vis" && "bg-[hsl(var(--success-solid))]"
-                            )}
-                          />
-                        ))}
-                      </span>
-                    ) : null}
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {digest.summary}
                   </span>
-                  <span className="shrink-0 pt-0.5 text-3xs tabular-nums text-muted-foreground">
+                  {digest.marks.length > 0 ? (
+                    <span className="flex shrink-0 gap-1">
+                      {digest.marks.map((mark, index) => (
+                        <span
+                          key={`${mark}-${index}`}
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            mark === "rev" && "bg-warning-foreground",
+                            mark === "dl" && "bg-destructive",
+                            mark === "vis" && "bg-[hsl(var(--success-solid))]"
+                          )}
+                        />
+                      ))}
+                    </span>
+                  ) : null}
+                  <span className="w-4 shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
                     {digest.count}
                   </span>
                 </button>

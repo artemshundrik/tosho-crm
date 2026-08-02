@@ -60,6 +60,14 @@ function dayLabel(iso: string, now: Date): string {
   return new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
 }
 
+/** «Сьогодні» / «Учора» / «31 лип.» — коротко, щоб влізло в одну колонку дайджесту. */
+function shortDayLabel(iso: string, now: Date): string {
+  const key = dayKey(new Date(iso));
+  if (key === dayKey(now)) return "Сьогодні";
+  if (key === dayKey(new Date(now.getTime() - 86_400_000))) return "Учора";
+  return new Date(iso).toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
+}
+
 /** Наскільки повідомлення може «прилипнути» до попереднього в одну групу. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -202,7 +210,8 @@ export function buildDayDigests(events: ThreadEntry[], now: Date): ThreadDayDige
 
     digests.push({
       key,
-      label: dayLabel(sorted[0].createdAt, now),
+      // Коротка форма («31 лип.»), бо в колонці 48 px «31 липня» рветься на два рядки.
+      label: shortDayLabel(sorted[0].createdAt, now),
       count: sorted.length,
       summary,
       marks,

@@ -36,6 +36,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
 import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
+
+/** Плаваюча кнопка AI-помічника: приховано візуально, функціонал лишається. */
+const SHOW_AI_LAUNCHER = false;
 import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
@@ -2286,7 +2289,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </SheetContent>
       </Sheet>
 
-      {!hideToShoAiLauncher ? (
+      {/* Плаваючу кнопку AI-помічника сховано на прохання CEO (2026-08-03).
+          Сам помічник працює: відкривається з командної палітри (Cmd+K) і з
+          усіх наявних точок входу — прибрано лише візуальну кнопку.
+          Щоб повернути — досить змінити прапорець на !hideToShoAiLauncher. */}
+      {SHOW_AI_LAUNCHER && !hideToShoAiLauncher ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-docked flex justify-end px-4 pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+14px)] md:right-0 md:px-5 md:pb-5">
           <div className="flex flex-col items-end gap-2">
             <ToShoAiLauncherButton

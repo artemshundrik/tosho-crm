@@ -74,7 +74,13 @@ export function TaskThreadRail({ quoteRef, teamId }: Props) {
   );
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(
-    () => members.map((member) => ({ userId: member.userId, name: member.displayName, role: member.jobRole })),
+    () =>
+      members.map((member) => ({
+        userId: member.userId,
+        name: member.displayName,
+        role: member.jobRole,
+        avatarUrl: member.avatarDisplayUrl ?? member.avatarUrl ?? null,
+      })),
     [members]
   );
 
