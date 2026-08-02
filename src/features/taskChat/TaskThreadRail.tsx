@@ -80,12 +80,18 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
 
   const mentionCandidates = React.useMemo<MentionCandidate[]>(
     () =>
-      members.map((member) => ({
+      members
+        // Звільнених не пропонуємо: тегнути людину, якої немає в команді,
+        // означає надіслати сповіщення в нікуди.
+        .filter(
+          (member) => member.employmentStatus !== "inactive" && member.employmentStatus !== "rejected"
+        )
+        .map((member) => ({
         userId: member.userId,
         name: member.displayName,
         role: member.jobRole,
         avatarUrl: member.avatarDisplayUrl ?? member.avatarUrl ?? null,
-      })),
+        })),
     [members]
   );
 

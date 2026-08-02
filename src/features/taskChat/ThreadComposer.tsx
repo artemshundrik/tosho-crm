@@ -120,7 +120,7 @@ export function ThreadComposer({
     const query = mentionQuery.toLowerCase();
     return candidates
       .filter((candidate) => !query || candidate.name.toLowerCase().includes(query))
-      .slice(0, 4);
+      .slice(0, 24);
   }, [candidates, mentionQuery]);
 
   const applyMention = (name: string) => {
@@ -147,7 +147,7 @@ export function ThreadComposer({
       ) : null}
 
       {matches.length > 0 ? (
-        <div className="mb-2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
+        <div className="mb-2 max-h-[184px] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
           {matches.map((candidate, index) => (
             <button
               key={candidate.userId}

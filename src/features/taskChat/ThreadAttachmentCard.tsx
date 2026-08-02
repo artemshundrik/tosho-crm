@@ -59,7 +59,7 @@ export function ThreadAttachmentCard({
       <button
         type="button"
         onClick={() => setPreviewOpen(true)}
-        className="mt-1 block w-full overflow-hidden rounded-xl border border-border/30 bg-muted/40 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="my-0.5 block w-full overflow-hidden rounded-xl border border-border/30 bg-muted/40 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         {url ? (
           <img
@@ -95,7 +95,7 @@ export function ThreadAttachmentCard({
       type="button"
       onClick={() => setPreviewOpen(true)}
       className={cn(
-        "mt-1 flex w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left transition-colors",
+        "my-0.5 flex w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left transition-colors",
         own
           ? "border-primary-foreground/25 bg-primary-foreground/10 hover:bg-primary-foreground/15"
           : "border-border/50 bg-background/70 hover:bg-muted/60"

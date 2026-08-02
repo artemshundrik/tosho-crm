@@ -1570,49 +1570,40 @@ export default function DesignTaskPage() {
    * пальці», хоч скролити нема чого. Міряємо фактичну відстань від верху сітки
    * до низу вікна: жодних припущень про те, що саме стоїть вище.
    */
-  const layoutGridRef = useRef<HTMLDivElement>(null);
-  /** Скільки пікселів довелося зрізати, щоб сторінка перестала вилазити за вікно. */
-  const heightCorrectionRef = useRef(0);
+  const layoutRootRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Висота повноекранної розкладки — виміряна, і задається КОРЕНЮ сторінки.
+   *
+   * Раніше я міряв саму сітку й, коли сторінка все одно вилазила, зрізав
+   * різницю. Через це замість скролу з'являлась дірка: колонка закінчувалась
+   * на 10-15 px вище низу вікна. Тепер висоту з обмеженням переповнення дістає
+   * корінь сторінки — усе, що всередині, фізично не може виштовхнути сторінку
+   * за вікно, і зрізати нічого не треба.
+   */
   useLayoutEffect(() => {
-    const node = layoutGridRef.current;
+    const node = layoutRootRef.current;
     if (!node) return;
 
-    const write = (value: number) => {
-      const next = `${Math.max(360, Math.round(value))}px`;
-      if (node.style.getPropertyValue("--task-grid-height") !== next) {
-        node.style.setProperty("--task-grid-height", next);
-      }
-    };
-
     const apply = () => {
-      const documentTop = node.getBoundingClientRect().top + window.scrollY;
-      const raw = window.innerHeight - documentTop;
-      write(raw - heightCorrectionRef.current);
-
-      // Самокорекція. Вимірювання «від верху сітки до низу вікна» дає правильну
-      // висоту лише якщо під сіткою нічого немає. Насправді там може виявитись
-      // будь-що (липкі панелі, відступи, майбутні блоки), і сторінка вилазить
-      // за вікно на кілька пікселів — той самий скрол «на два пальці».
-      // Замість того щоб вгадувати джерело, забираємо рівно ту різницю, на яку
-      // вилазимо. Накопичуємо в ref, інакше наступний рендер повернув би повну
-      // висоту й почалося б блимання.
-      const root = document.documentElement;
-      const overflow = root.scrollHeight - root.clientHeight;
-      if (overflow > 0 && overflow < 200) {
-        heightCorrectionRef.current += overflow;
-        write(raw - heightCorrectionRef.current);
+      // Нижче xl колонка стає під контентом — там сторінка має скролитись як звичайно.
+      if (window.innerWidth < 1280) {
+        node.style.removeProperty("height");
+        node.style.removeProperty("overflow");
+        return;
       }
-    };
-
-    const remeasure = () => {
-      heightCorrectionRef.current = 0;
-      apply();
+      const documentTop = node.getBoundingClientRect().top + window.scrollY;
+      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
+      const next = `${available}px`;
+      if (node.style.height !== next) {
+        node.style.height = next;
+        node.style.overflow = "hidden";
+      }
     };
 
     apply();
-    window.addEventListener("resize", remeasure);
-    return () => window.removeEventListener("resize", remeasure);
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
   });
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
@@ -9339,11 +9330,8 @@ export default function DesignTaskPage() {
   ];
 
   return (
-    <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
-      <div
-        ref={layoutGridRef}
-        className="grid grid-cols-1 xl:h-[var(--task-grid-height,calc(100dvh-56px))] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden"
-      >
+    <div ref={layoutRootRef} className="w-full max-w-none space-y-4 pb-20 md:pb-0 xl:space-y-0 xl:pb-0">
+      <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
