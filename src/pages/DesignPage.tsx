@@ -25,7 +25,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus, MessageSquare } from "lucide-react";
-import { useTaskChat } from "@/features/taskChat/TaskChatProvider";
+import { useOptionalTaskChat } from "@/features/taskChat/TaskChatProvider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
@@ -826,7 +826,9 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
-  const { openThread } = useTaskChat();
+  // Необов'язковий: якщо сторінку колись відрендерять поза AppLayout, кнопка
+  // обговорення просто не спрацює, а не вб'є всю сторінку.
+  const taskChat = useOptionalTaskChat();
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
@@ -1145,9 +1147,9 @@ export default function DesignPage() {
   const openTaskThread = useCallback(
     (task: DesignTask, event?: React.MouseEvent) => {
       event?.stopPropagation();
-      if (!teamId) return;
+      if (!teamId || !taskChat) return;
       const changeRequests = task.metadata?.design_brief_change_requests;
-      openThread({
+      taskChat.openThread({
         kind: "quote",
         ref: task.quoteId,
         title: task.title ?? task.designTaskNumber ?? "Дизайн-задача",
@@ -1170,7 +1172,7 @@ export default function DesignPage() {
         },
       });
     },
-    [openThread, teamId]
+    [taskChat, teamId]
   );
 
   const openTask = (taskId: string, inNewTab = false) => {
