@@ -1679,6 +1679,54 @@ export default function DesignPage() {
 
         limitedRows = fetchedRows;
       }
+      /**
+       * ДОБІР АКТИВНИХ ЗАДАЧ.
+       *
+       * Основна вибірка бере перші N за спаданням created_at. Задача, що досі
+       * «в роботі», але створена давно, у це вікно не влазить — і зникає з
+       * дошки взагалі. Реальний випадок: TS-0626-0043 від 10 червня була
+       * in_progress, а колонка «В роботі» показувала нуль, бо новіших задач у
+       * команді 135 при вікні 120. Робота, якої не видно на дошці, — це
+       * робота, про яку забувають.
+       *
+       * Тому активні статуси (new/changes/in_progress) добираємо завжди й
+       * повністю. Їх мало — це поточна робота команди, не історія. Рядки
+       * додаємо ДО спільного мапінгу, щоб вони пройшли те саме збагачення
+       * замовниками, номерами й логотипами, що й решта.
+       */
+      if (!append) {
+        const activeStatuses = serverFilters.status
+          ? (ACTIVE_DESIGN_STATUSES as string[]).includes(serverFilters.status)
+            ? [serverFilters.status]
+            : []
+          : (ACTIVE_DESIGN_STATUSES as string[]);
+
+        if (activeStatuses.length > 0) {
+          let activeQuery = supabase
+            .from("activity_log")
+            .select("id,entity_id,metadata,title,created_at")
+            .eq("team_id", effectiveTeamId)
+            .eq("action", "design_task")
+            .in("metadata->>status", activeStatuses)
+            .order("created_at", { ascending: false });
+          if (serverFilters.managerUserId) {
+            activeQuery = activeQuery.eq("metadata->>manager_user_id", serverFilters.managerUserId);
+          }
+          const { data: activeData, error: activeError } = await activeQuery;
+          if (activeError) {
+            // Добір — не критичний шлях: краще показати дошку без нього, ніж
+            // впасти цілком.
+            console.warn("Failed to top up active design tasks", activeError);
+          } else {
+            const seen = new Set(limitedRows.map((row) => row.id as string));
+            const extraRows = ((activeData ?? []) as DesignTaskListActivityRow[]).filter(
+              (row) => !seen.has(row.id as string)
+            );
+            if (extraRows.length > 0) limitedRows = [...limitedRows, ...extraRows];
+          }
+        }
+      }
+
       setHasMoreTasks(fetchAll ? false : nextHasMoreTasks);
       if (!append) {
         fullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
