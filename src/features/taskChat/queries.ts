@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { quoteRefFromThreadKey, type ThreadEntry } from "@/lib/taskThread";
+import { quoteRefFromThreadKey, type ThreadAttachment, type ThreadEntry } from "@/lib/taskThread";
 import { fetchThreadEvents } from "./threadEvents";
 
-const MESSAGE_COLUMNS = "id,body,created_at,created_by,kind,visibility,source,is_pinned";
+const MESSAGE_COLUMNS =
+  "id,body,created_at,created_by,kind,visibility,source,is_pinned,thread_meta";
 
 type MessageRow = {
   id: string;
@@ -14,6 +15,7 @@ type MessageRow = {
   visibility: string;
   source: string;
   is_pinned: boolean;
+  thread_meta: { attachments?: ThreadAttachment[] } | null;
 };
 
 const toEntry = (row: MessageRow): ThreadEntry => ({
@@ -26,6 +28,7 @@ const toEntry = (row: MessageRow): ThreadEntry => ({
   source: row.source === "telegram" ? "telegram" : "crm",
   eventType: null,
   isPinned: row.is_pinned,
+  attachments: row.thread_meta?.attachments ?? undefined,
 });
 
 export const threadKeys = {
@@ -91,6 +94,7 @@ export type SendMessageInput = {
   quoteId: string | null;
   userId: string;
   visibility: "team" | "finance";
+  attachments?: ThreadAttachment[];
 };
 
 export function useSendThreadMessage(threadKey: string | null) {
@@ -110,6 +114,7 @@ export function useSendThreadMessage(threadKey: string | null) {
           kind: "message",
           visibility: input.visibility,
           source: "crm",
+          thread_meta: input.attachments?.length ? { attachments: input.attachments } : {},
         })
         .select(MESSAGE_COLUMNS)
         .single();
@@ -132,6 +137,7 @@ export function useSendThreadMessage(threadKey: string | null) {
         source: "crm",
         eventType: null,
         isPinned: false,
+        attachments: input.attachments,
         pending: true,
       };
       client.setQueryData<ThreadEntry[]>(threadKeys.entries(threadKey), [

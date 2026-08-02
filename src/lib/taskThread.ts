@@ -8,6 +8,15 @@
 
 export type ThreadEntryKind = "message" | "event";
 
+/** Файл, показаний у бабблі. Живе в тому ж сховищі, що й вкладення задачі. */
+export type ThreadAttachment = {
+  fileName: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  bucket: string;
+  path: string;
+};
+
 export type ThreadEntry = {
   id: string;
   kind: ThreadEntryKind;
@@ -20,6 +29,7 @@ export type ThreadEntry = {
   /** Для kind="event" — action із activity_log. */
   eventType: string | null;
   isPinned: boolean;
+  attachments?: ThreadAttachment[];
   pending?: boolean;
   failed?: boolean;
 };

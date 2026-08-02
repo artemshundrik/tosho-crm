@@ -4,6 +4,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { buildThreadBlocks, type ThreadEntry } from "@/lib/taskThread";
 import { cn } from "@/lib/utils";
 import { eventTone } from "./threadEvents";
+import { ThreadAttachmentCard } from "./ThreadAttachmentCard";
 
 type Props = {
   entries: ThreadEntry[];
@@ -190,7 +191,17 @@ export function ThreadFeed({
                       {entry.pending ? <Clock className="h-3 w-3" /> : null}
                     </span>
 
-                    <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+                    {entry.body ? (
+                      <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+                    ) : null}
+
+                    {entry.attachments?.map((attachment) => (
+                      <ThreadAttachmentCard
+                        key={`${attachment.bucket}:${attachment.path}`}
+                        attachment={attachment}
+                        own={block.own && !restricted}
+                      />
+                    ))}
                   </div>
                 </div>
               );

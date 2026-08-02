@@ -4032,7 +4032,7 @@ export default function DesignTaskPage() {
     }
   };
 
-  const handleUploadTaskAttachments = async (files: FileList | null) => {
+  const handleUploadTaskAttachments = async (files: FileList | null): Promise<AttachmentRow[] | undefined> => {
     if (!files || files.length === 0 || !task || !effectiveTeamId || !userId || attachmentUploading) return;
     if (!ensureCanEdit()) return;
 
@@ -4141,6 +4141,7 @@ export default function DesignTaskPage() {
       }
 
       toast.success(`Додано файлів: ${uploadedAttachments.length}`);
+      return uploadedAttachments;
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося додати файли");
       setError(message);
@@ -11591,7 +11592,16 @@ export default function DesignTaskPage() {
               <TaskThreadRail
                 quoteRef={String(task.quoteId)}
                 teamId={effectiveTeamId}
-                onAttachFiles={(files) => handleUploadTaskAttachments(files)}
+                onAttachFiles={async (files) => {
+                  const uploaded = await handleUploadTaskAttachments(files);
+                  return (uploaded ?? []).map((file) => ({
+                    fileName: file.file_name ?? "Файл",
+                    fileSize: file.file_size ?? null,
+                    mimeType: file.mime_type ?? null,
+                    bucket: file.storage_bucket ?? "",
+                    path: file.storage_path ?? "",
+                  }));
+                }}
                 attaching={attachmentUploading}
               />
             ) : null}

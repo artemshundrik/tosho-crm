@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { countUnread, threadKeyForQuote } from "@/lib/taskThread";
+import { countUnread, threadKeyForQuote, type ThreadAttachment } from "@/lib/taskThread";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { ThreadComposer, type MentionCandidate } from "./ThreadComposer";
@@ -19,7 +19,7 @@ type Props = {
   quoteRef: string;
   teamId: string;
   /** Завантаження файлів тим самим шляхом, що й вкладення задачі. */
-  onAttachFiles?: (files: FileList) => Promise<void> | void;
+  onAttachFiles?: (files: FileList) => Promise<ThreadAttachment[] | void> | void;
   attaching?: boolean;
 };
 
@@ -136,10 +136,16 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
    */
   const handleAttach = async (files: FileList) => {
     if (!onAttachFiles || !userId) return;
-    const names = Array.from(files).map((file) => file.name);
-    await onAttachFiles(files);
-    const label = names.length === 1 ? `Додав файл: ${names[0]}` : `Додав файли: ${names.join(", ")}`;
-    sendMutation.mutate({ body: label, visibility: "team", teamId, quoteId, userId });
+    const uploaded = (await onAttachFiles(files)) || [];
+    if (uploaded.length === 0) return;
+    sendMutation.mutate({
+      body: uploaded.length === 1 ? "" : `Файлів: ${uploaded.length}`,
+      visibility: "team",
+      teamId,
+      quoteId,
+      userId,
+      attachments: uploaded,
+    });
   };
 
   const accessDenied =

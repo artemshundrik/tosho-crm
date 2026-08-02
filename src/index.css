@@ -2069,3 +2069,10 @@
   color: #666;
   border-top: 1px solid #d4d4d4;
 }
+
+
+/* Еквалайзер у полі диктовки чату: смужки «дихають», поки йде запис. */
+@keyframes thread-wave {
+  0%, 100% { transform: scaleY(0.45); }
+  50% { transform: scaleY(1); }
+}
