@@ -1540,6 +1540,27 @@ export default function DesignTaskPage() {
   const effectiveTeamId = teamId;
   const threadQueryClient = useQueryClient();
 
+  /** Згорнуті «Деталі» — щоб віддати висоту обговоренню. Вибір запам'ятовуємо. */
+  const [detailsCollapsed, setDetailsCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("tosho_design_task_details_collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleDetailsCollapsed = useCallback(() => {
+    setDetailsCollapsed((previous) => {
+      const next = !previous;
+      try {
+        window.localStorage.setItem("tosho_design_task_details_collapsed", next ? "1" : "0");
+      } catch {
+        // приватний режим — просто не запам'ятовуємо
+      }
+      return next;
+    });
+  }, []);
+
   /**
    * Висота повноекранної сітки — ВИМІРЯНА, а не порахована.
    *
@@ -11339,13 +11360,35 @@ export default function DesignTaskPage() {
               тонкою рамкою, картки — максимально широкі (варіант 2). */}
           <div className="flex flex-col gap-2 p-2.5 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <section className="shrink-0 rounded-inner border border-border/40 bg-card px-3 pb-2 pt-2.5 shadow-card">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="design-task-side-heading">Деталі</div>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={toggleDetailsCollapsed}
+              aria-expanded={!detailsCollapsed}
+              className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
+            >
+              <span className="design-task-side-heading">Деталі</span>
+              {detailsCollapsed ? (
+                <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+                  <span className="truncate">{task.customerName ?? "Без замовника"}</span>
+                  {task.assigneeUserId ? (
+                    <AvatarBase
+                      size={16}
+                      src={getMemberAvatar(task.assigneeUserId)}
+                      name={getMemberLabel(task.assigneeUserId)}
+                      className="shrink-0"
+                    />
+                  ) : null}
+                </span>
+              ) : null}
+              <ChevronDown
+                className={cn(
+                  "ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                  detailsCollapsed && "-rotate-90"
+                )}
+              />
+            </button>
 
-            <div className="design-task-detail-list">
+            <div className={cn("design-task-detail-list", detailsCollapsed && "hidden")}>
               <button
                 type="button"
                 onClick={() => setPartyCardOpen(true)}
