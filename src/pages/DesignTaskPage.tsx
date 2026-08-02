@@ -1550,20 +1550,48 @@ export default function DesignTaskPage() {
    * до низу вікна: жодних припущень про те, що саме стоїть вище.
    */
   const layoutGridRef = useRef<HTMLDivElement>(null);
+  /** Скільки пікселів довелося зрізати, щоб сторінка перестала вилазити за вікно. */
+  const heightCorrectionRef = useRef(0);
+
   useLayoutEffect(() => {
     const node = layoutGridRef.current;
     if (!node) return;
-    const apply = () => {
-      const documentTop = node.getBoundingClientRect().top + window.scrollY;
-      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
-      const next = `${available}px`;
+
+    const write = (value: number) => {
+      const next = `${Math.max(360, Math.round(value))}px`;
       if (node.style.getPropertyValue("--task-grid-height") !== next) {
         node.style.setProperty("--task-grid-height", next);
       }
     };
+
+    const apply = () => {
+      const documentTop = node.getBoundingClientRect().top + window.scrollY;
+      const raw = window.innerHeight - documentTop;
+      write(raw - heightCorrectionRef.current);
+
+      // Самокорекція. Вимірювання «від верху сітки до низу вікна» дає правильну
+      // висоту лише якщо під сіткою нічого немає. Насправді там може виявитись
+      // будь-що (липкі панелі, відступи, майбутні блоки), і сторінка вилазить
+      // за вікно на кілька пікселів — той самий скрол «на два пальці».
+      // Замість того щоб вгадувати джерело, забираємо рівно ту різницю, на яку
+      // вилазимо. Накопичуємо в ref, інакше наступний рендер повернув би повну
+      // висоту й почалося б блимання.
+      const root = document.documentElement;
+      const overflow = root.scrollHeight - root.clientHeight;
+      if (overflow > 0 && overflow < 200) {
+        heightCorrectionRef.current += overflow;
+        write(raw - heightCorrectionRef.current);
+      }
+    };
+
+    const remeasure = () => {
+      heightCorrectionRef.current = 0;
+      apply();
+    };
+
     apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
+    window.addEventListener("resize", remeasure);
+    return () => window.removeEventListener("resize", remeasure);
   });
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
