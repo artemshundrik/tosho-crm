@@ -18,6 +18,17 @@ begin;
 --    Той самий календар, що в team_absence_balances: пн–пт, скориговані
 --    ua_workday_exceptions.
 -- =====================================================================
+-- Робочий день у Києві, а не в UTC: сесія PostgREST живе в UTC, тож із 21:00
+-- київського вечора `current_date` уже «завтра», і вікно ±днів з'їжджало.
+create or replace function tosho.absence_today()
+returns date
+language sql
+stable
+as $$ select (now() at time zone 'Europe/Kyiv')::date $$;
+
+revoke all on function tosho.absence_today() from public;
+grant execute on function tosho.absence_today() to authenticated, anon, service_role;
+
 create or replace function tosho.count_absence_business_days(_workspace uuid, _from date, _to date)
 returns int
 language sql
@@ -66,7 +77,14 @@ with check (
       and mv.user_id = auth.uid()
   )
   and (
-    (team_absences.kind in ('vacation', 'day_off') and team_absences.status = 'pending')
+    -- Заявка на погодженні норму не чіпає, але без меж у планер лізе
+    -- «відпустка 2026–2030». Рік уперед і місяць назад покривають усе живе.
+    (
+      team_absences.kind in ('vacation', 'day_off')
+      and team_absences.status = 'pending'
+      and team_absences.start_date >= tosho.absence_today() - 31
+      and team_absences.end_date <= tosho.absence_today() + 366
+    )
     or (
       team_absences.kind = 'sick_leave'
       and team_absences.status = 'approved'
@@ -74,8 +92,8 @@ with check (
       -- мало: «хворію з сьогодні до кінця наступного місяця» так само
       -- обнуляє норму — просто вперед, а не назад. Довший лікарняний вносить
       -- керівництво (окрема політика, без обмежень).
-      and team_absences.start_date >= current_date - 7
-      and team_absences.end_date <= current_date + 14
+      and team_absences.start_date >= tosho.absence_today() - 7
+      and team_absences.end_date <= tosho.absence_today() + 14
       and team_absences.end_date - team_absences.start_date <= 14
     )
   )
@@ -218,6 +236,13 @@ begin
     return new;
   end if;
 
+  -- Без блокування квота ловить лише послідовні вставки: два паралельні
+  -- запити читають однакове «використано» і обидва проходять. Лок на пару
+  -- (воркспейс, людина) серіалізує саме тих, хто конкурує за одну квоту.
+  perform pg_advisory_xact_lock(
+    hashtextextended(new.workspace_id::text || ':' || new.user_id::text, 0)
+  );
+
   select coalesce(q.sick_days, 10)
     into v_quota
   from (select 1) dummy
@@ -226,31 +251,49 @@ begin
    and q.user_id = new.user_id
    and q.year = v_year;
 
-  select coalesce(sum(
-           tosho.count_absence_business_days(
-             a.workspace_id,
-             greatest(a.start_date, make_date(v_year, 1, 1)),
-             least(a.end_date, make_date(v_year, 12, 31))
-           )
-         ), 0)
+  -- Рахуємо УНІКАЛЬНІ робочі дні «наявні + новий» — так само, як
+  -- team_absence_balances. Інакше два записи, що перетинаються, рахувались
+  -- би двічі, і картка показувала б одне, а тригер відмовляв за іншим.
+  with spent as (
+    select distinct d::date as day
+    from tosho.team_absences a
+    cross join lateral generate_series(
+      greatest(a.start_date, make_date(v_year, 1, 1)),
+      least(a.end_date, make_date(v_year, 12, 31)),
+      interval '1 day'
+    ) as d
+    where a.workspace_id = new.workspace_id
+      and a.user_id = new.user_id
+      and a.kind = 'sick_leave'
+      and a.status = 'approved'
+      and a.id is distinct from new.id
+      and a.start_date <= make_date(v_year, 12, 31)
+      and a.end_date >= make_date(v_year, 1, 1)
+    union
+    select distinct d::date
+    from generate_series(
+      greatest(new.start_date, make_date(v_year, 1, 1)),
+      least(new.end_date, make_date(v_year, 12, 31)),
+      interval '1 day'
+    ) as d
+  )
+  select count(*)
     into v_used
-  from tosho.team_absences a
-  where a.workspace_id = new.workspace_id
-    and a.user_id = new.user_id
-    and a.kind = 'sick_leave'
-    and a.status = 'approved'
-    and a.start_date <= make_date(v_year, 12, 31)
-    and a.end_date >= make_date(v_year, 1, 1);
+  from spent s
+  left join tosho.ua_workday_exceptions ex
+    on ex.workspace_id = new.workspace_id
+   and ex.day = s.day
+  where coalesce(ex.is_workday, extract(isodow from s.day) between 1 and 5);
 
-  v_adding := tosho.count_absence_business_days(
-    new.workspace_id,
-    greatest(new.start_date, make_date(v_year, 1, 1)),
-    least(new.end_date, make_date(v_year, 12, 31))
-  );
+  v_adding := 0; -- v_used уже враховує новий запис
 
-  if v_used + v_adding > coalesce(v_quota, 10) then
+  if v_used > coalesce(v_quota, 10) then
     raise exception 'Лікарняних на рік лишилось % — довший вносить керівництво',
-      greatest(0, coalesce(v_quota, 10) - v_used)
+      greatest(0, coalesce(v_quota, 10) - (v_used - tosho.count_absence_business_days(
+        new.workspace_id,
+        greatest(new.start_date, make_date(v_year, 1, 1)),
+        least(new.end_date, make_date(v_year, 12, 31))
+      )))
       using errcode = '42501';
   end if;
 
