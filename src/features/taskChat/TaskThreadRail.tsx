@@ -131,7 +131,9 @@ export function TaskThreadRail({ quoteRef, teamId }: Props) {
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-inner border border-border/40 bg-card">
+    // h-full обов'язковий: батьківська секція розтягується (flex-1), але сама
+    // картка без цього сідає по вмісту — і під нею лишається порожнє тло.
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-inner border border-border/40 bg-card">
       <div className="flex items-center gap-2 px-3 pb-2 pt-3">
         <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-semibold tracking-tight">Обговорення</span>
