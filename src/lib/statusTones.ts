@@ -16,11 +16,11 @@
  */
 
 /**
- * `health` — бірюза «здоров'я» для лікарняного. Свідомо НЕ warning: амбер
- * читався як «увага, щось не так», а буденна хвороба — не аварія
- * (рішення CEO 2026-08-02).
+ * `festive` — святковий рожевий для днів народження й річниць. Раніше вони
+ * ділили warning із лікарняним, і жовтий сидів одночасно на святі й на
+ * хворобі — саме через це все й плуталось (рішення CEO 2026-08-02).
  */
-export type Tone = "neutral" | "info" | "accent" | "success" | "warning" | "danger" | "health";
+export type Tone = "neutral" | "info" | "accent" | "success" | "warning" | "danger" | "festive";
 
 /** Насичена заливка + межа + текст. Бейджі, статус-чипи. */
 export const toneBadgeClass: Record<Tone, string> = {
@@ -30,7 +30,7 @@ export const toneBadgeClass: Record<Tone, string> = {
   success: "tone-success",
   warning: "tone-warning",
   danger: "tone-danger",
-  health: "tone-health",
+  festive: "tone-festive",
 };
 
 /** Приглушена заливка для ШИРОКИХ поверхонь — банерів, рядків, карток.
@@ -42,7 +42,7 @@ export const toneSubtleClass: Record<Tone, string> = {
   success: "tone-success-subtle",
   warning: "tone-warning-subtle",
   danger: "tone-danger-subtle",
-  health: "tone-health-subtle",
+  festive: "tone-festive-subtle",
 };
 
 /** Тільки колір тексту/іконки. */
@@ -53,7 +53,7 @@ export const toneTextClass: Record<Tone, string> = {
   success: "tone-text-success",
   warning: "tone-text-warning",
   danger: "tone-text-danger",
-  health: "tone-text-health",
+  festive: "tone-text-festive",
 };
 
 /** Крапка-індикатор (канбан-колонки, легенди). */
@@ -64,7 +64,7 @@ export const toneDotClass: Record<Tone, string> = {
   success: "tone-dot-success",
   warning: "tone-dot-warning",
   danger: "tone-dot-danger",
-  health: "tone-dot-health",
+  festive: "tone-dot-festive",
 };
 
 /** Квадратик під іконку: нейтральне тло + кольорові межа й іконка. */
@@ -75,12 +75,12 @@ export const toneIconBoxClass: Record<Tone, string> = {
   success: "tone-icon-box-success",
   warning: "tone-icon-box-warning",
   danger: "tone-icon-box-danger",
-  health: "tone-icon-box-health",
+  festive: "tone-icon-box-festive",
 };
 
 /** Лівий кант 3px — колір «на ручці» для широких рядів. */
 export const toneFlagClass: Record<Tone, string> = {
-  health: "",
+  festive: "",
   neutral: "",
   info: "flag-info",
   accent: "",

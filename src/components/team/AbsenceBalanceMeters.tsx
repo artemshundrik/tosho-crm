@@ -21,13 +21,13 @@ import type { QuotaAbsenceKind } from "@/lib/teamAbsenceCalendar";
 const FILL_CLASS: Record<QuotaAbsenceKind, string> = {
   vacation: "bg-[hsl(var(--chart-1))]",
   day_off: "bg-[hsl(var(--accent-tone-foreground))]",
-  sick_leave: "bg-[hsl(var(--health-solid))]",
+  sick_leave: "bg-[hsl(var(--warning-solid))]",
 };
 
 const PENDING_CLASS: Record<QuotaAbsenceKind, string> = {
   vacation: "bg-[hsl(var(--chart-1)/0.28)]",
   day_off: "bg-[hsl(var(--accent-tone-foreground)/0.28)]",
-  sick_leave: "bg-[hsl(var(--health-solid)/0.28)]",
+  sick_leave: "bg-[hsl(var(--warning-solid)/0.28)]",
 };
 
 function percent(part: number, total: number) {

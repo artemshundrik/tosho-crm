@@ -93,11 +93,11 @@ export default {
             "soft-border": "hsl(var(--danger-soft-border))",
             foreground: "hsl(var(--danger-foreground))",
           },
-          health: {
-            DEFAULT: "hsl(var(--health-foreground))",
-            soft: "hsl(var(--health-soft))",
-            "soft-border": "hsl(var(--health-soft-border))",
-            foreground: "hsl(var(--health-foreground))",
+          festive: {
+            DEFAULT: "hsl(var(--festive-foreground))",
+            soft: "hsl(var(--festive-soft))",
+            "soft-border": "hsl(var(--festive-soft-border))",
+            foreground: "hsl(var(--festive-foreground))",
           },
           "accent-tone": {
             DEFAULT: "hsl(var(--accent-tone-foreground))",

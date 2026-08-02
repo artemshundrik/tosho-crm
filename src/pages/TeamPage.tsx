@@ -127,8 +127,9 @@ type EnrichedMember = WorkspaceMemberDisplayRow & {
   tenureDays: number | null;
 };
 
+/** Свято має власний тон: жовтий тепер належить лікарняному одному. */
 const EVENT_TONE = {
-  birthday: "warning",
+  birthday: "festive",
   anniversary: "accent",
   return: "success",
 } satisfies Record<string, Tone>;

@@ -59,9 +59,9 @@ export const TEAM_ABSENCE_KIND_LABELS: Record<TeamAbsenceKind, string> = {
  * ЄДИНЕ джерело тону відсутності. Класи збираються тільки через таблиці
  * statusTones — вручну рядки `tone-*` тут не пишемо.
  *
- * Лікарняний свідомо не червоний і не амбер: обидва читались як тривога, а це
- * буденна відсутність. Відпустка — info (спокійний синій), day-off — accent
- * (фіолетовий), лікарняний — health (бірюза «здоров'я»).
+ * Відпустка — info (спокійний синій), day-off — accent (фіолетовий),
+ * лікарняний — warning (амбер). Червоний свідомо не використовуємо: буденна
+ * хвороба не аварія.
  *
  * Раніше ця мапа існувала у трьох копіях (teamAbsences, teamAvailability,
  * TeamPage) і встигла розійтись: лікарняний був warning в одному файлі й
@@ -70,9 +70,10 @@ export const TEAM_ABSENCE_KIND_LABELS: Record<TeamAbsenceKind, string> = {
 export const TEAM_ABSENCE_KIND_TONE: Record<TeamAbsenceKind, Tone> = {
   vacation: "info",
   day_off: "accent",
-  // Бірюза «здоров'я», а не амбер: warning читався як «увага, щось не так»,
-  // тоді як буденна хвороба — не аварія (рішення CEO 2026-08-02).
-  sick_leave: "health",
+  // Амбер (рішення CEO 2026-08-02, після проби бірюзи). Тепер він однозначний:
+  // дні народження й річниці переїхали на festive, тож жовтий на сторінці
+  // означає рівно одне — лікарняний.
+  sick_leave: "warning",
   other: "neutral",
 };
 

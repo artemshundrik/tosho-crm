@@ -35,7 +35,7 @@ const badgeVariants = cva(
         success: "bg-success-soft text-success-foreground border-success-soft-border",
         warning: "bg-warning-soft text-warning-foreground border-warning-soft-border",
         danger: "bg-danger-soft text-danger-foreground border-danger-soft-border",
-        health: "tone-health",
+        festive: "tone-festive",
 
         /**
          * System destructive tone (keeps shadcn destructive palette)

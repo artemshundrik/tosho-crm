@@ -43,7 +43,7 @@ export type AbsenceReportPerson = {
 const METER_FILL: Record<QuotaAbsenceKind, string> = {
   vacation: "bg-[hsl(var(--chart-1))]",
   day_off: "bg-[hsl(var(--accent-tone-foreground))]",
-  sick_leave: "bg-[hsl(var(--health-solid))]",
+  sick_leave: "bg-[hsl(var(--warning-solid))]",
 };
 
 type ReportRow = {
