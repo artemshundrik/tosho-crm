@@ -3,7 +3,8 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { isChannelEnabled, isCategoryVisibleForRole } from "./_notificationCategories";
 import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
 import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
-import { formatLastSeen, loadPresence } from "./_teamAssistant";
+import { formatLastSeen, loadPresence, shortName } from "./_teamAssistant";
+import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import {
   TONE_EMOJI,
   collectSystemSignals,
@@ -636,6 +637,89 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (designOverdue > 0) todaySection.push(`• Прострочено макетів: ${designOverdue}`);
   if (pendingRevisions > 0) todaySection.push(`• Правки без відповіді: ${pendingRevisions}`);
   if (todaySection.length > 0) lines.push("", "<b>Сьогодні</b>", ...todaySection);
+
+  // --- Відсутності: хто поза грою сьогодні, що зміниться завтра, що висить ---
+  // Джерело — журнал tosho.team_absences (workspace-скоуп, не team!): той
+  // самий, що живить планер «Команди» і бот. Аудиторія цього дайджесту —
+  // owner/SEO, тож і лічильник заявок на погодженні тут доречний.
+  {
+    const tomorrowKey = shiftDays(todayKey, 1);
+    const workspaceIds = Array.from(new Set(members.map((m) => m.workspaceId)));
+    const nameByUser = new Map(
+      members
+        .filter((m) => (m.fullName ?? "").trim())
+        .map((m) => [m.userId, shortName((m.fullName ?? "").trim())])
+    );
+
+    const [currentAbs, pendingAbs] = await Promise.all([
+      admin
+        .schema("tosho")
+        .from("team_absences")
+        .select("user_id,start_date,end_date,kind")
+        .in("workspace_id", workspaceIds)
+        .eq("status", "approved")
+        .lte("start_date", tomorrowKey)
+        .gte("end_date", todayKey)
+        .limit(200),
+      admin
+        .schema("tosho")
+        .from("team_absences")
+        .select("user_id,start_date,end_date,kind,created_at")
+        .in("workspace_id", workspaceIds)
+        .eq("status", "pending")
+        .gte("end_date", todayKey)
+        .limit(100),
+    ]);
+
+    type AbsRow = { user_id?: string | null; start_date?: string | null; end_date?: string | null; kind?: string | null; created_at?: string | null };
+    const absKindLabel = (row: AbsRow) =>
+      (ABSENCE_KIND_LABELS[(row.kind ?? "other").trim()] ?? "Відсутність").toLowerCase();
+
+    const rows = ((currentAbs.data ?? []) as AbsRow[]).filter(
+      (r) => r.user_id && r.start_date && r.end_date && nameByUser.has(r.user_id)
+    );
+    const outToday = rows.filter((r) => r.start_date! <= todayKey);
+    const startTomorrow = rows.filter((r) => r.start_date === tomorrowKey);
+    const backTomorrow = outToday.filter((r) => r.end_date === todayKey);
+
+    const absenceSection: string[] = [];
+    if (outToday.length > 0) {
+      const parts = outToday.map((r) => {
+        const until = r.end_date === todayKey ? "останній день" : `до ${formatAbsenceShort(r.end_date!)}`;
+        return `${nameByUser.get(r.user_id!)} (${absKindLabel(r)}, ${until})`;
+      });
+      absenceSection.push(`• Сьогодні відсутні: ${escapeTelegramHtml(parts.join(" · "))}`);
+    }
+    const tomorrowBits: string[] = [];
+    if (backTomorrow.length > 0) {
+      tomorrowBits.push(`повертається ${backTomorrow.map((r) => nameByUser.get(r.user_id!)).join(", ")}`);
+    }
+    if (startTomorrow.length > 0) {
+      tomorrowBits.push(
+        startTomorrow.map((r) => `${nameByUser.get(r.user_id!)} — ${absKindLabel(r)}`).join(" · ")
+      );
+    }
+    if (tomorrowBits.length > 0) {
+      absenceSection.push(`• Завтра: ${escapeTelegramHtml(tomorrowBits.join(" · "))}`);
+    }
+
+    const pendingRows = ((pendingAbs.data ?? []) as AbsRow[]).filter(
+      (r) => r.user_id && nameByUser.has(r.user_id)
+    );
+    if (pendingRows.length > 0) {
+      const oldestDays = pendingRows.reduce((oldest, r) => {
+        if (!r.created_at) return oldest;
+        const days = Math.floor((now.getTime() - new Date(r.created_at).getTime()) / 86_400_000);
+        return days > oldest ? days : oldest;
+      }, 0);
+      absenceSection.push(
+        `• ⏳ Заявок без рішення: ${pendingRows.length}` +
+          (oldestDays > 0 ? ` (найстаршій ${oldestDays} дн)` : "")
+      );
+    }
+
+    if (absenceSection.length > 0) lines.push("", "<b>Відсутності</b>", ...absenceSection);
+  }
 
   const tail: string[] = [];
 
