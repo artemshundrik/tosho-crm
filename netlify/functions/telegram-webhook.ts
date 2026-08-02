@@ -66,10 +66,10 @@ type SettingsRow = {
 type AdminClient = SupabaseClient;
 
 const LINK_GREETING =
-  "Привіт! Це бот сповіщень ToSho CRM.\n\nЩоб підключити акаунт — відкрий профіль у CRM і натисни «Підключити Telegram». Звідти прийдеш сюди з персональним посиланням.";
+  "👋 <b>Привіт! Це бот ToSho CRM.</b>\n\nЩоб підключити акаунт — відкрий свій профіль у CRM і натисни «Підключити Telegram». Звідти прийдеш сюди з персональним посиланням.";
 
 const NOT_LINKED =
-  "Акаунт не підключено. Відкрий профіль у CRM → «Підключити Telegram».";
+  "🔗 <b>Акаунт не підключено.</b>\n\nВідкрий профіль у CRM → «Підключити Telegram».";
 
 function ok(body = "ok") {
   return { statusCode: 200, headers: { "Cache-Control": "no-store" }, body };
@@ -157,13 +157,13 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
         await sendTelegramMessage(
           chatId,
           allowed
-            ? "Акаунт уже підключено. Питання можна писати текстом, швидкі — у «Меню»."
-            : "Акаунт уже підключено. Налаштування — /settings, відписатись — /stop.",
+            ? "Акаунт уже підключено ✅\n\n💬 Питання — текстом, швидкі дії — у «Меню»\n🏝 /away — хто відсутній · 📝 /absence — оформити відсутність"
+            : "Акаунт уже підключено ✅\n\n⚙️ /settings — налаштування · /stop — відписатись",
           allowed ? { replyMarkup: PERSISTENT_MENU } : undefined
         );
         return;
       }
-      await sendTelegramMessage(chatId, LINK_GREETING);
+      await sendTelegramMessage(chatId, LINK_GREETING, { parseMode: "HTML" });
       return;
     }
 
@@ -178,7 +178,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     if (!tokenRow || tokenRow.used_at || expired) {
       await sendTelegramMessage(
         chatId,
-        "Посилання недійсне або застаріле. Згенеруй нове в профілі CRM → «Підключити Telegram»."
+        "⚠️ Посилання недійсне або застаріле.\n\nЗгенеруй нове: профіль у CRM → «Підключити Telegram»."
       );
       return;
     }
@@ -209,12 +209,13 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     const role = await loadRole(adminClient, tokenRow.user_id as string);
     await sendTelegramMessage(
       chatId,
-      "✅ Telegram підключено! Сповіщення CRM приходитимуть сюди.\n\n" +
-        (isAssistantAllowed(role)
-          ? "Питання про дизайн-задачі можна писати просто текстом, а швидкі — у «Меню».\n\n"
-          : "") +
-        "Налаштувати, що саме слати — /settings. Вимкнути все — /stop.",
-      isAssistantAllowed(role) ? { replyMarkup: PERSISTENT_MENU } : undefined
+      "✅ <b>Telegram підключено!</b>\n\n" +
+        "📣 Сповіщення CRM тепер приходитимуть сюди\n" +
+        "🏝 «Хто сьогодні відсутній» — /away\n" +
+        "📝 «Хворію» чи «day-off 15.08» — лікарняний або заявка без відкриття CRM\n" +
+        (isAssistantAllowed(role) ? "💬 Питання про задачі й цифри — просто текстом\n" : "") +
+        "\n⚙️ Що саме слати — /settings · вимкнути все — /stop",
+      isAssistantAllowed(role) ? { parseMode: "HTML", replyMarkup: PERSISTENT_MENU } : { parseMode: "HTML" }
     );
     return;
   }
@@ -232,7 +233,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (command === "/dropbox") {
     const settings = await loadSettingsByChat(adminClient, chatId);
     if (!settings) {
-      await sendTelegramMessage(chatId, NOT_LINKED);
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
       return;
     }
     if (!(await isActiveMember(adminClient, settings.user_id))) {
@@ -260,7 +261,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (command === "/absence") {
     const settings = await loadSettingsByChat(adminClient, chatId);
     if (!settings) {
-      await sendTelegramMessage(chatId, NOT_LINKED);
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
       return;
     }
     if (!(await isActiveMember(adminClient, settings.user_id))) {
@@ -284,11 +285,12 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (command === "/settings") {
     const row = await loadSettingsByChat(adminClient, chatId);
     if (!row) {
-      await sendTelegramMessage(chatId, NOT_LINKED);
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
       return;
     }
     const cats = visibleNotificationCategories(await loadRole(adminClient, row.user_id));
-    await sendTelegramMessage(chatId, "Які сповіщення слати в Telegram:", {
+    await sendTelegramMessage(chatId, "⚙️ <b>Сповіщення в Telegram</b>\n\nТисни категорію, щоб увімкнути чи вимкнути:", {
+      parseMode: "HTML",
       replyMarkup: { inline_keyboard: buildSettingsKeyboard(row, cats) },
     });
     return;
@@ -298,7 +300,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (command === "/menu" || text === MENU_BUTTON_LABEL) {
     const settings = await loadSettingsByChat(adminClient, chatId);
     if (!settings) {
-      await sendTelegramMessage(chatId, NOT_LINKED);
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
       return;
     }
     if (!(await isActiveMember(adminClient, settings.user_id))) {
@@ -310,7 +312,8 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       await sendTelegramMessage(chatId, ASSISTANT_FORBIDDEN);
       return;
     }
-    await sendTelegramMessage(chatId, "Швидкі питання — тисни, або просто напиши своє:", {
+    await sendTelegramMessage(chatId, "⚡️ <b>Швидкі дії</b>\n\nТисни кнопку — або просто напиши питання текстом:", {
+      parseMode: "HTML",
       replyMarkup: { inline_keyboard: buildQuickKeyboard(role) },
     });
     return;
@@ -329,7 +332,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       .eq("telegram_chat_id", chatId);
     await sendTelegramMessage(
       chatId,
-      "Відключено. Сповіщення більше не надходитимуть. Підключити знову — у профілі CRM."
+      "🔕 Відключено — сповіщення більше не надходитимуть.\n\nПовернутись: профіль у CRM → «Підключити Telegram»."
     );
     return;
   }
@@ -342,7 +345,7 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   if (absenceDraft) {
     const settings = await loadSettingsByChat(adminClient, chatId);
     if (!settings) {
-      await sendTelegramMessage(chatId, NOT_LINKED);
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
       return;
     }
     if (!(await isActiveMember(adminClient, settings.user_id))) {
@@ -468,7 +471,7 @@ async function handleAssistantQuestion(
 ) {
   const settings = await loadSettingsByChat(adminClient, chatId);
   if (!settings) {
-    await sendTelegramMessage(chatId, NOT_LINKED);
+    await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
     return;
   }
 

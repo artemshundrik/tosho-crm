@@ -134,6 +134,16 @@ export async function setTelegramCommands(
   return callTelegram("setMyCommands", { commands, scope: { type: "default" }, language_code: "" });
 }
 
+/** Опис на порожньому екрані чату («Що вміє цей бот?»). Раз на бота. */
+export async function setTelegramDescription(description: string): Promise<TelegramApiResult> {
+  return callTelegram("setMyDescription", { description });
+}
+
+/** Короткий опис у профілі бота і в шерингу. */
+export async function setTelegramShortDescription(shortDescription: string): Promise<TelegramApiResult> {
+  return callTelegram("setMyShortDescription", { short_description: shortDescription });
+}
+
 /** Явно вмикаємо режим «Меню = список команд» (це і так дефолт, але хай буде). */
 export async function setTelegramMenuButtonToCommands(): Promise<TelegramApiResult> {
   return callTelegram("setChatMenuButton", { menu_button: { type: "commands" } });

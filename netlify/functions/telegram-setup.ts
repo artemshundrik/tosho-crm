@@ -1,5 +1,10 @@
 import { assertCronAuthorized } from "./_cronAuth";
-import { setTelegramCommands, setTelegramMenuButtonToCommands } from "./_telegram";
+import {
+  setTelegramCommands,
+  setTelegramDescription,
+  setTelegramMenuButtonToCommands,
+  setTelegramShortDescription,
+} from "./_telegram";
 
 // Одноразове налаштування бота: список команд + режим кнопки «Меню».
 //
@@ -25,6 +30,14 @@ const COMMANDS = [
   { command: "stop", description: "Відписатись від сповіщень" },
 ];
 
+// Порожній екран чату — перше, що бачить людина ДО натискання Start.
+// Ліміти Bot API: description 512, short_description 120.
+const DESCRIPTION =
+  "Сповіщення ToSho CRM і швидкі відповіді про задачі, прорахунки й команду — просто напиши питання. " +
+  "Відсутності без відкриття CRM: «хворію» чи /absence — лікарняний або заявка, /away — хто сьогодні відсутній.";
+
+const SHORT_DESCRIPTION = "Бот ToSho CRM — сповіщення, задачі, відсутності.";
+
 function json(statusCode: number, body: Record<string, unknown>) {
   return {
     statusCode,
@@ -42,12 +55,16 @@ export const handler = async (event: HttpEvent) => {
 
   const commands = await setTelegramCommands(COMMANDS);
   const menuButton = await setTelegramMenuButtonToCommands();
+  const description = await setTelegramDescription(DESCRIPTION);
+  const shortDescription = await setTelegramShortDescription(SHORT_DESCRIPTION);
 
-  const ok = commands.ok && menuButton.ok;
+  const ok = commands.ok && menuButton.ok && description.ok && shortDescription.ok;
   return json(ok ? 200 : 502, {
     ok,
     commands: { ok: commands.ok, description: commands.description },
     menuButton: { ok: menuButton.ok, description: menuButton.description },
+    description: { ok: description.ok, description: description.description },
+    shortDescription: { ok: shortDescription.ok, description: shortDescription.description },
     registered: COMMANDS.map((c) => `/${c.command}`),
   });
 };
