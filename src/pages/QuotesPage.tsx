@@ -179,6 +179,8 @@ const DEFAULT_VAT_RATE = 20;
 const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
+/** Статуси, у яких прорахунок ще в роботі — їх дошка мусить показувати всі. */
+const ACTIVE_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval"] as const;
 const QUOTES_KANBAN_PAGE_INCREMENT = 60;
 const QUOTES_SEARCH_FETCH_PAGE_SIZE = 500;
 const KANBAN_AUTOLOAD_THRESHOLD_PX = 180;
@@ -1375,6 +1377,36 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         nextHasMore = data.length > pageSize;
         if (!fetchAll || !nextHasMore) break;
         nextOffset += pageSize;
+      }
+
+      /**
+       * ДОБІР АКТИВНИХ ПРОРАХУНКІВ.
+       *
+       * Та сама пастка, що була на дошці «Дизайну»: вибірка бере перші
+       * QUOTES_KANBAN_INITIAL_PAGE_SIZE записів за спаданням дати, тож
+       * прорахунок, який досі чекає рішення, але створений давно, з дошки
+       * зникає. Заміряно на проді: активних прорахунків 68, у вікно 120
+       * потрапляло 26 — губилось 42, тобто майже дві третини.
+       *
+       * Активні статуси добираємо завжди й повністю: це поточна робота, а не
+       * архів. Завершені (approved/cancelled) лишаються пагінованими — саме
+       * вони й забивали вікно (141 скасований на 248 усіх).
+       */
+      if (!append && (!status || status === "all")) {
+        try {
+          const activeRows = await listQuotes({
+            teamId,
+            search,
+            statuses: [...ACTIVE_QUOTE_STATUSES],
+            managerUserId: managerFilter !== ALL_MANAGERS_FILTER ? managerFilter : null,
+          });
+          const seen = new Set(fetchedRows.map((row) => row.id));
+          const extra = activeRows.filter((row) => !seen.has(row.id));
+          if (extra.length > 0) fetchedRows.push(...extra);
+        } catch (topUpError) {
+          // Добір не критичний: краще дошка без нього, ніж порожня сторінка.
+          console.warn("Failed to top up active quotes", topUpError);
+        }
       }
 
       const visibleData = fetchedRows;
@@ -6035,11 +6067,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <div className="mt-3 flex items-center gap-3 min-w-0">
                       <PartyHoverCard
                         target={
-                          row.customer_id
+                          row.customer_id || row.lead_id
                             ? {
-                                kind: "customer" as const,
-                                id: row.customer_id,
-                                name: row.customer_name ?? "Замовник",
+                                kind: row.customer_id ? ("customer" as const) : ("lead" as const),
+                                id: (row.customer_id ?? row.lead_id) as string,
+                                name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
                                 logoUrl: row.customer_logo_url ?? null,
                                 managerLabel: getManagerLabel(row.assigned_to),
                                 managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
@@ -6256,11 +6288,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           <div className="flex items-center gap-3 min-w-0">
                             <PartyHoverCard
                               target={
-                                row.customer_id
+                                row.customer_id || row.lead_id
                                   ? {
-                                      kind: "customer" as const,
-                                      id: row.customer_id,
-                                      name: row.customer_name ?? "Замовник",
+                                      kind: row.customer_id ? ("customer" as const) : ("lead" as const),
+                                      id: (row.customer_id ?? row.lead_id) as string,
+                                      name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
                                       logoUrl: row.customer_logo_url ?? null,
                                       managerLabel: getManagerLabel(row.assigned_to),
                                       managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
@@ -6680,11 +6712,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
                                       <PartyHoverCard
                                         target={
-                                          row.customer_id
+                                          row.customer_id || row.lead_id
                                             ? {
-                                                kind: "customer" as const,
-                                                id: row.customer_id,
-                                                name: row.customer_name ?? "Замовник",
+                                                kind: row.customer_id ? ("customer" as const) : ("lead" as const),
+                                                id: (row.customer_id ?? row.lead_id) as string,
+                                                name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
                                                 logoUrl: row.customer_logo_url ?? null,
                                                 managerLabel: getManagerLabel(row.assigned_to),
                                                 managerAvatarUrl:

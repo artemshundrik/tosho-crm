@@ -15,6 +15,8 @@ type ListQuotesParams = {
   teamId: string;
   search?: string;
   status?: string;
+  /** Кілька статусів одразу — для добору активних прорахунків на дошку. */
+  statuses?: string[];
   managerUserId?: string | null;
   limit?: number;
   offset?: number;
@@ -24,6 +26,11 @@ export type QuoteListRow = {
   id: string;
   team_id?: string | null;
   customer_id?: string | null;
+  /**
+   * Лід, зіставлений за назвою (прорахунок не має посилання на нього в БД).
+   * Заповнюється під час збагачення списку — див. lead_id нижче.
+   */
+  lead_id?: string | null;
   number?: string | null;
   status?: string | null;
   comment?: string | null;
@@ -376,7 +383,7 @@ async function getNextQuoteSequence(teamId: string, monthCode: string) {
 }
 
 export async function listQuotes(params: ListQuotesParams) {
-  const { teamId, search, status, managerUserId, limit, offset } = params;
+  const { teamId, search, status, statuses, managerUserId, limit, offset } = params;
   const q = search?.trim() ?? "";
   const escapedSearch = escapePostgrestIlikeTerm(q);
 
@@ -452,7 +459,9 @@ export async function listQuotes(params: ListQuotesParams) {
         query = query.or(searchFilters.join(","));
       }
 
-      if (status && status !== "all") {
+      if (statuses && statuses.length > 0) {
+        query = query.in("status", statuses as Array<Database["tosho"]["Enums"]["quote_status"]>);
+      } else if (status && status !== "all") {
         query = query.eq("status", status as Database["tosho"]["Enums"]["quote_status"]);
       }
 
@@ -527,10 +536,10 @@ export async function listQuotes(params: ListQuotesParams) {
     }
   }
 
-  let leadByName = new Map<string, { name: string; logo_url?: string | null }>();
+  let leadByName = new Map<string, { id: string | null; name: string; logo_url?: string | null }>();
   if (leadLookupNames.length > 0) {
     const loadLeads = async (withLogo: boolean) => {
-      const columns = withLogo ? "company_name,legal_name,logo_url" : "company_name,legal_name";
+      const columns = withLogo ? "id,company_name,legal_name,logo_url" : "id,company_name,legal_name";
       const [byCompany, byLegal] = await Promise.all([
         supabase
           .schema("tosho")
@@ -559,23 +568,25 @@ export async function listQuotes(params: ListQuotesParams) {
     if (!companyResult.error && !legalResult.error) {
       const rows = [
         ...(((companyResult.data ?? []) as unknown) as Array<{
+          id?: string | null;
           company_name?: string | null;
           legal_name?: string | null;
           logo_url?: string | null;
         }>),
         ...(((legalResult.data ?? []) as unknown) as Array<{
+          id?: string | null;
           company_name?: string | null;
           legal_name?: string | null;
           logo_url?: string | null;
         }>),
       ];
-      const map = new Map<string, { name: string; logo_url?: string | null }>();
+      const map = new Map<string, { id: string | null; name: string; logo_url?: string | null }>();
       rows.forEach((lead) => {
         const company = (lead.company_name ?? "").trim();
         const legal = (lead.legal_name ?? "").trim();
         const preferred = company || legal;
         if (!preferred) return;
-        const candidate = { name: preferred, logo_url: lead.logo_url ?? null };
+        const candidate = { id: lead.id ?? null, name: preferred, logo_url: lead.logo_url ?? null };
         if (company) map.set(normalize(company), candidate);
         if (legal) map.set(normalize(legal), candidate);
       });
@@ -589,6 +600,11 @@ export async function listQuotes(params: ListQuotesParams) {
     const leadFallback = !row.customer_id && leadLookupKey ? leadByName.get(leadLookupKey) : undefined;
     return {
       ...row,
+      // Прорахунок не зберігає посилання на ліда — у БД є лише текстова назва.
+      // Зіставлення за назвою вже робилось тут заради імені й логотипа; тепер
+      // повертаємо ще й id, щоб картка під курсором могла показати ліда так
+      // само, як замовника.
+      lead_id: leadFallback?.id ?? null,
       customer_name:
         row.customer_name ??
         customer?.name ??
