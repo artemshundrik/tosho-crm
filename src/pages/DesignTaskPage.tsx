@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -1539,6 +1539,32 @@ export default function DesignTaskPage() {
 
   const effectiveTeamId = teamId;
   const threadQueryClient = useQueryClient();
+
+  /**
+   * Висота повноекранної сітки — ВИМІРЯНА, а не порахована.
+   *
+   * Раніше стояло calc(100dvh - 56px), тобто «вікно мінус топбар». Але над
+   * сторінкою можуть бути й інші смуги (напр. «Дивитесь очима»), і тоді
+   * сторінка виходить вищою за вікно рівно на них — з'являється скрол «на два
+   * пальці», хоч скролити нема чого. Міряємо фактичну відстань від верху сітки
+   * до низу вікна: жодних припущень про те, що саме стоїть вище.
+   */
+  const layoutGridRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = layoutGridRef.current;
+    if (!node) return;
+    const apply = () => {
+      const documentTop = node.getBoundingClientRect().top + window.scrollY;
+      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
+      const next = `${available}px`;
+      if (node.style.getPropertyValue("--task-grid-height") !== next) {
+        node.style.setProperty("--task-grid-height", next);
+      }
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  });
   const canManageAssignments = permissions.canManageAssignments;
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canEditBriefChangeRequests = permissions.canEditDesignBriefChangeRequests;
@@ -9265,7 +9291,10 @@ export default function DesignTaskPage() {
 
   return (
     <div className="w-full max-w-none space-y-4 pb-20 md:pb-0">
-      <div className="grid grid-cols-1 xl:h-[calc(100dvh-56px-var(--app-chrome-offset,0px))] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
+      <div
+        ref={layoutGridRef}
+        className="grid grid-cols-1 xl:h-[var(--task-grid-height,calc(100dvh-56px))] xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden"
+      >
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
         className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"

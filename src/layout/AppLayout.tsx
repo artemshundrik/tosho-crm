@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -826,24 +826,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   ) : (
     pageNode
   );
-  // Висота службової смуги над сторінкою → CSS-змінна для повноекранних сіток.
-  const appChromeRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const node = appChromeRef.current;
-    if (!node) return;
-    const apply = () => {
-      const height = Math.round(node.getBoundingClientRect().height);
-      document.documentElement.style.setProperty("--app-chrome-offset", `${height}px`);
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.setProperty("--app-chrome-offset", "0px");
-    };
-  }, []);
-
   const isCanvasMode =
     location.pathname === ROUTES.ordersEstimates ||
     location.pathname.startsWith(`${ROUTES.ordersEstimates}/`) ||
@@ -2208,14 +2190,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         >
           {/* Нагадування про режим «Дивитись як» — над усім контентом, щоб
               випадково не сплутати чужий вигляд зі своїм. */}
-          {/* Смуга «Дивитесь очима» займає висоту НАД сторінкою, а сторінки з
-              повноекранною сіткою рахують висоту як 100dvh мінус топбар. Без
-              цієї змінної вони не знають про смугу — і сторінка виходить вищою
-              за вікно рівно на неї (той самий скрол «на два пальці»).
-              Міряємо, а не хардкодимо: смуга переносить рядки на вузьких екранах. */}
-          <div ref={appChromeRef}>
-            <ViewAsBar />
-          </div>
+          <ViewAsBar />
           {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
               до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
               <main>, інакше роздільник обрізався б по краях max-width. */}

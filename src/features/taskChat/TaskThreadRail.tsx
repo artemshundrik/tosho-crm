@@ -184,12 +184,15 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
       }}
     >
       {dragOver ? (
-        <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-[1px]">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+        // Непрозоре тло: під час перетягування вміст позаду не має просвічувати —
+        // напівпрозорий шар із блюром виглядав брудно.
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-inner bg-card p-2">
+          <div className="pointer-events-none absolute inset-2 rounded-xl border-2 border-dashed border-primary/50 bg-primary/[0.06]" />
+          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
             <Upload className="h-5 w-5" />
           </span>
-          <span className="text-xs font-semibold text-primary">Відпустіть файл тут</span>
-          <span className="max-w-[26ch] text-center text-2xs text-primary/80">
+          <span className="relative text-xs font-semibold text-primary">Відпустіть файл тут</span>
+          <span className="relative max-w-[26ch] text-center text-2xs text-primary/80">
             Він ляже у «Файли» задачі, а в розмові стане повідомленням
           </span>
         </div>
