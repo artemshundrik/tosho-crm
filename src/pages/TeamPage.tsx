@@ -794,12 +794,23 @@ export function TeamPage() {
     [liveAbsences, memberById]
   );
 
+  /**
+   * Клік по вільному дню в планері.
+   *
+   * Owner/SEO вносить факт будь-кому; решта може клікнути лише свій рядок —
+   * і це відкриває ЗАЯВКУ, а не адмінське внесення. Сам планер уже гейтить,
+   * чиї клітинки клікабельні (canPickForOthers), тут лишається обрати режим.
+   */
   const handlePlannerPick = useCallback(
     (pickedUserId: string, dateKey: string) => {
-      if (!canManageAbsences) return;
-      openAbsenceDialog({ userId: pickedUserId, dateKey });
+      if (!canManageAbsences && pickedUserId !== userId) return;
+      openAbsenceDialog({
+        userId: pickedUserId,
+        dateKey,
+        mode: canManageAbsences ? "manage" : "request",
+      });
     },
-    [canManageAbsences, openAbsenceDialog]
+    [canManageAbsences, openAbsenceDialog, userId]
   );
 
   const hasActiveFilters = search.trim() !== "" || roleFilter !== "all" || peopleFilter !== "all";
@@ -1097,7 +1108,8 @@ export function TeamPage() {
                 todayKey={todayKey}
                 currentUserId={userId}
                 canPickForOthers={canManageAbsences}
-                onPickDay={canManageAbsences ? handlePlannerPick : undefined}
+                onPickDay={handlePlannerPick}
+                onOpenAbsence={canManageAbsences ? (absence) => openAbsenceDialog({ absence }) : undefined}
                 emptyLabel="Найближчі два тижні вся команда на місці."
               />
             </CardContent>
@@ -1216,11 +1228,14 @@ export function TeamPage() {
               todayKey={todayKey}
               currentUserId={userId}
               canPickForOthers={canManageAbsences}
-              onPickDay={canManageAbsences ? handlePlannerPick : undefined}
+              onPickDay={handlePlannerPick}
+              onOpenAbsence={canManageAbsences ? (absence) => openAbsenceDialog({ absence }) : undefined}
             />
             <p className="border-t border-border/40 px-5 py-3 text-2xs text-muted-foreground">
               Сірі стовпчики — вихідні та свята: квоту вони не списують.
-              {canManageAbsences ? " Клік по вільному дню створює відсутність." : ""}
+              {canManageAbsences
+                ? " Клік по вільному дню створює відсутність, клік по бару — відкриває запис."
+                : " Клік по вільному дню у своєму рядку створює заявку."}
             </p>
           </CardContent>
         </Card>

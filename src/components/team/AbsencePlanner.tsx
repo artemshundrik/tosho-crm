@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Cake, Award, type LucideIcon } from "lucide-react";
+import { Award, Cake, CalendarOff, Coffee, Plane, Thermometer, type LucideIcon } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import {
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_TONE,
   type TeamAbsence,
+  type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
 import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 
@@ -51,6 +52,20 @@ const MARK_ICONS: Record<PlannerMark["kind"], LucideIcon> = {
 const MARK_TONE_CLASS: Record<PlannerMark["kind"], string> = {
   birthday: toneTextClass.warning,
   anniversary: toneTextClass.accent,
+};
+
+/**
+ * Іконка типу — єдине, що гарантовано вміщується в одноденний бар (клітинка
+ * ~26px). Без неї одноденна відсутність малювалась порожньою пігулкою, з якої
+ * неможливо зрозуміти, це відпустка чи лікарняний.
+ *
+ * Словник той самий, що був на картках людей до редизайну.
+ */
+const ABSENCE_ICONS: Record<TeamAbsenceKind, LucideIcon> = {
+  vacation: Plane,
+  sick_leave: Thermometer,
+  day_off: Coffee,
+  other: CalendarOff,
 };
 
 const NAME_COLUMN_PX = 208;
@@ -116,6 +131,8 @@ type AbsencePlannerProps = {
   /** Може створювати відсутність будь-кому (owner/SEO). Решта — лише собі. */
   canPickForOthers?: boolean;
   onPickDay?: (userId: string, dateKey: string) => void;
+  /** Клік по бару — відкрити саму відсутність (редагування для owner/SEO). */
+  onOpenAbsence?: (absence: TeamAbsence) => void;
   emptyLabel?: string;
 };
 
@@ -129,6 +146,7 @@ function AbsencePlannerImpl({
   currentUserId,
   canPickForOthers = false,
   onPickDay,
+  onOpenAbsence,
   emptyLabel = "Нікого немає в цьому вікні.",
 }: AbsencePlannerProps) {
   const absencesByUser = useMemo(() => {
@@ -265,33 +283,76 @@ function AbsencePlannerImpl({
 
               {/* Бари відсутностей */}
               {segments.map((segment) => {
-                const span = segment.endIndex - segment.startIndex + 1;
                 const tone = TEAM_ABSENCE_KIND_TONE[segment.absence.kind];
                 const pending = segment.absence.status === "pending";
+                const Icon = ABSENCE_ICONS[segment.absence.kind];
                 const label = pending
                   ? `Запит · ${TEAM_ABSENCE_KIND_LABELS[segment.absence.kind]}`
                   : TEAM_ABSENCE_KIND_LABELS[segment.absence.kind];
 
-                return (
+                // Підпис показуємо за ФАКТИЧНОЮ шириною бару, а не за кількістю
+                // днів: та сама триденна відпустка на 14-денному вікні має купу
+                // місця, а на 31-денному дає обрізане «Відпу…». Тому бар — це
+                // container, і підпис вмикається container-query, коли реально
+                // влазить. Іконка є завжди: без неї одноденна відсутність
+                // малювалась порожньою пігулкою.
+
+                // Бар лежить ПОВЕРХ клітинок, тож без власного обробника він
+                // просто з'їдав кліки: людина тицяла в пігулку, а нічого не
+                // відбувалось. Owner/SEO відкриває запис, решта — потрапляє
+                // туди ж, куди й клік по вільному дню під баром.
+                const handleClick = onOpenAbsence
+                  ? () => onOpenAbsence(segment.absence)
+                  : canPick
+                    ? () => onPickDay?.(person.userId, days[segment.startIndex])
+                    : undefined;
+
+                const barClass = cn(
+                  "z-10 mx-0.5 flex h-[26px] items-center gap-1.5 self-center overflow-hidden rounded-full border text-3xs font-semibold",
+                  "[container-type:inline-size] justify-center px-0",
+                  "@min-[96px]:justify-start @min-[96px]:px-2",
+                  toneBadgeClass[tone],
+                  pending &&
+                    "border-dashed [background-image:repeating-linear-gradient(45deg,transparent_0_5px,hsl(var(--card)/0.5)_5px_10px)]",
+                  handleClick &&
+                    "cursor-pointer transition-[filter,box-shadow] hover:brightness-[0.97] hover:shadow-[var(--shadow-elevated-sm)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
+                );
+
+                const barStyle = {
+                  gridColumn: `${segment.startIndex + 2} / ${segment.endIndex + 3}`,
+                  gridRow: 1,
+                } as const;
+
+                const barContent = (
+                  <>
+                    <Icon className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="hidden truncate @min-[96px]:inline">
+                      {label}
+                      {segment.clippedRight ? " →" : ""}
+                    </span>
+                  </>
+                );
+
+                return handleClick ? (
+                  <button
+                    key={segment.absence.id}
+                    type="button"
+                    className={barClass}
+                    style={barStyle}
+                    title={formatRangeTitle(segment.absence)}
+                    aria-label={formatRangeTitle(segment.absence)}
+                    onClick={handleClick}
+                  >
+                    {barContent}
+                  </button>
+                ) : (
                   <div
                     key={segment.absence.id}
-                    className={cn(
-                      "z-10 mx-0.5 flex h-[26px] items-center gap-1.5 self-center overflow-hidden rounded-full border px-2 text-3xs font-semibold",
-                      toneBadgeClass[tone],
-                      pending && "border-dashed [background-image:repeating-linear-gradient(45deg,transparent_0_5px,hsl(var(--card)/0.5)_5px_10px)]"
-                    )}
-                    style={{
-                      gridColumn: `${segment.startIndex + 2} / ${segment.endIndex + 3}`,
-                      gridRow: 1,
-                    }}
+                    className={barClass}
+                    style={barStyle}
                     title={formatRangeTitle(segment.absence)}
                   >
-                    {span >= 3 ? (
-                      <span className="truncate">
-                        {label}
-                        {segment.clippedRight ? " →" : ""}
-                      </span>
-                    ) : null}
+                    {barContent}
                   </div>
                 );
               })}
