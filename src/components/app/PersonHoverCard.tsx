@@ -7,8 +7,12 @@ import {
   formatAbsenceLabel,
   formatReturnDate,
   getAbsenceTone,
+  toAvatarAbsence,
   type AvatarAbsence,
 } from "@/lib/absenceIndicator";
+import { formatJobRole } from "@/lib/jobRoles";
+import { getInitialsFromName } from "@/lib/userName";
+import { isInactiveEmployment } from "@/lib/employment";
 
 /**
  * Картка людини під курсором — для поверхонь, де ухвалюють РІШЕННЯ про людину:
@@ -20,6 +24,51 @@ import {
  * ЩО СВІДОМО НЕ ПОКАЗУЄМО: залишок відпустки, ставки й виплати — приватне
  * (бачить сама людина + owner/SEO, і то на своїй сторінці, а не під курсором).
  */
+
+/**
+ * Рядок директорії → дані картки. Один конвертер на всі сторінки: інакше
+ * кожна збирала б поля по-своєму і десь забула б, наприклад, приглушити
+ * звільненого.
+ */
+export function toPersonHoverCardData(
+  row: {
+    userId: string;
+    label: string;
+    jobRole?: string | null;
+    avatarDisplayUrl?: string | null;
+    initials?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    absenceToday?: { kind: string; startDate?: string | null; endDate?: string | null } | null;
+    employmentStatus?: string | null;
+  },
+  extras?: {
+    roleLabel?: string | null;
+    online?: boolean;
+    lastSeenLabel?: string | null;
+    activeTasks?: number | null;
+    birthdayToday?: boolean;
+    pendingAbsence?: AvatarAbsence | null;
+    inactive?: boolean;
+  }
+): PersonHoverCardData {
+  return {
+    userId: row.userId,
+    name: row.label,
+    roleLabel: extras?.roleLabel ?? formatJobRole(row.jobRole) ?? null,
+    avatarUrl: row.avatarDisplayUrl ?? null,
+    initials: row.initials?.trim() || getInitialsFromName(row.label, row.email),
+    email: row.email ?? null,
+    phone: row.phone ?? null,
+    absence: toAvatarAbsence(row.absenceToday),
+    pendingAbsence: extras?.pendingAbsence ?? null,
+    online: extras?.online ?? false,
+    lastSeenLabel: extras?.lastSeenLabel ?? null,
+    activeTasks: extras?.activeTasks ?? null,
+    birthdayToday: extras?.birthdayToday ?? false,
+    inactive: extras?.inactive ?? isInactiveEmployment(row.employmentStatus),
+  };
+}
 
 export type PersonHoverCardData = {
   userId: string;
@@ -133,5 +182,26 @@ export function PersonHoverCard({
     <HoverTip label={card} side={side} contentClassName="max-w-none rounded-[14px] p-3">
       {children}
     </HoverTip>
+  );
+}
+
+/**
+ * Зручна обгортка для місць, де людину може бути не визначено (незакріплений
+ * менеджер, видалений виконавець): без даних просто рендерить дитину.
+ */
+export function PersonHoverCardMaybe({
+  person,
+  children,
+  side = "top",
+}: {
+  person: PersonHoverCardData | null;
+  children: React.ReactNode;
+  side?: "top" | "bottom" | "left" | "right";
+}) {
+  if (!person) return <>{children}</>;
+  return (
+    <PersonHoverCard person={person} side={side}>
+      {children}
+    </PersonHoverCard>
   );
 }

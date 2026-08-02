@@ -30,6 +30,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence, type AvatarAbsence } from "@/lib/absenceIndicator";
+import { PersonHoverCard, toPersonHoverCardData } from "@/components/app/PersonHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
@@ -107,7 +108,10 @@ import {
   type DesignTaskProduct,
 } from "@/lib/designTaskProduct";
 import { ACTIVE_DESIGN_STATUSES, calculateDesignWorkload, getDesignTaskEstimateMinutes } from "@/lib/designWorkload";
-import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import {
+  listWorkspaceMembersForDisplay,
+  type WorkspaceMemberDisplayRow,
+} from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import { listCatalogModelsByIds, listCustomersBySearch, listLeadsBySearch, type LeadSearchRow } from "@/lib/toshoApi";
 import {
@@ -1038,6 +1042,8 @@ export default function DesignPage() {
   const [memberInactiveById, setMemberInactiveById] = useState<Record<string, boolean>>({});
   /** Відсутність «сьогодні» з журналу — живить кільце на аватарці. */
   const [memberAbsenceById, setMemberAbsenceById] = useState<Record<string, AvatarAbsence | null>>({});
+  /** Повні рядки директорії — з них будується картка людини під курсором. */
+  const [memberRowById, setMemberRowById] = useState<Record<string, WorkspaceMemberDisplayRow>>({});
   const [managerMembers, setManagerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
     () => initialMemberCache?.managerMembers ?? []
   );
@@ -1242,6 +1248,7 @@ export default function DesignPage() {
           setMemberAvatarById({});
           setMemberAvailabilityById({});
           setMemberAbsenceById({});
+          setMemberRowById({});
           setManagerMembers([]);
           setDesignerMembers([]);
           return;
@@ -1260,12 +1267,14 @@ export default function DesignPage() {
           inactiveById[row.userId] = isInactiveEmployment(row.employmentStatus);
           absenceById[row.userId] = toAvatarAbsence(row.absenceToday);
         });
+        const rowById = Object.fromEntries(rows.map((row) => [row.userId, row]));
 
         setMemberById(labelById);
         setMemberAvatarById(avatarById);
         setMemberAvailabilityById(availabilityById);
         setMemberInactiveById(inactiveById);
         setMemberAbsenceById(absenceById);
+        setMemberRowById(rowById);
         const designerRows = rows.filter(
           (row) => isDesignerRole(row.jobRole) && !isInactiveEmployment(row.employmentStatus)
         );
@@ -2286,6 +2295,34 @@ export default function DesignPage() {
       </span>
     );
   }, [currentUserDisplayName, getMemberAvatar, getMemberAvailability, memberById, memberInactiveById, onlineMemberIds, userId]);
+
+  /**
+   * Скільки задач у людини в роботі. Саме це питає менеджер, коли обирає, кому
+   * віддати нову: завершені й скасовані не рахуємо.
+   */
+  const activeTaskCountByUser = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tasks.forEach((task) => {
+      const assignee = task.assigneeUserId?.trim();
+      if (!assignee) return;
+      if (task.status === "approved" || task.status === "cancelled") return;
+      counts[assignee] = (counts[assignee] ?? 0) + 1;
+    });
+    return counts;
+  }, [tasks]);
+
+  const buildPersonCard = useCallback(
+    (personId: string) => {
+      const row = memberRowById[personId];
+      if (!row) return null;
+      return toPersonHoverCardData(row, {
+        online: onlineMemberIds.has(personId),
+        activeTasks: activeTaskCountByUser[personId] ?? 0,
+        inactive: memberInactiveById[personId] ?? false,
+      });
+    },
+    [activeTaskCountByUser, memberInactiveById, memberRowById, onlineMemberIds]
+  );
 
   const visibleTasks = useMemo(
     () =>
@@ -4775,17 +4812,26 @@ export default function DesignPage() {
           <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
             <div className="flex shrink-0 items-center -space-x-2">
               {task.assigneeUserId ? (
-                <AvatarBase
-                  src={getTaskAssigneeAvatar(task)}
-                  name={assigneeLabel}
-                  fallback={getInitials(assigneeLabel)}
-                  size={26}
-                  className="text-3xs font-semibold ring-2 ring-background"
-                  availability={getMemberAvailability(task.assigneeUserId)}
-                  absence={task.assigneeUserId ? memberAbsenceById[task.assigneeUserId] ?? null : null}
-                  presence={task.assigneeUserId && onlineMemberIds.has(task.assigneeUserId) ? "online" : "offline"}
-                  inactive={memberInactiveById[task.assigneeUserId] ?? false}
-                />
+                (() => {
+                  const assigneeId = task.assigneeUserId as string;
+                  const avatar = (
+                    <AvatarBase
+                      src={getTaskAssigneeAvatar(task)}
+                      name={assigneeLabel}
+                      fallback={getInitials(assigneeLabel)}
+                      size={26}
+                      className="text-3xs font-semibold ring-2 ring-background"
+                      availability={getMemberAvailability(assigneeId)}
+                      absence={memberAbsenceById[assigneeId] ?? null}
+                      presence={onlineMemberIds.has(assigneeId) ? "online" : "offline"}
+                      inactive={memberInactiveById[assigneeId] ?? false}
+                    />
+                  );
+                  // Картка під курсором лише там, де є кого показувати: на цій
+                  // аватарці менеджер вирішує, чи не перевантажений виконавець.
+                  const person = buildPersonCard(assigneeId);
+                  return person ? <PersonHoverCard person={person}>{avatar}</PersonHoverCard> : avatar;
+                })()
               ) : (
                 <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground ring-2 ring-background">
                   <User className="h-3.5 w-3.5" />

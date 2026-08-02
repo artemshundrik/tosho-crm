@@ -81,6 +81,7 @@ import {
 } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence } from "@/lib/absenceIndicator";
+import { toPersonHoverCardData } from "@/components/app/PersonHoverCard";
 import {
   notifyAbsenceRecorded,
   notifyAbsenceRequestCancelled,
@@ -479,6 +480,12 @@ export function TeamPage() {
       online: member.online,
       inactive: member.inactive,
       absence: toAvatarAbsence(member.absenceToday),
+      card: toPersonHoverCardData(member, {
+        online: member.online,
+        lastSeenLabel: member.inactive ? null : formatPresenceText(member.lastSeenAt, member.online),
+        birthdayToday: member.birthdayInsight?.daysUntil === 0,
+        inactive: member.inactive,
+      }),
     }),
     []
   );

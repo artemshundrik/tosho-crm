@@ -15,6 +15,11 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence } from "@/lib/absenceIndicator";
+import {
+  PersonHoverCard,
+  PersonHoverCardMaybe,
+  toPersonHoverCardData,
+} from "@/components/app/PersonHoverCard";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -82,7 +87,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import {
+  listWorkspaceMembersForDisplay,
+  type WorkspaceMemberDisplayRow,
+} from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
@@ -507,6 +515,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>(() => initialTeamMembers);
   const [teamMembersLoaded, setTeamMembersLoaded] = useState(() => initialTeamMembers.length > 0);
+  /** Повні рядки директорії — з них будується картка людини під курсором. */
+  const [memberRowById, setMemberRowById] = useState<Record<string, WorkspaceMemberDisplayRow>>({});
   const [workspaceMemberLabelById, setWorkspaceMemberLabelById] = useState<Record<string, string>>({});
   const [workspaceMemberAvatarById, setWorkspaceMemberAvatarById] = useState<Record<string, string | null>>({});
   const [workspaceMemberInactiveById, setWorkspaceMemberInactiveById] = useState<Record<string, boolean>>({});
@@ -971,6 +981,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     );
   }, [getManagerLabel, isManagerInactive, onlineMemberIds, resolveManagerMember]);
 
+  /**
+   * Картка людини під курсором. Кількість задач тут свідомо не показуємо:
+   * «у роботі» для менеджера означало б прорахунки, а не дизайн-задачі, і
+   * змішувати ці два числа в одному підписі — гірше, ніж не показати.
+   */
+  const buildPersonCard = useCallback(
+    (personId: string) => {
+      const row = memberRowById[personId];
+      if (!row) return null;
+      return toPersonHoverCardData(row, {
+        online: onlineMemberIds.has(personId),
+        inactive: isManagerInactive(personId),
+      });
+    },
+    [isManagerInactive, memberRowById, onlineMemberIds]
+  );
+
   const getDateLabels = (value?: string | null) => {
     if (!value) return "Не вказано";
     const date = new Date(value);
@@ -1082,6 +1109,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           absence: toAvatarAbsence(row.absenceToday),
           employmentStatus: row.employmentStatus,
         }));
+        const nextRowById = Object.fromEntries(rows.map((row) => [row.userId, row]));
         const nextLabels = Object.fromEntries(rows.map((row) => [row.userId, row.label]));
         const nextAvatars = Object.fromEntries(rows.map((row) => [row.userId, row.avatarDisplayUrl]));
         const nextInactive = Object.fromEntries(
@@ -1089,6 +1117,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         );
         if (active) {
           setTeamMembers(data);
+          setMemberRowById(nextRowById);
           setWorkspaceMemberLabelById(nextLabels);
           setWorkspaceMemberAvatarById(nextAvatars);
           setWorkspaceMemberInactiveById(nextInactive);
@@ -6225,21 +6254,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             {(() => {
                               const manager = resolveManagerMember(row.assigned_to);
                               const managerLabel = getManagerLabel(row.assigned_to);
+                              const managerAvatar = (
+                                <AvatarBase
+                                  src={manager?.avatarUrl ?? null}
+                                  name={managerLabel}
+                                  fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
+                                  size={28}
+                                  className="text-3xs font-semibold"
+                                  availability={manager?.availabilityStatus ?? null}
+                                  absence={manager?.absence ?? null}
+                                  presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                                  inactive={isManagerInactive(row.assigned_to)}
+                                />
+                              );
+                              const managerCard = row.assigned_to ? buildPersonCard(row.assigned_to) : null;
                               return (
                                 <>
-                                  <AvatarBase
-                                    src={manager?.avatarUrl ?? null}
-                                    name={managerLabel}
-                                    fallback={
-                                      row.assigned_to ? getInitials(managerLabel) : "Не вказано"
-                                    }
-                                    size={28}
-                                    className="text-3xs font-semibold"
-                                    availability={manager?.availabilityStatus ?? null}
-                                    absence={manager?.absence ?? null}
-                                    presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
-                                    inactive={isManagerInactive(row.assigned_to)}
-                                  />
+                                  {managerCard ? (
+                                    <PersonHoverCard person={managerCard}>{managerAvatar}</PersonHoverCard>
+                                  ) : (
+                                    managerAvatar
+                                  )}
                                   <span className="truncate">
                                     {managerLabel}
                                   </span>
@@ -6721,6 +6756,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
                                   <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
                                     <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
+                                      <PersonHoverCardMaybe person={row.assigned_to ? buildPersonCard(row.assigned_to) : null}>
                                       <AvatarBase
                                         src={manager?.avatarUrl ?? null}
                                         name={managerLabel}
@@ -6732,6 +6768,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                         inactive={isManagerInactive(row.assigned_to)}
                                       />
+                                      </PersonHoverCardMaybe>
                                       <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
                                     </div>
                                     {row.deadline_at ? (

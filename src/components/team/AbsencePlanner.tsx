@@ -10,6 +10,7 @@ import {
   type TeamAbsence,
 } from "@/lib/teamAbsences";
 import { ABSENCE_KIND_ICONS, type AvatarAbsence } from "@/lib/absenceIndicator";
+import { PersonHoverCardMaybe, type PersonHoverCardData } from "@/components/app/PersonHoverCard";
 import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 
 /**
@@ -29,6 +30,8 @@ import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 export type PlannerPerson = {
   userId: string;
   absence?: AvatarAbsence | null;
+  /** Дані для картки під курсором. Без них рядок просто не має підказки. */
+  card?: PersonHoverCardData | null;
   name: string;
   roleLabel: string;
   avatarUrl?: string | null;
@@ -217,15 +220,17 @@ function AbsencePlannerImpl({
               style={gridStyle}
             >
               <div className="flex h-full min-w-0 items-center gap-2.5 border-r border-border/60 px-3">
-                <AvatarBase
-                  src={person.avatarUrl}
-                  name={person.name}
-                  fallback={person.initials}
-                  assetVariant="xs"
-                  size={26}
-                  inactive={person.inactive}
-                  absence={person.absence ?? null}
-                />
+                <PersonHoverCardMaybe person={person.card ?? null} side="right">
+                  <AvatarBase
+                    src={person.avatarUrl}
+                    name={person.name}
+                    fallback={person.initials}
+                    assetVariant="xs"
+                    size={26}
+                    inactive={person.inactive}
+                    absence={person.absence ?? null}
+                  />
+                </PersonHoverCardMaybe>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span
