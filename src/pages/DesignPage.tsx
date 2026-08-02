@@ -2707,12 +2707,16 @@ export default function DesignPage() {
     (teamWorkloadLoaded ? teamWorkloadTasks : tasks).forEach((task) => byId.set(task.id, task));
     tasks.forEach((task) => byId.set(task.id, task));
 
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { total: number; new: number; changes: number; inProgress: number }> = {};
     byId.forEach((task) => {
       const assignee = task.assigneeUserId?.trim();
       if (!assignee) return;
       if (!ACTIVE_DESIGN_STATUSES.includes(task.status)) return;
-      counts[assignee] = (counts[assignee] ?? 0) + 1;
+      const bucket = (counts[assignee] ??= { total: 0, new: 0, changes: 0, inProgress: 0 });
+      bucket.total += 1;
+      if (task.status === "new") bucket.new += 1;
+      else if (task.status === "changes") bucket.changes += 1;
+      else if (task.status === "in_progress") bucket.inProgress += 1;
     });
     return counts;
   }, [tasks, teamWorkloadLoaded, teamWorkloadTasks]);
@@ -2721,9 +2725,17 @@ export default function DesignPage() {
     (personId: string) => {
       const row = memberRowById[personId];
       if (!row) return null;
+      const workload = activeTaskCountByUser[personId];
       return toPersonHoverCardData(row, {
         online: onlineMemberIds.has(personId),
-        activeTasks: teamWorkloadLoaded ? (activeTaskCountByUser[personId] ?? 0) : null,
+        activeTasks: teamWorkloadLoaded ? (workload?.total ?? 0) : null,
+        taskBreakdown: teamWorkloadLoaded
+          ? {
+              new: workload?.new ?? 0,
+              changes: workload?.changes ?? 0,
+              inProgress: workload?.inProgress ?? 0,
+            }
+          : null,
         inactive: memberInactiveById[personId] ?? false,
       });
     },

@@ -6678,12 +6678,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   </div>
                                   <div className="mt-3 space-y-3">
                                     <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
-                                      <EntityAvatar
-                                        src={row.customer_logo_url ?? null}
-                                        name={row.customer_name ?? "Замовник / Лід"}
-                                        fallback={getInitials(row.customer_name)}
-                                        size={32}
-                                      />
+                                      <PartyHoverCard
+                                        target={
+                                          row.customer_id
+                                            ? {
+                                                kind: "customer" as const,
+                                                id: row.customer_id,
+                                                name: row.customer_name ?? "Замовник",
+                                                logoUrl: row.customer_logo_url ?? null,
+                                                managerLabel: getManagerLabel(row.assigned_to),
+                                                managerAvatarUrl:
+                                                  resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
+                                              }
+                                            : null
+                                        }
+                                      >
+                                        <EntityAvatar
+                                          src={row.customer_logo_url ?? null}
+                                          name={row.customer_name ?? "Замовник / Лід"}
+                                          fallback={getInitials(row.customer_name)}
+                                          size={32}
+                                        />
+                                      </PartyHoverCard>
                                       <div className="min-w-0">
                                         <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
                                           {getPartyLabel(row)}

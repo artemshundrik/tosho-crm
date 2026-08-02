@@ -47,6 +47,7 @@ export function toPersonHoverCardData(
     online?: boolean;
     lastSeenLabel?: string | null;
     activeTasks?: number | null;
+    taskBreakdown?: { new: number; changes: number; inProgress: number } | null;
     birthdayToday?: boolean;
     pendingAbsence?: AvatarAbsence | null;
     inactive?: boolean;
@@ -65,6 +66,7 @@ export function toPersonHoverCardData(
     online: extras?.online ?? false,
     lastSeenLabel: extras?.lastSeenLabel ?? null,
     activeTasks: extras?.activeTasks ?? null,
+    taskBreakdown: extras?.taskBreakdown ?? null,
     birthdayToday: extras?.birthdayToday ?? false,
     inactive: extras?.inactive ?? isInactiveEmployment(row.employmentStatus),
   };
@@ -83,8 +85,16 @@ export type PersonHoverCardData = {
   pendingAbsence?: AvatarAbsence | null;
   online?: boolean;
   lastSeenLabel?: string | null;
-  /** Скільки задач у роботі — головне число в момент призначення. */
+  /**
+   * Скільки задач НА ЛЮДИНІ зараз (нові + правки + в роботі).
+   *
+   * Підпис свідомо НЕ «у роботі»: так зветься колонка канбану, у якій лежить
+   * лише `in_progress`. Через збіг назв число 9 читалось як «9 карток у тій
+   * колонці», хоча там була одна — решта чекала в «Нових» і «Правках».
+   */
   activeTasks?: number | null;
+  /** Розбивка, щоб число пояснювало себе, а не змушувало здогадуватись. */
+  taskBreakdown?: { new: number; changes: number; inProgress: number } | null;
   birthdayToday?: boolean;
   inactive?: boolean;
 };
@@ -158,9 +168,22 @@ export function PersonHoverCard({
       {typeof person.activeTasks === "number" || person.lastSeenLabel ? (
         <div className="mt-2.5 space-y-1 text-2xs text-muted-foreground">
           {typeof person.activeTasks === "number" ? (
-            <div className="flex items-center justify-between gap-3">
-              <span>У роботі</span>
-              <span className="font-medium tabular-nums text-foreground">{person.activeTasks}</span>
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <span>Активних задач</span>
+                <span className="font-medium tabular-nums text-foreground">{person.activeTasks}</span>
+              </div>
+              {person.taskBreakdown && person.activeTasks > 0 ? (
+                <div className="mt-0.5 text-3xs text-muted-foreground/80">
+                  {[
+                    person.taskBreakdown.new > 0 ? `нових ${person.taskBreakdown.new}` : null,
+                    person.taskBreakdown.changes > 0 ? `правок ${person.taskBreakdown.changes}` : null,
+                    person.taskBreakdown.inProgress > 0 ? `у роботі ${person.taskBreakdown.inProgress}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {person.lastSeenLabel ? (
