@@ -210,6 +210,9 @@ declare
   v_from      date := make_date(p_year, 1, 1);
   v_to        date := make_date(p_year, 12, 31);
 begin
+  -- Воркспейс і прапорець адміна беремо З ОДНОГО рядка, тож не буває
+  -- комбінації «адмін тут, дані звідти». `order by` — щоб при кількох
+  -- членствах вибір був детермінованим, а не залежав від плану запиту.
   select mv.workspace_id,
          (
            lower(coalesce(mv.access_role::text, '')) = 'owner'
@@ -218,6 +221,7 @@ begin
     into v_workspace, v_is_admin
   from tosho.memberships_view mv
   where mv.user_id = auth.uid()
+  order by mv.created_at asc, mv.workspace_id asc
   limit 1;
 
   if v_workspace is null then
