@@ -66,6 +66,8 @@ import {
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
 import { countBusinessDaysInYear, eachDateKey } from "@/lib/teamAbsenceCalendar";
+import { ACTIVE_DESIGN_STATUSES } from "@/lib/designWorkload";
+import { supabase } from "@/lib/supabaseClient";
 import {
   fallbackBalance,
   loadAbsenceBalances,
@@ -113,6 +115,14 @@ import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/Tea
  */
 
 type TeamTab = "people" | "calendar" | "requests";
+
+/** Контекст для approver'а під заявкою: перетини і навантаження заявника. */
+type AbsenceDecideContext = {
+  overlaps: string[];
+  /** null — заявник не дизайнер, задачі не рахуємо. */
+  activeTasks: number | null;
+  dueInPeriod: number;
+};
 type PeopleFilter = "all" | "present" | "away";
 type SortMode = "presence" | "name" | "tenure" | "birthday";
 
@@ -217,7 +227,7 @@ function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
 /* ------------------------------------------------------------------ */
 
 export function TeamPage() {
-  const { userId, loading, permissions } = useAuth();
+  const { userId, teamId, loading, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
 
   /** Вносити відсутності за інших і бачити чужі залишки може owner/SEO. */
@@ -394,6 +404,95 @@ export function TeamPage() {
         .filter((absence) => absence.status === "pending")
         .sort((a, b) => a.startDate.localeCompare(b.startDate)),
     [absences]
+  );
+
+  /**
+   * Контекст рішення: скільки активних дизайн-задач у заявника і чи є серед
+   * них дедлайни, що падають у період відсутності. Це те, чого не дасть
+   * жоден HR-тул — CRM знає навантаження.
+   *
+   * Вантажиться ЛІНИВО й лише approver'ам із відкритими заявками: список
+   * людей не платить за це нічого.
+   */
+  const [requesterTasks, setRequesterTasks] = useState<Map<string, { id: string; deadlineKey: string | null }[]>>(
+    () => new Map()
+  );
+
+  useEffect(() => {
+    if (!canManageAbsences || !teamId || pendingRequests.length === 0) return;
+    const requesterIds = Array.from(new Set(pendingRequests.map((request) => request.userId)));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("activity_log")
+          .select("id,metadata")
+          .eq("team_id", teamId)
+          .eq("action", "design_task")
+          .in("metadata->>status", ACTIVE_DESIGN_STATUSES as string[])
+          .in("metadata->>assignee_user_id", requesterIds)
+          .limit(500);
+        if (error || cancelled) return;
+        const byUser = new Map<string, { id: string; deadlineKey: string | null }[]>();
+        for (const row of (data ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>) {
+          const metadata = row.metadata ?? {};
+          const assignee = typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : null;
+          if (!assignee) continue;
+          const rawDeadline = metadata.design_deadline ?? metadata.deadline;
+          const deadlineKey =
+            typeof rawDeadline === "string" && /^\d{4}-\d{2}-\d{2}/.test(rawDeadline)
+              ? rawDeadline.slice(0, 10)
+              : null;
+          const list = byUser.get(assignee) ?? [];
+          list.push({ id: row.id, deadlineKey });
+          byUser.set(assignee, list);
+        }
+        if (!cancelled) setRequesterTasks(byUser);
+      } catch {
+        // Контекст — допоміжна річ: без нього рішення все одно можливе.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageAbsences, teamId, pendingRequests]);
+
+  /** Перетини заявки з іншими живими відсутностями + навантаження заявника. */
+  const decideContextFor = useCallback(
+    (request: TeamAbsence): AbsenceDecideContext | null => {
+      if (!canManageAbsences) return null;
+      const overlaps = (absences ?? [])
+        .filter(
+          (other) =>
+            other.id !== request.id &&
+            other.userId !== request.userId &&
+            (other.status === "approved" || other.status === "pending") &&
+            other.startDate <= request.endDate &&
+            other.endDate >= request.startDate
+        )
+        .slice(0, 4)
+        .map((other) => {
+          const label = memberById.get(other.userId)?.label ?? "—";
+          const range = `${formatShort(other.startDate)}–${formatShort(other.endDate)}`;
+          return `${label} (${TEAM_ABSENCE_KIND_LABELS[other.kind].toLowerCase()} ${range}${
+            other.status === "pending" ? ", запит" : ""
+          })`;
+        });
+
+      const isDesigner = (memberById.get(request.userId)?.jobRole ?? "").trim().toLowerCase() === "designer";
+      const tasks = requesterTasks.get(request.userId) ?? [];
+      const dueInPeriod = tasks.filter(
+        (task) => task.deadlineKey && task.deadlineKey >= request.startDate && task.deadlineKey <= request.endDate
+      ).length;
+
+      if (overlaps.length === 0 && (!isDesigner || tasks.length === 0)) return null;
+      return {
+        overlaps,
+        activeTasks: isDesigner ? tasks.length : null,
+        dueInPeriod: isDesigner ? dueInPeriod : 0,
+      };
+    },
+    [absences, canManageAbsences, memberById, requesterTasks]
   );
 
   const myAbsences = useMemo(
@@ -1327,6 +1426,7 @@ export function TeamPage() {
                           deciding={decidingId === absence.id}
                           onApprove={() => void handleDecide(absence, "approved")}
                           onDecline={() => setDeclineTarget(absence)}
+                          decideContext={decideContextFor(absence)}
                         />
                       );
                     })}
@@ -1549,6 +1649,7 @@ function AbsenceRow({
   canCancel,
   cancelling,
   onCancel,
+  decideContext,
 }: {
   absence: TeamAbsence;
   name: string;
@@ -1572,6 +1673,8 @@ function AbsenceRow({
   canCancel?: boolean;
   cancelling?: boolean;
   onCancel?: () => void;
+  /** Перетини з іншими відсутностями + навантаження заявника — для рішення. */
+  decideContext?: AbsenceDecideContext | null;
 }) {
   const businessDays = countBusinessDaysInYear(absence, year, exceptions);
   const restOnly = businessDays === 0;
@@ -1612,6 +1715,31 @@ function AbsenceRow({
         {decisionComment ? (
           <div className={cn("mt-0.5 truncate text-2xs", toneTextClass.danger)}>
             Причина: {decisionComment}
+          </div>
+        ) : null}
+        {decideContext ? (
+          <div className="mt-1 space-y-0.5">
+            {decideContext.overlaps.length > 0 ? (
+              <div className={cn("flex items-start gap-1 text-2xs", toneTextClass.warning)}>
+                <CalendarRange className="mt-px h-3 w-3 shrink-0" aria-hidden />
+                <span className="min-w-0">У ці дні також: {decideContext.overlaps.join(" · ")}</span>
+              </div>
+            ) : null}
+            {typeof decideContext.activeTasks === "number" ? (
+              <div className="text-2xs text-muted-foreground">
+                Активних задач:{" "}
+                <b className="font-medium tabular-nums text-foreground">{decideContext.activeTasks}</b>
+                {decideContext.dueInPeriod > 0 ? (
+                  <>
+                    {" "}
+                    · дедлайнів у період:{" "}
+                    <b className={cn("font-medium tabular-nums", toneTextClass.danger)}>
+                      {decideContext.dueInPeriod}
+                    </b>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
