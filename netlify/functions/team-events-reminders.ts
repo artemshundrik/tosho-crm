@@ -21,6 +21,8 @@ type TeamProfileRow = {
 type MembershipRow = {
   workspace_id: string;
   user_id: string;
+  access_role?: string | null;
+  job_role?: string | null;
 };
 
 type NotificationRow = {
@@ -47,6 +49,8 @@ type AbsenceRow = {
   kind: string | null;
 };
 
+type PendingAbsenceRow = AbsenceRow & { created_at?: string | null };
+
 const ABSENCE_KIND_LABELS: Record<string, string> = {
   vacation: "відпустка",
   day_off: "day-off",
@@ -68,10 +72,17 @@ type PendingNotificationRow = {
   title: string;
   body: string;
   href: string;
-  type: "info" | "success";
+  type: "info" | "success" | "warning";
 };
 
 const TEAM_EVENTS_TIME_ZONE = "Europe/Kiev";
+
+/** YYYY-MM-DD ± дні. Опівденний UTC-«якір» страхує від зсуву доби. */
+function shiftDateKey(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -253,15 +264,27 @@ export const handler = async (event: HttpEvent) => {
     if (profilesError) throw profilesError;
 
     // Погоджені відсутності, що починаються або закінчуються сьогодні.
-    const { data: absences, error: absencesError } = await adminClient
-      .schema("tosho")
-      .from("team_absences")
-      .select("id,workspace_id,user_id,start_date,end_date,kind")
-      .eq("status", "approved")
-      .or(`start_date.eq.${todayKey},end_date.eq.${todayKey}`)
-      .limit(2000);
+    const [{ data: absences, error: absencesError }, { data: pendingAbsences, error: pendingError }] =
+      await Promise.all([
+        adminClient
+          .schema("tosho")
+          .from("team_absences")
+          .select("id,workspace_id,user_id,start_date,end_date,kind")
+          .eq("status", "approved")
+          .or(`start_date.eq.${todayKey},end_date.eq.${todayKey}`)
+          .limit(2000),
+        // Заявки без рішення — для ескалації нижче.
+        adminClient
+          .schema("tosho")
+          .from("team_absences")
+          .select("id,workspace_id,user_id,start_date,end_date,kind,created_at")
+          .eq("status", "pending")
+          .gte("end_date", todayKey)
+          .limit(500),
+      ]);
 
     if (absencesError) throw absencesError;
+    if (pendingError) throw pendingError;
 
     const absenceRows = ((absences ?? []) as AbsenceRow[]).filter(
       (row) => row.workspace_id && row.user_id
@@ -287,7 +310,7 @@ export const handler = async (event: HttpEvent) => {
       adminClient
         .schema("tosho")
         .from("memberships_view")
-        .select("workspace_id,user_id")
+        .select("workspace_id,user_id,access_role,job_role")
         .in("workspace_id", workspaceIds)
         .limit(10000),
       adminClient
@@ -306,6 +329,11 @@ export const handler = async (event: HttpEvent) => {
     const existingNotifications = (existingNotificationsResult.data ?? []) as NotificationRow[];
     const profileByUserKey = new Map(profileRows.map((profile) => [`${profile.workspace_id}:${profile.user_id}`, profile]));
     const recipientIdsByWorkspace = new Map<string, string[]>();
+    /** owner/SEO — адресати ескалацій по завислих заявках. */
+    const approverIdsByWorkspace = new Map<string, string[]>();
+    const ownerIdsByWorkspace = new Map<string, string[]>();
+    /** Хто сам є SEO/owner — їхні заявки вирішує лише власник. */
+    const privilegedByKey = new Set<string>();
 
     for (const membership of memberships) {
       const workspaceId = membership.workspace_id?.trim();
@@ -318,6 +346,20 @@ export const handler = async (event: HttpEvent) => {
       const list = recipientIdsByWorkspace.get(workspaceId) ?? [];
       list.push(userId);
       recipientIdsByWorkspace.set(workspaceId, list);
+
+      const accessRole = (membership.access_role ?? "").trim().toLowerCase();
+      const jobRole = (membership.job_role ?? "").trim().toLowerCase();
+      if (accessRole === "owner" || jobRole === "seo") {
+        const approvers = approverIdsByWorkspace.get(workspaceId) ?? [];
+        approvers.push(userId);
+        approverIdsByWorkspace.set(workspaceId, approvers);
+        privilegedByKey.add(`${workspaceId}:${userId}`);
+      }
+      if (accessRole === "owner") {
+        const owners = ownerIdsByWorkspace.get(workspaceId) ?? [];
+        owners.push(userId);
+        ownerIdsByWorkspace.set(workspaceId, owners);
+      }
     }
 
     const existingKeys = new Set(
@@ -401,11 +443,70 @@ export const handler = async (event: HttpEvent) => {
       await deliverNotifications(adminClient, pendingRows, { dedupeByHref: true, category: "team_events" });
     }
 
+    // --- Ескалація завислих заявок -------------------------------------
+    // Заявка, яку ніхто не вирішив, — тихий вбивця self-service: людина не
+    // знає, чи купувати квитки, і повертається до «спитаю в лічку». Тому
+    // owner/SEO отримують нагадування раз на день (href містить дату, тож
+    // щогодинний cron шле лише перше входження), а заявка, що стартує вже
+    // завтра або вже почалась, — маркується терміновою.
+    const escalationRows: PendingNotificationRow[] = [];
+    const tomorrowKey = shiftDateKey(todayKey, 1);
+    const agedBefore = now.getTime() - 24 * 60 * 60 * 1000;
+
+    for (const request of (pendingAbsences ?? []) as PendingAbsenceRow[]) {
+      if (!request.workspace_id || !request.user_id || !request.id) continue;
+      const urgent = (request.start_date ?? "") <= tomorrowKey;
+      const aged = request.created_at ? new Date(request.created_at).getTime() < agedBefore : false;
+      if (!urgent && !aged) continue;
+
+      // Заявку SEO/власника вирішує лише власник (те саме правило, що в
+      // team-absence-request) — SEO №2 отримав би нагадування без права дії.
+      const pool = privilegedByKey.has(`${request.workspace_id}:${request.user_id}`)
+        ? (ownerIdsByWorkspace.get(request.workspace_id) ?? [])
+        : (approverIdsByWorkspace.get(request.workspace_id) ?? []);
+      const approvers = pool.filter((id) => id !== request.user_id);
+      if (approvers.length === 0) continue;
+
+      const profile = profileByUserKey.get(`${request.workspace_id}:${request.user_id}`);
+      const requesterName = profile ? getDisplayName(profile) : "Співробітник";
+      const kindText = absenceLabel(request.kind);
+      const range = formatAbsenceRange(request);
+      const href = `/team?reminder=${encodeURIComponent(`team-event:absence-pending:${request.id}:${todayKey}`)}`;
+
+      const notification: Omit<PendingNotificationRow, "user_id"> = urgent
+        ? {
+            title: `⏳ Заявка без рішення — ${(request.start_date ?? "") <= todayKey ? "вже почалась" : "стартує завтра"}`,
+            body: `${requesterName} — ${kindText}, ${range}. Погодьте або відхиліть у CRM.`,
+            href,
+            type: "warning",
+          }
+        : {
+            title: `Заявка чекає рішення — ${requesterName}`,
+            body: `${kindText}, ${range}. Висить понад добу.`,
+            href,
+            type: "info",
+          };
+
+      for (const approverId of approvers) {
+        const dedupeKey = `${approverId}::${href}`;
+        if (existingKeys.has(dedupeKey)) continue;
+        existingKeys.add(dedupeKey);
+        escalationRows.push({ user_id: approverId, ...notification });
+      }
+    }
+
+    if (escalationRows.length > 0) {
+      // Окремий виклик з категорією заявок: у налаштуваннях бота це той самий
+      // тумблер, що й «заявка подана / рішення прийнято».
+      await deliverNotifications(adminClient, escalationRows, { dedupeByHref: true, category: "team_absences" });
+    }
+
     return jsonResponse(200, {
       success: true,
       scanned: profileRows.length,
       events: emittedEvents,
       delivered: pendingRows.length,
+      escalations: escalationRows.length,
       today: todayKey,
       timeZone: TEAM_EVENTS_TIME_ZONE,
     });
