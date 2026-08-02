@@ -1,0 +1,39 @@
+// Тихі години: коли команду будити не можна.
+//
+// Причина існування (інцидент 2026-08-03): reminders-team-events крутиться
+// щогодини, а денні події («сьогодні day-off у Антона», дні народження,
+// річниці) стають істиною РІВНО ОПІВНОЧІ — тож першим же нічним прогоном
+// о 00:05 команда отримала 36 пушів. Календарна подія за визначенням не
+// термінова: вона однаково правдива о 9 ранку, коли її нарешті прочитають.
+//
+// Аварійні сигнали (system-alerts) сюди НЕ входять навмисно — вони мають
+// будити, у тому й сенс.
+
+export const QUIET_HOURS_TIME_ZONE = "Europe/Kiev";
+
+/** З 9:00 включно і до 21:00 — вікно, коли денні сповіщення дозволені. */
+export const NOTIFY_FROM_HOUR = 9;
+export const NOTIFY_UNTIL_HOUR = 21;
+
+/** Година доби за Києвом (0–23). */
+export function kyivHour(now: Date): number {
+  const raw = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: QUIET_HOURS_TIME_ZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  const parsed = Number(raw);
+  // Якщо формат раптом віддав щось дивне — вважаємо, що зараз робочий час:
+  // краще зайве сповіщення, ніж мовчазно проковтнута подія.
+  return Number.isFinite(parsed) ? parsed : NOTIFY_FROM_HOUR;
+}
+
+/**
+ * Чи зараз тиха година. Денні сповіщення в цей час НЕ шлемо — вони
+ * дочекаються найближчого робочого прогону (дедуплікація по href із датою
+ * гарантує, що подія відправиться рівно один раз, а не накопичиться).
+ */
+export function isQuietHour(now: Date): boolean {
+  const hour = kyivHour(now);
+  return hour < NOTIFY_FROM_HOUR || hour >= NOTIFY_UNTIL_HOUR;
+}

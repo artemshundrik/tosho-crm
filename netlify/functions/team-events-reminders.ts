@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
+import { NOTIFY_FROM_HOUR, NOTIFY_UNTIL_HOUR, isQuietHour } from "./_lib/quietHours";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -252,6 +253,20 @@ export const handler = async (event: HttpEvent) => {
     const now = new Date();
     const todayKey = formatDateKeyInTimeZone(now, TEAM_EVENTS_TIME_ZONE);
 
+    // Денні події («сьогодні day-off у Антона», ДН, річниці) стають істиною
+    // опівночі — і саме тому цей крон одного разу розбудив команду 36 пушами
+    // о 00:05. Нічого не губимо: дедуплікація по href із датою відправить
+    // подію рівно один раз, коли настане робоче вікно.
+    if (isQuietHour(now)) {
+      return jsonResponse(200, {
+        success: true,
+        skipped: "quiet-hours",
+        window: `${NOTIFY_FROM_HOUR}:00–${NOTIFY_UNTIL_HOUR}:00`,
+        today: todayKey,
+        timeZone: TEAM_EVENTS_TIME_ZONE,
+      });
+    }
+
     const { data: profiles, error: profilesError } = await adminClient
       .schema("tosho")
       .from("team_member_profiles")
@@ -457,7 +472,11 @@ export const handler = async (event: HttpEvent) => {
       if (!request.workspace_id || !request.user_id || !request.id) continue;
       const urgent = (request.start_date ?? "") <= tomorrowKey;
       const aged = request.created_at ? new Date(request.created_at).getTime() < agedBefore : false;
-      if (!urgent && !aged) continue;
+      // Заявку, подану вночі, при поданні свідомо не розсилали (тихі години) —
+      // тож перше сповіщення про неї approver має отримати тут, уранці, а не
+      // аж через добу «за віком».
+      const submittedQuietly = request.created_at ? isQuietHour(new Date(request.created_at)) : false;
+      if (!urgent && !aged && !submittedQuietly) continue;
 
       // Заявку SEO/власника вирішує лише власник (те саме правило, що в
       // team-absence-request) — SEO №2 отримав би нагадування без права дії.

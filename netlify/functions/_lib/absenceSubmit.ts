@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "../_notificationDelivery";
+import { isQuietHour } from "./quietHours";
 
 // Спільна логіка подання відсутності — для двох ротів одного процесу:
 //  - HTTP (team-absence-request, action: "submit") — вставка ЮЗЕРСЬКИМ
@@ -134,6 +135,8 @@ export type SubmittedAbsenceNotifyResult = {
   businessDays: number | null;
   /** Скільком людям розліталося сповіщення. */
   audienceCount: number;
+  /** true — була тиха година, розсилку віддали ранковому крону. */
+  deferred: boolean;
 };
 
 /**
@@ -146,6 +149,11 @@ export type SubmittedAbsenceNotifyResult = {
  *  - заявка на погодженні — лише owner/SEO;
  *  - вільний коментар заявника йде ТІЛЬКИ у вузьке коло — команді треба
  *    знати, що людини не буде, а не чому (там може бути медична деталь).
+ *
+ * У ТИХІ ГОДИНИ не шлемо нічого: «прокинувся о 3 ночі з температурою» не
+ * привід будити всю команду. Нічого не губиться — відсутність, що починається
+ * сьогодні, вранці розішле team-events-reminders (той самий href, тож дубля не
+ * буде), а заявку без рішення підхопить ранкова ескалація.
  */
 export async function notifySubmittedAbsence(
   adminClient: SupabaseClient,
@@ -155,6 +163,7 @@ export async function notifySubmittedAbsence(
   const approvedFact = absence.status === "approved";
   const kindLabel = ABSENCE_KIND_LABELS[absence.kind] ?? "Відсутність";
   const range = formatAbsenceRange(absence);
+  const quiet = isQuietHour(new Date());
 
   try {
     const [recipients, actorName, todayResult, daysResult] = await Promise.all([
@@ -169,8 +178,8 @@ export async function notifySubmittedAbsence(
     ]);
 
     const businessDays = typeof daysResult.data === "number" ? daysResult.data : null;
-    const audience = recipients.filter((id) => id !== actorId);
-    if (audience.length === 0) return { businessDays, audienceCount: 0 };
+    const audience = quiet ? [] : recipients.filter((id) => id !== actorId);
+    if (audience.length === 0) return { businessDays, audienceCount: 0, deferred: quiet };
 
     const todayKey = typeof todayResult.data === "string" ? todayResult.data : "";
 
@@ -198,10 +207,10 @@ export async function notifySubmittedAbsence(
       { category: approvedFact ? "team_events" : "team_absences" }
     );
 
-    return { businessDays, audienceCount: audience.length };
+    return { businessDays, audienceCount: audience.length, deferred: false };
   } catch (notifyError) {
     console.warn("[absence-submit] notify failed", notifyError);
-    return { businessDays: null, audienceCount: 0 };
+    return { businessDays: null, audienceCount: 0, deferred: false };
   }
 }
 

@@ -306,7 +306,7 @@ export async function submitAbsenceFromBot(params: {
   }
 
   const absence = data as SubmittedAbsenceRow;
-  const { businessDays } = await notifySubmittedAbsence(admin, {
+  const { businessDays, deferred } = await notifySubmittedAbsence(admin, {
     absence,
     comment: null,
     actorId: userId,
@@ -321,7 +321,9 @@ export async function submitAbsenceFromBot(params: {
       text: [
         `✅ <b>${label(kind)} зафіксовано</b> · ${range}` + (days ? ` · ${days}` : ""),
         "",
-        "Команда отримала сповіщення. Одужуй 💙",
+        // Уночі розсилку свідомо відкладено до ранку — кажемо це прямо, щоб
+        // людина не думала, що сповіщення загубилось.
+        deferred ? "Команда побачить зранку. Одужуй 💙" : "Команда отримала сповіщення. Одужуй 💙",
       ].join("\n"),
     };
   }
@@ -330,7 +332,9 @@ export async function submitAbsenceFromBot(params: {
     text: [
       `📨 <b>Заявку надіслано</b> · ${label(kind).toLowerCase()} ${range}` + (days ? ` · ${days}` : ""),
       "",
-      "SEO отримає сповіщення — рішення прийде сюди.",
+      deferred
+        ? "SEO побачить її зранку — рішення прийде сюди."
+        : "SEO отримає сповіщення — рішення прийде сюди.",
     ].join("\n"),
   };
 }
