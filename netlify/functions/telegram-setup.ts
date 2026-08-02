@@ -21,10 +21,11 @@ type HttpEvent = {
 };
 
 // Порядок = порядок у меню Telegram.
+// Меню команд — короткий службовий список. Дії з відсутностями — у плитках
+// «Швидких дій» (/menu); самі команди /absence і /away при цьому ПРАЦЮЮТЬ,
+// якщо їх набрати руками, — вони просто не муляють у цьому списку.
 const COMMANDS = [
-  { command: "menu", description: "Швидкі питання" },
-  { command: "absence", description: "Оформити відсутність" },
-  { command: "away", description: "Хто сьогодні відсутній" },
+  { command: "menu", description: "Швидкі дії" },
   { command: "help", description: "Що можна питати" },
   { command: "settings", description: "Які сповіщення слати" },
   { command: "stop", description: "Відписатись від сповіщень" },

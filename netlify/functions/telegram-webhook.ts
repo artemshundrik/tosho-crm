@@ -416,8 +416,8 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
   const level: AccessLevel = resolveAccessLevel(role);
   // Плоский список у пріоритетному порядку, який нижче ріжеться по ДВІ кнопки
   // в ряд: рядки-сироти впереміш із парами виглядали неохайно (рішення CEO
-  // 2026-08-02). Відсутності тут немає навмисно — вона живе в меню команд
-  // (/absence, /away), а не в питаннях до асистента.
+  // 2026-08-02). Усі дії з відсутностями живуть САМЕ тут, у плитках — з меню
+  // команд їх прибрано, щоб воно лишалось коротким службовим списком.
   //
   // Кнопки показуємо тільки ті, що людина справді може натиснути: кнопка, яка
   // відповідає «немає доступу», дратує більше, ніж її відсутність.
@@ -430,6 +430,8 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
     { text: "🐌 Найдовше висить", callback_data: "qa:stuck" },
     { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
     { text: "🟢 Хто в системі", callback_data: "qa:who_is_online" },
+    { text: "🏝 Хто відсутній", callback_data: "qa:who_is_absent" },
+    { text: "📝 Оформити відсутність", callback_data: "abs:open" },
     { text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" },
   ];
   if (canUseQuotes(level)) {
