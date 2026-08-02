@@ -76,6 +76,12 @@ type AvatarBaseProps = {
   absence?: AvatarAbsence | null;
   /** `full` (кільце + іконка) лише там, де тип відсутності справді потрібен. */
   absenceDetail?: AbsenceIndicatorLevel;
+  /**
+   * Вимикає нативний `title`. Потрібно, коли аватарку загорнуто в
+   * PersonHoverCard: інакше поверх картки вилазить ще й сіра системна
+   * підказка з тим самим іменем.
+   */
+  suppressNativeTitle?: boolean;
 };
 
 type PlayerAvatarProps = {
@@ -138,6 +144,7 @@ export function AvatarBase({
   inactive = false,
   absence = null,
   absenceDetail = "simple",
+  suppressNativeTitle = false,
 }: AvatarBaseProps) {
   const avatarRef = React.useRef<HTMLSpanElement | null>(null);
   const [errored, setErrored] = React.useState(false);
@@ -276,7 +283,7 @@ export function AvatarBase({
       // Кільце живе на ОБГОРТЦІ навмисно: grayscale нижче знебарвлює власну
       // тінь елемента, тож на самій аватарці кільце виходило б сірим.
       style={showAbsence && absence ? getAbsenceRingStyle(absence.kind, computedSize) : undefined}
-      title={statusTitle || undefined}
+      title={suppressNativeTitle ? undefined : statusTitle || undefined}
     >
       <Avatar
         ref={avatarRef}

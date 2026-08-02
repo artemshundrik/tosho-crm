@@ -229,6 +229,7 @@ function AbsencePlannerImpl({
                     size={26}
                     inactive={person.inactive}
                     absence={person.absence ?? null}
+                    suppressNativeTitle={Boolean(person.card)}
                   />
                 </PersonHoverCardMaybe>
                 <div className="min-w-0">

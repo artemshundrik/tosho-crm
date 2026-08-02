@@ -20,6 +20,7 @@ import {
   PersonHoverCardMaybe,
   toPersonHoverCardData,
 } from "@/components/app/PersonHoverCard";
+import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -6032,12 +6033,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </div>
 
                     <div className="mt-3 flex items-center gap-3 min-w-0">
-                      <EntityAvatar
-                        src={row.customer_logo_url ?? null}
-                        name={row.customer_name ?? "Замовник / Лід"}
-                        fallback={getInitials(row.customer_name)}
-                        size={40}
-                      />
+                      <PartyHoverCard
+                        target={
+                          row.customer_id
+                            ? {
+                                kind: "customer" as const,
+                                id: row.customer_id,
+                                name: row.customer_name ?? "Замовник",
+                                logoUrl: row.customer_logo_url ?? null,
+                                managerLabel: getManagerLabel(row.assigned_to),
+                                managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
+                              }
+                            : null
+                        }
+                      >
+                        <EntityAvatar
+                          src={row.customer_logo_url ?? null}
+                          name={row.customer_name ?? "Замовник / Лід"}
+                          fallback={getInitials(row.customer_name)}
+                          size={40}
+                        />
+                      </PartyHoverCard>
                       <div className="min-w-0">
                         <div className="truncate font-medium">{row.customer_name ?? "Не вказано"}</div>
                         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -6238,12 +6254,27 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         </TableCell>
                         <TableCell className="font-medium max-w-[260px]">
                           <div className="flex items-center gap-3 min-w-0">
-                            <EntityAvatar
-                              src={row.customer_logo_url ?? null}
-                              name={row.customer_name ?? "Замовник / Лід"}
-                              fallback={getInitials(row.customer_name)}
-                              size={36}
-                            />
+                            <PartyHoverCard
+                              target={
+                                row.customer_id
+                                  ? {
+                                      kind: "customer" as const,
+                                      id: row.customer_id,
+                                      name: row.customer_name ?? "Замовник",
+                                      logoUrl: row.customer_logo_url ?? null,
+                                      managerLabel: getManagerLabel(row.assigned_to),
+                                      managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
+                                    }
+                                  : null
+                              }
+                            >
+                              <EntityAvatar
+                                src={row.customer_logo_url ?? null}
+                                name={row.customer_name ?? "Замовник / Лід"}
+                                fallback={getInitials(row.customer_name)}
+                                size={36}
+                              />
+                            </PartyHoverCard>
                             <span className="truncate" title={row.customer_name ?? "Не вказано"}>
                               {row.customer_name ?? "Не вказано"}
                             </span>
@@ -6263,6 +6294,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   className="text-3xs font-semibold"
                                   availability={manager?.availabilityStatus ?? null}
                                   absence={manager?.absence ?? null}
+                                  suppressNativeTitle
                                   presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                   inactive={isManagerInactive(row.assigned_to)}
                                 />
@@ -6765,6 +6797,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                         className="text-3xs font-semibold"
                                         availability={manager?.availabilityStatus ?? null}
                                         absence={manager?.absence ?? null}
+                                        suppressNativeTitle
                                         presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
                                         inactive={isManagerInactive(row.assigned_to)}
                                       />

@@ -31,6 +31,7 @@ import { DesignTaskRenameDialog } from "@/components/app/DesignTaskRenameDialog"
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { PersonHoverCard, toPersonHoverCardData } from "@/components/app/PersonHoverCard";
+import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
@@ -2296,34 +2297,6 @@ export default function DesignPage() {
     );
   }, [currentUserDisplayName, getMemberAvatar, getMemberAvailability, memberById, memberInactiveById, onlineMemberIds, userId]);
 
-  /**
-   * Скільки задач у людини в роботі. Саме це питає менеджер, коли обирає, кому
-   * віддати нову: завершені й скасовані не рахуємо.
-   */
-  const activeTaskCountByUser = useMemo(() => {
-    const counts: Record<string, number> = {};
-    tasks.forEach((task) => {
-      const assignee = task.assigneeUserId?.trim();
-      if (!assignee) return;
-      if (task.status === "approved" || task.status === "cancelled") return;
-      counts[assignee] = (counts[assignee] ?? 0) + 1;
-    });
-    return counts;
-  }, [tasks]);
-
-  const buildPersonCard = useCallback(
-    (personId: string) => {
-      const row = memberRowById[personId];
-      if (!row) return null;
-      return toPersonHoverCardData(row, {
-        online: onlineMemberIds.has(personId),
-        activeTasks: activeTaskCountByUser[personId] ?? 0,
-        inactive: memberInactiveById[personId] ?? false,
-      });
-    },
-    [activeTaskCountByUser, memberInactiveById, memberRowById, onlineMemberIds]
-  );
-
   const visibleTasks = useMemo(
     () =>
       isManagerUser && userId
@@ -2716,6 +2689,46 @@ export default function DesignPage() {
       return true;
     });
   }, [contentView, tasks, teamWorkloadLoaded, teamWorkloadTasks]);
+
+  /**
+   * Скільки задач у людини СПРАВДІ в роботі.
+   *
+   * Дві помилки, які тут були: рахувалось «усе, крім approved/cancelled» —
+   * тобто pm_review і client_review теж, хоча там м'яч уже не в дизайнера
+   * (у Лєни таких 115, і число перетворювалось на сміття). І бралось із
+   * `tasks`, а це пагінована сторінка канбану, не весь набір.
+   *
+   * Тепер: канонічний ACTIVE_DESIGN_STATUSES (new/changes/in_progress) з
+   * designWorkload.ts і повне джерело. Поки повний набір не завантажено —
+   * числа НЕ показуємо взагалі, бо часткове гірше за відсутнє.
+   */
+  const activeTaskCountByUser = useMemo(() => {
+    const byId = new Map<string, DesignTask>();
+    (teamWorkloadLoaded ? teamWorkloadTasks : tasks).forEach((task) => byId.set(task.id, task));
+    tasks.forEach((task) => byId.set(task.id, task));
+
+    const counts: Record<string, number> = {};
+    byId.forEach((task) => {
+      const assignee = task.assigneeUserId?.trim();
+      if (!assignee) return;
+      if (!ACTIVE_DESIGN_STATUSES.includes(task.status)) return;
+      counts[assignee] = (counts[assignee] ?? 0) + 1;
+    });
+    return counts;
+  }, [tasks, teamWorkloadLoaded, teamWorkloadTasks]);
+
+  const buildPersonCard = useCallback(
+    (personId: string) => {
+      const row = memberRowById[personId];
+      if (!row) return null;
+      return toPersonHoverCardData(row, {
+        online: onlineMemberIds.has(personId),
+        activeTasks: teamWorkloadLoaded ? (activeTaskCountByUser[personId] ?? 0) : null,
+        inactive: memberInactiveById[personId] ?? false,
+      });
+    },
+    [activeTaskCountByUser, memberInactiveById, memberRowById, onlineMemberIds, teamWorkloadLoaded]
+  );
 
   const getTaskEstimateMinutes = (task: DesignTask) => {
     return getDesignTaskEstimateMinutes(task);
@@ -4760,12 +4773,27 @@ export default function DesignPage() {
         ) : null}
         <div className="mt-3 space-y-3">
           <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
-            <EntityAvatar
-              src={task.customerLogoUrl ?? null}
-              name={task.customerName ?? "Замовник / Лід"}
-              fallback={getInitials(task.customerName)}
-              size={32}
-            />
+            <PartyHoverCard
+              target={
+                task.customerId && task.customerType
+                  ? {
+                      kind: task.customerType,
+                      id: task.customerId,
+                      name: task.customerName ?? "Замовник / Лід",
+                      logoUrl: task.customerLogoUrl ?? null,
+                      managerLabel: task.quoteManagerUserId ? memberById[task.quoteManagerUserId] ?? null : null,
+                      managerAvatarUrl: task.quoteManagerUserId ? getMemberAvatar(task.quoteManagerUserId) : null,
+                    }
+                  : null
+              }
+            >
+              <EntityAvatar
+                src={task.customerLogoUrl ?? null}
+                name={task.customerName ?? "Замовник / Лід"}
+                fallback={getInitials(task.customerName)}
+                size={32}
+              />
+            </PartyHoverCard>
             <div className="min-w-0">
               <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
                 {partyLabel}
@@ -4822,6 +4850,7 @@ export default function DesignPage() {
                       size={26}
                       className="text-3xs font-semibold ring-2 ring-background"
                       availability={getMemberAvailability(assigneeId)}
+                      suppressNativeTitle
                       absence={memberAbsenceById[assigneeId] ?? null}
                       presence={onlineMemberIds.has(assigneeId) ? "online" : "offline"}
                       inactive={memberInactiveById[assigneeId] ?? false}
