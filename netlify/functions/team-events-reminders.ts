@@ -15,9 +15,6 @@ type TeamProfileRow = {
   last_name?: string | null;
   birth_date?: string | null;
   start_date?: string | null;
-  availability_status?: string | null;
-  availability_start_date?: string | null;
-  availability_end_date?: string | null;
   employment_status?: string | null;
 };
 
@@ -31,7 +28,40 @@ type NotificationRow = {
   href?: string | null;
 };
 
-type TeamEventKind = "birthday" | "anniversary" | "vacation-start" | "vacation-end";
+type TeamEventKind = "birthday" | "anniversary" | "absence-start" | "absence-end";
+
+/**
+ * Відсутність, що стосується сьогодні, — із ЖУРНАЛУ `tosho.team_absences`.
+ *
+ * Раніше ці нагадування дивились на `team_member_profiles.availability_status`
+ * і його дати. Це поле ніхто не вів системно (відсутності вносили в журнал),
+ * тож повідомлення «почалась відпустка» фактично не приходили. Тепер джерело
+ * те саме, що в календарі й нормах — погоджені записи журналу.
+ */
+type AbsenceRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  kind: string | null;
+};
+
+const ABSENCE_KIND_LABELS: Record<string, string> = {
+  vacation: "відпустка",
+  day_off: "day-off",
+  sick_leave: "лікарняний",
+  other: "відсутність",
+};
+
+const absenceLabel = (kind?: string | null) => ABSENCE_KIND_LABELS[(kind ?? "other").trim()] ?? "відсутність";
+
+function formatAbsenceRange(row: AbsenceRow) {
+  const short = (key: string) => `${key.slice(8, 10)}.${key.slice(5, 7)}`;
+  return row.start_date === row.end_date
+    ? short(row.start_date)
+    : `${short(row.start_date)} – ${short(row.end_date)}`;
+}
 
 type PendingNotificationRow = {
   user_id: string;
@@ -76,14 +106,6 @@ function formatDatePartsInTimeZone(date: Date, timeZone: string) {
 function formatDateKeyInTimeZone(date: Date, timeZone: string) {
   const { year, month, day } = formatDatePartsInTimeZone(date, timeZone);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function formatDateUA(value?: string | null) {
-  const trimmed = value?.trim();
-  if (!trimmed) return "";
-  const [year, month, day] = trimmed.split("-");
-  if (!year || !month || !day) return trimmed;
-  return `${day}.${month}.${year}`;
 }
 
 function getDisplayName(profile: TeamProfileRow) {
@@ -134,19 +156,11 @@ function formatYearsLabel(value: number) {
   return `${value} років`;
 }
 
-function buildVacationCaption(profile: TeamProfileRow) {
-  const start = formatDateUA(profile.availability_start_date);
-  const end = formatDateUA(profile.availability_end_date);
-  if (start && end) return `Період: ${start} - ${end}`;
-  if (end) return `До ${end}`;
-  if (start) return `З ${start}`;
-  return "Подія зі сторінки команди";
-}
-
 function buildEventNotification(
   profile: TeamProfileRow,
   kind: TeamEventKind,
-  todayKey: string
+  todayKey: string,
+  absence?: AbsenceRow | null
 ): Omit<PendingNotificationRow, "user_id"> | null {
   const name = getDisplayName(profile);
 
@@ -171,19 +185,23 @@ function buildEventNotification(
     };
   }
 
-  if (kind === "vacation-start") {
+  if (!absence) return null;
+  const label = absenceLabel(absence.kind);
+  const range = formatAbsenceRange(absence);
+
+  if (kind === "absence-start") {
     return {
-      title: `Сьогодні почалась відпустка у ${name}`,
-      body: buildVacationCaption(profile),
-      href: `/team?reminder=${encodeURIComponent(`team-event:vacation-start:${profile.user_id}:${todayKey}`)}`,
+      title: `Сьогодні починається ${label} у ${name}`,
+      body: `Період: ${range}.`,
+      href: `/team?reminder=${encodeURIComponent(`team-event:absence-start:${absence.id}:${todayKey}`)}`,
       type: "info",
     };
   }
 
   return {
-    title: `Сьогодні завершується відпустка у ${name}`,
-    body: buildVacationCaption(profile),
-    href: `/team?reminder=${encodeURIComponent(`team-event:vacation-end:${profile.user_id}:${todayKey}`)}`,
+    title: `Сьогодні завершується ${label} у ${name}`,
+    body: `Період: ${range}. Завтра на місці.`,
+    href: `/team?reminder=${encodeURIComponent(`team-event:absence-end:${absence.id}:${todayKey}`)}`,
     type: "info",
   };
 }
@@ -218,11 +236,33 @@ export const handler = async (event: HttpEvent) => {
       .schema("tosho")
       .from("team_member_profiles")
       .select(
-        "workspace_id,user_id,full_name,first_name,last_name,birth_date,start_date,availability_status,availability_start_date,availability_end_date,employment_status"
+        // availability_* більше не читаємо: відсутності живуть у журналі.
+        "workspace_id,user_id,full_name,first_name,last_name,birth_date,start_date,employment_status"
       )
       .limit(5000);
 
     if (profilesError) throw profilesError;
+
+    // Погоджені відсутності, що починаються або закінчуються сьогодні.
+    const { data: absences, error: absencesError } = await adminClient
+      .schema("tosho")
+      .from("team_absences")
+      .select("id,workspace_id,user_id,start_date,end_date,kind")
+      .eq("status", "approved")
+      .or(`start_date.eq.${todayKey},end_date.eq.${todayKey}`)
+      .limit(2000);
+
+    if (absencesError) throw absencesError;
+
+    const absenceRows = ((absences ?? []) as AbsenceRow[]).filter(
+      (row) => row.workspace_id && row.user_id
+    );
+    const absencesByUser = new Map<string, AbsenceRow[]>();
+    absenceRows.forEach((row) => {
+      const list = absencesByUser.get(row.user_id);
+      if (list) list.push(row);
+      else absencesByUser.set(row.user_id, [row]);
+    });
 
     const profileRows = ((profiles ?? []) as TeamProfileRow[]).filter((profile) => {
       if (!profile.workspace_id || !profile.user_id) return false;
@@ -295,15 +335,33 @@ export const handler = async (event: HttpEvent) => {
       if (getAnniversaryYearsToday(profile.start_date, todayKey) !== null) {
         events.push("anniversary");
       }
-      if ((profile.availability_status ?? "").trim() === "vacation" && profile.availability_start_date?.trim() === todayKey) {
-        events.push("vacation-start");
-      }
-      if ((profile.availability_status ?? "").trim() === "vacation" && profile.availability_end_date?.trim() === todayKey) {
-        events.push("vacation-end");
+      // Відсутності — з журналу; одна людина може мати кілька записів на день
+      // (закінчився лікарняний, почалась відпустка), тож пара «подія + запис».
+      const absenceEvents: Array<{ kind: TeamEventKind; absence: AbsenceRow }> = [];
+      for (const absence of absencesByUser.get(profile.user_id) ?? []) {
+        if (absence.workspace_id !== profile.workspace_id) continue;
+        if (absence.start_date === todayKey) absenceEvents.push({ kind: "absence-start", absence });
+        if (absence.end_date === todayKey) absenceEvents.push({ kind: "absence-end", absence });
       }
 
       for (const eventKind of events) {
         const baseNotification = buildEventNotification(profile, eventKind, todayKey);
+        if (!baseNotification) continue;
+        emittedEvents += 1;
+
+        for (const recipientId of workspaceRecipients) {
+          const dedupeKey = `${recipientId}::${baseNotification.href}`;
+          if (existingKeys.has(dedupeKey)) continue;
+          existingKeys.add(dedupeKey);
+          pendingRows.push({
+            user_id: recipientId,
+            ...baseNotification,
+          });
+        }
+      }
+
+      for (const { kind: eventKind, absence } of absenceEvents) {
+        const baseNotification = buildEventNotification(profile, eventKind, todayKey, absence);
         if (!baseNotification) continue;
         emittedEvents += 1;
 

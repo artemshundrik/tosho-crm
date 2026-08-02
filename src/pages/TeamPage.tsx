@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
   Loader2,
   Pencil,
   Plus,
@@ -82,8 +83,13 @@ import {
 } from "@/lib/workflowNotifications";
 import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
 import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
-import { AbsenceDialog, type AbsenceDialogValue } from "@/components/team/AbsenceDialog";
+import {
+  AbsenceDialog,
+  type AbsenceDialogValue,
+  type AbsenceOverlap,
+} from "@/components/team/AbsenceDialog";
 import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/components/team/AbsencePlanner";
+import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
 import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/TeamMemberCard";
 
@@ -232,6 +238,7 @@ export function TeamPage() {
   const [absenceSaving, setAbsenceSaving] = useState(false);
   const [absenceDeletingId, setAbsenceDeletingId] = useState<string | null>(null);
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [decisionComments, setDecisionComments] = useState<Map<string, string>>(new Map());
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<TeamAbsence | null>(null);
@@ -740,6 +747,26 @@ export function TeamPage() {
     [reloadAbsenceData]
   );
 
+  /** Хто ще відсутній у ті самі дні — з уже завантаженого року, без мережі. */
+  const findOverlaps = useCallback(
+    ({ userId: forUserId, startDate, endDate }: { userId: string; startDate: string; endDate: string }): AbsenceOverlap[] =>
+      liveAbsences
+        .filter(
+          (absence) =>
+            absence.userId !== forUserId &&
+            absence.startDate <= endDate &&
+            absence.endDate >= startDate
+        )
+        .map((absence) => ({
+          userId: absence.userId,
+          name: memberById.get(absence.userId)?.label ?? "Колега",
+          rangeLabel: `${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()} ${formatRange(absence)}`,
+          pending: absence.status === "pending",
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "uk")),
+    [liveAbsences, memberById]
+  );
+
   const handlePlannerPick = useCallback(
     (pickedUserId: string, dateKey: string) => {
       if (!canManageAbsences) return;
@@ -799,14 +826,24 @@ export function TeamPage() {
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             {canManageAbsences ? (
-              <Button
-                variant="outline"
-                onClick={() => setQuotaDialogOpen(true)}
-                className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
-              >
-                <Settings2 className="h-4 w-4" aria-hidden />
-                Квоти
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setReportDialogOpen(true)}
+                  className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+                >
+                  <FileSpreadsheet className="h-4 w-4" aria-hidden />
+                  Звіт
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setQuotaDialogOpen(true)}
+                  className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+                >
+                  <Settings2 className="h-4 w-4" aria-hidden />
+                  Квоти
+                </Button>
+              </>
             ) : null}
             {canManageAbsences ? (
               <Button
@@ -1347,6 +1384,7 @@ export function TeamPage() {
           mode={absenceDialogMode}
           approverLabel={approverLabel}
           todayKey={todayKey}
+          findOverlaps={findOverlaps}
           onSubmit={handleAbsenceSubmit}
         />
       ) : null}
@@ -1362,6 +1400,16 @@ export function TeamPage() {
         onConfirm={(comment) => {
           if (declineTarget) void handleDecide(declineTarget, "declined", comment || undefined);
         }}
+      />
+
+      <AbsenceYearReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        year={year}
+        people={quotaPeople}
+        absences={absences ?? []}
+        balances={balances}
+        exceptions={exceptions}
       />
 
       <QuotaEditorDialog

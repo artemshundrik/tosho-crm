@@ -106,7 +106,11 @@ import {
   upsertWorkspaceMemberProfile,
   type WorkspaceMemberDirectoryRow,
 } from "@/lib/workspaceMemberDirectory";
-import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
+import {
+  getTeamAvailabilityBadgeClass,
+  getTeamAvailabilityLabel,
+  normalizeTeamAvailabilityStatus,
+} from "@/lib/teamAvailability";
 import {
   defaultModuleAccess,
   getModuleDefinition,
@@ -242,12 +246,21 @@ const JOB_ROLE_OPTIONS: JobRoleOption[] = [
   { value: "it_specialist", label: "IT-спеціаліст" },
 ];
 
+/**
+ * Що можна ВИСТАВИТИ руками. Відпустка й лікарняний зі списку прибрані
+ * свідомо: вони живуть у журналі `tosho.team_absences` і виводяться з нього
+ * (див. workspaceMemberDirectory). Поки їх можна було ставити й тут, бейдж
+ * на аватарці розходився з календарем — статус лишався «у відпустці» тижнями
+ * після повернення, бо перемкнути його назад ніхто не згадував.
+ *
+ * Ярлики й тони для ВІДОБРАЖЕННЯ беремо з канонічного teamAvailability.ts —
+ * журнал і далі присилає vacation/sick_leave.
+ */
 const AVAILABILITY_OPTIONS = [
   { value: "available", label: "Доступний" },
-  { value: "vacation", label: "Відпустка" },
-  { value: "sick_leave", label: "Лікарняний" },
   { value: "offline", label: "Поза офісом" },
 ] as const;
+
 
 /** Підписи, порядок і дефолти модулів — у реєстрі src/lib/moduleAccess.ts. */
 const DEFAULT_MODULE_ACCESS = defaultModuleAccess();
@@ -301,17 +314,6 @@ function getJobBadgeClass(role: string | null) {
 
 function supportsManagerRate(role: string | null) {
   return ["manager", "sales_manager", "junior_sales_manager", "top_manager"].includes((role ?? "").toLowerCase());
-}
-
-function getAvailabilityLabel(value: MemberProfileMeta["availabilityStatus"]) {
-  return AVAILABILITY_OPTIONS.find((option) => option.value === value)?.label ?? "Доступний";
-}
-
-function getAvailabilityBadgeClass(value: MemberProfileMeta["availabilityStatus"]) {
-  if (value === "vacation") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
-  if (value === "sick_leave") return "bg-danger-soft text-danger-foreground border-danger-soft-border";
-  if (value === "offline") return "bg-muted text-muted-foreground border-border";
-  return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 
 function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
@@ -2643,10 +2645,10 @@ export function TeamMembersPage() {
                           "px-2 py-0.5 text-xs",
                           isInactive
                             ? "border-muted-foreground/30 bg-muted text-muted-foreground"
-                            : getAvailabilityBadgeClass(availability)
+                            : getTeamAvailabilityBadgeClass(availability)
                         )}
                       >
-                        {isInactive ? "Неактивний" : getAvailabilityLabel(availability)}
+                        {isInactive ? "Неактивний" : getTeamAvailabilityLabel(availability)}
                       </Badge>
                       {!isInactive && availabilityRange ? (
                         <Badge variant="outline" className="px-2 py-0.5 text-xs text-muted-foreground">
@@ -2838,7 +2840,7 @@ export function TeamMembersPage() {
                         </div>
                         <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Доступність</div>
-                          <div className="mt-1 text-sm font-medium text-foreground">{getAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{getTeamAvailabilityLabel(panelMeta?.availabilityStatus ?? "available")}</div>
                         </div>
                         <div className="rounded-[var(--radius)] border border-border bg-muted/20 p-3">
                           <div className="text-xs uppercase tracking-wide text-muted-foreground">Телефон</div>
@@ -2920,13 +2922,17 @@ export function TeamMembersPage() {
                         ) : null}
                         <div className="space-y-2">
                           <Label className="text-sm font-medium text-foreground">Статус доступності</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Відпустки й лікарняні — на сторінці «Команда»: бейдж береться з журналу
+                            відсутностей. Тут лишається тільки «поза офісом».
+                          </p>
                           <Select
                             value={editProfileAvailabilityStatus}
                             onValueChange={(value) => setEditProfileAvailabilityStatus(value as MemberProfileMeta["availabilityStatus"])}
                             disabled={!canManage}
                           >
                             <SelectTrigger className={cn(CONTROL_BASE, "h-11")}>
-                              {getAvailabilityLabel(editProfileAvailabilityStatus)}
+                              {getTeamAvailabilityLabel(editProfileAvailabilityStatus)}
                             </SelectTrigger>
                             <SelectContent>
                               {AVAILABILITY_OPTIONS.map((option) => (
@@ -3276,8 +3282,8 @@ export function TeamMembersPage() {
                                   Співпрацю завершено
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className={cn("w-fit px-2 py-0.5 text-xs rounded-full", getAvailabilityBadgeClass(rowAvailability))}>
-                                  {getAvailabilityLabel(rowAvailability)}
+                                <Badge variant="outline" className={cn("w-fit px-2 py-0.5 text-xs rounded-full", getTeamAvailabilityBadgeClass(rowAvailability))}>
+                                  {getTeamAvailabilityLabel(rowAvailability)}
                                 </Badge>
                               )}
                               {!rowInactive && rowRange ? (

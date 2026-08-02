@@ -488,6 +488,80 @@ async function listFromFallback(workspaceId: string) {
   return merged;
 }
 
+
+/**
+ * Хто відсутній СЬОГОДНІ — за журналом `tosho.team_absences`.
+ *
+ * ЧОМУ ЦЕ ТУТ: доступність людини раніше жила у двох місцях — журналі
+ * відсутностей і полі `team_member_profiles.availability_status`. Вони ніде не
+ * синхронізувались, тож бейдж на аватарці в «Дизайні» міг казати «у відпустці»
+ * тижнями після повернення, поки хтось не перемкне статус руками.
+ *
+ * Тепер правда одна: якщо на сьогодні є ПОГОДЖЕНА відсутність — вона й визначає
+ * бейдж. Ручний статус лишається тільки для «поза офісом» (offline), який із
+ * журналу не виводиться: це не відсутність, а «я не за робочим місцем».
+ *
+ * Запит один, легкий і покритий індексом (workspace_id, status, start, end).
+ */
+type TodayAbsenceStatus = Exclude<WorkspaceMemberDirectoryRow["availabilityStatus"], "available">;
+
+const ABSENCE_KIND_TO_AVAILABILITY: Record<string, TodayAbsenceStatus> = {
+  vacation: "vacation",
+  sick_leave: "sick_leave",
+  day_off: "offline",
+  other: "offline",
+};
+
+async function loadTodayAbsenceStatuses(workspaceId: string): Promise<Map<string, TodayAbsenceStatus>> {
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate()
+  ).padStart(2, "0")}`;
+
+  const byUser = new Map<string, TodayAbsenceStatus>();
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("team_absences")
+      .select("user_id,kind")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "approved")
+      .lte("start_date", todayKey)
+      .gte("end_date", todayKey);
+    if (error) throw error;
+    (data ?? []).forEach((row) => {
+      const mapped = ABSENCE_KIND_TO_AVAILABILITY[row.kind ?? "other"] ?? "offline";
+      // Відпустка/лікарняний важливіші за day-off, якщо раптом накладаються.
+      const current = byUser.get(row.user_id);
+      if (!current || current === "offline") byUser.set(row.user_id, mapped);
+    });
+  } catch (error) {
+    // Журнал недоступний — краще показати «доступний», ніж зламати весь довідник.
+    console.warn("[directory] today absences unavailable", error);
+  }
+  return byUser;
+}
+
+/**
+ * Накладає сьогоднішній журнал на рядки довідника.
+ * Журнал перебиває профіль; ручний статус лишається тільки як «поза офісом» —
+ * решта ручних значень (стара «відпустка» в профілі) більше не показуються.
+ */
+function applyTodayAbsence(
+  rows: WorkspaceMemberDirectoryRow[],
+  absenceToday: Map<string, TodayAbsenceStatus>
+): WorkspaceMemberDirectoryRow[] {
+  if (absenceToday.size === 0 && rows.every((row) => row.availabilityStatus === "available")) {
+    return rows;
+  }
+  return rows.map((row) => {
+    const derived = absenceToday.get(row.userId);
+    const next: WorkspaceMemberDirectoryRow["availabilityStatus"] =
+      derived ?? (row.availabilityStatus === "offline" ? "offline" : "available");
+    return next === row.availabilityStatus ? row : { ...row, availabilityStatus: next };
+  });
+}
+
 export async function listWorkspaceMemberDirectory(workspaceId: string): Promise<WorkspaceMemberDirectoryRow[]> {
   if (workspaceDirectoryCache.has(workspaceId)) {
     return workspaceDirectoryCache.get(workspaceId) ?? [];
@@ -496,10 +570,16 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
   if (existing) return existing;
 
   const promise = (async () => {
+  // Доступність накладаємо ТУТ, а не в кожній гілці: так і в'юха, і fallback
+  // дають один і той самий бейдж, і ніхто не забуде продублювати правило.
+  const absenceToday = await loadTodayAbsenceStatuses(workspaceId);
+
   try {
     const rows = await listFromUnifiedView(workspaceId);
     if (rows.length > 0) {
-      const resolved = rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+      const resolved = applyTodayAbsence(rows, absenceToday).sort((a, b) =>
+        a.displayName.localeCompare(b.displayName, "uk")
+      );
       workspaceDirectoryCache.set(workspaceId, resolved);
       return resolved;
     }
@@ -510,7 +590,9 @@ export async function listWorkspaceMemberDirectory(workspaceId: string): Promise
   }
 
   const rows = await listFromFallback(workspaceId);
-  const resolved = rows.sort((a, b) => a.displayName.localeCompare(b.displayName, "uk"));
+  const resolved = applyTodayAbsence(rows, absenceToday).sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, "uk")
+  );
   workspaceDirectoryCache.set(workspaceId, resolved);
   return resolved;
   })();

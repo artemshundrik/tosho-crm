@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Info, Loader2 } from "lucide-react";
+import { CalendarRange, Info, Loader2, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,7 +41,10 @@ export type AbsenceDialogValue = {
   comment: string;
 };
 
-export type AbsenceDialogPerson = { userId: string; name: string };
+export type AbsenceDialogPerson = { userId: string; name: string; roleLabel?: string };
+
+/** Хто ще відсутній у ті самі дні — рахує викликач, діалог лише показує. */
+export type AbsenceOverlap = { userId: string; name: string; rangeLabel: string; pending: boolean };
 
 function addDaysKey(dateKey: string, delta: number) {
   const date = new Date(`${dateKey}T00:00:00Z`);
@@ -89,6 +92,7 @@ export function AbsenceDialog({
   mode = "manage",
   approverLabel,
   todayKey,
+  findOverlaps,
   onSubmit,
 }: {
   open: boolean;
@@ -106,6 +110,8 @@ export function AbsenceDialog({
   mode?: "manage" | "request";
   approverLabel?: string;
   todayKey?: string;
+  /** Повертає колег, чиї відсутності перетинаються з обраним діапазоном. */
+  findOverlaps?: (params: { userId: string; startDate: string; endDate: string }) => AbsenceOverlap[];
   onSubmit: (value: AbsenceDialogValue) => void;
 }) {
   const [value, setValue] = useState<AbsenceDialogValue>(initial);
@@ -154,6 +160,14 @@ export function AbsenceDialog({
   const sickOverQuota = Boolean(sickAsFact && remainingAfter !== null && remainingAfter < 0);
 
   const sickBlocked = sickTooOld || sickTooFar || sickTooLong || sickOverQuota;
+
+  // Перетини рахуємо на клієнті з уже завантаженого року — це підказка, а не
+  // заборона: два дизайнери у відпустці одночасно бувають виправдані, але
+  // рішення має ухвалюватись із цим фактом перед очима, а не постфактум.
+  const overlaps = useMemo(() => {
+    if (!findOverlaps || !value.startDate || !value.endDate || rangeInvalid) return [];
+    return findOverlaps({ userId: value.userId, startDate: value.startDate, endDate: value.endDate });
+  }, [findOverlaps, rangeInvalid, value.endDate, value.startDate, value.userId]);
 
   const canSubmit =
     Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !sickBlocked && !saving;
@@ -289,6 +303,26 @@ export function AbsenceDialog({
               </span>
             </div>
           )}
+
+          {overlaps.length > 0 ? (
+            <div className="rounded-[var(--radius-inner)] border border-warning-soft-border bg-warning-soft/60 px-3 py-2.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-warning-foreground">
+                <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                У ці ж дні відсутні ще {overlaps.length}
+              </div>
+              <ul className="mt-1.5 space-y-0.5">
+                {overlaps.slice(0, 4).map((overlap) => (
+                  <li key={overlap.userId + overlap.rangeLabel} className="text-2xs text-foreground/80">
+                    {overlap.name} · {overlap.rangeLabel}
+                    {overlap.pending ? " (на погодженні)" : ""}
+                  </li>
+                ))}
+                {overlaps.length > 4 ? (
+                  <li className="text-2xs text-muted-foreground">… і ще {overlaps.length - 4}</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
 
           {sickBlocked ? (
             <p className="text-xs text-destructive">
