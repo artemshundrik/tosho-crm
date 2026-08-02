@@ -167,9 +167,29 @@ Current catalog variant contract:
 
 - [src/pages/TeamPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/TeamPage.tsx)
 - [src/pages/TeamMembersPage.tsx](/Users/artem/Projects/tosho-crm/src/pages/TeamMembersPage.tsx)
+- [src/components/team](/Users/artem/Projects/tosho-crm/src/components/team)
 - [netlify/functions/team-member-employment.ts](/Users/artem/Projects/tosho-crm/netlify/functions/team-member-employment.ts)
 - [netlify/functions/team-member-probation.ts](/Users/artem/Projects/tosho-crm/netlify/functions/team-member-probation.ts)
 - [scripts/team-member-profiles.sql](/Users/artem/Projects/tosho-crm/scripts/team-member-profiles.sql)
+- [scripts/team-absences-quotas.sql](/Users/artem/Projects/tosho-crm/scripts/team-absences-quotas.sql)
+- [docs/TEAM_ABSENCES_DESIGN.md](/Users/artem/Projects/tosho-crm/docs/TEAM_ABSENCES_DESIGN.md)
+
+Current `/team` UI contract (Фаза 1, серпень 2026):
+
+- Три вкладки в `UnifiedPageToolbar`: **Люди · Календар · Запити**. Один дизайн
+  для всіх, глибина різна за роллю.
+- **Відсутність = журнал `tosho.team_absences`.** «Хто відсутній сьогодні»,
+  бейджі на картках і планер виводяться ЛИШЕ звідти. Поле
+  `team_member_profiles.availability_status` більше не живить цю сторінку —
+  два джерела правди раніше розходились (KPI показував одне, список інше).
+- **Приватність залишків:** свій баланс бачить кожен, чужі — лише owner/SEO.
+  Гейт стоїть у БД (RPC `team_absence_balances`), а не тільки в UI.
+- Квоти списують **робочі** дні (`src/lib/teamAbsenceCalendar.ts` +
+  `ua_workday_exceptions`); вихідні/свята — фон календаря, не тип відсутності.
+- Рік відсутностей тягнеться одним запитом і ріжеться на клієнті — місячна
+  навігація в планері не ходить у мережу.
+- Self-service заявки й погодження (SEO вирішує, owner бачить) — Фаза 2,
+  через Netlify-функцію за патерном `team-member-probation.ts`.
 
 ### Notifications
 

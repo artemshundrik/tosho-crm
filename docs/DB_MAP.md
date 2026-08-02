@@ -170,6 +170,33 @@ Practical implication:
 - `team_member_probation_events`
   - probation event log
 
+- `team_absences`
+  - журнал відсутностей: один рядок = одна людина × діапазон дат × тип
+    (`vacation` / `day_off` / `sick_leave` / `other`)
+  - tracked schema: [scripts/team-absences.sql](/Users/artem/Projects/tosho-crm/scripts/team-absences.sql)
+    + [scripts/team-absences-quotas.sql](/Users/artem/Projects/tosho-crm/scripts/team-absences-quotas.sql)
+  - `status` (`pending` / `approved` / `declined` / `cancelled`) — **джерело правди
+    і для календаря, і для норм дизайнерів**. Норму й квоту ріжуть ЛИШЕ `approved`
+    (`src/lib/designerPayroll.ts` фільтрує явно; знімеш фільтр — pending почне
+    тихо зменшувати зарплатні нормо-дні)
+  - RLS: читає будь-який учасник воркспейсу, пише owner/SEO
+  - «хто зараз відсутній» на `/team` виводиться звідси, а не з
+    `team_member_profiles.availability_status`
+
+- `team_absence_quotas`
+  - річні ліміти на людину в РОБОЧИХ днях; рядка може не бути — тоді діють
+    дефолти 18 / 6 / 10 (`src/lib/teamAbsenceCalendar.ts`)
+  - RLS: свій рядок бачить кожен, усі — лише owner/SEO; пише owner/SEO
+
+- `team_absence_events`
+  - слід рішень по відсутностях; пише лише service-role функція
+
+- RPC `team_absence_balances(p_year int)`
+  - `security definer`; повертає квоту/використано по трьох типах
+  - **гейт приватності залишків**: не-owner/SEO отримує рівно один рядок — свій
+  - «використано» = унікальні робочі дні approved-записів за рік, з урахуванням
+    `ua_workday_exceptions`
+
 ## Catalog / Product Configuration Tables
 
 - `catalog_models`
