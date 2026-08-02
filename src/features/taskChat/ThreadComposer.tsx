@@ -18,6 +18,9 @@ type Props = {
   onSend: (body: string) => void;
 };
 
+/** Стеля росту поля вводу — приблизно чотири рядки. */
+const MAX_INPUT_HEIGHT = 92;
+
 /**
  * Композер у стилі месенджера: одна капсула, іконки-привиди всередині,
  * кругла кнопка надсилання.
@@ -44,6 +47,16 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
     const match = /(?:^|\s)@([^\s@]*)$/u.exec(value);
     setMentionQuery(match ? match[1] : null);
   };
+
+  // Поле росте разом із текстом до чотирьох рядків, далі — власний скрол.
+  // Саме так поводяться месенджери: один рядок не змушує гадати, скільки
+  // написано, а простирадло не з'їдає всю панель.
+  React.useLayoutEffect(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [body]);
 
   const matches = React.useMemo(() => {
     if (mentionQuery === null) return [];
@@ -128,7 +141,8 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
               submit();
             }
           }}
-          className="min-w-0 flex-1 resize-none bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
+          style={{ maxHeight: MAX_INPUT_HEIGHT }}
+          className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
         />
 
         <button

@@ -11277,7 +11277,9 @@ export default function DesignTaskPage() {
         </div>
 
         <aside className="self-start xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))]">
-          <div className="flex flex-col gap-3 px-4 py-5 xl:h-full xl:min-h-0 xl:gap-3 xl:overflow-hidden xl:px-5 xl:pr-6 xl:pt-5 xl:pb-5">
+          {/* Щільне обрамлення: поля 10 px, проміжок 8 px. Сіре тло лишається
+              тонкою рамкою, картки — максимально широкі (варіант 2). */}
+          <div className="flex flex-col gap-2 p-2.5 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <section className="shrink-0 rounded-inner border border-border/40 bg-card px-3 pb-2 pt-2.5 shadow-card">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
@@ -11581,7 +11583,10 @@ export default function DesignTaskPage() {
             </div>
           </section>
 
-          <section className="flex min-h-0 flex-1 flex-col">
+          {/* min-h тримає висоту, коли колонка стає під контентом (нижче xl,
+              де xl:h-full не діє) — інакше картка стискається до вмісту
+              й під нею лишається порожнє сіре поле. */}
+          <section className="flex min-h-[440px] flex-col xl:min-h-0 xl:flex-1">
             {effectiveTeamId ? (
               <TaskThreadRail quoteRef={String(task.quoteId)} teamId={effectiveTeamId} />
             ) : null}
