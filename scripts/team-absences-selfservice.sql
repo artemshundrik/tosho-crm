@@ -12,6 +12,32 @@
 
 begin;
 
+
+-- =====================================================================
+-- 0. Робочі дні діапазону — спільний хелпер для гардів квоти.
+--    Той самий календар, що в team_absence_balances: пн–пт, скориговані
+--    ua_workday_exceptions.
+-- =====================================================================
+create or replace function tosho.count_absence_business_days(_workspace uuid, _from date, _to date)
+returns int
+language sql
+stable
+security definer
+set search_path to 'tosho', 'public'
+as $$
+  select coalesce(count(*), 0)::int
+  from generate_series(_from, _to, interval '1 day') as d
+  left join tosho.ua_workday_exceptions ex
+    on ex.workspace_id = _workspace
+   and ex.day = d::date
+  where _to >= _from
+    and coalesce(ex.is_workday, extract(isodow from d) between 1 and 5);
+$$;
+
+revoke all on function tosho.count_absence_business_days(uuid, date, date) from public;
+revoke all on function tosho.count_absence_business_days(uuid, date, date) from anon;
+grant execute on function tosho.count_absence_business_days(uuid, date, date) to authenticated, service_role;
+
 -- =====================================================================
 -- 1. Insert самому за себе
 --
@@ -44,7 +70,13 @@ with check (
     or (
       team_absences.kind = 'sick_leave'
       and team_absences.status = 'approved'
+      -- Обидва кінці діапазону, а не лише початок. Обмежити тільки початок
+      -- мало: «хворію з сьогодні до кінця наступного місяця» так само
+      -- обнуляє норму — просто вперед, а не назад. Довший лікарняний вносить
+      -- керівництво (окрема політика, без обмежень).
       and team_absences.start_date >= current_date - 7
+      and team_absences.end_date <= current_date + 14
+      and team_absences.end_date - team_absences.start_date <= 14
     )
   )
 );
@@ -112,8 +144,12 @@ begin
       using errcode = '42501';
   end if;
 
-  if new.user_id is distinct from old.user_id
+  if new.id is distinct from old.id
+     or new.user_id is distinct from old.user_id
      or new.workspace_id is distinct from old.workspace_id
+     or new.comment is distinct from old.comment
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
      or new.start_date is distinct from old.start_date
      or new.end_date is distinct from old.end_date
      or new.kind is distinct from old.kind
@@ -133,6 +169,99 @@ drop trigger if exists team_absences_guard_self_update on tosho.team_absences;
 create trigger team_absences_guard_self_update
 before update on tosho.team_absences
 for each row execute function tosho.guard_team_absence_self_update();
+
+
+-- =====================================================================
+-- 3b. Гард річної квоти на самостійний лікарняний
+--
+--     Політика обмежує ОДИН запис (не глибше 7 днів назад, не далі 14 вперед,
+--     не довше 14 днів). Але записи можна котити: щодня додавати новий на два
+--     тижні вперед і так закрити місяць. Тому річна квота теж має бути
+--     стіною, а не лише цифрою на картці.
+--
+--     Понад квоту лікарняний вносить керівництво — там і рішення, і аудит.
+-- =====================================================================
+create or replace function tosho.guard_team_absence_self_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'tosho', 'public'
+as $$
+declare
+  v_is_admin boolean := false;
+  v_quota    int;
+  v_used     int;
+  v_adding   int;
+  v_year     int := extract(year from new.start_date)::int;
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select (
+      lower(coalesce(mv.access_role::text, '')) = 'owner'
+      or lower(coalesce(mv.job_role::text, '')) = 'seo'
+    )
+    into v_is_admin
+  from tosho.memberships_view mv
+  where mv.user_id = auth.uid()
+    and mv.workspace_id = new.workspace_id
+  limit 1;
+
+  if coalesce(v_is_admin, false) then
+    return new;
+  end if;
+
+  -- Квоту стережемо лише там, де запис одразу стає чинним без людини в циклі.
+  -- Відпустка й day-off ідуть через погодження, там ліміт бачить approver.
+  if new.kind <> 'sick_leave' or new.status <> 'approved' then
+    return new;
+  end if;
+
+  select coalesce(q.sick_days, 10)
+    into v_quota
+  from (select 1) dummy
+  left join tosho.team_absence_quotas q
+    on q.workspace_id = new.workspace_id
+   and q.user_id = new.user_id
+   and q.year = v_year;
+
+  select coalesce(sum(
+           tosho.count_absence_business_days(
+             a.workspace_id,
+             greatest(a.start_date, make_date(v_year, 1, 1)),
+             least(a.end_date, make_date(v_year, 12, 31))
+           )
+         ), 0)
+    into v_used
+  from tosho.team_absences a
+  where a.workspace_id = new.workspace_id
+    and a.user_id = new.user_id
+    and a.kind = 'sick_leave'
+    and a.status = 'approved'
+    and a.start_date <= make_date(v_year, 12, 31)
+    and a.end_date >= make_date(v_year, 1, 1);
+
+  v_adding := tosho.count_absence_business_days(
+    new.workspace_id,
+    greatest(new.start_date, make_date(v_year, 1, 1)),
+    least(new.end_date, make_date(v_year, 12, 31))
+  );
+
+  if v_used + v_adding > coalesce(v_quota, 10) then
+    raise exception 'Лікарняних на рік лишилось % — довший вносить керівництво',
+      greatest(0, coalesce(v_quota, 10) - v_used)
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists team_absences_guard_self_insert on tosho.team_absences;
+create trigger team_absences_guard_self_insert
+before insert on tosho.team_absences
+for each row execute function tosho.guard_team_absence_self_insert();
 
 -- =====================================================================
 -- 4. Приватність причини відмови

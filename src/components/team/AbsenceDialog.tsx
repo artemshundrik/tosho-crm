@@ -49,6 +49,12 @@ function addDaysKey(dateKey: string, delta: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function calendarSpan(startKey: string, endKey: string) {
+  const start = new Date(`${startKey}T00:00:00Z`).getTime();
+  const end = new Date(`${endKey}T00:00:00Z`).getTime();
+  return Math.round((end - start) / 86400000) + 1;
+}
+
 function pluralDays(count: number) {
   const mod100 = count % 100;
   const mod10 = count % 10;
@@ -58,8 +64,17 @@ function pluralDays(count: number) {
   return "днів";
 }
 
-/** Скільки днів назад можна самому зафіксувати лікарняний (дзеркало RLS). */
+/**
+ * Межі самостійного лікарняного — ДЗЕРКАЛО правил у БД
+ * (scripts/team-absences-selfservice.sql). Тут вони лише для того, щоб
+ * людина побачила проблему до відправлення; стіною лишається база.
+ *
+ * Обмежені обидва кінці: «хворію до кінця наступного місяця» обнуляє норму
+ * дизайнера так само ефективно, як лікарняний заднім числом.
+ */
 export const SELF_SICK_BACKDATE_DAYS = 7;
+export const SELF_SICK_FORWARD_DAYS = 14;
+export const SELF_SICK_MAX_LENGTH_DAYS = 14;
 
 export function AbsenceDialog({
   open,
@@ -119,15 +134,29 @@ export function AbsenceDialog({
 
   const sickAsFact = isRequest && value.kind === "sick_leave";
 
-  // Дзеркало RLS-правила: самостійний лікарняний не можна вносити глибоко
-  // заднім числом (інакше ним можна різати норму за минулий місяць).
   const earliestSelfSick = todayKey ? addDaysKey(todayKey, -SELF_SICK_BACKDATE_DAYS) : null;
+  const latestSelfSick = todayKey ? addDaysKey(todayKey, SELF_SICK_FORWARD_DAYS) : null;
   const sickTooOld = Boolean(
     sickAsFact && earliestSelfSick && value.startDate && value.startDate < earliestSelfSick
   );
+  const sickTooFar = Boolean(
+    sickAsFact && latestSelfSick && value.endDate && value.endDate > latestSelfSick
+  );
+  const sickTooLong = Boolean(
+    sickAsFact &&
+      value.startDate &&
+      value.endDate &&
+      !rangeInvalid &&
+      calendarSpan(value.startDate, value.endDate) > SELF_SICK_MAX_LENGTH_DAYS + 1
+  );
+  // Понад річну квоту лікарняний вносить керівництво — база відхилить, тож
+  // не даємо натиснути «Зафіксувати» наосліп.
+  const sickOverQuota = Boolean(sickAsFact && remainingAfter !== null && remainingAfter < 0);
+
+  const sickBlocked = sickTooOld || sickTooFar || sickTooLong || sickOverQuota;
 
   const canSubmit =
-    Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !sickTooOld && !saving;
+    Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !sickBlocked && !saving;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -261,10 +290,16 @@ export function AbsenceDialog({
             </div>
           )}
 
-          {sickTooOld ? (
+          {sickBlocked ? (
             <p className="text-xs text-destructive">
-              Лікарняний заднім числом можна вносити не глибше ніж на {SELF_SICK_BACKDATE_DAYS} днів.
-              Давнішу дату може поставити керівництво.
+              {sickTooOld
+                ? `Лікарняний заднім числом можна вносити не глибше ніж на ${SELF_SICK_BACKDATE_DAYS} днів.`
+                : sickTooFar
+                  ? `Лікарняний наперед можна вносити не далі ніж на ${SELF_SICK_FORWARD_DAYS} днів.`
+                  : sickTooLong
+                    ? `Самостійно можна зафіксувати не більше ніж ${SELF_SICK_MAX_LENGTH_DAYS} днів поспіль.`
+                    : "Це більше за річний залишок лікарняних."}{" "}
+              Довший лікарняний вносить керівництво.
             </p>
           ) : null}
 
