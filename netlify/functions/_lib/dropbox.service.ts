@@ -17,6 +17,8 @@ type DropboxListFolderEntry = {
   name?: string;
   path_display?: string;
   path_lower?: string;
+  /** Байти файлу; у тек відсутній. dropboxHealth рахує з нього обсяг куп. */
+  size?: number;
 };
 
 type DropboxListFolderResult = {
