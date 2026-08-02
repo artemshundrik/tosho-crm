@@ -1,10 +1,11 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Upload } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { countUnread, threadKeyForQuote, type ThreadAttachment } from "@/lib/taskThread";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
+import { cn } from "@/lib/utils";
 import { ThreadComposer, type MentionCandidate } from "./ThreadComposer";
 import { ThreadFeed, ThreadNoAccess, ThreadSkeleton } from "./ThreadFeed";
 import { ThreadHistory } from "./ThreadHistory";
@@ -148,13 +149,48 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     });
   };
 
+  // Перетягування працює на всю картку обговорення, а не лише на поле вводу —
+  // саме так поводиться Telegram, і саме туди людина цілиться файлом.
+  const [dragOver, setDragOver] = React.useState(false);
+
   const accessDenied =
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
 
   return (
     // h-full обов'язковий: батьківська секція розтягується (flex-1), але сама
     // картка без цього сідає по вмісту — і під нею лишається порожнє тло.
-    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-inner border border-border/40 bg-card">
+    <section
+      className={cn(
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-inner border bg-card transition-colors",
+        dragOver ? "border-primary/60 bg-primary/[0.04]" : "border-border/40"
+      )}
+      onDragOver={(event) => {
+        if (!onAttachFiles || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setDragOver(false);
+      }}
+      onDrop={(event) => {
+        if (!onAttachFiles) return;
+        event.preventDefault();
+        setDragOver(false);
+        if (event.dataTransfer.files.length > 0) void handleAttach(event.dataTransfer.files);
+      }}
+    >
+      {dragOver ? (
+        <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-[1px]">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+            <Upload className="h-5 w-5" />
+          </span>
+          <span className="text-xs font-semibold text-primary">Відпустіть файл тут</span>
+          <span className="max-w-[26ch] text-center text-2xs text-primary/80">
+            Він ляже у «Файли» задачі, а в розмові стане повідомленням
+          </span>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 px-3 pb-2 pt-3">
         <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-semibold tracking-tight">Обговорення</span>

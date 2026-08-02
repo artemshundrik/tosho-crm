@@ -11584,10 +11584,11 @@ export default function DesignTaskPage() {
             </div>
           </section>
 
-          {/* min-h тримає висоту, коли колонка стає під контентом (нижче xl,
-              де xl:h-full не діє) — інакше картка стискається до вмісту
-              й під нею лишається порожнє сіре поле. */}
-          <section className="flex min-h-[440px] flex-col xl:min-h-0 xl:flex-1">
+          {/* Нижче xl колонка стає під контентом: там висоту задає max-h від
+              вікна, а не фіксовані пікселі — інакше картка додавала сторінці
+              зайву висоту й з'являвся скрол «на два пальці». На xl+ колонка
+              зафіксована й не скролиться взагалі: тягнеться лише ця секція. */}
+          <section className="flex max-h-[70vh] min-h-[360px] flex-col xl:max-h-none xl:min-h-0 xl:flex-1">
             {effectiveTeamId ? (
               <TaskThreadRail
                 quoteRef={String(task.quoteId)}

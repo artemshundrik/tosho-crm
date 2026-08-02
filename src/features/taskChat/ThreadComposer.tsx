@@ -90,8 +90,6 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
     if (dictation.state === "error" && dictation.error) toast.error(dictation.error);
   }, [dictation.state, dictation.error]);
 
-  const [dragOver, setDragOver] = React.useState(false);
-
   const acceptFiles = React.useCallback(
     async (incoming: FileList | null) => {
       if (!onAttachFiles || !incoming || incoming.length === 0) return false;
@@ -147,30 +145,7 @@ export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, att
   };
 
   return (
-    <div
-      className="relative border-t border-border/40 bg-card p-2.5"
-      onDragOver={(event) => {
-        if (!onAttachFiles || !event.dataTransfer.types.includes("Files")) return;
-        event.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setDragOver(false);
-      }}
-      onDrop={(event) => {
-        if (!onAttachFiles) return;
-        event.preventDefault();
-        setDragOver(false);
-        void acceptFiles(event.dataTransfer.files);
-      }}
-    >
-      {dragOver ? (
-        <div className="absolute inset-1.5 z-10 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/50 bg-primary/10 text-2xs font-medium text-primary backdrop-blur-[1px]">
-          <Paperclip className="h-3.5 w-3.5" />
-          Відпустіть — файл піде у «Файли», а тут стане повідомленням
-        </div>
-      ) : null}
+    <div className="border-t border-border/40 bg-card p-2.5">
       {matches.length > 0 ? (
         <div className="mb-2 overflow-hidden rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
           {matches.map((candidate, index) => (
