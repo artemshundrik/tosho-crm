@@ -7,6 +7,7 @@ import {
   sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
+  type InlineKeyboardButton,
   type PersistentKeyboard,
 } from "./_telegram";
 import {
@@ -413,44 +414,43 @@ const PERSISTENT_MENU: PersistentKeyboard = {
  */
 function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
   const level: AccessLevel = resolveAccessLevel(role);
-  const rows: InlineKeyboard = [
-    [
-      { text: "🎨 Задачі в роботі", callback_data: "qa:workload_now" },
-      { text: "📋 Список задач", callback_data: "qa:tasks_list" },
-    ],
-    [
-      { text: "⏰ Дедлайни", callback_data: "qa:deadlines" },
-      { text: "✏️ Правки", callback_data: "qa:revisions" },
-    ],
-    [
-      { text: "⏱ Час за таймерами", callback_data: "qa:time_spent" },
-      { text: "🐌 Найдовше висить", callback_data: "qa:stuck" },
-    ],
-    [
-      { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
-      { text: "🟢 Хто в системі", callback_data: "qa:who_is_online" },
-    ],
-    [{ text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" }],
-    [
-      { text: "🏝 Хто відсутній", callback_data: "qa:who_is_absent" },
-      { text: "📝 Оформити відсутність", callback_data: "abs:open" },
-    ],
-  ];
+  // Плоский список у пріоритетному порядку, який нижче ріжеться по ДВІ кнопки
+  // в ряд: рядки-сироти впереміш із парами виглядали неохайно (рішення CEO
+  // 2026-08-02). Відсутності тут немає навмисно — вона живе в меню команд
+  // (/absence, /away), а не в питаннях до асистента.
+  //
   // Кнопки показуємо тільки ті, що людина справді може натиснути: кнопка, яка
   // відповідає «немає доступу», дратує більше, ніж її відсутність.
+  const buttons: InlineKeyboardButton[] = [
+    { text: "🎨 Задачі в роботі", callback_data: "qa:workload_now" },
+    { text: "📋 Список задач", callback_data: "qa:tasks_list" },
+    { text: "⏰ Дедлайни", callback_data: "qa:deadlines" },
+    { text: "✏️ Правки", callback_data: "qa:revisions" },
+    { text: "⏱ Час за таймерами", callback_data: "qa:time_spent" },
+    { text: "🐌 Найдовше висить", callback_data: "qa:stuck" },
+    { text: "👥 Хто чим зайнятий", callback_data: "qa:team_workload" },
+    { text: "🟢 Хто в системі", callback_data: "qa:who_is_online" },
+    { text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" },
+  ];
   if (canUseQuotes(level)) {
-    rows.push([{ text: "📊 Воронка", callback_data: "qa:quotes_pipeline" }]);
+    buttons.push({ text: "📊 Воронка", callback_data: "qa:quotes_pipeline" });
   }
   if (canSeeAiCosts(level)) {
-    rows.push([{ text: "💰 AI-кости", callback_data: "qa:ai_usage" }]);
+    buttons.push({ text: "💰 AI-кости", callback_data: "qa:ai_usage" });
   }
   if (isOwnerRole(role)) {
-    rows.push([
+    buttons.push(
       { text: "🚨 Що не працює", callback_data: "qa:whats_broken" },
       { text: "💬 Що це значить", callback_data: "qa:explain_problem" },
-    ]);
-    rows.push([{ text: "🩺 Стан системи", callback_data: "qa:system_health" }]);
+      { text: "🩺 Стан системи", callback_data: "qa:system_health" }
+    );
   }
+
+  const rows: InlineKeyboard = [];
+  for (let i = 0; i < buttons.length; i += 2) {
+    rows.push(buttons.slice(i, i + 2));
+  }
+  // «Що можна питати» — завжди одна широка в кінці.
   rows.push([{ text: "❓ Що можна питати", callback_data: "qa:help" }]);
   return rows;
 }

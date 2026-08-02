@@ -23,7 +23,7 @@ type HttpEvent = {
 // Порядок = порядок у меню Telegram.
 const COMMANDS = [
   { command: "menu", description: "Швидкі питання" },
-  { command: "absence", description: "Оформити відсутність: лікарняний, day-off, відпустка" },
+  { command: "absence", description: "Оформити відсутність" },
   { command: "away", description: "Хто сьогодні відсутній" },
   { command: "help", description: "Що можна питати" },
   { command: "settings", description: "Які сповіщення слати" },
