@@ -82,11 +82,7 @@ import {
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence } from "@/lib/absenceIndicator";
 import { toPersonHoverCardData } from "@/components/app/PersonHoverCard";
-import {
-  notifyAbsenceRecorded,
-  notifyAbsenceRequestCancelled,
-  notifyAbsenceRequestSubmitted,
-} from "@/lib/workflowNotifications";
+import { notifyAbsenceRequestCancelled } from "@/lib/workflowNotifications";
 import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
 import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
 import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
@@ -628,43 +624,14 @@ export function TeamPage() {
       try {
         if (absenceDialogMode === "request" && !absenceEditingId) {
           const kind = value.kind === "other" ? "vacation" : value.kind;
-          const created = await createOwnAbsenceRequest({
-            workspaceId,
-            userId: value.userId,
+          // Запис І сповіщення робить сервер одним викликом: раніше слав їх
+          // браузер, і закрита відразу вкладка лишала заявку без адресата.
+          await createOwnAbsenceRequest({
             startDate: value.startDate,
             endDate: value.endDate,
             kind,
             comment: value.comment.trim() || null,
           });
-
-          const businessDays = countBusinessDaysInYear(created, year, exceptions);
-          const rangeLabel = formatRange(created);
-          const myName = memberById.get(value.userId)?.label ?? "Співробітник";
-
-          // Сповіщення не має валити саму заявку: вона вже в базі.
-          try {
-            if (kind === "sick_leave") {
-              await notifyAbsenceRecorded({
-                workspaceId,
-                userId: value.userId,
-                userName: myName,
-                kindLabel: TEAM_ABSENCE_KIND_LABELS[kind],
-                rangeLabel,
-              });
-            } else {
-              await notifyAbsenceRequestSubmitted({
-                workspaceId,
-                requesterUserId: value.userId,
-                requesterName: myName,
-                kindLabel: TEAM_ABSENCE_KIND_LABELS[kind],
-                rangeLabel,
-                businessDays,
-                comment: value.comment.trim() || null,
-              });
-            }
-          } catch (notifyError) {
-            console.warn("[team] absence notify failed", notifyError);
-          }
 
           toast.success(kind === "sick_leave" ? "Лікарняний зафіксовано" : "Заявку надіслано");
           setAbsenceDialogOpen(false);
@@ -700,7 +667,15 @@ export function TeamPage() {
         await reloadAbsenceData();
       } catch (error) {
         console.error("[team] absence save failed", error);
-        toast.error("Не вдалося зберегти відсутність");
+        // Заявка ходить через нашу функцію — там текст відмови вже людський
+        // («лікарняних на рік лишилось N»), і саме він каже, що робити далі.
+        // Ручне ж внесення падає сирою помилкою Postgres, її не показуємо.
+        const ownRequest = absenceDialogMode === "request" && !absenceEditingId;
+        toast.error(
+          ownRequest && error instanceof Error && error.message
+            ? error.message
+            : "Не вдалося зберегти відсутність"
+        );
       } finally {
         setAbsenceSaving(false);
       }
@@ -708,12 +683,9 @@ export function TeamPage() {
     [
       absenceDialogMode,
       absenceEditingId,
-      exceptions,
-      memberById,
       reloadAbsenceData,
       userId,
       workspaceId,
-      year,
     ]
   );
 

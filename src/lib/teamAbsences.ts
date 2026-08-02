@@ -279,43 +279,72 @@ export async function updateTeamAbsence(params: {
 }
 
 /**
- * Створити ВЛАСНУ заявку.
+ * Виклик серверної функції заявок. Один рот на два боки: подання й рішення
+ * ходять тим самим шляхом, бо обидва — «запис + аудит + сповіщення» одним
+ * пакетом, який не можна лишити на совість вкладки.
+ */
+async function callAbsenceFunction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Сесія завершилась — увійдіть знову");
+
+  const response = await fetch("/.netlify/functions/team-absence-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+
+  const raw = await response.text();
+  let parsed: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!response.ok) {
+    throw new Error(typeof parsed.error === "string" ? parsed.error : `HTTP ${response.status}`);
+  }
+  return parsed;
+}
+
+/**
+ * Створити ВЛАСНУ заявку — через серверну функцію.
  *
- * Статус визначає тип, а не клієнт: відпустка й day-off ідуть на погодження,
- * лікарняний фіксується фактом. RLS перевіряє те саме (політика
- * team_absences_insert_self), тож підмінити статус з фронта не вийде — тут
- * лише дзеркало правила, щоб UI не показував недосяжних станів.
+ * Раніше вставку робив браузер, а сповіщення слав він же: закрив вкладку
+ * відразу після «Надіслати» — заявка в базі є, а SEO про неї не знає ніколи.
+ * Тепер запис і сповіщення — один серверний виклик.
+ *
+ * Сама вставка на сервері йде ЮЗЕРСЬКИМ клієнтом, тож RLS і тригери (квота
+ * лікарняних, межі дат, «лише за себе») лишаються в грі — статус визначає
+ * тип, а не клієнт, і підмінити його з фронта не вийде.
  */
 export async function createOwnAbsenceRequest(params: {
-  workspaceId: string;
-  userId: string;
   startDate: string;
   endDate: string;
   kind: Exclude<TeamAbsenceKind, "other">;
   comment: string | null;
 }): Promise<TeamAbsence> {
-  const status: TeamAbsenceStatus = params.kind === "sick_leave" ? "approved" : "pending";
+  const parsed = await callAbsenceFunction({
+    action: "submit",
+    kind: params.kind,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    comment: params.comment,
+  });
 
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("team_absences")
-    .insert({
-      workspace_id: params.workspaceId,
-      user_id: params.userId,
-      start_date: params.startDate,
-      end_date: params.endDate,
-      kind: params.kind,
-      status,
-      comment: params.comment,
-      created_by: params.userId,
-      requested_by: params.userId,
-    })
-    .select(ABSENCE_COLUMNS)
-    .single();
+  const absence = parsed.absence as TeamAbsence | undefined;
+  if (!absence?.id) throw new Error("Сервер не повернув заявку — оновіть сторінку");
 
-  if (error) throw error;
-
-  return mapAbsenceRow(data as TeamAbsenceRow);
+  return {
+    ...absence,
+    kind: normalizeTeamAbsenceKind(absence.kind),
+    status: normalizeTeamAbsenceStatus(absence.status),
+    requestedBy: absence.requestedBy ?? null,
+    decidedBy: absence.decidedBy ?? null,
+    decidedAt: absence.decidedAt ?? null,
+  };
 }
 
 /**
@@ -354,32 +383,12 @@ export async function decideAbsenceRequest(params: {
   decision: "approved" | "declined";
   comment?: string | null;
 }): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error("Сесія завершилась — увійдіть знову");
-
-  const response = await fetch("/.netlify/functions/team-absence-request", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      absenceId: params.absenceId,
-      decision: params.decision,
-      comment: params.comment ?? null,
-    }),
+  await callAbsenceFunction({
+    action: "decide",
+    absenceId: params.absenceId,
+    decision: params.decision,
+    comment: params.comment ?? null,
   });
-
-  const raw = await response.text();
-  let parsed: Record<string, unknown> = {};
-  if (raw) {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = {};
-    }
-  }
-  if (!response.ok) {
-    throw new Error(typeof parsed.error === "string" ? parsed.error : `HTTP ${response.status}`);
-  }
 }
 
 /**
