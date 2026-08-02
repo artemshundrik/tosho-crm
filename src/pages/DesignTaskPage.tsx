@@ -11347,36 +11347,72 @@ export default function DesignTaskPage() {
           {/* Щільне обрамлення: поля 10 px, проміжок 8 px. Сіре тло лишається
               тонкою рамкою, картки — максимально широкі (варіант 2). */}
           <div className="flex flex-col gap-2 p-2.5 xl:h-full xl:min-h-0 xl:overflow-hidden">
-          <section className="shrink-0 rounded-inner border border-border/40 bg-card px-3 pb-2 pt-2.5 shadow-card">
+          {/* Ховер на всю картку: падінги перенесені на дітей, тож кнопка
+              заголовка тягнеться від краю до краю, а має-селектор підсвічує
+              всю секцію — незалежно від того, куди саме навели, на підпис чи
+              на стрілку. */}
+          <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card shadow-card transition-colors has-[.details-toggle:hover]:bg-muted/40">
             <button
               type="button"
               onClick={toggleDetailsCollapsed}
               aria-expanded={!detailsCollapsed}
-              className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-lg px-1 py-0.5 text-left transition-colors hover:bg-muted/40"
+              className="details-toggle flex w-full flex-col gap-2 px-3 pb-2 pt-2.5 text-left"
             >
-              <span className="design-task-side-heading">Деталі</span>
+              <span className="flex w-full items-center gap-2">
+                <span className="design-task-side-heading">Деталі</span>
+                <ChevronDown
+                  className={cn(
+                    "ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                    detailsCollapsed && "-rotate-90"
+                  )}
+                />
+              </span>
+
               {detailsCollapsed ? (
-                <span className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-                  <span className="truncate">{task.customerName ?? "Без замовника"}</span>
-                  {task.assigneeUserId ? (
-                    <AvatarBase
-                      size={16}
-                      src={getMemberAvatar(task.assigneeUserId)}
-                      name={getMemberLabel(task.assigneeUserId)}
-                      className="shrink-0"
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 py-0.5 pl-0.5 pr-2.5">
+                    <EntityAvatar
+                      src={task.customerLogoUrl ?? null}
+                      name={task.customerName ?? undefined}
+                      fallback={getInitials(task.customerName)}
+                      size={18}
                     />
+                    <span className="truncate text-2xs font-medium">
+                      {task.customerName ?? "Без замовника"}
+                    </span>
+                  </span>
+
+                  {taskManagerUserId ? (
+                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 py-0.5 pl-0.5 pr-2.5">
+                      <AvatarBase size={18} src={taskManagerAvatar} name={taskManagerLabel} className="shrink-0" />
+                      <span className="truncate text-2xs font-medium">{taskManagerLabel}</span>
+                    </span>
+                  ) : null}
+
+                  {task.assigneeUserId ? (
+                    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/60 py-0.5 pl-0.5 pr-2.5">
+                      <AvatarBase
+                        size={18}
+                        src={getMemberAvatar(task.assigneeUserId)}
+                        name={getMemberLabel(task.assigneeUserId)}
+                        className="shrink-0"
+                      />
+                      <span className="truncate text-2xs font-medium">
+                        {getMemberLabel(task.assigneeUserId)}
+                      </span>
+                    </span>
+                  ) : null}
+
+                  {task.createdAt ? (
+                    <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-2xs tabular-nums text-muted-foreground">
+                      {formatDate(task.createdAt)}
+                    </span>
                   ) : null}
                 </span>
               ) : null}
-              <ChevronDown
-                className={cn(
-                  "ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                  detailsCollapsed && "-rotate-90"
-                )}
-              />
             </button>
 
-            <div className={cn("design-task-detail-list", detailsCollapsed && "hidden")}>
+            <div className={cn("design-task-detail-list px-3 pb-2", detailsCollapsed && "hidden")}>
               <button
                 type="button"
                 onClick={() => setPartyCardOpen(true)}
