@@ -93,6 +93,12 @@ export default {
             "soft-border": "hsl(var(--danger-soft-border))",
             foreground: "hsl(var(--danger-foreground))",
           },
+          health: {
+            DEFAULT: "hsl(var(--health-foreground))",
+            soft: "hsl(var(--health-soft))",
+            "soft-border": "hsl(var(--health-soft-border))",
+            foreground: "hsl(var(--health-foreground))",
+          },
           "accent-tone": {
             DEFAULT: "hsl(var(--accent-tone-foreground))",
             soft: "hsl(var(--accent-tone-soft))",

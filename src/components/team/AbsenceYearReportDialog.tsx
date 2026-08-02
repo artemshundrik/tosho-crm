@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,7 +13,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { eachDateKey, isBusinessDay, QUOTA_ABSENCE_KINDS } from "@/lib/teamAbsenceCalendar";
+import {
+  eachDateKey,
+  isBusinessDay,
+  QUOTA_ABSENCE_KINDS,
+  type QuotaAbsenceKind,
+} from "@/lib/teamAbsenceCalendar";
 import { TEAM_ABSENCE_KIND_LABELS, type TeamAbsence } from "@/lib/teamAbsences";
 import { fallbackBalance, type AbsenceBalance } from "@/lib/teamAbsenceQuotas";
 
@@ -30,12 +36,22 @@ export type AbsenceReportPerson = {
   userId: string;
   name: string;
   roleLabel: string;
+  avatarUrl?: string | null;
+  initials: string;
+};
+
+const METER_FILL: Record<QuotaAbsenceKind, string> = {
+  vacation: "bg-[hsl(var(--chart-1))]",
+  day_off: "bg-[hsl(var(--accent-tone-foreground))]",
+  sick_leave: "bg-[hsl(var(--health-solid))]",
 };
 
 type ReportRow = {
   userId: string;
   name: string;
   roleLabel: string;
+  avatarUrl?: string | null;
+  initials: string;
   used: Record<string, number>;
   quota: Record<string, number>;
   total: number;
@@ -105,7 +121,16 @@ export function AbsenceYearReportDialog({
         used.other = otherDays;
         total += otherDays;
 
-        return { userId: person.userId, name: person.name, roleLabel: person.roleLabel, used, quota, total };
+        return {
+          userId: person.userId,
+          name: person.name,
+          roleLabel: person.roleLabel,
+          avatarUrl: person.avatarUrl,
+          initials: person.initials,
+          used,
+          quota,
+          total,
+        };
       })
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "uk"));
   }, [absences, balances, exceptions, people, year]);
@@ -150,6 +175,25 @@ export function AbsenceYearReportDialog({
 
   const cell = "px-2 py-1.5 text-right tabular-nums";
 
+  /**
+   * Крихітна шкала поруч із числом: таблиця з самими нулями читалась як
+   * мертва, а так одразу видно, хто вибирає квоту, ще до читання цифр.
+   */
+  const meter = (used: number, quota: number, kind: QuotaAbsenceKind) => {
+    const pct = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+    return (
+      <span className="inline-flex items-center justify-end gap-2">
+        <span className="h-1.5 w-9 overflow-hidden rounded-full bg-muted" aria-hidden>
+          {pct > 0 ? (
+            <span className={cn("block h-full rounded-full", METER_FILL[kind])} style={{ width: `${pct}%` }} />
+          ) : null}
+        </span>
+        <span className={cn(used === 0 && "text-muted-foreground")}>{used}</span>
+        <span className="text-muted-foreground">/ {quota}</span>
+      </span>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[820px]">
@@ -185,20 +229,34 @@ export function AbsenceYearReportDialog({
                 rows.map((row) => (
                   <tr key={row.userId} className="hover:bg-muted/40">
                     <td className="px-2 py-1.5">
-                      <div className="font-medium text-foreground">{row.name}</div>
-                      <div className="text-3xs text-muted-foreground">{row.roleLabel}</div>
+                      <div className="flex items-center gap-2.5">
+                        <AvatarBase
+                          src={row.avatarUrl}
+                          name={row.name}
+                          fallback={row.initials}
+                          assetVariant="xs"
+                          size={28}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">{row.name}</div>
+                          <div className="truncate text-3xs text-muted-foreground">{row.roleLabel}</div>
+                        </div>
+                      </div>
                     </td>
                     {QUOTA_ABSENCE_KINDS.map((kind) => {
                       const over = row.used[kind] > row.quota[kind];
                       return (
                         <td key={kind} className={cn(cell, over && "text-warning-foreground")}>
-                          {row.used[kind]}
-                          <span className="text-muted-foreground"> / {row.quota[kind]}</span>
+                          {meter(row.used[kind], row.quota[kind], kind)}
                         </td>
                       );
                     })}
-                    <td className={cell}>{row.used.other || "—"}</td>
-                    <td className={cn(cell, "font-semibold")}>{row.total}</td>
+                    <td className={cn(cell, !row.used.other && "text-muted-foreground")}>
+                      {row.used.other || "—"}
+                    </td>
+                    <td className={cn(cell, "font-semibold", row.total === 0 && "text-muted-foreground")}>
+                      {row.total}
+                    </td>
                   </tr>
                 ))
               )}

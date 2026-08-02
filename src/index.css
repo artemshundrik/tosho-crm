@@ -129,6 +129,17 @@
     --danger-soft-border: 356 90% 78%;
     --danger-foreground: 356 80% 46%;
 
+    /* Бірюза «здоров'я» — окремий тон для лікарняного. Амбер тут не підходив:
+       warning читається як «увага, щось не так», а буденна хвороба — не аварія
+       (рішення CEO 2026-08-02). Перевірено: 5.58:1 на власному soft і 6.46:1
+       на картці, тобто норма 4.5:1 тримається; від info (синій) і accent
+       (фіолетовий) відрізняється впевнено, тож три типи відсутностей не
+       зливаються. --health-solid — для суцільних заливок без тексту. */
+    --health-soft: 187 78% 90%;
+    --health-soft-border: 188 62% 70%;
+    --health-foreground: 192 92% 26%;
+    --health-solid: 189 82% 38%;
+
     /* --- TOSHO AI ACCENT --- */
     /* Власний бренд-колір модуля ToSho AI (був #E6007E, розсипаний по коду).
        Окремий від --brand-h навмисно: AI — це підбренд, а не тема застосунку. */
@@ -392,6 +403,12 @@
     --danger-soft: 356 34% 16%;
     --danger-soft-border: 356 42% 32%;
     --danger-foreground: 356 100% 70%;
+
+    /* Бірюза «здоров'я» під темну поверхню: 8.36:1 на власному soft. */
+    --health-soft: 190 40% 15%;
+    --health-soft-border: 189 36% 32%;
+    --health-foreground: 187 82% 62%;
+    --health-solid: 187 78% 55%;
 
     /* Той самий рожевий, піднятий по світлості: #E6007E на темному тлі
        провалюється (контраст ~2.9:1 до card). 66% дає читабельний акцент. */
@@ -856,6 +873,11 @@
     border-color: hsl(var(--danger-soft-border));
     color: hsl(var(--danger-foreground));
   }
+  .tone-health {
+    background-color: hsl(var(--health-soft));
+    border-color: hsl(var(--health-soft-border));
+    color: hsl(var(--health-foreground));
+  }
 
   .tone-neutral-subtle {
     background-color: hsl(var(--neutral-soft) / 0.55);
@@ -887,6 +909,10 @@
   .tone-warning-subtle :where(.tone-text-warning, .text-warning-foreground) {
     color: hsl(var(--warning-foreground));
   }
+  .tone-health-subtle {
+    background-color: hsl(var(--health-soft) / 0.5);
+    border-color: hsl(var(--health-soft-border) / 0.7);
+  }
   .tone-danger-subtle {
     background-color: hsl(var(--danger-soft) / 0.5);
     border-color: hsl(var(--danger-soft-border) / 0.7);
@@ -909,6 +935,9 @@
   }
   .tone-text-danger {
     color: hsl(var(--danger-foreground));
+  }
+  .tone-text-health {
+    color: hsl(var(--health-foreground));
   }
 
   .tone-copy-neutral {
@@ -949,6 +978,9 @@
        warning-foreground. */
     background-color: hsl(var(--warning-solid));
   }
+  .tone-dot-health {
+    background-color: hsl(var(--health-solid));
+  }
   .tone-dot-danger {
     background-color: hsl(var(--danger-foreground));
   }
@@ -982,6 +1014,11 @@
     background-color: hsl(var(--background) / 0.72);
     border-color: hsl(var(--danger-soft-border));
     color: hsl(var(--danger-foreground));
+  }
+  .tone-icon-box-health {
+    background-color: hsl(var(--background) / 0.72);
+    border-color: hsl(var(--health-soft-border));
+    color: hsl(var(--health-foreground));
   }
 
   .hover-tone-info:hover {

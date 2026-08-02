@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Award, Cake, CalendarOff, Coffee, Plane, Thermometer, type LucideIcon } from "lucide-react";
+import { Award, Cake, type LucideIcon } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,8 @@ import {
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_TONE,
   type TeamAbsence,
-  type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
+import { ABSENCE_KIND_ICONS } from "@/components/team/AbsenceKindChip";
 import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 
 /**
@@ -52,20 +52,6 @@ const MARK_ICONS: Record<PlannerMark["kind"], LucideIcon> = {
 const MARK_TONE_CLASS: Record<PlannerMark["kind"], string> = {
   birthday: toneTextClass.warning,
   anniversary: toneTextClass.accent,
-};
-
-/**
- * Іконка типу — єдине, що гарантовано вміщується в одноденний бар (клітинка
- * ~26px). Без неї одноденна відсутність малювалась порожньою пігулкою, з якої
- * неможливо зрозуміти, це відпустка чи лікарняний.
- *
- * Словник той самий, що був на картках людей до редизайну.
- */
-const ABSENCE_ICONS: Record<TeamAbsenceKind, LucideIcon> = {
-  vacation: Plane,
-  sick_leave: Thermometer,
-  day_off: Coffee,
-  other: CalendarOff,
 };
 
 const NAME_COLUMN_PX = 208;
@@ -285,7 +271,7 @@ function AbsencePlannerImpl({
               {segments.map((segment) => {
                 const tone = TEAM_ABSENCE_KIND_TONE[segment.absence.kind];
                 const pending = segment.absence.status === "pending";
-                const Icon = ABSENCE_ICONS[segment.absence.kind];
+                const Icon = ABSENCE_KIND_ICONS[segment.absence.kind];
                 const label = pending
                   ? `Запит · ${TEAM_ABSENCE_KIND_LABELS[segment.absence.kind]}`
                   : TEAM_ABSENCE_KIND_LABELS[segment.absence.kind];

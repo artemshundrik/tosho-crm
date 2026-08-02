@@ -4,6 +4,7 @@ import {
   Cake,
   CalendarDays,
   CalendarRange,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
@@ -59,7 +60,6 @@ import {
   loadAbsenceDecisionComments,
   updateTeamAbsence,
   TEAM_ABSENCE_KIND_LABELS,
-  TEAM_ABSENCE_KIND_TONE,
   TEAM_ABSENCE_STATUS_LABELS,
   TEAM_ABSENCE_STATUS_TONE,
   type TeamAbsence,
@@ -86,6 +86,7 @@ import {
   notifyAbsenceRequestSubmitted,
 } from "@/lib/workflowNotifications";
 import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
 import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
 import {
   AbsenceDialog,
@@ -537,9 +538,11 @@ export function TeamPage() {
   const upcomingEvents = useMemo(() => {
     const events: Array<{
       id: string;
+      userId: string;
       type: keyof typeof EVENT_TONE;
       title: string;
       caption: string;
+      dateLabel: string;
       daysUntil: number;
     }> = [];
 
@@ -548,9 +551,11 @@ export function TeamPage() {
       if (birthday && birthday.daysUntil <= 45) {
         events.push({
           id: `b:${member.userId}`,
+          userId: member.userId,
           type: "birthday",
           title: member.label,
-          caption: `день народження · ${birthday.dateLabel}`,
+          caption: birthday.daysUntil === 0 ? "День народження — сьогодні" : "День народження",
+          dateLabel: formatShort(addDaysKey(todayKey, birthday.daysUntil)),
           daysUntil: birthday.daysUntil,
         });
       }
@@ -558,9 +563,11 @@ export function TeamPage() {
       if (anniversary && anniversary.daysUntil <= 45) {
         events.push({
           id: `a:${member.userId}`,
+          userId: member.userId,
           type: "anniversary",
           title: member.label,
-          caption: `${anniversary.label} · ${anniversary.dateLabel}`,
+          caption: anniversary.label,
+          dateLabel: formatShort(addDaysKey(todayKey, anniversary.daysUntil)),
           daysUntil: anniversary.daysUntil,
         });
       }
@@ -571,9 +578,11 @@ export function TeamPage() {
         if (daysUntil >= 0 && daysUntil <= 45) {
           events.push({
             id: `r:${member.userId}`,
+            userId: member.userId,
             type: "return",
             title: member.label,
-            caption: `повертається · ${formatShort(back)}`,
+            caption: `Повертається з ${TEAM_ABSENCE_KIND_LABELS[absence.kind].toLowerCase()}`,
+            dateLabel: formatShort(back),
             daysUntil,
           });
         }
@@ -1030,7 +1039,7 @@ export function TeamPage() {
               </CardHeader>
               <CardContent className="space-y-2.5">
                 {awayToday.length === 0 ? (
-                  <p className="py-2 text-xs text-muted-foreground">Вся команда на місці.</p>
+                  <EmptyRow icon={CheckCircle2} title="Вся команда на місці" compact />
                 ) : (
                   awayToday.map(({ member, absence }) => (
                     <div key={member.userId} className="flex items-center gap-2.5">
@@ -1045,14 +1054,7 @@ export function TeamPage() {
                         <div className="truncate text-xs font-semibold">{member.label}</div>
                         <div className="text-2xs text-muted-foreground">до {formatShort(absence.endDate)}</div>
                       </div>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full border px-2 py-0.5 text-3xs font-semibold",
-                          toneBadgeClass[TEAM_ABSENCE_KIND_TONE[absence.kind]]
-                        )}
-                      >
-                        {TEAM_ABSENCE_KIND_LABELS[absence.kind]}
-                      </span>
+                      <AbsenceKindChip kind={absence.kind} size="sm" />
                     </div>
                   ))
                 )}
@@ -1068,15 +1070,39 @@ export function TeamPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {upcomingEvents.length === 0 ? (
-                  <p className="py-2 text-xs text-muted-foreground">Найближчим часом подій немає.</p>
+                  <EmptyRow icon={CalendarDays} title="Найближчим часом подій немає" compact />
                 ) : (
                   upcomingEvents.map((event) => {
                     const Icon = EVENT_ICONS[event.type];
+                    const member = memberById.get(event.userId);
                     return (
-                      <div key={event.id} className="flex items-center gap-2 text-xs">
-                        <Icon className={cn("h-3.5 w-3.5 shrink-0", toneTextClass[EVENT_TONE[event.type]])} aria-hidden />
-                        <span className="truncate font-medium">{event.title}</span>
-                        <span className="truncate text-muted-foreground">{event.caption}</span>
+                      <div key={event.id} className="flex items-center gap-2.5 py-0.5">
+                        <span className="relative shrink-0">
+                          <AvatarBase
+                            src={member?.avatarDisplayUrl}
+                            name={event.title}
+                            fallback={member ? getInitialsFromName(member.label, member.email) : "•"}
+                            assetVariant="xs"
+                            size={32}
+                          />
+                          {/* Кольорова іконка-коробка на аватарі: тип події видно
+                              одразу, але вона не фарбує весь рядок. */}
+                          <span
+                            className={cn(
+                              "absolute -bottom-0.5 -right-0.5 grid h-[15px] w-[15px] place-items-center rounded-full border",
+                              toneBadgeClass[EVENT_TONE[event.type]]
+                            )}
+                          >
+                            <Icon className="h-2.5 w-2.5" aria-hidden />
+                          </span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-semibold">{event.title}</div>
+                          <div className="truncate text-2xs text-muted-foreground">{event.caption}</div>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-2xs font-semibold tabular-nums">
+                          {event.dateLabel}
+                        </span>
                       </div>
                     );
                   })
@@ -1198,16 +1224,7 @@ export function TeamPage() {
             ) : null}
             <div className="ml-auto flex flex-wrap items-center gap-3 text-2xs text-muted-foreground">
               {(["vacation", "sick_leave", "day_off"] as TeamAbsenceKind[]).map((kind) => (
-                <span key={kind} className="inline-flex items-center gap-1.5">
-                  <span
-                    className={cn(
-                      "inline-block h-2.5 w-4 rounded-sm border",
-                      toneBadgeClass[TEAM_ABSENCE_KIND_TONE[kind]]
-                    )}
-                    aria-hidden
-                  />
-                  {TEAM_ABSENCE_KIND_LABELS[kind]}
-                </span>
+                <AbsenceKindChip key={kind} kind={kind} size="sm" />
               ))}
               <span className="inline-flex items-center gap-1.5">
                 <span
@@ -1261,6 +1278,11 @@ export function TeamPage() {
                   key={absence.id}
                   absence={absence}
                   name={memberById.get(absence.userId)?.label ?? "—"}
+                  avatarUrl={memberById.get(absence.userId)?.avatarDisplayUrl}
+                  initials={(() => {
+                    const m = memberById.get(absence.userId);
+                    return m ? getInitialsFromName(m.label, m.email) : undefined;
+                  })()}
                   exceptions={exceptions}
                   year={year}
                   canManage={false}
@@ -1294,9 +1316,11 @@ export function TeamPage() {
               </CardHeader>
               <CardContent>
                 {pendingRequests.length === 0 ? (
-                  <p className="py-2 text-xs text-muted-foreground">
-                    Заявок на погодженні немає.
-                  </p>
+                  <EmptyRow
+                    icon={CheckCircle2}
+                    title="Заявок на погодженні немає"
+                    hint="Щойно хтось попросить відпустку — вона зʼявиться тут."
+                  />
                 ) : (
                   <div className="divide-y divide-border/40">
                     {pendingRequests.map((absence) => {
@@ -1306,6 +1330,8 @@ export function TeamPage() {
                           key={absence.id}
                           absence={absence}
                           name={member?.label ?? "—"}
+                          avatarUrl={member?.avatarDisplayUrl}
+                          initials={member ? getInitialsFromName(member.label, member.email) : undefined}
                           exceptions={exceptions}
                           year={year}
                           canManage={canManageAbsences}
@@ -1339,7 +1365,13 @@ export function TeamPage() {
             </CardHeader>
             <CardContent>
               {myAbsences.length === 0 ? (
-                <p className="py-2 text-xs text-muted-foreground">За цей рік відсутностей не записано.</p>
+                <EmptyRow
+                  icon={CalendarDays}
+                  title="За цей рік відсутностей не записано"
+                  hint="Відпустку чи day-off можна попросити кнопкою вгорі."
+                  actionLabel="Запросити відсутність"
+                  onAction={() => openAbsenceDialog({ mode: "request", userId: userId ?? undefined })}
+                />
               ) : (
                 <div className="divide-y divide-border/40">
                   {myAbsences.map((absence) => (
@@ -1378,7 +1410,7 @@ export function TeamPage() {
               </CardHeader>
               <CardContent>
                 {(absences ?? []).length === 0 ? (
-                  <p className="py-2 text-xs text-muted-foreground">За цей рік відсутностей не записано.</p>
+                  <EmptyRow icon={CalendarDays} title="За цей рік відсутностей не записано" />
                 ) : (
                   <div className="divide-y divide-border/40">
                     {(absences ?? []).map((absence) => (
@@ -1386,6 +1418,11 @@ export function TeamPage() {
                         key={absence.id}
                         absence={absence}
                         name={memberById.get(absence.userId)?.label ?? "—"}
+                        avatarUrl={memberById.get(absence.userId)?.avatarDisplayUrl}
+                        initials={(() => {
+                          const m = memberById.get(absence.userId);
+                          return m ? getInitialsFromName(m.label, m.email) : undefined;
+                        })()}
                         exceptions={exceptions}
                         year={year}
                         canManage={canManageAbsences}
@@ -1411,7 +1448,13 @@ export function TeamPage() {
             if (!open) setAbsenceEditingId(null);
           }}
           initial={absenceDialogInitial}
-          people={activeMembers.map((member) => ({ userId: member.userId, name: member.label }))}
+          people={activeMembers.map((member) => ({
+            userId: member.userId,
+            name: member.label,
+            roleLabel: formatRoleLabel(member.jobRole),
+            avatarUrl: member.avatarDisplayUrl,
+            initials: getInitialsFromName(member.label, member.email),
+          }))}
           canPickPerson={canManageAbsences && absenceDialogMode === "manage"}
           balanceOf={(id) => balances.get(id) ?? null}
           exceptions={exceptions}
@@ -1463,6 +1506,41 @@ export function TeamPage() {
   );
 }
 
+/**
+ * Порожній стан усередині картки.
+ *
+ * Три картки поспіль із сірим рядком тексту читались як помилка завантаження —
+ * тиха іконка й підказка дії знімають цю двозначність.
+ */
+function EmptyRow({
+  icon: Icon,
+  title,
+  hint,
+  actionLabel,
+  onAction,
+  compact,
+}: {
+  icon: LucideIcon;
+  title: string;
+  hint?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn("flex flex-col items-center text-center", compact ? "gap-1 py-3" : "gap-1.5 py-6")}>
+      <Icon className={cn("text-muted-foreground/50", compact ? "h-4 w-4" : "h-5 w-5")} aria-hidden />
+      <div className="text-xs font-medium text-muted-foreground">{title}</div>
+      {hint ? <div className="max-w-[38ch] text-2xs text-muted-foreground/80">{hint}</div> : null}
+      {actionLabel && onAction ? (
+        <Button variant="outline" size="sm" className="mt-1.5 h-8" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Рядок відсутності                                                   */
 /* ------------------------------------------------------------------ */
@@ -1477,6 +1555,8 @@ function AbsenceRow({
   onEdit,
   onDelete,
   hideName,
+  avatarUrl,
+  initials,
   decisionComment,
   balance,
   canDecide,
@@ -1496,6 +1576,8 @@ function AbsenceRow({
   onEdit: () => void;
   onDelete: () => void;
   hideName?: boolean;
+  avatarUrl?: string | null;
+  initials?: string;
   /** Причина рішення — приходить окремим RPC, видна лише заявнику й owner/SEO. */
   decisionComment?: string | null;
   /** Баланс заявника — щоб рішення приймалось із цифрами перед очима. */
@@ -1514,14 +1596,16 @@ function AbsenceRow({
 
   return (
     <div className="group flex items-center gap-3 py-2.5">
-      <span
-        className={cn(
-          "shrink-0 rounded-full border px-2 py-0.5 text-3xs font-semibold",
-          toneBadgeClass[TEAM_ABSENCE_KIND_TONE[absence.kind]]
-        )}
-      >
-        {TEAM_ABSENCE_KIND_LABELS[absence.kind]}
-      </span>
+      {hideName ? null : (
+        <AvatarBase
+          src={avatarUrl}
+          name={name}
+          fallback={initials ?? getInitialsFromName(name)}
+          assetVariant="xs"
+          size={32}
+          className="shrink-0"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 text-xs">
           {hideName ? null : <span className="font-semibold">{name}</span>}
@@ -1548,6 +1632,7 @@ function AbsenceRow({
           </div>
         ) : null}
       </div>
+      <AbsenceKindChip kind={absence.kind} size="sm" className="hidden sm:inline-flex" />
       {absence.status !== "approved" ? (
         <span
           className={cn(
@@ -1587,15 +1672,17 @@ function AbsenceRow({
           Скасувати
         </Button>
       ) : null}
+      {/* На тачі hover не існує, тож до sm дії видно завжди; 44px — мінімальна
+          зона натискання, тому кнопка більша за саму іконку. */}
       {canManage ? (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} aria-label="Редагувати">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+          <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={onEdit} aria-label="Редагувати">
             <Pencil className="h-3.5 w-3.5" aria-hidden />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-destructive"
+            className="h-11 w-11 text-destructive sm:h-9 sm:w-9"
             onClick={onDelete}
             disabled={deleting}
             aria-label="Видалити"

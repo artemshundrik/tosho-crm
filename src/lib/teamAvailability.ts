@@ -13,12 +13,12 @@ export function getTeamAvailabilityLabel(value?: TeamAvailabilityStatus | null) 
   return "Доступний";
 }
 
-// Кольори мусять збігатися з TEAM_ABSENCE_KIND_BADGE_CLASSES у teamAbsences.ts:
-// лікарняний — warning, відпустка — info. Міняєш тут — міняй і там.
+// Кольори мусять збігатися з TEAM_ABSENCE_KIND_TONE у teamAbsences.ts:
+// відпустка — info, лікарняний — health (бірюза). Міняєш тут — міняй і там.
 export function getTeamAvailabilityBadgeClass(value?: TeamAvailabilityStatus | null) {
   const normalized = normalizeTeamAvailabilityStatus(value);
   if (normalized === "vacation") return "bg-info-soft text-info-foreground border-info-soft-border";
-  if (normalized === "sick_leave") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
+  if (normalized === "sick_leave") return "tone-health";
   if (normalized === "offline") return "bg-muted text-muted-foreground border-border";
   return "bg-success-soft text-success-foreground border-success-soft-border";
 }

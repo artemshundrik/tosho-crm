@@ -21,13 +21,13 @@ import type { QuotaAbsenceKind } from "@/lib/teamAbsenceCalendar";
 const FILL_CLASS: Record<QuotaAbsenceKind, string> = {
   vacation: "bg-[hsl(var(--chart-1))]",
   day_off: "bg-[hsl(var(--accent-tone-foreground))]",
-  sick_leave: "bg-[hsl(var(--warning-solid))]",
+  sick_leave: "bg-[hsl(var(--health-solid))]",
 };
 
 const PENDING_CLASS: Record<QuotaAbsenceKind, string> = {
   vacation: "bg-[hsl(var(--chart-1)/0.28)]",
   day_off: "bg-[hsl(var(--accent-tone-foreground)/0.28)]",
-  sick_leave: "bg-[hsl(var(--warning-solid)/0.28)]",
+  sick_leave: "bg-[hsl(var(--health-solid)/0.28)]",
 };
 
 function percent(part: number, total: number) {
@@ -51,6 +51,9 @@ function Meter({
 
   return (
     <div className="min-w-0">
+      {!dense ? (
+        <div className="text-3xs uppercase tracking-wide text-muted-foreground/80">залишилось</div>
+      ) : null}
       <div className="flex items-baseline gap-1.5">
         <span
           className={cn(

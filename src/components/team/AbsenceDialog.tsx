@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Info, Loader2, Users } from "lucide-react";
 
+import { AvatarBase } from "@/components/app/avatar-kit";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,11 +17,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { toneBadgeClass } from "@/lib/statusTones";
 import { countBusinessDays } from "@/lib/teamAbsenceCalendar";
+import { ABSENCE_KIND_ICONS } from "@/components/team/AbsenceKindChip";
 import {
   isQuotaAbsenceKind,
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_OPTIONS,
+  TEAM_ABSENCE_KIND_TONE,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
 import type { AbsenceBalance } from "@/lib/teamAbsenceQuotas";
@@ -41,7 +46,13 @@ export type AbsenceDialogValue = {
   comment: string;
 };
 
-export type AbsenceDialogPerson = { userId: string; name: string; roleLabel?: string };
+export type AbsenceDialogPerson = {
+  userId: string;
+  name: string;
+  roleLabel?: string;
+  avatarUrl?: string | null;
+  initials?: string;
+};
 
 /** Хто ще відсутній у ті самі дні — рахує викликач, діалог лише показує. */
 export type AbsenceOverlap = { userId: string; name: string; rangeLabel: string; pending: boolean };
@@ -206,7 +217,19 @@ export function AbsenceDialog({
                 <SelectContent>
                   {people.map((person) => (
                     <SelectItem key={person.userId} value={person.userId}>
-                      {person.name}
+                      <span className="flex items-center gap-2.5">
+                        <AvatarBase
+                          src={person.avatarUrl}
+                          name={person.name}
+                          fallback={person.initials ?? "•"}
+                          assetVariant="xs"
+                          size={24}
+                        />
+                        <span>{person.name}</span>
+                        {person.roleLabel ? (
+                          <span className="text-2xs text-muted-foreground">· {person.roleLabel}</span>
+                        ) : null}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -215,22 +238,38 @@ export function AbsenceDialog({
           ) : null}
 
           <div className="space-y-1.5">
-            <Label htmlFor="absence-kind">Тип</Label>
-            <Select
-              value={value.kind}
-              onValueChange={(next) => setValue((prev) => ({ ...prev, kind: next as TeamAbsenceKind }))}
+            <Label>Тип</Label>
+            {/* Сегменти замість дропдауна: варіантів мало, і всі мають бути
+                видні одразу — зайвий клік тут нічого не дає. */}
+            <div
+              role="radiogroup"
+              aria-label="Тип відсутності"
+              className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner"
             >
-              <SelectTrigger id="absence-kind">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {kindOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
+              {kindOptions.map((option) => {
+                const KindIcon = ABSENCE_KIND_ICONS[option.value];
+                const active = value.kind === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setValue((prev) => ({ ...prev, kind: option.value }))}
+                    className={cn(
+                      "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-all duration-200",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                      active
+                        ? cn("shadow-[var(--shadow-elevated-sm)]", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])
+                        : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                    )}
+                  >
+                    <KindIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
