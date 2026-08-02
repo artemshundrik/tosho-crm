@@ -252,6 +252,9 @@ export async function loadAbsences(params: {
     .select("start_date,end_date,kind,comment")
     .eq("workspace_id", params.workspaceId)
     .eq("user_id", params.userId)
+    // ЛИШЕ погоджені: запит на погодженні (pending) чи відхилений норму не
+    // чіпає — інакше людина «втрачала» б норму за дні, яких їй ще не дали.
+    .eq("status", "approved")
     // Діапазон може починатись до 1-го числа й тягнутись у місяць — тому
     // перетин діапазонів, а не «початок усередині місяця».
     .lte("start_date", to.toISOString().slice(0, 10))
@@ -387,6 +390,8 @@ export async function loadNormPlans(params: {
       .from("team_absences")
       .select("user_id,start_date,end_date,kind")
       .eq("workspace_id", params.workspaceId)
+      // Див. loadAbsences: норму ріжуть тільки погоджені відсутності.
+      .eq("status", "approved")
       .lte("start_date", toDay)
       .gte("end_date", fromDay),
   ]);
