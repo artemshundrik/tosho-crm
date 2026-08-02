@@ -1,5 +1,6 @@
 import React from "react";
-import { AtSign, Mic, Paperclip, Send } from "lucide-react";
+import { AtSign, Loader2, Paperclip, Send } from "lucide-react";
+import { DictationButton } from "@/components/dictation/DictationButton";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,12 @@ type Props = {
   sending: boolean;
   candidates: MentionCandidate[];
   onSend: (body: string) => void;
+  /**
+   * Завантаження файлу. Свого сховища чат не заводить: файл іде тим самим
+   * шляхом, що й вкладення задачі, а в розмові лишається повідомлення про нього.
+   */
+  onAttachFiles?: (files: FileList) => Promise<void> | void;
+  attaching?: boolean;
 };
 
 /** Стеля росту поля вводу — приблизно чотири рядки. */
@@ -29,10 +36,11 @@ const MAX_INPUT_HEIGHT = 92;
  * прямокутник — три різні форми, через що рядок читався як панель
  * інструментів, а не як поле чату.
  */
-export function ThreadComposer({ sending, candidates, onSend }: Props) {
+export function ThreadComposer({ sending, candidates, onSend, onAttachFiles, attaching }: Props) {
   const [body, setBody] = React.useState("");
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const submit = () => {
     const text = body.trim();
@@ -101,13 +109,26 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
       ) : null}
 
       <div className="flex items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={async (event) => {
+            const files = event.target.files;
+            if (files && files.length > 0) await onAttachFiles?.(files);
+            event.target.value = "";
+          }}
+        />
         <button
           type="button"
           aria-label="Прикріпити файл"
           title="Файл ляже у «Файли», а тут стане повідомленням"
-          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          disabled={!onAttachFiles || attaching}
+          onClick={() => fileInputRef.current?.click()}
+          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-40"
         >
-          <Paperclip className="h-3.5 w-3.5" />
+          {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
         </button>
         <button
           type="button"
@@ -120,13 +141,14 @@ export function ThreadComposer({ sending, candidates, onSend }: Props) {
         >
           <AtSign className="h-3.5 w-3.5" />
         </button>
-        <button
-          type="button"
-          aria-label="Продиктувати голосом"
-          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <Mic className="h-3.5 w-3.5" />
-        </button>
+        {/* Готовий компонент диктовки: запис → transcribe → вставка в каретку. */}
+        <DictationButton
+          textareaRef={inputRef}
+          value={body}
+          onChange={handleChange}
+          context="comment"
+          className="h-[30px] w-[30px] shrink-0 rounded-full"
+        />
 
         <textarea
           ref={inputRef}

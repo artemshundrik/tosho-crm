@@ -18,6 +18,9 @@ type Props = {
   /** quote_id справи; у самостійних задач має вигляд `standalone-<uuid>`. */
   quoteRef: string;
   teamId: string;
+  /** Завантаження файлів тим самим шляхом, що й вкладення задачі. */
+  onAttachFiles?: (files: FileList) => Promise<void> | void;
+  attaching?: boolean;
 };
 
 /**
@@ -26,7 +29,7 @@ type Props = {
  * Нитка одна на справу: та сама розмова відкривається і з дизайн-задачі, і зі
  * сторінки прорахунку. Історія подій — окремо, згорнута (див. ThreadHistory).
  */
-export function TaskThreadRail({ quoteRef, teamId }: Props) {
+export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: Props) {
   const { userId, session } = useAuth();
   const threadKey = threadKeyForQuote(quoteRef);
   // FK на tosho.quotes: у колонку quote_id можна класти лише справжній uuid.
@@ -127,6 +130,18 @@ export function TaskThreadRail({ quoteRef, teamId }: Props) {
     );
   };
 
+  /**
+   * Файл вантажимо наявним шляхом сторінки (він кладе його у «Файли»), а в
+   * розмові лишаємо повідомлення — щоб було видно, хто і що приніс.
+   */
+  const handleAttach = async (files: FileList) => {
+    if (!onAttachFiles || !userId) return;
+    const names = Array.from(files).map((file) => file.name);
+    await onAttachFiles(files);
+    const label = names.length === 1 ? `Додав файл: ${names[0]}` : `Додав файли: ${names.join(", ")}`;
+    sendMutation.mutate({ body: label, visibility: "team", teamId, quoteId, userId });
+  };
+
   const accessDenied =
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
 
@@ -181,6 +196,8 @@ export function TaskThreadRail({ quoteRef, teamId }: Props) {
           sending={sendMutation.isPending}
           candidates={mentionCandidates}
           onSend={handleSend}
+          onAttachFiles={onAttachFiles ? handleAttach : undefined}
+          attaching={attaching}
         />
       )}
     </section>

@@ -11588,7 +11588,12 @@ export default function DesignTaskPage() {
               й під нею лишається порожнє сіре поле. */}
           <section className="flex min-h-[440px] flex-col xl:min-h-0 xl:flex-1">
             {effectiveTeamId ? (
-              <TaskThreadRail quoteRef={String(task.quoteId)} teamId={effectiveTeamId} />
+              <TaskThreadRail
+                quoteRef={String(task.quoteId)}
+                teamId={effectiveTeamId}
+                onAttachFiles={(files) => handleUploadTaskAttachments(files)}
+                attaching={attachmentUploading}
+              />
             ) : null}
           </section>
           </div>
