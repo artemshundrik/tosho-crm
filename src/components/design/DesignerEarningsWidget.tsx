@@ -12,8 +12,10 @@ import {
 import {
   normalizeTeamAbsenceKind,
   TEAM_ABSENCE_KIND_LABELS,
+  TEAM_ABSENCE_KIND_TONE,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
+import { toneBadgeClass } from "@/lib/statusTones";
 
 /**
  * Віджет «мій заробіток» у хедері — тільки для дизайнера, тільки про нього.
@@ -55,11 +57,23 @@ function Money({ value, masked, className }: { value: string; masked: boolean; c
  * (TEAM_ABSENCE_KIND_BADGE_CLASSES): лікарняний жовтий, відпустка синя.
  * Тут потрібні лише фон і рамка, без кольору тексту — квадратики порожні.
  */
+/**
+ * Колір клітинки — з КАНОНІЧНОЇ мапи тонів, а не власної.
+ *
+ * Своя копія тут уже встигла розійтися: day-off був `neutral-soft` (0 0% 94%)
+ * на фоні майбутніх днів `muted` (0 0% 95.5%) — півтора відсотка світлості,
+ * тобто «квадратик не закрасився» на вигляд, хоча код відпрацював. Той самий
+ * клас помилок, що колись розвів лікарняний на warning в одному файлі й
+ * danger у сусідньому.
+ *
+ * `other` не має власного тону (neutral зливається з фоном), тож даємо йому
+ * штриховку — це рідкісний ручний тип, і він має читатись як «щось особливе».
+ */
 const ABSENCE_CELL_CLASS: Record<TeamAbsenceKind, string> = {
-  sick_leave: "bg-warning-soft border-warning-soft-border",
-  vacation: "bg-info-soft border-info-soft-border",
-  day_off: "bg-neutral-soft border-neutral-soft-border",
-  other: "bg-muted border-border",
+  sick_leave: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.sick_leave],
+  vacation: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.vacation],
+  day_off: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.day_off],
+  other: "border-dashed border-foreground/30 bg-muted",
 };
 
 const formatDayLabel = (iso: string) =>
