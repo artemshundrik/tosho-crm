@@ -12,7 +12,7 @@ import {
 } from "./_telegram";
 import {
   confirmScreen,
-  countBusinessDaysForUser,
+  countQuotaDaysForUser,
   isAbsenceBotKind,
   kindMenuScreen,
   parseAbsenceText,
@@ -362,7 +362,13 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       return;
     }
     const workspaceId = await resolveMemberWorkspaceId(adminClient, settings.user_id);
-    const days = await countBusinessDaysForUser(adminClient, workspaceId, absenceDraft.start, absenceDraft.end);
+    const days = await countQuotaDaysForUser(
+      adminClient,
+      workspaceId,
+      absenceDraft.kind,
+      absenceDraft.start,
+      absenceDraft.end
+    );
     const screen = confirmScreen(absenceDraft.kind, absenceDraft.start, absenceDraft.end, days);
     await sendTelegramMessage(chatId, screen.text, {
       parseMode: "HTML",
@@ -660,7 +666,7 @@ async function handleAbsenceCallback(
       return;
     }
     const workspaceId = await resolveMemberWorkspaceId(adminClient, userId);
-    const days = await countBusinessDaysForUser(adminClient, workspaceId, range.start, range.end);
+    const days = await countQuotaDaysForUser(adminClient, workspaceId, kind, range.start, range.end);
     const screen = confirmScreen(kind, range.start, range.end, days);
     await editTelegramMessageText(chatId, messageId, screen.text, {
       replyMarkup: { inline_keyboard: screen.keyboard },

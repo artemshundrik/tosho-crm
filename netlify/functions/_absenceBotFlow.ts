@@ -45,8 +45,9 @@ function rangeLabel(start: string, end: string) {
   return start === end ? formatAbsenceShort(start) : `${formatAbsenceShort(start)} – ${formatAbsenceShort(end)}`;
 }
 
-function businessDaysLabel(days: number | null) {
-  return typeof days === "number" ? `${days} роб. дн.` : null;
+function daysLabel(days: number | null, kind: AbsenceBotKind) {
+  if (typeof days !== "number") return null;
+  return `${days} ${kind === "vacation" ? "кал" : "роб"}. дн.`;
 }
 
 /* ------------------------------- Екрани ------------------------------- */
@@ -165,7 +166,7 @@ export function confirmScreen(
   end: string,
   businessDays: number | null
 ): { text: string; keyboard: InlineKeyboard } {
-  const days = businessDaysLabel(businessDays);
+  const days = daysLabel(businessDays, kind);
   return {
     text: [
       `${KIND_EMOJI[kind]} <b>${label(kind)} · ${rangeLabel(start, end)}</b>` + (days ? ` · ${days}` : ""),
@@ -256,15 +257,18 @@ export function parseAbsenceText(raw: string, now: Date): ParsedAbsenceText | nu
 
 /* ------------------------------ Подання ------------------------------- */
 
-export async function countBusinessDaysForUser(
+/** Скільки днів квоти з'їсть діапазон — одиниця залежить від типу. */
+export async function countQuotaDaysForUser(
   admin: SupabaseClient,
   workspaceId: string | null,
+  kind: AbsenceBotKind,
   start: string,
   end: string
 ): Promise<number | null> {
   if (!workspaceId) return null;
-  const { data } = await admin.schema("tosho").rpc("count_absence_business_days", {
+  const { data } = await admin.schema("tosho").rpc("count_absence_quota_days", {
     _workspace: workspaceId,
+    _kind: kind,
     _from: start,
     _to: end,
   });
@@ -312,7 +316,7 @@ export async function submitAbsenceFromBot(params: {
     actorId: userId,
   });
 
-  const days = businessDaysLabel(businessDays);
+  const days = daysLabel(businessDays, kind);
   const range = rangeLabel(absence.start_date, absence.end_date);
 
   if (absence.status === "approved") {

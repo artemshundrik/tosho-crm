@@ -156,8 +156,10 @@ export function QuotaEditorDialog({
         <DialogHeader>
           <DialogTitle>Квоти на {year}</DialogTitle>
           <DialogDescription>
-            Робочі дні на рік. За замовчуванням {DEFAULT_ABSENCE_QUOTAS.vacation} /{" "}
-            {DEFAULT_ABSENCE_QUOTAS.day_off} / {DEFAULT_ABSENCE_QUOTAS.sick_leave}.
+            Відпустка рахується КАЛЕНДАРНИМИ днями (свята всередині не
+            списуються), day-off і лікарняний — робочими. За замовчуванням{" "}
+            {DEFAULT_ABSENCE_QUOTAS.vacation} / {DEFAULT_ABSENCE_QUOTAS.day_off} /{" "}
+            {DEFAULT_ABSENCE_QUOTAS.sick_leave}.
           </DialogDescription>
         </DialogHeader>
 

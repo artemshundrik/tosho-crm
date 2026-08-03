@@ -18,7 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toneBadgeClass } from "@/lib/statusTones";
-import { countBusinessDays } from "@/lib/teamAbsenceCalendar";
+import {
+  ABSENCE_QUOTA_UNIT,
+  ABSENCE_QUOTA_UNIT_LABEL,
+  countQuotaDaysInYear,
+} from "@/lib/teamAbsenceCalendar";
 import { ABSENCE_KIND_ICONS } from "@/components/team/AbsenceKindChip";
 import {
   isQuotaAbsenceKind,
@@ -33,7 +37,7 @@ import type { AbsenceBalance } from "@/lib/teamAbsenceQuotas";
  * Створення/редагування відсутності.
  *
  * Ключова деталь: людина бачить ціну рішення ДО відправлення — скільки саме
- * робочих днів з'їсть діапазон і скільки лишиться. Без цього рядка «18 днів
+ * днів квоти з'їсть діапазон і скільки лишиться. Без цього рядка «24 дні
  * відпустки» лишається абстракцією, а вихідні всередині діапазону здаються
  * втраченими.
  */
@@ -133,14 +137,23 @@ export function AbsenceDialog({
 
   const rangeInvalid = Boolean(value.startDate && value.endDate && value.endDate < value.startDate);
 
-  const businessDays = useMemo(() => {
+  // Одиниця залежить від типу: відпустка — календарні дні, day-off і
+  // лікарняний — робочі. «Інше» квоти не має, показуємо робочими.
+  const quotaKind = isQuotaAbsenceKind(value.kind) ? value.kind : "day_off";
+  const chargedDays = useMemo(() => {
     if (!value.startDate || !value.endDate || rangeInvalid) return 0;
-    return countBusinessDays(value.startDate, value.endDate, exceptions);
-  }, [exceptions, rangeInvalid, value.endDate, value.startDate]);
+    return countQuotaDaysInYear(
+      quotaKind,
+      { startDate: value.startDate, endDate: value.endDate },
+      Number(value.startDate.slice(0, 4)),
+      exceptions
+    );
+  }, [exceptions, quotaKind, rangeInvalid, value.endDate, value.startDate]);
+  const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
 
   const balance = balanceOf(value.userId);
   const bucket = balance && isQuotaAbsenceKind(value.kind) ? balance[value.kind] : null;
-  const remainingAfter = bucket ? bucket.remaining - businessDays : null;
+  const remainingAfter = bucket ? bucket.remaining - chargedDays : null;
 
   const isRequest = mode === "request";
   // «Інше» — керований тип (відрядження, форс-мажор), його вносить лише
@@ -321,9 +334,9 @@ export function AbsenceDialog({
               )}
               <span>
                 <b className="font-semibold tabular-nums">
-                  {businessDays} {pluralDays(businessDays)}
+                  {chargedDays} {pluralDays(chargedDays)}
                 </b>{" "}
-                робочих.
+                {unitLabel}
                 {bucket ? (
                   remainingAfter !== null && remainingAfter < 0 ? (
                     <>

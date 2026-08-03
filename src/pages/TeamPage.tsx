@@ -65,7 +65,12 @@ import {
   type TeamAbsence,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
-import { countBusinessDaysInYear, eachDateKey } from "@/lib/teamAbsenceCalendar";
+import {
+  ABSENCE_QUOTA_UNIT,
+  ABSENCE_QUOTA_UNIT_LABEL,
+  countQuotaDaysInYear,
+  eachDateKey,
+} from "@/lib/teamAbsenceCalendar";
 import { ACTIVE_DESIGN_STATUSES } from "@/lib/designWorkload";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -1667,8 +1672,11 @@ function AbsenceRow({
   /** Перетини з іншими відсутностями + навантаження заявника — для рішення. */
   decideContext?: AbsenceDecideContext | null;
 }) {
-  const businessDays = countBusinessDaysInYear(absence, year, exceptions);
-  const restOnly = businessDays === 0;
+  // «Інше» квоти не має — рахуємо його робочими днями просто щоб показати обсяг.
+  const quotaKind = absence.kind === "other" ? "day_off" : absence.kind;
+  const chargedDays = countQuotaDaysInYear(quotaKind, absence, year, exceptions);
+  const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
+  const restOnly = chargedDays === 0;
   const bucket = balance && absence.kind !== "other" ? balance[absence.kind] : null;
 
   return (
@@ -1688,14 +1696,14 @@ function AbsenceRow({
           {hideName ? null : <span className="font-semibold">{name}</span>}
           <span className="font-medium tabular-nums">{formatRange(absence)}</span>
           <span className="text-muted-foreground">
-            {restOnly ? "вихідні — квота не списується" : `${businessDays} ${pluralDays(businessDays)} робочих`}
+            {restOnly ? "квота не списується" : `${chargedDays} ${pluralDays(chargedDays)} · ${unitLabel}`}
           </span>
         </div>
         {bucket && absence.status === "pending" ? (
           <div className="mt-0.5 text-2xs text-muted-foreground">
             після погодження залишиться{" "}
             <b className="font-medium tabular-nums text-foreground">
-              {Math.max(0, bucket.remaining - businessDays)}
+              {Math.max(0, bucket.remaining - chargedDays)}
             </b>{" "}
             із {bucket.quota}
           </div>

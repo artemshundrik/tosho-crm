@@ -15,7 +15,9 @@ import {
 import { cn } from "@/lib/utils";
 import {
   eachDateKey,
+  ABSENCE_QUOTA_UNIT,
   isBusinessDay,
+  isVacationChargeableDay,
   QUOTA_ABSENCE_KINDS,
   type QuotaAbsenceKind,
 } from "@/lib/teamAbsenceCalendar";
@@ -25,7 +27,8 @@ import { fallbackBalance, type AbsenceBalance } from "@/lib/teamAbsenceQuotas";
 /**
  * Річний звіт по відсутностях — для бухгалтерії.
  *
- * Рахуємо ті самі робочі дні, що й квота, і з тих самих ПОГОДЖЕНИХ записів,
+ * Рахуємо тими самими одиницями, що й квота (відпустка — календарні дні,
+ * решта — робочі), і з тих самих ПОГОДЖЕНИХ записів,
  * щоб цифра у звіті не могла розійтися з цифрою на картці людини.
  *
  * Копіювання віддає TSV: він вставляється в Excel/Google Sheets колонками
@@ -82,17 +85,23 @@ export function AbsenceYearReportDialog({
     const yearTo = `${year}-12-31`;
 
     /**
-     * УНІКАЛЬНІ робочі дні, а не сума по записах. Сума подвоювала б дні на
+     * УНІКАЛЬНІ дні, а не сума по записах. Сума подвоювала б дні на
      * перетинах, і звіт для бухгалтерії розходився б із залишком на картці
      * людини — там (і в гарді квоти) рахунок теж по унікальних днях.
+     *
+     * Одиниця залежить від типу: відпустка міряється календарними днями
+     * (вихідні всередині входять, свята — ні), day-off і лікарняний —
+     * робочими. Те саме правило, що в teamAbsenceCalendar і в RPC балансів.
      */
-    const countDistinct = (list: TeamAbsence[]) => {
+    const countDistinct = (list: TeamAbsence[], unit: "calendar" | "business") => {
       const days = new Set<string>();
       list.forEach((absence) => {
         const from = absence.startDate < yearFrom ? yearFrom : absence.startDate;
         const to = absence.endDate > yearTo ? yearTo : absence.endDate;
         eachDateKey(from, to).forEach((day) => {
-          if (isBusinessDay(day, exceptions)) days.add(day);
+          const counts =
+            unit === "calendar" ? isVacationChargeableDay(day, exceptions) : isBusinessDay(day, exceptions);
+          if (counts) days.add(day);
         });
       });
       return days.size;
@@ -109,7 +118,10 @@ export function AbsenceYearReportDialog({
         let total = 0;
 
         QUOTA_ABSENCE_KINDS.forEach((kind) => {
-          const days = countDistinct(own.filter((absence) => absence.kind === kind));
+          const days = countDistinct(
+            own.filter((absence) => absence.kind === kind),
+            ABSENCE_QUOTA_UNIT[kind]
+          );
           used[kind] = days;
           quota[kind] = balance[kind].quota;
           total += days;
@@ -117,7 +129,7 @@ export function AbsenceYearReportDialog({
 
         // «Інше» до квот не входить, але в звіті має бути — бухгалтерія
         // рахує всі дні відсутності, а не лише лімітовані.
-        const otherDays = countDistinct(own.filter((absence) => absence.kind === "other"));
+        const otherDays = countDistinct(own.filter((absence) => absence.kind === "other"), "business");
         used.other = otherDays;
         total += otherDays;
 

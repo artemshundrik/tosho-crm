@@ -3,10 +3,19 @@
  * можна було тестувати юнітами (той самий розподіл, що designerPayrollMath vs
  * designerPayroll).
  *
- * ГОЛОВНЕ ПРАВИЛО (рішення CEO 2026-08-01): квота відсутностей списується
- * ЛИШЕ робочими днями. Вихідні й свята всередині відпустки ліміт не їдять —
- * так само, як вони не додають нормо-днів дизайнеру. Календар один на всю
- * систему: пн–пт, скориговані `tosho.ua_workday_exceptions`.
+ * ОДИНИЦЯ ЗАЛЕЖИТЬ ВІД ТИПУ (рішення CEO 2026-08-03):
+ *  · відпустка — КАЛЕНДАРНІ дні (квота 24, як у ст. 75 КЗпП): вихідні
+ *    всередині відпустки квоту їдять, а свята — ні (ст. 78 КЗпП: святкові
+ *    дні до відпустки не включаються й подовжують її);
+ *  · day-off і лікарняний — РОБОЧІ дні: це відгул і хвороба в робочий день,
+ *    календарна арифметика там сенсу не має.
+ *
+ * Календар один на всю систему: пн–пт, скориговані
+ * `tosho.ua_workday_exceptions` (там же живуть державні свята).
+ *
+ * Дзеркало цієї математики в БД — `tosho.count_absence_quota_days`
+ * (scripts/ua-holidays-and-calendar-quotas.sql). Міняючи правило тут, міняй
+ * і там: RPC балансів рахує по-своєму.
  */
 
 /** Типи, що мають річну квоту. `other` — без ліміту, вносить лише owner/SEO. */
@@ -14,9 +23,21 @@ export const QUOTA_ABSENCE_KINDS = ["vacation", "day_off", "sick_leave"] as cons
 export type QuotaAbsenceKind = (typeof QUOTA_ABSENCE_KINDS)[number];
 
 export const DEFAULT_ABSENCE_QUOTAS: Record<QuotaAbsenceKind, number> = {
-  vacation: 18,
-  day_off: 6,
+  vacation: 24,
+  day_off: 5,
   sick_leave: 10,
+};
+
+/** У чому міряється квота цього типу. */
+export const ABSENCE_QUOTA_UNIT: Record<QuotaAbsenceKind, "calendar" | "business"> = {
+  vacation: "calendar",
+  day_off: "business",
+  sick_leave: "business",
+};
+
+export const ABSENCE_QUOTA_UNIT_LABEL: Record<"calendar" | "business", string> = {
+  calendar: "кал. дн.",
+  business: "роб. дн.",
 };
 
 /** Мінімум, який потрібен, щоб порахувати дні: сам діапазон. */
@@ -77,4 +98,34 @@ export function countBusinessDaysInYear(
 /** Календарна тривалість діапазону в днях (для підписів «5 днів поспіль»). */
 export function countCalendarDays(range: DateRangeLike): number {
   return eachDateKey(range.startDate, range.endDate).length;
+}
+
+/**
+ * День, що списує ВІДПУСТКУ: будь-який календарний, окрім явно позначеного
+ * неробочим (свято). Звичайний вихідний виняток не має — і тому рахується.
+ */
+export function isVacationChargeableDay(dateKey: string, exceptions?: Map<string, boolean>): boolean {
+  return exceptions?.get(dateKey) !== false;
+}
+
+/**
+ * Скільки днів квоти з'їсть відсутність у межах року — з урахуванням типу.
+ * Діапазон може перетинати межу року (новорічна відпустка), тоді рахуємо
+ * лише його частину: квота теж річна.
+ */
+export function countQuotaDaysInYear(
+  kind: QuotaAbsenceKind,
+  range: DateRangeLike,
+  year: number,
+  exceptions?: Map<string, boolean>
+): number {
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
+  const start = range.startDate < from ? from : range.startDate;
+  const end = range.endDate > to ? to : range.endDate;
+
+  if (ABSENCE_QUOTA_UNIT[kind] === "calendar") {
+    return eachDateKey(start, end).filter((key) => isVacationChargeableDay(key, exceptions)).length;
+  }
+  return countBusinessDays(start, end, exceptions);
 }

@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import {
-  countBusinessDaysInYear,
+  countQuotaDaysInYear,
   DEFAULT_ABSENCE_QUOTAS,
   type QuotaAbsenceKind,
 } from "@/lib/teamAbsenceCalendar";
@@ -121,7 +121,13 @@ export async function loadAbsenceBalances(params: {
     if (absence.status !== "pending" || !isQuotaAbsenceKind(absence.kind)) return;
     const balance = balances.get(absence.userId);
     if (!balance) return; // чужий баланс нам не віддали — і не треба
-    balance[absence.kind].pending += countBusinessDaysInYear(absence, params.year, params.exceptions);
+    // Одиниця залежить від типу: відпустка календарними, решта робочими.
+    balance[absence.kind].pending += countQuotaDaysInYear(
+      absence.kind,
+      absence,
+      params.year,
+      params.exceptions
+    );
   });
 
   return balances;

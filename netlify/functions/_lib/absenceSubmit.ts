@@ -131,7 +131,7 @@ export async function resolveMemberWorkspaceId(
 }
 
 export type SubmittedAbsenceNotifyResult = {
-  /** Робочих днів у діапазоні — для тексту підтвердження заявнику. */
+  /** Днів квоти в діапазоні — для тексту підтвердження заявнику. */
   businessDays: number | null;
   /** Скільком людям розліталося сповіщення. */
   audienceCount: number;
@@ -170,8 +170,11 @@ export async function notifySubmittedAbsence(
       resolveAbsenceRecipients(adminClient, absence.workspace_id, approvedFact ? "workspace" : "approvers"),
       resolveMemberDisplayName(adminClient, absence.workspace_id, actorId),
       adminClient.schema("tosho").rpc("absence_today"),
-      adminClient.schema("tosho").rpc("count_absence_business_days", {
+      // Одиниця залежить від типу (відпустка — календарні, решта — робочі):
+      // рішення живе в БД, щоб не розійтись із балансами.
+      adminClient.schema("tosho").rpc("count_absence_quota_days", {
         _workspace: absence.workspace_id,
+        _kind: absence.kind,
         _from: absence.start_date,
         _to: absence.end_date,
       }),
@@ -200,7 +203,7 @@ export async function notifySubmittedAbsence(
         title: approvedFact ? `${kindLabel}: ${actorName}` : `Заявка: ${kindLabel.toLowerCase()} — ${actorName}`,
         body: approvedFact
           ? `${range} — зафіксовано без погодження.`
-          : `${range}${businessDays ? ` · ${businessDays} роб. дн.` : ""}${comment ? ` — «${comment}»` : ""}`,
+          : `${range}${businessDays ? ` · ${businessDays} ${absence.kind === "vacation" ? "кал" : "роб"}. дн.` : ""}${comment ? ` — «${comment}»` : ""}`,
         href: eventKey ? `/team?reminder=${encodeURIComponent(eventKey)}` : "/team",
         type: approvedFact ? "warning" : "info",
       })),

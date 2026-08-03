@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   countBusinessDays,
   countBusinessDaysInYear,
+  countQuotaDaysInYear,
+  DEFAULT_ABSENCE_QUOTAS,
   eachDateKey,
   isBusinessDay,
 } from "./teamAbsenceCalendar";
@@ -100,5 +102,52 @@ describe("countBusinessDaysInYear", () => {
   it("відсутність поза роком не списує нічого", () => {
     const absence = { startDate: "2025-03-03", endDate: "2025-03-07" };
     expect(countBusinessDaysInYear(absence, 2026)).toBe(0);
+  });
+});
+
+describe("квота: відпустка календарними, решта робочими", () => {
+  // 24.08.2026 (пн) — свято; решта днів звичайні.
+  const holidays = new Map<string, boolean>([["2026-08-24", false]]);
+
+  it("відпустка їсть вихідні всередині діапазону", () => {
+    // 12.08 (ср) – 25.08 (вт) = 14 календарних днів
+    const range = { startDate: "2026-08-12", endDate: "2026-08-25" };
+    expect(countQuotaDaysInYear("vacation", range, 2026)).toBe(14);
+    // для порівняння: робочими було б 10
+    expect(countBusinessDays(range.startDate, range.endDate)).toBe(10);
+  });
+
+  it("свято всередині відпустки квоту НЕ їсть (ст. 78 КЗпП)", () => {
+    const range = { startDate: "2026-08-21", endDate: "2026-08-26" }; // 6 календарних
+    // Без завантаженого календаря свято просто невідоме — рахуються всі 6.
+    // Це і є причина, чому виклики зобов'язані передавати exceptions.
+    expect(countQuotaDaysInYear("vacation", range, 2026)).toBe(6);
+    expect(countQuotaDaysInYear("vacation", range, 2026, holidays)).toBe(5);
+  });
+
+  it("day-off і лікарняний лишаються робочими днями", () => {
+    // 15.08 (сб) – 16.08 (нд): для відпустки це 2 дні, для решти — 0
+    const weekend = { startDate: "2026-08-15", endDate: "2026-08-16" };
+    expect(countQuotaDaysInYear("vacation", weekend, 2026)).toBe(2);
+    expect(countQuotaDaysInYear("day_off", weekend, 2026)).toBe(0);
+    expect(countQuotaDaysInYear("sick_leave", weekend, 2026)).toBe(0);
+  });
+
+  it("свято не їсть і робочу квоту", () => {
+    const single = { startDate: "2026-08-24", endDate: "2026-08-24" };
+    expect(countQuotaDaysInYear("day_off", single, 2026, holidays)).toBe(0);
+    expect(countQuotaDaysInYear("vacation", single, 2026, holidays)).toBe(0);
+  });
+
+  it("новорічна відпустка ділиться між роками", () => {
+    const range = { startDate: "2026-12-28", endDate: "2027-01-05" };
+    // 28–31.12 = 4 дні у 2026
+    expect(countQuotaDaysInYear("vacation", range, 2026)).toBe(4);
+    // 01–05.01 = 5 днів у 2027, але 1 січня свято → 4
+    expect(countQuotaDaysInYear("vacation", range, 2027, new Map([["2027-01-01", false]]))).toBe(4);
+  });
+
+  it("дефолтні квоти — 24 / 5 / 10", () => {
+    expect(DEFAULT_ABSENCE_QUOTAS).toEqual({ vacation: 24, day_off: 5, sick_leave: 10 });
   });
 });
