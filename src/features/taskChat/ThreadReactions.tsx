@@ -96,18 +96,28 @@ export function ThreadReactionBar({
   /** null — видаляти нема права (чуже повідомлення й ти не керівник). */
   onDelete: (() => void) | null;
 }) {
+  // Поки відкрите меню або палітра — панель не ховаємо: інакше вона зникає
+  // разом із тригером, щойно курсор іде у випадайку.
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const pinned = menuOpen || pickerOpen;
+
   return (
     <div
       className={cn(
-        // bottom-full — панель повністю НАД повідомленням, а не поверх нього.
-        // Затримка 400 мс на появу: без неї панель вискакувала від найменшого
-        // руху миші й заважала читати. Зникає одразу, без затримки.
-        "absolute bottom-full z-10 mb-1 flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5",
-        "opacity-0 shadow-[var(--shadow-menu)] transition-opacity duration-150",
-        "pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-hover:delay-[400ms]",
+        // bottom-full ставить панель НАД повідомленням, а pb-2 створює невидимий
+        // місток через зазор: без нього курсор дорогою до панелі перетинав
+        // порожнечу, наведення губилось і панель зникала, не даючи себе натиснути.
+        "absolute bottom-full z-10 pb-2",
+        "transition-opacity duration-150",
+        pinned
+          ? "opacity-100"
+          : "opacity-0 delay-200 group-hover:opacity-100 group-hover:delay-[400ms]",
+        pinned ? "pointer-events-auto" : "pointer-events-none group-hover:pointer-events-auto",
         align === "end" ? "right-0" : "left-0"
       )}
     >
+      <div className="flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5 shadow-[var(--shadow-menu)]">
       {QUICK_REACTIONS.map((emoji) => (
         <button
           key={emoji}
@@ -121,6 +131,7 @@ export function ThreadReactionBar({
       <ThreadEmojiPicker
         align={align}
         onPick={onPick}
+        onOpenChange={setPickerOpen}
         trigger={
           <button
             type="button"
@@ -133,7 +144,7 @@ export function ThreadReactionBar({
       />
 
       {/* Одне меню на всі дії — щоб не було двох, які сваряться за наведення. */}
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -160,6 +171,7 @@ export function ThreadReactionBar({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </div>
   );
 }

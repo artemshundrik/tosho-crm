@@ -24,13 +24,21 @@ type Props = {
   /** Кнопка-тригер: за замовчуванням смайлик у стилі композера. */
   trigger?: React.ReactNode;
   align?: "start" | "center" | "end";
+  /** Щоб панель наведення не ховалась, поки палітра відкрита. */
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function ThreadEmojiPicker({ onPick, className, trigger, align = "start" }: Props) {
+export function ThreadEmojiPicker({ onPick, className, trigger, align = "start", onOpenChange }: Props) {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        onOpenChange?.(next);
+      }}
+    >
       <PopoverTrigger asChild>
         {trigger ?? (
           <button
