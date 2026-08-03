@@ -48,6 +48,14 @@ type DeliverNotificationsOptions = {
   // Категорія сповіщення (ключ із notificationCategories) — для гейтингу каналів
   // через user_notification_settings.channel_prefs. Одна категорія на батч.
   category?: string;
+  /**
+   * Записати лише в дзвіночок, без push і Telegram.
+   *
+   * Для сповіщень, які людині ТРЕБА побачити, але будити заради них не можна
+   * (тихі години — див. _lib/quietHours.ts). Мовчазна альтернатива «не слати
+   * взагалі» там, де інший механізм події не підхопить.
+   */
+  silent?: boolean;
 };
 
 type DeliveryResult = {
@@ -259,6 +267,12 @@ export async function deliverNotifications(
 
   const insertedRows = await insertNotificationRows(adminClient, rows, options);
   if (insertedRows.length === 0) return empty;
+
+  // Перевірка ДО завантаження налаштувань: у тихому режимі вони не потрібні,
+  // а це зайвий запит у базу на кожен батч.
+  if (options?.silent) {
+    return { ...empty, delivered: insertedRows.length };
+  }
 
   const userIds = Array.from(new Set(insertedRows.map((row) => row.user_id)));
   const settings = await loadUserSettings(adminClient, userIds);

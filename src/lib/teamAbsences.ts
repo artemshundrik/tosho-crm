@@ -215,67 +215,66 @@ export async function listTeamAbsencesForUserYear(params: {
   return ((data ?? []) as TeamAbsenceRow[]).map(mapAbsenceRow);
 }
 
-/** Create one absence entry. Owner/SEO only (enforced by RLS). */
+/**
+ * Внести відсутність ЗА людину. Owner/SEO — право перевіряє RLS на сервері.
+ *
+ * Через серверну функцію, бо раніше цей шлях МОВЧАВ: SEO ставив людині
+ * відпустку, а людина дізнавалась про це, лише якщо сама відкривала CRM —
+ * хоча запис міняє її баланс і ріже норму (а отже бонус).
+ */
 export async function createTeamAbsence(params: {
-  workspaceId: string;
+  /** Кому записуємо. Воркспейс і автора сервер бере з токена викликача. */
   userId: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD (>= startDate)
   kind: TeamAbsenceKind;
   comment: string | null;
-  createdBy: string | null;
   status?: TeamAbsenceStatus;
 }): Promise<TeamAbsence> {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("team_absences")
-    .insert({
-      workspace_id: params.workspaceId,
-      user_id: params.userId,
-      start_date: params.startDate,
-      end_date: params.endDate,
-      kind: params.kind,
-      status: params.status ?? "approved",
-      comment: params.comment,
-      created_by: params.createdBy,
-      requested_by: params.createdBy,
-    })
-    .select(ABSENCE_COLUMNS)
-    .single();
+  const parsed = await callAbsenceFunction({
+    action: "record",
+    userId: params.userId,
+    kind: params.kind,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    comment: params.comment,
+    status: params.status ?? "approved",
+  });
 
-  if (error) throw error;
-
-  return mapAbsenceRow(data as TeamAbsenceRow);
+  return mapAbsenceRow(parsed.absence as TeamAbsenceRow);
 }
 
-/** Update one absence entry. Owner/SEO only (enforced by RLS). */
+/** Змінити чужий запис. Owner/SEO — право перевіряє RLS на сервері. */
 export async function updateTeamAbsence(params: {
-  workspaceId: string;
   id: string;
+  /** Воркспейс сервер бере з членства викликача, тому в підписі його немає. */
   userId: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD (>= startDate)
   kind: TeamAbsenceKind;
   comment: string | null;
 }): Promise<TeamAbsence> {
-  const { data, error } = await supabase
-    .schema("tosho")
-    .from("team_absences")
-    .update({
-      user_id: params.userId,
-      start_date: params.startDate,
-      end_date: params.endDate,
-      kind: params.kind,
-      comment: params.comment,
-    })
-    .eq("workspace_id", params.workspaceId)
-    .eq("id", params.id)
-    .select(ABSENCE_COLUMNS)
-    .single();
+  const parsed = await callAbsenceFunction({
+    action: "revise",
+    absenceId: params.id,
+    userId: params.userId,
+    kind: params.kind,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    comment: params.comment,
+  });
 
-  if (error) throw error;
+  return mapAbsenceRow(parsed.absence as TeamAbsenceRow);
+}
 
-  return mapAbsenceRow(data as TeamAbsenceRow);
+/**
+ * Прибрати запис. Owner/SEO — право перевіряє RLS на сервері.
+ *
+ * Воркспейс сервер бере з членства викликача, а не з аргументу — тому в
+ * підписі його вже немає.
+ */
+export async function deleteTeamAbsence(id: string): Promise<void> {
+  await callAbsenceFunction({ action: "revoke", absenceId: id });
 }
 
 /**
@@ -408,16 +407,4 @@ export async function loadAbsenceDecisionComments(year: number): Promise<Map<str
     if (row.decision_comment) map.set(row.absence_id, row.decision_comment);
   });
   return map;
-}
-
-/** Delete one absence entry. Owner/SEO only (enforced by RLS). */
-export async function deleteTeamAbsence(workspaceId: string, id: string): Promise<void> {
-  const { error } = await supabase
-    .schema("tosho")
-    .from("team_absences")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("id", id);
-
-  if (error) throw error;
 }

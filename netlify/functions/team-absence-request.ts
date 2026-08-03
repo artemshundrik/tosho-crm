@@ -8,6 +8,7 @@ import {
   humanizeAbsenceInsertError,
   isOwnerMembership,
   isSeoMembership,
+  notifyAbsenceRecordedForMember,
   notifySubmittedAbsence,
   type SubmittedAbsenceRow,
 } from "./_lib/absenceSubmit";
@@ -29,14 +30,21 @@ import {
 type Decision = "approved" | "declined";
 
 type RequestBody = {
-  /** `submit` — подати власну заявку; без action — рішення (як було). */
-  action?: "submit" | "decide";
+  /**
+   * `submit` — подати власну заявку;
+   * `record` / `revise` / `revoke` — керівництво веде запис ЗА людину;
+   * без action — рішення по заявці (як було).
+   */
+  action?: "submit" | "decide" | "record" | "revise" | "revoke";
   absenceId?: string;
   decision?: Decision;
   comment?: string;
   kind?: string;
   startDate?: string;
   endDate?: string;
+  /** Кого стосується запис — лише для record/revise (owner/SEO). */
+  userId?: string;
+  status?: string;
 };
 
 type HttpEvent = {
@@ -107,6 +115,9 @@ export const handler = async (event: HttpEvent) => {
 
   if (action === "submit") {
     return await handleSubmit({ payload, comment, actorId, userClient, adminClient });
+  }
+  if (action === "record" || action === "revise" || action === "revoke") {
+    return await handleAdminRecord({ payload, comment, actorId, action, userClient, adminClient });
   }
 
   const absenceId = payload.absenceId?.trim();
@@ -312,4 +323,170 @@ async function handleSubmit(params: {
       comment,
     },
   });
+}
+
+/* ============ Керівництво веде запис ЗА людину (owner/SEO) ============ */
+
+/**
+ * Внести / змінити / прибрати чужу відсутність.
+ *
+ * Чому через сервер, хоча RLS і так пускає лише owner/SEO: раніше ці три дії
+ * йшли прямо з браузера і МОВЧАЛИ — SEO ставив людині відпустку, а людина
+ * дізнавалась про це, лише якщо сама відкривала CRM. Запис при цьому міняє її
+ * баланс і ріже норму (а отже бонус). Тепер запис і сповіщення — один виклик.
+ *
+ * Пишемо ЮЗЕРСЬКИМ клієнтом: політики team_absences_insert/update/delete
+ * (owner/SEO) лишаються єдиним джерелом права на дію — окремої перевірки ролі
+ * в коді свідомо немає, щоб правило не роздвоїлось.
+ */
+async function handleAdminRecord(params: {
+  payload: RequestBody;
+  comment: string | null;
+  actorId: string;
+  action: "record" | "revise" | "revoke";
+  userClient: SupabaseLike;
+  adminClient: SupabaseLike;
+}) {
+  const { payload, comment, actorId, action, userClient, adminClient } = params;
+
+  const { data: membership, error: membershipError } = await userClient
+    .schema("tosho")
+    .from("memberships_view")
+    .select("workspace_id")
+    .eq("user_id", actorId)
+    .maybeSingle<{ workspace_id?: string | null }>();
+
+  if (membershipError) return jsonResponse(500, { error: membershipError.message });
+  const workspaceId = membership?.workspace_id ?? null;
+  if (!workspaceId) return jsonResponse(403, { error: "Немає доступу до воркспейсу" });
+
+  const columns = "id,workspace_id,user_id,start_date,end_date,kind,status";
+
+  if (action === "revoke") {
+    const absenceId = payload.absenceId?.trim();
+    if (!absenceId) return jsonResponse(400, { error: "Missing absenceId" });
+
+    // Читаємо ДО видалення: після нього нікому й нічого не скажеш.
+    const { data: existing } = await adminClient
+      .schema("tosho")
+      .from("team_absences")
+      .select(columns)
+      .eq("workspace_id", workspaceId)
+      .eq("id", absenceId)
+      .maybeSingle<SubmittedAbsenceRow>();
+
+    const { data: deleted, error: deleteError } = await userClient
+      .schema("tosho")
+      .from("team_absences")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("id", absenceId)
+      .select("id");
+
+    if (deleteError) return jsonResponse(400, { error: humanizeAbsenceInsertError(deleteError) });
+    // .select() навмисно: delete, що не зачепив рядків, повертає error === null,
+    // і ми б сповістили людину про скасування, якого не сталось.
+    if (!deleted || deleted.length === 0) {
+      return jsonResponse(404, { error: "Запис не знайдено або немає прав" });
+    }
+
+    if (existing) {
+      await notifyAbsenceRecordedForMember(adminClient, { absence: existing, actorId, action: "revoke" });
+    }
+    return jsonResponse(200, { success: true, deleted: absenceId });
+  }
+
+  const kind = (payload.kind ?? "").trim();
+  const startDate = (payload.startDate ?? "").trim();
+  const endDate = (payload.endDate ?? "").trim();
+  if (!kind) return jsonResponse(400, { error: "Невідомий тип відсутності" });
+  if (!ABSENCE_DATE_KEY.test(startDate) || !ABSENCE_DATE_KEY.test(endDate) || endDate < startDate) {
+    return jsonResponse(400, { error: "Невірний діапазон дат" });
+  }
+
+  if (action === "revise") {
+    const absenceId = payload.absenceId?.trim();
+    const userId = payload.userId?.trim();
+    if (!absenceId || !userId) return jsonResponse(400, { error: "Missing absenceId or userId" });
+
+    const { data: before } = await adminClient
+      .schema("tosho")
+      .from("team_absences")
+      .select(columns)
+      .eq("workspace_id", workspaceId)
+      .eq("id", absenceId)
+      .maybeSingle<SubmittedAbsenceRow>();
+
+    const { data: updated, error: updateError } = await userClient
+      .schema("tosho")
+      .from("team_absences")
+      .update({
+        user_id: userId,
+        start_date: startDate,
+        end_date: endDate,
+        kind,
+        comment,
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("id", absenceId)
+      .select(columns)
+      .maybeSingle<SubmittedAbsenceRow>();
+
+    if (updateError || !updated) {
+      return jsonResponse(400, { error: humanizeAbsenceInsertError(updateError) });
+    }
+
+    // Мовчимо, коли нічого змістовного не змінилось: правка коментаря — не
+    // привід смикати людину.
+    const meaningful =
+      !before ||
+      before.start_date !== updated.start_date ||
+      before.end_date !== updated.end_date ||
+      before.kind !== updated.kind ||
+      before.user_id !== updated.user_id;
+    if (meaningful) {
+      await notifyAbsenceRecordedForMember(adminClient, {
+        absence: updated,
+        actorId,
+        action: "revise",
+        previous: before ?? null,
+      });
+    }
+    return jsonResponse(200, { success: true, absence: updated });
+  }
+
+  const userId = payload.userId?.trim();
+  if (!userId) return jsonResponse(400, { error: "Missing userId" });
+
+  const { data: inserted, error: insertError } = await userClient
+    .schema("tosho")
+    .from("team_absences")
+    .insert({
+      workspace_id: workspaceId,
+      user_id: userId,
+      start_date: startDate,
+      end_date: endDate,
+      kind,
+      status: payload.status?.trim() || "approved",
+      comment,
+      created_by: actorId,
+      requested_by: actorId,
+    })
+    .select(columns)
+    .maybeSingle<SubmittedAbsenceRow>();
+
+  if (insertError || !inserted) {
+    return jsonResponse(400, { error: humanizeAbsenceInsertError(insertError) });
+  }
+
+  // Запис САМ СОБІ (owner теж людина, і RLS не забороняє це нікому) — не
+  // «внесено керівництвом», а звичайне подання: інакше команді прилетить
+  // текст, який приписує чужу дію тому, хто її не робив.
+  if (inserted.user_id === actorId) {
+    await notifySubmittedAbsence(adminClient, { absence: inserted, comment, actorId });
+  } else {
+    await notifyAbsenceRecordedForMember(adminClient, { absence: inserted, actorId, action: "record" });
+  }
+
+  return jsonResponse(200, { success: true, absence: inserted });
 }

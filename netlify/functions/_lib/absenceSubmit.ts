@@ -214,6 +214,110 @@ export async function notifySubmittedAbsence(
   }
 }
 
+export type AdminAbsenceAction = "record" | "revise" | "revoke";
+
+/**
+ * Керівництво внесло / змінило / прибрало відсутність ЗА людину.
+ *
+ * Раніше цей шлях мовчав узагалі: SEO ставив Антону відпустку, і Антон
+ * дізнавався про це, лише якщо сам відкривав CRM — хоча записміняє його
+ * баланс і ріже норму (а отже бонус). Тепер:
+ *  - сама людина отримує сповіщення ЗАВЖДИ (це про неї);
+ *  - команда — лише якщо відсутність уже покриває сьогодні, тобто змінює
+ *    сьогоднішню картину «хто на місці». Майбутню оголосить крон у день
+ *    початку, дублювати його зараз немає сенсу.
+ *
+ * У тихі години пишемо в дзвіночок мовчки (silent): подія особиста, крон її
+ * не підхопить, тож проковтнути її не можна — але й будити о 2 ночі теж.
+ */
+export async function notifyAbsenceRecordedForMember(
+  adminClient: SupabaseClient,
+  params: {
+    absence: SubmittedAbsenceRow;
+    actorId: string;
+    action: AdminAbsenceAction;
+    /** Для revise — щоб сказати, що саме змінилось. */
+    previous?: { start_date: string; end_date: string; kind: string } | null;
+  }
+): Promise<{ notified: number; deferred: boolean }> {
+  const { absence, actorId, action, previous } = params;
+  const quiet = isQuietHour(new Date());
+
+  try {
+    const [actorName, memberName, todayResult] = await Promise.all([
+      resolveMemberDisplayName(adminClient, absence.workspace_id, actorId),
+      resolveMemberDisplayName(adminClient, absence.workspace_id, absence.user_id),
+      adminClient.schema("tosho").rpc("absence_today"),
+    ]);
+
+    const todayKey = typeof todayResult.data === "string" ? todayResult.data : "";
+    const kindLabel = ABSENCE_KIND_LABELS[absence.kind] ?? "Відсутність";
+    const range = formatAbsenceRange(absence);
+    const coversToday = Boolean(todayKey) && absence.start_date <= todayKey && absence.end_date >= todayKey;
+
+    const rows: Array<{
+      user_id: string;
+      title: string;
+      body: string;
+      href: string;
+      type: "info" | "success" | "warning";
+    }> = [];
+
+    // 1. Самій людині — окрім випадку «керівник вніс сам собі».
+    if (absence.user_id !== actorId) {
+      const changed =
+        previous && (previous.start_date !== absence.start_date || previous.end_date !== absence.end_date)
+          ? ` Було: ${formatAbsenceRange(previous)}.`
+          : "";
+      rows.push({
+        user_id: absence.user_id,
+        title:
+          action === "record"
+            ? `Тобі записали: ${kindLabel.toLowerCase()}`
+            : action === "revise"
+              ? `Твою відсутність змінили`
+              : `Твою відсутність прибрали`,
+        body:
+          action === "revoke"
+            ? `${kindLabel} ${range} більше не в календарі. Внесено: ${actorName}.`
+            : `${kindLabel} ${range}.${changed} Внесено: ${actorName}.`,
+        href: "/team",
+        type: action === "revoke" ? "warning" : "info",
+      });
+    }
+
+    // 2. Команді — лише коли це вже змінює сьогоднішню картину.
+    if (coversToday && action !== "revise") {
+      const recipients = await resolveAbsenceRecipients(adminClient, absence.workspace_id, "workspace");
+      for (const userId of recipients) {
+        if (userId === absence.user_id || userId === actorId) continue;
+        rows.push({
+          user_id: userId,
+          title: action === "record" ? `${kindLabel}: ${memberName}` : `${memberName} повертається`,
+          body:
+            action === "record"
+              ? `${range} — записано керівництвом.`
+              : `${kindLabel} ${range} скасовано — людина на місці.`,
+          href: "/team",
+          type: action === "record" ? "warning" : "info",
+        });
+      }
+    }
+
+    if (rows.length === 0) return { notified: 0, deferred: false };
+
+    await deliverNotifications(adminClient, rows, {
+      category: "team_absences",
+      silent: quiet,
+    });
+    return { notified: rows.length, deferred: quiet };
+  } catch (notifyError) {
+    // Запис уже в базі — сповіщення не має його валити.
+    console.warn("[absence-record] notify failed", notifyError);
+    return { notified: 0, deferred: false };
+  }
+}
+
 /**
  * Людський переклад відмови вставки. Тригери БД пояснюють відмову українською
  * («лікарняних на рік лишилось N») — той текст і призначений заявнику. А от

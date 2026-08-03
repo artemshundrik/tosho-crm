@@ -740,7 +740,6 @@ export function TeamPage() {
 
         if (absenceEditingId) {
           await updateTeamAbsence({
-            workspaceId,
             id: absenceEditingId,
             userId: value.userId,
             startDate: value.startDate,
@@ -751,13 +750,11 @@ export function TeamPage() {
           toast.success("Відсутність оновлено");
         } else {
           await createTeamAbsence({
-            workspaceId,
             userId: value.userId,
             startDate: value.startDate,
             endDate: value.endDate,
             kind: value.kind,
             comment: value.comment.trim() || null,
-            createdBy: userId ?? null,
           });
           toast.success("Відсутність додано");
         }
@@ -779,13 +776,7 @@ export function TeamPage() {
         setAbsenceSaving(false);
       }
     },
-    [
-      absenceDialogMode,
-      absenceEditingId,
-      reloadAbsenceData,
-      userId,
-      workspaceId,
-    ]
+    [absenceDialogMode, absenceEditingId, reloadAbsenceData, workspaceId]
   );
 
   const handleAbsenceDelete = useCallback(
@@ -793,7 +784,7 @@ export function TeamPage() {
       if (!workspaceId) return;
       setAbsenceDeletingId(absence.id);
       try {
-        await deleteTeamAbsence(workspaceId, absence.id);
+        await deleteTeamAbsence(absence.id);
         toast.success("Відсутність видалено");
         await reloadAbsenceData();
       } catch (error) {
