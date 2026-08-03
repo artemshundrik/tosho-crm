@@ -77,6 +77,7 @@ import {
   CircleHelp,
   History,
   Plus,
+  UserPlus,
   SmilePlus,
   type LucideIcon,
 } from "lucide-react";
@@ -125,9 +126,11 @@ import {
   canChangeDesignStatus,
   DESIGN_ALL_STATUSES,
   DESIGN_STATUS_LABELS,
-  DESIGN_STATUS_QUICK_ACTIONS,
+  getClientReviewBlockers,
   getDesignStatusActionLabel,
+  resolveDesignTaskActions,
   type DesignStatus,
+  type DesignTaskAction,
 } from "@/lib/designTaskStatus";
 import { designStatusBadgeClass, toneSubtleClass, type Tone } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
@@ -843,7 +846,6 @@ const statusLabels = DESIGN_STATUS_LABELS;
 
 const statusColors = designStatusBadgeClass;
 
-const statusQuickActions = DESIGN_STATUS_QUICK_ACTIONS;
 const allStatuses = DESIGN_ALL_STATUSES;
 const CHANGE_REQUEST_AUTO_CHANGES_STATUSES = new Set<DesignStatus>(["pm_review", "client_review"]);
 
@@ -3270,10 +3272,6 @@ export default function DesignTaskPage() {
           )
         : [],
     [canManageDesignStatuses, isAssignedToMe, task]
-  );
-  const quickActions = useMemo(
-    () => (task ? (statusQuickActions[task.status] ?? []).filter((action) => allowedStatusTransitions.includes(action.next)) : []),
-    [allowedStatusTransitions, task]
   );
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
     return getDesignTaskEstimateMinutes(sourceTask);
@@ -6960,7 +6958,6 @@ export default function DesignTaskPage() {
     }
   };
 
-  const isStatusStartable = task?.status === "new" || task?.status === "changes";
   const isAssignedToOther = !!task?.assigneeUserId && !!userId && task.assigneeUserId !== userId && !isCollaboratorOnTask;
   const selectedVisualizationOutputFileIds = useMemo(
     () => resolveSelectedOutputIdsFromMetadata(task?.metadata, designOutputFiles, "visualization"),
@@ -7006,24 +7003,21 @@ export default function DesignTaskPage() {
     task?.designTaskType === "layout" ||
     task?.designTaskType === "layout_adaptation" ||
     (task?.designTaskType === "visualization" && hasLayoutOutputs);
-  const clientReviewBlockers = useMemo(() => {
-    const blockers: string[] = [];
-    if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) {
-      blockers.push("Потрібно погодити хоча б один візуал");
-    }
-    if (requiresLayoutOutput && selectedLayoutOutputFileIds.length === 0) {
-      blockers.push("Потрібно погодити хоча б один макет");
-    }
-    return blockers;
-  }, [
-    requiresLayoutOutput,
-    requiresVisualizationOutput,
-    selectedLayoutOutputFileIds.length,
-    selectedVisualizationOutputFileIds.length,
-  ]);
-  const canSeeMarkReadyAction = !!task && task.status === "in_progress" && allowedStatusTransitions.includes("pm_review");
-  const canMarkReadyNow = canSeeMarkReadyAction;
-  const canSendToClientNow = clientReviewBlockers.length === 0;
+  const clientReviewBlockers = useMemo(
+    () =>
+      getClientReviewBlockers({
+        designTaskType: task?.designTaskType ?? null,
+        approvedVisualizationCount: selectedVisualizationOutputFileIds.length,
+        approvedLayoutCount: selectedLayoutOutputFileIds.length,
+        hasLayoutOutputs,
+      }),
+    [
+      hasLayoutOutputs,
+      selectedLayoutOutputFileIds.length,
+      selectedVisualizationOutputFileIds.length,
+      task?.designTaskType,
+    ]
+  );
 
   useEffect(() => {
     let active = true;
@@ -7457,57 +7451,85 @@ export default function DesignTaskPage() {
     !assigningSelf &&
     (!task.assigneeUserId || task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
 
-  const canStartWorkNow =
-    !!task &&
-    isStatusStartable &&
-    !statusSaving &&
-    (!!isAssignedToMe || canManageAssignments);
+  // Що показати в смузі дій — вирішує один резолвер (див.
+  // docs/DESIGN_TASK_ACTIONS_MATRIX.md). Сторінка лише малює його відповідь і
+  // підставляє обробники: одна основна дія, максимум одна вторинна, решта в «⋮».
+  const statusChangedAtRaw =
+    typeof task?.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
+  const deadlineUpdatedAtRaw =
+    typeof task?.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
+  // Та сама умова, що гейтить повернення в «Правки» в updateTaskStatus.
+  const deadlineUpdatedAfterStatus =
+    !!deadlineUpdatedAtRaw &&
+    (!statusChangedAtRaw ||
+      new Date(deadlineUpdatedAtRaw).getTime() > new Date(statusChangedAtRaw).getTime());
 
-  let primaryActionLabel = "Взяти в роботу";
-  let primaryActionDisabled = true;
-  const primaryActionLoading = assigningSelf || statusSaving === "in_progress";
-  let primaryActionClick: (() => void) | null = null;
+  const actionPlan = resolveDesignTaskActions({
+    status: task?.status ?? "new",
+    canManageStatuses: canManageDesignStatuses,
+    canManageAssignments,
+    canSelfAssign,
+    isAssignee: !!isAssignedToMe,
+    hasAssignee: !!task?.assigneeUserId,
+    assigneeName: task?.assigneeUserId ? getMemberLabel(task.assigneeUserId) : null,
+    locked: designTaskLockedByOther,
+    approvedAtLabel:
+      task?.status === "approved" && statusChangedAtRaw ? formatDate(statusChangedAtRaw) : null,
+  });
 
-  if (task) {
-    if (!task.assigneeUserId && isStatusStartable) {
-      primaryActionLabel = "Взяти на себе і почати";
-      primaryActionDisabled = !canTakeOverForSelf;
-      primaryActionClick = () => {
-        void assignTaskToMe({ alsoStart: true });
-      };
-    } else if (!task.assigneeUserId) {
-      primaryActionLabel = "Взяти на себе";
-      primaryActionDisabled = !canTakeOverForSelf;
-      primaryActionClick = () => {
-        void assignTaskToMe();
-      };
-    } else if (isAssignedToMe && isStatusStartable) {
-      primaryActionLabel = task.status === "changes" ? "Почати правки" : "Почати роботу";
-      primaryActionDisabled = !canStartWorkNow;
-      primaryActionClick = () => {
-        void updateTaskStatus("in_progress");
-      };
-    } else if (isAssignedToMe) {
-      primaryActionLabel = "Задача на мені";
-      primaryActionDisabled = true;
-      primaryActionClick = null;
-    } else if (isAssignedToOther && !canManageAssignments) {
-      primaryActionLabel = "Вже призначено";
-      primaryActionDisabled = true;
-      primaryActionClick = null;
-    } else if (isAssignedToOther && canManageAssignments) {
-      primaryActionLabel = "Призначити себе";
-      primaryActionDisabled = !canTakeOverForSelf;
-      primaryActionClick = () => {
-        void assignTaskToMe();
-      };
+  const runTaskAction = (action: DesignTaskAction | null) => {
+    if (!action) return;
+    switch (action.id.kind) {
+      case "assign_designer":
+        // Рендериться як власний DropdownMenu зі списком дизайнерів — окремого
+        // обробника не потребує.
+        break;
+      case "self_assign":
+        void assignTaskToMe({ alsoStart: action.id.alsoStart });
+        break;
+      case "status":
+        void updateTaskStatus(action.id.next);
+        break;
+      case "timer":
+        if (isTimerRunning) void handlePauseTimer();
+        else void handleStartTimer();
+        break;
+      case "change_request":
+        setActiveDesignTab("brief");
+        setChangeRequestOpen(true);
+        break;
     }
-  }
+  };
 
-  const mobileSecondaryAction =
-    quickActions.find((action) => !(isStatusStartable && action.next === "in_progress")) ?? null;
-  const mobileSecondaryActionDisabled =
-    !!statusSaving || (mobileSecondaryAction?.next === "client_review" && !canSendToClientNow);
+  const isActionBusy = (action: DesignTaskAction | null) => {
+    if (!action) return false;
+    if (action.id.kind === "self_assign") return assigningSelf;
+    if (action.id.kind === "status") return statusSaving === action.id.next;
+    if (action.id.kind === "timer") return timerBusy !== null;
+    return false;
+  };
+
+  // Причина, чому дія не спрацює, показується ПІД кнопкою заздалегідь, а не
+  // тостом після кліку. Саму кнопку не гасимо — клік веде туди, де це виправляють.
+  const actionBlockReason = (action: DesignTaskAction | null): string | null => {
+    if (!action || action.id.kind !== "status") return null;
+    if (action.id.next === "client_review" && clientReviewBlockers.length > 0) {
+      return clientReviewBlockers.join(", ");
+    }
+    if (action.id.next === "changes" && !deadlineUpdatedAfterStatus) {
+      return "Спочатку оновіть дедлайн";
+    }
+    return null;
+  };
+
+  const timerActionLabel = isTimerRunning ? "Пауза" : "Старт";
+
+  /** Переходи, які вже показані кнопками — щоб не дублювати їх у меню «⋮». */
+  const surfacedStatusActions = new Set<DesignStatus>(
+    [actionPlan.primary, actionPlan.secondary]
+      .filter((action): action is DesignTaskAction => !!action)
+      .flatMap((action) => (action.id.kind === "status" ? [action.id.next] : []))
+  );
 
   const dropboxFolderNameDefault = useMemo(
     () => normalizeDropboxFolderNameDraft(task?.title ?? quoteItem?.name ?? "Замовлення"),
@@ -8589,6 +8611,110 @@ export default function DesignTaskPage() {
     );
   };
 
+  /** Список дизайнерів — спільний для олівця в сайдбарі і кнопки «Призначити дизайнера». */
+  const renderAssigneeMenuItems = () => (
+    <>
+      <DropdownMenuLabel>Дизайнери</DropdownMenuLabel>
+      {sortedDesignerMembers.length === 0 ? (
+        <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
+      ) : (
+        sortedDesignerMembers.map((member) => {
+          const workload = designerWorkloadById.get(member.id);
+          return (
+            <DropdownMenuItem key={member.id} onClick={() => void applyAssignee(member.id)} disabled={task.assigneeUserId === member.id} className="gap-2 py-2">
+              <AvatarBase src={member.avatarUrl ?? getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-3xs font-semibold" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate">{member.label}</div>
+                {workload ? (
+                  <div className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
+                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
+                    <span>·</span>
+                    <span>{workload.activeTaskCount} задач</span>
+                  </div>
+                ) : null}
+              </div>
+              {workload ? (
+                <Badge variant="outline" className={cn("ml-auto text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
+                  {workload.score}
+                </Badge>
+              ) : null}
+              <Check className={cn("h-3.5 w-3.5 text-primary", task.assigneeUserId === member.id ? "opacity-100" : "opacity-0")} />
+            </DropdownMenuItem>
+          );
+        })
+      )}
+      {task.assigneeUserId ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => void applyAssignee(null)}>Зняти виконавця</DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  );
+
+  /** Смуга дій: основна, вторинна і текст стану. Рендер один — для шапки і для мобільної панелі. */
+  const renderTaskActionBar = (options?: { className?: string }) => {
+    const { primary, secondary, stateText } = actionPlan;
+    if (!primary && !secondary && !stateText) return null;
+    // Причину показуємо лише для ОСНОВНОЇ дії. Для вторинної вона йде в title:
+    // «Повернути на правки» вимагає свіжого дедлайну майже завжди, і постійний
+    // помаранчевий рядок під здоровою задачею читався б як поломка.
+    const primaryReason = actionBlockReason(primary);
+    const secondaryReason = actionBlockReason(secondary);
+
+    const renderAction = (action: DesignTaskAction, variant: "primary" | "outline", reason: string | null) => {
+      const label = action.id.kind === "timer" ? timerActionLabel : action.label;
+      const busy = isActionBusy(action);
+      return (
+        <Button
+          variant={variant}
+          className="gap-2"
+          disabled={busy}
+          title={reason ?? undefined}
+          onClick={() => runTaskAction(action)}
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          {label}
+        </Button>
+      );
+    };
+
+    return (
+      <div className={cn("flex flex-col gap-1.5", options?.className)}>
+        <div className="flex flex-wrap items-center gap-2">
+          {stateText ? (
+            <span className="inline-flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+              {stateText}
+            </span>
+          ) : null}
+          {primary && primary.id.kind === "assign_designer" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2" disabled={!!assigningMemberId}>
+                  {assigningMemberId ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  {primary.label}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                {renderAssigneeMenuItems()}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : primary ? (
+            renderAction(primary, "primary", primaryReason)
+          ) : null}
+          {secondary ? renderAction(secondary, "outline", secondaryReason) : null}
+        </div>
+        {primaryReason ? (
+          <div className="flex items-start gap-1.5 text-2xs tone-text-warning">
+            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>{primaryReason}</span>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderDesignOutputSection = (kind: DesignOutputKind) => {
     const groupedOutputs = groupedDesignOutputsByKind[kind];
     const selectedIdSet = kind === "visualization" ? selectedVisualizationOutputFileIdSet : selectedLayoutOutputFileIdSet;
@@ -9590,11 +9716,9 @@ export default function DesignTaskPage() {
           </div>
         }
         actions={
-          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
-            <Button disabled={primaryActionDisabled || designTaskLockedByOther} onClick={primaryActionClick ?? undefined}>
-              {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {primaryActionLabel}
-            </Button>
+          <div className="flex shrink-0 items-start gap-2">
+            {/* Нижче xl смуга живе в липкій панелі внизу — інакше вона видима двічі. */}
+            {renderTaskActionBar({ className: "hidden xl:flex" })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
@@ -9618,19 +9742,23 @@ export default function DesignTaskPage() {
                     Редагувати назву
                   </DropdownMenuItem>
                 ) : null}
-                {allowedStatusTransitions.filter((status) => status !== "pm_review").map((status) => {
-                  const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[status];
-                  return (
-                    <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
-                      <StatusIcon className={`mr-2 h-4 w-4 ${DESIGN_STATUS_ICON_COLOR_BY_STATUS[status]}`} />
-                      {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
-                    </DropdownMenuItem>
-                  );
-                })}
-                {canSeeMarkReadyAction ? (
-                  <DropdownMenuItem disabled={!!statusSaving || !canMarkReadyNow} onClick={() => void updateTaskStatus("pm_review")}>
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Позначити як дизайн готовий
+                {/* У меню лишається те, чого немає в смузі дій: інакше та сама
+                    дія дублюється кнопкою і пунктом. */}
+                {allowedStatusTransitions
+                  .filter((status) => !surfacedStatusActions.has(status))
+                  .map((status) => {
+                    const StatusIcon = DESIGN_STATUS_ICON_BY_STATUS[status];
+                    return (
+                      <DropdownMenuItem key={status} disabled={!!statusSaving} onClick={() => void updateTaskStatus(status)}>
+                        <StatusIcon className={`mr-2 h-4 w-4 ${DESIGN_STATUS_ICON_COLOR_BY_STATUS[status]}`} />
+                        {task ? getDesignStatusActionLabel(task.status, status) : statusLabels[status]}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                {canManageAssignments && isAssignedToOther && canTakeOverForSelf ? (
+                  <DropdownMenuItem disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
+                    {assigningSelf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                    Призначити себе
                   </DropdownMenuItem>
                 ) : null}
                 {canManageAssignments ? (
@@ -11489,39 +11617,7 @@ export default function DesignTaskPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
-                      <DropdownMenuLabel>Дизайнери</DropdownMenuLabel>
-                      {sortedDesignerMembers.length === 0 ? (
-                        <DropdownMenuItem disabled>Немає дизайнерів</DropdownMenuItem>
-                      ) : (
-                        sortedDesignerMembers.map((member) => {
-                          const workload = designerWorkloadById.get(member.id);
-                          return (
-                            <DropdownMenuItem key={member.id} onClick={() => void applyAssignee(member.id)} disabled={task.assigneeUserId === member.id} className="gap-2 py-2">
-                              <AvatarBase src={member.avatarUrl ?? getMemberAvatar(member.id)} name={member.label} fallback={getInitials(member.label)} size={18} className="shrink-0 border-border/70" fallbackClassName="text-3xs font-semibold" />
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate">{member.label}</div>
-                                {workload ? (
-                                  <div className="mt-0.5 flex items-center gap-1 text-2xs text-muted-foreground">
-                                    <span>{CAPACITY_LABEL_BY_LEVEL[workload.level]}</span>
-                                    <span>·</span>
-                                    <span>{workload.activeTaskCount} задач</span>
-                                  </div>
-                                ) : null}
-                              </div>
-                              {workload ? (
-                                <Badge variant="outline" className={cn("ml-auto text-3xs", CAPACITY_BADGE_CLASS_BY_LEVEL[workload.level])}>
-                                  {workload.score}
-                                </Badge>
-                              ) : null}
-                              <Check className={cn("h-3.5 w-3.5 text-primary", task.assigneeUserId === member.id ? "opacity-100" : "opacity-0")} />
-                            </DropdownMenuItem>
-                          );
-                        })
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => void applyAssignee(null)} disabled={!task.assigneeUserId}>
-                        Зняти виконавця
-                      </DropdownMenuItem>
+                      {renderAssigneeMenuItems()}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : !task.assigneeUserId && canTakeOverForSelf ? (
@@ -12495,28 +12591,12 @@ export default function DesignTaskPage() {
         onConfirm={() => void handleDeleteTask()}
       />
 
-      <div className="sticky bottom-3 z-10 xl:hidden flex flex-wrap gap-2 border border-border/60 bg-card/90 backdrop-blur rounded-lg px-3 py-2 shadow-sm">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={primaryActionDisabled}
-          onClick={primaryActionClick ?? undefined}
-        >
-          {primaryActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {primaryActionLabel}
-        </Button>
-        {mobileSecondaryAction ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={mobileSecondaryActionDisabled}
-            onClick={() => void updateTaskStatus(mobileSecondaryAction.next)}
-          >
-            {statusSaving === mobileSecondaryAction.next ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mobileSecondaryAction.label}
-          </Button>
-        ) : null}
-      </div>
+      {/* Мобільна панель дій — та сама смуга, що й у шапці. Раніше вона мала
+          власну гілку і, на відміну від шапки, не враховувала блокування. */}
+      {renderTaskActionBar({
+        className:
+          "sticky bottom-3 z-10 xl:hidden rounded-lg border border-border/60 bg-card/90 px-3 py-2 shadow-sm backdrop-blur",
+      })}
     </div>
   );
 }

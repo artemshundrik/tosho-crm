@@ -35,6 +35,7 @@ import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
+  getClientReviewBlockers,
   getDesignStatusActionLabel,
   DESIGN_STATUS_LABELS,
   type DesignStatus,
@@ -321,6 +322,69 @@ const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: 
     map.set(task.id, formatDesignTaskNumber(monthCode, next));
   });
   return map;
+};
+
+/**
+ * Читачі metadata для гейта «Передати замовнику». Саме правило (який тип задачі
+ * що вимагає) живе в getClientReviewBlockers — тут лише дістаємо числа.
+ */
+const readStringIds = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
+
+/**
+ * Файли без output_kind картка нормалізує за типом задачі (parseDesignOutputKind).
+ * Дошка мусить робити так само, інакше вона рахує нуль погоджених там, де картка
+ * бачить погоджене, і блокує перехід, який картка пускає.
+ */
+const normalizeOutputKind = (raw: unknown, taskType: DesignTaskType | null | undefined) => {
+  if (raw === "visualization" || raw === "layout") return raw;
+  if (taskType === "visualization") return "visualization";
+  return "layout";
+};
+
+const readApprovedOutputCount = (
+  metadata: Record<string, unknown> | null | undefined,
+  kind: "visualization" | "layout",
+  taskType?: DesignTaskType | null
+) => {
+  const idsKey = kind === "visualization" ? "selected_visual_output_file_ids" : "selected_layout_output_file_ids";
+  const idKey = kind === "visualization" ? "selected_visual_output_file_id" : "selected_layout_output_file_id";
+  const explicit = readStringIds(metadata?.[idsKey]);
+  if (explicit.length > 0) return new Set(explicit).size;
+  const single = metadata?.[idKey];
+  if (typeof single === "string" && single.trim().length > 0) return 1;
+
+  // Легасі: старі задачі тримають погодження в спільних ключах без поділу за
+  // типом. Той самий фолбек є в картці задачі — без нього дошка блокувала б
+  // перехід, який картка пускає.
+  const legacy = new Set([
+    ...readStringIds(metadata?.selected_design_output_file_ids),
+    ...(typeof metadata?.selected_design_output_file_id === "string" &&
+    metadata.selected_design_output_file_id.trim().length > 0
+      ? [metadata.selected_design_output_file_id]
+      : []),
+  ]);
+  if (legacy.size === 0) return 0;
+  const files = Array.isArray(metadata?.design_output_files) ? metadata.design_output_files : [];
+  return files.filter((file) => {
+    const row = file as { id?: unknown; output_kind?: unknown } | null;
+    return (
+      typeof row?.id === "string" && legacy.has(row.id) && normalizeOutputKind(row.output_kind, taskType) === kind
+    );
+  }).length;
+};
+
+const readHasLayoutOutputs = (
+  metadata: Record<string, unknown> | null | undefined,
+  taskType?: DesignTaskType | null
+) => {
+  const files = metadata?.design_output_files;
+  if (!Array.isArray(files)) return false;
+  return files.some(
+    (file) => normalizeOutputKind((file as { output_kind?: unknown } | null)?.output_kind, taskType) === "layout"
+  );
 };
 
 const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
@@ -3263,15 +3327,43 @@ export default function DesignPage() {
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
-    const statusChangedAt = typeof task.metadata?.status_changed_at === "string" ? task.metadata.status_changed_at : null;
+    // Дошка не має realtime, тож у її стані лежить знімок на момент завантаження.
+    // Читаємо актуальні metadata ОДИН раз — і для гейтів, і як базу для запису.
+    // Без цього update нижче писав би застарілий знімок цілою колонкою і затирав
+    // усе, що змінилось у задачі після того, як дошку відкрили.
+    const { data: freshRow } = await supabase
+      .from("activity_log")
+      .select("metadata")
+      .eq("id", task.id)
+      .eq("team_id", effectiveTeamId)
+      .maybeSingle();
+    const currentMetadata =
+      ((freshRow?.metadata as Record<string, unknown> | null) ?? task.metadata ?? {}) as Record<string, unknown>;
+
+    const statusChangedAt =
+      typeof currentMetadata.status_changed_at === "string" ? currentMetadata.status_changed_at : null;
     const deadlineUpdatedAt =
-      typeof task.metadata?.deadline_updated_at === "string" ? task.metadata.deadline_updated_at : null;
+      typeof currentMetadata.deadline_updated_at === "string" ? currentMetadata.deadline_updated_at : null;
     const deadlineWasUpdatedAfterCurrentStatus =
       !!deadlineUpdatedAt &&
       (!statusChangedAt || new Date(deadlineUpdatedAt).getTime() > new Date(statusChangedAt).getTime());
     if (next === "changes" && !deadlineWasUpdatedAfterCurrentStatus) {
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
+    }
+    if (next === "client_review") {
+      // Той самий гейт, що й у картці задачі. Без нього задачу можна було
+      // перетягнути в «На погодженні» без жодного погодженого матеріалу.
+      const blockers = getClientReviewBlockers({
+        designTaskType: task.designTaskType ?? null,
+        approvedVisualizationCount: readApprovedOutputCount(currentMetadata, "visualization", task.designTaskType),
+        approvedLayoutCount: readApprovedOutputCount(currentMetadata, "layout", task.designTaskType),
+        hasLayoutOutputs: readHasLayoutOutputs(currentMetadata, task.designTaskType),
+      });
+      if (blockers.length > 0) {
+        toast.error(`Щоб передати дизайн замовнику, закрийте блокери: ${blockers.join(", ")}.`);
+        return;
+      }
     }
     const existingEstimateMinutes = getTaskEstimateMinutes(task);
     if (next === "in_progress" && !existingEstimateMinutes && !options?.estimateMinutes) {
@@ -3283,13 +3375,13 @@ export default function DesignPage() {
     const estimateSetAt =
       options?.estimateMinutes != null
         ? new Date().toISOString()
-        : ((task.metadata ?? {}).estimate_set_at as string | null | undefined) ?? null;
+        : (currentMetadata.estimate_set_at as string | null | undefined) ?? null;
     const estimatedByUserId =
       options?.estimateMinutes != null
         ? (userId ?? null)
-        : ((task.metadata ?? {}).estimated_by_user_id as string | null | undefined) ?? null;
+        : (currentMetadata.estimated_by_user_id as string | null | undefined) ?? null;
     const baseMetadata = {
-      ...(task.metadata ?? {}),
+      ...currentMetadata,
       status: next,
       status_changed_at: new Date().toISOString(),
       methods_count: task.methodsCount ?? 0,
