@@ -191,7 +191,10 @@ export function ThreadFeed({
                             : highlighted
                               ? "border border-primary/30 bg-primary/10 text-foreground"
                               : block.own
-                                ? "bg-primary text-primary-foreground"
+                                ? // thread-bubble-own — не декор, а гачок для правила
+                                  // виділення тексту (index.css): без нього виділення
+                                  // синє на синьому й тексту не видно.
+                                  "thread-bubble-own bg-primary text-primary-foreground"
                                 : "bg-muted text-foreground",
                           isLast && !entry.attachments?.length && (block.own ? "rounded-br-sm" : "rounded-bl-sm")
                         )}

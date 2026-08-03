@@ -174,7 +174,7 @@ export function ThreadComposer({
       {isRecording || isTranscribing ? (
         <div
           className={cn(
-            "flex items-center gap-2.5 rounded-[20px] border px-2.5 py-1.5 transition-colors",
+            "flex min-h-[38px] items-center gap-2.5 rounded-[20px] border px-2.5 py-1 transition-colors",
             isRecording ? "border-destructive/30 bg-danger-soft/60" : "border-border/60 bg-muted/50"
           )}
         >
@@ -222,7 +222,7 @@ export function ThreadComposer({
           )}
         </div>
       ) : (
-      <div className="flex items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+      <div className="flex min-h-[38px] items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
         <input
           ref={fileInputRef}
           type="file"
