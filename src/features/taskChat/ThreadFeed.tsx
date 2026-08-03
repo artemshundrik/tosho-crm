@@ -160,7 +160,7 @@ export function ThreadFeed({
                       б і тоді, коли курсор просто в порожньому місці рядка. */}
                   <div
                     className={cn(
-                      "group relative flex max-w-[76%] flex-col gap-1",
+                      "group relative flex min-w-0 max-w-[76%] flex-col gap-1",
                       block.own && "items-end"
                     )}
                   >
@@ -181,7 +181,7 @@ export function ThreadFeed({
                     {entry.body ? (
                       <div
                         className={cn(
-                          "relative rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
+                          "relative cursor-default rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
                           // місце під час зарезервовано ОДНАКОВЕ в усіх станах —
                           // інакше баббл стрибав завширшки, щойно надсилання
                           // завершувалось.
@@ -208,7 +208,7 @@ export function ThreadFeed({
                           </span>
                         ) : null}
 
-                        <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+                        <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.body}</span>
 
                         <span
                           className={cn(

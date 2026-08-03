@@ -198,18 +198,46 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     atBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 60;
   };
 
+  const stickToBottom = React.useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+    atBottomRef.current = true;
+  }, []);
+
+  /**
+   * Тримаємо низ стрічки.
+   *
+   * Одного scrollTo після рендера мало: висота ще змінюється після нього —
+   * доростає баббл, підвантажується прев'ю картинки, з'являється рядок
+   * реакцій. Через це останнє повідомлення лишалось наполовину під
+   * композером. Тому стежимо за розміром вмісту й, поки користувач унизу,
+   * дотримуємо його там.
+   */
+  React.useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(() => {
+      if (atBottomRef.current) node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(node);
+    for (const child of Array.from(node.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [threadKey]);
+
   const lastMessage = messages[0];
   const lastMessageId = lastMessage?.id;
   const lastMessageMine = lastMessage?.createdBy === userId;
 
   React.useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    const mine = lastMessageMine;
-    if (!atBottomRef.current && !mine) return;
-    node.scrollTo({ top: node.scrollHeight, behavior: mine ? "smooth" : "auto" });
-    atBottomRef.current = true;
-  }, [lastMessageId, lastMessageMine]);
+    if (!atBottomRef.current && !lastMessageMine) return;
+    // Два кадри: перший — після рендера, другий — коли макет уже влігся.
+    const frame = requestAnimationFrame(() => {
+      stickToBottom();
+      requestAnimationFrame(stickToBottom);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [lastMessageId, lastMessageMine, stickToBottom]);
 
   const accessDenied =
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
