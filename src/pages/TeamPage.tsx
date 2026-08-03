@@ -207,6 +207,30 @@ function formatRange(absence: TeamAbsence) {
     : `${formatShort(absence.startDate)} – ${formatShort(absence.endDate)}`;
 }
 
+/** Скільки подій видно до кнопки «ще N». Решта — на вкладці «Календар». */
+const EVENTS_PREVIEW_COUNT = 5;
+
+/**
+ * «завтра» замість «04.08» для найближчого тижня: саме ці події вимагають
+ * дії, і рахувати дні в голові там зайве. Далі за тиждень дата зрозуміліша
+ * за «за 23 дні».
+ */
+function formatEventWhen(daysUntil: number, dateLabel: string) {
+  if (daysUntil === 0) return "сьогодні";
+  if (daysUntil === 1) return "завтра";
+  if (daysUntil <= 6) return `за ${daysUntil} ${pluralDays(daysUntil)}`;
+  return dateLabel;
+}
+
+function pluralEvents(count: number) {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "подій";
+  if (mod10 === 1) return "подія";
+  if (mod10 >= 2 && mod10 <= 4) return "події";
+  return "подій";
+}
+
 function pluralDays(count: number) {
   const mod100 = count % 100;
   const mod10 = count % 10;
@@ -725,7 +749,9 @@ export function TeamPage() {
       });
     });
 
-    return events.sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 8);
+    // Стелю тримає кнопка «ще N», а не обрізання: інакше лічильник у шапці
+    // брехав би, показуючи 8 замість справжньої кількості.
+    return events.sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 20);
   }, [activeMembers, absenceTodayByUser, holidayNames, todayKey]);
 
   /* ------------------------------ Дії -------------------------------- */
@@ -1132,7 +1158,9 @@ export function TeamPage() {
                 <CardContent>
                   <AbsenceBalanceMeters balance={myBalance} />
                   <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
-                    Квота списується робочими днями — вихідні всередині відпустки не рахуються.
+                    Відпустка міряється календарними днями — вихідні всередині неї
+                    квоту списують. Day-off і лікарняний рахуються робочими. Свята не
+                    списують нічого.
                   </p>
                 </CardContent>
               </Card>
@@ -1177,52 +1205,89 @@ export function TeamPage() {
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <CalendarDays className="h-4 w-4 text-primary" aria-hidden />
                   Найближчі події
+                  {upcomingEvents.length > 0 ? (
+                    <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
+                      {upcomingEvents.length}
+                    </span>
+                  ) : null}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              {/* Показуємо рівно EVENTS_PREVIEW_COUNT, решту віддаємо календарю:
+                  список тут росте разом із командою, і без стелі картка ставала
+                  вдвічі вищою за сусідні (правка CEO 2026-08-03). */}
+              <CardContent className="px-0 pb-0">
                 {upcomingEvents.length === 0 ? (
-                  <EmptyRow icon={CalendarDays} title="Найближчим часом подій немає" compact />
+                  <div className="px-5 pb-4">
+                    <EmptyRow icon={CalendarDays} title="Найближчим часом подій немає" compact />
+                  </div>
                 ) : (
-                  upcomingEvents.map((event) => {
-                    const Icon = EVENT_ICONS[event.type];
-                    const member = event.userId ? memberById.get(event.userId) : null;
-                    return (
-                      <div key={event.id} className="flex items-center gap-2.5 py-0.5">
-                        <span className="relative shrink-0">
-                          {event.userId ? (
-                            <AvatarBase
-                              src={member?.avatarDisplayUrl}
-                              name={event.title}
-                              fallback={member ? getInitialsFromName(member.label, member.email) : "•"}
-                              assetVariant="xs"
-                              size={32}
-                            />
-                          ) : (
-                            // У свята немає людини — замість аватарки нейтральне
-                            // коло, щоб рядок не з'їхав відносно сусідніх.
-                            <span className="grid h-8 w-8 place-items-center rounded-full border border-border/60 bg-muted/40" />
-                          )}
-                          {/* Кольорова іконка-коробка на аватарі: тип події видно
-                              одразу, але вона не фарбує весь рядок. */}
-                          <span
-                            className={cn(
-                              "absolute -bottom-0.5 -right-0.5 grid h-[15px] w-[15px] place-items-center rounded-full border",
-                              toneBadgeClass[EVENT_TONE[event.type]]
-                            )}
-                          >
-                            <Icon className="h-2.5 w-2.5" aria-hidden />
-                          </span>
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-xs font-semibold">{event.title}</div>
-                          <div className="truncate text-2xs text-muted-foreground">{event.caption}</div>
-                        </div>
-                        <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-2xs font-semibold tabular-nums">
-                          {event.dateLabel}
-                        </span>
-                      </div>
-                    );
-                  })
+                  <>
+                    <div className="divide-y divide-border/30 px-5">
+                      {upcomingEvents.slice(0, EVENTS_PREVIEW_COUNT).map((event) => {
+                        const Icon = EVENT_ICONS[event.type];
+                        const member = event.userId ? memberById.get(event.userId) : null;
+                        const tone = EVENT_TONE[event.type];
+                        return (
+                          <div key={event.id} className="flex items-center gap-2 py-1.5">
+                            <span className="relative shrink-0">
+                              {event.userId ? (
+                                <>
+                                  <AvatarBase
+                                    src={member?.avatarDisplayUrl}
+                                    name={event.title}
+                                    fallback={member ? getInitialsFromName(member.label, member.email) : "•"}
+                                    assetVariant="xs"
+                                    size={24}
+                                  />
+                                  {/* Кольорова іконка-коробка на аватарі: тип події
+                                      видно одразу, але вона не фарбує весь рядок. */}
+                                  <span
+                                    className={cn(
+                                      "absolute -bottom-0.5 -right-0.5 grid h-[13px] w-[13px] place-items-center rounded-full border",
+                                      toneBadgeClass[tone]
+                                    )}
+                                  >
+                                    <Icon className="h-2 w-2" aria-hidden />
+                                  </span>
+                                </>
+                              ) : (
+                                // У свята людини немає. Порожній сірий кружечок на
+                                // її місці читався як незавантажена аватарка, тож
+                                // ставимо саму іконку події в кольорі типу.
+                                <span
+                                  className={cn(
+                                    "grid h-6 w-6 place-items-center rounded-full border",
+                                    toneBadgeClass[tone]
+                                  )}
+                                >
+                                  <Icon className="h-3 w-3" aria-hidden />
+                                </span>
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-2xs">
+                              <b className="font-semibold text-foreground">{event.title}</b>
+                              <span className="text-muted-foreground"> · {event.caption}</span>
+                            </span>
+                            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
+                              {formatEventWhen(event.daysUntil, event.dateLabel)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {upcomingEvents.length > EVENTS_PREVIEW_COUNT ? (
+                      <button
+                        type="button"
+                        onClick={() => setTab("calendar")}
+                        className="mt-1 flex w-full items-center justify-center gap-1 border-t border-border/40 py-2 text-2xs font-semibold text-primary transition-colors hover:bg-muted/40"
+                      >
+                        Ще {upcomingEvents.length - EVENTS_PREVIEW_COUNT}{" "}
+                        {pluralEvents(upcomingEvents.length - EVENTS_PREVIEW_COUNT)} →
+                      </button>
+                    ) : (
+                      <div className="pb-4" />
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
