@@ -52,26 +52,138 @@ export function fallbackBalance(userId: string): AbsenceBalance {
 }
 
 /** Виняткові дні календаря за період. Порожня мапа = звичайні пн–пт. */
+/**
+ * Винятки робочого календаря + назви свят.
+ *
+ * Назви живуть в окремій мапі навмисно: уся математика (isBusinessDay,
+ * countQuotaDaysInYear) працює з `Map<день, boolean>` і не має знати про
+ * підписи, а UI без підписів показував би 24 серпня точно як суботу.
+ */
+export type WorkdayCalendar = {
+  /** день → чи робочий. Це те, що їсть математика. */
+  exceptions: Map<string, boolean>;
+  /** день → назва свята. Лише для неробочих винятків із заповненим note. */
+  holidayNames: Map<string, string>;
+};
+
 export async function loadWorkdayExceptions(params: {
   workspaceId: string;
   from: string; // YYYY-MM-DD
   to: string; // YYYY-MM-DD (exclusive)
-}): Promise<Map<string, boolean>> {
+}): Promise<WorkdayCalendar> {
   const { data, error } = await supabase
     .schema("tosho")
     .from("ua_workday_exceptions")
-    .select("day,is_workday")
+    .select("day,is_workday,note")
     .eq("workspace_id", params.workspaceId)
     .gte("day", params.from)
     .lt("day", params.to);
 
   if (error) throw error;
 
-  const map = new Map<string, boolean>();
+  const exceptions = new Map<string, boolean>();
+  const holidayNames = new Map<string, string>();
   (data ?? []).forEach((row) => {
-    map.set(row.day, row.is_workday);
+    exceptions.set(row.day, row.is_workday);
+    const note = (row.note as string | null)?.trim();
+    // Робочу суботу теж можна підписати, але «свято» — це саме неробочий день.
+    if (!row.is_workday && note) holidayNames.set(row.day, note);
   });
-  return map;
+  return { exceptions, holidayNames };
+}
+
+export type HolidayRow = { dateKey: string; name: string };
+
+/**
+ * Список свят року для редактора. Беремо лише неробочі винятки: робоча
+ * субота — теж виняток, але це не свято й у списку свят їй не місце.
+ */
+export async function listHolidays(params: {
+  workspaceId: string;
+  year: number;
+}): Promise<HolidayRow[]> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("ua_workday_exceptions")
+    .select("day,is_workday,note")
+    .eq("workspace_id", params.workspaceId)
+    .eq("is_workday", false)
+    .gte("day", `${params.year}-01-01`)
+    .lte("day", `${params.year}-12-31`)
+    .order("day", { ascending: true });
+
+  if (error) throw error;
+  return ((data ?? []) as Array<{ day: string; note: string | null }>).map((row) => ({
+    dateKey: row.day,
+    name: row.note?.trim() || "Свято",
+  }));
+}
+
+/** Додати або перейменувати святковий день. Пише лише owner/admin/SEO (RLS). */
+export async function upsertHoliday(params: {
+  workspaceId: string;
+  dateKey: string;
+  name: string;
+  updatedBy: string | null;
+}): Promise<void> {
+  const { error } = await supabase
+    .schema("tosho")
+    .from("ua_workday_exceptions")
+    .upsert(
+      {
+        workspace_id: params.workspaceId,
+        day: params.dateKey,
+        is_workday: false,
+        note: params.name.trim().slice(0, 200) || "Свято",
+        updated_by: params.updatedBy,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "workspace_id,day" }
+    );
+  if (error) throw error;
+}
+
+export async function deleteHoliday(params: { workspaceId: string; dateKey: string }): Promise<void> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("ua_workday_exceptions")
+    .delete()
+    .eq("workspace_id", params.workspaceId)
+    .eq("day", params.dateKey)
+    .select("day");
+
+  if (error) throw error;
+  // .select() навмисно: delete без нього мовчить, коли RLS не дала рядка, і
+  // UI показав би «видалено» на дні, який лишився в календарі.
+  if (!data || data.length === 0) {
+    throw new Error("День не знайдено або немає прав");
+  }
+}
+
+/** Найближчі свята від дати — для блоку «Події» і сповіщень. */
+export function upcomingHolidays(
+  holidayNames: Map<string, string>,
+  fromDateKey: string,
+  limit = 3
+): Array<{ dateKey: string; name: string }> {
+  return Array.from(holidayNames.entries())
+    .filter(([dateKey]) => dateKey >= fromDateKey)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([dateKey, name]) => ({ dateKey, name }));
+}
+
+/** Свята всередині діапазону — щоб пояснити, чому дні не списались. */
+export function holidaysInRange(
+  holidayNames: Map<string, string>,
+  startKey: string,
+  endKey: string
+): Array<{ dateKey: string; name: string }> {
+  if (!startKey || !endKey || endKey < startKey) return [];
+  return Array.from(holidayNames.entries())
+    .filter(([dateKey]) => dateKey >= startKey && dateKey <= endKey)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([dateKey, name]) => ({ dateKey, name }));
 }
 
 /**

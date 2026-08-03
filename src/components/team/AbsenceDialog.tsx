@@ -23,6 +23,7 @@ import {
   ABSENCE_QUOTA_UNIT_LABEL,
   countQuotaDaysInYear,
 } from "@/lib/teamAbsenceCalendar";
+import { holidaysInRange } from "@/lib/teamAbsenceQuotas";
 import { ABSENCE_KIND_ICONS } from "@/components/team/AbsenceKindChip";
 import {
   isQuotaAbsenceKind,
@@ -73,6 +74,11 @@ function calendarSpan(startKey: string, endKey: string) {
   return Math.round((end - start) / 86400000) + 1;
 }
 
+/** «24.08» — короткий підпис святкового дня всередині діапазону. */
+function formatHolidayShort(dateKey: string) {
+  return `${dateKey.slice(8, 10)}.${dateKey.slice(5, 7)}`;
+}
+
 function pluralDays(count: number) {
   const mod100 = count % 100;
   const mod10 = count % 10;
@@ -102,6 +108,7 @@ export function AbsenceDialog({
   canPickPerson,
   balanceOf,
   exceptions,
+  holidayNames,
   saving,
   editing,
   mode = "manage",
@@ -119,6 +126,8 @@ export function AbsenceDialog({
   /** Баланс людини, якщо він видимий викликачу. */
   balanceOf: (userId: string) => AbsenceBalance | null;
   exceptions?: Map<string, boolean>;
+  /** день → назва свята: пояснює, чому діапазон з'їв менше, ніж здається. */
+  holidayNames?: Map<string, string>;
   saving?: boolean;
   editing?: boolean;
   /** `request` — співробітник просить за себе; `manage` — owner/SEO вносить факт. */
@@ -150,6 +159,13 @@ export function AbsenceDialog({
     );
   }, [exceptions, quotaKind, rangeInvalid, value.endDate, value.startDate]);
   const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
+
+  // Свята у вибраному діапазоні. Без цього рядка «6 днів, а списалось 5»
+  // виглядає як помилка розрахунку.
+  const rangeHolidays = useMemo(() => {
+    if (!holidayNames || !value.startDate || !value.endDate || rangeInvalid) return [];
+    return holidaysInRange(holidayNames, value.startDate, value.endDate);
+  }, [holidayNames, rangeInvalid, value.endDate, value.startDate]);
 
   const balance = balanceOf(value.userId);
   const bucket = balance && isQuotaAbsenceKind(value.kind) ? balance[value.kind] : null;
@@ -337,6 +353,16 @@ export function AbsenceDialog({
                   {chargedDays} {pluralDays(chargedDays)}
                 </b>{" "}
                 {unitLabel}
+                {rangeHolidays.length > 0 ? (
+                  <>
+                    {" "}
+                    {rangeHolidays.length === 1
+                      ? `${formatHolidayShort(rangeHolidays[0].dateKey)} — ${rangeHolidays[0].name}, цей день не списується.`
+                      : `${rangeHolidays.length} святкові дні всередині не списуються (${rangeHolidays
+                          .map((holiday) => formatHolidayShort(holiday.dateKey))
+                          .join(", ")}).`}
+                  </>
+                ) : null}
                 {bucket ? (
                   remainingAfter !== null && remainingAfter < 0 ? (
                     <>

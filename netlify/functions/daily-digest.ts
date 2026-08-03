@@ -651,7 +651,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         .map((m) => [m.userId, shortName((m.fullName ?? "").trim())])
     );
 
-    const [currentAbs, pendingAbs] = await Promise.all([
+    const [currentAbs, pendingAbs, holidayRows] = await Promise.all([
       admin
         .schema("tosho")
         .from("team_absences")
@@ -669,7 +669,20 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         .eq("status", "pending")
         .gte("end_date", todayKey)
         .limit(100),
+      admin
+        .schema("tosho")
+        .from("ua_workday_exceptions")
+        .select("day,note")
+        .in("workspace_id", workspaceIds)
+        .eq("is_workday", false)
+        .in("day", [todayKey, tomorrowKey]),
     ]);
+
+    const holidayByDay = new Map(
+      ((holidayRows.data ?? []) as Array<{ day?: string | null; note?: string | null }>)
+        .filter((row) => row.day)
+        .map((row) => [row.day as string, (row.note ?? "").trim() || "Свято"])
+    );
 
     type AbsRow = { user_id?: string | null; start_date?: string | null; end_date?: string | null; kind?: string | null; created_at?: string | null };
     const absKindLabel = (row: AbsRow) =>
@@ -683,6 +696,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     const backTomorrow = outToday.filter((r) => r.end_date === todayKey);
 
     const absenceSection: string[] = [];
+    // Свято сьогодні — перше, що має стояти в ранковому звіті: решта цифр
+    // цього дня читається інакше.
+    if (holidayByDay.has(todayKey)) {
+      absenceSection.push(`• 🎉 Сьогодні свято — ${escapeTelegramHtml(holidayByDay.get(todayKey) as string)}`);
+    }
     if (outToday.length > 0) {
       const parts = outToday.map((r) => {
         const until = r.end_date === todayKey ? "останній день" : `до ${formatAbsenceShort(r.end_date!)}`;
@@ -698,6 +716,9 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
       tomorrowBits.push(
         startTomorrow.map((r) => `${nameByUser.get(r.user_id!)} — ${absKindLabel(r)}`).join(" · ")
       );
+    }
+    if (holidayByDay.has(tomorrowKey)) {
+      tomorrowBits.unshift(`🎉 свято (${holidayByDay.get(tomorrowKey)})`);
     }
     if (tomorrowBits.length > 0) {
       absenceSection.push(`• Завтра: ${escapeTelegramHtml(tomorrowBits.join(" · "))}`);

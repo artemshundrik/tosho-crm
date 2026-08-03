@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileSpreadsheet,
   Loader2,
+  PartyPopper,
   Pencil,
   Plus,
   Settings2,
@@ -77,6 +78,7 @@ import {
   fallbackBalance,
   loadAbsenceBalances,
   loadWorkdayExceptions,
+  upcomingHolidays,
   type AbsenceBalance,
 } from "@/lib/teamAbsenceQuotas";
 import { toneBadgeClass, toneTextClass, type Tone } from "@/lib/statusTones";
@@ -100,6 +102,7 @@ import {
 } from "@/components/team/AbsenceDialog";
 import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/components/team/AbsencePlanner";
 import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDialog";
+import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
 import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/TeamMemberCard";
 
@@ -145,12 +148,14 @@ const EVENT_TONE = {
   birthday: "festive",
   anniversary: "accent",
   return: "success",
+  holiday: "festive",
 } satisfies Record<string, Tone>;
 
 const EVENT_ICONS: Record<keyof typeof EVENT_TONE, LucideIcon> = {
   birthday: Cake,
   anniversary: Award,
   return: Undo2,
+  holiday: PartyPopper,
 };
 
 /* ------------------------------------------------------------------ */
@@ -250,6 +255,8 @@ export function TeamPage() {
   const [absencesLoading, setAbsencesLoading] = useState(false);
   const [balances, setBalances] = useState<Map<string, AbsenceBalance>>(new Map());
   const [exceptions, setExceptions] = useState<Map<string, boolean>>(new Map());
+  /** день → назва свята. Окремо від математики: та про підписи не знає. */
+  const [holidayNames, setHolidayNames] = useState<Map<string, string>>(new Map());
 
   const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
   const [absenceDialogInitial, setAbsenceDialogInitial] = useState<AbsenceDialogValue | null>(null);
@@ -257,6 +264,7 @@ export function TeamPage() {
   const [absenceSaving, setAbsenceSaving] = useState(false);
   const [absenceDeletingId, setAbsenceDeletingId] = useState<string | null>(null);
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
+  const [holidayDialogOpen, setHolidayDialogOpen] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [decisionComments, setDecisionComments] = useState<Map<string, string>>(new Map());
   const [decidingId, setDecidingId] = useState<string | null>(null);
@@ -308,7 +316,7 @@ export function TeamPage() {
     try {
       const from = `${year}-01-01`;
       const to = `${year + 1}-01-01`;
-      const [rows, exceptionMap] = await Promise.all([
+      const [rows, calendar] = await Promise.all([
         listTeamAbsencesInRange({
           workspaceId,
           from,
@@ -318,9 +326,10 @@ export function TeamPage() {
         loadWorkdayExceptions({ workspaceId, from, to }),
       ]);
       setAbsences(rows);
-      setExceptions(exceptionMap);
+      setExceptions(calendar.exceptions);
+      setHolidayNames(calendar.holidayNames);
       const [balanceMap, comments] = await Promise.all([
-        loadAbsenceBalances({ year, pendingAbsences: rows, exceptions: exceptionMap }),
+        loadAbsenceBalances({ year, pendingAbsences: rows, exceptions: calendar.exceptions }),
         // Причини рішень лежать за окремим RPC: колонку знято з табличного
         // select, бо журнал читає вся команда.
         loadAbsenceDecisionComments(year).catch(() => new Map<string, string>()),
@@ -648,7 +657,8 @@ export function TeamPage() {
   const upcomingEvents = useMemo(() => {
     const events: Array<{
       id: string;
-      userId: string;
+      /** У свята людини немає — тоді рядок показує іконку без аватарки. */
+      userId: string | null;
       type: keyof typeof EVENT_TONE;
       title: string;
       caption: string;
@@ -699,8 +709,24 @@ export function TeamPage() {
       }
     });
 
+    // Свята — теж подія команди: «через 3 тижні День Незалежності» рятує від
+    // планування дедлайну на неробочий день.
+    upcomingHolidays(holidayNames, todayKey, 3).forEach((holiday) => {
+      const daysUntil = eachDateKey(todayKey, holiday.dateKey).length - 1;
+      if (daysUntil < 0 || daysUntil > 45) return;
+      events.push({
+        id: `h:${holiday.dateKey}`,
+        userId: null,
+        type: "holiday",
+        title: holiday.name,
+        caption: daysUntil === 0 ? "Свято — сьогодні" : "Святковий день, не робочий",
+        dateLabel: formatShort(holiday.dateKey),
+        daysUntil,
+      });
+    });
+
     return events.sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 8);
-  }, [activeMembers, absenceTodayByUser, todayKey]);
+  }, [activeMembers, absenceTodayByUser, holidayNames, todayKey]);
 
   /* ------------------------------ Дії -------------------------------- */
 
@@ -967,6 +993,14 @@ export function TeamPage() {
                   <Settings2 className="h-4 w-4" aria-hidden />
                   Квоти
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setHolidayDialogOpen(true)}
+                  className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+                >
+                  <PartyPopper className="h-4 w-4" aria-hidden />
+                  Свята
+                </Button>
               </>
             ) : null}
             {canManageAbsences ? (
@@ -1151,17 +1185,23 @@ export function TeamPage() {
                 ) : (
                   upcomingEvents.map((event) => {
                     const Icon = EVENT_ICONS[event.type];
-                    const member = memberById.get(event.userId);
+                    const member = event.userId ? memberById.get(event.userId) : null;
                     return (
                       <div key={event.id} className="flex items-center gap-2.5 py-0.5">
                         <span className="relative shrink-0">
-                          <AvatarBase
-                            src={member?.avatarDisplayUrl}
-                            name={event.title}
-                            fallback={member ? getInitialsFromName(member.label, member.email) : "•"}
-                            assetVariant="xs"
-                            size={32}
-                          />
+                          {event.userId ? (
+                            <AvatarBase
+                              src={member?.avatarDisplayUrl}
+                              name={event.title}
+                              fallback={member ? getInitialsFromName(member.label, member.email) : "•"}
+                              assetVariant="xs"
+                              size={32}
+                            />
+                          ) : (
+                            // У свята немає людини — замість аватарки нейтральне
+                            // коло, щоб рядок не з'їхав відносно сусідніх.
+                            <span className="grid h-8 w-8 place-items-center rounded-full border border-border/60 bg-muted/40" />
+                          )}
                           {/* Кольорова іконка-коробка на аватарі: тип події видно
                               одразу, але вона не фарбує весь рядок. */}
                           <span
@@ -1208,6 +1248,7 @@ export function TeamPage() {
                 people={stripPeople}
                 absences={liveAbsences}
                 exceptions={exceptions}
+                holidayNames={holidayNames}
                 todayKey={todayKey}
                 currentUserId={userId}
                 canPickForOthers={canManageAbsences}
@@ -1320,6 +1361,7 @@ export function TeamPage() {
               absences={liveAbsences}
               marks={plannerMarks}
               exceptions={exceptions}
+              holidayNames={holidayNames}
               todayKey={todayKey}
               currentUserId={userId}
               canPickForOthers={canManageAbsences}
@@ -1327,7 +1369,9 @@ export function TeamPage() {
               onOpenAbsence={canManageAbsences ? (absence) => openAbsenceDialog({ absence }) : undefined}
             />
             <p className="border-t border-border/40 px-5 py-3 text-2xs text-muted-foreground">
-              Сірі стовпчики — вихідні та свята: квоту вони не списують.
+              Сірі стовпчики — вихідні та свята. Свята квоту не списують ніколи;
+              вихідні всередині відпустки — списують, бо відпустка міряється
+              календарними днями.
               {canManageAbsences
                 ? " Клік по вільному дню створює відсутність, клік по бару — відкриває запис."
                 : " Клік по вільному дню у своєму рядку створює заявку."}
@@ -1527,6 +1571,7 @@ export function TeamPage() {
             if (!open) setAbsenceEditingId(null);
           }}
           initial={absenceDialogInitial}
+          holidayNames={holidayNames}
           people={activeMembers.map((member) => ({
             userId: member.userId,
             name: member.label,
@@ -1579,6 +1624,16 @@ export function TeamPage() {
         year={year}
         people={quotaPeople}
         currentUserId={userId ?? null}
+        onSaved={() => void reloadAbsenceData()}
+      />
+
+      <HolidayEditorDialog
+        open={holidayDialogOpen}
+        onOpenChange={setHolidayDialogOpen}
+        workspaceId={workspaceId}
+        year={year}
+        currentUserId={userId ?? null}
+        // Свята міняють і баланси, і сітку планера — перезавантажуємо все.
         onSaved={() => void reloadAbsenceData()}
       />
     </div>

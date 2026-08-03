@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Award, Cake, type LucideIcon } from "lucide-react";
+import { Award, Cake, PartyPopper, type LucideIcon } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import {
 } from "@/lib/teamAbsences";
 import { ABSENCE_KIND_ICONS, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { PersonHoverCardMaybe, type PersonHoverCardData } from "@/components/app/PersonHoverCard";
-import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
+import { toneBadgeClass, toneDotClass, toneTextClass } from "@/lib/statusTones";
 
 /**
  * Планер відсутностей: люди × дні.
@@ -116,6 +116,8 @@ type AbsencePlannerProps = {
   absences: TeamAbsence[];
   marks?: PlannerMark[];
   exceptions?: Map<string, boolean>;
+  /** день → назва свята. Свято неробоче, як і вихідний, але має ім'я. */
+  holidayNames?: Map<string, string>;
   todayKey: string;
   currentUserId?: string | null;
   /** Може створювати відсутність будь-кому (owner/SEO). Решта — лише собі. */
@@ -132,6 +134,7 @@ function AbsencePlannerImpl({
   absences,
   marks,
   exceptions,
+  holidayNames,
   todayKey,
   currentUserId,
   canPickForOthers = false,
@@ -164,9 +167,18 @@ function AbsencePlannerImpl({
       days.map((dateKey) => ({
         dateKey,
         rest: !isBusinessDay(dateKey, exceptions),
+        // Свято теж неробоче, але з іменем — і саме тому його треба
+        // відрізняти від суботи, інакше 24 серпня виглядає як вихідний.
+        holiday: holidayNames?.get(dateKey) ?? null,
         today: dateKey === todayKey,
       })),
-    [days, exceptions, todayKey]
+    [days, exceptions, holidayNames, todayKey]
+  );
+
+  /** Свята видимого вікна — для підпису під сіткою. */
+  const visibleHolidays = useMemo(
+    () => dayMeta.filter((day) => day.holiday).map((day) => ({ dateKey: day.dateKey, name: day.holiday as string })),
+    [dayMeta]
   );
 
   const gridStyle = {
@@ -178,7 +190,8 @@ function AbsencePlannerImpl({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto">
       <div className="min-w-[760px]">
         {/* Шапка з датами */}
         <div className="grid border-b border-border/60" style={gridStyle}>
@@ -190,16 +203,29 @@ function AbsencePlannerImpl({
                 "px-0.5 py-1.5 text-center text-3xs uppercase tracking-wide text-muted-foreground",
                 day.rest && "bg-muted/40 text-muted-foreground/70"
               )}
+              title={day.holiday ?? undefined}
             >
               <div>{formatWeekdayShort(day.dateKey)}</div>
               <div
                 className={cn(
                   "mt-0.5 text-2xs font-semibold tabular-nums text-foreground",
+                  // Свято неробоче так само, як субота, тож фон однаковий —
+                  // відрізняє його колір числа. «Сьогодні» лишається сильнішим
+                  // сигналом і перебиває: воно одне на весь місяць.
+                  day.holiday && !day.today && toneTextClass.festive,
                   day.today &&
                     "mx-auto grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground"
                 )}
               >
                 {dayNumber(day.dateKey)}
+              </div>
+              {/* Крапка дублює колір для тих, хто його не розрізняє, і тримає
+                  висоту шапки однаковою. Легенда під сіткою дає назву: на
+                  тачі title недоступний. */}
+              <div className="mt-0.5 flex h-1.5 items-center justify-center">
+                {day.holiday ? (
+                  <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", toneDotClass.festive)} />
+                ) : null}
               </div>
             </div>
           ))}
@@ -370,6 +396,25 @@ function AbsencePlannerImpl({
           );
         })}
       </div>
+      </div>
+
+      {/* Свята видимого вікна. Дублює крапку в шапці навмисно: на телефоні
+          title не спрацьовує, а саме там планер найчастіше й гортають. */}
+      {visibleHolidays.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 px-3 py-2">
+          <span className="flex items-center gap-1.5 text-3xs uppercase tracking-wide text-muted-foreground">
+            <PartyPopper className={cn("h-3 w-3", toneTextClass.festive)} aria-hidden />
+            Свята
+          </span>
+          {visibleHolidays.map((holiday) => (
+            <span key={holiday.dateKey} className="flex items-center gap-1.5 text-2xs">
+              <span aria-hidden className={cn("h-1 w-1 shrink-0 rounded-full", toneDotClass.festive)} />
+              <b className="font-medium tabular-nums text-foreground">{dayNumber(holiday.dateKey)}</b>
+              <span className="text-muted-foreground">{holiday.name}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
