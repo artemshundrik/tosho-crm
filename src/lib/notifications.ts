@@ -15,6 +15,8 @@ export type NotificationItem = {
   title: string;
   description: string;
   time: string;
+  /** Сирий ISO з created_at — потрібен там, де час групують по днях або форматують інакше. */
+  createdAt: string;
   href?: string;
   read: boolean;
   tone?: NotificationTone;
@@ -41,6 +43,7 @@ export function mapNotificationRow(row: NotificationRow): NotificationItem {
     title: row.title,
     description: row.body ?? "",
     time: formatNotificationTime(row.created_at),
+    createdAt: row.created_at,
     href: row.href ?? undefined,
     read: Boolean(row.read_at),
     tone,

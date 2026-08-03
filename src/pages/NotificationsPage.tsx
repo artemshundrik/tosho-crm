@@ -4,8 +4,6 @@ import {
   BadgeCheck,
   BellRing,
   MonitorSmartphone,
-  PlaneTakeoff,
-  PartyPopper,
   Send,
   Settings2,
   ShieldAlert,
@@ -36,6 +34,11 @@ import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
+import {
+  extractNotificationName,
+  getNotificationAvatarMeta,
+  getNotificationInitials as getInitials,
+} from "@/lib/notificationAvatar";
 import { playNotificationSound } from "@/lib/notificationSound";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -182,21 +185,6 @@ function notificationCardToneClass(item: NotificationItem) {
   return "tone-neutral-subtle";
 }
 
-function extractNotificationName(title: string) {
-  const normalized = title.replace(/\s+/g, " ").trim();
-  const markerIndex = Math.max(normalized.lastIndexOf(" у "), normalized.lastIndexOf(" в "));
-  const subject = markerIndex >= 0 ? normalized.slice(markerIndex + 3).trim() : normalized;
-  const clean = subject.replace(/[.,;:!?]+$/g, "");
-  const words = clean.split(" ").filter(Boolean).slice(0, 2);
-  return words.join(" ").trim() || "CRM";
-}
-
-function getInitials(value: string) {
-  const words = value.split(" ").filter(Boolean);
-  const initials = words.slice(0, 2).map((word) => word[0]?.toUpperCase() ?? "").join("");
-  return initials || "CR";
-}
-
 function normalizeNotificationMatchText(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -283,84 +271,6 @@ function findPartyAvatarByTypedId(
     partyAvatars.find((party) => party.entityType === entityType && party.id === id) ??
     null
   );
-}
-
-function getNotificationToneClasses(
-  tone: "mention" | "birthday" | "vacation" | "success" | "warning" | "default"
-) {
-  if (tone === "mention") {
-    return "border-info-soft-border bg-info-soft text-info-foreground";
-  }
-  if (tone === "birthday") {
-    return "border-danger-soft-border bg-danger-soft text-danger-foreground";
-  }
-  if (tone === "vacation") {
-    return "border-warning-soft-border bg-warning-soft text-warning-foreground";
-  }
-  if (tone === "success") {
-    return "border-success-soft-border bg-success-soft text-success-foreground";
-  }
-  if (tone === "warning") {
-    return "border-warning-soft-border bg-warning-soft text-warning-foreground";
-  }
-  return "border-border/70 bg-muted/50 text-foreground";
-}
-
-function getNotificationAvatarMeta(item: NotificationItem) {
-  const lowerTitle = item.title.toLowerCase();
-  const name = extractNotificationName(item.title);
-
-  if (lowerTitle.includes("згадав")) {
-    return {
-      initials: getInitials(name),
-      icon: <BellRing className="h-4 w-4" />,
-      avatarClass: getNotificationToneClasses("mention"),
-      badgeClass: getNotificationToneClasses("mention"),
-    };
-  }
-
-  if (lowerTitle.includes("день народження")) {
-    return {
-      initials: getInitials(name),
-      icon: <PartyPopper className="h-4 w-4" />,
-      avatarClass: getNotificationToneClasses("birthday"),
-      badgeClass: getNotificationToneClasses("birthday"),
-    };
-  }
-
-  if (lowerTitle.includes("відпуст")) {
-    return {
-      initials: getInitials(name),
-      icon: <PlaneTakeoff className="h-4 w-4" />,
-      avatarClass: getNotificationToneClasses("vacation"),
-      badgeClass: getNotificationToneClasses("vacation"),
-    };
-  }
-
-  if (item.tone === "success") {
-    return {
-      initials: "OK",
-      icon: <BadgeCheck className="h-4 w-4" />,
-      avatarClass: getNotificationToneClasses("success"),
-      badgeClass: getNotificationToneClasses("success"),
-    };
-  }
-
-  if (item.tone === "warning") {
-    return {
-      initials: "AL",
-      icon: <ShieldAlert className="h-4 w-4" />,
-      avatarClass: getNotificationToneClasses("warning"),
-      badgeClass: getNotificationToneClasses("warning"),
-    };
-  }
-
-  return {
-    initials: getInitials(name),
-    icon: <BellRing className="h-4 w-4" />,
-    avatarClass: getNotificationToneClasses("default"),
-    badgeClass: getNotificationToneClasses("default"),
-  };
 }
 
 function renderNotificationDescription(text: string): ReactNode {

@@ -78,6 +78,7 @@ import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 import { DesignerEarningsWidget } from "@/components/design/DesignerEarningsWidget";
 import { ViewAsBar } from "@/components/app/ViewAsBar";
 import { AppDropdown } from "@/components/app/AppDropdown";
+import { NotificationsMenu } from "@/components/app/NotificationsMenu";
 import {
   DesignerFloatingTimerWidget,
   DesignerHeaderTimerWidget,
@@ -1460,6 +1461,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 title: row.title,
                 description: row.body,
                 time: formatDateTimeUA(new Date().toISOString()),
+                createdAt: new Date().toISOString(),
                 href: row.href,
                 read: false,
                 tone: "warning",
@@ -2058,122 +2060,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
               </Button>
 
-              <AppDropdown
-                align="end"
-                sideOffset={10}
-                contentClassName="w-[340px]"
+              <NotificationsMenu
                 open={notificationsOpen}
                 onOpenChange={setNotificationsOpen}
-                trigger={
-                  <Button
-                    type="button"
-                    variant="control"
-                    size="iconMd"
-                    className="relative rounded-xl border border-border/50 bg-muted/40 shadow-inner hover:bg-muted/60 h-10 w-10 transition-all duration-200"
-                    aria-label="Сповіщення"
-                    title="Сповіщення"
-                  >
-                    <Bell className="h-4.5 w-4.5" />
-                    {unreadCount > 0 ? (
-                      <span className="pointer-events-none absolute right-0 top-0 inline-flex h-5 min-w-5 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-none text-primary-foreground">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    ) : null}
-                  </Button>
-                }
-                content={
-                  <>
-                    <div className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[15px] font-semibold tracking-tight text-foreground">Сповіщення</div>
-                        </div>
-                        <div className="flex shrink-0 items-start gap-2">
-                          {push.supported && push.configured ? (
-                            <Button
-                              type="button"
-                              variant={push.enabled ? "secondary" : "outline"}
-                              size="xs"
-                              className="rounded-full"
-                              onClick={push.enabled ? push.disable : push.enable}
-                              disabled={push.busy}
-                            >
-                              {push.enabled ? "Push увімкнено" : "Push вимкнено"}
-                            </Button>
-                          ) : null}
-                          {unreadCount > 0 ? (
-                            <Button
-                              type="button"
-                              variant="textMuted"
-                              size="xs"
-                              onClick={markAllRead}
-                              className="h-auto px-0 py-0.5"
-                            >
-                              Позначити всі
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="h-px bg-border/70" />
-                    <div className="max-h-[320px] overflow-auto">
-                      {notificationsLoading ? (
-                        <div className="px-4 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
-                      ) : unreadNotifications.length === 0 ? (
-                        <div className="px-4 py-4">
-                          <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-5 text-center">
-                            <div className="text-sm font-medium text-foreground">Немає непрочитаних</div>
-                            <div className="mt-1 text-xs text-muted-foreground">Нові події з’являться тут автоматично.</div>
-                          </div>
-                        </div>
-                      ) : (
-                        unreadNotifications.map((n) => (
-                          <Button
-                            key={n.id}
-                            type="button"
-                            variant="menu"
-                            size="sm"
-                            className="h-auto w-full items-start justify-start gap-3 px-4 py-3 text-left"
-                            onClick={() => {
-                              openNotification(n);
-                              setNotificationsOpen(false);
-                            }}
-                          >
-                            <span
-                              className={cn(
-                                "mt-1 h-2 w-2 rounded-full",
-                                !n.read && n.tone === "success" && "tone-dot-success",
-                                !n.read && n.tone === "warning" && "tone-dot-warning",
-                                !n.read && n.tone === "info" && "tone-dot-info",
-                                !n.read && !n.tone && "bg-muted-foreground",
-                                n.read && "bg-muted-foreground/40"
-                              )}
-                            />
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
-                              <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.description}</div>
-                              <div className="mt-1 text-3xs text-muted-foreground/70">{n.time}</div>
-                            </div>
-                          </Button>
-                        ))
-                      )}
-                    </div>
-                    <div className="h-px bg-border/70" />
-                    <Button
-                      type="button"
-                      variant="menu"
-                      size="sm"
-                      className="h-auto w-full justify-between px-4 py-3 text-left"
-                      onClick={() => {
-                        navigate("/notifications");
-                        setNotificationsOpen(false);
-                      }}
-                    >
-                      <span className="font-medium">Всі сповіщення</span>
-                      <span className="text-xs text-muted-foreground">Відкрити</span>
-                    </Button>
-                  </>
-                }
+                items={unreadNotifications}
+                unreadCount={unreadCount}
+                loading={notificationsLoading}
+                push={push}
+                onOpenItem={openNotification}
+                onMarkAllRead={markAllRead}
+                onOpenAll={() => navigate("/notifications")}
               />
 
             </div>
