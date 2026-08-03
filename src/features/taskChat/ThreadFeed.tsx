@@ -173,10 +173,19 @@ export function ThreadFeed({
                       б і тоді, коли курсор просто в порожньому місці рядка. */}
                   <div
                     className={cn(
-                      "group relative flex min-w-0 max-w-[76%] flex-col gap-1",
+                      "flex min-w-0 max-w-[76%] flex-col gap-1",
                       block.own && "items-end"
                     )}
                   >
+                    {/* Зона наведення — САМЕ повідомлення. Рядок реакцій лежить
+                        нижче, поза нею: інакше панель зринала, коли курсор
+                        просто над уже поставленою реакцією чи кнопкою «додати». */}
+                    <div
+                      className={cn(
+                        "group relative flex min-w-0 flex-col gap-1",
+                        block.own && "items-end"
+                      )}
+                    >
                     {entry.pending || entry.deletedAt ? null : (
                       <ThreadReactionBar
                         align={block.own ? "end" : "start"}
@@ -270,6 +279,8 @@ export function ThreadFeed({
                         attachment={attachment}
                       />
                     ))}
+
+                    </div>
 
                     <ThreadReactions
                       reactions={reactions.filter((item) => item.messageId === entry.id)}
