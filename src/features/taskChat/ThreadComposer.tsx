@@ -210,7 +210,8 @@ export function ThreadComposer({
                 type="button"
                 aria-label="Скасувати запис"
                 onClick={() => dictation.cancel()}
-                className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-background/70 hover:text-destructive"
+                // Той самий кружечок наведення, що в скріпки, емодзі й мікрофона.
+                className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-destructive"
               >
                 <X className="h-4 w-4" />
               </button>
