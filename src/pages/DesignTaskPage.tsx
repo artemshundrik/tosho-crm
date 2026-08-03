@@ -11813,6 +11813,7 @@ export default function DesignTaskPage() {
               <TaskThreadRail
                 quoteRef={String(task.quoteId)}
                 teamId={effectiveTeamId}
+                canManage={canManageAssignments}
                 onAttachFiles={async (files) => {
                   const uploaded = await handleUploadTaskAttachments(files);
                   return (uploaded ?? []).map((file) => ({

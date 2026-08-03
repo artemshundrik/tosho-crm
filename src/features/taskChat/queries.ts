@@ -4,7 +4,7 @@ import { quoteRefFromThreadKey, type ThreadAttachment, type ThreadEntry } from "
 import { fetchThreadEvents } from "./threadEvents";
 
 const MESSAGE_COLUMNS =
-  "id,body,created_at,created_by,kind,visibility,source,is_pinned,thread_meta";
+  "id,body,created_at,created_by,kind,visibility,source,is_pinned,thread_meta,reply_to,deleted_at";
 
 type MessageRow = {
   id: string;
@@ -16,6 +16,8 @@ type MessageRow = {
   source: string;
   is_pinned: boolean;
   thread_meta: { attachments?: ThreadAttachment[] } | null;
+  reply_to: string | null;
+  deleted_at: string | null;
 };
 
 const toEntry = (row: MessageRow): ThreadEntry => ({
@@ -29,6 +31,8 @@ const toEntry = (row: MessageRow): ThreadEntry => ({
   eventType: null,
   isPinned: row.is_pinned,
   attachments: row.thread_meta?.attachments ?? undefined,
+  replyTo: row.reply_to,
+  deletedAt: row.deleted_at,
 });
 
 export const threadKeys = {
@@ -95,6 +99,7 @@ export type SendMessageInput = {
   userId: string;
   visibility: "team" | "finance";
   attachments?: ThreadAttachment[];
+  replyTo?: string | null;
 };
 
 export function useSendThreadMessage(threadKey: string | null) {
@@ -115,6 +120,7 @@ export function useSendThreadMessage(threadKey: string | null) {
           visibility: input.visibility,
           source: "crm",
           thread_meta: input.attachments?.length ? { attachments: input.attachments } : {},
+          reply_to: input.replyTo ?? null,
         })
         .select(MESSAGE_COLUMNS)
         .single();
@@ -258,6 +264,27 @@ export function useToggleReaction(threadKey: string | null) {
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: reactionKeys.byThread(threadKey ?? "none") });
+    },
+  });
+}
+
+/**
+ * Видалення — позначкою, а не стиранням рядка: інакше з розмови зникає
+ * контекст і відповіді на це повідомлення висять самі по собі.
+ */
+export function useDeleteThreadMessage(threadKey: string | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quote_comments")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", messageId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      if (threadKey) void client.invalidateQueries({ queryKey: threadKeys.entries(threadKey) });
     },
   });
 }

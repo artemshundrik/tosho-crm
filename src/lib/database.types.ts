@@ -2922,6 +2922,8 @@ export type Database = {
         Row: {
           body: string
           comment_type: Database["tosho"]["Enums"]["quote_comment_type"]
+          deleted_at: string | null
+          reply_to: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -2937,6 +2939,8 @@ export type Database = {
         Insert: {
           body: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
+          deleted_at?: string | null
+          reply_to?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -2953,6 +2957,8 @@ export type Database = {
         Update: {
           body?: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
+          deleted_at?: string | null
+          reply_to?: string | null
           created_at?: string
           created_by?: string | null
           id?: string

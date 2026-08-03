@@ -1,5 +1,11 @@
 import React from "react";
-import { SmilePlus } from "lucide-react";
+import { Copy, MoreHorizontal, Reply, SmilePlus, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
 import { QUICK_REACTIONS, ThreadEmojiPicker } from "./ThreadEmojiPicker";
@@ -79,9 +85,16 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
 export function ThreadReactionBar({
   onPick,
   align,
+  onReply,
+  onCopy,
+  onDelete,
 }: {
   onPick: (emoji: string) => void;
   align: "start" | "end";
+  onReply: () => void;
+  onCopy: () => void;
+  /** null — видаляти нема права (чуже повідомлення й ти не керівник). */
+  onDelete: (() => void) | null;
 }) {
   return (
     <div
@@ -118,6 +131,35 @@ export function ThreadReactionBar({
           </button>
         }
       />
+
+      {/* Одне меню на всі дії — щоб не було двох, які сваряться за наведення. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Дії з повідомленням"
+            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={align === "end" ? "end" : "start"} className="w-44">
+          <DropdownMenuItem onClick={onReply}>
+            <Reply className="h-3.5 w-3.5" />
+            Відповісти
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCopy}>
+            <Copy className="h-3.5 w-3.5" />
+            Копіювати текст
+          </DropdownMenuItem>
+          {onDelete ? (
+            <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-3.5 w-3.5" />
+              Видалити
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

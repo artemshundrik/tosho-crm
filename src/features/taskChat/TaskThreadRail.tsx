@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquare, Upload } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { countUnread, threadKeyForQuote, type ThreadAttachment } from "@/lib/taskThread";
+import { countUnread, threadKeyForQuote, type ThreadAttachment, type ThreadEntry } from "@/lib/taskThread";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { ThreadComposer, type MentionCandidate } from "./ThreadComposer";
 import { ThreadFeed, ThreadNoAccess, ThreadSkeleton } from "./ThreadFeed";
 import { ThreadHistory } from "./ThreadHistory";
 import {
+  useDeleteThreadMessage,
   useMarkThreadRead,
   useSendThreadMessage,
   useThreadEntries,
@@ -30,6 +31,8 @@ type Props = {
   /** quote_id справи; у самостійних задач має вигляд `standalone-<uuid>`. */
   quoteRef: string;
   teamId: string;
+  /** Керівник може видаляти чужі повідомлення; свої може кожен. */
+  canManage?: boolean;
   /** Завантаження файлів тим самим шляхом, що й вкладення задачі. */
   onAttachFiles?: (files: FileList) => Promise<ThreadAttachment[] | void> | void;
   attaching?: boolean;
@@ -41,7 +44,7 @@ type Props = {
  * Нитка одна на справу: та сама розмова відкривається і з дизайн-задачі, і зі
  * сторінки прорахунку. Історія подій — окремо, згорнута (див. ThreadHistory).
  */
-export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: Props) {
+export function TaskThreadRail({ quoteRef, teamId, canManage = false, onAttachFiles, attaching }: Props) {
   const { userId, session } = useAuth();
   const threadKey = threadKeyForQuote(quoteRef);
   // FK на tosho.quotes: у колонку quote_id можна класти лише справжній uuid.
@@ -114,6 +117,10 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
   const messageIds = React.useMemo(() => messages.map((item) => item.id), [messages]);
   const reactionsQuery = useThreadReactions(threadKey, messageIds);
   const toggleReaction = useToggleReaction(threadKey);
+  const deleteMessage = useDeleteThreadMessage(threadKey);
+
+  /** Повідомлення, на яке відповідаємо — показується смужкою над полем вводу. */
+  const [replyTo, setReplyTo] = React.useState<ThreadEntry | null>(null);
 
   const handleToggleReaction = (messageId: string, emoji: string, mine: boolean) => {
     if (!userId) return;
@@ -163,9 +170,10 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     }
 
     sendMutation.mutate(
-      { body, visibility: "team", teamId, quoteId, userId, attachments },
+      { body, visibility: "team", teamId, quoteId, userId, attachments, replyTo: replyTo?.id ?? null },
       { onSuccess: () => void notifyMentions(body) }
     );
+    setReplyTo(null);
   };
 
   // Перетягування працює на всю картку обговорення, а не лише на поле вводу —
@@ -322,6 +330,9 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
                 mentionNames={mentionNames}
                 reactions={reactionsQuery.data ?? EMPTY_REACTIONS}
                 onToggleReaction={handleToggleReaction}
+                onReply={setReplyTo}
+                onDelete={(messageId) => deleteMessage.mutate(messageId)}
+                canDeleteAny={canManage}
               />
             )}
           </>
@@ -334,6 +345,10 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
           candidates={mentionCandidates}
           onSend={(body) => void handleSend(body)}
           pendingFiles={pendingFiles}
+          replyTo={
+            replyTo ? { author: memberName(replyTo.createdBy), body: replyTo.body || "вкладення" } : null
+          }
+          onCancelReply={() => setReplyTo(null)}
           onAddFiles={addFiles}
           onRemoveFile={removeFile}
           canAttach={Boolean(onAttachFiles)}

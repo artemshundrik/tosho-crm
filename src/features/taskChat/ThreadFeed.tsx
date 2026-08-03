@@ -17,6 +17,10 @@ type Props = {
   mentionNames: string[];
   reactions: ThreadReaction[];
   onToggleReaction: (messageId: string, emoji: string, mine: boolean) => void;
+  onReply: (entry: ThreadEntry) => void;
+  onDelete: (messageId: string) => void;
+  /** Чи можна видаляти чужі (керівник) — свої можна завжди. */
+  canDeleteAny: boolean;
   onRetry?: () => void;
 };
 
@@ -48,9 +52,18 @@ export function ThreadFeed({
   mentionNames,
   reactions,
   onToggleReaction,
+  onReply,
+  onDelete,
+  canDeleteAny,
   onRetry,
 }: Props) {
   const [collapsedDays, setCollapsedDays] = React.useState<Set<string>>(() => new Set());
+
+  /** Мапа для цитат: id → повідомлення, на яке відповідають. */
+  const repliedTo = React.useMemo(
+    () => new Map(entries.map((item) => [item.id, item])),
+    [entries]
+  );
 
   const blocks = React.useMemo(
     () => buildThreadBlocks(entries, { userId, now: new Date() }),
@@ -164,10 +177,13 @@ export function ThreadFeed({
                       block.own && "items-end"
                     )}
                   >
-                    {entry.pending ? null : (
+                    {entry.pending || entry.deletedAt ? null : (
                       <ThreadReactionBar
                         align={block.own ? "end" : "start"}
                         onPick={(emoji) => onToggleReaction(entry.id, emoji, false)}
+                        onReply={() => onReply(entry)}
+                        onCopy={() => void navigator.clipboard?.writeText(entry.body)}
+                        onDelete={block.own || canDeleteAny ? () => onDelete(entry.id) : null}
                       />
                     )}
                     {/* Ім'я автора, коли повідомлення складається лише з файлу:
@@ -178,7 +194,11 @@ export function ThreadFeed({
                       </span>
                     ) : null}
 
-                    {entry.body ? (
+                    {entry.deletedAt ? (
+                      <div className="rounded-2xl border border-dashed border-border/60 px-2.5 py-1.5 text-xs italic text-muted-foreground">
+                        Повідомлення видалено
+                      </div>
+                    ) : entry.body ? (
                       <div
                         className={cn(
                           "relative cursor-default rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
@@ -208,6 +228,24 @@ export function ThreadFeed({
                         {!block.own && position === 0 ? (
                           <span className={cn("mb-0.5 block text-2xs font-semibold", authorTone(block.authorId))}>
                             {memberName(block.authorId)}
+                          </span>
+                        ) : null}
+
+                        {entry.replyTo && repliedTo.get(entry.replyTo) ? (
+                          <span
+                            className={cn(
+                              "mb-1 block rounded-lg border-l-2 py-0.5 pl-2 text-3xs",
+                              block.own
+                                ? "border-primary-foreground/50 text-primary-foreground/85"
+                                : "border-primary/40 text-muted-foreground"
+                            )}
+                          >
+                            <span className="block font-semibold">
+                              {memberName(repliedTo.get(entry.replyTo)!.createdBy)}
+                            </span>
+                            <span className="line-clamp-2">
+                              {repliedTo.get(entry.replyTo)!.body || "вкладення"}
+                            </span>
                           </span>
                         ) : null}
 

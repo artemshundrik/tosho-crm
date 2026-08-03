@@ -26,6 +26,9 @@ type Props = {
   onRemoveFile: (index: number) => void;
   canAttach: boolean;
   attaching?: boolean;
+  /** Кого цитуємо — смужка над полем вводу. */
+  replyTo: { author: string; body: string } | null;
+  onCancelReply: () => void;
 };
 
 /** Смужки еквалайзера під час запису: різна висота й зсув фази. */
@@ -59,6 +62,8 @@ export function ThreadComposer({
   onRemoveFile,
   canAttach,
   attaching,
+  replyTo,
+  onCancelReply,
 }: Props) {
   const [body, setBody] = React.useState("");
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
@@ -134,6 +139,24 @@ export function ThreadComposer({
 
   return (
     <div className="border-t border-border/40 bg-card p-2.5">
+      {replyTo ? (
+        <div className="mb-2 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/40 py-1.5 pl-2 pr-1.5">
+          <span className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-primary" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-2xs font-semibold text-primary">{replyTo.author}</span>
+            <span className="line-clamp-2 text-2xs text-muted-foreground">{replyTo.body}</span>
+          </span>
+          <button
+            type="button"
+            aria-label="Скасувати відповідь"
+            onClick={onCancelReply}
+            className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : null}
+
       {pendingFiles.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {pendingFiles.map((file, index) => (
@@ -174,7 +197,9 @@ export function ThreadComposer({
       {isRecording || isTranscribing ? (
         <div
           className={cn(
-            "flex min-h-[38px] items-center gap-2.5 rounded-[20px] border px-2.5 py-1 transition-colors",
+            // Ті самі падінги, що й у поля вводу: інакше «✕» і «готово» стоять
+            // ближче до центру, ніж скріпка й надсилання.
+            "flex min-h-[38px] items-center gap-1 rounded-[20px] border p-1 pl-1.5 transition-colors",
             isRecording ? "border-destructive/30 bg-danger-soft/60" : "border-border/60 bg-muted/50"
           )}
         >
@@ -195,7 +220,7 @@ export function ThreadComposer({
               </span>
 
               {/* Еквалайзер: показує, що запис справді йде. */}
-              <span className="flex flex-1 items-center gap-[3px]" aria-hidden="true">
+              <span className="flex flex-1 items-center gap-[3px] px-1" aria-hidden="true">
                 {WAVE_BARS.map((bar, index) => (
                   <span
                     key={index}

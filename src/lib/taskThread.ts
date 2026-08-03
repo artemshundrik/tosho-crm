@@ -29,6 +29,10 @@ export type ThreadEntry = {
   /** Для kind="event" — action із activity_log. */
   eventType: string | null;
   isPinned: boolean;
+  /** id повідомлення, на яке це є відповіддю. */
+  replyTo?: string | null;
+  /** Видалене лишається в стрічці позначкою — інакше відповіді на нього висять самі. */
+  deletedAt?: string | null;
   attachments?: ThreadAttachment[];
   pending?: boolean;
   failed?: boolean;
