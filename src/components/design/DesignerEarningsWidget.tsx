@@ -103,17 +103,35 @@ function WorkdayGrid({ cells }: { cells: WorkdayCell[] }) {
   if (cells.length === 0) return null;
 
   const active = hovered != null ? cells[hovered] : null;
-  // Обрізаємо позицію підказки, щоб для крайніх днів вона не вилазила за
-  // межі поповера — дата в тексті все одно названа явно.
-  const rawLeft = hovered != null ? ((hovered + 0.5) / cells.length) * 100 : 50;
-  const left = Math.min(78, Math.max(22, rawLeft));
+
+  /**
+   * Підказку прив'язуємо КРАЄМ, а не центром.
+   *
+   * Було: центр + затиск позиції в 22–78%. Не рятувало — затиск міряється у
+   * відсотках смужки, а вилазить підказка на свою ПІВШИРИНУ в пікселях, тож
+   * «понеділок, 31 серпня · попереду» все одно обрізався об край поповера.
+   * Прив'язка краю робить це неможливим за побудовою: у лівій третині
+   * тримаємо лівий край, у правій — правий, посередині центруємо.
+   */
+  const anchor =
+    hovered == null
+      ? "center"
+      : hovered < cells.length / 3
+        ? "start"
+        : hovered >= (cells.length * 2) / 3
+          ? "end"
+          : "center";
 
   return (
     <div className="relative mt-1.5">
       {active ? (
         <div
-          className="pointer-events-none absolute bottom-full z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-3xs leading-snug text-background shadow-md"
-          style={{ left: `${left}%` }}
+          className={cn(
+            "pointer-events-none absolute bottom-full z-10 mb-1.5 max-w-full whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-3xs leading-snug text-background shadow-md",
+            anchor === "start" && "left-0",
+            anchor === "center" && "left-1/2 -translate-x-1/2",
+            anchor === "end" && "right-0"
+          )}
         >
           <span className="font-semibold">{formatDayLabel(active.day)}</span>
           {active.absence
