@@ -143,14 +143,8 @@ export function ThreadFeed({
               return (
                 <div
                   key={entry.id}
-                  className={cn("group relative flex items-end gap-1.5", block.own && "flex-row-reverse")}
+                  className={cn("flex items-end gap-1.5", block.own && "flex-row-reverse")}
                 >
-                  {entry.pending ? null : (
-                    <ThreadReactionBar
-                      align={block.own ? "end" : "start"}
-                      onPick={(emoji) => onToggleReaction(entry.id, emoji, false)}
-                    />
-                  )}
                   {block.own ? null : isLast ? (
                     <AvatarBase
                       size={24}
@@ -162,7 +156,20 @@ export function ThreadFeed({
                     <span className="w-6 shrink-0" />
                   )}
 
-                  <div className={cn("flex max-w-[80%] flex-col gap-1", block.own && "items-end")}>
+                  {/* group і relative саме тут: інакше панель реакцій зринала
+                      б і тоді, коли курсор просто в порожньому місці рядка. */}
+                  <div
+                    className={cn(
+                      "group relative flex max-w-[76%] flex-col gap-1",
+                      block.own && "items-end"
+                    )}
+                  >
+                    {entry.pending ? null : (
+                      <ThreadReactionBar
+                        align={block.own ? "end" : "start"}
+                        onPick={(emoji) => onToggleReaction(entry.id, emoji, false)}
+                      />
+                    )}
                     {/* Ім'я автора, коли повідомлення складається лише з файлу:
                         баббла немає, а підписати відправника все одно треба. */}
                     {!block.own && position === 0 && !entry.body ? (
@@ -174,9 +181,10 @@ export function ThreadFeed({
                     {entry.body ? (
                       <div
                         className={cn(
-                          "relative rounded-2xl py-1.5 pl-2.5 text-xs leading-snug",
-                          // місце під час у правому куті — щоб текст під нього не заповзав
-                          entry.pending ? "pr-24" : "pr-12",
+                          "relative rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
+                          // місце під час зарезервовано ОДНАКОВЕ в усіх станах —
+                          // інакше баббл стрибав завширшки, щойно надсилання
+                          // завершувалось.
                           entry.pending && "opacity-60",
                           restricted
                             ? "border border-warning-soft-border bg-warning-soft text-foreground"
@@ -208,8 +216,7 @@ export function ThreadFeed({
                             block.own && !restricted ? "text-primary-foreground/80" : "text-muted-foreground"
                           )}
                         >
-                          {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
-                          {entry.pending ? <Clock className="h-3 w-3" /> : null}
+                          {entry.pending ? <Clock className="h-3 w-3" /> : timeOf(entry.createdAt)}
                         </span>
                       </div>
                     ) : null}

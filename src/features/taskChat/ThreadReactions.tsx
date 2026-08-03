@@ -86,8 +86,13 @@ export function ThreadReactionBar({
   return (
     <div
       className={cn(
-        "absolute -top-3.5 z-10 hidden items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5 shadow-[var(--shadow-menu)] group-hover:flex",
-        align === "end" ? "right-2" : "left-8"
+        // bottom-full — панель повністю НАД повідомленням, а не поверх нього.
+        // Затримка 400 мс на появу: без неї панель вискакувала від найменшого
+        // руху миші й заважала читати. Зникає одразу, без затримки.
+        "absolute bottom-full z-10 mb-1 flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5",
+        "opacity-0 shadow-[var(--shadow-menu)] transition-opacity duration-150",
+        "pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-hover:delay-[400ms]",
+        align === "end" ? "right-0" : "left-0"
       )}
     >
       {QUICK_REACTIONS.map((emoji) => (
