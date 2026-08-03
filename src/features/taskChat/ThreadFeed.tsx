@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCheck, ChevronDown, Clock, Lock, MessageSquare, Send } from "lucide-react";
+import { ChevronDown, Clock, Lock, MessageSquare, Send } from "lucide-react";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { buildThreadBlocks, type ThreadEntry } from "@/lib/taskThread";
 import { cn } from "@/lib/utils";
@@ -150,58 +150,70 @@ export function ThreadFeed({
                     <span className="w-6 shrink-0" />
                   )}
 
-                  <div
-                    className={cn(
-                      "max-w-[80%] rounded-2xl px-2.5 py-1.5 text-xs leading-snug",
-                      entry.pending && "opacity-60",
-                      restricted
-                        ? "border border-warning-soft-border bg-warning-soft text-foreground"
-                        : highlighted
-                          ? "border border-primary/30 bg-primary/10 text-foreground"
-                          : block.own
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-foreground",
-                      isLast && (block.own ? "rounded-br-sm" : "rounded-bl-sm")
-                    )}
-                  >
-                    {restricted && position === 0 ? (
-                      <span className="mb-0.5 flex items-center gap-1 text-3xs font-semibold uppercase tracking-wide text-warning-foreground">
-                        <Lock className="h-2.5 w-2.5" /> Внутрішня
-                      </span>
-                    ) : null}
-
-                    {!block.own && position === 0 ? (
-                      <span
-                        className={cn("mb-0.5 block text-2xs font-semibold", authorTone(block.authorId))}
-                      >
+                  <div className={cn("flex max-w-[80%] flex-col gap-1", block.own && "items-end")}>
+                    {/* Ім'я автора, коли повідомлення складається лише з файлу:
+                        баббла немає, а підписати відправника все одно треба. */}
+                    {!block.own && position === 0 && !entry.body ? (
+                      <span className={cn("px-1 text-2xs font-semibold", authorTone(block.authorId))}>
                         {memberName(block.authorId)}
                       </span>
                     ) : null}
 
-                    <span
-                      className={cn(
-                        "float-right ml-2 mt-1.5 inline-flex items-center gap-1 text-3xs tabular-nums",
-                        block.own && !restricted
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
-                      {block.own && !entry.pending ? <CheckCheck className="h-3 w-3" /> : null}
-                      {entry.pending ? <Clock className="h-3 w-3" /> : null}
-                    </span>
-
                     {entry.body ? (
-                      <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+                      <div
+                        className={cn(
+                          "rounded-2xl px-2.5 py-1.5 text-xs leading-snug",
+                          entry.pending && "opacity-60",
+                          restricted
+                            ? "border border-warning-soft-border bg-warning-soft text-foreground"
+                            : highlighted
+                              ? "border border-primary/30 bg-primary/10 text-foreground"
+                              : block.own
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-foreground",
+                          isLast && !entry.attachments?.length && (block.own ? "rounded-br-sm" : "rounded-bl-sm")
+                        )}
+                      >
+                        {restricted && position === 0 ? (
+                          <span className="mb-0.5 flex items-center gap-1 text-3xs font-semibold uppercase tracking-wide text-warning-foreground">
+                            <Lock className="h-2.5 w-2.5" /> Внутрішня
+                          </span>
+                        ) : null}
+
+                        {!block.own && position === 0 ? (
+                          <span className={cn("mb-0.5 block text-2xs font-semibold", authorTone(block.authorId))}>
+                            {memberName(block.authorId)}
+                          </span>
+                        ) : null}
+
+                        <span
+                          className={cn(
+                            "float-right ml-2 mt-1.5 inline-flex items-center gap-1 whitespace-nowrap text-3xs tabular-nums",
+                            block.own && !restricted ? "text-primary-foreground/80" : "text-muted-foreground"
+                          )}
+                        >
+                          {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
+                          {entry.pending ? <Clock className="h-3 w-3" /> : null}
+                        </span>
+
+                        <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+                      </div>
                     ) : null}
 
+                    {/* Файл — окремою нейтральною карткою ПОЗА бабблом: у нього
+                        і так є власна форма, а на синьому будь-яка плашка світиться. */}
                     {entry.attachments?.map((attachment) => (
                       <ThreadAttachmentCard
                         key={`${attachment.bucket}:${attachment.path}`}
                         attachment={attachment}
-                        own={block.own && !restricted}
                       />
                     ))}
+
+                    {!entry.body && entry.attachments?.length ? (
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap px-1 text-3xs tabular-nums text-muted-foreground">
+                        {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               );

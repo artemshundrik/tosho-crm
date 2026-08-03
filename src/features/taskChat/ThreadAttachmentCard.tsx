@@ -19,13 +19,7 @@ const formatSize = (bytes: number | null) => {
  * `getSignedAttachmentUrl` з його кешем, а не робимо власні запити на кожен
  * рендер стрічки.
  */
-export function ThreadAttachmentCard({
-  attachment,
-  own,
-}: {
-  attachment: ThreadAttachment;
-  own: boolean;
-}) {
+export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachment }) {
   const isImage = React.useMemo(
     () => isRasterPreviewableFile({ type: attachment.mimeType ?? "", name: attachment.fileName }),
     [attachment.mimeType, attachment.fileName]
@@ -51,7 +45,7 @@ export function ThreadAttachmentCard({
   }, [attachment.bucket, attachment.path, isImage]);
 
   const size = formatSize(attachment.fileSize);
-  const subtle = own ? "text-primary-foreground/75" : "text-muted-foreground";
+  const subtle = "text-muted-foreground";
 
   if (isImage && !broken) {
     return (
@@ -59,7 +53,7 @@ export function ThreadAttachmentCard({
       <button
         type="button"
         onClick={() => setPreviewOpen(true)}
-        className="my-0.5 block w-full overflow-hidden rounded-xl border border-border/30 bg-muted/40 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         {url ? (
           <img
@@ -94,19 +88,9 @@ export function ThreadAttachmentCard({
     <button
       type="button"
       onClick={() => setPreviewOpen(true)}
-      className={cn(
-        "my-0.5 flex w-full items-center gap-2 rounded-xl border px-2 py-1.5 text-left transition-colors",
-        own
-          ? "border-primary-foreground/25 bg-primary-foreground/10 hover:bg-primary-foreground/15"
-          : "border-border/50 bg-background/70 hover:bg-muted/60"
-      )}
+      className="flex w-full items-center gap-2.5 rounded-2xl border border-border/60 bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
     >
-      <span
-        className={cn(
-          "grid h-8 w-8 shrink-0 place-items-center rounded-lg",
-          own ? "bg-primary-foreground/15" : "bg-muted"
-        )}
-      >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
         {broken ? <ImageOff className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
       </span>
       <span className="flex min-w-0 flex-col">

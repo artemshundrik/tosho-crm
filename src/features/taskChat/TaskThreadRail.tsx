@@ -162,6 +162,36 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     setPendingFiles((previous) => previous.filter((_, position) => position !== index));
   }, []);
 
+  /**
+   * Прокрутка до низу. Під час переїзду зі шторки в колонку я цю логіку
+   * загубив — тому надіслане повідомлення лишалось нижче видимої зони, і
+   * здавалося, що воно «перекрилось».
+   *
+   * Правило: докручуємо, якщо користувач уже був унизу або якщо останнє
+   * повідомлення — його власне. Інакше читання старої переписки смикалось би
+   * щоразу, коли хтось пише.
+   */
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const atBottomRef = React.useRef(true);
+
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const node = event.currentTarget;
+    atBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 60;
+  };
+
+  const lastMessage = messages[0];
+  const lastMessageId = lastMessage?.id;
+  const lastMessageMine = lastMessage?.createdBy === userId;
+
+  React.useEffect(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const mine = lastMessageMine;
+    if (!atBottomRef.current && !mine) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: mine ? "smooth" : "auto" });
+    atBottomRef.current = true;
+  }, [lastMessageId, lastMessageMine]);
+
   const accessDenied =
     entriesQuery.isError && /permission|policy|denied/i.test(String(entriesQuery.error));
 
@@ -217,7 +247,11 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 pb-2"
+      >
         {accessDenied ? (
           <ThreadNoAccess />
         ) : entriesQuery.isLoading ? (
