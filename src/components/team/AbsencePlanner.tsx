@@ -58,6 +58,19 @@ const MARK_TONE_CLASS: Record<PlannerMark["kind"], string> = {
   anniversary: toneTextClass.accent,
 };
 
+/**
+ * Заливка святкового стовпчика. Свідомо слабка: вона тягнеться на всю висоту
+ * планера, а насиченість мусить падати з площею — інакше колір читається як
+ * бруд і перебиває самі бари відсутностей.
+ */
+/*
+ * У світлій темі беремо м'який відтінок, у темній — ЯСКРАВИЙ колір із низькою
+ * альфою. Прямий `festive-soft` у темній не працює: він сам темний (17%
+ * lightness) і на темній картці зливається з фоном — перевірено рендером.
+ */
+const HOLIDAY_COLUMN_CLASS =
+  "bg-[hsl(var(--festive-soft)/0.55)] dark:bg-[hsl(var(--festive-solid)/0.16)]";
+
 const NAME_COLUMN_PX = 208;
 const MIN_DAY_PX = 26;
 
@@ -191,6 +204,30 @@ function AbsencePlannerImpl({
 
   return (
     <div>
+      {/* Свята видимого вікна — НАД сіткою: знизу цей рядок не помічали
+          (правка CEO 2026-08-03). Дублює заливку стовпчика навмисно: колір
+          каже «щось особливе», а назву дає лише текст. */}
+      {visibleHolidays.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/40 px-3 py-2">
+          <span className="flex items-center gap-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <PartyPopper className={cn("h-3.5 w-3.5", toneTextClass.festive)} aria-hidden />
+            Свята
+          </span>
+          {visibleHolidays.map((holiday) => (
+            <span key={holiday.dateKey} className="flex items-center gap-1.5 text-2xs">
+              <span
+                aria-hidden
+                className={cn("h-3 w-3 shrink-0 rounded-sm border border-border/50", HOLIDAY_COLUMN_CLASS)}
+              />
+              <b className={cn("font-semibold tabular-nums", toneTextClass.festive)}>
+                {dayNumber(holiday.dateKey)}
+              </b>
+              <span className="text-foreground">{holiday.name}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto">
       <div className="min-w-[760px]">
         {/* Шапка з датами */}
@@ -201,7 +238,9 @@ function AbsencePlannerImpl({
               key={day.dateKey}
               className={cn(
                 "px-0.5 py-1.5 text-center text-3xs uppercase tracking-wide text-muted-foreground",
-                day.rest && "bg-muted/40 text-muted-foreground/70"
+                // Свято теж неробоче, але фон інший: сірий = просто вихідний.
+                day.rest && !day.holiday && "bg-muted/40 text-muted-foreground/70",
+                day.holiday && HOLIDAY_COLUMN_CLASS
               )}
               title={day.holiday ?? undefined}
             >
@@ -280,7 +319,10 @@ function AbsencePlannerImpl({
               {dayMeta.map((day, index) => {
                 const cellClass = cn(
                   "h-full",
-                  day.rest && "bg-muted/40",
+                  day.rest && !day.holiday && "bg-muted/40",
+                  // Стовпчик свята фарбується НАСКРІЗЬ, а не лише в шапці:
+                  // мітка вгорі губилась серед сірих вихідних.
+                  day.holiday && HOLIDAY_COLUMN_CLASS,
                   day.today && "shadow-[inset_1.5px_0_0_hsl(var(--primary)/0.35),inset_-1.5px_0_0_hsl(var(--primary)/0.35)]",
                   canPick && "cursor-pointer hover:bg-primary/5"
                 );
@@ -398,23 +440,6 @@ function AbsencePlannerImpl({
       </div>
       </div>
 
-      {/* Свята видимого вікна. Дублює крапку в шапці навмисно: на телефоні
-          title не спрацьовує, а саме там планер найчастіше й гортають. */}
-      {visibleHolidays.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 px-3 py-2">
-          <span className="flex items-center gap-1.5 text-3xs uppercase tracking-wide text-muted-foreground">
-            <PartyPopper className={cn("h-3 w-3", toneTextClass.festive)} aria-hidden />
-            Свята
-          </span>
-          {visibleHolidays.map((holiday) => (
-            <span key={holiday.dateKey} className="flex items-center gap-1.5 text-2xs">
-              <span aria-hidden className={cn("h-1 w-1 shrink-0 rounded-full", toneDotClass.festive)} />
-              <b className="font-medium tabular-nums text-foreground">{dayNumber(holiday.dateKey)}</b>
-              <span className="text-muted-foreground">{holiday.name}</span>
-            </span>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1352,6 +1352,17 @@ export function TeamPage() {
                 />
                 На погодженні
               </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-2.5 w-4 rounded-sm border border-border/50 bg-[hsl(var(--festive-soft)/0.55)] dark:bg-[hsl(var(--festive-solid)/0.16)]"
+                  aria-hidden
+                />
+                Свято
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-4 rounded-sm bg-muted" aria-hidden />
+                Вихідний
+              </span>
             </div>
           </CardHeader>
           <CardContent className="px-0 pb-0">
