@@ -207,3 +207,57 @@ export function usePinThreadMessage(threadKey: string | null) {
     },
   });
 }
+
+export type ThreadReaction = { messageId: string; userId: string; emoji: string };
+
+export const reactionKeys = {
+  byThread: (threadKey: string) => ["taskThread", "reactions", threadKey] as const,
+};
+
+/** Усі реакції нитки одним запитом — по одному на повідомлення було б N+1. */
+export function useThreadReactions(threadKey: string | null, messageIds: string[]) {
+  const key = messageIds.join(",");
+  return useQuery({
+    queryKey: [...reactionKeys.byThread(threadKey ?? "none"), key],
+    enabled: Boolean(threadKey) && messageIds.length > 0,
+    queryFn: async (): Promise<ThreadReaction[]> => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("thread_reactions")
+        .select("message_id,user_id,emoji")
+        .in("message_id", messageIds);
+      if (error) throw error;
+      return ((data as Array<{ message_id: string; user_id: string; emoji: string }> | null) ?? []).map(
+        (row) => ({ messageId: row.message_id, userId: row.user_id, emoji: row.emoji })
+      );
+    },
+  });
+}
+
+/** Клік по реакції: ставимо, а якщо вже стоїть — знімаємо. */
+export function useToggleReaction(threadKey: string | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { messageId: string; userId: string; emoji: string; mine: boolean }) => {
+      if (input.mine) {
+        const { error } = await supabase
+          .schema("tosho")
+          .from("thread_reactions")
+          .delete()
+          .eq("message_id", input.messageId)
+          .eq("user_id", input.userId)
+          .eq("emoji", input.emoji);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase
+        .schema("tosho")
+        .from("thread_reactions")
+        .insert({ message_id: input.messageId, user_id: input.userId, emoji: input.emoji });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: reactionKeys.byThread(threadKey ?? "none") });
+    },
+  });
+}

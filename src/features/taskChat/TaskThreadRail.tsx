@@ -6,14 +6,24 @@ import { countUnread, threadKeyForQuote, type ThreadAttachment } from "@/lib/tas
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { cn } from "@/lib/utils";
+import type { ThreadReaction } from "./queries";
 import { toFileList, withReadableName } from "./threadFiles";
 import { ThreadComposer, type MentionCandidate } from "./ThreadComposer";
 import { ThreadFeed, ThreadNoAccess, ThreadSkeleton } from "./ThreadFeed";
 import { ThreadHistory } from "./ThreadHistory";
-import { useMarkThreadRead, useSendThreadMessage, useThreadEntries, useThreadRead } from "./queries";
+import {
+  useMarkThreadRead,
+  useSendThreadMessage,
+  useThreadEntries,
+  useThreadReactions,
+  useThreadRead,
+  useToggleReaction,
+} from "./queries";
 import { useThreadRealtime } from "./useThreadRealtime";
 
 const READ_DELAY_MS = 3000;
+/** Стала порожня посилка — щоб не створювати новий масив щорендеру. */
+const EMPTY_REACTIONS: ThreadReaction[] = [];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Props = {
@@ -100,6 +110,15 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
     if (!me) return [];
     return [me.displayName, me.firstName].filter((name) => Boolean(name && name.length > 1));
   }, [members, userId]);
+
+  const messageIds = React.useMemo(() => messages.map((item) => item.id), [messages]);
+  const reactionsQuery = useThreadReactions(threadKey, messageIds);
+  const toggleReaction = useToggleReaction(threadKey);
+
+  const handleToggleReaction = (messageId: string, emoji: string, mine: boolean) => {
+    if (!userId) return;
+    toggleReaction.mutate({ messageId, userId, emoji, mine });
+  };
 
   const unread = countUnread(messages, readQuery.data ?? null, userId ?? null);
 
@@ -273,6 +292,8 @@ export function TaskThreadRail({ quoteRef, teamId, onAttachFiles, attaching }: P
                 memberName={memberName}
                 memberAvatar={memberAvatar}
                 mentionNames={mentionNames}
+                reactions={reactionsQuery.data ?? EMPTY_REACTIONS}
+                onToggleReaction={handleToggleReaction}
               />
             )}
           </>

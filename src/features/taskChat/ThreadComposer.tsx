@@ -1,11 +1,12 @@
 import React from "react";
-import { AtSign, Check, FileText, Loader2, Mic, Paperclip, Send, X } from "lucide-react";
+import { Check, FileText, Loader2, Mic, Paperclip, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useDictation } from "@/lib/useDictation";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { formatJobRole } from "@/lib/jobRoles";
 import { cn } from "@/lib/utils";
 import { formatFileSize, isImageFile, withReadableName } from "./threadFiles";
+import { ThreadEmojiPicker } from "./ThreadEmojiPicker";
 
 export type MentionCandidate = {
   userId: string;
@@ -243,17 +244,17 @@ export function ThreadComposer({
         >
           {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
         </button>
-        <button
-          type="button"
-          aria-label="Згадати учасника"
-          onClick={() => {
-            handleChange(`${body}${body && !body.endsWith(" ") ? " " : ""}@`);
-            inputRef.current?.focus();
+        <ThreadEmojiPicker
+          onPick={(emoji) => {
+            const node = inputRef.current;
+            const caret = node?.selectionStart ?? body.length;
+            handleChange(`${body.slice(0, caret)}${emoji}${body.slice(caret)}`);
+            requestAnimationFrame(() => {
+              node?.focus();
+              node?.setSelectionRange(caret + emoji.length, caret + emoji.length);
+            });
           }}
-          className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-        >
-          <AtSign className="h-3.5 w-3.5" />
-        </button>
+        />
         {dictation.isSupported ? (
           <button
             type="button"

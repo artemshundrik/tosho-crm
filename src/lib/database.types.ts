@@ -2982,6 +2982,27 @@ export type Database = {
           },
         ]
       }
+      thread_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       thread_reads: {
         Row: {
           last_read_at: string

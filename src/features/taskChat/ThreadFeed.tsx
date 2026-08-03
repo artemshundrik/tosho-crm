@@ -5,6 +5,8 @@ import { buildThreadBlocks, type ThreadEntry } from "@/lib/taskThread";
 import { cn } from "@/lib/utils";
 import { eventTone } from "./threadEvents";
 import { ThreadAttachmentCard } from "./ThreadAttachmentCard";
+import { ThreadReactionBar, ThreadReactions } from "./ThreadReactions";
+import type { ThreadReaction } from "./queries";
 
 type Props = {
   entries: ThreadEntry[];
@@ -13,6 +15,8 @@ type Props = {
   memberAvatar: (userId: string | null) => string | null;
   /** Імена, згадка яких підсвічує баббл (я і мої псевдоніми). */
   mentionNames: string[];
+  reactions: ThreadReaction[];
+  onToggleReaction: (messageId: string, emoji: string, mine: boolean) => void;
   onRetry?: () => void;
 };
 
@@ -42,6 +46,8 @@ export function ThreadFeed({
   memberName,
   memberAvatar,
   mentionNames,
+  reactions,
+  onToggleReaction,
   onRetry,
 }: Props) {
   const [collapsedDays, setCollapsedDays] = React.useState<Set<string>>(() => new Set());
@@ -137,8 +143,14 @@ export function ThreadFeed({
               return (
                 <div
                   key={entry.id}
-                  className={cn("flex items-end gap-1.5", block.own && "flex-row-reverse")}
+                  className={cn("group relative flex items-end gap-1.5", block.own && "flex-row-reverse")}
                 >
+                  {entry.pending ? null : (
+                    <ThreadReactionBar
+                      align={block.own ? "end" : "start"}
+                      onPick={(emoji) => onToggleReaction(entry.id, emoji, false)}
+                    />
+                  )}
                   {block.own ? null : isLast ? (
                     <AvatarBase
                       size={24}
@@ -162,7 +174,9 @@ export function ThreadFeed({
                     {entry.body ? (
                       <div
                         className={cn(
-                          "rounded-2xl px-2.5 py-1.5 text-xs leading-snug",
+                          "relative rounded-2xl py-1.5 pl-2.5 text-xs leading-snug",
+                          // місце під час у правому куті — щоб текст під нього не заповзав
+                          entry.pending ? "pr-24" : "pr-12",
                           entry.pending && "opacity-60",
                           restricted
                             ? "border border-warning-soft-border bg-warning-soft text-foreground"
@@ -186,17 +200,17 @@ export function ThreadFeed({
                           </span>
                         ) : null}
 
+                        <span className="whitespace-pre-wrap break-words">{entry.body}</span>
+
                         <span
                           className={cn(
-                            "float-right ml-2 mt-1.5 inline-flex items-center gap-1 whitespace-nowrap text-3xs tabular-nums",
+                            "pointer-events-none absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 whitespace-nowrap text-3xs tabular-nums",
                             block.own && !restricted ? "text-primary-foreground/80" : "text-muted-foreground"
                           )}
                         >
                           {entry.pending ? "надсилаю…" : timeOf(entry.createdAt)}
                           {entry.pending ? <Clock className="h-3 w-3" /> : null}
                         </span>
-
-                        <span className="whitespace-pre-wrap break-words">{entry.body}</span>
                       </div>
                     ) : null}
 
@@ -208,6 +222,14 @@ export function ThreadFeed({
                         attachment={attachment}
                       />
                     ))}
+
+                    <ThreadReactions
+                      reactions={reactions.filter((item) => item.messageId === entry.id)}
+                      userId={userId}
+                      memberName={memberName}
+                      align={block.own ? "end" : "start"}
+                      onToggle={(emoji, mine) => onToggleReaction(entry.id, emoji, mine)}
+                    />
 
                     {!entry.body && entry.attachments?.length ? (
                       <span className="inline-flex items-center gap-1 whitespace-nowrap px-1 text-3xs tabular-nums text-muted-foreground">
