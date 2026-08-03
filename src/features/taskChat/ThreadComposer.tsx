@@ -199,8 +199,9 @@ export function ThreadComposer({
           className={cn(
             // Ті самі падінги, що й у поля вводу: інакше «✕» і «готово» стоять
             // ближче до центру, ніж скріпка й надсилання.
-            "flex min-h-[38px] items-center gap-1 rounded-[20px] border p-1 pl-1.5 transition-colors",
-            isRecording ? "border-destructive/30 bg-danger-soft/60" : "border-border/60 bg-muted/50"
+            // Рамка й тло — рівно як у звичайного поля вводу: сама капсула не
+            // має «червоніти», червоними лишаються тільки крапка, час і пульсація.
+            "flex min-h-[38px] items-center gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5"
           )}
         >
           {isRecording ? (
