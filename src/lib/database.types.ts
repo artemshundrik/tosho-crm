@@ -1625,6 +1625,33 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_adoption: {
+        Row: {
+          feature_key: string
+          first_used_at: string | null
+          last_used_at: string | null
+          refreshed_at: string
+          user_id: string
+          uses: number
+        }
+        Insert: {
+          feature_key: string
+          first_used_at?: string | null
+          last_used_at?: string | null
+          refreshed_at?: string
+          user_id: string
+          uses?: number
+        }
+        Update: {
+          feature_key?: string
+          first_used_at?: string | null
+          last_used_at?: string | null
+          refreshed_at?: string
+          user_id?: string
+          uses?: number
+        }
+        Relationships: []
+      }
       finance_accounts: {
         Row: {
           bank_provider: string | null
@@ -2922,14 +2949,14 @@ export type Database = {
         Row: {
           body: string
           comment_type: Database["tosho"]["Enums"]["quote_comment_type"]
-          deleted_at: string | null
-          reply_to: string | null
           created_at: string
           created_by: string | null
+          deleted_at: string | null
           id: string
           is_pinned: boolean
           kind: string
           quote_id: string | null
+          reply_to: string | null
           source: string
           team_id: string
           thread_key: string
@@ -2939,32 +2966,31 @@ export type Database = {
         Insert: {
           body: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
-          deleted_at?: string | null
-          reply_to?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           id?: string
           is_pinned?: boolean
           kind?: string
           quote_id?: string | null
+          reply_to?: string | null
           source?: string
           team_id: string
-          /** Проставляється тригером із quote_id, якщо не переданий явно. */
-          thread_key?: string
+          thread_key: string
           thread_meta?: Json
           visibility?: string
         }
         Update: {
           body?: string
           comment_type?: Database["tosho"]["Enums"]["quote_comment_type"]
-          deleted_at?: string | null
-          reply_to?: string | null
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
           id?: string
           is_pinned?: boolean
           kind?: string
           quote_id?: string | null
+          reply_to?: string | null
           source?: string
           team_id?: string
           thread_key?: string
@@ -2986,46 +3012,14 @@ export type Database = {
             referencedRelation: "v_quotes_list"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "quote_comments_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "quote_comments"
+            referencedColumns: ["id"]
+          },
         ]
-      }
-      thread_reactions: {
-        Row: {
-          created_at: string
-          emoji: string
-          message_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          emoji: string
-          message_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          emoji?: string
-          message_id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      thread_reads: {
-        Row: {
-          last_read_at: string
-          thread_key: string
-          user_id: string
-        }
-        Insert: {
-          last_read_at?: string
-          thread_key: string
-          user_id: string
-        }
-        Update: {
-          last_read_at?: string
-          thread_key?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       quote_counters: {
         Row: {
@@ -4176,6 +4170,53 @@ export type Database = {
         }
         Relationships: []
       }
+      thread_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "quote_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_reads: {
+        Row: {
+          last_read_at: string
+          thread_key: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          thread_key: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          thread_key?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ua_workday_exceptions: {
         Row: {
           day: string
@@ -4562,6 +4603,7 @@ export type Database = {
       }
     }
     Functions: {
+      absence_today: { Args: never; Returns: string }
       accept_workspace_invite: { Args: { p_token: string }; Returns: string }
       adjust_sample_stock_item: {
         Args: {
@@ -4602,11 +4644,34 @@ export type Database = {
         Args: { p_batch_limit?: number; p_max_rounds?: number }
         Returns: Json
       }
+      bot_submit_absence: {
+        Args: {
+          p_comment?: string
+          p_end: string
+          p_kind: string
+          p_start: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      can_read_all_feature_adoption: { Args: never; Returns: boolean }
       capture_admin_observability_snapshot: {
         Args: { p_team_id: string }
         Returns: Json
       }
       capture_observability_snapshot_scheduled: { Args: never; Returns: Json }
+      count_absence_business_days: {
+        Args: { _from: string; _to: string; _workspace: string }
+        Returns: number
+      }
+      count_absence_calendar_days: {
+        Args: { _from: string; _to: string; _workspace: string }
+        Returns: number
+      }
+      count_absence_quota_days: {
+        Args: { _from: string; _kind: string; _to: string; _workspace: string }
+        Returns: number
+      }
       create_contact: {
         Args: { p_email?: string; p_name: string; p_phone?: string }
         Returns: {
@@ -4710,6 +4775,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      refresh_feature_adoption: { Args: never; Returns: undefined }
       set_quote_status: {
         Args: {
           p_new_status: Database["tosho"]["Enums"]["quote_status"]

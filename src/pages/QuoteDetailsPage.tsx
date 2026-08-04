@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { threadKeyForQuote } from "@/lib/taskThread";
 import {
   getAttachmentDisplayFileName,
   getAttachmentDownloadFileName,
@@ -5526,6 +5527,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .insert({
           team_id: effectiveTeamId,
           quote_id: quoteId,
+          thread_key: threadKeyForQuote(quoteId),
           body,
           created_by: userId,
         })
