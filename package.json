@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "check:feature-keys": "node scripts/check-feature-keys.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
