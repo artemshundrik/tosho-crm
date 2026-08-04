@@ -59,6 +59,7 @@ const NovaPoshtaSettingsPage = lazyWithRetry(() => import("./pages/NovaPoshtaSet
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
+const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -1053,6 +1054,16 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <ProfilePage />
+            </RouteSuspense>
+          }
+        />
+        {/* Без ModuleRouteGate: сторінка доступна всім, а її вміст уже
+            відфільтрований visibleFeatures за доступами людини. */}
+        <Route
+          path="features"
+          element={
+            <RouteSuspense shell>
+              <FeaturesPage />
             </RouteSuspense>
           }
         />
