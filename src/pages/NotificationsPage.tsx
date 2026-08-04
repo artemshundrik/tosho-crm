@@ -26,6 +26,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -798,7 +799,7 @@ export default function NotificationsPage() {
         topLeft={
           <div className="flex w-full items-center justify-between gap-3 md:w-auto md:justify-start">
             <div className="flex items-center gap-2">
-              <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
+              <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
                 <Button
                   variant="segmented"
                   size="xs"
@@ -817,7 +818,7 @@ export default function NotificationsPage() {
                 >
                   Непрочитані
                 </Button>
-              </div>
+              </SegmentedGroup>
               <div className="hidden md:flex items-center gap-1.5">
                 <button
                   type="button"

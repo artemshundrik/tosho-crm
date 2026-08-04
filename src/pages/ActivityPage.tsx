@@ -11,6 +11,7 @@ import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
@@ -171,7 +172,7 @@ export default function ActivityPage() {
           </Button>
         }
         filters={
-          <div className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "h-auto flex-wrap")}>
             {FILTER_TABS.map((tab) => (
               <Button
                 key={tab.value}
@@ -185,7 +186,7 @@ export default function ActivityPage() {
                 {tab.label}
               </Button>
             ))}
-          </div>
+          </SegmentedGroup>
         }
         meta={<ToolbarMeta count={filtered.length} countLabel="подій" />}
       />

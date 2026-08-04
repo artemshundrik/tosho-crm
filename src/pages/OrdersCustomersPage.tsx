@@ -86,6 +86,7 @@ import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { toast } from "sonner";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type CustomerRow = {
   id: string;
@@ -3160,7 +3161,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const customersHeaderActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
-        <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
           <Button
             type="button"
             variant="segmented"
@@ -3185,7 +3186,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             Ліди
             <CountBadge value={leadsTotal} className="ml-1.5" />
           </Button>
-        </div>
+        </SegmentedGroup>
       }
       topRight={
         <Button

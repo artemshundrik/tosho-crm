@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { useSegmentedSlider } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
@@ -305,6 +306,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [activeLegalEntityId, setActiveLegalEntityId] = React.useState<string | null>(null);
+  // Ковзна плашка для вкладок картки: TabsList від Radix не наш div, тож
+  // механіку вдягаємо хуком, а не обгорткою.
+  const { ref: segmentedRef, indicator: segmentedIndicator } = useSegmentedSlider<HTMLDivElement>();
+
   const [section, setSection] = React.useState<"basic" | "legalEntities" | "communication" | "logistics" | "accountant" | "related">(
     "basic"
   );
@@ -1753,7 +1758,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               ) : null}
               <SectionHeader>Пов'язані сутності</SectionHeader>
               <Tabs defaultValue="calculations" className="w-full">
-                <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
+                <TabsList ref={segmentedRef} className={cn("w-fit segmented-slider relative", SEGMENTED_GROUP_SM)}>
+              {segmentedIndicator}
                   <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                     Прорахунки
                     <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">

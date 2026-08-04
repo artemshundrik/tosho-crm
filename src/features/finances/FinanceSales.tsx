@@ -2,6 +2,7 @@ import * as React from "react";
 import { FileText, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { FinanceStickyBar } from "./FinanceMonthBar";
 import { FinanceInvoices } from "./FinanceInvoices";
 import { FinancePayments } from "./FinancePayments";
@@ -20,7 +21,7 @@ export function FinanceSales({ teamId, userId, canSeeSensitive }: FinanceSalesPr
       {/* Липкий бар (спільний із рештою розділів Фінансів): перемикач підрозділів
           лишається на екрані під час скролу довгих списків. */}
       <FinanceStickyBar>
-        <div className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
+        <SegmentedGroup className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
           <button
             type="button"
             className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5")}
@@ -37,7 +38,7 @@ export function FinanceSales({ teamId, userId, canSeeSensitive }: FinanceSalesPr
           >
             <Wallet className="h-3.5 w-3.5" /> Оплати
           </button>
-        </div>
+        </SegmentedGroup>
       </FinanceStickyBar>
 
       {tab === "invoices" ? (

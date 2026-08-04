@@ -873,6 +873,38 @@
     border-color: hsl(var(--danger-soft-border));
     color: hsl(var(--danger-foreground));
   }
+  /*
+   * Сегментований перемикач із ковзною плашкою (SegmentedGroup).
+   *
+   * Активний фон малює абсолютна плашка обгортки, тож власний фон/тінь
+   * активного тригера тут гасимо — інакше було б два накладені прямокутники,
+   * і той, що на кнопці, «телепортувався» б попереду анімованого.
+   *
+   * Селектор навмисно покриває обидва механізми стану: aria-pressed у наших
+   * кнопок і data-state у тригерів Radix.
+   */
+  .segmented-slider [aria-pressed="true"],
+  .segmented-slider [data-state="active"],
+  .segmented-slider [data-state="on"] {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  /*
+   * Тригери мусять лежати НАД плашкою, інакше вона перекриє текст.
+   *
+   * Виняток для самої плашки обов'язковий: без нього `position: relative`
+   * діставався і їй, перебивав `absolute` — і плашка ставала звичайним
+   * елементом потоку, тобто малювалась ЛІВОРУЧ від першої кнопки замість
+   * того, щоб лягти під активну.
+   */
+  .segmented-slider > *:not([data-segmented-indicator]) {
+    position: relative;
+    z-index: 1;
+  }
+
   .tone-festive {
     background-color: hsl(var(--festive-soft));
     border-color: hsl(var(--festive-soft-border));

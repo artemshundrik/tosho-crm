@@ -167,6 +167,7 @@ import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeS
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type QuotesPageProps = {
   teamId: string;
@@ -5272,7 +5273,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const estimatesHeaderActions = useMemo(() => (
       <UnifiedPageToolbar
         topLeft={
-          <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
@@ -5291,7 +5292,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             >
               КП та набори
             </Button>
-          </div>
+          </SegmentedGroup>
         }
         topRight={
           <>
@@ -5369,7 +5370,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </Select>
                 )}
                 {viewMode === "table" ? (
-                  <div className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
+                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
                     <Button
                       variant="segmented"
                       size="xs"
@@ -5388,13 +5389,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     >
                       Групи
                     </Button>
-                  </div>
+                  </SegmentedGroup>
                 ) : null}
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             ) : (
               <>
-                <div className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
+                <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
                   <Button
                     variant="segmented"
                     size="xs"
@@ -5425,7 +5426,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     Набори
                     <CountBadge value={quoteSetSetCount} className="ml-1" />
                   </Button>
-                </div>
+                </SegmentedGroup>
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             )}

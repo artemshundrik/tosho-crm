@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatOrderMoney } from "@/features/orders/orderRecords";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { FinanceStickyBar } from "./FinanceMonthBar";
 import {
   useFinanceAccounts,
@@ -175,7 +176,7 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
     <div className="space-y-5">
       {/* Період — у липкому барі, як перемикачі в решті розділів Фінансів. */}
       <FinanceStickyBar>
-        <div className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
+        <SegmentedGroup className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
           {(["month", "year", "all"] as RangeKey[]).map((r) => (
             <button
               key={r}
@@ -187,7 +188,7 @@ export function FinanceReports({ teamId, canSeeSensitive }: FinanceReportsProps)
               {r === "month" ? "Цей місяць" : r === "year" ? "Цей рік" : "Весь час"}
             </button>
           ))}
-        </div>
+        </SegmentedGroup>
       </FinanceStickyBar>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

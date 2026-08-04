@@ -119,6 +119,7 @@ import {
   type ModuleAccess,
   type ModuleKey,
 } from "@/lib/moduleAccess";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
@@ -2304,7 +2305,7 @@ export function TeamMembersPage() {
               <h1 className="text-lg font-semibold tracking-tight text-foreground">Ролі та доступи</h1>
               <CountBadge value={members.length} />
             </div>
-            <div className={SEGMENTED_GROUP}>
+            <SegmentedGroup className={SEGMENTED_GROUP}>
                 <Button
                   type="button"
                   variant="segmented"
@@ -2327,13 +2328,13 @@ export function TeamMembersPage() {
                     Запрошення ({invites.filter((i) => !i.accepted_at && !isExpired(i.expires_at)).length})
                   </Button>
                 ) : null}
-              </div>
+              </SegmentedGroup>
           </div>
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end lg:ml-auto">
             {activeTab === "members" ? (
-              <div className={SEGMENTED_GROUP}>
+              <SegmentedGroup className={SEGMENTED_GROUP}>
                 <Button
                   type="button"
                   variant="segmented"
@@ -2372,7 +2373,7 @@ export function TeamMembersPage() {
                     Пульс
                   </Button>
                 ) : null}
-              </div>
+              </SegmentedGroup>
             ) : null}
             {canManage ? (
               <Button variant="primary" size="lg" className={cn(TOOLBAR_ACTION_BUTTON, "md:px-5")} onClick={openInviteDialog}>
@@ -2816,7 +2817,7 @@ export function TeamMembersPage() {
                     </div>
                   </div>
 
-                  <div className={cn(SEGMENTED_GROUP_SM, "h-auto flex-wrap")}>
+                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "h-auto flex-wrap")}>
                     {visiblePersonSections.map((section) => (
                       <Button key={section.key} type="button" variant="segmented" size="xs"
                         aria-pressed={activeSection === section.key}
@@ -2825,7 +2826,7 @@ export function TeamMembersPage() {
                         {section.label}
                       </Button>
                     ))}
-                  </div>
+                  </SegmentedGroup>
 
                   {activeSection === "overview" ? (
                     <>

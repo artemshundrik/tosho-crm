@@ -127,6 +127,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { AlertTriangle, CalendarRange, Clock3, ExternalLink, Gauge, LayoutGrid, Layers3, PencilLine, Target, Users } from "lucide-react";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type DesignTask = {
   id: string;
@@ -5072,7 +5073,7 @@ export default function DesignPage() {
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
@@ -5103,11 +5104,11 @@ export default function DesignPage() {
               Окремі
               <CountBadge value={standaloneTasksCount} className="ml-1" />
             </Button>
-          </div>
+          </SegmentedGroup>
         }
         topRight={
           <>
-            <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
+            <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
               <Button
                 variant="segmented"
                 size="xs"
@@ -5140,7 +5141,7 @@ export default function DesignPage() {
                 <Users className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">Дизайнери</span>
               </Button>
-            </div>
+            </SegmentedGroup>
             <Button
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
               onClick={() => setCreateDialogOpen(true)}

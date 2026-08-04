@@ -108,6 +108,7 @@ import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
 import { TeamBalancesTable } from "@/components/team/TeamBalancesTable";
 import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/TeamMemberCard";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 /**
  * Сторінка «Команда».
@@ -1027,7 +1028,7 @@ export function TeamPage() {
     () => (
       <UnifiedPageToolbar
         topLeft={
-          <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
@@ -1071,7 +1072,7 @@ export function TeamPage() {
                   size="xs"
                   aria-pressed={peopleView === "cards"}
                   onClick={() => setPeopleView("cards")}
-                  className={cn(SEGMENTED_TRIGGER, "px-2")}
+                  className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
                   title="Картки"
                   aria-label="Показати картками"
                 >
@@ -1082,7 +1083,7 @@ export function TeamPage() {
                   size="xs"
                   aria-pressed={peopleView === "balances"}
                   onClick={() => setPeopleView("balances")}
-                  className={cn(SEGMENTED_TRIGGER, "px-2")}
+                  className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
                   title="Баланси таблицею"
                   aria-label="Показати баланси таблицею"
                 >
@@ -1090,7 +1091,7 @@ export function TeamPage() {
                 </Button>
               </>
             ) : null}
-          </div>
+          </SegmentedGroup>
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">

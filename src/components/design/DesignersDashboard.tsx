@@ -34,6 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { DesignersPrintReport, type PrintReportVariant } from "@/components/design/DesignersPrintReport";
 import {
   firstName,
@@ -1322,7 +1323,7 @@ export function DesignersDashboard({
               ) : null}
             </span>
             {/* Перемикач метрики: та сама картка, ті самі рядки — інша величина. */}
-            <div className={SEGMENTED_GROUP_SM} aria-label="Метрика картки типів">
+            <SegmentedGroup className={SEGMENTED_GROUP_SM} aria-label="Метрика картки типів">
               <Button
                 variant="segmented"
                 size="xs"
@@ -1341,7 +1342,7 @@ export function DesignersDashboard({
               >
                 Кількість
               </Button>
-            </div>
+            </SegmentedGroup>
             <p className="w-full text-xs text-muted-foreground">
               {typesMetric === "time" ? (
                 "Час у таймері на задачах типу ÷ кількість таких задач у таймері. Задачі без таймера в середнє не входять."
@@ -1949,7 +1950,7 @@ export function DesignersDashboard({
               <Users className="h-4 w-4 text-primary" />
               Команда
             </h3>
-            <div className={cn(SEGMENTED_GROUP_SM, "ml-auto")} aria-label="Режим таблиці">
+            <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "ml-auto")} aria-label="Режим таблиці">
               <Button
                 variant="segmented"
                 size="xs"
@@ -1977,7 +1978,7 @@ export function DesignersDashboard({
               >
                 Файли
               </Button>
-            </div>
+            </SegmentedGroup>
             <p className="w-full text-xs text-muted-foreground">
               {tableMode === "month"
                 ? "Показники за обраний місяць. Клік по рядку — профіль дизайнера."

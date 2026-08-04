@@ -54,6 +54,7 @@ import {
   ShieldCheck,
   Wallet,
 } from "lucide-react";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type HeaderFilter = "all" | "created" | "ready" | "counterparty" | "design";
 
@@ -702,7 +703,7 @@ export default function OrdersProductionPage() {
               <span>СП з обраних ({selectedSpecificationIds.length})</span>
             </Button>
           ) : null}
-          <div className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full sm:w-auto")}>
             <Button
               variant="segmented"
               size="xs"
@@ -723,7 +724,7 @@ export default function OrdersProductionPage() {
               <LayoutGrid className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Kanban</span>
             </Button>
-          </div>
+          </SegmentedGroup>
           <Button
             onClick={() => setCreateOrderOpen(true)}
             className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}

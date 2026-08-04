@@ -40,6 +40,7 @@ import {
   categorizeAction,
   isNoiseActivity,
 } from "@/components/team/activityCategories";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 export type PulsePerson = {
   userId: string;
@@ -323,7 +324,7 @@ export function TeamPulsePanel({
       {/* Range + KPIs */}
       <div className="flex w-full flex-col gap-5 px-4 pb-8 pt-4 md:px-5 lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
-          <div className={cn(SEGMENTED_GROUP_SM, "self-start")}>
+          <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "self-start")}>
             {RANGE_OPTIONS.map((option) => (
               <Button
                 key={option.value}
@@ -340,7 +341,7 @@ export function TeamPulsePanel({
                 {option.label}
               </Button>
             ))}
-          </div>
+          </SegmentedGroup>
 
           {/* Step through periods: "сьогодні" answers the daily question, one
               click back answers "а вчора?" without a second control. */}

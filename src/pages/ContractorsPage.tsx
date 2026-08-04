@@ -48,6 +48,7 @@ import {
   PlusCircle,
   Trash2,
 } from "lucide-react";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type ContractorRow = {
   id: string;
@@ -361,7 +362,7 @@ export default function ContractorsPage() {
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
-        <div className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
           <Button
             variant="segmented"
             size="xs"
@@ -384,7 +385,7 @@ export default function ContractorsPage() {
             Постачальники
             <CountBadge value={suppliersCount} />
           </Button>
-        </div>
+        </SegmentedGroup>
       }
       topRight={
         <Button

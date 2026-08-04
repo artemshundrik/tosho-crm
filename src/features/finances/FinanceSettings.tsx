@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import {
   createAccount,
@@ -121,7 +122,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
 
   return (
     <div className="space-y-4">
-      <div className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
+      <SegmentedGroup className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
         <button
           type="button"
           className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap", tab === "entities" && "data-[state=active]")}
@@ -154,7 +155,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         >
           <FileText className="h-3.5 w-3.5" /> Реквізити
         </button>
-      </div>
+      </SegmentedGroup>
 
       {loading ? (
         <FinanceSkeleton variant="stats" />

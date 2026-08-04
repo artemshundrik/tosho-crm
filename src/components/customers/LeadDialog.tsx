@@ -21,6 +21,7 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
+import { useSegmentedSlider } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
@@ -222,6 +223,10 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
   const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [quickMode, setQuickMode] = React.useState(true);
+  // Ковзна плашка для вкладок картки: TabsList від Radix не наш div, тож
+  // механіку вдягаємо хуком, а не обгорткою.
+  const { ref: segmentedRef, indicator: segmentedIndicator } = useSegmentedSlider<HTMLDivElement>();
+
   const [section, setSection] = React.useState<"basic" | "requisites" | "communication" | "logistics" | "related">(
     "basic"
   );
@@ -1206,7 +1211,8 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               <TabsContent value="related" className="space-y-3 mt-3">
                 <SectionHeader>Пов'язані сутності</SectionHeader>
                 <Tabs defaultValue="calculations" className="w-full">
-            <TabsList className={cn("w-fit", SEGMENTED_GROUP_SM)}>
+            <TabsList ref={segmentedRef} className={cn("w-fit segmented-slider relative", SEGMENTED_GROUP_SM)}>
+              {segmentedIndicator}
               <TabsTrigger value="calculations" className={cn(SEGMENTED_TRIGGER_SM, "px-2.5 text-xs")}>
                 Прорахунки
                 <span className="ml-1 rounded-full border border-border/60 px-1.5 py-0.5 text-3xs leading-none text-muted-foreground">
