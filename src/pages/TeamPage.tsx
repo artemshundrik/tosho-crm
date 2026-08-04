@@ -8,10 +8,12 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
+  LayoutGrid,
   Loader2,
   PartyPopper,
   Pencil,
   Plus,
+  Rows3,
   Settings2,
   Trash2,
   Undo2,
@@ -1057,6 +1059,37 @@ export function TeamPage() {
                 className={cn("ml-1", canManageAbsences && pendingRequests.length > 0 && toneBadgeClass.warning)}
               />
             </Button>
+            {/* Перемикач ВИДУ, а не вкладка: серед фільтрів він читався як
+                ще один фільтр, тож живе поруч із вкладками — але окремою
+                групою через розділювач, щоб не здатися четвертою вкладкою.
+                Лише owner/SEO: у решти таблиця була б з одного рядка. */}
+            {tab === "people" && canManageAbsences ? (
+              <>
+                <span className="mx-1 h-5 w-px shrink-0 self-center bg-border" aria-hidden />
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={peopleView === "cards"}
+                  onClick={() => setPeopleView("cards")}
+                  className={cn(SEGMENTED_TRIGGER, "px-2")}
+                  title="Картки"
+                  aria-label="Показати картками"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={peopleView === "balances"}
+                  onClick={() => setPeopleView("balances")}
+                  className={cn(SEGMENTED_TRIGGER, "px-2")}
+                  title="Баланси таблицею"
+                  aria-label="Показати баланси таблицею"
+                >
+                  <Rows3 className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </>
+            ) : null}
           </div>
         }
         topRight={
@@ -1150,30 +1183,6 @@ export function TeamPage() {
                   <SelectItem value="birthday">За днем народження</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Щільний вид — лише для тих, кому видно чужі залишки: у решти
-                  таблиця складалася б з одного рядка й читалась як поломка. */}
-              {canManageAbsences ? (
-                <div className={SEGMENTED_GROUP}>
-                  <Button
-                    variant="segmented"
-                    size="xs"
-                    aria-pressed={peopleView === "cards"}
-                    onClick={() => setPeopleView("cards")}
-                    className={SEGMENTED_TRIGGER}
-                  >
-                    Картки
-                  </Button>
-                  <Button
-                    variant="segmented"
-                    size="xs"
-                    aria-pressed={peopleView === "balances"}
-                    onClick={() => setPeopleView("balances")}
-                    className={SEGMENTED_TRIGGER}
-                  >
-                    Баланси
-                  </Button>
-                </div>
-              ) : null}
             </>
           ) : undefined
         }
