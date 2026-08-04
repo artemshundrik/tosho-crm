@@ -192,11 +192,6 @@ export default {
             "0%": { transform: "translateX(-140%) skewX(-25deg)" },
             "100%": { transform: "translateX(140%) skewX(-25deg)" },
           },
-          // Смужки-хвиля під час запису голосу (розділ «Можливості»).
-          "feature-wave": {
-            "0%, 100%": { height: "22%" },
-            "50%": { height: "100%" },
-          },
         },
         animation: {
           "accordion-down": "accordion-down 0.2s ease-out",
@@ -204,7 +199,6 @@ export default {
           // 👇 Додана анімація "shine"
           shine: "shine 0.7s",
           "fifa-shine": "fifa-shine 0.9s ease-out",
-          "feature-wave": "feature-wave 0.85s ease-in-out infinite",
         },
       },
     },

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Loader2, Mic, Send, Square } from "lucide-react";
+import { Check, Loader2, Mic, RefreshCw, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,12 @@ import { FEATURE_DEFINITIONS, type FeatureDefinition, type FeatureKey } from "@/
  * 2026-08-04): ліворуч історія з нумерованими кроками, праворуч — вікно CRM,
  * усередині якого фіча ПРАЦЮЄ по-справжньому.
  *
- * НАВІЩО саме так: промо-модалка з кнопкою «перейти в налаштування» дала
+ * ВАЖЛИВО ПРО СТИЛІ: бульбашки, композер і еквалайзер запису тут — НЕ власні.
+ * Це ті самі класи, що в справжньому чаті задачі (features/taskChat/ThreadFeed
+ * і ThreadComposer). Своя версія виглядала «криво» саме тому, що розходилась
+ * із продуманим оригіналом. Міняєш чат — звіряй і це.
+ *
+ * НАВІЩО взагалі: промо-модалка з кнопкою «перейти в налаштування» дала
  * 53 покази й 2 кліки (заміри по проду). Людина не хоче переходити кудись —
  * вона хоче натиснути й побачити результат, не втрачаючи контексту.
  */
@@ -35,11 +40,16 @@ const WINDOW_LABEL: Record<FeatureKey, string> = {
   task_chat: "обговорення",
 };
 
-const FIELD_LABEL: Record<FeatureKey, string> = {
-  telegram_bot: "Telegram",
-  voice_dictation: "Технічне завдання",
-  task_chat: "Обговорення",
-};
+/** Смужки еквалайзера — копія з ThreadComposer, щоб запис виглядав однаково. */
+const WAVE_BARS = [
+  { height: 8, delay: "0ms" },
+  { height: 14, delay: "120ms" },
+  { height: 10, delay: "240ms" },
+  { height: 16, delay: "80ms" },
+  { height: 9, delay: "300ms" },
+  { height: 13, delay: "180ms" },
+  { height: 7, delay: "60ms" },
+];
 
 type Props = {
   feature: FeatureDefinition | null;
@@ -124,7 +134,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                 }}
               />
               <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-                <div className="flex items-center gap-1.5 border-b border-border bg-muted/60 px-3 py-2">
+                <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-3 py-2">
                   <span className="h-2 w-2 rounded-full bg-border" />
                   <span className="h-2 w-2 rounded-full bg-border" />
                   <span className="h-2 w-2 rounded-full bg-border" />
@@ -132,12 +142,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                     {WINDOW_LABEL[feature.key]}
                   </span>
                 </div>
-                <div className="grid gap-2.5 p-3.5">
-                  <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {FIELD_LABEL[feature.key]}
-                  </p>
-                  <FeatureDemo featureKey={feature.key} />
-                </div>
+                <FeatureDemo featureKey={feature.key} />
               </div>
             </div>
           </div>
@@ -161,6 +166,7 @@ function TelegramDemo() {
   const [linked, setLinked] = useState<string | null>(null);
   const [awaitingStart, setAwaitingStart] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [relinking, setRelinking] = useState(false);
 
   const readSettings = useCallback(async () => {
     if (!userId) return null;
@@ -213,6 +219,7 @@ function TelegramDemo() {
       if (data?.telegram_chat_id) {
         setLinked(data.telegram_username ?? "підключено");
         setAwaitingStart(false);
+        setRelinking(false);
         toast.success("Telegram підключено.");
       } else {
         toast.message("Ще не бачу підключення. Натисни Start у боті й перевір ще раз.");
@@ -222,24 +229,36 @@ function TelegramDemo() {
     }
   };
 
-  if (linked) {
+  // Уже підключено — показуємо стан, але лишаємо шлях пройти підключення ще раз.
+  // Без цього людина з підключеним ботом не може перевірити, чи воно взагалі працює.
+  if (linked && !relinking) {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-success-soft-border bg-success-soft px-3 py-2.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-card text-success-foreground">
-          <Check className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-success-foreground">Бот підключений</p>
-          <p className="truncate text-3xs text-success-foreground">
-            {linked === "підключено" || linked.startsWith("@") ? linked : `@${linked}`}
-          </p>
+      <div className="grid gap-2.5 p-3.5">
+        <div className="flex items-center gap-2.5 rounded-xl border border-success-soft-border bg-success-soft px-3 py-2.5">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-success-foreground">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-success-foreground">Бот підключений</p>
+            <p className="truncate text-3xs text-success-foreground">
+              {linked === "підключено" || linked.startsWith("@") ? linked : `@${linked}`}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setRelinking(true)}
+          className="inline-flex items-center gap-1.5 justify-self-start text-2xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Підключити заново
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-2.5">
+    <div className="grid gap-2.5 p-3.5">
       <p className="text-xs leading-5 text-muted-foreground">
         Тисни кнопку — відкриється бот @{TELEGRAM_BOT_USERNAME}. Там натисни <b>Start</b> і
         повертайся сюди.
@@ -253,11 +272,23 @@ function TelegramDemo() {
           Я натиснув Start — перевір
         </Button>
       ) : null}
+      {relinking ? (
+        <button
+          type="button"
+          onClick={() => {
+            setRelinking(false);
+            setAwaitingStart(false);
+          }}
+          className="justify-self-start text-2xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Скасувати
+        </button>
+      ) : null}
     </div>
   );
 }
 
-/* ── Диктування: справжній запис і розшифровка тут же ──────────── */
+/* ── Диктування: справжній запис, вигляд — як у композері чату ──── */
 
 function DictationDemo() {
   const [text, setText] = useState("");
@@ -275,76 +306,93 @@ function DictationDemo() {
 
   if (!isSupported) {
     return (
-      <p className="text-xs leading-5 text-muted-foreground">
+      <p className="p-3.5 text-xs leading-5 text-muted-foreground">
         Цей браузер не вміє записувати звук. Спробуй у Chrome або Safari на компʼютері.
       </p>
     );
   }
 
   return (
-    <div className="grid gap-2.5">
-      <Textarea
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder="Тут зʼявиться те, що ти надиктуєш…"
-        className="min-h-[82px] resize-none text-xs leading-5"
-        aria-label="Розшифрований текст"
-      />
+    <div className="grid gap-2.5 p-3.5">
+      <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Технічне завдання
+      </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {recording ? (
-          <Button type="button" size="sm" variant="destructive" onClick={stop}>
-            <Square className="h-3 w-3" />
-            Зупинити
-          </Button>
+      <div className="min-h-[82px] rounded-xl border border-border/60 bg-card p-2.5 text-xs leading-snug">
+        {text ? (
+          <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
         ) : (
-          <Button type="button" size="sm" onClick={start} disabled={transcribing}>
-            {transcribing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Mic className="h-3.5 w-3.5" />
-            )}
-            {transcribing ? "Розшифровую…" : "Записати"}
-          </Button>
+          <span className="text-muted-foreground">Тут зʼявиться те, що ти надиктуєш…</span>
         )}
-
-        {recording ? (
-          <>
-            <Waveform />
-            <span className="font-mono text-3xs tabular-nums text-destructive">{timer}</span>
-          </>
-        ) : null}
-
-        {text && !recording ? (
-          <Button type="button" size="sm" variant="ghost" onClick={() => setText("")}>
-            Очистити
-          </Button>
-        ) : null}
       </div>
+
+      {/* Смуга запису — той самий вигляд, що в композері чату. */}
+      {recording || transcribing ? (
+        <div className="flex min-h-[38px] items-center gap-1.5 rounded-[20px] border border-destructive/40 bg-card p-1 pl-2.5">
+          {recording ? (
+            <>
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-destructive">
+                {timer}
+              </span>
+              <span className="flex flex-1 items-center gap-[3px] px-1" aria-hidden="true">
+                {WAVE_BARS.map((bar, index) => (
+                  <span
+                    key={index}
+                    className="w-[3px] rounded-full bg-destructive/45 motion-safe:animate-[thread-wave_1.1s_ease-in-out_infinite]"
+                    style={{ height: bar.height, animationDelay: bar.delay }}
+                  />
+                ))}
+              </span>
+              <button
+                type="button"
+                aria-label="Завершити запис"
+                onClick={stop}
+                className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+              <span className="flex-1 text-xs text-muted-foreground">Розпізнаю голос…</span>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="flex min-h-[38px] items-center gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5">
+          <button
+            type="button"
+            aria-label="Продиктувати голосом"
+            onClick={start}
+            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            <Mic className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-0 flex-1 px-1 text-xs leading-snug text-muted-foreground">
+            Натисни мікрофон і говори
+          </span>
+          {text ? (
+            <button
+              type="button"
+              onClick={() => setText("")}
+              className="shrink-0 rounded-full px-2 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Очистити
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {error ? <p className="text-3xs text-destructive">{error}</p> : null}
     </div>
   );
 }
 
-/** Смужки, що стрибають під час запису. Суто декоративна. */
-function Waveform() {
-  return (
-    <span aria-hidden="true" className="flex h-4 items-center gap-[3px] text-destructive">
-      {Array.from({ length: 10 }, (_, index) => (
-        <span
-          key={index}
-          className="w-[3px] rounded-full bg-current motion-safe:animate-feature-wave"
-          style={{ height: "30%", animationDelay: `${index * 0.08}s` }}
-        />
-      ))}
-    </span>
-  );
-}
+/* ── Обговорення: бульбашки й композер один в один із чату задачі ── */
 
-/* ── Обговорення в задачі: показова гілка з відповіддю ──────────── */
-
-type DemoMessage = { id: number; author: "me" | "mate"; text: string };
+type DemoMessage = { id: number; own: boolean; text: string; at: string };
 
 const MATE_REPLIES = [
   "Прийняв. Візьму в роботу після поточної правки.",
@@ -352,16 +400,24 @@ const MATE_REPLIES = [
   "Зрозумів. Якщо клієнт попросить ще варіант — пиши сюди ж.",
 ];
 
-const SEED: DemoMessage[] = [
-  { id: 1, author: "mate", text: "Клієнт просить логотип більший і без тіні. Встигнемо сьогодні?" },
-];
+function clockNow(): string {
+  return new Date().toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+}
 
 function TaskChatDemo() {
-  const [messages, setMessages] = useState<DemoMessage[]>(SEED);
+  const [messages, setMessages] = useState<DemoMessage[]>(() => [
+    {
+      id: 1,
+      own: false,
+      text: "Клієнт просить логотип більший і без тіні. Встигнемо сьогодні?",
+      at: clockNow(),
+    },
+  ]);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const replyIndex = useRef(0);
   const timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const feedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(
     () => () => {
@@ -371,10 +427,15 @@ function TaskChatDemo() {
     []
   );
 
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [messages, typing]);
+
   const send = () => {
     const body = draft.trim();
     if (!body) return;
-    setMessages((prev) => [...prev, { id: prev.length + 1, author: "me", text: body }]);
+    setMessages((prev) => [...prev, { id: prev.length + 1, own: true, text: body, at: clockNow() }]);
     setDraft("");
     setTyping(true);
 
@@ -384,8 +445,9 @@ function TaskChatDemo() {
         ...prev,
         {
           id: prev.length + 1,
-          author: "mate",
+          own: false,
           text: MATE_REPLIES[replyIndex.current % MATE_REPLIES.length],
+          at: clockNow(),
         },
       ]);
       replyIndex.current += 1;
@@ -394,75 +456,97 @@ function TaskChatDemo() {
   };
 
   return (
-    <div className="grid gap-2.5">
-      <div className="grid max-h-[150px] gap-1.5 overflow-y-auto pr-1">
+    <div>
+      <div
+        ref={feedRef}
+        className="flex max-h-[176px] flex-col gap-2.5 overflow-y-auto px-2.5 py-3"
+      >
         {messages.map((message) => (
           <div
             key={message.id}
-            className={cn("flex items-start gap-1.5", message.author === "me" && "flex-row-reverse")}
+            className={cn("flex items-end gap-1.5", message.own && "flex-row-reverse")}
           >
-            <span
+            {message.own ? null : (
+              <AvatarBase size={24} name="Марина Сидоренко" className="shrink-0" />
+            )}
+            <div
               className={cn(
-                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-3xs font-bold",
-                message.author === "me"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground"
+                "flex min-w-0 max-w-[76%] flex-col gap-1",
+                message.own && "items-end"
               )}
             >
-              {message.author === "me" ? "Я" : "МС"}
-            </span>
-            <p
-              className={cn(
-                "max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs leading-5",
-                message.author === "me" ? "bg-primary/10" : "bg-muted"
-              )}
-            >
-              {message.text}
-            </p>
+              <div
+                className={cn(
+                  "relative cursor-default rounded-2xl py-1.5 pl-2.5 pr-12 text-xs leading-snug",
+                  message.own
+                    ? "thread-bubble-own rounded-br-sm bg-primary text-primary-foreground"
+                    : "rounded-bl-sm bg-muted text-foreground"
+                )}
+              >
+                {message.own ? null : (
+                  <span className="mb-0.5 block text-2xs font-semibold text-info-foreground">
+                    Марина
+                  </span>
+                )}
+                <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{message.text}</span>
+                <span
+                  className={cn(
+                    "pointer-events-none absolute bottom-1.5 right-2.5 inline-flex items-center gap-1 whitespace-nowrap text-3xs tabular-nums",
+                    message.own ? "text-primary-foreground/80" : "text-muted-foreground"
+                  )}
+                >
+                  {message.at}
+                </span>
+              </div>
+            </div>
           </div>
         ))}
 
         {typing ? (
-          <div className="flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-3xs font-bold text-secondary-foreground">
-              МС
-            </span>
-            <span className="rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
+          <div className="flex items-end gap-1.5">
+            <AvatarBase size={24} name="Марина Сидоренко" className="shrink-0" />
+            <div className="rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
               друкує…
-            </span>
+            </div>
           </div>
         ) : null}
       </div>
 
-      <div className="flex items-end gap-1.5">
-        <Textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Напиши повідомлення…"
-          className="min-h-[36px] resize-none text-xs leading-5"
-          rows={1}
-          aria-label="Повідомлення"
-        />
-        <Button
-          type="button"
-          size="sm"
-          onClick={send}
-          disabled={!draft.trim()}
-          aria-label="Надіслати"
-        >
-          <Send className="h-3.5 w-3.5" />
-        </Button>
+      <div className="border-t border-border/40 bg-card p-2.5">
+        <div className="flex min-h-[38px] items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+          <textarea
+            value={draft}
+            rows={1}
+            placeholder="Написати…"
+            aria-label="Текст повідомлення"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-[7px] text-xs leading-snug outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            type="button"
+            onClick={send}
+            disabled={draft.trim().length === 0}
+            aria-label="Надіслати"
+            className={cn(
+              "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full transition-colors",
+              draft.trim().length === 0
+                ? "bg-muted text-muted-foreground"
+                : "bg-primary text-primary-foreground hover:opacity-90"
+            )}
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <p className="mt-1.5 px-1 text-3xs text-muted-foreground">
+          Демо — повідомлення нікуди не йдуть.
+        </p>
       </div>
-
-      <p className="text-3xs leading-4 text-muted-foreground">
-        Демо — повідомлення нікуди не йдуть.
-      </p>
     </div>
   );
 }
