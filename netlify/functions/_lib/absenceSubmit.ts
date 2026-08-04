@@ -334,5 +334,10 @@ export function humanizeAbsenceInsertError(
   if (error.code === "42501" || /row-level security/i.test(error.message)) {
     return "Такі дати недоступні для самостійної заявки — попроси SEO внести вручну";
   }
+  // Гард дубля кидає 23505 із власним текстом, але PostgREST на цей код може
+  // підставити службове «duplicate key value violates unique constraint».
+  if (error.code === "23505" && /duplicate key|unique constraint/i.test(error.message)) {
+    return "Така відсутність уже є в журналі — перевірте список своїх заявок";
+  }
   return error.message;
 }

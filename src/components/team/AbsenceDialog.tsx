@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { toneBadgeClass } from "@/lib/statusTones";
+import { toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 import {
   ABSENCE_QUOTA_UNIT,
   ABSENCE_QUOTA_UNIT_LABEL,
@@ -60,6 +60,14 @@ export type AbsenceDialogPerson = {
 };
 
 /** Хто ще відсутній у ті самі дні — рахує викликач, діалог лише показує. */
+export type AbsenceOwnConflict = {
+  kindLabel: string;
+  rangeLabel: string;
+  pending: boolean;
+  /** Точний збіг дат — тоді це вже не «перетин», а дубль, і його блокуємо. */
+  exact: boolean;
+};
+
 export type AbsenceOverlap = { userId: string; name: string; rangeLabel: string; pending: boolean };
 
 function addDaysKey(dateKey: string, delta: number) {
@@ -115,6 +123,8 @@ export function AbsenceDialog({
   approverLabel,
   todayKey,
   findOverlaps,
+  findOwnConflict,
+  editingId,
   onSubmit,
 }: {
   open: boolean;
@@ -136,6 +146,10 @@ export function AbsenceDialog({
   todayKey?: string;
   /** Повертає колег, чиї відсутності перетинаються з обраним діапазоном. */
   findOverlaps?: (params: { userId: string; startDate: string; endDate: string }) => AbsenceOverlap[];
+  /** Власний запис людини, що перетинає діапазон, — захист від дубля. */
+  findOwnConflict?: (params: { userId: string; startDate: string; endDate: string }) => AbsenceOwnConflict | null;
+  /** Id запису, який редагуємо: сам себе конфліктом вважати не можна. */
+  editingId?: string | null;
   onSubmit: (value: AbsenceDialogValue) => void;
 }) {
   const [value, setValue] = useState<AbsenceDialogValue>(initial);
@@ -209,8 +223,20 @@ export function AbsenceDialog({
     return findOverlaps({ userId: value.userId, startDate: value.startDate, endDate: value.endDate });
   }, [findOverlaps, rangeInvalid, value.endDate, value.startDate, value.userId]);
 
+  // Власний запис на ті самі дати. Точний збіг блокуємо тут же: у БД на нього
+  // стоїть тригер, але зловити помилку після кліку — гірше, ніж не дати
+  // натиснути. Під час редагування запис не конфліктує сам із собою.
+  const ownConflict = useMemo(() => {
+    if (editingId || !findOwnConflict || !value.startDate || !value.endDate || rangeInvalid) return null;
+    return findOwnConflict({ userId: value.userId, startDate: value.startDate, endDate: value.endDate });
+  }, [editingId, findOwnConflict, rangeInvalid, value.endDate, value.startDate, value.userId]);
+
   const canSubmit =
-    Boolean(value.userId && value.startDate && value.endDate) && !rangeInvalid && !sickBlocked && !saving;
+    Boolean(value.userId && value.startDate && value.endDate) &&
+    !rangeInvalid &&
+    !sickBlocked &&
+    !saving &&
+    !ownConflict?.exact;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -400,6 +426,18 @@ export function AbsenceDialog({
                 ) : null}
               </ul>
             </div>
+          ) : null}
+
+          {ownConflict ? (
+            <p className={cn("text-xs", ownConflict.exact ? "text-destructive" : toneTextClass.warning)}>
+              {ownConflict.exact
+                ? `Така заявка вже подана: ${ownConflict.kindLabel.toLowerCase()} ${ownConflict.rangeLabel}${
+                    ownConflict.pending ? " — чекає рішення" : ""
+                  }.`
+                : `Ці дати вже перетинаються з вашим записом: ${ownConflict.kindLabel.toLowerCase()} ${
+                    ownConflict.rangeLabel
+                  }${ownConflict.pending ? " (на погодженні)" : ""}.`}
+            </p>
           ) : null}
 
           {sickBlocked ? (

@@ -911,6 +911,9 @@ export function TeamPage() {
       liveAbsences
         .filter(
           (absence) =>
+            // Сама людина виключена навмисно: цей блок відповідає на питання
+            // «чи не лишимось без рук», а не «чи не подаю я вдруге». Власний
+            // конфлікт показує окремий рядок — findOwnConflict нижче.
             absence.userId !== forUserId &&
             absence.startDate <= endDate &&
             absence.endDate >= startDate
@@ -930,6 +933,32 @@ export function TeamPage() {
         }, [])
         .sort((a, b) => a.name.localeCompare(b.name, "uk")),
     [liveAbsences, memberById]
+  );
+
+  /**
+   * ВЛАСНИЙ конфлікт: у цієї людини вже є запис, що перетинає ці дати.
+   *
+   * Саме його бракувало, коли Ілля подав ту саму відпустку двічі за 32
+   * секунди: блок перетинів каже про КОЛЕГ і свого автора виключає, тож
+   * власна щойно подана заявка ніде не світилась.
+   */
+  const findOwnConflict = useCallback(
+    ({ userId: forUserId, startDate, endDate }: { userId: string; startDate: string; endDate: string }) => {
+      const hit = liveAbsences.find(
+        (absence) =>
+          absence.userId === forUserId &&
+          absence.startDate <= endDate &&
+          absence.endDate >= startDate
+      );
+      if (!hit) return null;
+      return {
+        kindLabel: TEAM_ABSENCE_KIND_LABELS[hit.kind],
+        rangeLabel: formatRange(hit),
+        pending: hit.status === "pending",
+        exact: hit.startDate === startDate && hit.endDate === endDate,
+      };
+    },
+    [liveAbsences]
   );
 
   /**
@@ -1664,6 +1693,8 @@ export function TeamPage() {
           approverLabel={approverLabel}
           todayKey={todayKey}
           findOverlaps={findOverlaps}
+          findOwnConflict={findOwnConflict}
+          editingId={absenceEditingId}
           onSubmit={handleAbsenceSubmit}
         />
       ) : null}
