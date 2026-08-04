@@ -17,6 +17,11 @@ import { cn } from "@/lib/utils";
  *
  * Обидва механізми стану підтримані навмисно: `aria-pressed` у наших кнопок і
  * `data-state` у Radix. Один селектор на два світи дешевший за дві обгортки.
+ *
+ * ОДНА ГРУПА = ОДИН ПЕРЕМИКАЧ. Плашка тут одна, тож два незалежні набори в
+ * спільному контейнері не працюють: підсвітку забере перший активний, а
+ * другий лишиться зовсім без неї — його ж власний фон погашено. Якщо поруч
+ * потрібні два перемикачі (вкладки + вид показу), робіть дві сусідні групи.
  */
 
 const ACTIVE_SELECTOR = '[aria-pressed="true"],[data-state="active"],[data-state="on"]';
@@ -41,7 +46,16 @@ export function useSegmentedSlider<T extends HTMLElement>() {
     if (!node) return;
 
     const measure = () => {
-      const active = node.querySelector<HTMLElement>(ACTIVE_SELECTOR);
+      const all = node.querySelectorAll<HTMLElement>(ACTIVE_SELECTOR);
+      if (import.meta.env.DEV && all.length > 1) {
+        // Мовчазна поломка виглядала б як «кнопка не підсвічується», а не як
+        // помилка розмітки — тому кажемо прямо.
+        console.warn(
+          "[SegmentedGroup] у групі кілька активних тригерів — плашка одна. " +
+            "Розділіть на дві сусідні групи."
+        );
+      }
+      const active = all[0] ?? null;
       if (!active) {
         setRect(null);
         setAnimated(false);

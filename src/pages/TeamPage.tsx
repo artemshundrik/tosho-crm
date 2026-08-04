@@ -1028,6 +1028,7 @@ export function TeamPage() {
     () => (
       <UnifiedPageToolbar
         topLeft={
+          <div className="flex w-full items-center gap-2 lg:w-auto">
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
               variant="segmented"
@@ -1060,38 +1061,40 @@ export function TeamPage() {
                 className={cn("ml-1", canManageAbsences && pendingRequests.length > 0 && toneBadgeClass.warning)}
               />
             </Button>
-            {/* Перемикач ВИДУ, а не вкладка: серед фільтрів він читався як
-                ще один фільтр, тож живе поруч із вкладками — але окремою
-                групою через розділювач, щоб не здатися четвертою вкладкою.
-                Лише owner/SEO: у решти таблиця була б з одного рядка. */}
-            {tab === "people" && canManageAbsences ? (
-              <>
-                <span className="mx-1 h-5 w-px shrink-0 self-center bg-border" aria-hidden />
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={peopleView === "cards"}
-                  onClick={() => setPeopleView("cards")}
-                  className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
-                  title="Картки"
-                  aria-label="Показати картками"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={peopleView === "balances"}
-                  onClick={() => setPeopleView("balances")}
-                  className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
-                  title="Баланси таблицею"
-                  aria-label="Показати баланси таблицею"
-                >
-                  <Rows3 className="h-3.5 w-3.5" aria-hidden />
-                </Button>
-              </>
-            ) : null}
           </SegmentedGroup>
+
+          {/* Перемикач ВИДУ — ОКРЕМА група, а не хвіст вкладок.
+              Плашка в групі одна, тож усередині вкладок іконка активного
+              виду лишалась би без підсвітки: перша активна кнопка («Люди»)
+              забирала б плашку собі. Плюс так чесніше семантично — це два
+              різні перемикачі, а не один із п'яти станів. */}
+          {tab === "people" && canManageAbsences ? (
+            <SegmentedGroup className={cn(SEGMENTED_GROUP, "shrink-0 gap-0.5")}>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={peopleView === "cards"}
+                onClick={() => setPeopleView("cards")}
+                className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
+                title="Картки"
+                aria-label="Показати картками"
+              >
+                <LayoutGrid className="h-4 w-4" aria-hidden />
+              </Button>
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={peopleView === "balances"}
+                onClick={() => setPeopleView("balances")}
+                className={cn(SEGMENTED_TRIGGER, "w-9 flex-none px-0")}
+                title="Баланси таблицею"
+                aria-label="Показати баланси таблицею"
+              >
+                <Rows3 className="h-4 w-4" aria-hidden />
+              </Button>
+            </SegmentedGroup>
+          ) : null}
+          </div>
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
