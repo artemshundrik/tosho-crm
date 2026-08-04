@@ -212,7 +212,9 @@ export function AbsenceYearReportDialog({
         <DialogHeader>
           <DialogTitle>Відсутності за {year} рік</DialogTitle>
           <DialogDescription>
-            Робочі дні за погодженими записами. Вихідні та свята не рахуються.
+            Використано за погодженими записами. Відпустка — календарними днями
+            (вихідні всередині рахуються), day-off і лікарняний — робочими. Свята
+            не списують нічого.
           </DialogDescription>
         </DialogHeader>
 

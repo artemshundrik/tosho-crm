@@ -4,7 +4,7 @@ import { AvatarBase } from "@/components/app/avatar-kit";
 import { Badge } from "@/components/ui/badge";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { cn } from "@/lib/utils";
-import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceBalanceMeters, type BalanceEntry } from "@/components/team/AbsenceBalanceMeters";
 import type { AbsenceBalance } from "@/lib/teamAbsenceQuotas";
 import {
   TEAM_ABSENCE_KIND_LABELS,
@@ -77,6 +77,8 @@ export function TeamMemberCard({
   absenceToday,
   pendingRequest,
   balance,
+  balanceEntries,
+  year,
 }: {
   person: TeamMemberCardPerson;
   /** Погоджена відсутність, що покриває сьогодні. */
@@ -85,6 +87,9 @@ export function TeamMemberCard({
   pendingRequest?: TeamAbsence | null;
   /** Передають лише коли залишки видно цьому глядачу. */
   balance?: AbsenceBalance | null;
+  /** Історія за типами — вмикає розшифровку під метрами. */
+  balanceEntries?: Record<"vacation" | "day_off" | "sick_leave", BalanceEntry[]>;
+  year?: number;
 }) {
   const birthdayToday = person.birthdayDaysUntil === 0;
 
@@ -175,7 +180,7 @@ export function TeamMemberCard({
 
       {balance ? (
         <div className="mt-3 border-t border-border/40 px-4 pt-3">
-          <AbsenceBalanceMeters balance={balance} dense />
+          <AbsenceBalanceMeters balance={balance} dense entries={balanceEntries} year={year} />
         </div>
       ) : null}
 

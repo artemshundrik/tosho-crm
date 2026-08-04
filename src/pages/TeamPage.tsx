@@ -92,7 +92,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { toAvatarAbsence } from "@/lib/absenceIndicator";
 import { toPersonHoverCardData } from "@/components/app/PersonHoverCard";
 import { notifyAbsenceRequestCancelled } from "@/lib/workflowNotifications";
-import { AbsenceBalanceMeters } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceBalanceMeters, buildBalanceEntries } from "@/components/team/AbsenceBalanceMeters";
 import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
 import { AbsenceDeclineDialog } from "@/components/team/AbsenceDeclineDialog";
 import {
@@ -104,6 +104,7 @@ import { AbsencePlanner, type PlannerMark, type PlannerPerson } from "@/componen
 import { AbsenceYearReportDialog } from "@/components/team/AbsenceYearReportDialog";
 import { HolidayEditorDialog } from "@/components/team/HolidayEditorDialog";
 import { QuotaEditorDialog } from "@/components/team/QuotaEditorDialog";
+import { TeamBalancesTable } from "@/components/team/TeamBalancesTable";
 import { TeamMemberCard, type TeamMemberCardPerson } from "@/components/team/TeamMemberCard";
 
 /**
@@ -271,6 +272,8 @@ export function TeamPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
+  /** Щільний вид списку. Лише owner/SEO — у решти таблиця була б з одного рядка. */
+  const [peopleView, setPeopleView] = useState<"cards" | "balances">("cards");
   const [sortMode, setSortMode] = useState<SortMode>("presence");
   const [monthOffset, setMonthOffset] = useState(0);
 
@@ -408,6 +411,34 @@ export function TeamPage() {
   );
 
   const activeMembers = useMemo(() => enrichedMembers.filter((member) => !member.inactive), [enrichedMembers]);
+
+  /**
+   * Історія відсутностей за типами — для розшифровки під метрами.
+   *
+   * Рахуємо ОДИН раз на всіх, а не в кожній картці: дні кожного запису
+   * міряються тією ж функцією, що й квота (відпустка — календарними), тож
+   * бульбашка не може розійтися з числом на метрі.
+   */
+  const balanceEntriesByUser = useMemo(() => {
+    const byUser = new Map<string, ReturnType<typeof buildBalanceEntries>>();
+    const grouped = new Map<string, TeamAbsence[]>();
+    (absences ?? []).forEach((absence) => {
+      const list = grouped.get(absence.userId);
+      if (list) list.push(absence);
+      else grouped.set(absence.userId, [absence]);
+    });
+    grouped.forEach((list, userId) => {
+      byUser.set(
+        userId,
+        buildBalanceEntries(list, (absence) =>
+          absence.kind === "other"
+            ? 0
+            : countQuotaDaysInYear(absence.kind, absence, year, exceptions)
+        )
+      );
+    });
+    return byUser;
+  }, [absences, exceptions, year]);
 
   const liveAbsences = useMemo(
     () => (absences ?? []).filter((absence) => absence.status === "approved" || absence.status === "pending"),
@@ -1119,6 +1150,30 @@ export function TeamPage() {
                   <SelectItem value="birthday">За днем народження</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Щільний вид — лише для тих, кому видно чужі залишки: у решти
+                  таблиця складалася б з одного рядка й читалась як поломка. */}
+              {canManageAbsences ? (
+                <div className={SEGMENTED_GROUP}>
+                  <Button
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={peopleView === "cards"}
+                    onClick={() => setPeopleView("cards")}
+                    className={SEGMENTED_TRIGGER}
+                  >
+                    Картки
+                  </Button>
+                  <Button
+                    variant="segmented"
+                    size="xs"
+                    aria-pressed={peopleView === "balances"}
+                    onClick={() => setPeopleView("balances")}
+                    className={SEGMENTED_TRIGGER}
+                  >
+                    Баланси
+                  </Button>
+                </div>
+              ) : null}
             </>
           ) : undefined
         }
@@ -1145,6 +1200,7 @@ export function TeamPage() {
       openAbsenceDialog,
       pendingRequests.length,
       peopleFilter,
+      peopleView,
       resetFilters,
       roleFilter,
       roleOptions,
@@ -1185,7 +1241,11 @@ export function TeamPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <AbsenceBalanceMeters balance={myBalance} />
+                  <AbsenceBalanceMeters
+                    balance={myBalance}
+                    entries={userId ? balanceEntriesByUser.get(userId) : undefined}
+                    year={year}
+                  />
                   <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
                     Відпустка міряється календарними днями — вихідні всередині неї
                     квоту списують. Day-off і лікарняний рахуються робочими. Свята не
@@ -1361,6 +1421,25 @@ export function TeamPage() {
               actionLabel={hasActiveFilters ? "Скинути фільтри" : undefined}
               onAction={hasActiveFilters ? resetFilters : undefined}
             />
+          ) : canManageAbsences && peopleView === "balances" ? (
+            <Card>
+              <CardContent className="px-0 py-0">
+                <TeamBalancesTable
+                  people={filteredMembers.map((member) => ({
+                    userId: member.userId,
+                    name: member.label,
+                    roleLabel: formatRoleLabel(member.jobRole),
+                    avatarUrl: member.avatarDisplayUrl,
+                    initials: getInitialsFromName(member.label, member.email),
+                    absenceToday: absenceTodayByUser.get(member.userId) ?? null,
+                  }))}
+                  balances={balances}
+                  entriesByUser={balanceEntriesByUser}
+                  year={year}
+                  onOpenPerson={(personId) => openAbsenceDialog({ userId: personId, mode: "manage" })}
+                />
+              </CardContent>
+            </Card>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
               {filteredMembers.map((member) => {
@@ -1393,6 +1472,8 @@ export function TeamPage() {
                     absenceToday={absenceTodayByUser.get(member.userId) ?? null}
                     pendingRequest={pendingByUser.get(member.userId) ?? null}
                     balance={showBalance ? (balances.get(member.userId) ?? null) : null}
+                    balanceEntries={showBalance ? balanceEntriesByUser.get(member.userId) : undefined}
+                    year={year}
                   />
                 );
               })}
