@@ -435,6 +435,7 @@ const ROUTES = {
   notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
+  features: "/features",
   observability: "/admin/observability",
 } as const;
 
@@ -644,6 +645,14 @@ if (pathname === ROUTES.profile)
       subtitle: "Керуй своїм обліковим записом та налаштуваннями.",
       breadcrumbLabel: "Профіль",
       breadcrumbTo: ROUTES.profile,
+      showPageHeader: false,
+    };
+  if (pathname === ROUTES.features)
+    return {
+      title: "Можливості",
+      subtitle: "Що вміє CRM і що з цього ти ще не пробував.",
+      breadcrumbLabel: "Можливості",
+      breadcrumbTo: ROUTES.features,
       showPageHeader: false,
     };
   // fallback

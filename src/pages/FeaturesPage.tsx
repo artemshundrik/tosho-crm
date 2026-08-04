@@ -1,21 +1,22 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { ArrowRight, MessageSquare, Mic, Send } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { defaultModuleAccess } from "@/lib/moduleAccess";
-import { visibleFeatures, type FeatureDefinition } from "@/lib/featureCatalog";
+import { visibleFeatures, type FeatureDefinition, type FeatureKey } from "@/lib/featureCatalog";
 import { isFreshFeature, resolveFeatureState, type FeatureState } from "@/lib/featureState";
 import { useMyFeatureAdoption } from "@/features/features/queries";
+import { FeatureOnboardingDialog } from "@/features/features/FeatureOnboardingDialog";
 
 /**
  * Розділ «Можливості» — відповідь на питання «а що ця CRM узагалі вміє?».
  *
  * НАВІЩО: заміри по проду (2026-08-04) показали, що промо-модалка дала 53
  * покази й лише 2 кліки, а дев'ять можливостей із двадцяти чотирьох знає одна
- * людина або ніхто. Модалка лікує «не помітив нового», але не лікує «не знаю,
- * що є» — для цього потрібне місце, куди можна прийти самому.
+ * людина або ніхто. Ключове рішення — фічу можна спробувати ПРЯМО з картки,
+ * не йдучи в дизайн-задачу чи профіль: саме перехід «кудись» і не працював.
  */
 
 type Filter = "all" | "untried" | "fresh";
@@ -32,13 +33,25 @@ const STATE_LABEL: Record<Exclude<FeatureState, "unknown">, string> = {
   untried: "Ще не пробував",
 };
 
+const FEATURE_ICON: Record<FeatureKey, typeof Send> = {
+  telegram_bot: Send,
+  voice_dictation: Mic,
+  task_chat: MessageSquare,
+};
+
+/** Свій тон кожній можливості — картки мають розрізнятися з першого погляду. */
+const FEATURE_TONE: Record<FeatureKey, string> = {
+  telegram_bot: "text-info-foreground bg-info-soft",
+  voice_dictation: "text-warning-foreground bg-warning-soft",
+  task_chat: "text-success-foreground bg-success-soft",
+};
+
 export default function FeaturesPage() {
-  const navigate = useNavigate();
   const { viewUserId, moduleAccess, accessRole, jobRole } = useAuth();
   const { data: adoption } = useMyFeatureAdoption(viewUserId);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<FeatureKey | null>(null);
 
   // Одна позначка часу на весь рендер: інакше «нове» перераховувалось би
   // на кожній картці й ламало мемоїзацію.
@@ -71,25 +84,26 @@ export default function FeaturesPage() {
     });
   }, [mine, filter, search, stateOf, now]);
 
-  const active = useMemo(
-    () => shown.find((def) => def.key === activeKey) ?? shown[0] ?? null,
-    [shown, activeKey]
-  );
-
   const untriedCount = useMemo(
     () => mine.filter((def) => stateOf(def) === "untried").length,
     [mine, stateOf]
   );
 
+  const openFeature = useMemo(
+    () => mine.find((def) => def.key === openKey) ?? null,
+    [mine, openKey]
+  );
+
   return (
-    <div className="flex flex-col gap-4 py-4">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Можливості</h1>
-        <p className="text-sm text-muted-foreground">
-          {mine.length} доступно тобі
-          {untriedCount > 0 ? `, ${untriedCount} ще не пробував` : ""}
+    <div className="flex flex-col gap-6 py-6">
+      <header className="grid gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Можливості</h1>
+        <p className="max-w-[62ch] text-sm leading-6 text-muted-foreground">
+          Те, що CRM уміє полегшити щодня. Кожну можна спробувати прямо звідси — надиктувати,
+          підключити бот чи написати в чат, не виходячи зі сторінки.
+          {untriedCount > 0 ? ` Ти ще не пробував ${untriedCount} із ${mine.length}.` : ""}
         </p>
-      </div>
+      </header>
 
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -113,32 +127,35 @@ export default function FeaturesPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {shown.map((def) => {
-            const state = stateOf(def);
-            const fresh = isFreshFeature(def, now);
-            return (
-              <button
-                key={def.key}
-                type="button"
-                onClick={() => setActiveKey(def.key)}
-                aria-current={active?.key === def.key}
-                className={cn(
-                  "rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent",
-                  active?.key === def.key && "border-primary/50 ring-1 ring-primary/20"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate font-medium">{def.label}</span>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {shown.map((def) => {
+          const state = stateOf(def);
+          const fresh = isFreshFeature(def, now);
+          const Icon = FEATURE_ICON[def.key];
+          return (
+            <article
+              key={def.key}
+              className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    FEATURE_TONE[def.key]
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold tracking-tight">{def.label}</h2>
                   {fresh ? (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                       Нове
                     </span>
                   ) : state === "unknown" ? null : (
                     <span
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-xs font-semibold",
+                        "mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold",
                         state === "untried"
                           ? "bg-warning-soft text-warning-foreground"
                           : "bg-success-soft text-success-foreground"
@@ -148,36 +165,35 @@ export default function FeaturesPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{def.summary}</p>
-              </button>
-            );
-          })}
+              </div>
 
-          {shown.length === 0 ? (
-            <p className="text-sm text-muted-foreground">За цим фільтром нічого немає.</p>
-          ) : null}
-        </div>
+              <p className="flex-1 text-sm leading-6 text-muted-foreground">{def.summary}</p>
 
-        {active ? (
-          <aside className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-lg font-semibold tracking-tight">{active.label}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{active.summary}</p>
+              <Button
+                type="button"
+                variant={state === "untried" ? "primary" : "outline"}
+                className="w-full"
+                onClick={() => setOpenKey(def.key)}
+              >
+                Спробувати тут
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </article>
+          );
+        })}
 
-            <ol className="mt-4 grid gap-2">
-              {active.steps.map((step, index) => (
-                <li key={step} className="flex gap-2 text-sm text-muted-foreground">
-                  <span className="font-mono text-xs font-semibold text-primary">{index + 1}</span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-
-            <Button type="button" className="mt-5 w-full" onClick={() => navigate(active.route)}>
-              Спробувати
-            </Button>
-          </aside>
+        {shown.length === 0 ? (
+          <p className="text-sm text-muted-foreground">За цим фільтром нічого немає.</p>
         ) : null}
       </div>
+
+      <FeatureOnboardingDialog
+        feature={openFeature}
+        open={Boolean(openFeature)}
+        onOpenChange={(next) => {
+          if (!next) setOpenKey(null);
+        }}
+      />
     </div>
   );
 }
