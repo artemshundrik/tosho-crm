@@ -93,7 +93,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
       <button
         type="button"
         onClick={() => navigate(`/features?open=${mode.feature.key}`)}
-        className="group/plate grid w-full cursor-pointer overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/40"
+        className="group/plate grid w-full cursor-pointer overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-foreground/25"
       >
         <span className="relative grid h-14 place-items-center border-b border-border bg-muted/60">
           <span
@@ -125,7 +125,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
     <button
       type="button"
       onClick={() => navigate("/features")}
-      className="group/plate flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left transition-colors hover:border-primary/40 hover:bg-secondary/50"
+      className="group/plate flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left transition-colors hover:border-foreground/25"
     >
       <span
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
