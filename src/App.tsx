@@ -60,6 +60,7 @@ const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
+const WhatsNewPage = lazyWithRetry(() => import("./pages/WhatsNewPage"));
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -1064,6 +1065,16 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <FeaturesPage />
+            </RouteSuspense>
+          }
+        />
+        {/* Стрічка змін. Гейта немає: анонси звужуються за module_key
+            всередині сторінки, як і каталог. */}
+        <Route
+          path="whats-new"
+          element={
+            <RouteSuspense shell>
+              <WhatsNewPage />
             </RouteSuspense>
           }
         />

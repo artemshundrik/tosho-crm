@@ -43,6 +43,7 @@ import {
 } from "@/components/app/page-header-actions";
 import { preloadRoute } from "@/routes/routePreload";
 import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
+import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
@@ -435,6 +436,7 @@ const ROUTES = {
   accountSettings: "/account-settings",
   profile: "/profile",
   features: "/features",
+  whatsNew: "/whats-new",
   observability: "/admin/observability",
 } as const;
 
@@ -662,6 +664,14 @@ if (pathname === ROUTES.profile)
       subtitle: "Що вміє CRM і що з цього ти ще не пробував.",
       breadcrumbLabel: "Можливості",
       breadcrumbTo: ROUTES.features,
+      showPageHeader: false,
+    };
+  if (pathname === ROUTES.whatsNew)
+    return {
+      title: "Що нового",
+      subtitle: "Історія змін у CRM.",
+      breadcrumbLabel: "Що нового",
+      breadcrumbTo: ROUTES.whatsNew,
       showPageHeader: false,
     };
   // fallback
@@ -2120,6 +2130,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           {/* Нагадування про режим «Дивитись як» — над усім контентом, щоб
               випадково не сплутати чужий вигляд зі своїм. */}
           <ViewAsBar />
+          {/* Анонс релізу при вході. Сам вирішує, показуватись чи ні, і
+              тримає інваріант «одна модалка за сеанс». */}
+          <ProductUpdateModal />
           {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
               до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
               <main>, інакше роздільник обрізався б по краях max-width. */}

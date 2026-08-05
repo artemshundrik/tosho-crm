@@ -2918,6 +2918,80 @@ export type Database = {
         }
         Relationships: []
       }
+      product_update_reads: {
+        Row: {
+          seen_at: string
+          source: string
+          update_id: string
+          user_id: string
+        }
+        Insert: {
+          seen_at?: string
+          source?: string
+          update_id: string
+          user_id: string
+        }
+        Update: {
+          seen_at?: string
+          source?: string
+          update_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_update_reads_update_id_fkey"
+            columns: ["update_id"]
+            isOneToOne: false
+            referencedRelation: "product_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_updates: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          cta_href: string | null
+          cta_label: string | null
+          feature_key: string | null
+          id: string
+          importance: string
+          module_key: string | null
+          published_at: string
+          telegram_broadcast_at: string | null
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          cta_href?: string | null
+          cta_label?: string | null
+          feature_key?: string | null
+          id?: string
+          importance?: string
+          module_key?: string | null
+          published_at?: string
+          telegram_broadcast_at?: string | null
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          cta_href?: string | null
+          cta_label?: string | null
+          feature_key?: string | null
+          id?: string
+          importance?: string
+          module_key?: string | null
+          published_at?: string
+          telegram_broadcast_at?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       quote_attachments: {
         Row: {
           created_at: string

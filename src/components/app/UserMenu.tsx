@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Compass, Eye, LogOut, MoreVertical, Truck, User } from "lucide-react";
+import { BarChart3, Compass, Eye, LogOut, MoreVertical, Newspaper, Truck, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
 import { hasModuleAccess } from "@/lib/moduleAccess";
+import { useVisibleUpdates } from "@/features/features/useVisibleUpdates";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
@@ -48,6 +49,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   // прав, тож із увімкненого режиму його не можна «загубити»).
   const { canUseViewAs, viewAs, moduleAccess, permissions } = useAuth();
   const [viewAsOpen, setViewAsOpen] = useState(false);
+  // Бейдж непрочитаних анонсів — м'який канал: не перебиває роботу, але й
+  // не дає забути, що вийшло щось нове.
+  const { unread: unreadUpdates } = useVisibleUpdates();
 
   /**
    * Конфіг-пункти, що переїхали сюди з сайдбару (чистка 2026-08-05): у меню
@@ -312,6 +316,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               ),
               onSelect: () => navigate("/features"),
             },
+            {
+              label: (
+                <>
+                  <Newspaper className="mr-2 h-4 w-4" />
+                  <span className="flex-1">Що нового</span>
+                  {unreadUpdates.length > 0 ? (
+                    <span className="ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-2xs font-bold tabular-nums text-primary-foreground">
+                      {unreadUpdates.length}
+                    </span>
+                  ) : null}
+                </>
+              ),
+              onSelect: () => navigate("/whats-new"),
+            },
             ...(settingsItems.length > 0
               ? ([
                   { type: "separator" as const },
@@ -430,6 +448,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
             </>
           ),
           onSelect: () => navigate("/features"),
+        },
+        {
+          label: (
+            <>
+              <Newspaper className="mr-2 h-4 w-4" />
+              <span className="flex-1">Що нового</span>
+              {unreadUpdates.length > 0 ? (
+                <span className="ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-2xs font-bold tabular-nums text-primary-foreground">
+                  {unreadUpdates.length}
+                </span>
+              ) : null}
+            </>
+          ),
+          onSelect: () => navigate("/whats-new"),
         },
         ...(settingsItems.length > 0
           ? ([
