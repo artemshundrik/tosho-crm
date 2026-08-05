@@ -2098,6 +2098,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 push={push}
                 onOpenItem={openNotification}
                 onMarkAllRead={markAllRead}
+                onOpenTelegramSetup={() => {
+                  setNotificationsOpen(false);
+                  navigate(ROUTES.profile);
+                }}
                 onOpenAll={() => navigate("/notifications")}
               />
 

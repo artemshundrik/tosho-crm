@@ -6,6 +6,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { getNotificationAvatarMeta } from "@/lib/notificationAvatar";
 import type { NotificationItem } from "@/lib/notifications";
+import { FeatureHint } from "@/features/features/FeatureHint";
 import type { usePushNotifications } from "@/hooks/usePushNotifications";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,8 @@ type NotificationsMenuProps = {
   onOpenItem: (item: NotificationItem) => void;
   onMarkAllRead: () => void;
   onOpenAll: () => void;
+  /** Веде в налаштування, де підключають Telegram (підказка в підвалі меню). */
+  onOpenTelegramSetup: () => void;
 };
 
 function startOfDay(value: Date) {
@@ -162,6 +165,7 @@ export function NotificationsMenu({
   onOpenItem,
   onMarkAllRead,
   onOpenAll,
+  onOpenTelegramSetup,
 }: NotificationsMenuProps) {
   // Позначка дня друкується один раз на групу — дата в кожному рядку її не варта.
   const { rows, hiddenCount } = React.useMemo(() => {
@@ -268,6 +272,18 @@ export function NotificationsMenu({
           )}
 
           <div className="-mx-1.5 h-px bg-border/70" />
+
+          {/* Найкращий момент розповісти про бота: людина щойно читала
+              сповіщення в CRM, тобто сама довела, що вони їй потрібні.
+              Показується лише тим, у кого бот не підключений. */}
+          <FeatureHint
+            featureKey="telegram_bot"
+            variant="inline"
+            className="mt-1.5"
+            text="Ці сповіщення можуть приходити в Telegram — і тоді не треба тримати вкладку відкритою."
+            actLabel="Підключити бота →"
+            onAct={onOpenTelegramSetup}
+          />
 
           <DropdownMenuItem
             onSelect={onOpenAll}

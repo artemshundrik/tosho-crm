@@ -1652,6 +1652,33 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_hints: {
+        Row: {
+          dismissed_at: string | null
+          feature_key: string
+          last_shown_at: string | null
+          shown_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          dismissed_at?: string | null
+          feature_key: string
+          last_shown_at?: string | null
+          shown_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          dismissed_at?: string | null
+          feature_key?: string
+          last_shown_at?: string | null
+          shown_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       finance_accounts: {
         Row: {
           bank_provider: string | null

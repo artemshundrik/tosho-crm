@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FeatureHint } from "@/features/features/FeatureHint";
 import {
   useDictation,
   type DictationContext,
@@ -110,27 +111,40 @@ export function DictationButton({
       : "Диктувати голосом";
 
   return (
-    <Button
-      type="button"
-      variant={isRecording ? "controlDestructive" : "control"}
-      size={isRecording ? "sm" : "iconSm"}
-      onClick={handleClick}
-      disabled={disabled || isTranscribing}
-      aria-label={label}
-      aria-pressed={isRecording}
-      title={label}
-      className={cn(isRecording && "gap-1.5 tabular-nums", className)}
-    >
-      {isTranscribing ? (
-        <Loader2 className="animate-spin" />
-      ) : isRecording ? (
-        <>
-          <Square className="fill-current" />
-          <span className="text-xs">{formatElapsed(elapsedMs)}</span>
-        </>
-      ) : (
-        <Mic />
-      )}
-    </Button>
+    /* Обгортка потрібна лише як точка відліку для підказки. inline-flex, щоб
+       у флекс-рядках поводитись так само, як сама кнопка. */
+    <span className="relative inline-flex">
+      <Button
+        type="button"
+        variant={isRecording ? "controlDestructive" : "control"}
+        size={isRecording ? "sm" : "iconSm"}
+        onClick={handleClick}
+        disabled={disabled || isTranscribing}
+        aria-label={label}
+        aria-pressed={isRecording}
+        title={label}
+        className={cn(isRecording && "gap-1.5 tabular-nums", className)}
+      >
+        {isTranscribing ? (
+          <Loader2 className="animate-spin" />
+        ) : isRecording ? (
+          <>
+            <Square className="fill-current" />
+            <span className="text-xs">{formatElapsed(elapsedMs)}</span>
+          </>
+        ) : (
+          <Mic />
+        )}
+      </Button>
+
+      {/* Фіча стоїть у 16 місцях, а користувалась нею одна людина тричі —
+          отже її просто не помічають. Підказка вказує на цю саму кнопку. */}
+      {isSupported && !isRecording && !isTranscribing ? (
+        <FeatureHint
+          featureKey="voice_dictation"
+          text="Замість друкувати — надиктуй. Натисни мікрофон і говори."
+        />
+      ) : null}
+    </span>
   );
 }
