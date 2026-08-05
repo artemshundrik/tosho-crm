@@ -2319,6 +2319,11 @@ function SidebarGroup({
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
                 "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-medium",
+                // Ховер підсвічує САМУ область, а не лише текст з іконкою.
+                // Було hover:bg-muted/40 — у світлій темі muted (95.5%) майже
+                // збігається з тлом сайдбару (96.4%), різниця 0.4% і плашки не
+                // видно взагалі. bg-background світліший за сайдбар в обох
+                // темах, тож ефект однаковий і там, і там.
                 "transition-colors duration-150 ease-linear",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                 collapsed
@@ -2333,8 +2338,8 @@ function SidebarGroup({
                       ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
                       : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium"
                   : isMobileDrawer
-                    ? "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    ? "text-muted-foreground hover:bg-background hover:text-foreground"
+                    : "text-muted-foreground hover:bg-background hover:text-foreground"
               )}
             >
 

@@ -57,8 +57,15 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
     if (announce) return { kind: "announce", feature: announce };
 
     const measurable = mine.filter((def) => def.measurable);
+    if (measurable.length === 0) return { kind: "hidden" };
+
     const tried = measurable.filter((def) => ["tried", "using"].includes(stateOf(def))).length;
-    if (measurable.length === 0 || tried >= measurable.length) return { kind: "hidden" };
+
+    // Власнику плашка не ховається ніколи — навіть на 100%. Він єдиний, хто
+    // має бачити те саме, що бачить команда: інакше неможливо перевірити, як
+    // воно виглядає, бо він завжди все вже спробував (він це й замовляв).
+    const isOwner = (accessRole ?? "").trim().toLowerCase() === "owner";
+    if (tried >= measurable.length && !isOwner) return { kind: "hidden" };
 
     return { kind: "ring", tried, total: measurable.length };
   }, [moduleAccess, accessRole, jobRole, adoption, now]);
@@ -131,8 +138,8 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
       </span>
       <span className="min-w-0">
         <span className="block text-xs font-semibold">Можливості</span>
-        <span className="block text-3xs leading-4 text-muted-foreground">
-          {left === 1 ? "1 ще не пробував" : `${left} ще не пробував`}
+        <span className="block truncate text-3xs leading-4 text-muted-foreground">
+          {left === 0 ? "усе спробовано" : `${left} ще не пробував`}
         </span>
       </span>
     </button>

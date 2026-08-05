@@ -276,7 +276,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               type="button"
               variant="menu"
               size="icon"
-              className="h-10 w-10 rounded-xl p-0 hover:bg-muted/40"
+              className="h-10 w-10 rounded-xl p-0 hover:bg-background"
               title={userData.name}
               aria-label="Меню профілю"
             >
@@ -371,10 +371,13 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           variant="menu"
           size="md"
           className={cn(
-            "w-full h-auto rounded-xl px-2 py-2 text-left hover:bg-muted/40 transition-colors"
+            "group/acct w-full h-auto rounded-xl px-2 py-2 text-left hover:bg-background transition-colors"
           )}
         >
-          <div className="flex items-center gap-2">
+          {/* w-full тут обовʼязковий: без нього внутрішній flex був завширшки
+              з контент, flex-1 на тексті нічого не розтягував, і три крапки
+              липли впритул до підпису замість правого краю області. */}
+          <div className="flex w-full items-center gap-2">
             <AvatarBase
               src={userData.avatarUrl}
               name={userData.name}
@@ -401,7 +404,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               )}
             </div>
 
-            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+            <span className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors group-hover/acct:bg-secondary group-hover/acct:text-foreground">
+              <MoreVertical className="h-4 w-4" />
+            </span>
           </div>
         </Button>
       }
