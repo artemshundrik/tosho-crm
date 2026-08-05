@@ -21,7 +21,7 @@ export type FeatureAdoption = {
 /** Від скількох використань вважаємо, що людина фічею користується, а не куштувала раз. */
 const REGULAR_USE_THRESHOLD = 3;
 
-/** Скільки днів можливість вважається новою. */
+/** Скільки днів можливість вважається новою за замовчуванням. */
 const FRESH_DAYS = 30;
 
 export function resolveFeatureState(adoption: FeatureAdoption | null | undefined): FeatureState {
@@ -30,10 +30,18 @@ export function resolveFeatureState(adoption: FeatureAdoption | null | undefined
   return adoption.uses >= REGULAR_USE_THRESHOLD ? "using" : "tried";
 }
 
-export function isFreshFeature(def: { since?: string }, now: Date): boolean {
+/**
+ * Чи можливість ще «нова». Поріг параметром, бо вікна різні: у каталозі чип
+ * «Нове» висить 30 днів, а плашка в сайдбарі анонсує лише 14 — вона нав'язливіша.
+ */
+export function isFreshFeature(
+  def: { since?: string },
+  now: Date,
+  days: number = FRESH_DAYS
+): boolean {
   if (!def.since) return false;
   const since = new Date(`${def.since}T00:00:00Z`);
   if (Number.isNaN(since.getTime())) return false;
-  const days = (now.getTime() - since.getTime()) / 86_400_000;
-  return days >= 0 && days <= FRESH_DAYS;
+  const passed = (now.getTime() - since.getTime()) / 86_400_000;
+  return passed >= 0 && passed <= days;
 }

@@ -58,4 +58,12 @@ describe("нові можливості", () => {
   it("сміття замість дати не роняє", () => {
     expect(isFreshFeature({ since: "не-дата" }, NOW)).toBe(false);
   });
+
+  it("власний поріг вужчий за типовий", () => {
+    // Плашка в сайдбарі анонсує 14 днів, каталог — 30. Одна й та сама фіча
+    // має потрапляти в чип «Нове», але вже не смикати плашкою.
+    const twentyDaysOld = { since: "2026-07-15" };
+    expect(isFreshFeature(twentyDaysOld, NOW)).toBe(true);
+    expect(isFreshFeature(twentyDaysOld, NOW, 14)).toBe(false);
+  });
 });

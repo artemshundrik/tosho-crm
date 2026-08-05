@@ -41,6 +41,7 @@ import {
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
 import { preloadRoute } from "@/routes/routePreload";
+import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
@@ -1728,6 +1729,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
               />
+            </div>
+
+            {/* Плашка «Можливості» — у кінці зони прокрутки, а не прибита до
+                низу. Тоді вона не забирає фіксовану висоту в тих, у кого меню
+                й так довге (власник, SEO), а в решти лишається на очах. */}
+            <div className={cn(sidebarCollapsed ? "pt-1.5" : "px-1 pt-1")}>
+              <SidebarFeaturePlate collapsed={sidebarCollapsed} />
             </div>
           </div>
           )}

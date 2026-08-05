@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowRight, SearchX } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export default function FeaturesPage() {
   const [search, setSearch] = useState("");
   const [openKey, setOpenKey] = useState<FeatureKey | null>(null);
   const [activeCategory, setActiveCategory] = useState<FeatureCategory | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const headingRefs = useRef(new Map<FeatureCategory, HTMLElement>());
 
@@ -113,6 +115,22 @@ export default function FeaturesPage() {
     () => mine.find((def) => def.key === openKey) ?? null,
     [mine, openKey]
   );
+
+  /**
+   * Глибоке посилання `/features?open=<ключ>`: плашка-анонс і майбутні
+   * повідомлення в Telegram ведуть одразу в онбординг потрібної фічі, а не
+   * у спільний список, де її ще треба знайти. Посиланням можна ділитись.
+   */
+  useEffect(() => {
+    const requested = searchParams.get("open");
+    if (!requested) return;
+    const match = mine.find((def) => def.key === requested);
+    if (match) setOpenKey(match.key);
+    // Прибираємо параметр, щоб повторне закриття діалогу його не відкривало.
+    const next = new URLSearchParams(searchParams);
+    next.delete("open");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, mine]);
 
   const resetFilters = useCallback(() => {
     setFilter("all");
