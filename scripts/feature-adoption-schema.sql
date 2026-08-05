@@ -95,6 +95,18 @@ begin
     where created_by is not null
       and deleted_at is null
     group by created_by
+
+    union all
+    select 'support_ai', created_by, count(*)::int, min(created_at), max(created_at)
+    from tosho.support_requests
+    where created_by is not null
+    group by created_by
+
+    union all
+    select 'absence_request', requested_by, count(*)::int, min(created_at), max(created_at)
+    from tosho.team_absences
+    where requested_by is not null
+    group by requested_by
   )
   insert into tosho.feature_adoption as fa (
     feature_key, user_id, uses, first_used_at, last_used_at, refreshed_at

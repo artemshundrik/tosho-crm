@@ -16,7 +16,16 @@ import { hasModuleAccess, type ModuleAccess, type ModuleKey } from "./moduleAcce
  * вводом за весь час скористалась одна людина тричі.
  */
 
-export type FeatureKey = "telegram_bot" | "voice_dictation" | "task_chat";
+export type FeatureKey =
+  | "telegram_bot"
+  | "voice_dictation"
+  | "task_chat"
+  | "support_ai"
+  | "absence_request"
+  | "command_palette"
+  | "nova_poshta_address"
+  | "dropbox_folders"
+  | "telegram_assistant";
 
 /**
  * Розділ каталогу. Рейка ліворуч і лічильники в ній рахуються з цього поля,
@@ -110,6 +119,102 @@ export const FEATURE_DEFINITIONS: readonly FeatureDefinition[] = [
     route: "/design",
     measurable: true,
   },
+  {
+    key: "support_ai",
+    label: "Підтримка",
+    category: "core",
+    summary:
+      "Питаєш своїми словами прямо зі сторінки, де застряг — помічник відповідає, а якщо не знає, передає людині.",
+    steps: [
+      "Натисни значок помічника в шапці — сторінка, де ти стоїш, підставиться сама",
+      "Опиши проблему звичайною мовою, без термінів",
+      "Якщо відповіді замало — заявка піде далі, і рішення прийде сповіщенням",
+    ],
+    moduleKey: null,
+    route: "/overview?tosho_ai=open",
+    measurable: true,
+  },
+  {
+    key: "absence_request",
+    label: "Заявка на відсутність",
+    category: "core",
+    summary:
+      "Відпустка чи лікарняний оформлюються з CRM: керівнику приходить погодження, а дні самі лягають у планер.",
+    steps: [
+      "Команда → вкладка «Відсутності» → «Подати заявку»",
+      "Обери тип і дати — залишок днів порахується сам",
+      "Стежити за рішенням можна там само, воно прийде сповіщенням",
+    ],
+    moduleKey: "team",
+    route: "/team",
+    measurable: true,
+  },
+  {
+    key: "command_palette",
+    label: "Швидкий перехід ⌘K",
+    category: "core",
+    summary:
+      "Одне вікно замість блукання меню: набери назву клієнта, номер прорахунку чи розділ — і одразу опинишся там.",
+    steps: [
+      "Натисни ⌘K (на Windows — Ctrl+K) будь-де в CRM",
+      "Почни писати: назву замовника, номер прорахунку або розділ",
+      "Enter — і ти на місці; стрілками можна ходити списком",
+    ],
+    moduleKey: null,
+    route: "/overview",
+    // Натискання клавіш ніде не пишуться, тож стан не показуємо.
+    measurable: false,
+  },
+  {
+    key: "nova_poshta_address",
+    label: "Адреси Нової Пошти",
+    category: "sales",
+    summary:
+      "Місто й відділення підказує довідник перевізника — не треба переходити на їхній сайт і копіювати вручну.",
+    steps: [
+      "Відкрий картку замовника → вкладка «Логістика»",
+      "Почни вводити місто — підказки зʼявляться самі",
+      "Обери відділення; адреса підтягнеться в документи замовлення",
+    ],
+    moduleKey: "customers",
+    route: "/orders/customers",
+    since: "2026-07-21",
+    // У картці замовника немає колонки автора зміни, тож достовірної проби
+    // «хто саме заповнював» не існує — краще без стану, ніж навмання.
+    measurable: false,
+  },
+  {
+    key: "dropbox_folders",
+    label: "Папки Dropbox замовника",
+    category: "sales",
+    summary:
+      "У замовника своя папка з підпапкою «Бренд»: макети й вихідники лежать за однаковою структурою, а не в кого де.",
+    steps: [
+      "Замовники → меню в рядку клієнта → «Створити папку Dropbox»",
+      "Якщо папка вже є на диску — «Прив'язати папку Dropbox»",
+      "Далі «Відкрити папку» відкриває її одним кліком із картки",
+    ],
+    moduleKey: "customers",
+    route: "/orders/customers",
+    measurable: false,
+  },
+  {
+    key: "telegram_assistant",
+    label: "Помічник у Telegram",
+    category: "ai",
+    summary:
+      "Питання про дизайн-задачі просто в чаті з ботом: скільки в роботі, у кого дедлайн сьогодні, що зависло.",
+    steps: [
+      "Підключи бота, якщо ще не підключив",
+      "Напиши йому питання звичайною мовою — наприклад «що горить сьогодні»",
+      "Числа він бере з CRM, тож відповідь збігається з дошкою",
+    ],
+    moduleKey: null,
+    route: "/profile",
+    // Запити в бот лягають у ai_usage без ознаки поверхні, тож відрізнити їх
+    // від консолі в CRM зараз неможливо.
+    measurable: false,
+  },
 ] as const;
 
 export const FEATURE_KEYS: FeatureKey[] = FEATURE_DEFINITIONS.map((item) => item.key);
@@ -124,17 +229,27 @@ export type FeatureViewerContext = {
   jobRole: string | null;
 };
 
+/** Власник — над модульними гейтами, як `isSuperAdmin` у сайдбарі. */
+function isOwner(ctx: FeatureViewerContext): boolean {
+  return (ctx.accessRole ?? "").trim().toLowerCase() === "owner";
+}
+
 /**
- * Власник і SEO бачать усе — це задум, а не діра в правах.
+ * Власник і SEO не звужуються за посадою — це задум, а не діра в правах.
  * Повторює хелпер `ownerOrSeo` із moduleAccess.ts.
  */
 function isPrivileged(ctx: FeatureViewerContext): boolean {
-  const access = (ctx.accessRole ?? "").trim().toLowerCase();
-  if (access === "owner") return true;
+  if (isOwner(ctx)) return true;
   return (ctx.jobRole ?? "").trim().toLowerCase() === "seo";
 }
 
 export function isFeatureVisible(def: FeatureDefinition, ctx: FeatureViewerContext): boolean {
+  // Власник бачить усе — так само, як у сайдбарі, де гілка isSuperAdmin
+  // обходить перевірку модуля. Без цього каталог розходився б із меню:
+  // напр. `customers` не має defaultFor, тож у чистих дефолтах вимкнений
+  // навіть власнику, і фічі за ним зникали б у нього зі списку.
+  if (isOwner(ctx)) return true;
+
   // Увага: hasModuleAccess дозволяє за замовчуванням — відсутній ключ читається
   // як «доступ є». Тому сюди має приходити повний набір із defaultModuleAccess
   // чи normalizeModuleAccess, де кожен ключ проставлений явно.

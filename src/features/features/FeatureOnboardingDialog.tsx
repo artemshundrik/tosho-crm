@@ -14,6 +14,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { useDictation } from "@/lib/useDictation";
+import { FeaturePreview } from "@/features/features/FeaturePreview";
 import { FEATURE_DEFINITIONS, type FeatureDefinition, type FeatureKey } from "@/lib/featureCatalog";
 
 /**
@@ -38,6 +39,12 @@ const WINDOW_LABEL: Record<FeatureKey, string> = {
   telegram_bot: "профіль · сповіщення",
   voice_dictation: "дизайн-задача",
   task_chat: "обговорення",
+  support_ai: "помічник",
+  absence_request: "команда · відсутності",
+  command_palette: "швидкий перехід",
+  nova_poshta_address: "картка замовника",
+  dropbox_folders: "замовники · файли",
+  telegram_assistant: "telegram",
 };
 
 /** Смужки еквалайзера — копія з ThreadComposer, щоб запис виглядав однаково. */
@@ -133,17 +140,26 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                   backgroundSize: "15px 15px",
                 }}
               />
-              <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-                <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-3 py-2">
-                  <span className="h-2 w-2 rounded-full bg-border" />
-                  <span className="h-2 w-2 rounded-full bg-border" />
-                  <span className="h-2 w-2 rounded-full bg-border" />
-                  <span className="ml-1.5 font-mono text-3xs text-muted-foreground">
-                    {WINDOW_LABEL[feature.key]}
-                  </span>
+              {LIVE_DEMO_KEYS.includes(feature.key) ? (
+                <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                  <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-3 py-2">
+                    <span className="h-2 w-2 rounded-full bg-border" />
+                    <span className="h-2 w-2 rounded-full bg-border" />
+                    <span className="h-2 w-2 rounded-full bg-border" />
+                    <span className="ml-1.5 font-mono text-3xs text-muted-foreground">
+                      {WINDOW_LABEL[feature.key]}
+                    </span>
+                  </div>
+                  <FeatureDemo featureKey={feature.key} />
                 </div>
-                <FeatureDemo featureKey={feature.key} />
-              </div>
+              ) : (
+                <div className="relative w-full max-w-[360px]">
+                  <FeaturePreview featureKey={feature.key} />
+                  <p className="mt-2.5 text-center text-3xs text-muted-foreground">
+                    Ця можливість живе не у вікні — тисни «Відкрити у CRM».
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ) : null}
@@ -152,10 +168,19 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
   );
 }
 
+/**
+ * Живе демо є не в кожної можливості — і це навмисно. Там, де фічу неможливо
+ * чесно відтворити у вікні (вона живе в іншому місці CRM або взагалі в
+ * Telegram), показуємо статичне прев'ю з каталогу замість імітації, яка
+ * вдавала б робочу.
+ */
+const LIVE_DEMO_KEYS: FeatureKey[] = ["telegram_bot", "voice_dictation", "task_chat"];
+
 function FeatureDemo({ featureKey }: { featureKey: FeatureKey }) {
   if (featureKey === "telegram_bot") return <TelegramDemo />;
   if (featureKey === "voice_dictation") return <DictationDemo />;
-  return <TaskChatDemo />;
+  if (featureKey === "task_chat") return <TaskChatDemo />;
+  return null;
 }
 
 /* ── Telegram: справжнє підключення просто звідси ──────────────── */

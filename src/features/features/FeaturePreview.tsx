@@ -16,6 +16,12 @@ const WINDOW_LABEL: Record<FeatureKey, string> = {
   telegram_bot: "профіль · сповіщення",
   voice_dictation: "дизайн-задача",
   task_chat: "обговорення",
+  support_ai: "помічник",
+  absence_request: "команда · відсутності",
+  command_palette: "швидкий перехід",
+  nova_poshta_address: "картка замовника",
+  dropbox_folders: "замовники · файли",
+  telegram_assistant: "telegram",
 };
 
 /** Смужки еквалайзера — ті самі, що в композері чату. */
@@ -43,7 +49,12 @@ export function FeaturePreview({ featureKey }: { featureKey: FeatureKey }) {
       <div className="p-2.5" aria-hidden="true">
         {featureKey === "telegram_bot" ? <TelegramShot /> : null}
         {featureKey === "voice_dictation" ? <DictationShot /> : null}
-        {featureKey === "task_chat" ? <ChatShot /> : null}
+        {featureKey === "task_chat" || featureKey === "telegram_assistant" ? <ChatShot /> : null}
+        {featureKey === "support_ai" ? <SupportShot /> : null}
+        {featureKey === "absence_request" ? <AbsenceShot /> : null}
+        {featureKey === "command_palette" ? <PaletteShot /> : null}
+        {featureKey === "nova_poshta_address" ? <AddressShot /> : null}
+        {featureKey === "dropbox_folders" ? <DropboxShot /> : null}
       </div>
     </div>
   );
@@ -89,6 +100,85 @@ function DictationShot() {
         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
           <Check className="h-3 w-3" />
         </span>
+      </div>
+    </div>
+  );
+}
+
+function SupportShot() {
+  return (
+    <div className="grid gap-1.5">
+      <div className="ml-auto max-w-[86%] rounded-2xl rounded-br-sm bg-primary px-2 py-1.5 text-3xs leading-4 text-primary-foreground">
+        Чому не зберігається коментар?
+      </div>
+      <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-muted px-2 py-1.5 text-3xs leading-4">
+        Схоже на відомий збій. Передаю Артему — відповідь прийде сповіщенням.
+      </div>
+    </div>
+  );
+}
+
+function AbsenceShot() {
+  return (
+    <div className="grid gap-2">
+      <div className="flex gap-1.5">
+        <span className="flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-3xs tabular-nums">
+          12 серп
+        </span>
+        <span className="flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-3xs tabular-nums">
+          16 серп
+        </span>
+      </div>
+      <div className="rounded-lg bg-warning-soft px-2 py-1.5 text-3xs font-semibold text-warning-foreground">
+        На погодженні
+      </div>
+    </div>
+  );
+}
+
+function PaletteShot() {
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-1.5 rounded-lg border border-primary px-2 py-1.5">
+        <span className="flex-1 text-3xs">ромаш</span>
+        <span className="rounded border border-border px-1 font-mono text-3xs text-muted-foreground">
+          ⌘K
+        </span>
+      </div>
+      <div className="rounded-lg bg-primary/10 px-2 py-1 text-3xs font-medium">ТОВ «Ромашка»</div>
+      <div className="px-2 text-3xs text-muted-foreground">TS-0731-0042 · Ромашка</div>
+    </div>
+  );
+}
+
+function AddressShot() {
+  return (
+    <div className="grid gap-1.5">
+      <div className="rounded-lg border border-primary px-2 py-1.5 text-3xs">Кив</div>
+      <div className="overflow-hidden rounded-lg border border-border">
+        <div className="bg-primary/10 px-2 py-1 text-3xs font-medium">Київ · Відділення №12</div>
+        <div className="border-t border-border px-2 py-1 text-3xs text-muted-foreground">
+          Київ · Поштомат №4471
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DropboxShot() {
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center gap-1.5 text-3xs font-medium">
+        <span className="h-2.5 w-2.5 rounded-sm bg-info-foreground" />
+        ТОВ «Ромашка»
+      </div>
+      <div className="ml-3.5 flex items-center gap-1.5 text-3xs text-muted-foreground">
+        <span className="h-2.5 w-2.5 rounded-sm bg-border" />
+        Бренд
+      </div>
+      <div className="ml-3.5 flex items-center gap-1.5 text-3xs text-muted-foreground">
+        <span className="h-2.5 w-2.5 rounded-sm bg-border" />
+        Замовлення
       </div>
     </div>
   );

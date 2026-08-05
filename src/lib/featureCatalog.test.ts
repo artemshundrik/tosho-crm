@@ -117,9 +117,29 @@ describe("видимість", () => {
     }
   });
 
-  it("усі три стартові можливості доступні кожному", () => {
-    expect(visibleFeatures(DESIGNER)).toHaveLength(FEATURE_DEFINITIONS.length);
-    expect(visibleFeatures(MARKETER)).toHaveLength(FEATURE_DEFINITIONS.length);
+  it("розділ «Для всіх» видно кожному повністю", () => {
+    const core = FEATURE_DEFINITIONS.filter((def) => def.category === "core");
+    expect(core.length).toBeGreaterThan(0);
+    for (const viewer of [DESIGNER, MANAGER, MARKETER]) {
+      const visibleKeys = visibleFeatures(viewer).map((def) => def.key);
+      for (const def of core) {
+        expect(visibleKeys, `${def.key} / ${viewer.jobRole}`).toContain(def.key);
+      }
+    }
+  });
+
+  it("можливість за модулем ховається, коли модуль вимкнений дефолтами", () => {
+    // ГОЧА: `customers` має inheritsFrom, але не має defaultFor — тобто в
+    // ЧИСТИХ дефолтах він вимкнений, а успадкування спрацьовує лише для
+    // наявних записів у module_access (normalizeModuleAccess).
+    const gated = FEATURE_DEFINITIONS.filter((def) => def.moduleKey === "customers");
+    expect(gated.length).toBeGreaterThan(0);
+    const visibleKeys = visibleFeatures(DESIGNER).map((def) => def.key);
+    for (const def of gated) {
+      expect(visibleKeys, def.key).not.toContain(def.key);
+    }
+    // А власник бачить їх однаково — він над модульними гейтами.
+    expect(visibleFeatures(OWNER)).toHaveLength(FEATURE_DEFINITIONS.length);
   });
 
   it("модуль без доступу ховає можливість", () => {
