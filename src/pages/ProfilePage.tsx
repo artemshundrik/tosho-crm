@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Save, Loader2, Camera, Globe, BriefcaseBusiness, Hourglass, BellRing, Send } from "lucide-react";
+import { Save, Loader2, Camera, BriefcaseBusiness, Hourglass, BellRing, Send } from "lucide-react";
 import { supabase, db } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
@@ -107,6 +116,12 @@ export function ProfilePage() {
     cached?.employmentStatus ?? normalizeEmploymentStatus(undefined, cached?.probationEndDate)
   );
   const [avatarStoragePath, setAvatarStoragePath] = useState<string | null>(null);
+
+  // Інлайн-зміна пароля (без переходу на /reset-password)
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   // Telegram-сповіщення (фаза 1)
   const [tgChatId, setTgChatId] = useState<number | null>(null);
@@ -612,8 +627,8 @@ export function ProfilePage() {
       setFullName(nextFullName);
       setDisplayName(nextDisplayName);
 
-      toast.success("Профіль оновлено!", {
-        description: "Твоє нове ім'я збережено в системі.",
+      toast.success("Профіль оновлено", {
+        description: "Зміни вже видно всій команді.",
       });
       commitCache({
         firstName: nextFirstName,
@@ -635,14 +650,38 @@ export function ProfilePage() {
           },
         })
       );
-      setTimeout(() => window.location.reload(), 1000);
-
     } catch (error: unknown) {
       toast.error("Помилка оновлення", {
         description: getErrorMessage(error, "Не вдалося оновити профіль."),
       });
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    if (newPassword.length < 6) {
+      toast.error("Закороткий пароль", { description: "Мінімум 6 символів." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Паролі не співпадають", { description: "Перевір обидва поля." });
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setPasswordDialogOpen(false);
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Пароль оновлено");
+    } catch (error: unknown) {
+      toast.error("Не вдалося змінити пароль", {
+        description: getErrorMessage(error, "Спробуй ще раз."),
+      });
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -684,101 +723,67 @@ export function ProfilePage() {
   return (
     <div className="mx-auto max-w-6xl py-6">
       <div className="overflow-hidden rounded-section border border-border bg-card shadow-surface">
-        <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-8 pt-6 md:px-10">
+        <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-6 pt-6 md:px-10">
           <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,hsl(var(--surface-sheen))_18%,transparent_36%)] opacity-60 dark:opacity-20" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="flex flex-col gap-5 md:flex-row md:items-end">
-              <div className="relative mx-auto shrink-0 md:mx-0">
-                <AvatarBase
-                  src={avatarUrl}
-                  name={displayName || "Користувач"}
-                  fallback={initials}
-                  assetVariant="hero"
-                  size={120}
-                  shape="circle"
-                  className="border-[5px] border-card bg-card text-foreground ring-1 ring-black/5"
-                  imageClassName="object-cover"
-                  fallbackClassName="text-3xl font-bold text-foreground"
-                />
-                <Button
-                  type="button"
-                  variant="inverted"
-                  size="iconXs"
-                  onClick={handlePickAvatar}
-                  className="absolute bottom-1 right-1 border-[3px] border-card shadow-sm"
-                  aria-label="Змінити фото профілю"
-                  disabled={avatarUploading}
-                >
-                  {avatarUploading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Camera className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarChange}
-                />
-              </div>
-
-              <div className="space-y-3 text-center md:text-left">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-foreground">{displayName || "Користувач"}</h1>
-                  <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
-                        accessRole === "owner"
-                          ? "tone-accent"
-                          : accessRole === "admin"
-                          ? "border-primary/20 bg-primary/10 text-foreground"
-                          : "border-border bg-background/80 text-muted-foreground"
-                      )}
-                    >
-                      {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
-                    </span>
-                    {jobRole ? (
-                      <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-                        {jobRole}
-                      </span>
-                    ) : null}
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <Globe className="h-3.5 w-3.5" />
-                      Kyiv, UA
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Старт</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">
-                      {startDate ? formatEmploymentDate(startDate) : "Не вказано"}
-                    </div>
-                  </div>
-                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Стаж</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
-                  </div>
-                  <div className="rounded-[var(--radius)] border border-border/70 bg-background/75 px-3 py-2 text-left">
-                    <div className="text-2xs uppercase tracking-caps text-muted-foreground">Статус</div>
-                    <div className="mt-1">
-                      <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", employmentStatusTone)}>
-                        {getEmploymentStatusLabel(resolvedEmploymentStatus)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="relative flex flex-col gap-5 md:flex-row md:items-center">
+            <div className="relative mx-auto shrink-0 md:mx-0">
+              <AvatarBase
+                src={avatarUrl}
+                name={displayName || "Користувач"}
+                fallback={initials}
+                assetVariant="hero"
+                size={120}
+                shape="circle"
+                className="border-[5px] border-card bg-card text-foreground ring-1 ring-black/5"
+                imageClassName="object-cover"
+                fallbackClassName="text-3xl font-bold text-foreground"
+              />
+              <Button
+                type="button"
+                variant="inverted"
+                size="iconXs"
+                onClick={handlePickAvatar}
+                className="absolute bottom-1 right-1 border-[3px] border-card shadow-sm"
+                aria-label="Змінити фото профілю"
+                disabled={avatarUploading}
+              >
+                {avatarUploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Camera className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
 
-            <Button onClick={updateProfile} disabled={updating} className="hidden h-11 min-w-[220px] sm:inline-flex">
-              {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Зберегти зміни
-            </Button>
+            <div className="space-y-2 text-center md:text-left">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">{displayName || "Користувач"}</h1>
+              <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                    accessRole === "owner"
+                      ? "tone-accent"
+                      : accessRole === "admin"
+                      ? "border-primary/20 bg-primary/10 text-foreground"
+                      : "border-border bg-background/80 text-muted-foreground"
+                  )}
+                >
+                  {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
+                </span>
+                {jobRole ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+                    {jobRole}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -859,6 +864,13 @@ export function ProfilePage() {
                     <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
                   </div>
                 </div>
+                <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-border/60 bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
+                  <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
+                  <Button onClick={updateProfile} disabled={updating} className="h-9 sm:min-w-[180px]">
+                    {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Зберегти зміни
+                  </Button>
+                </div>
               </div>
 
               <div className="rounded-inner border border-border bg-background/70 p-5">
@@ -871,8 +883,13 @@ export function ProfilePage() {
                     <label className="text-sm font-medium text-foreground">Пароль</label>
                     <Input disabled value="••••••••••••••" type="password" />
                   </div>
-                  <Button asChild variant="outline" className="h-10 min-w-[140px]">
-                    <Link to="/reset-password">Змінити</Link>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 min-w-[140px]"
+                    onClick={() => setPasswordDialogOpen(true)}
+                  >
+                    Змінити пароль
                   </Button>
                 </div>
               </div>
@@ -1053,13 +1070,65 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="sm:hidden">
-            <Button onClick={updateProfile} disabled={updating} className="h-11 w-full text-base">
-              {updating ? "Зберігаю..." : "Зберегти зміни"}
-            </Button>
-          </div>
         </div>
       </div>
+
+      <Dialog
+        open={passwordDialogOpen}
+        onOpenChange={(open) => {
+          setPasswordDialogOpen(open);
+          if (!open) {
+            setNewPassword("");
+            setConfirmPassword("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Змінити пароль</DialogTitle>
+            <DialogDescription>Новий пароль почне діяти одразу — виходити з акаунта не потрібно.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="profile-new-password">
+                Новий пароль
+              </label>
+              <PasswordInput
+                id="profile-new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Мінімум 6 символів"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="profile-confirm-password">
+                Повтори пароль
+              </label>
+              <PasswordInput
+                id="profile-confirm-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Ще раз той самий"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)} disabled={passwordSaving}>
+              Скасувати
+            </Button>
+            <Button
+              type="button"
+              onClick={handlePasswordSave}
+              disabled={passwordSaving || !newPassword || !confirmPassword}
+            >
+              {passwordSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Зберегти пароль
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
