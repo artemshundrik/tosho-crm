@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart3, Compass, Eye, KeyRound, LogOut, MoreVertical, Truck, User } from "lucide-react";
+import { BarChart3, Compass, Eye, LogOut, MoreVertical, Truck, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
@@ -55,10 +55,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
    * сайдбарі, — доступ нікому не розширюється й не звужується.
    */
   const settingsItems = useMemo(() => {
-    const items: Array<{ icon: typeof KeyRound; label: string; to: string }> = [];
-    if (hasModuleAccess(moduleAccess, "members_access")) {
-      items.push({ icon: KeyRound, label: "Ролі та доступи", to: "/settings/members" });
-    }
+    const items: Array<{ icon: typeof Truck; label: string; to: string }> = [];
+    // «Ролі та доступи» свідомо НЕ тут — вони лишились у сайдбарі під
+    // «Командою»: це робота з людьми, а не налаштування системи.
     if (hasModuleAccess(moduleAccess, "nova_poshta")) {
       items.push({ icon: Truck, label: "Нова Пошта", to: "/settings/nova-poshta" });
     }

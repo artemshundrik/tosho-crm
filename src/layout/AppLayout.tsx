@@ -10,6 +10,7 @@ import {
   Loader2,
   Factory,
   FolderKanban,
+  KeyRound,
   LayoutGrid,
   Megaphone,
   Menu,
@@ -488,10 +489,14 @@ const baseSidebarLinks: SidebarLink[] = [
   //     (NotificationsMenu). Пункт бачили всі шістнадцятеро.
   //   • «Логістика» — модуль вимкнений усім, крім власника, а точки доставки
   //     заповнені у 3 клієнтів зі 128 і в 0 лідів. Маршрут лишається.
-  //   • «Ролі та доступи», «Нова Пошта», «Observability» — це конфіг, а не
-  //     робочі поверхні. Переїхали в меню акаунта (UserMenu).
+  //   • «Нова Пошта», «Observability» — це конфіг, а не робочі поверхні.
+  //     Переїхали в меню акаунта (UserMenu).
+  // «Ролі та доступи» лишились у меню поруч із «Командою»: це не конфіг
+  // системи, а щоденна робота з людьми — і дивитись їх ходять із того ж
+  // місця, що й склад команди.
   // Маршрути ніде не чіпалися — прибрані лише пункти навігації.
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users, moduleKey: "team" },
+  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
