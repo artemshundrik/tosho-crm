@@ -1,12 +1,25 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
-import { Save, Loader2, Camera, BriefcaseBusiness, Hourglass, BellRing, Send } from "lucide-react";
+import {
+  BellRing,
+  Cake,
+  CalendarRange,
+  Camera,
+  Loader2,
+  Mail,
+  Pencil,
+  Phone,
+  Plus,
+  Save,
+  Send,
+  UserCheck,
+} from "lucide-react";
 import { supabase, db } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import {
@@ -18,6 +31,46 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
+import {
+  SEGMENTED_GROUP,
+  SEGMENTED_TRIGGER,
+  TOOLBAR_ACTION_BUTTON,
+} from "@/components/ui/controlStyles";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AbsenceBalanceMeters, buildBalanceEntries } from "@/components/team/AbsenceBalanceMeters";
+import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
+import {
+  AbsenceDialog,
+  type AbsenceDialogValue,
+  type AbsenceOwnConflict,
+} from "@/components/team/AbsenceDialog";
+import {
+  cancelOwnAbsenceRequest,
+  createOwnAbsenceRequest,
+  isQuotaAbsenceKind,
+  listTeamAbsencesForUserYear,
+  TEAM_ABSENCE_KIND_LABELS,
+  TEAM_ABSENCE_STATUS_LABELS,
+  TEAM_ABSENCE_STATUS_TONE,
+  type TeamAbsence,
+} from "@/lib/teamAbsences";
+import {
+  fallbackBalance,
+  loadAbsenceBalances,
+  loadWorkdayExceptions,
+  type AbsenceBalance,
+  type WorkdayCalendar,
+} from "@/lib/teamAbsenceQuotas";
+import { countQuotaDaysInYear } from "@/lib/teamAbsenceCalendar";
+import { ACTIVE_DESIGN_STATUSES } from "@/lib/designWorkload";
+import { listQuotes } from "@/lib/toshoApi";
+import { notifyAbsenceRequestCancelled } from "@/lib/workflowNotifications";
+import { toneBadgeClass } from "@/lib/statusTones";
+import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import Cropper, { type Area } from "react-easy-crop";
 import { usePageCache } from "@/hooks/usePageCache";
@@ -33,7 +86,12 @@ import {
   normalizeEmploymentStatus,
   type EmploymentStatus,
 } from "@/lib/employment";
-import { getCurrentWorkspaceMemberDirectoryEntry, upsertWorkspaceMemberProfile } from "@/lib/workspaceMemberDirectory";
+import {
+  getCurrentWorkspaceMemberDirectoryEntry,
+  listWorkspaceMembersForDisplay,
+  upsertWorkspaceMemberProfile,
+  type WorkspaceMemberDisplayRow,
+} from "@/lib/workspaceMemberDirectory";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
@@ -41,6 +99,8 @@ const STORAGE_CACHE_CONTROL = "31536000, immutable";
 const AVATAR_XS_SIZE = 40;
 const AVATAR_MD_SIZE = 64;
 const AVATAR_HERO_SIZE = 192;
+
+type ProfileTab = "overview" | "absences" | "settings";
 
 type ProfileCache = {
   userId: string | null;
@@ -60,6 +120,57 @@ type ProfileCache = {
   employmentStatus: EmploymentStatus;
 };
 
+type TodayReminder = {
+  id: string;
+  source: "customer" | "lead";
+  name: string;
+  comment: string | null;
+  remindAt: string;
+};
+
+type MyQuoteRow = {
+  id: string;
+  number: string | null;
+  title: string | null;
+  status: string | null;
+  deadline_at: string | null;
+  customer_name?: string | null;
+};
+
+type MyDesignTaskRow = {
+  id: string;
+  title: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+// Дзеркало ACTIVE_QUOTE_STATUSES із QuotesPage — «активний» прорахунок ще в роботі.
+const PROFILE_ACTIVE_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval"];
+
+const toDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const formatShortDate = (key: string) => `${key.slice(8, 10)}.${key.slice(5, 7)}`;
+
+const formatAbsenceRange = (absence: { startDate: string; endDate: string }) =>
+  absence.startDate === absence.endDate
+    ? formatShortDate(absence.startDate)
+    : `${formatShortDate(absence.startDate)} – ${formatShortDate(absence.endDate)}`;
+
+const formatReminderTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+
+const formatDeadlineShort = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
+  return date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+};
+
+/** Дедлайн дизайн-задачі живе в metadata: design_deadline із фолбеком на deadline. */
+const designTaskDeadline = (metadata: Record<string, unknown> | null): string | null => {
+  const raw = metadata?.["design_deadline"] ?? metadata?.["deadline"];
+  return typeof raw === "string" && raw ? raw : null;
+};
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null) {
@@ -75,21 +186,22 @@ const tdb = db as unknown as SupabaseClient<Database, "tosho">;
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
-  
+  const { teamId } = useAuth();
+
   // Перевіряємо наявність кешу - важливо перевіряти кожен раз
   const hasCache = Boolean(cached && cached.accessRole !== undefined);
 
   const [loading, setLoading] = useState(!hasCache);
   const [updating, setUpdating] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  
+
   // Оновлюємо loading коли з'являється кеш (важливо для повторних відвідувань)
   useEffect(() => {
     if (hasCache && loading) {
       setLoading(false);
     }
   }, [hasCache, loading]);
-  
+
   const showSkeleton = useMinimumLoading(loading && !hasCache);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(cached?.avatarUrl ?? null);
   const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
@@ -98,7 +210,7 @@ export function ProfilePage() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [userId, setUserId] = useState<string | null>(cached?.userId ?? null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+
   // Form state
   const [firstName, setFirstName] = useState(cached?.firstName ?? "");
   const [lastName, setLastName] = useState(cached?.lastName ?? "");
@@ -123,12 +235,53 @@ export function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
 
+  // Вкладки: ?tab= дає диплінк на налаштування/відсутності
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: ProfileTab = tabParam === "absences" || tabParam === "settings" ? tabParam : "overview";
+
+  // Мій зріз відсутностей (дані й RLS ті самі, що на сторінці Команди)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [myAbsences, setMyAbsences] = useState<TeamAbsence[]>([]);
+  const [myBalance, setMyBalance] = useState<AbsenceBalance | null>(null);
+  const [workdayCalendar, setWorkdayCalendar] = useState<WorkdayCalendar | null>(null);
+  const [absencesLoading, setAbsencesLoading] = useState(true);
+  const [teamRows, setTeamRows] = useState<WorkspaceMemberDisplayRow[]>([]);
+  const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
+  const [absenceDialogInitial, setAbsenceDialogInitial] = useState<AbsenceDialogValue | null>(null);
+  const [absenceSaving, setAbsenceSaving] = useState(false);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+
+  // «Сьогодні»: нагадування + мої активні прорахунки й дизайн-задачі
+  const [todayReminders, setTodayReminders] = useState<TodayReminder[]>([]);
+  const [myQuotes, setMyQuotes] = useState<MyQuoteRow[]>([]);
+  const [myDesignTasks, setMyDesignTasks] = useState<MyDesignTaskRow[]>([]);
+  const [todayLoading, setTodayLoading] = useState(true);
+
   // Telegram-сповіщення (фаза 1)
   const [tgChatId, setTgChatId] = useState<number | null>(null);
   const [tgUsername, setTgUsername] = useState<string | null>(null);
   const [tgEnabled, setTgEnabled] = useState(true);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgLinkHint, setTgLinkHint] = useState(false);
+
+  const todayKey = useMemo(() => toDateKey(new Date()), []);
+  const year = Number(todayKey.slice(0, 4));
+
+  const setTab = useCallback(
+    (next: ProfileTab) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === "overview") params.delete("tab");
+          else params.set("tab", next);
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   const commitCache = (overrides: Partial<ProfileCache> = {}) => {
     if (!userId) return;
@@ -157,8 +310,8 @@ export function ProfilePage() {
     if (!hasCache) {
       getProfile();
     }
-     
-// eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasCache]);
 
   const TELEGRAM_BOT_USERNAME = "ToShoCRM_bot";
@@ -522,10 +675,10 @@ export function ProfilePage() {
         AVATAR_BUCKET
       );
 
-      const workspaceId = await resolveWorkspaceId(userId);
-      if (workspaceId) {
+      const workspaceIdForAvatar = await resolveWorkspaceId(userId);
+      if (workspaceIdForAvatar) {
         await upsertWorkspaceMemberProfile({
-          workspaceId,
+          workspaceId: workspaceIdForAvatar,
           userId,
           firstName,
           lastName,
@@ -593,10 +746,10 @@ export function ProfilePage() {
         email
       ).displayName;
       if (userId) {
-        const workspaceId = await resolveWorkspaceId(userId);
-        if (workspaceId) {
+        const workspaceIdForProfile = await resolveWorkspaceId(userId);
+        if (workspaceIdForProfile) {
           await upsertWorkspaceMemberProfile({
-            workspaceId,
+            workspaceId: workspaceIdForProfile,
             userId,
             firstName: nextFirstName,
             lastName: nextLastName,
@@ -685,6 +838,318 @@ export function ProfilePage() {
     }
   };
 
+  /* -------------------- Мій зріз: відсутності -------------------- */
+
+  const reloadAbsenceData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const resolvedWorkspaceId = await resolveWorkspaceId(userId);
+      if (!resolvedWorkspaceId) return;
+      const [mine, calendar, members] = await Promise.all([
+        listTeamAbsencesForUserYear({ workspaceId: resolvedWorkspaceId, userId, year }),
+        loadWorkdayExceptions({
+          workspaceId: resolvedWorkspaceId,
+          from: `${year}-01-01`,
+          to: `${year + 1}-01-01`,
+        }),
+        listWorkspaceMembersForDisplay(resolvedWorkspaceId),
+      ]);
+      const balances = await loadAbsenceBalances({
+        year,
+        pendingAbsences: mine,
+        exceptions: calendar.exceptions,
+      });
+      setWorkspaceId(resolvedWorkspaceId);
+      setMyAbsences(mine);
+      setWorkdayCalendar(calendar);
+      setTeamRows(members);
+      setMyBalance(balances.get(userId) ?? fallbackBalance(userId));
+    } catch (error) {
+      console.error("[profile] absence load failed", error);
+    } finally {
+      setAbsencesLoading(false);
+    }
+  }, [userId, year]);
+
+  useEffect(() => {
+    void reloadAbsenceData();
+  }, [reloadAbsenceData]);
+
+  /* -------------------- «Сьогодні» -------------------- */
+
+  const loadTodayData = useCallback(async () => {
+    // Блок «Сьогодні» живе лише на Огляді — на інших вкладках ці 4 запити
+    // були б чистою витратою першого рендера.
+    if (!userId || !teamId || tab !== "overview") return;
+    try {
+      const startIso = new Date(`${todayKey}T00:00:00`).toISOString();
+      const endIso = new Date(`${todayKey}T23:59:59.999`).toISOString();
+      const [customersRes, leadsRes, quotesRes, designRes] = await Promise.all([
+        supabase
+          .schema("tosho")
+          .from("customers")
+          .select("id,name,reminder_at,reminder_comment")
+          .eq("team_id", teamId)
+          .eq("manager_user_id", userId)
+          .not("reminder_at", "is", null)
+          .gte("reminder_at", startIso)
+          .lte("reminder_at", endIso)
+          .order("reminder_at", { ascending: true })
+          .limit(20),
+        supabase
+          .schema("tosho")
+          .from("leads")
+          .select("id,company_name,legal_name,reminder_at,reminder_comment")
+          .eq("team_id", teamId)
+          .eq("manager_user_id", userId)
+          .not("reminder_at", "is", null)
+          .gte("reminder_at", startIso)
+          .lte("reminder_at", endIso)
+          .order("reminder_at", { ascending: true })
+          .limit(20),
+        listQuotes({
+          teamId,
+          managerUserId: userId,
+          statuses: PROFILE_ACTIVE_QUOTE_STATUSES,
+          limit: 30,
+        }),
+        supabase
+          .from("activity_log")
+          .select("id,title,metadata")
+          .eq("team_id", teamId)
+          .eq("action", "design_task")
+          .eq("metadata->>assignee_user_id", userId)
+          .in("metadata->>status", ACTIVE_DESIGN_STATUSES)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
+
+      const reminders: TodayReminder[] = [];
+      ((customersRes.data ?? []) as Array<{
+        id: string;
+        name: string | null;
+        reminder_at: string | null;
+        reminder_comment: string | null;
+      }>).forEach((row) => {
+        if (!row.reminder_at) return;
+        reminders.push({
+          id: `customer-${row.id}`,
+          source: "customer",
+          name: row.name?.trim() || "Клієнт",
+          comment: row.reminder_comment,
+          remindAt: row.reminder_at,
+        });
+      });
+      ((leadsRes.data ?? []) as Array<{
+        id: string;
+        company_name: string | null;
+        legal_name: string | null;
+        reminder_at: string | null;
+        reminder_comment: string | null;
+      }>).forEach((row) => {
+        if (!row.reminder_at) return;
+        reminders.push({
+          id: `lead-${row.id}`,
+          source: "lead",
+          name: row.company_name?.trim() || row.legal_name?.trim() || "Лід",
+          comment: row.reminder_comment,
+          remindAt: row.reminder_at,
+        });
+      });
+      reminders.sort((a, b) => a.remindAt.localeCompare(b.remindAt));
+      setTodayReminders(reminders);
+
+      // listQuotes повертає масив напряму (не {data,error}) і вже підмішує
+      // customer_name із замовників/лідів.
+      const quoteRows = ((quotesRes ?? []) as unknown as MyQuoteRow[]).slice();
+      quoteRows.sort((a, b) => (a.deadline_at ?? "9999").localeCompare(b.deadline_at ?? "9999"));
+      setMyQuotes(quoteRows);
+      if (!designRes.error) {
+        const rows = (((designRes.data ?? []) as unknown) as MyDesignTaskRow[]).slice();
+        rows.sort((a, b) =>
+          (designTaskDeadline(a.metadata) ?? "9999").localeCompare(designTaskDeadline(b.metadata) ?? "9999")
+        );
+        setMyDesignTasks(rows);
+      }
+    } catch (error) {
+      console.error("[profile] today load failed", error);
+    } finally {
+      setTodayLoading(false);
+    }
+  }, [tab, teamId, todayKey, userId]);
+
+  useEffect(() => {
+    void loadTodayData();
+  }, [loadTodayData]);
+
+  const pendingRequestsCount = useMemo(
+    () => myAbsences.filter((absence) => absence.status === "pending").length,
+    [myAbsences]
+  );
+
+  const balanceEntries = useMemo(
+    () =>
+      buildBalanceEntries(myAbsences, (absence) =>
+        isQuotaAbsenceKind(absence.kind)
+          ? countQuotaDaysInYear(absence.kind, absence, year, workdayCalendar?.exceptions)
+          : 0
+      ),
+    [myAbsences, workdayCalendar, year]
+  );
+
+  // Хто погоджує заявки — щоб «піде на погодження» не було безадресним.
+  const approverLabel = useMemo(() => {
+    const others = teamRows.filter((row) => row.userId !== userId);
+    const seo = others.filter((row) => (row.jobRole ?? "").toLowerCase() === "seo");
+    const names = (seo.length > 0 ? seo : others).slice(0, 2).map((row) => row.label.split(" ")[0]);
+    return names.length > 0 ? names.join(" або ") : "";
+  }, [teamRows, userId]);
+
+  const findOwnConflict = useCallback(
+    ({ startDate: fromKey, endDate: toKey }: { userId: string; startDate: string; endDate: string }): AbsenceOwnConflict | null => {
+      const hit = myAbsences.find(
+        (absence) =>
+          (absence.status === "approved" || absence.status === "pending") &&
+          absence.startDate <= toKey &&
+          absence.endDate >= fromKey
+      );
+      if (!hit) return null;
+      return {
+        kindLabel: TEAM_ABSENCE_KIND_LABELS[hit.kind],
+        rangeLabel: formatAbsenceRange(hit),
+        pending: hit.status === "pending",
+        exact: hit.startDate === fromKey && hit.endDate === toKey,
+      };
+    },
+    [myAbsences]
+  );
+
+  const openRequestDialog = useCallback(() => {
+    setAbsenceDialogInitial({
+      userId: userId ?? "",
+      startDate: todayKey,
+      endDate: todayKey,
+      kind: "vacation",
+      comment: "",
+    });
+    setAbsenceDialogOpen(true);
+  }, [todayKey, userId]);
+
+  const handleAbsenceSubmit = useCallback(
+    async (value: AbsenceDialogValue) => {
+      setAbsenceSaving(true);
+      try {
+        const kind = value.kind === "other" ? "vacation" : value.kind;
+        await createOwnAbsenceRequest({
+          startDate: value.startDate,
+          endDate: value.endDate,
+          kind,
+          comment: value.comment.trim() || null,
+        });
+        toast.success(kind === "sick_leave" ? "Лікарняний зафіксовано" : "Заявку надіслано");
+        setAbsenceDialogOpen(false);
+        await reloadAbsenceData();
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message ? error.message : "Не вдалося надіслати заявку"
+        );
+      } finally {
+        setAbsenceSaving(false);
+      }
+    },
+    [reloadAbsenceData]
+  );
+
+  const handleCancelRequest = useCallback(
+    async (absence: TeamAbsence) => {
+      if (!workspaceId) return;
+      setCancelingId(absence.id);
+      try {
+        await cancelOwnAbsenceRequest({ workspaceId, id: absence.id });
+        await notifyAbsenceRequestCancelled({
+          workspaceId,
+          requesterUserId: absence.userId,
+          requesterName: displayName || "Співробітник",
+          kindLabel: TEAM_ABSENCE_KIND_LABELS[absence.kind],
+          rangeLabel: formatAbsenceRange(absence),
+        });
+        toast.success("Заявку скасовано");
+        await reloadAbsenceData();
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message ? error.message : "Не вдалося скасувати заявку"
+        );
+      } finally {
+        setCancelingId(null);
+      }
+    },
+    [displayName, reloadAbsenceData, workspaceId]
+  );
+
+  /* -------------------- Тулбар -------------------- */
+
+  const headerActions = useMemo(
+    () => (
+      <UnifiedPageToolbar
+        topLeft={
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={tab === "overview"}
+              onClick={() => setTab("overview")}
+              className={SEGMENTED_TRIGGER}
+            >
+              Огляд
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={tab === "absences"}
+              onClick={() => setTab("absences")}
+              className={SEGMENTED_TRIGGER}
+            >
+              Відсутності
+              {pendingRequestsCount > 0 ? (
+                <CountBadge value={pendingRequestsCount} className={cn("ml-1", toneBadgeClass.warning)} />
+              ) : null}
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={tab === "settings"}
+              onClick={() => setTab("settings")}
+              className={SEGMENTED_TRIGGER}
+            >
+              Налаштування
+            </Button>
+          </SegmentedGroup>
+        }
+        topRight={
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            {tab !== "settings" ? (
+              <Button
+                variant="outline"
+                onClick={() => setTab("settings")}
+                className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}
+              >
+                <Pencil className="h-4 w-4" aria-hidden />
+                Редагувати
+              </Button>
+            ) : null}
+            <Button onClick={openRequestDialog} className={cn(TOOLBAR_ACTION_BUTTON, "gap-2")}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Подати заявку
+            </Button>
+          </div>
+        }
+      />
+    ),
+    [openRequestDialog, pendingRequestsCount, setTab, tab]
+  );
+
+  usePageHeaderActions(headerActions, [headerActions]);
+
   if (showSkeleton) return <DetailSkeleton />;
 
   const employmentDuration = formatEmploymentDuration(startDate);
@@ -699,16 +1164,6 @@ export function ProfilePage() {
       : resolvedEmploymentStatus === "rejected"
       ? "tone-danger"
       : "tone-warning";
-  const employmentHeadline =
-    resolvedEmploymentStatus === "active"
-      ? "Штатний статус підтверджено"
-      : resolvedEmploymentStatus === "inactive"
-      ? "Співпрацю завершено"
-      : resolvedEmploymentStatus === "rejected"
-      ? "Після випробувального не прийнято"
-      : probation
-      ? `До ${probation.endLabel}`
-      : "Кінець випробувального не вказано";
   const employmentDescription =
     resolvedEmploymentStatus === "active"
       ? "Ти вже працюєш у компанії в штатному статусі."
@@ -720,76 +1175,294 @@ export function ProfilePage() {
       ? probation.caption
       : "Адміністратор може задати дату завершення випробувального в управлінні командою.";
 
-  return (
-    <div className="mx-auto max-w-6xl py-6">
-      <div className="overflow-hidden rounded-section border border-border bg-card shadow-surface">
-        <div className="relative overflow-hidden border-b border-border bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_32%),linear-gradient(135deg,hsl(var(--background)),hsl(var(--muted)/0.55))] px-6 pb-6 pt-6 md:px-10">
-          <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,hsl(var(--surface-sheen))_18%,transparent_36%)] opacity-60 dark:opacity-20" />
-          <div className="relative flex flex-col gap-5 md:flex-row md:items-center">
-            <div className="relative mx-auto shrink-0 md:mx-0">
-              <AvatarBase
-                src={avatarUrl}
-                name={displayName || "Користувач"}
-                fallback={initials}
-                assetVariant="hero"
-                size={120}
-                shape="circle"
-                className="border-[5px] border-card bg-card text-foreground ring-1 ring-black/5"
-                imageClassName="object-cover"
-                fallbackClassName="text-3xl font-bold text-foreground"
-              />
-              <Button
-                type="button"
-                variant="inverted"
-                size="iconXs"
-                onClick={handlePickAvatar}
-                className="absolute bottom-1 right-1 border-[3px] border-card shadow-sm"
-                aria-label="Змінити фото профілю"
-                disabled={avatarUploading}
-              >
-                {avatarUploading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Camera className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
-            </div>
+  // Таймлайн співпраці: старт → (випробувальний) → сьогодні.
+  const probationActive = resolvedEmploymentStatus === "probation" && Boolean(probation);
+  const journeyEnded = resolvedEmploymentStatus === "inactive" || resolvedEmploymentStatus === "rejected";
+  let journeyFillPercent = 100;
+  let probationMilestonePercent: number | null = null;
+  if (startDate) {
+    if (probationActive && probation) {
+      journeyFillPercent = Math.max(4, Math.min(96, probation.progress));
+    } else if (probationEndDate) {
+      const startMs = new Date(`${startDate}T00:00:00`).getTime();
+      const probationMs = new Date(`${probationEndDate}T00:00:00`).getTime();
+      const nowMs = Date.now();
+      if (probationMs > startMs && nowMs > probationMs) {
+        probationMilestonePercent = Math.max(
+          8,
+          Math.min(60, ((probationMs - startMs) / (nowMs - startMs)) * 100)
+        );
+      }
+    }
+  }
 
-            <div className="space-y-2 text-center md:text-left">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground">{displayName || "Користувач"}</h1>
-              <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
-                    accessRole === "owner"
-                      ? "tone-accent"
-                      : accessRole === "admin"
-                      ? "border-primary/20 bg-primary/10 text-foreground"
-                      : "border-border bg-background/80 text-muted-foreground"
-                  )}
-                >
-                  {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
-                </span>
-                {jobRole ? (
-                  <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-                    {jobRole}
-                  </span>
-                ) : null}
-              </div>
-            </div>
+  const todayLabel = new Date().toLocaleDateString("uk-UA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  const birthdayLabel = birthDate
+    ? new Date(`${birthDate}T00:00:00`).toLocaleDateString("uk-UA", { day: "numeric", month: "long" })
+    : null;
+
+  const absenceDaysOf = (absence: TeamAbsence) =>
+    isQuotaAbsenceKind(absence.kind)
+      ? countQuotaDaysInYear(absence.kind, absence, year, workdayCalendar?.exceptions)
+      : null;
+
+  const renderAbsenceRow = (absence: TeamAbsence, options?: { withCancel?: boolean }) => {
+    const days = absenceDaysOf(absence);
+    return (
+      <div key={absence.id} className="flex items-center gap-3 py-2.5">
+        <AbsenceKindChip kind={absence.kind} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium tabular-nums text-foreground">
+            {formatAbsenceRange(absence)}
+            {days != null ? <span className="text-muted-foreground"> · {days} дн</span> : null}
+          </div>
+          {absence.comment ? (
+            <div className="truncate text-xs text-muted-foreground">{absence.comment}</div>
+          ) : null}
+        </div>
+        <span
+          className={cn(
+            "inline-flex shrink-0 rounded-full border px-2 py-0.5 text-2xs font-semibold",
+            toneBadgeClass[TEAM_ABSENCE_STATUS_TONE[absence.status]]
+          )}
+        >
+          {TEAM_ABSENCE_STATUS_LABELS[absence.status]}
+        </span>
+        {options?.withCancel && absence.status === "pending" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 text-xs text-muted-foreground"
+            onClick={() => handleCancelRequest(absence)}
+            disabled={cancelingId === absence.id}
+          >
+            {cancelingId === absence.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Скасувати"}
+          </Button>
+        ) : null}
+      </div>
+    );
+  };
+
+  const identityCard = (
+    <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card md:p-6">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center">
+        <div className="relative mx-auto shrink-0 md:mx-0">
+          <AvatarBase
+            src={avatarUrl}
+            name={displayName || "Користувач"}
+            fallback={initials}
+            assetVariant="hero"
+            size={96}
+            shape="circle"
+            className="border-4 border-card bg-card text-foreground ring-1 ring-black/5"
+            imageClassName="object-cover"
+            fallbackClassName="text-2xl font-bold text-foreground"
+          />
+          <Button
+            type="button"
+            variant="inverted"
+            size="iconXs"
+            onClick={handlePickAvatar}
+            className="absolute bottom-0.5 right-0.5 border-[3px] border-card shadow-sm"
+            aria-label="Змінити фото профілю"
+            disabled={avatarUploading}
+          >
+            {avatarUploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Camera className="h-3.5 w-3.5" />
+            )}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarChange}
+          />
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-2 text-center md:text-left">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 md:justify-start">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {displayName || "Користувач"}
+            </h1>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                accessRole === "owner"
+                  ? "tone-accent"
+                  : accessRole === "admin"
+                  ? "border-primary/20 bg-primary/10 text-foreground"
+                  : "border-border bg-background/80 text-muted-foreground"
+              )}
+            >
+              {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
+            </span>
+            {jobRole ? (
+              <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+                {jobRole}
+              </span>
+            ) : null}
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+                employmentStatusTone
+              )}
+            >
+              {getEmploymentStatusLabel(resolvedEmploymentStatus)}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-muted-foreground md:justify-start">
+            {phone ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5" aria-hidden />
+                <span className="tabular-nums">{phone}</span>
+              </span>
+            ) : null}
+            {email ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5" aria-hidden />
+                {email}
+              </span>
+            ) : null}
+            {tgUsername ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Send className="h-3.5 w-3.5" aria-hidden />@{tgUsername}
+              </span>
+            ) : null}
+            {birthdayLabel ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Cake className="h-3.5 w-3.5" aria-hidden />
+                ДН — {birthdayLabel}
+              </span>
+            ) : null}
           </div>
         </div>
 
-        <div className="px-6 py-6 md:px-10">
+        <div className="hidden shrink-0 text-right lg:block">
+          <div className="text-2xs uppercase tracking-caps text-muted-foreground">Стаж</div>
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">
+            {employmentDuration || "—"}
+          </div>
+          {employmentDays !== null && employmentDays >= 0 ? (
+            <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+              {employmentDays} днів у компанії
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {startDate ? (
+        <div className="mt-6 border-t border-border/40 pt-6">
+          <div className="relative mx-1 h-1.5 rounded-full bg-muted/60">
+            <div
+              className={cn(
+                "absolute inset-y-0 left-0 rounded-full opacity-60",
+                journeyEnded
+                  ? "bg-muted-foreground/40"
+                  : probationActive
+                  ? "tone-dot-warning"
+                  : "tone-dot-success"
+              )}
+              style={{ width: `${journeyFillPercent}%` }}
+            />
+            {/* Старт */}
+            <span className="absolute left-0 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success shadow-sm" />
+            <span className="absolute left-0 top-4 text-left">
+              <span className="block text-xs font-semibold tabular-nums text-foreground">
+                {formatEmploymentDate(startDate)}
+              </span>
+              <span className="block text-2xs text-muted-foreground">старт співпраці</span>
+            </span>
+
+            {/* Випробувальний пройдено (мітка на прямій, коли він позаду) */}
+            {probationMilestonePercent !== null && probationEndDate ? (
+              <>
+                <span
+                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success shadow-sm"
+                  style={{ left: `${probationMilestonePercent}%` }}
+                />
+                <span
+                  className="absolute top-4 hidden -translate-x-1/2 text-center sm:block"
+                  style={{ left: `${probationMilestonePercent}%` }}
+                >
+                  <span className="block text-xs font-semibold text-foreground">
+                    Випробувальний пройдено
+                  </span>
+                  <span className="block text-2xs tabular-nums text-muted-foreground">
+                    {formatEmploymentDate(probationEndDate)}
+                  </span>
+                </span>
+              </>
+            ) : null}
+
+            {/* Сьогодні / кінець випробувального */}
+            {probationActive && probation ? (
+              <>
+                <span
+                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-warning shadow-sm"
+                  style={{ left: `${journeyFillPercent}%` }}
+                />
+                <span className="absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card bg-muted-foreground/40 shadow-sm" />
+                <span className="absolute right-0 top-4 text-right">
+                  <span className="block text-xs font-semibold text-foreground">{probation.statusLabel}</span>
+                  <span className="block text-2xs tabular-nums text-muted-foreground">
+                    до {probation.endLabel} · {probation.progress}%
+                  </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    "absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card shadow-sm",
+                    journeyEnded ? "bg-muted-foreground/40" : "tone-dot-success"
+                  )}
+                />
+                <span className="absolute right-0 top-4 text-right">
+                  <span className="block text-xs font-semibold text-foreground">
+                    {journeyEnded ? getEmploymentStatusLabel(resolvedEmploymentStatus) : "Сьогодні"}
+                  </span>
+                  <span className="block text-2xs tabular-nums text-muted-foreground">
+                    {employmentDuration || "—"}
+                  </span>
+                </span>
+              </>
+            )}
+          </div>
+          <div className="h-11" aria-hidden />
+          <p className="text-xs text-muted-foreground">{employmentDescription}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const todaySection = (label: string, countValue: number, moreHref?: string, moreLabel?: string) => (
+    <div className="flex items-center gap-2">
+      <span className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">{label}</span>
+      <span className="text-2xs tabular-nums text-muted-foreground/80">{countValue}</span>
+      {moreHref ? (
+        <Link to={moreHref} className="ml-auto text-xs font-semibold text-foreground hover:underline">
+          {moreLabel ?? "Всі"} →
+        </Link>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 pb-8">
+      {tab === "overview" ? (
+        <>
+          {identityCard}
+
           {avatarDraftUrl ? (
-            <div className="mb-6 rounded-inner border border-border bg-muted/20 p-4">
+            <div className="rounded-inner border border-border/40 bg-card p-4 shadow-card">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div className="relative h-40 w-40 overflow-hidden rounded-full border border-border bg-background">
                   <Cropper
@@ -834,244 +1507,372 @@ export function ProfilePage() {
             </div>
           ) : null}
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-            <div className="space-y-6">
-              <div className="rounded-inner border border-border bg-background/70 p-5">
-                <div className="mb-5">
-                  <div className="text-lg font-semibold text-foreground">Особисті дані</div>
-                  <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <CalendarRange className="h-4 w-4 text-primary" aria-hidden />
+                  Сьогодні
+                  <span className="ml-auto text-xs font-normal text-muted-foreground">{todayLabel}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {todayLoading ? (
+                  <div className="space-y-2" aria-hidden>
+                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
+                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
+                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      {todaySection("Нагадування", todayReminders.length, "/notifications")}
+                      {todayReminders.length === 0 ? (
+                        <p className="mt-2 text-xs text-muted-foreground">На сьогодні нагадувань немає.</p>
+                      ) : (
+                        <div className="mt-1 divide-y divide-border/30">
+                          {todayReminders.slice(0, 4).map((reminder) => (
+                            <div key={reminder.id} className="flex items-center gap-3 py-2">
+                              <span className="w-11 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+                                {formatReminderTime(reminder.remindAt)}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-foreground">{reminder.name}</div>
+                                {reminder.comment ? (
+                                  <div className="truncate text-xs text-muted-foreground">{reminder.comment}</div>
+                                ) : null}
+                              </div>
+                              <span className="shrink-0 text-2xs text-muted-foreground">
+                                {reminder.source === "lead" ? "лід" : "клієнт"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {myQuotes.length > 0 ? (
+                      <div className="border-t border-border/40 pt-3">
+                        {todaySection("Мої активні прорахунки", myQuotes.length, "/orders/estimates", "У прорахунки")}
+                        <div className="mt-1 divide-y divide-border/30">
+                          {myQuotes.slice(0, 3).map((quote) => (
+                            <div key={quote.id} className="flex items-center gap-3 py-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-foreground">
+                                  <span className="tabular-nums">{quote.number || "Без номера"}</span>
+                                  {quote.customer_name ? (
+                                    <span className="text-muted-foreground"> · {quote.customer_name}</span>
+                                  ) : quote.title ? (
+                                    <span className="text-muted-foreground"> · {quote.title}</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              {quote.deadline_at ? (
+                                <span
+                                  className={cn(
+                                    "shrink-0 text-xs tabular-nums",
+                                    new Date(quote.deadline_at).getTime() < Date.now()
+                                      ? "tone-text-danger font-semibold"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  до {formatDeadlineShort(quote.deadline_at)}
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {myDesignTasks.length > 0 ? (
+                      <div className="border-t border-border/40 pt-3">
+                        {todaySection("Мої дизайн-задачі", myDesignTasks.length, "/design", "У дизайн")}
+                        <div className="mt-1 divide-y divide-border/30">
+                          {myDesignTasks.slice(0, 3).map((task) => {
+                            const deadline = designTaskDeadline(task.metadata);
+                            return (
+                              <div key={task.id} className="flex items-center gap-3 py-2">
+                                <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                                  {task.title || "Дизайн-задача"}
+                                </div>
+                                {deadline ? (
+                                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                    до {formatDeadlineShort(deadline)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {todayReminders.length === 0 && myQuotes.length === 0 && myDesignTasks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Сьогодні без нагадувань і активних задач — чистий горизонт.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <UserCheck className="h-4 w-4 text-primary" aria-hidden />
+                    Мій баланс — {year}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {absencesLoading || !myBalance ? (
+                    <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+                  ) : (
+                    <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <CalendarRange className="h-4 w-4 text-primary" aria-hidden />
+                    Мої заявки
+                    <button
+                      type="button"
+                      onClick={() => setTab("absences")}
+                      className="ml-auto text-xs font-semibold text-foreground hover:underline"
+                    >
+                      Всі →
+                    </button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {absencesLoading ? (
+                    <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+                  ) : myAbsences.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Цього року заявок ще не було.</p>
+                  ) : (
+                    <div className="divide-y divide-border/30">
+                      {myAbsences.slice(0, 3).map((absence) => renderAbsenceRow(absence))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {tab === "absences" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+          <Card className="self-start">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <UserCheck className="h-4 w-4 text-primary" aria-hidden />
+                Мій баланс — {year}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {absencesLoading || !myBalance ? (
+                <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+              ) : (
+                <>
+                  <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
+                  <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+                    Відпустка міряється календарними днями — вихідні всередині неї квоту списують.
+                    Day-off і лікарняний рахуються робочими. Свята не списують нічого.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <CalendarRange className="h-4 w-4 text-primary" aria-hidden />
+                Мої заявки — {year}
+                <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
+                  {myAbsences.length}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {absencesLoading ? (
+                <div className="space-y-2" aria-hidden>
+                  <div className="h-10 animate-pulse rounded-lg bg-muted/40" />
+                  <div className="h-10 animate-pulse rounded-lg bg-muted/40" />
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Імʼя</label>
-                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Введи імʼя" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Прізвище</label>
-                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Введи прізвище" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Дата народження</label>
-                    <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Телефон</label>
-                    <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-foreground">Email</label>
-                    <Input value={email} disabled />
-                    <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
-                  </div>
+              ) : myAbsences.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center">
+                  <p className="text-sm font-medium text-foreground">Цього року заявок ще не було</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Відпустка, day-off чи лікарняний — кнопка «Подати заявку» вгорі.
+                  </p>
                 </div>
-                <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-border/60 bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
-                  <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
-                  <Button onClick={updateProfile} disabled={updating} className="h-9 sm:min-w-[180px]">
-                    {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Зберегти зміни
-                  </Button>
+              ) : (
+                <div className="divide-y divide-border/30">
+                  {myAbsences.map((absence) => renderAbsenceRow(absence, { withCancel: true }))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {tab === "settings" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+              <div className="mb-5">
+                <div className="text-lg font-semibold text-foreground">Особисті дані</div>
+                <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Імʼя</label>
+                  <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Введи імʼя" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Прізвище</label>
+                  <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Введи прізвище" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Дата народження</label>
+                  <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Телефон</label>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-foreground">Email</label>
+                  <Input value={email} disabled />
+                  <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
                 </div>
               </div>
-
-              <div className="rounded-inner border border-border bg-background/70 p-5">
-                <div className="mb-5">
-                  <div className="text-lg font-semibold text-foreground">Безпека</div>
-                  <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Пароль</label>
-                    <Input disabled value="••••••••••••••" type="password" />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 min-w-[140px]"
-                    onClick={() => setPasswordDialogOpen(true)}
-                  >
-                    Змінити пароль
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-inner border border-border bg-background/70 p-5">
-                <div className="mb-5">
-                  <div className="text-lg font-semibold text-foreground">Сповіщення</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Push, in-app сповіщення та звук тепер зібрані в одному центрі керування.
-                  </div>
-                </div>
-                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <BellRing className="h-4 w-4 text-primary" />
-                      Центр сповіщень
-                    </div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      Відкрий сторінку сповіщень, щоб керувати push, in-app popup та звуком.
-                    </div>
-                  </div>
-                  <Button asChild type="button" variant="outline" className="min-w-[168px]">
-                    <Link to="/notifications">Відкрити</Link>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-inner border border-border bg-background/70 p-5">
-                <div className="mb-5">
-                  <div className="text-lg font-semibold text-foreground">Telegram-бот</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Сповіщення CRM у Telegram через бота @{TELEGRAM_BOT_USERNAME}. А ще там можна
-                    спитати «хто сьогодні відсутній», написати «хворію» чи «day-off 15.08» — і
-                    лікарняний або заявка оформляться без відкриття CRM (команда /absence).
-                  </div>
-                </div>
-                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <Send className="h-4 w-4 text-primary" />
-                        {tgChatId != null ? "Telegram підключено" : "Telegram не підключено"}
-                      </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        {tgChatId != null
-                          ? tgUsername
-                            ? `Акаунт @${tgUsername}`
-                            : "Акаунт підключено"
-                          : "Натисни «Підключити» — відкриється бот, там натисни Start."}
-                      </div>
-                    </div>
-                    {tgChatId != null ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant={tgEnabled ? "primary" : "outline"}
-                          className="min-w-[132px]"
-                          onClick={handleTelegramToggle}
-                          disabled={tgBusy}
-                        >
-                          {tgEnabled ? "Увімкнено" : "Вимкнено"}
-                        </Button>
-                        <Button type="button" variant="outline" onClick={handleTelegramDisconnect} disabled={tgBusy}>
-                          Відключити
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="min-w-[168px]"
-                        onClick={handleTelegramConnect}
-                        disabled={tgBusy}
-                      >
-                        {tgBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Підключити Telegram"}
-                      </Button>
-                    )}
-                  </div>
-                  {tgChatId == null && tgLinkHint ? (
-                    <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                      <span>Натиснув Start у боті?</span>
-                      <Button type="button" variant="ghost" className="h-8" onClick={handleTelegramRefresh} disabled={tgBusy}>
-                        Я підключив — оновити статус
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
+              <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-border/60 bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
+                <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
+                <Button onClick={updateProfile} disabled={updating} className="h-9 sm:min-w-[180px]">
+                  {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Зберегти зміни
+                </Button>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="rounded-inner border border-border bg-muted/20 p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-lg font-semibold text-foreground">Робота в компанії</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Стаж, статус роботи і поточний стан співпраці.</div>
-                  </div>
-                  <div className="rounded-full border border-border bg-background p-2.5 text-muted-foreground">
-                    <BriefcaseBusiness className="h-4 w-4" />
-                  </div>
+            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+              <div className="mb-5">
+                <div className="text-lg font-semibold text-foreground">Безпека</div>
+                <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Пароль</label>
+                  <Input disabled value="••••••••••••••" type="password" />
                 </div>
-
-                <div className="mt-5 space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
-                      <div className="text-2xs uppercase tracking-caps text-muted-foreground">Дата старту</div>
-                      <div className="mt-1.5 text-base font-semibold text-foreground">
-                        {startDate ? formatEmploymentDate(startDate) : "Поки не вказано"}
-                      </div>
-                    </div>
-                    <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
-                      <div className="text-2xs uppercase tracking-caps text-muted-foreground">Стаж</div>
-                      <div className="mt-1.5 text-base font-semibold text-foreground">{employmentDuration || "Ще не задано"}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {employmentDays !== null && employmentDays >= 0 ? `${employmentDays} днів у компанії` : "Потрібна дата початку"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {resolvedEmploymentStatus === "probation" ? "Випробувальний термін" : "Статус роботи"}
-                        </div>
-                        <div className="mt-1 text-sm text-muted-foreground">{employmentHeadline}</div>
-                      </div>
-                      <div className="rounded-full border border-border bg-muted/30 p-2 text-muted-foreground">
-                        <Hourglass className="h-4 w-4" />
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold", employmentStatusTone)}>
-                        {getEmploymentStatusLabel(resolvedEmploymentStatus)}
-                      </span>
-                    </div>
-
-                    {resolvedEmploymentStatus === "probation" && probation ? (
-                      <>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <span className="text-xs font-semibold text-muted-foreground">{probation.statusLabel}</span>
-                          <span className="text-xs text-muted-foreground">{probation.progress}%</span>
-                        </div>
-                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/50">
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-[width]",
-                              probation.status === "completed"
-                                ? "tone-dot-success"
-                                : probation.status === "active"
-                                ? "tone-dot-warning"
-                                : "bg-muted-foreground/40"
-                            )}
-                            style={{ width: `${probation.progress}%` }}
-                          />
-                        </div>
-                      </>
-                    ) : null}
-
-                    <div
-                      className={cn(
-                        "mt-4 rounded-[var(--radius)] border px-3 py-3 text-sm",
-                        resolvedEmploymentStatus === "active"
-                          ? "tone-success-subtle text-foreground"
-                          : resolvedEmploymentStatus === "inactive"
-                          ? "border-border/70 bg-muted/20 text-foreground"
-                          : resolvedEmploymentStatus === "rejected"
-                          ? "tone-danger-subtle text-foreground"
-                          : "tone-warning-subtle text-foreground"
-                      )}
-                    >
-                      {employmentDescription}
-                    </div>
-                  </div>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 min-w-[140px]"
+                  onClick={() => setPasswordDialogOpen(true)}
+                >
+                  Змінити пароль
+                </Button>
               </div>
             </div>
           </div>
 
+          <div className="space-y-4">
+            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+              <div className="mb-5">
+                <div className="text-lg font-semibold text-foreground">Telegram-бот</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Сповіщення CRM у Telegram через бота @{TELEGRAM_BOT_USERNAME}. А ще там можна
+                  спитати «хто сьогодні відсутній», написати «хворію» чи «day-off 15.08» — і
+                  лікарняний або заявка оформляться без відкриття CRM (команда /absence).
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Send className="h-4 w-4 text-primary" />
+                      {tgChatId != null ? "Telegram підключено" : "Telegram не підключено"}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {tgChatId != null
+                        ? tgUsername
+                          ? `Акаунт @${tgUsername}`
+                          : "Акаунт підключено"
+                        : "Натисни «Підключити» — відкриється бот, там натисни Start."}
+                    </div>
+                  </div>
+                  {tgChatId != null ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant={tgEnabled ? "primary" : "outline"}
+                        className="min-w-[132px]"
+                        onClick={handleTelegramToggle}
+                        disabled={tgBusy}
+                      >
+                        {tgEnabled ? "Увімкнено" : "Вимкнено"}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={handleTelegramDisconnect} disabled={tgBusy}>
+                        Відключити
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-w-[168px]"
+                      onClick={handleTelegramConnect}
+                      disabled={tgBusy}
+                    >
+                      {tgBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Підключити Telegram"}
+                    </Button>
+                  )}
+                </div>
+                {tgChatId == null && tgLinkHint ? (
+                  <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                    <span>Натиснув Start у боті?</span>
+                    <Button type="button" variant="ghost" className="h-8" onClick={handleTelegramRefresh} disabled={tgBusy}>
+                      Я підключив — оновити статус
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+              <div className="mb-5">
+                <div className="text-lg font-semibold text-foreground">Сповіщення</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  Push, in-app сповіщення та звук тепер зібрані в одному центрі керування.
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <BellRing className="h-4 w-4 text-primary" />
+                    Центр сповіщень
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Відкрий сторінку сповіщень, щоб керувати push, in-app popup та звуком.
+                  </div>
+                </div>
+                <Button asChild type="button" variant="outline" className="min-w-[168px]">
+                  <Link to="/notifications">Відкрити</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <Dialog
         open={passwordDialogOpen}
@@ -1129,6 +1930,37 @@ export function ProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {absenceDialogInitial ? (
+        <AbsenceDialog
+          open={absenceDialogOpen}
+          onOpenChange={setAbsenceDialogOpen}
+          initial={absenceDialogInitial}
+          people={
+            userId
+              ? [
+                  {
+                    userId,
+                    name: displayName || "Я",
+                    roleLabel: jobRole ?? undefined,
+                    avatarUrl,
+                    initials,
+                  },
+                ]
+              : []
+          }
+          canPickPerson={false}
+          balanceOf={(id) => (myBalance && id === myBalance.userId ? myBalance : null)}
+          exceptions={workdayCalendar?.exceptions}
+          holidayNames={workdayCalendar?.holidayNames}
+          saving={absenceSaving}
+          mode="request"
+          approverLabel={approverLabel}
+          todayKey={todayKey}
+          findOwnConflict={findOwnConflict}
+          onSubmit={handleAbsenceSubmit}
+        />
+      ) : null}
     </div>
   );
 }
