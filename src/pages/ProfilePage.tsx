@@ -8,6 +8,7 @@ import {
   Loader2,
   Mail,
   MonitorSmartphone,
+  Moon,
   Pencil,
   Phone,
   Plus,
@@ -52,6 +53,7 @@ import {
   TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
 import { AbsenceBalanceMeters, buildBalanceEntries } from "@/components/team/AbsenceBalanceMeters";
 import { AbsenceKindChip } from "@/components/team/AbsenceKindChip";
 import {
@@ -80,6 +82,7 @@ import { countQuotaDaysInYear } from "@/lib/teamAbsenceCalendar";
 import { ACTIVE_DESIGN_STATUSES } from "@/lib/designWorkload";
 import { listQuotes } from "@/lib/toshoApi";
 import { notifyAbsenceRequestCancelled } from "@/lib/workflowNotifications";
+import { NOTIFY_FROM_HOUR, NOTIFY_UNTIL_HOUR } from "@/lib/quietHours";
 import { toneBadgeClass } from "@/lib/statusTones";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -1970,26 +1973,64 @@ export function ProfilePage() {
             </div>
 
             <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
-              <div className="mb-5">
-                <div className="text-lg font-semibold text-foreground">Сповіщення</div>
+              <div className="mb-4">
+                <div className="text-lg font-semibold text-foreground">Тихі години</div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  Push, in-app сповіщення та звук тепер зібрані в одному центрі керування.
+                  Коли команду не будять сповіщеннями про події.
                 </div>
               </div>
-              <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div className="rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Moon className="h-4 w-4 text-primary" aria-hidden />
+                  <span className="text-base font-semibold tabular-nums text-foreground">
+                    {NOTIFY_UNTIL_HOUR}:00 — {NOTIFY_FROM_HOUR}:00
+                  </span>
+                  <span className={cn("ml-auto inline-flex rounded-full border px-2 py-0.5 text-2xs font-semibold", toneBadgeClass.neutral)}>
+                    Київ
+                  </span>
+                </div>
+                <p className="mt-2.5 text-sm text-muted-foreground">
+                  Денні події — дні народження, відпустки, нагадування — чекають до {NOTIFY_FROM_HOUR}:00,
+                  а не приходять опівночі. Аварійні сигнали системи будять завжди: у тому їхній сенс.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Вікно спільне для всієї команди — персонально його поки не змінити.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="xl:col-span-2">
+            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <BellRing className="h-4 w-4 text-primary" />
-                    Центр сповіщень
+                  <div className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                    <BellRing className="h-4 w-4 text-primary" aria-hidden />
+                    Що і куди надсилати
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
-                    Відкрий сторінку сповіщень, щоб керувати push, in-app popup та звуком.
+                    Кожен тип сповіщення — окремо для push і Telegram. У самій CRM сповіщення
+                    приходять завжди.
+                    {tgChatId == null ? " Telegram увімкнеться після підключення бота." : ""}
                   </div>
                 </div>
-                <Button asChild type="button" variant="outline" className="min-w-[168px]">
-                  <Link to="/notifications">Відкрити</Link>
+                <Button asChild type="button" variant="outline" className="shrink-0">
+                  <Link to="/notifications">Стрічка сповіщень</Link>
                 </Button>
               </div>
+              {/* Ролі — з локального стану (memberships_view по справжньому user.id),
+                  а НЕ з useAuth: у режимі «Дивитись як» той віддав би ролі людини,
+                  за яку дивляться, і власник правив би свої налаштування чужим
+                  списком категорій. */}
+              <NotificationChannelMatrix
+                userId={userId}
+                accessRole={accessRole || null}
+                jobRole={jobRole}
+                telegramLinked={tgChatId != null}
+              />
+              <p className="mt-3 text-xs text-muted-foreground">
+                Push, спливні вікна та звук залежать від пристрою — вони лишились у стрічці сповіщень.
+              </p>
             </div>
           </div>
         </div>

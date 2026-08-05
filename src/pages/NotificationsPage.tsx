@@ -19,16 +19,13 @@ import {
   supabase,
   db,
 } from "@/lib/supabaseClient";
-import {
-  visibleNotificationCategories,
-  type NotificationChannel,
-} from "@/lib/notificationCategories";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER, TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ListSkeleton } from "@/components/app/page-skeleton-templates";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
@@ -303,10 +300,6 @@ const NOTIFICATION_AVATAR_SHELL_CLASS = "relative mt-0.5 flex h-12 w-12 shrink-0
 
 export default function NotificationsPage() {
   const { userId, accessRole, jobRole } = useAuth();
-  const visibleCategories = useMemo(
-    () => visibleNotificationCategories({ accessRole, jobRole }),
-    [accessRole, jobRole]
-  );
   const push = usePushNotifications(userId);
   const location = useLocation();
   const navigate = useNavigate();
@@ -327,9 +320,7 @@ export default function NotificationsPage() {
   const [partyAvatars, setPartyAvatars] = useState<NotificationPartyAvatar[]>([]);
   const [quoteAvatars, setQuoteAvatars] = useState<NotificationQuoteAvatar[]>([]);
   const [designTaskAvatars, setDesignTaskAvatars] = useState<NotificationDesignTaskAvatar[]>([]);
-  const [channelPrefs, setChannelPrefs] = useState<Record<string, Record<string, boolean>>>({});
   const [telegramLinked, setTelegramLinked] = useState(false);
-  const [channelPrefsBusy, setChannelPrefsBusy] = useState(false);
 
   useEffect(() => {
     if (hasCache && loading) {
@@ -343,43 +334,17 @@ export default function NotificationsPage() {
     (async () => {
       const { data } = await db
         .from("user_notification_settings" as never)
-        .select("telegram_chat_id,channel_prefs")
+        .select("telegram_chat_id")
         .eq("user_id", userId)
         .maybeSingle();
       if (!active) return;
-      const row = data as unknown as {
-        channel_prefs?: Record<string, Record<string, boolean>> | null;
-        telegram_chat_id?: string | null;
-      } | null;
-      setChannelPrefs((row?.channel_prefs as Record<string, Record<string, boolean>> | null) ?? {});
+      const row = data as unknown as { telegram_chat_id?: string | null } | null;
       setTelegramLinked(row?.telegram_chat_id != null);
     })();
     return () => {
       active = false;
     };
   }, [settingsOpen, userId]);
-
-  const isCategoryChannelOn = (categoryKey: string, channel: NotificationChannel) =>
-    channelPrefs[categoryKey]?.[channel] !== false;
-
-  const toggleCategoryChannel = async (categoryKey: string, channel: NotificationChannel) => {
-    if (!userId || channelPrefsBusy) return;
-    const next = !isCategoryChannelOn(categoryKey, channel);
-    const nextPrefs: Record<string, Record<string, boolean>> = {
-      ...channelPrefs,
-      [categoryKey]: { ...(channelPrefs[categoryKey] ?? {}), [channel]: next },
-    };
-    setChannelPrefs(nextPrefs);
-    setChannelPrefsBusy(true);
-    const { error } = await db
-      .from("user_notification_settings" as never)
-      .upsert({ user_id: userId, channel_prefs: nextPrefs } as never, { onConflict: "user_id" });
-    setChannelPrefsBusy(false);
-    if (error) {
-      setChannelPrefs(channelPrefs);
-      toast.error("Не вдалося зберегти налаштування.");
-    }
-  };
 
   const loadNotifications = useCallback(
     async (showLoader = false) => {
@@ -1143,47 +1108,12 @@ export default function NotificationsPage() {
                   </div>
                 </div>
               </div>
-              <div className="overflow-hidden rounded-[var(--radius)] border border-border/60">
-                <div className="flex items-center justify-end gap-6 border-b border-border/60 bg-muted/30 px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <span className="w-12 text-center">Push</span>
-                  <span className="w-16 text-center">Telegram</span>
-                </div>
-                {visibleCategories.map((cat) => (
-                  <div
-                    key={cat.key}
-                    className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-2.5 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-foreground">{cat.label}</div>
-                      <div className="truncate text-xs text-muted-foreground">{cat.description}</div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-6">
-                      <div className="flex w-12 justify-center">
-                        {cat.telegramOnly ? (
-                          <span className="text-xs text-muted-foreground" title="Цей тип шлеться лише в Telegram">
-                            —
-                          </span>
-                        ) : (
-                          <Switch
-                            checked={isCategoryChannelOn(cat.key, "push")}
-                            disabled={channelPrefsBusy}
-                            onCheckedChange={() => toggleCategoryChannel(cat.key, "push")}
-                            label={`Push: ${cat.label}`}
-                          />
-                        )}
-                      </div>
-                      <div className="flex w-16 justify-center">
-                        <Switch
-                          checked={isCategoryChannelOn(cat.key, "telegram")}
-                          disabled={channelPrefsBusy || !telegramLinked}
-                          onCheckedChange={() => toggleCategoryChannel(cat.key, "telegram")}
-                          label={`Telegram: ${cat.label}`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <NotificationChannelMatrix
+                userId={userId}
+                accessRole={accessRole}
+                jobRole={jobRole}
+                telegramLinked={telegramLinked}
+              />
             </section>
           </div>
 
