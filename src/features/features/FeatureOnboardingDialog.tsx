@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, Loader2, Mic, RefreshCw, Send } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Check, Loader2, MessageCircleQuestion, Mic, RefreshCw, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -15,6 +15,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { useDictation } from "@/lib/useDictation";
 import { FeaturePreview } from "@/features/features/FeaturePreview";
+import { ASSISTANT_TOPICS, BOT_COMMANDS } from "@/features/features/featureDemoContent";
+import { visibleNotificationCategories } from "@/lib/notificationCategories";
+import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
+import { CommandPalette } from "@/components/app/CommandPalette";
 import { FEATURE_DEFINITIONS, type FeatureDefinition, type FeatureKey } from "@/lib/featureCatalog";
 
 /**
@@ -169,18 +173,158 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
 }
 
 /**
- * Живе демо є не в кожної можливості — і це навмисно. Там, де фічу неможливо
- * чесно відтворити у вікні (вона живе в іншому місці CRM або взагалі в
- * Telegram), показуємо статичне прев'ю з каталогу замість імітації, яка
- * вдавала б робочу.
+ * Демо є майже в кожної можливості, і всюди, де це можливо, воно працює на
+ * СПРАВЖНІХ компонентах CRM — а не на намальованій імітації:
+ *   • адреси — той самий `AddressAutocomplete`, що в картці замовника,
+ *     із живими запитами до довідника Нової Пошти;
+ *   • ⌘K — та сама `CommandPalette`, що й глобальна;
+ *   • підтримка — справжня консоль помічника через URL-намір `?tosho_ai=open`.
+ *
+ * Виняток — Telegram: він живе поза браузером, тож там показуємо не імітацію
+ * чату, а справжній перелік того, що бот уміє (див. featureDemoContent.ts).
  */
-const LIVE_DEMO_KEYS: FeatureKey[] = ["telegram_bot", "voice_dictation", "task_chat"];
+const LIVE_DEMO_KEYS: FeatureKey[] = [
+  "telegram_bot",
+  "voice_dictation",
+  "task_chat",
+  "support_ai",
+  "command_palette",
+  "nova_poshta_address",
+  "telegram_assistant",
+];
 
 function FeatureDemo({ featureKey }: { featureKey: FeatureKey }) {
   if (featureKey === "telegram_bot") return <TelegramDemo />;
   if (featureKey === "voice_dictation") return <DictationDemo />;
   if (featureKey === "task_chat") return <TaskChatDemo />;
+  if (featureKey === "support_ai") return <SupportDemo />;
+  if (featureKey === "command_palette") return <PaletteDemo />;
+  if (featureKey === "nova_poshta_address") return <AddressDemo />;
+  if (featureKey === "telegram_assistant") return <AssistantDemo />;
   return null;
+}
+
+/* ── Підтримка: відкриваємо СПРАВЖНЮ консоль помічника ─────────── */
+
+function SupportDemo() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  return (
+    <div className="grid gap-2.5 p-3.5">
+      <p className="text-xs leading-5 text-muted-foreground">
+        Помічник бачить сторінку, з якої ти його відкрив, тож питання можна ставити
+        своїми словами — «чому не зберігається», «де знайти».
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => {
+          // Той самий URL-намір, яким консоль відкривається звідусіль у CRM.
+          const params = new URLSearchParams(location.search);
+          params.set("tosho_ai", "open");
+          navigate(`${location.pathname}?${params.toString()}`);
+        }}
+      >
+        <MessageCircleQuestion className="h-3.5 w-3.5" />
+        Відкрити помічника
+      </Button>
+      <p className="text-3xs leading-4 text-muted-foreground">
+        Якщо відповіді забракне — заявка піде далі, і рішення прийде сповіщенням.
+      </p>
+    </div>
+  );
+}
+
+/* ── ⌘K: відкриваємо ту саму глобальну палітру ─────────────────── */
+
+function PaletteDemo() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="grid gap-2.5 p-3.5">
+      <p className="text-xs leading-5 text-muted-foreground">
+        Це та сама палітра, що й по ⌘K будь-де в CRM. Спробуй набрати назву замовника
+        або номер прорахунку.
+      </p>
+      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <Search className="h-3.5 w-3.5" />
+        Відкрити пошук
+        <kbd className="ml-1 rounded border border-border px-1 font-mono text-3xs">⌘K</kbd>
+      </Button>
+      <CommandPalette open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
+/* ── Адреси: справжній автокомпліт Нової Пошти ─────────────────── */
+
+function AddressDemo() {
+  const [value, setValue] = useState("");
+
+  return (
+    <div className="grid gap-2.5 p-3.5">
+      <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Точка доставки
+      </p>
+      {/* Той самий компонент, що в картці замовника: запити йдуть у справжній
+          довідник перевізника. Читання, тож нічого не змінює. */}
+      <AddressAutocomplete
+        value={value}
+        onChange={setValue}
+        placeholder="Почни вводити місто…"
+        className="text-xs"
+      />
+      <p className="text-3xs leading-4 text-muted-foreground">
+        Підказки живі — це справжній довідник Нової Пошти. Спробуй «Киї» або «Львів».
+      </p>
+    </div>
+  );
+}
+
+/* ── Помічник у Telegram: справжній перелік можливостей ────────── */
+
+function AssistantDemo() {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = async (question: string) => {
+    try {
+      await navigator.clipboard.writeText(question);
+      setCopied(question);
+      setTimeout(() => setCopied(null), 1600);
+    } catch {
+      toast.message("Не вдалося скопіювати — виділи текст вручну.");
+    }
+  };
+
+  return (
+    <div className="grid gap-2 p-3.5">
+      <p className="text-3xs leading-4 text-muted-foreground">
+        Питання, які бот розуміє. Тисни, щоб скопіювати й вставити в чат.
+      </p>
+      <div className="grid max-h-[260px] gap-2.5 overflow-y-auto pr-1">
+        {ASSISTANT_TOPICS.map((topic) => (
+          <div key={topic.title} className="grid gap-1">
+            <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {topic.title}
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {topic.questions.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() => void copy(question)}
+                  className="cursor-pointer rounded-full border border-border bg-card px-2 py-0.5 text-3xs transition-colors hover:border-foreground/25"
+                >
+                  {copied === question ? "скопійовано" : question}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* ── Telegram: справжнє підключення просто звідси ──────────────── */
@@ -270,10 +414,13 @@ function TelegramDemo() {
             </p>
           </div>
         </div>
+
+        <BotCapabilities />
+
         <button
           type="button"
           onClick={() => setRelinking(true)}
-          className="inline-flex items-center gap-1.5 justify-self-start text-2xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex cursor-pointer items-center gap-1.5 justify-self-start text-2xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <RefreshCw className="h-3 w-3" />
           Підключити заново
@@ -304,11 +451,62 @@ function TelegramDemo() {
             setRelinking(false);
             setAwaitingStart(false);
           }}
-          className="justify-self-start text-2xs text-muted-foreground transition-colors hover:text-foreground"
+          className="cursor-pointer justify-self-start text-2xs text-muted-foreground transition-colors hover:text-foreground"
         >
           Скасувати
         </button>
-      ) : null}
+      ) : (
+        <BotCapabilities />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Що саме бот уміє — з реальних реєстрів, а не з опису «по памʼяті»:
+ * категорії беремо з notificationCategories.ts (звужені під роль так само,
+ * як у налаштуваннях), команди — з featureDemoContent.ts.
+ */
+function BotCapabilities() {
+  const { accessRole, jobRole } = useAuth();
+
+  const categories = useMemo(
+    () => visibleNotificationCategories({ accessRole, jobRole }),
+    [accessRole, jobRole]
+  );
+
+  return (
+    <div className="grid gap-2 border-t border-border pt-2.5">
+      <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Про що напише ({categories.length})
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {categories.map((category) => (
+          <span
+            key={category.key}
+            title={category.description}
+            className="rounded-full border border-border bg-card px-2 py-0.5 text-3xs text-muted-foreground"
+          >
+            {category.label}
+          </span>
+        ))}
+      </div>
+
+      <p className="mt-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Команди в чаті
+      </p>
+      <dl className="grid gap-0.5">
+        {BOT_COMMANDS.map((item) => (
+          <div key={item.command} className="flex gap-1.5 text-3xs leading-4">
+            <dt className="shrink-0 font-mono font-semibold text-primary">{item.command}</dt>
+            <dd className="min-w-0 text-muted-foreground">— {item.what}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="text-3xs leading-4 text-muted-foreground">
+        Нічні сповіщення притримуються: бот пише лише з 9:00 до 21:00.
+      </p>
     </div>
   );
 }
