@@ -247,7 +247,7 @@ export default function FeaturesPage() {
                   <button
                     type="button"
                     onClick={() => setOpenKey(def.key)}
-                    className="group/row my-1 grid w-full grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-xl px-3 py-3.5 text-left transition-colors hover:bg-secondary xl:grid-cols-[2.25rem_minmax(0,1fr)_260px] xl:items-center"
+                    className="group/row my-1 grid w-full cursor-pointer grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-xl px-3 py-3.5 text-left transition-colors hover:bg-secondary xl:grid-cols-[2.25rem_minmax(0,1fr)_260px] xl:items-center"
                   >
                     <span className="pt-0.5 font-mono text-lg font-light tabular-nums text-muted-foreground transition-colors group-hover/row:text-foreground">
                       {String(index + 1).padStart(2, "0")}

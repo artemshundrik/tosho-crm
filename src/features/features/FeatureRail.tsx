@@ -66,7 +66,7 @@ export function FeatureRail({ groups, activeCategory, onPick, triedCount, totalC
             onClick={() => onPick(group.category)}
             aria-current={active ? "true" : undefined}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
+              "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
               active
                 ? "bg-secondary font-medium text-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"

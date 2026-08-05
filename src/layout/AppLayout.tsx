@@ -1735,19 +1735,22 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 collapsed={sidebarCollapsed}
               />
             </div>
-
-            {/* Плашка «Можливості» — у кінці зони прокрутки, а не прибита до
-                низу. Тоді вона не забирає фіксовану висоту в тих, у кого меню
-                й так довге (власник, SEO), а в решти лишається на очах. */}
-            <div className={cn(sidebarCollapsed ? "pt-1.5" : "px-1 pt-1")}>
-              <SidebarFeaturePlate collapsed={sidebarCollapsed} />
-            </div>
           </div>
           )}
         </nav>
 
-        {/* Footer / Profile */}
-<div className={cn("border-t border-border/40", sidebarCollapsed ? "p-2" : "p-4")}>
+        {/* Footer / Profile
+            Плашка «Можливості» прибита сюди, до блоку акаунта: у хвості
+            навігації вона зависала посеред порожнечі. Flex із gap, а не
+            margin, — коли плашці нема чого сказати, вона рендерить null і
+            відступ зникає разом із нею. */}
+<div
+  className={cn(
+    "flex flex-col border-t border-border/40",
+    sidebarCollapsed ? "gap-2 p-2" : "gap-2.5 p-4"
+  )}
+>
+  <SidebarFeaturePlate collapsed={sidebarCollapsed} />
   <UserMenu compact={sidebarCollapsed} />
 </div>
       </aside>

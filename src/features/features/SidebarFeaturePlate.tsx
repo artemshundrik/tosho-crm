@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { defaultModuleAccess } from "@/lib/moduleAccess";
@@ -80,7 +81,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
         onClick={() => navigate("/features")}
         aria-label="Можливості CRM"
         title="Можливості CRM"
-        className="mx-auto grid h-9 w-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        className="mx-auto grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
       >
         <span className="h-2 w-2 rounded-full bg-[hsl(var(--success-solid))]" />
       </button>
@@ -92,7 +93,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
       <button
         type="button"
         onClick={() => navigate(`/features?open=${mode.feature.key}`)}
-        className="group/plate grid w-full overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/40"
+        className="group/plate grid w-full cursor-pointer overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/40"
       >
         <span className="relative grid h-14 place-items-center border-b border-border bg-muted/60">
           <span
@@ -124,7 +125,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
     <button
       type="button"
       onClick={() => navigate("/features")}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left transition-colors hover:border-primary/40"
+      className="group/plate flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left transition-colors hover:border-primary/40 hover:bg-secondary/50"
     >
       <span
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
@@ -136,12 +137,13 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
           {mode.tried}/{mode.total}
         </span>
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block text-xs font-semibold">Можливості</span>
         <span className="block truncate text-3xs leading-4 text-muted-foreground">
           {left === 0 ? "усе спробовано" : `${left} ще не пробував`}
         </span>
       </span>
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover/plate:translate-x-0.5" />
     </button>
   );
 }
