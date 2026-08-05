@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   CalendarDays,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Mic,
   RefreshCw,
@@ -25,8 +23,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
 import { useDictation } from "@/lib/useDictation";
 import { FeaturePreview } from "@/features/features/FeaturePreview";
-import { ASSISTANT_TOPICS, BOT_COMMANDS } from "@/features/features/featureDemoContent";
-import { visibleNotificationCategories } from "@/lib/notificationCategories";
+import { BOT_CHAT_PROMPTS, BOT_CHAT_SEED } from "@/features/features/featureDemoContent";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { CommandPalette } from "@/components/app/CommandPalette";
 import { AbsenceDialog } from "@/components/team/AbsenceDialog";
@@ -403,7 +400,7 @@ function TelegramDemo() {
           </div>
         </div>
 
-        <BotCapabilities />
+        <BotChatDemo />
 
         <button
           type="button"
@@ -444,133 +441,135 @@ function TelegramDemo() {
           Скасувати
         </button>
       ) : (
-        <BotCapabilities />
+        <BotChatDemo />
       )}
     </div>
   );
 }
 
 /**
- * Що бот уміє — сторінками, а не одним звалищем. Джерела справжні:
- * категорії з notificationCategories.ts (звужені під роль так само, як у
- * налаштуваннях), команди й питання помічника — з featureDemoContent.ts,
- * який дзеркалить HELP_* у netlify/functions/_designAssistant.ts.
+ * Демо-чат із ботом (варіант «А», обраний CEO 2026-08-05).
+ *
+ * ЧОМУ ЧАТ, А НЕ СПИСОК: попередня версія була пейджером на девʼять сторінок,
+ * де вперемішку лежали категорії сповіщень, команди й питання — три різні за
+ * природою речі в одній стрічці. Бот живе в чаті, тож рідна метафора — чат:
+ * зверху видно, ЩО він присилає, знизу можна спитати й одразу побачити, ЯК
+ * він відповідає.
+ *
+ * Відповіді заготовлені (Telegram у браузер не вмонтуєш) — і про це прямо
+ * написано під чатом, щоб ніхто не думав, що це живий бот.
  */
-function BotCapabilities() {
-  const { accessRole, jobRole } = useAuth();
-  const [page, setPage] = useState(0);
-  const [copied, setCopied] = useState<string | null>(null);
+function BotChatDemo() {
+  const [messages, setMessages] = useState<Array<{ id: number; own: boolean; text: string }>>([]);
+  const [typing, setTyping] = useState(false);
+  const [asked, setAsked] = useState<string[]>([]);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
-  const categories = useMemo(
-    () => visibleNotificationCategories({ accessRole, jobRole }),
-    [accessRole, jobRole]
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    },
+    []
   );
 
-  const copy = async (question: string) => {
-    try {
-      await navigator.clipboard.writeText(question);
-      setCopied(question);
-      setTimeout(() => setCopied(null), 1600);
-    } catch {
-      toast.message("Не вдалося скопіювати — виділи текст вручну.");
-    }
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [messages, typing]);
+
+  const ask = (prompt: (typeof BOT_CHAT_PROMPTS)[number]) => {
+    setMessages((prev) => [...prev, { id: prev.length + 1, own: true, text: prompt.ask }]);
+    setAsked((prev) => (prev.includes(prompt.ask) ? prev : [...prev, prompt.ask]));
+    setTyping(true);
+    const timer = setTimeout(() => {
+      setTyping(false);
+      setMessages((prev) => [...prev, { id: prev.length + 1, own: false, text: prompt.reply }]);
+    }, 850);
+    timers.current.push(timer);
   };
-
-  const pages = useMemo(
-    () => [
-      {
-        title: `Про що напише · ${categories.length}`,
-        body: (
-          <div className="flex flex-wrap gap-1">
-            {categories.map((category) => (
-              <span
-                key={category.key}
-                title={category.description}
-                className="rounded-full border border-border bg-card px-2 py-0.5 text-3xs text-muted-foreground"
-              >
-                {category.label}
-              </span>
-            ))}
-          </div>
-        ),
-      },
-      {
-        title: "Команди в чаті",
-        body: (
-          <dl className="grid gap-1">
-            {BOT_COMMANDS.map((item) => (
-              <div key={item.command} className="flex gap-1.5 text-3xs leading-4">
-                <dt className="shrink-0 font-mono font-semibold text-primary">{item.command}</dt>
-                <dd className="min-w-0 text-muted-foreground">— {item.what}</dd>
-              </div>
-            ))}
-          </dl>
-        ),
-      },
-      ...ASSISTANT_TOPICS.map((topic) => ({
-        title: `Спитай про: ${topic.title}`,
-        body: (
-          <div className="flex flex-wrap gap-1">
-            {topic.questions.map((question) => (
-              <button
-                key={question}
-                type="button"
-                onClick={() => void copy(question)}
-                title="Скопіювати"
-                className="cursor-pointer rounded-full border border-border bg-card px-2 py-0.5 text-3xs transition-colors hover:border-foreground/25"
-              >
-                {copied === question ? "скопійовано" : question}
-              </button>
-            ))}
-          </div>
-        ),
-      })),
-    ],
-    [categories, copied]
-  );
-
-  const index = Math.min(page, pages.length - 1);
-  const current = pages[index];
 
   return (
     <div className="grid gap-2 border-t border-border pt-2.5">
-      <div className="flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {current.title}
-        </p>
-        <span className="font-mono text-3xs tabular-nums text-muted-foreground">
-          {index + 1}/{pages.length}
-        </span>
-        <div className="flex gap-0.5">
-          <button
-            type="button"
-            aria-label="Назад"
-            disabled={index === 0}
-            onClick={() => setPage(Math.max(0, index - 1))}
-            className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-default disabled:opacity-35"
+      <div ref={feedRef} className="grid max-h-[196px] gap-1.5 overflow-y-auto pr-1">
+        {/* Те, що бот присилає сам. */}
+        {BOT_CHAT_SEED.map((item) => (
+          <div key={item.title} className="flex items-end gap-1.5">
+            <BotAvatar />
+            <p className="max-w-[82%] rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs leading-5">
+              <b className="font-semibold">{item.title}</b>
+              <span className="mt-0.5 block text-3xs leading-4 text-muted-foreground">
+                {item.detail}
+              </span>
+            </p>
+          </div>
+        ))}
+
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn("flex items-end gap-1.5", message.own && "flex-row-reverse")}
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Далі"
-            disabled={index >= pages.length - 1}
-            onClick={() => setPage(Math.min(pages.length - 1, index + 1))}
-            className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-default disabled:opacity-35"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
+            {message.own ? null : <BotAvatar />}
+            <p
+              className={cn(
+                "max-w-[82%] rounded-2xl px-2.5 py-1.5 text-xs leading-5",
+                message.own
+                  ? "thread-bubble-own rounded-br-sm bg-primary text-primary-foreground"
+                  : "rounded-bl-sm bg-muted"
+              )}
+            >
+              {message.text}
+            </p>
+          </div>
+        ))}
+
+        {typing ? (
+          <div className="flex items-end gap-1.5">
+            <BotAvatar />
+            <p className="rounded-2xl rounded-bl-sm bg-muted px-2.5 py-1.5 text-xs italic text-muted-foreground">
+              друкує…
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="min-h-[86px]">{current.body}</div>
+      {/* Питання — саме ті формулювання, які бот справді розуміє. */}
+      <div className="flex gap-1.5 overflow-x-auto border-t border-border pt-2">
+        {BOT_CHAT_PROMPTS.map((prompt) => (
+          <button
+            key={prompt.ask}
+            type="button"
+            onClick={() => ask(prompt)}
+            className={cn(
+              "shrink-0 cursor-pointer rounded-full border px-2.5 py-1 text-3xs font-medium transition-colors",
+              asked.includes(prompt.ask)
+                ? "border-border bg-card text-muted-foreground"
+                : "border-primary/35 bg-primary/[0.07] text-primary hover:bg-primary/15"
+            )}
+          >
+            {prompt.ask}
+          </button>
+        ))}
+      </div>
 
       <p className="text-3xs leading-4 text-muted-foreground">
-        Нічні сповіщення притримуються: бот пише лише з 9:00 до 21:00.
+        Тисни питання — бот відповість тут же. Це демо із заготовленими відповідями; у чаті
+        він рахує по справжніх даних. Вночі мовчить: пише лише з 9:00 до 21:00.
       </p>
     </div>
   );
 }
+
+function BotAvatar() {
+  return (
+    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-3xs font-bold text-secondary-foreground">
+      Т
+    </span>
+  );
+}
+
 
 /* ── Диктування: справжній запис, вигляд — як у композері чату ──── */
 
