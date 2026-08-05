@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Check, Loader2, MessageCircleQuestion, Mic, RefreshCw, Search, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Mic,
+  RefreshCw,
+  Search,
+  Send,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -19,6 +29,8 @@ import { ASSISTANT_TOPICS, BOT_COMMANDS } from "@/features/features/featureDemoC
 import { visibleNotificationCategories } from "@/lib/notificationCategories";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
 import { CommandPalette } from "@/components/app/CommandPalette";
+import { AbsenceDialog } from "@/components/team/AbsenceDialog";
+import type { TeamAbsenceKind } from "@/lib/teamAbsences";
 import { FEATURE_DEFINITIONS, type FeatureDefinition, type FeatureKey } from "@/lib/featureCatalog";
 
 /**
@@ -43,12 +55,10 @@ const WINDOW_LABEL: Record<FeatureKey, string> = {
   telegram_bot: "профіль · сповіщення",
   voice_dictation: "дизайн-задача",
   task_chat: "обговорення",
-  support_ai: "помічник",
   absence_request: "команда · відсутності",
   command_palette: "швидкий перехід",
   nova_poshta_address: "картка замовника",
   dropbox_folders: "замовники · файли",
-  telegram_assistant: "telegram",
 };
 
 /** Смужки еквалайзера — копія з ThreadComposer, щоб запис виглядав однаково. */
@@ -187,51 +197,69 @@ const LIVE_DEMO_KEYS: FeatureKey[] = [
   "telegram_bot",
   "voice_dictation",
   "task_chat",
-  "support_ai",
+  "absence_request",
   "command_palette",
   "nova_poshta_address",
-  "telegram_assistant",
 ];
 
 function FeatureDemo({ featureKey }: { featureKey: FeatureKey }) {
   if (featureKey === "telegram_bot") return <TelegramDemo />;
   if (featureKey === "voice_dictation") return <DictationDemo />;
   if (featureKey === "task_chat") return <TaskChatDemo />;
-  if (featureKey === "support_ai") return <SupportDemo />;
+  if (featureKey === "absence_request") return <AbsenceDemo />;
   if (featureKey === "command_palette") return <PaletteDemo />;
   if (featureKey === "nova_poshta_address") return <AddressDemo />;
-  if (featureKey === "telegram_assistant") return <AssistantDemo />;
   return null;
 }
 
-/* ── Підтримка: відкриваємо СПРАВЖНЮ консоль помічника ─────────── */
+/* ── Відсутність: відкриваємо СПРАВЖНІЙ AbsenceDialog ──────────── */
 
-function SupportDemo() {
-  const navigate = useNavigate();
-  const location = useLocation();
+function AbsenceDemo() {
+  const { viewUserId } = useAuth();
+  const [open, setOpen] = useState(false);
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // Форма справжня, з реальним підрахунком днів і свят. Не справжнє тут лише
+  // збереження: показуємо форму, а не створюємо заявку з каталогу.
+  const initial = useMemo(
+    () => ({
+      userId: viewUserId ?? "",
+      startDate: today,
+      endDate: today,
+      kind: "vacation" as TeamAbsenceKind,
+      comment: "",
+    }),
+    [viewUserId, today]
+  );
 
   return (
     <div className="grid gap-2.5 p-3.5">
       <p className="text-xs leading-5 text-muted-foreground">
-        Помічник бачить сторінку, з якої ти його відкрив, тож питання можна ставити
-        своїми словами — «чому не зберігається», «де знайти».
+        Це та сама форма, що на сторінці «Команда»: типи, підрахунок днів і свят — справжні.
       </p>
-      <Button
-        type="button"
-        size="sm"
-        onClick={() => {
-          // Той самий URL-намір, яким консоль відкривається звідусіль у CRM.
-          const params = new URLSearchParams(location.search);
-          params.set("tosho_ai", "open");
-          navigate(`${location.pathname}?${params.toString()}`);
-        }}
-      >
-        <MessageCircleQuestion className="h-3.5 w-3.5" />
-        Відкрити помічника
+      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <CalendarDays className="h-3.5 w-3.5" />
+        Показати форму
       </Button>
       <p className="text-3xs leading-4 text-muted-foreground">
-        Якщо відповіді забракне — заявка піде далі, і рішення прийде сповіщенням.
+        Це попередній перегляд — заявка звідси не створюється.
       </p>
+
+      <AbsenceDialog
+        open={open}
+        onOpenChange={setOpen}
+        initial={initial}
+        people={[]}
+        canPickPerson={false}
+        balanceOf={() => null}
+        mode="request"
+        todayKey={today}
+        onSubmit={() => {
+          setOpen(false);
+          toast.message("Це попередній перегляд — подати заявку можна на сторінці «Команда».");
+        }}
+      />
     </div>
   );
 }
@@ -272,57 +300,14 @@ function AddressDemo() {
       <AddressAutocomplete
         value={value}
         onChange={setValue}
-        placeholder="Почни вводити місто…"
+        placeholder="Спочатку місто: «Киї»…"
         className="text-xs"
       />
       <p className="text-3xs leading-4 text-muted-foreground">
-        Підказки живі — це справжній довідник Нової Пошти. Спробуй «Киї» або «Львів».
+        Підказки живі — це довідник Нової Пошти, а в ньому вся Україна, не лише їхні
+        відділення. <b>Спершу обери місто</b>: доки міста немає, вулиці не шукаються — саме
+        тому «салютна» нічого не знаходила.
       </p>
-    </div>
-  );
-}
-
-/* ── Помічник у Telegram: справжній перелік можливостей ────────── */
-
-function AssistantDemo() {
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const copy = async (question: string) => {
-    try {
-      await navigator.clipboard.writeText(question);
-      setCopied(question);
-      setTimeout(() => setCopied(null), 1600);
-    } catch {
-      toast.message("Не вдалося скопіювати — виділи текст вручну.");
-    }
-  };
-
-  return (
-    <div className="grid gap-2 p-3.5">
-      <p className="text-3xs leading-4 text-muted-foreground">
-        Питання, які бот розуміє. Тисни, щоб скопіювати й вставити в чат.
-      </p>
-      <div className="grid max-h-[260px] gap-2.5 overflow-y-auto pr-1">
-        {ASSISTANT_TOPICS.map((topic) => (
-          <div key={topic.title} className="grid gap-1">
-            <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {topic.title}
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {topic.questions.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  onClick={() => void copy(question)}
-                  className="cursor-pointer rounded-full border border-border bg-card px-2 py-0.5 text-3xs transition-colors hover:border-foreground/25"
-                >
-                  {copied === question ? "скопійовано" : question}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -463,46 +448,119 @@ function TelegramDemo() {
 }
 
 /**
- * Що саме бот уміє — з реальних реєстрів, а не з опису «по памʼяті»:
- * категорії беремо з notificationCategories.ts (звужені під роль так само,
- * як у налаштуваннях), команди — з featureDemoContent.ts.
+ * Що бот уміє — сторінками, а не одним звалищем. Джерела справжні:
+ * категорії з notificationCategories.ts (звужені під роль так само, як у
+ * налаштуваннях), команди й питання помічника — з featureDemoContent.ts,
+ * який дзеркалить HELP_* у netlify/functions/_designAssistant.ts.
  */
 function BotCapabilities() {
   const { accessRole, jobRole } = useAuth();
+  const [page, setPage] = useState(0);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const categories = useMemo(
     () => visibleNotificationCategories({ accessRole, jobRole }),
     [accessRole, jobRole]
   );
 
+  const copy = async (question: string) => {
+    try {
+      await navigator.clipboard.writeText(question);
+      setCopied(question);
+      setTimeout(() => setCopied(null), 1600);
+    } catch {
+      toast.message("Не вдалося скопіювати — виділи текст вручну.");
+    }
+  };
+
+  const pages = useMemo(
+    () => [
+      {
+        title: `Про що напише · ${categories.length}`,
+        body: (
+          <div className="flex flex-wrap gap-1">
+            {categories.map((category) => (
+              <span
+                key={category.key}
+                title={category.description}
+                className="rounded-full border border-border bg-card px-2 py-0.5 text-3xs text-muted-foreground"
+              >
+                {category.label}
+              </span>
+            ))}
+          </div>
+        ),
+      },
+      {
+        title: "Команди в чаті",
+        body: (
+          <dl className="grid gap-1">
+            {BOT_COMMANDS.map((item) => (
+              <div key={item.command} className="flex gap-1.5 text-3xs leading-4">
+                <dt className="shrink-0 font-mono font-semibold text-primary">{item.command}</dt>
+                <dd className="min-w-0 text-muted-foreground">— {item.what}</dd>
+              </div>
+            ))}
+          </dl>
+        ),
+      },
+      ...ASSISTANT_TOPICS.map((topic) => ({
+        title: `Спитай про: ${topic.title}`,
+        body: (
+          <div className="flex flex-wrap gap-1">
+            {topic.questions.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => void copy(question)}
+                title="Скопіювати"
+                className="cursor-pointer rounded-full border border-border bg-card px-2 py-0.5 text-3xs transition-colors hover:border-foreground/25"
+              >
+                {copied === question ? "скопійовано" : question}
+              </button>
+            ))}
+          </div>
+        ),
+      })),
+    ],
+    [categories, copied]
+  );
+
+  const index = Math.min(page, pages.length - 1);
+  const current = pages[index];
+
   return (
     <div className="grid gap-2 border-t border-border pt-2.5">
-      <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Про що напише ({categories.length})
-      </p>
-      <div className="flex flex-wrap gap-1">
-        {categories.map((category) => (
-          <span
-            key={category.key}
-            title={category.description}
-            className="rounded-full border border-border bg-card px-2 py-0.5 text-3xs text-muted-foreground"
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {current.title}
+        </p>
+        <span className="font-mono text-3xs tabular-nums text-muted-foreground">
+          {index + 1}/{pages.length}
+        </span>
+        <div className="flex gap-0.5">
+          <button
+            type="button"
+            aria-label="Назад"
+            disabled={index === 0}
+            onClick={() => setPage(Math.max(0, index - 1))}
+            className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-default disabled:opacity-35"
           >
-            {category.label}
-          </span>
-        ))}
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Далі"
+            disabled={index >= pages.length - 1}
+            onClick={() => setPage(Math.min(pages.length - 1, index + 1))}
+            className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-default disabled:opacity-35"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
-      <p className="mt-1 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Команди в чаті
-      </p>
-      <dl className="grid gap-0.5">
-        {BOT_COMMANDS.map((item) => (
-          <div key={item.command} className="flex gap-1.5 text-3xs leading-4">
-            <dt className="shrink-0 font-mono font-semibold text-primary">{item.command}</dt>
-            <dd className="min-w-0 text-muted-foreground">— {item.what}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="min-h-[86px]">{current.body}</div>
 
       <p className="text-3xs leading-4 text-muted-foreground">
         Нічні сповіщення притримуються: бот пише лише з 9:00 до 21:00.

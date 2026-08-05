@@ -97,12 +97,6 @@ begin
     group by created_by
 
     union all
-    select 'support_ai', created_by, count(*)::int, min(created_at), max(created_at)
-    from tosho.support_requests
-    where created_by is not null
-    group by created_by
-
-    union all
     select 'absence_request', requested_by, count(*)::int, min(created_at), max(created_at)
     from tosho.team_absences
     where requested_by is not null

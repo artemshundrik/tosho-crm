@@ -16,12 +16,10 @@ const WINDOW_LABEL: Record<FeatureKey, string> = {
   telegram_bot: "профіль · сповіщення",
   voice_dictation: "дизайн-задача",
   task_chat: "обговорення",
-  support_ai: "помічник",
   absence_request: "команда · відсутності",
   command_palette: "швидкий перехід",
   nova_poshta_address: "картка замовника",
   dropbox_folders: "замовники · файли",
-  telegram_assistant: "telegram",
 };
 
 /** Смужки еквалайзера — ті самі, що в композері чату. */
@@ -49,8 +47,7 @@ export function FeaturePreview({ featureKey }: { featureKey: FeatureKey }) {
       <div className="p-2.5" aria-hidden="true">
         {featureKey === "telegram_bot" ? <TelegramShot /> : null}
         {featureKey === "voice_dictation" ? <DictationShot /> : null}
-        {featureKey === "task_chat" || featureKey === "telegram_assistant" ? <ChatShot /> : null}
-        {featureKey === "support_ai" ? <SupportShot /> : null}
+        {featureKey === "task_chat" ? <ChatShot /> : null}
         {featureKey === "absence_request" ? <AbsenceShot /> : null}
         {featureKey === "command_palette" ? <PaletteShot /> : null}
         {featureKey === "nova_poshta_address" ? <AddressShot /> : null}
@@ -100,19 +97,6 @@ function DictationShot() {
         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
           <Check className="h-3 w-3" />
         </span>
-      </div>
-    </div>
-  );
-}
-
-function SupportShot() {
-  return (
-    <div className="grid gap-1.5">
-      <div className="ml-auto max-w-[86%] rounded-2xl rounded-br-sm bg-primary px-2 py-1.5 text-3xs leading-4 text-primary-foreground">
-        Чому не зберігається коментар?
-      </div>
-      <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-muted px-2 py-1.5 text-3xs leading-4">
-        Схоже на відомий збій. Передаю Артему — відповідь прийде сповіщенням.
       </div>
     </div>
   );
