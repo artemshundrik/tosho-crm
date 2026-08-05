@@ -7,6 +7,7 @@ import {
   Camera,
   Loader2,
   Mail,
+  MonitorSmartphone,
   Pencil,
   Phone,
   Plus,
@@ -30,6 +31,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
@@ -159,6 +170,47 @@ const formatAbsenceRange = (absence: { startDate: string; endDate: string }) =>
 const formatReminderTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
 
+const formatSignInMoment = (iso: string | null | undefined) => {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+/**
+ * Опис ЦЬОГО браузера — єдине, що клієнт чесно знає про сесії.
+ *
+ * Supabase не віддає фронту список чужих сесій (лише свій токен), тож
+ * будь-який «список пристроїв» тут був би вигадкою. Показуємо рівно одну
+ * поточну сесію, а решту прибираємо кнопкою.
+ */
+const describeCurrentDevice = (): string => {
+  if (typeof navigator === "undefined") return "Цей браузер";
+  const ua = navigator.userAgent;
+  const browser =
+    /Edg\//.test(ua) ? "Edge"
+    : /OPR\/|Opera/.test(ua) ? "Opera"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari"
+    : null;
+  const os =
+    /iPhone|iPad|iPod/.test(ua) ? "iOS"
+    : /Android/.test(ua) ? "Android"
+    : /Mac OS X/.test(ua) ? "macOS"
+    : /Windows/.test(ua) ? "Windows"
+    : /Linux/.test(ua) ? "Linux"
+    : null;
+  if (browser && os) return `${browser} · ${os}`;
+  return browser ?? os ?? "Цей браузер";
+};
+
 const formatDeadlineShort = (iso: string) => {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
@@ -186,7 +238,7 @@ const tdb = db as unknown as SupabaseClient<Database, "tosho">;
 
 export function ProfilePage() {
   const { cached, setCache } = usePageCache<ProfileCache>("profile");
-  const { teamId } = useAuth();
+  const { teamId, session } = useAuth();
 
   // Перевіряємо наявність кешу - важливо перевіряти кожен раз
   const hasCache = Boolean(cached && cached.accessRole !== undefined);
@@ -234,6 +286,10 @@ export function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+
+  // Вихід з інших сесій
+  const [signOutOthersOpen, setSignOutOthersOpen] = useState(false);
+  const [signingOutOthers, setSigningOutOthers] = useState(false);
 
   // Вкладки: ?tab= дає диплінк на налаштування/відсутності
   const [searchParams, setSearchParams] = useSearchParams();
@@ -838,6 +894,31 @@ export function ProfilePage() {
     }
   };
 
+  /**
+   * Завершити всі сесії, КРІМ поточної.
+   *
+   * scope: "others" замість "global" навмисно: людина натискає кнопку саме в
+   * тій сесії, яку хоче лишити. Global викинув би її звідси разом з рештою —
+   * і виглядало б це як помилка, а не як захист.
+   */
+  const handleSignOutOthers = async () => {
+    setSigningOutOthers(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "others" });
+      if (error) throw error;
+      setSignOutOthersOpen(false);
+      toast.success("Інші сесії завершено", {
+        description: "На решті пристроїв доведеться увійти заново.",
+      });
+    } catch (error: unknown) {
+      toast.error("Не вдалося завершити інші сесії", {
+        description: getErrorMessage(error, "Спробуй ще раз."),
+      });
+    } finally {
+      setSigningOutOthers(false);
+    }
+  };
+
   /* -------------------- Мій зріз: відсутності -------------------- */
 
   const reloadAbsenceData = useCallback(async () => {
@@ -1195,6 +1276,9 @@ export function ProfilePage() {
       }
     }
   }
+
+  const currentDeviceLabel = describeCurrentDevice();
+  const lastSignInLabel = formatSignInMoment(session?.user?.last_sign_in_at);
 
   const todayLabel = new Date().toLocaleDateString("uk-UA", {
     weekday: "long",
@@ -1782,6 +1866,43 @@ export function ProfilePage() {
                   Змінити пароль
                 </Button>
               </div>
+
+              <div className="mt-5 border-t border-border/60 pt-5">
+                <div className="flex flex-col gap-3 rounded-[var(--radius)] border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="mt-0.5 rounded-full border border-border bg-muted/30 p-2 text-muted-foreground">
+                      <MonitorSmartphone className="h-4 w-4" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                        {currentDeviceLabel}
+                        <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-2xs font-semibold", toneBadgeClass.success)}>
+                          ця сесія
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm text-muted-foreground">
+                        {lastSignInLabel ? (
+                          <>Вхід <span className="tabular-nums">{lastSignInLabel}</span></>
+                        ) : (
+                          "Активна сесія цього браузера"
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 md:min-w-[190px]"
+                    onClick={() => setSignOutOthersOpen(true)}
+                  >
+                    Вийти на інших пристроях
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  CRM бачить лише сесію цього браузера — списку інших пристроїв немає ні в кого.
+                  Кнопка завершує решту сесій наосліп — поточна лишається активною.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1930,6 +2051,31 @@ export function ProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={signOutOthersOpen} onOpenChange={setSignOutOthersOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Вийти на інших пристроях?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Усі сесії, крім поточної, буде завершено — на телефоні й інших комп'ютерах доведеться
+              увійти заново. Ця вкладка продовжить працювати.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingOutOthers}>Скасувати</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleSignOutOthers();
+              }}
+              disabled={signingOutOthers}
+            >
+              {signingOutOthers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Завершити інші сесії
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {absenceDialogInitial ? (
         <AbsenceDialog
