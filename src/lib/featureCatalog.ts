@@ -18,9 +18,34 @@ import { hasModuleAccess, type ModuleAccess, type ModuleKey } from "./moduleAcce
 
 export type FeatureKey = "telegram_bot" | "voice_dictation" | "task_chat";
 
+/**
+ * Розділ каталогу. Рейка ліворуч і лічильники в ній рахуються з цього поля,
+ * тож новий розділ зʼявляється сам, щойно перша можливість його вкаже.
+ */
+export type FeatureCategory = "core" | "sales" | "design" | "ai" | "finance" | "team";
+
+export const FEATURE_CATEGORY_ORDER: FeatureCategory[] = [
+  "core",
+  "sales",
+  "design",
+  "ai",
+  "finance",
+  "team",
+];
+
+export const FEATURE_CATEGORY_LABEL: Record<FeatureCategory, string> = {
+  core: "Для всіх",
+  sales: "Продажі та клієнти",
+  design: "Дизайн і виробництво",
+  ai: "AI-можливості",
+  finance: "Фінанси та документи",
+  team: "Команда",
+};
+
 export type FeatureDefinition = {
   key: FeatureKey;
   label: string;
+  category: FeatureCategory;
   /** Один рядок людською мовою: що це дає, а не як влаштоване. */
   summary: string;
   /** Рівно три кроки «як зробити вперше». */
@@ -45,6 +70,7 @@ export const FEATURE_DEFINITIONS: readonly FeatureDefinition[] = [
   {
     key: "telegram_bot",
     label: "Telegram-бот",
+    category: "core",
     summary: "Дедлайни, нагадування по клієнтах і події команди приходять у звичайний чат.",
     steps: [
       "Профіль → «Сповіщення» → «Підключити Telegram»",
@@ -58,6 +84,7 @@ export const FEATURE_DEFINITIONS: readonly FeatureDefinition[] = [
   {
     key: "voice_dictation",
     label: "Диктування голосом",
+    category: "core",
     summary: "Наговори завдання — CRM розшифрує запис і сама почистить текст від зайвого.",
     steps: [
       "Постав курсор у поле «Технічне завдання»",
@@ -72,6 +99,7 @@ export const FEATURE_DEFINITIONS: readonly FeatureDefinition[] = [
   {
     key: "task_chat",
     label: "Обговорення в задачі",
+    category: "core",
     summary: "Чат біля дизайн-задачі: домовленості лишаються там, де робота, а не в особистих.",
     steps: [
       "Відкрий дизайн-задачу — чат уже в правій колонці",
@@ -118,4 +146,22 @@ export function isFeatureVisible(def: FeatureDefinition, ctx: FeatureViewerConte
 
 export function visibleFeatures(ctx: FeatureViewerContext): FeatureDefinition[] {
   return FEATURE_DEFINITIONS.filter((def) => isFeatureVisible(def, ctx));
+}
+
+export type FeatureGroup = {
+  category: FeatureCategory;
+  label: string;
+  features: FeatureDefinition[];
+};
+
+/**
+ * Групує можливості за розділами у сталому порядку. Порожні розділи
+ * відкидаємо: у рейці не має бути пунктів, які нікуди не ведуть.
+ */
+export function groupFeatures(features: FeatureDefinition[]): FeatureGroup[] {
+  return FEATURE_CATEGORY_ORDER.map((category) => ({
+    category,
+    label: FEATURE_CATEGORY_LABEL[category],
+    features: features.filter((def) => def.category === category),
+  })).filter((group) => group.features.length > 0);
 }

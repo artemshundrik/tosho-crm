@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { defaultModuleAccess } from "./moduleAccess";
 import {
+  FEATURE_CATEGORY_LABEL,
+  FEATURE_CATEGORY_ORDER,
   FEATURE_DEFINITIONS,
   FEATURE_KEYS,
   MEASURABLE_FEATURE_KEYS,
+  groupFeatures,
   isFeatureVisible,
   visibleFeatures,
   type FeatureDefinition,
@@ -37,6 +40,7 @@ const OWNER = ctx({ accessRole: "owner", jobRole: "it_specialist" });
 const GALLERY: FeatureDefinition = {
   key: "marketing_gallery" as FeatureDefinition["key"],
   label: "Галерея візуалів",
+  category: "design",
   summary: "Усі готові макети в одному місці.",
   steps: ["крок", "крок", "крок"],
   moduleKey: "marketing",
@@ -46,6 +50,7 @@ const GALLERY: FeatureDefinition = {
 const TIMER: FeatureDefinition = {
   key: "design_timer" as FeatureDefinition["key"],
   label: "Таймер роботи",
+  category: "design",
   summary: "Скільки часу пішло на візуал.",
   steps: ["крок", "крок", "крок"],
   moduleKey: "design",
@@ -71,6 +76,35 @@ describe("реєстр", () => {
     for (const key of MEASURABLE_FEATURE_KEYS) {
       expect(FEATURE_KEYS).toContain(key);
     }
+  });
+
+  it("у кожної можливості є відомий розділ", () => {
+    for (const def of FEATURE_DEFINITIONS) {
+      expect(FEATURE_CATEGORY_ORDER, def.key).toContain(def.category);
+      expect(FEATURE_CATEGORY_LABEL[def.category], def.key).toBeTruthy();
+    }
+  });
+});
+
+describe("групування для рейки", () => {
+  it("порожніх розділів у рейці немає", () => {
+    const groups = groupFeatures([...FEATURE_DEFINITIONS]);
+    for (const group of groups) {
+      expect(group.features.length, group.category).toBeGreaterThan(0);
+    }
+  });
+
+  it("жодна можливість не губиться при групуванні", () => {
+    const groups = groupFeatures([...FEATURE_DEFINITIONS]);
+    const flat = groups.flatMap((group) => group.features.map((def) => def.key));
+    expect(flat.sort()).toEqual([...FEATURE_KEYS].sort());
+  });
+
+  it("порядок розділів сталий, а не за появою в реєстрі", () => {
+    const groups = groupFeatures([...FEATURE_DEFINITIONS]);
+    const order = groups.map((group) => group.category);
+    const expected = FEATURE_CATEGORY_ORDER.filter((category) => order.includes(category));
+    expect(order).toEqual(expected);
   });
 });
 

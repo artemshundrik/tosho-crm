@@ -1,22 +1,37 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Sparkles, Star } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { defaultModuleAccess } from "@/lib/moduleAccess";
-import { visibleFeatures, type FeatureDefinition, type FeatureKey } from "@/lib/featureCatalog";
+import {
+  groupFeatures,
+  visibleFeatures,
+  type FeatureCategory,
+  type FeatureDefinition,
+  type FeatureKey,
+} from "@/lib/featureCatalog";
 import { isFreshFeature, resolveFeatureState, type FeatureState } from "@/lib/featureState";
 import { useMyFeatureAdoption } from "@/features/features/queries";
 import { FeatureOnboardingDialog } from "@/features/features/FeatureOnboardingDialog";
 import { FeaturePreview } from "@/features/features/FeaturePreview";
+import { FeatureRail } from "@/features/features/FeatureRail";
 
 /**
  * Розділ «Можливості» — відповідь на питання «а що ця CRM узагалі вміє?».
  *
- * Розкладка «розворот + прев'ю» (рішення CEO 2026-08-04): ліворуч рейка із
- * заголовком, лічильником і фільтрами; посередині типографічний список із
- * мононумерацією; праворуч — живе прев'ю тієї можливості, на яку навели.
- * Та сама мова, що в онбординг-вікні, тож сторінка й вікно — одна родина.
+ * Розкладка «журнал + рейка-зміст» (рішення CEO 2026-08-05): тулбар іде через
+ * слот шапки, як на решті сторінок; ліворуч рейка розділів зі скролспаєм і
+ * кільцем прогресу; праворуч журнал, де в кожного рядка СВОЄ прев'ю.
+ *
+ * ВАЖЛИВО: заголовок сторінки живе в AppLayout (гілка ROUTES.features), а не
+ * в контенті. Власний <h1> тут = подвійна шапка й зайвий відступ згори — саме
+ * так виглядала перша версія.
  *
  * НАВІЩО взагалі: заміри по проду показали, що промо-модалка дала 53 покази
  * й 2 кліки, а дев'ять можливостей із двадцяти чотирьох знає одна людина або
@@ -41,8 +56,11 @@ export default function FeaturesPage() {
   const { viewUserId, moduleAccess, accessRole, jobRole } = useAuth();
   const { data: adoption } = useMyFeatureAdoption(viewUserId);
   const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
   const [openKey, setOpenKey] = useState<FeatureKey | null>(null);
-  const [previewKey, setPreviewKey] = useState<FeatureKey | null>(null);
+  const [activeCategory, setActiveCategory] = useState<FeatureCategory | null>(null);
+
+  const headingRefs = useRef(new Map<FeatureCategory, HTMLElement>());
 
   // Одна позначка часу на весь рендер: інакше «нове» перераховувалось би
   // на кожному рядку й ламало мемоїзацію.
@@ -74,156 +92,199 @@ export default function FeaturesPage() {
     [mine, stateOf, now]
   );
 
-  const shown = useMemo(() => {
-    return mine.filter((def) => {
-      if (filter === "untried") return stateOf(def) === "untried";
-      if (filter === "fresh") return isFreshFeature(def, now);
-      return true;
-    });
-  }, [mine, filter, stateOf, now]);
-
-  // Прев'ю завжди має що показувати: тримаємось наведеного рядка, а якщо
-  // його відфільтрували — падаємо на перший зі списку.
-  useEffect(() => {
-    if (shown.length === 0) return;
-    if (!previewKey || !shown.some((def) => def.key === previewKey)) {
-      setPreviewKey(shown[0].key);
-    }
-  }, [shown, previewKey]);
-
-  const preview = useMemo(
-    () => shown.find((def) => def.key === previewKey) ?? shown[0] ?? null,
-    [shown, previewKey]
+  const triedCount = useMemo(
+    () => mine.filter((def) => ["tried", "using"].includes(stateOf(def))).length,
+    [mine, stateOf]
   );
+
+  const shown = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return mine.filter((def) => {
+      if (filter === "untried" && stateOf(def) !== "untried") return false;
+      if (filter === "fresh" && !isFreshFeature(def, now)) return false;
+      if (!query) return true;
+      return `${def.label} ${def.summary}`.toLowerCase().includes(query);
+    });
+  }, [mine, filter, search, stateOf, now]);
+
+  const groups = useMemo(() => groupFeatures(shown), [shown]);
 
   const openFeature = useMemo(
     () => mine.find((def) => def.key === openKey) ?? null,
     [mine, openKey]
   );
 
+  const resetFilters = useCallback(() => {
+    setFilter("all");
+    setSearch("");
+  }, []);
+
+  // Тулбар — у слот шапки, як на решті сторінок списків.
+  usePageHeaderActions(
+    <UnifiedPageToolbar
+      topLeft={
+        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          {(Object.keys(FILTER_LABEL) as Filter[]).map((value) => (
+            <Button
+              key={value}
+              variant="segmented"
+              size="xs"
+              aria-pressed={filter === value}
+              data-state={filter === value ? "on" : "off"}
+              onClick={() => setFilter(value)}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              {FILTER_LABEL[value]}
+              <CountBadge value={counts[value]} />
+            </Button>
+          ))}
+        </SegmentedGroup>
+      }
+      search={
+        <ToolbarSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="Пошук по можливостях..."
+        />
+      }
+      meta={
+        <ToolbarMeta
+          count={shown.length}
+          countLabel={shown.length === 1 ? "можливість" : "можливостей"}
+          onReset={resetFilters}
+          showReset={filter !== "all" || search.trim().length > 0}
+        />
+      }
+    />,
+    [filter, search, counts, shown.length, resetFilters]
+  );
+
+  // Скролспай: активний розділ рахуємо за верхньою межею вікна.
+  useEffect(() => {
+    const onScroll = () => {
+      let current: FeatureCategory | null = null;
+      for (const group of groups) {
+        const node = headingRefs.current.get(group.category);
+        if (node && node.getBoundingClientRect().top <= 140) current = group.category;
+      }
+      setActiveCategory(current ?? groups[0]?.category ?? null);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [groups]);
+
+  const scrollToCategory = useCallback((category: FeatureCategory) => {
+    const node = headingRefs.current.get(category);
+    if (!node) return;
+    const top = node.getBoundingClientRect().top + window.scrollY - 120;
+    window.scrollTo({ top, behavior: "smooth" });
+  }, []);
+
   return (
-    <div className="py-4">
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_300px] xl:gap-8">
-        {/* ── Рейка ── */}
-        <aside className="grid content-start gap-4 lg:sticky lg:top-20">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Можливості</h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Що CRM уміє полегшити щодня. Кожну можна спробувати прямо звідси.
-            </p>
-          </div>
-
-          {counts.untried > 0 ? (
-            <div className="flex items-baseline gap-2.5 border-t border-border pt-4">
-              <span className="text-3xl font-light tracking-tight tabular-nums">
-                {counts.untried}
-              </span>
-              <span className="text-xs leading-4 text-muted-foreground">
-                із {counts.all}
-                <br />
-                ще не пробував
-              </span>
-            </div>
-          ) : null}
-
-          <nav className="grid gap-0.5 border-t border-border pt-3">
-            {(Object.keys(FILTER_LABEL) as Filter[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={filter === value}
-                onClick={() => setFilter(value)}
-                className={cn(
-                  "flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
-                  filter === value
-                    ? "bg-secondary font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                {FILTER_LABEL[value]}
-                <span className="font-mono text-2xs opacity-70">{counts[value]}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* ── Список ── */}
-        <div className="border-t border-border">
-          {shown.map((def, index) => {
-            const state = stateOf(def);
-            const fresh = isFreshFeature(def, now);
-            return (
-              <button
-                key={def.key}
-                type="button"
-                onClick={() => setOpenKey(def.key)}
-                onMouseEnter={() => setPreviewKey(def.key)}
-                onFocus={() => setPreviewKey(def.key)}
-                className={cn(
-                  "grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-4 border-b border-border py-5 pr-2 text-left transition-colors hover:bg-secondary/40",
-                  preview?.key === def.key && "bg-secondary/30"
-                )}
-              >
-                <span className="font-mono text-xl font-light tabular-nums text-muted-foreground">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-
-                <span className="min-w-0">
-                  <span className="block text-lg font-semibold tracking-tight">{def.label}</span>
-                  <span className="mt-1 block max-w-[58ch] text-sm leading-6 text-muted-foreground">
-                    {def.summary}
-                  </span>
-                  <span className="mt-2.5 inline-flex items-center gap-1.5 text-sm font-medium text-primary">
-                    Спробувати
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </span>
-                </span>
-
-                {fresh ? (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                    Нове
-                  </span>
-                ) : state === "unknown" ? null : (
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-semibold",
-                      state === "untried"
-                        ? "bg-warning-soft text-warning-foreground"
-                        : state === "using"
-                          ? "bg-success-soft text-success-foreground"
-                          : "bg-secondary text-muted-foreground"
-                    )}
-                  >
-                    {STATE_LABEL[state]}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {shown.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">За цим фільтром нічого немає.</p>
-          ) : null}
+    <div className="pb-8">
+      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <FeatureRail
+            groups={groups}
+            activeCategory={activeCategory}
+            onPick={scrollToCategory}
+            triedCount={triedCount}
+            totalCount={mine.length}
+          />
         </div>
 
-        {/* ── Прев'ю: показує, що всередині, ще до кліку ── */}
-        {preview ? (
-          <aside className="hidden content-start gap-3 xl:sticky xl:top-20 xl:grid">
-            <p className="font-mono text-2xs uppercase tracking-wider text-muted-foreground">
-              Як це виглядає
-            </p>
-            <FeaturePreview featureKey={preview.key} />
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setOpenKey(preview.key)}
-            >
-              Спробувати тут
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </aside>
-        ) : null}
+        <div className="min-w-0">
+          {groups.map((group, groupIndex) => (
+            <section key={group.category}>
+              <header
+                ref={(node) => {
+                  if (node) headingRefs.current.set(group.category, node);
+                  else headingRefs.current.delete(group.category);
+                }}
+                className={cn(
+                  "flex items-center gap-3 pb-2.5 pt-1",
+                  groupIndex > 0 && "mt-7"
+                )}
+              >
+                <span className="font-mono text-3xs uppercase tracking-widest text-muted-foreground">
+                  {group.label}
+                </span>
+                <span className="font-mono text-3xs tabular-nums text-muted-foreground opacity-70">
+                  {group.features.length}
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </header>
+
+              {group.features.map((def, index) => {
+                const state = stateOf(def);
+                const fresh = isFreshFeature(def, now);
+                return (
+                  <button
+                    key={def.key}
+                    type="button"
+                    onClick={() => setOpenKey(def.key)}
+                    className="grid w-full grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-lg border-b border-border/70 px-1 py-4 text-left transition-colors hover:bg-secondary/40 xl:grid-cols-[2.25rem_minmax(0,1fr)_260px] xl:items-center"
+                  >
+                    <span className="pt-0.5 font-mono text-lg font-light tabular-nums text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+
+                    <span className="min-w-0 self-start">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-semibold tracking-tight">{def.label}</span>
+                        {fresh ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                            <Star className="h-3 w-3" />
+                            Нове
+                          </span>
+                        ) : state === "unknown" ? null : (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-xs font-semibold",
+                              state === "untried"
+                                ? "bg-warning-soft text-warning-foreground"
+                                : state === "using"
+                                  ? "bg-success-soft text-success-foreground"
+                                  : "bg-secondary text-muted-foreground"
+                            )}
+                          >
+                            {STATE_LABEL[state]}
+                          </span>
+                        )}
+                      </span>
+
+                      <span className="mt-1 block max-w-[52ch] text-sm leading-6 text-muted-foreground">
+                        {def.summary}
+                      </span>
+
+                      <span className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary">
+                        Спробувати
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
+                    </span>
+
+                    <span className="col-start-2 xl:col-start-3">
+                      <FeaturePreview featureKey={def.key} />
+                    </span>
+                  </button>
+                );
+              })}
+            </section>
+          ))}
+
+          {shown.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <p className="text-sm font-semibold">Нічого не знайшлося</p>
+              <p className="max-w-[36ch] text-xs text-muted-foreground">
+                Спробуй інший запит або скинь фільтри у верхній панелі.
+              </p>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <FeatureOnboardingDialog
