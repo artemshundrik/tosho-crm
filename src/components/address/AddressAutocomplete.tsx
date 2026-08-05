@@ -66,6 +66,13 @@ export function AddressAutocomplete({
   const [streets, setStreets] = React.useState<NpStreet[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [unavailable, setUnavailable] = React.useState(false);
+  /**
+   * Запит впав з іншої причини, ніж «ключ не налаштовано»: немає мережі,
+   * функція не піднята (на голому `npm run dev` /.netlify/functions/* не
+   * існує), сервіс віддав помилку. Раніше такі випадки ковталися мовчки —
+   * людина друкувала й не розуміла, чому підказок немає взагалі.
+   */
+  const [failed, setFailed] = React.useState(false);
 
   const activeSegment = getActiveSegment(value).segment;
   const debouncedSegment = useDebounced(activeSegment);
@@ -101,9 +108,13 @@ export function AddressAutocomplete({
           }
         });
     request
+      .then(() => {
+        if (!cancelled) setFailed(false);
+      })
       .catch((error) => {
         if (cancelled) return;
         if (error instanceof NovaPoshtaNotConfiguredError) setUnavailable(true);
+        else setFailed(true);
         setSettlements([]);
         setStreets([]);
       })
@@ -155,10 +166,21 @@ export function AddressAutocomplete({
   if (unavailable) return field;
 
   const hasResults = settlements.length > 0 || streets.length > 0;
+  // Помилку показуємо лише коли людина справді щось шукала: інакше підказка
+  // про збій зринала б на порожньому полі.
+  const showFailure = failed && !loading && !hasResults && activeSegment.trim().length >= 2;
 
   return (
     <div className="relative">
       {field}
+      {open && showFailure ? (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-border/60 bg-popover p-2 shadow-overlay">
+          <p className="text-2xs leading-4 text-muted-foreground">
+            Підказки адрес зараз недоступні — довідник не відповідає. Адресу можна ввести
+            вручну, поле це приймає.
+          </p>
+        </div>
+      ) : null}
       {open && (loading || hasResults) ? (
         <div
           className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1 shadow-overlay"
