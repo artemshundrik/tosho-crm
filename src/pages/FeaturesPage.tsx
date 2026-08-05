@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Sparkles, Star } from "lucide-react";
+import { ArrowRight, SearchX } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -220,13 +220,18 @@ export default function FeaturesPage() {
                 const state = stateOf(def);
                 const fresh = isFreshFeature(def, now);
                 return (
-                  <button
+                  /* Дивайдер живе на обгортці, а не на кнопці: інакше він
+                     повторював заокруглення ховера й обривався по краях. */
+                  <div
                     key={def.key}
+                    className="border-b border-border last:border-b-0"
+                  >
+                  <button
                     type="button"
                     onClick={() => setOpenKey(def.key)}
-                    className="grid w-full grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-lg border-b border-border/70 px-1 py-4 text-left transition-colors hover:bg-secondary/40 xl:grid-cols-[2.25rem_minmax(0,1fr)_260px] xl:items-center"
+                    className="group/row my-1 grid w-full grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-xl px-3 py-3.5 text-left transition-colors hover:bg-secondary xl:grid-cols-[2.25rem_minmax(0,1fr)_260px] xl:items-center"
                   >
-                    <span className="pt-0.5 font-mono text-lg font-light tabular-nums text-muted-foreground">
+                    <span className="pt-0.5 font-mono text-lg font-light tabular-nums text-muted-foreground transition-colors group-hover/row:text-foreground">
                       {String(index + 1).padStart(2, "0")}
                     </span>
 
@@ -234,8 +239,7 @@ export default function FeaturesPage() {
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="text-base font-semibold tracking-tight">{def.label}</span>
                         {fresh ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                            <Star className="h-3 w-3" />
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                             Нове
                           </span>
                         ) : state === "unknown" ? null : (
@@ -260,7 +264,7 @@ export default function FeaturesPage() {
 
                       <span className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                         Спробувати
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/row:translate-x-0.5" />
                       </span>
                     </span>
 
@@ -268,6 +272,7 @@ export default function FeaturesPage() {
                       <FeaturePreview featureKey={def.key} />
                     </span>
                   </button>
+                  </div>
                 );
               })}
             </section>
@@ -276,7 +281,7 @@ export default function FeaturesPage() {
           {shown.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-14 text-center">
               <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
-                <Sparkles className="h-4 w-4" />
+                <SearchX className="h-4 w-4" />
               </span>
               <p className="text-sm font-semibold">Нічого не знайшлося</p>
               <p className="max-w-[36ch] text-xs text-muted-foreground">

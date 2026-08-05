@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, LogOut, MoreVertical, Sparkles, User } from "lucide-react";
+import { Compass, Eye, LogOut, MoreVertical, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
@@ -287,7 +287,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
             {
               label: (
                 <>
-                  <Sparkles className="mr-2 h-4 w-4" />
+                  <Compass className="mr-2 h-4 w-4" />
                   Можливості
                 </>
               ),
@@ -387,7 +387,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
         {
           label: (
             <>
-              <Sparkles className="mr-2 h-4 w-4" />
+              <Compass className="mr-2 h-4 w-4" />
               Можливості
             </>
           ),

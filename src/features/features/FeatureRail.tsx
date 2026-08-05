@@ -1,4 +1,4 @@
-import { Banknote, MapPin, Palette, Sparkles, Users, Wallet } from "lucide-react";
+import { Banknote, Bot, MapPin, Palette, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FeatureCategory, FeatureGroup } from "@/lib/featureCatalog";
 
@@ -13,7 +13,7 @@ const CATEGORY_ICON: Record<FeatureCategory, typeof Users> = {
   core: Users,
   sales: MapPin,
   design: Palette,
-  ai: Sparkles,
+  ai: Bot,
   finance: Wallet,
   team: Banknote,
 };
@@ -93,14 +93,17 @@ export function FeatureRail({ groups, activeCategory, onPick, triedCount, totalC
 
 /**
  * Кільце прогресу на conic-gradient: без svg і без залежностей.
- * Тільки токени, тож у темній темі працює само собою.
+ *
+ * Колір — `--success-solid`, той самий яскравий зелений, що в online-крапці
+ * (.tone-dot-success). Текстовий `--success-foreground` тут не годиться:
+ * він темний і на світлій темі кільце виглядало брудною плямою.
  */
 function ProgressRing({ percent, label }: { percent: number; label: string }) {
   return (
     <span
       className="grid h-12 w-12 shrink-0 place-items-center rounded-full"
       style={{
-        background: `conic-gradient(hsl(var(--success-foreground)) ${percent}%, hsl(var(--muted)) 0)`,
+        background: `conic-gradient(hsl(var(--success-solid)) ${percent}%, hsl(var(--muted)) 0)`,
       }}
       role="img"
       aria-label={`Спробовано ${label}`}
