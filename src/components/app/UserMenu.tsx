@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Compass, Eye, LogOut, MoreVertical, User } from "lucide-react";
+import { BarChart3, Compass, Eye, KeyRound, LogOut, MoreVertical, Truck, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
+import { hasModuleAccess } from "@/lib/moduleAccess";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
@@ -45,8 +46,27 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   const navigate = useNavigate();
   // Режим «Дивитись як» — лише для owner (canUseViewAs рахується від РЕАЛЬНИХ
   // прав, тож із увімкненого режиму його не можна «загубити»).
-  const { canUseViewAs, viewAs } = useAuth();
+  const { canUseViewAs, viewAs, moduleAccess, permissions } = useAuth();
   const [viewAsOpen, setViewAsOpen] = useState(false);
+
+  /**
+   * Конфіг-пункти, що переїхали сюди з сайдбару (чистка 2026-08-05): у меню
+   * власника їх було 17 і воно скролилось. Гейти повторюють ті, що діяли в
+   * сайдбарі, — доступ нікому не розширюється й не звужується.
+   */
+  const settingsItems = useMemo(() => {
+    const items: Array<{ icon: typeof KeyRound; label: string; to: string }> = [];
+    if (hasModuleAccess(moduleAccess, "members_access")) {
+      items.push({ icon: KeyRound, label: "Ролі та доступи", to: "/settings/members" });
+    }
+    if (hasModuleAccess(moduleAccess, "nova_poshta")) {
+      items.push({ icon: Truck, label: "Нова Пошта", to: "/settings/nova-poshta" });
+    }
+    if (permissions.isSuperAdmin || permissions.isAdmin) {
+      items.push({ icon: BarChart3, label: "Observability", to: "/admin/observability" });
+    }
+    return items;
+  }, [moduleAccess, permissions.isSuperAdmin, permissions.isAdmin]);
   const [loading, setLoading] = useState(!cachedUserData);
   const [userData, setUserData] = useState<UserState>(
     cachedUserData ?? {
@@ -293,6 +313,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               ),
               onSelect: () => navigate("/features"),
             },
+            ...(settingsItems.length > 0
+              ? ([
+                  { type: "separator" as const },
+                  ...settingsItems.map((item) => ({
+                    label: (
+                      <>
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.label}
+                      </>
+                    ),
+                    onSelect: () => navigate(item.to),
+                  })),
+                ])
+              : []),
             ...(canUseViewAs
               ? ([
                   { type: "separator" as const },
@@ -393,6 +427,20 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           ),
           onSelect: () => navigate("/features"),
         },
+        ...(settingsItems.length > 0
+          ? ([
+              { type: "separator" as const },
+              ...settingsItems.map((item) => ({
+                label: (
+                  <>
+                    <item.icon className="mr-2 h-4 w-4" />
+                    {item.label}
+                  </>
+                ),
+                onSelect: () => navigate(item.to),
+              })),
+            ])
+          : []),
         ...(canUseViewAs
           ? ([
               { type: "separator" as const },

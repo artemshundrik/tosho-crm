@@ -3,7 +3,6 @@ import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState 
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
-  BarChart3,
   Banknote,
   BriefcaseBusiness,
   Building2,
@@ -11,14 +10,12 @@ import {
   Loader2,
   Factory,
   FolderKanban,
-  KeyRound,
   LayoutGrid,
   Megaphone,
   Menu,
   Moon,
   Palette,
   X as CloseIcon,
-  Route,
   Search,
   ShieldAlert,
   Sun,
@@ -451,7 +448,6 @@ const baseSidebarLinks: SidebarLink[] = [
   { label: "До відвантаження", to: ROUTES.ordersReadyToShip, group: "orders", icon: Truck, moduleKey: "shipping" },
   // Операції
   { label: "Каталог", to: ROUTES.catalogProducts, group: "operations", icon: FolderKanban, moduleKey: "catalog" },
-  { label: "Логістика", to: ROUTES.logistics, group: "operations", icon: Route, moduleKey: "logistics" },
   { label: "Дизайн", to: ROUTES.design, group: "operations", icon: Palette, moduleKey: "design" },
   {
     label: "Підрядники",
@@ -483,11 +479,18 @@ const baseSidebarLinks: SidebarLink[] = [
   },
 
   // Акаунт
+  //
+  // ЧОМУ ТУТ ЛИШЕ «КОМАНДА». Заміри 2026-08-05: власник бачив 17 пунктів,
+  // SEO — 14, решта — 8. При висоті рядка 36 px меню власника вже не
+  // вміщалось у 13-дюймовий екран і скролилось. Прибрано:
+  //   • «Сповіщення» — дублікат: у дзвіночку в шапці вже є «Усі сповіщення»
+  //     (NotificationsMenu). Пункт бачили всі шістнадцятеро.
+  //   • «Логістика» — модуль вимкнений усім, крім власника, а точки доставки
+  //     заповнені у 3 клієнтів зі 128 і в 0 лідів. Маршрут лишається.
+  //   • «Ролі та доступи», «Нова Пошта», «Observability» — це конфіг, а не
+  //     робочі поверхні. Переїхали в меню акаунта (UserMenu).
+  // Маршрути ніде не чіпалися — прибрані лише пункти навігації.
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users, moduleKey: "team" },
-  { label: "Сповіщення", to: ROUTES.notifications, group: "account", icon: Bell },
-  { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
-  { label: "Нова Пошта", to: ROUTES.novaPoshta, group: "account", icon: Truck, moduleKey: "nova_poshta" },
-  { label: "Observability", to: ROUTES.observability, group: "account", icon: BarChart3 },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -1881,21 +1884,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 </Sheet>
               </div>
 
-              {/* Breadcrumb */}
-              <div className="hidden md:flex h-7 items-center gap-1 text-[12px] leading-none font-medium text-muted-foreground">
-                <Link
-                  to={ROUTES.overview}
-                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] px-1.5 leading-none hover:bg-muted/60 hover:text-foreground transition-colors duration-150"
-                >
-                  ToSho CRM
-                </Link>
-                <span className="text-muted-foreground/40 select-none">/</span>
-                <Link
-                  to={header.breadcrumbTo}
-                  className="inline-flex h-7 items-center rounded-[var(--radius-md)] bg-muted/50 px-2 leading-none text-foreground/90 hover:bg-muted hover:text-foreground transition-colors duration-150"
-                >
+              {/* Назва сторінки замість хлібних крихт.
+                  Крихти були завжди дворівневі: «ToSho CRM» вело на «Огляд»
+                  (перший пункт сайдбару), а друга ланка — на сторінку, де ти
+                  вже стоїш. На сторінках деталей повернення до списку й так
+                  дає власна кнопка «Назад до списку». Тобто це був підпис, а
+                  не навігація — лишаємо тільки підпис. */}
+              <div className="hidden min-w-0 md:flex h-7 items-center">
+                <span className="truncate text-sm font-semibold leading-none tracking-tight text-foreground">
                   {header.breadcrumbLabel}
-                </Link>
+                </span>
               </div>
 
               {/* Mobile title */}
@@ -1906,12 +1904,18 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               </div>
             </div>
 
-            {/* CENTER SEARCH */}
+            {/* CENTER SEARCH
+                Компактна фіксована ширина, а не max-w-[520px]: праворуч живуть
+                плашка виробітку дизайнера, таймер, курси й дзвіночок, і широке
+                поле забирало в них місце. Сама середня колонка сітки центрована
+                по вікну, тож ширина назви сторінки ліворуч на неї не впливає —
+                кнопка не стрибає між сторінками. */}
             <div className="hidden md:flex min-w-0 items-center justify-center">
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
-                className="inline-flex h-10 w-full max-w-[520px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground cursor-pointer"
+                aria-label="Пошук"
+                className="inline-flex h-10 w-[230px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground cursor-pointer"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="flex-1 text-left">Пошук...</span>
