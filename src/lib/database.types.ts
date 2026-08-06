@@ -1138,6 +1138,7 @@ export type Database = {
           phone: string | null
           reminder_at: string | null
           reminder_comment: string | null
+          reminder_repeat: string | null
           services: string | null
           team_id: string
           updated_at: string
@@ -1154,6 +1155,7 @@ export type Database = {
           phone?: string | null
           reminder_at?: string | null
           reminder_comment?: string | null
+          reminder_repeat?: string | null
           services?: string | null
           team_id: string
           updated_at?: string
@@ -1170,6 +1172,7 @@ export type Database = {
           phone?: string | null
           reminder_at?: string | null
           reminder_comment?: string | null
+          reminder_repeat?: string | null
           services?: string | null
           team_id?: string
           updated_at?: string
@@ -3570,6 +3573,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      releases: {
+        Row: {
+          changes: Json
+          commit_ref: string
+          created_at: string
+          id: string
+          released_at: string
+          title: string | null
+        }
+        Insert: {
+          changes?: Json
+          commit_ref: string
+          created_at?: string
+          id?: string
+          released_at?: string
+          title?: string | null
+        }
+        Update: {
+          changes?: Json
+          commit_ref?: string
+          created_at?: string
+          id?: string
+          released_at?: string
+          title?: string | null
+        }
+        Relationships: []
       }
       runtime_errors: {
         Row: {

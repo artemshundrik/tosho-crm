@@ -11,6 +11,7 @@ import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyle
 import { cn } from "@/lib/utils";
 import { useVisibleUpdates } from "@/features/features/useVisibleUpdates";
 import { useMarkUpdatesRead } from "@/features/features/updateQueries";
+import { ReleaseHistory } from "@/features/features/ReleaseHistory";
 
 /**
  * Стрічка «Що нового» — історія змін у CRM.
@@ -23,11 +24,12 @@ import { useMarkUpdatesRead } from "@/features/features/updateQueries";
  * читати, і лишати після цього бейдж означало б брехати лічильником.
  */
 
-type Filter = "all" | "unread";
+type Filter = "all" | "unread" | "releases";
 
 const FILTER_LABEL: Record<Filter, string> = {
   all: "Усі",
   unread: "Непрочитані",
+  releases: "Релізи",
 };
 
 const DATE = new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long" });
@@ -35,10 +37,19 @@ const MONTH = new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" 
 
 export default function WhatsNewPage() {
   const navigate = useNavigate();
-  const { viewUserId } = useAuth();
+  const { viewUserId, accessRole, jobRole } = useAuth();
   const { visible, unread, ready } = useVisibleUpdates();
   const markRead = useMarkUpdatesRead(viewUserId);
   const [filter, setFilter] = useState<Filter>("all");
+
+  /**
+   * Вкладка «Релізи» — лише власнику й SEO. Решті команди цифри про обсяг
+   * робіт нічого не дають: їм потрібно знати, ЩО змінилось, а не скільки
+   * комітів на це пішло.
+   */
+  const canSeeReleases =
+    (accessRole ?? "").trim().toLowerCase() === "owner" ||
+    (jobRole ?? "").trim().toLowerCase() === "seo";
 
   // Показане на цій сторінці вважаємо прочитаним — але список для рендеру
   // фіксуємо ДО позначення, інакше фільтр «непрочитані» спорожнів би на очах.
@@ -78,7 +89,9 @@ export default function WhatsNewPage() {
     <UnifiedPageToolbar
       topLeft={
         <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-          {(Object.keys(FILTER_LABEL) as Filter[]).map((value) => (
+          {(Object.keys(FILTER_LABEL) as Filter[])
+            .filter((value) => value !== "releases" || canSeeReleases)
+            .map((value) => (
             <Button
               key={value}
               variant="segmented"
@@ -89,15 +102,31 @@ export default function WhatsNewPage() {
               className={cn(SEGMENTED_TRIGGER, "gap-2")}
             >
               {FILTER_LABEL[value]}
-              <CountBadge value={value === "all" ? visible.length : (frozenUnread?.size ?? 0)} />
+              {value === "releases" ? null : (
+                <CountBadge value={value === "all" ? visible.length : (frozenUnread?.size ?? 0)} />
+              )}
             </Button>
           ))}
         </SegmentedGroup>
       }
-      meta={<ToolbarMeta count={shown.length} countLabel={shown.length === 1 ? "запис" : "записів"} />}
+      meta={
+        filter === "releases" ? null : (
+          <ToolbarMeta count={shown.length} countLabel={shown.length === 1 ? "запис" : "записів"} />
+        )
+      }
     />,
-    [filter, visible.length, frozenUnread, shown.length]
+    [filter, visible.length, frozenUnread, shown.length, canSeeReleases]
   );
+
+  if (filter === "releases" && canSeeReleases) {
+    return (
+      <div className="py-4">
+        <div className="mx-auto max-w-[760px]">
+          <ReleaseHistory />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-4">
