@@ -42,6 +42,7 @@ import {
   formatVatRateLabel,
   getCustomerLegalEntityDocumentMissingFields,
   hasCustomerLegalEntityIdentity,
+  splitSignatoryFullName,
   type CustomerLegalEntity,
 } from "@/lib/customerLegalEntities";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
@@ -438,6 +439,28 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         return { ...next, signatoryName };
       }),
     }));
+  };
+
+  /**
+   * ПІБ зазвичай копіюють цілим рядком — із витягу, листа, реквізитів. Замість
+   * того щоб змушувати рознести його по трьох полях руками, розкладаємо самі:
+   * вставка з пробілом у БУДЬ-ЯКЕ з трьох полів заповнює всі три. Поля лишаються
+   * окремими, тож людина одразу бачить, чи правильно розклалось, — саме заради
+   * цього вони й розділені (у договір іде «Д.О. Буйна» і родовий відмінок).
+   *
+   * Вставка одного слова поводиться як звичайна — щоб можна було просто
+   * замінити прізвище, не чіпаючи решти.
+   */
+  const handleSignatoryPaste = (index: number) => (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text").trim();
+    if (!pasted || !/\s/.test(pasted)) return;
+    event.preventDefault();
+    const parts = splitSignatoryFullName(pasted);
+    updateSignatoryName(index, {
+      signatoryLastName: parts.last,
+      signatoryFirstName: parts.first,
+      signatoryMiddleName: parts.middle,
+    });
   };
 
   const addLegalEntity = () => {
@@ -1377,6 +1400,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           <Input
                             value={activeLegalEntity.signatoryLastName}
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryLastName: e.target.value })}
+                            onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іваненко"
                             className="h-9"
                           />
@@ -1386,6 +1410,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           <Input
                             value={activeLegalEntity.signatoryFirstName}
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryFirstName: e.target.value })}
+                            onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іван"
                             className="h-9"
                           />
@@ -1395,6 +1420,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           <Input
                             value={activeLegalEntity.signatoryMiddleName}
                             onChange={(e) => updateSignatoryName(activeLegalEntityIndex, { signatoryMiddleName: e.target.value })}
+                            onPaste={handleSignatoryPaste(activeLegalEntityIndex)}
                             placeholder="Напр. Іванович"
                             className="h-9"
                           />
