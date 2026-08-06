@@ -58,6 +58,7 @@ import {
   type FxRates,
 } from "@/lib/fxRates";
 import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
+import { findMissingMonthEntries, shiftMonthKey } from "./monthClose";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { OrderPickerInline } from "./OrderPickerInline";
 import {
@@ -163,12 +164,8 @@ type MonthSection = {
   missingCount?: number;
 };
 
-// Shift a «YYYY-MM» key by a number of months.
-const shiftMonthKey = (key: string, delta: number) => {
-  const [year, month] = key.split("-").map(Number);
-  const d = new Date(year, (month || 1) - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
+// shiftMonthKey живе в ./monthClose — там же правило «місяць не закритий»,
+// і друга копія арифметики місяців тут лише розʼїхалась би з ним.
 
 // Парсинг суми з «людського» вводу: апостроф/пробіл (і nbsp) — роздільник тисяч,
 // останній «,» або «.» — десятковий. «6'238,20» → 6238.2; «12 500» → 12500.
@@ -896,21 +893,12 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [entriesByExpense]
   );
 
-  // «Не внесено за місяць» — ТЕ САМЕ правило, що й у крон-функції
-  // finance-month-close-reminders: журнальна витрата (не подія), у якої за
-  // вибраний місяць немає жодного запису, АЛЕ є історія за 3 попередні місяці.
-  // Умова про історію обовʼязкова: без неї давно закинуті статті («Кондиціонери»
-  // з нулем записів за весь час) світилися б червоним вічно.
-  const missingEntryIds = React.useMemo(() => {
-    const historyMonths = [1, 2, 3].map((d) => shiftMonthKey(selectedMonth, -d));
-    const ids = new Set<string>();
-    for (const e of visibleExpenses) {
-      if (!e.isRecurring || !e.amountVaries || e.eventType) continue;
-      if (entriesForMonth(e.id, selectedMonth).length > 0) continue;
-      if (historyMonths.some((m) => entriesForMonth(e.id, m).length > 0)) ids.add(e.id);
-    }
-    return ids;
-  }, [visibleExpenses, entriesForMonth, selectedMonth]);
+  // «Не внесено за місяць» — правило спільне з підпунктом «Витрати» й крон-функцією
+  // finance-month-close-reminders, тому живе в ./monthClose, а не тут.
+  const missingEntryIds = React.useMemo(
+    () => findMissingMonthEntries(visibleExpenses, entriesByExpense, selectedMonth),
+    [visibleExpenses, entriesByExpense, selectedMonth]
+  );
 
   // Дата останнього запису — підказка «останній запис — 13.07» під назвою.
   const lastEntryDate = React.useCallback(
