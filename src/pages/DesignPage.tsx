@@ -3164,8 +3164,25 @@ export default function DesignPage() {
   }, [completedByAssignee, designerMembers, memberById, workloadSourceTasks]);
 
   const recommendedAssigneeGroup = useMemo(() => {
-    return assigneeGrouped.find((group) => group.id) ?? null;
-  }, [assigneeGrouped]);
+    // assigneeGrouped НАВМИСНО ширший за список діючих дизайнерів: у нього
+    // підмішуються всі, хто здавав задачі за обраний період (completedByAssignee)
+    // і хто висить у завантажених задачах — це потрібно для статистики.
+    //
+    // Але брати з нього рекомендацію напряму не можна. Список відсортований за
+    // навантаженням ЗА ЗРОСТАННЯМ, а в людини, яка звільнилась, активних задач
+    // нуль — тобто вона завжди опиняється першою і отримує підпис «Можна
+    // ставити термінову задачу». Саме так у рекомендацію потрапила Євгенія Б.,
+    // inactive з 26.06.2026 (її стару задачу заапрувили 27.07, і цього вистачило).
+    const activeDesignerIds = new Set(designerMembers.map((member) => member.id));
+    const candidate = assigneeGrouped.find(
+      (group) => group.id && activeDesignerIds.has(group.id) && !memberInactiveById[group.id]
+    );
+    if (!candidate) return null;
+    // Радити того, про кого сама ж система пише «нові задачі краще не давати», —
+    // це не рекомендація. Коли перевантажені всі, чесніше не радити нікого.
+    if (candidate.workload?.level === "critical") return null;
+    return candidate;
+  }, [assigneeGrouped, designerMembers, memberInactiveById]);
 
   const designerLoadById = useMemo(() => {
     const map = new Map<string, ReturnType<typeof calculateDesignWorkload>>();

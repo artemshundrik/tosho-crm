@@ -888,6 +888,17 @@ export function TeamPage() {
     [reloadAbsenceData, workspaceId]
   );
 
+  // Видалення з діалогу редагування: сам запис бере зі стану, а не з аргументу —
+  // діалог знає лише «видали те, що зараз редагую». Після успіху закривається,
+  // бо редагувати вже нічого.
+  const handleAbsenceDeleteFromDialog = useCallback(async () => {
+    const target = (absences ?? []).find((absence) => absence.id === absenceEditingId);
+    if (!target) return;
+    await handleAbsenceDelete(target);
+    setAbsenceDialogOpen(false);
+    setAbsenceEditingId(null);
+  }, [absences, absenceEditingId, handleAbsenceDelete]);
+
   const handleCancelRequest = useCallback(
     async (absence: TeamAbsence) => {
       if (!workspaceId) return;
@@ -1790,6 +1801,10 @@ export function TeamPage() {
           findOwnConflict={findOwnConflict}
           editingId={absenceEditingId}
           onSubmit={handleAbsenceSubmit}
+          // Видаляти може лише той, хто взагалі керує відсутностями (owner/SEO) —
+          // це той самий набір, що дозволяють RLS-політики team_absences_delete.
+          onDelete={canManageAbsences && absenceEditingId ? handleAbsenceDeleteFromDialog : undefined}
+          deleting={Boolean(absenceEditingId) && absenceDeletingId === absenceEditingId}
         />
       ) : null}
 

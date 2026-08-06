@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarRange, Info, Loader2, Users } from "lucide-react";
+import { CalendarRange, Info, Loader2, Trash2, Users } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 
@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -126,6 +126,8 @@ export function AbsenceDialog({
   findOwnConflict,
   editingId,
   onSubmit,
+  onDelete,
+  deleting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -151,11 +153,20 @@ export function AbsenceDialog({
   /** Id запису, який редагуємо: сам себе конфліктом вважати не можна. */
   editingId?: string | null;
   onSubmit: (value: AbsenceDialogValue) => void;
+  /** Видалити запис, який редагуємо. Немає — кнопки видалення теж немає. */
+  onDelete?: () => void;
+  deleting?: boolean;
 }) {
   const [value, setValue] = useState<AbsenceDialogValue>(initial);
+  // Другий клік по «Видалити» — це і є підтвердження. Скидаємо на кожному
+  // відкритті, щоб діалог ніколи не відкривався вже зведеним на видалення.
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (open) setValue(initial);
+    if (open) {
+      setValue(initial);
+      setConfirmDelete(false);
+    }
   }, [initial, open]);
 
   const rangeInvalid = Boolean(value.startDate && value.endDate && value.endDate < value.startDate);
@@ -330,9 +341,8 @@ export function AbsenceDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="absence-start">З</Label>
-              <Input
+              <DateInput
                 id="absence-start"
-                type="date"
                 value={value.startDate}
                 onChange={(event) => {
                   const startDate = event.target.value;
@@ -348,9 +358,8 @@ export function AbsenceDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="absence-end">По</Label>
-              <Input
+              <DateInput
                 id="absence-end"
-                type="date"
                 value={value.endDate}
                 min={value.startDate || undefined}
                 onChange={(event) => setValue((prev) => ({ ...prev, endDate: event.target.value }))}
@@ -465,14 +474,36 @@ export function AbsenceDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            Скасувати
-          </Button>
-          <Button onClick={() => onSubmit(value)} disabled={!canSubmit}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {editing ? "Зберегти" : isRequest ? (sickAsFact ? "Зафіксувати" : "Надіслати заявку") : "Додати"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {/* Видалення живе тут, бо саме сюди приводить клік по відсутності в
+              календарі: відкрив — і або правиш, або прибираєш. Підтвердження
+              двокрокове прямо в кнопці, а не окремим діалогом: вкладені модалки
+              в цьому проєкті ловлять фокус, а рішення тут одне й оборотне
+              (відсутність можна внести заново). */}
+          {editing && onDelete ? (
+            <Button
+              variant="ghost"
+              onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+              disabled={saving || deleting}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : (
+                <Trash2 className="h-4 w-4" aria-hidden />
+              )}
+              {confirmDelete ? "Точно видалити?" : "Видалити"}
+            </Button>
+          ) : (
+            <span className="hidden sm:block" />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
+              Скасувати
+            </Button>
+            <Button onClick={() => onSubmit(value)} disabled={!canSubmit || deleting}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+              {editing ? "Зберегти" : isRequest ? (sickAsFact ? "Зафіксувати" : "Надіслати заявку") : "Додати"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

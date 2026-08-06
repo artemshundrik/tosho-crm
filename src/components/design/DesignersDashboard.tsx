@@ -1028,7 +1028,7 @@ export function DesignersDashboard({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-[13px] font-semibold text-foreground">{label}</span>
-                      {index === 0 ? (
+                      {index === 0 && row.workload.level !== "critical" ? (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
                           <Star className="h-3 w-3" />
                           Рекомендуємо
@@ -1918,7 +1918,7 @@ export function DesignersDashboard({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="truncate text-[13px] font-semibold text-foreground">{label}</span>
-                          {index === 0 ? (
+                          {index === 0 && row.workload.level !== "critical" ? (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-3xs font-medium text-primary">
                               <Star className="h-3 w-3" />
                               Рекомендуємо
