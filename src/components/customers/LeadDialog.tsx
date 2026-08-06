@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/ui/picker-input";
+import { DateInput, TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -151,27 +151,6 @@ const getInitials = (value?: string) => {
   return (first + last).toUpperCase();
 };
 
-const normalizeTime = (value: string) => {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (!digits) return "";
-
-  let hour = 0;
-  let minute = 0;
-  if (digits.length <= 2) {
-    hour = Number(digits);
-  } else if (digits.length === 3) {
-    hour = Number(digits.slice(0, 1));
-    minute = Number(digits.slice(1));
-  } else {
-    hour = Number(digits.slice(0, 2));
-    minute = Number(digits.slice(2));
-  }
-
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
-  hour = Math.max(0, Math.min(23, hour));
-  minute = Math.max(0, Math.min(59, minute));
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-};
 
 const formatLinkedMoney = (value?: number | null) => {
   if (typeof value !== "number" || Number.isNaN(value)) return null;
@@ -320,15 +299,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
     }));
   };
 
-  const handleReminderTimeChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    const masked = digits.length <= 2 ? digits : `${digits.slice(0, 2)}:${digits.slice(2)}`;
-    setForm((prev) => ({ ...prev, reminderTime: masked }));
-  };
-
-  const handleReminderTimeBlur = () => {
-    setForm((prev) => ({ ...prev, reminderTime: normalizeTime(prev.reminderTime) }));
-  };
 
   const formatOwnershipOptionText = (option: NonNullable<LeadDialogProps["ownershipOptions"]>[number]) =>
     option.description ? `${option.label} (${option.description})` : option.label;
@@ -1045,13 +1015,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>Час</Label>
-                    <Input
-                      value={form.reminderTime}
-                      onChange={(e) => handleReminderTimeChange(e.target.value)}
-                      onBlur={handleReminderTimeBlur}
-                      placeholder="HH:MM"
-                      inputMode="numeric"
+                    <TimeInput
                       className="h-9"
+                      value={form.reminderTime}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, reminderTime: e.target.value }))
+                      }
                     />
                   </div>
                   <div className="grid gap-2 col-span-2">

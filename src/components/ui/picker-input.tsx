@@ -117,6 +117,56 @@ function useForwardedInputRef(forwardedRef: React.ForwardedRef<HTMLInputElement>
   return { innerRef, setRefs };
 }
 
+/**
+ * Свій підпис порожнього поля замість браузерного.
+ *
+ * На `<input type=date|time>` НЕ МОЖНА поставити placeholder: підказку формату
+ * («дд.мм.рррр», «--:--») малює сам браузер за локаллю ОС. Тому вона в кожного
+ * своя, латиницею і різна для дати й часу — рівно те, що виглядало неохайно.
+ *
+ * Прийом: поки значення порожнє і поле не у фокусі — гасимо текст самого інпута
+ * (`text-transparent`) і кладемо поверх власний підпис. У фокусі підпис зникає,
+ * і людина бачить рідні сегменти, у які друкує. Оверлей не ловить кліки, тож
+ * поле й іконка працюють як завжди.
+ */
+const PLACEHOLDER_TEXT = { date: "дд.мм.рррр", time: "гг:хв" } as const;
+
+/** Відступ підпису мусить збігатися з падінгом інпута — він залежить від розміру. */
+const PLACEHOLDER_POSITION: Record<InputControlSize, string> = {
+  sm: "left-2.5 text-xs",
+  md: "left-3 text-sm",
+  lg: "left-3 text-sm",
+};
+
+function useEmptyPlaceholder(params: {
+  kind: "date" | "time";
+  value: React.ComponentProps<"input">["value"];
+  placeholder?: string;
+  controlSize: InputControlSize;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+}) {
+  const [focused, setFocused] = React.useState(false);
+  const isEmpty = !(typeof params.value === "string" ? params.value : "");
+  const visible = isEmpty && !focused;
+
+  return {
+    visible,
+    text: params.placeholder ?? PLACEHOLDER_TEXT[params.kind],
+    className: PLACEHOLDER_POSITION[params.controlSize],
+    handlers: {
+      onFocus: (event: React.FocusEvent<HTMLInputElement>) => {
+        setFocused(true);
+        params.onFocus?.(event);
+      },
+      onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
+        setFocused(false);
+        params.onBlur?.(event);
+      },
+    },
+  };
+}
+
 const ICON_BUTTON_CLASS = cn(
   // inset-y-0 + flex замість -translate-y-1/2: проєкт на Tailwind v4, де
   // центрування живе у властивості translate і v3-рецепти з нею конфліктують.
@@ -140,12 +190,22 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
       draft = false,
       onDraftCommit,
       saving = false,
+      controlSize = "lg",
+      placeholder,
       ...props
     },
     forwardedRef
   ) => {
     const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
     const [open, setOpen] = React.useState(false);
+    const hint = useEmptyPlaceholder({
+      kind: "date",
+      value: props.value,
+      placeholder,
+      controlSize,
+      onFocus: props.onFocus,
+      onBlur: props.onBlur,
+    });
 
     const rawValue = typeof props.value === "string" ? props.value : "";
     const selected = React.useMemo(() => {
@@ -174,7 +234,26 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
 
     return (
       <div className="relative">
-        <Input {...props} type="date" disabled={disabled} ref={setRefs} className={cn("pr-9", className)} />
+        <Input
+          {...props}
+          {...hint.handlers}
+          type="date"
+          controlSize={controlSize}
+          disabled={disabled}
+          ref={setRefs}
+          className={cn("pr-9", hint.visible && "text-transparent", className)}
+        />
+        {hint.visible ? (
+          <span
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground",
+              hint.className
+            )}
+          >
+            {hint.text}
+          </span>
+        ) : null}
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button type="button" tabIndex={-1} aria-label="Відкрити календар" disabled={disabled} className={ICON_BUTTON_CLASS}>
@@ -272,8 +351,16 @@ DateInput.displayName = "DateInput";
  * і контроль формату.
  */
 const TimeInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
-  ({ className, disabled, ...props }, forwardedRef) => {
+  ({ className, disabled, controlSize = "lg", placeholder, ...props }, forwardedRef) => {
     const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
+    const hint = useEmptyPlaceholder({
+      kind: "time",
+      value: props.value,
+      placeholder,
+      controlSize,
+      onFocus: props.onFocus,
+      onBlur: props.onBlur,
+    });
 
     const openPicker = React.useCallback(() => {
       const node = innerRef.current;
@@ -289,7 +376,26 @@ const TimeInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
 
     return (
       <div className="relative">
-        <Input {...props} type="time" disabled={disabled} ref={setRefs} className={cn("pr-9", className)} />
+        <Input
+          {...props}
+          {...hint.handlers}
+          type="time"
+          controlSize={controlSize}
+          disabled={disabled}
+          ref={setRefs}
+          className={cn("pr-9", hint.visible && "text-transparent", className)}
+        />
+        {hint.visible ? (
+          <span
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground",
+              hint.className
+            )}
+          >
+            {hint.text}
+          </span>
+        ) : null}
         <button
           type="button"
           tabIndex={-1}
