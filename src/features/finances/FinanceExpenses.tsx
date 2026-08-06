@@ -24,6 +24,7 @@ import {
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -448,8 +449,7 @@ function EntryEditor({
       {/* Порядок: дата → звідки → сума → коментар. Радіус rounded-md — як у кнопок
           тієї ж висоти (h-8); дефолтний rounded-xl на низькому полі виглядав завеликим. */}
       {hideDate ? null : (
-        <Input controlSize="sm"
-          type="date"
+        <DateInput controlSize="sm"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           onKeyDown={onKeyDown}
@@ -2442,8 +2442,7 @@ function ExpenseDialog({
                   </div>
                   <div className="grid gap-2">
                     <Label>Дата початку</Label>
-                    <Input
-                      type="date"
+                    <DateInput
                       value={expenseDate}
                       onChange={(e) => setExpenseDate(e.target.value)}
                       className="h-10"
@@ -2499,7 +2498,7 @@ function ExpenseDialog({
               )}
               <div className="grid gap-2">
                 <Label>{isEvent ? "Дата події" : varyingRecurring ? "Веду облік з" : isRecurring ? "Дата початку" : "Дата оплати"}</Label>
-                <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-10" />
+                <DateInput value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="h-10" />
               </div>
 
               {/* FX — на всю ширину, тому наступні рядки не зсуваються */}
@@ -2565,7 +2564,7 @@ function ExpenseDialog({
                   {varyingRecurring ? null : (
                     <div className="grid gap-2">
                       <Label>Наступне списання</Label>
-                      <Input type="date" value={nextChargeDate} onChange={(e) => setNextChargeDate(e.target.value)} className="h-10" />
+                      <DateInput value={nextChargeDate} onChange={(e) => setNextChargeDate(e.target.value)} className="h-10" />
                     </div>
                   )}
 

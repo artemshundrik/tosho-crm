@@ -880,7 +880,11 @@ export function TeamPage() {
         await reloadAbsenceData();
       } catch (error) {
         console.error("[team] absence delete failed", error);
-        toast.error("Не вдалося видалити відсутність");
+        // Причину показуємо: без неї «не вдалося» однаково виглядає і коли немає
+        // прав, і коли ендпойнта просто немає (локальний npm run dev).
+        toast.error("Не вдалося видалити відсутність", {
+          description: error instanceof Error ? error.message : undefined,
+        });
       } finally {
         setAbsenceDeletingId(null);
       }

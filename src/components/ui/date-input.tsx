@@ -61,7 +61,9 @@ const DateInput = React.forwardRef<
         onClick={openPicker}
         disabled={disabled}
         className={cn(
-          "absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-xl text-muted-foreground",
+          // Без власного радіуса: поле буває і rounded-md (controlSize sm), і
+          // rounded-xl (lg), а кнопка прозора — фіксований радіус тут лише б розʼїхався.
+          "absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground",
           "transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
           disabled && "pointer-events-none opacity-50"
         )}

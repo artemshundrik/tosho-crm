@@ -303,9 +303,25 @@ async function callAbsenceFunction(body: Record<string, unknown>): Promise<Recor
     }
   }
   if (!response.ok) {
-    throw new Error(typeof parsed.error === "string" ? parsed.error : `HTTP ${response.status}`);
+    if (typeof parsed.error === "string") throw new Error(parsed.error);
+    // 404 з порожнім тілом = ендпойнта немає взагалі. Локально це майже завжди
+    // `npm run dev`: Vite не роздає /.netlify/functions/*, і кожна дія, що ходить
+    // сюди (подання, погодження, редагування, видалення), падає однаково німо.
+    // Годину на це витрачати не треба — кажемо прямо.
+    if (response.status === 404 && isLocalhost()) {
+      throw new Error(
+        "Серверної функції немає на цьому сервері. Для дій із відсутностями потрібен «npx netlify dev» (http://localhost:8888), звичайний «npm run dev» їх не піднімає."
+      );
+    }
+    throw new Error(`HTTP ${response.status}`);
   }
   return parsed;
+}
+
+function isLocalhost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 }
 
 /**

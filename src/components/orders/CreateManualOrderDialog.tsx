@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1032,7 +1033,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Дедлайн</Label>
-                        <Input type="date" value={createDesignDeadline} onChange={(e) => setCreateDesignDeadline(e.target.value)} />
+                        <DateInput value={createDesignDeadline} onChange={(e) => setCreateDesignDeadline(e.target.value)} />
                       </div>
                     </div>
                     <div className="space-y-1.5">

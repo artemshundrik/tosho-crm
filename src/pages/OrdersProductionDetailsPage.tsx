@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -2591,9 +2592,8 @@ export default function OrdersProductionDetailsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="contract-date">Дата договору</Label>
-                  <Input
+                  <DateInput
                     id="contract-date"
-                    type="date"
                     value={contractDateInput}
                     onChange={(e) => setContractDateInput(e.target.value)}
                     className="h-9"

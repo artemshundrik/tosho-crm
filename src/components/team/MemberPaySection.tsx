@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { loadPayDefaults, loadPayRates, type DesignerPayDefaults, type DesignerPayRate } from "@/lib/designerPayroll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
@@ -209,8 +210,7 @@ export function MemberPaySection({
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium text-foreground">Діє з</Label>
-              <Input
-                type="date"
+              <DateInput
                 value={effectiveFrom}
                 onChange={(event) => setEffectiveFrom(event.target.value)}
                 className={cn(CONTROL_BASE, "h-11")}

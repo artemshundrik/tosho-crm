@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toneTextClass } from "@/lib/statusTones";
@@ -164,9 +165,8 @@ export function HolidayEditorDialog({
           <div className="grid gap-2 sm:grid-cols-[150px_1fr_auto] sm:items-end">
             <div className="space-y-1.5">
               <Label htmlFor="holiday-date">Дата</Label>
-              <Input
+              <DateInput
                 id="holiday-date"
-                type="date"
                 value={draftDate}
                 min={`${year}-01-01`}
                 max={`${year}-12-31`}

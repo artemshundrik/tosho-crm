@@ -4,6 +4,7 @@ import { Check, Loader2, Plus, Search, Wallet } from "lucide-react";
 import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -360,7 +361,7 @@ function PaymentDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Дата</Label>
-              <Input controlSize="md" type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className="h-9" />
+              <DateInput controlSize="md" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-2">
               <Label>Джерело</Label>

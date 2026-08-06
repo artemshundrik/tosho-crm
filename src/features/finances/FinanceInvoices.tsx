@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Check, FileText, Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -584,11 +585,11 @@ function InvoiceDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Дата виставлення</Label>
-              <Input controlSize="md" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="h-9" />
+              <DateInput controlSize="md" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-2">
               <Label>Оплатити до</Label>
-              <Input controlSize="md" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
+              <DateInput controlSize="md" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

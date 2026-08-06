@@ -26,6 +26,7 @@ import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Table,
   TableBody,
@@ -2888,8 +2889,7 @@ export function TeamMembersPage() {
                         </div>
                         <div className="space-y-2">
                           <Label className="text-sm font-medium text-foreground">Дата народження</Label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={editProfileBirthDate}
                             onChange={(event) => setEditProfileBirthDate(event.target.value)}
                             className="h-11"
@@ -2951,8 +2951,7 @@ export function TeamMembersPage() {
                           <>
                             <div className="space-y-2">
                               <Label className="text-sm font-medium text-foreground">Початок відсутності</Label>
-                              <Input
-                                type="date"
+                              <DateInput
                                 value={editProfileAvailabilityStartDate}
                                 onChange={(event) => setEditProfileAvailabilityStartDate(event.target.value)}
                                 className="h-11"
@@ -2961,8 +2960,7 @@ export function TeamMembersPage() {
                             </div>
                             <div className="space-y-2">
                               <Label className="text-sm font-medium text-foreground">Кінець відсутності</Label>
-                              <Input
-                                type="date"
+                              <DateInput
                                 value={editProfileAvailabilityEndDate}
                                 onChange={(event) => setEditProfileAvailabilityEndDate(event.target.value)}
                                 className="h-11"
@@ -2996,8 +2994,7 @@ export function TeamMembersPage() {
                         </div>
                         <div className="space-y-2">
                           <Label className="text-sm font-medium text-foreground">Дата старту</Label>
-                          <Input
-                            type="date"
+                          <DateInput
                             value={editProfileStartDate}
                             onChange={(event) => setEditProfileStartDate(event.target.value)}
                             className="h-11"

@@ -14,6 +14,7 @@ type ContractorReminderRow = {
   name?: string | null;
   services?: string | null;
   reminder_at?: string | null;
+  reminder_repeat?: string | null;
   reminder_comment?: string | null;
 };
 
@@ -78,6 +79,89 @@ function reminderKeyFromHref(href?: string | null) {
   return value?.trim() || null;
 }
 
+const TIME_ZONE = "Europe/Kiev";
+
+type WallClock = { year: number; month: number; day: number; hour: number; minute: number; second: number };
+
+/** Київський настінний час для UTC-моменту. */
+function kyivWallClock(date: Date): WallClock {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour") % 24, // о півночі Intl подекуди віддає 24
+    minute: get("minute"),
+    second: get("second"),
+  };
+}
+
+const asUtcMillis = (w: WallClock) => Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
+
+/**
+ * UTC-момент, київський настінний час якого дорівнює переданому.
+ *
+ * Ітерація, а не формула: зсув Києва залежить від самого моменту (літній/зимовий
+ * час), тож перше наближення коригуємо різницею й перевіряємо ще раз.
+ */
+function kyivWallClockToUtc(target: WallClock): Date {
+  let guess = asUtcMillis(target);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const diff = asUtcMillis(kyivWallClock(new Date(guess))) - asUtcMillis(target);
+    if (diff === 0) break;
+    guess -= diff;
+  }
+  return new Date(guess);
+}
+
+/**
+ * Наступне спрацювання періодичного нагадування — перше, що ще попереду.
+ *
+ * Крок рахуємо в київському настінному часі: reminder_at зберігається справжнім
+ * UTC, і додавання рівно 7×24 годин зсунуло б «щотижня о 10:00» на 09:00 або
+ * 11:00 після переводу годинників.
+ *
+ * Місячний крок тримається за день, на який людина поставила нагадування:
+ * 31 січня + місяць = 28 лютого, а не 3 березня, і наступного місяця знову 31-ше.
+ */
+export function rollReminderForward(iso: string, repeat: "weekly" | "monthly", now: Date): string | null {
+  const start = new Date(iso);
+  if (Number.isNaN(start.getTime())) return null;
+
+  const base = kyivWallClock(start);
+  const anchorDay = base.day;
+  let next = start;
+  let steps = 0;
+
+  while (next.getTime() <= now.getTime() && steps < 400) {
+    steps += 1;
+    let target: WallClock;
+    if (repeat === "weekly") {
+      target = { ...base, day: anchorDay + steps * 7 };
+    } else {
+      const monthIndex = base.month - 1 + steps;
+      const year = base.year + Math.floor(monthIndex / 12);
+      const month = (monthIndex % 12) + 1;
+      // День 0 наступного місяця = останній день цільового.
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      target = { ...base, year, month, day: Math.min(anchorDay, lastDay) };
+    }
+    next = kyivWallClockToUtc(target);
+  }
+
+  return next.getTime() > now.getTime() ? next.toISOString() : null;
+}
+
 function isDeliverableProfile(profile?: ProfileRow) {
   if (!profile) return true;
   const status = normalizeIdentity(profile.employment_status);
@@ -118,7 +202,7 @@ export const handler = async (event: HttpEvent) => {
       adminClient
         .schema("tosho")
         .from("contractors")
-        .select("id,team_id,kind,name,services,reminder_at,reminder_comment")
+        .select("id,team_id,kind,name,services,reminder_at,reminder_repeat,reminder_comment")
         .not("reminder_at", "is", null)
         .lte("reminder_at", nowIso)
         .gte("reminder_at", reminderFromIso)
@@ -190,11 +274,29 @@ export const handler = async (event: HttpEvent) => {
         .filter((value): value is string => Boolean(value))
     );
     const pendingRows: PendingNotificationRow[] = [];
+    const rolled: Array<{ id: string; next: string }> = [];
 
     for (const contractor of contractors) {
       if (!contractor.id || !contractor.team_id || !contractor.reminder_at) continue;
 
+      // Ключ дедупу рахуємо ДО прокрутки — він мусить вказувати на спрацювання,
+      // що саме сталось, а не на наступне.
       const reminderKey = `contractor:${contractor.id}:${contractor.reminder_at}`;
+
+      // Періодичне нагадування: посуваємо дату вперед, поки вона не стане
+      // майбутньою. Крок рахуємо в КИЇВСЬКОМУ настінному часі, щоб «щомісяця
+      // о 10:00» лишалось 10:00 і після переводу годинників — reminder_at
+      // зберігається справжнім UTC, і додавання рівно 24×7 годин з'їхало б на
+      // годину двічі на рік.
+      const repeat = contractor.reminder_repeat === "weekly" || contractor.reminder_repeat === "monthly"
+        ? contractor.reminder_repeat
+        : null;
+      if (repeat) {
+        const next = rollReminderForward(contractor.reminder_at, repeat, now);
+        if (next && next !== contractor.reminder_at) {
+          rolled.push({ id: contractor.id, next });
+        }
+      }
       const params = new URLSearchParams({
         reminder: reminderKey,
         tab: contractor.kind === "supplier" ? "suppliers" : "contractors",
@@ -202,11 +304,15 @@ export const handler = async (event: HttpEvent) => {
       });
       const name = contractor.name?.trim() || (contractor.kind === "supplier" ? "Постачальник" : "Підрядник");
       const title = `Нагадування: ${name}`;
+      const nextRun = rolled.find((entry) => entry.id === contractor.id)?.next ?? null;
       const bodyParts = [
         contractor.kind === "supplier" ? "Постачальник" : "Підрядник",
         contractor.services?.trim() ? `Послуги: ${contractor.services.trim()}` : null,
         contractor.reminder_comment?.trim() || null,
         `Заплановано на ${formatDateTimeUA(contractor.reminder_at)}`,
+        // Періодичне нагадування має одразу казати, коли прийде наступне —
+        // інакше незрозуміло, чи це разовий пінг, чи воно повернеться.
+        nextRun ? `Повторно нагадаємо ${formatDateTimeUA(nextRun)}` : null,
       ].filter(Boolean);
       const href = `/contractors?${params.toString()}`;
       const recipients = recipientsByTeam.get(contractor.team_id) ?? new Set<string>();
@@ -235,9 +341,25 @@ export const handler = async (event: HttpEvent) => {
       pushFailed = delivery.pushFailed;
     }
 
+    // Прокрутку пишемо ПІСЛЯ доставки: якщо доставка впаде, дата лишиться
+    // старою і наступний запуск (раз на хвилину) спробує ще раз. Зворотний
+    // порядок мовчки з'їдав би нагадування.
+    if (rolled.length > 0) {
+      await Promise.all(
+        rolled.map((entry) =>
+          adminClient
+            .schema("tosho")
+            .from("contractors")
+            .update({ reminder_at: entry.next })
+            .eq("id", entry.id)
+        )
+      );
+    }
+
     return jsonResponse(200, {
       success: true,
       scanned: contractors.length,
+      rolled: rolled.length,
       delivered,
       pushDelivered,
       pushFailed,

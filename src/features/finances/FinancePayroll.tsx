@@ -6,6 +6,7 @@ import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -742,8 +743,7 @@ function AdvanceCell({
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" side="bottom" className="w-auto space-y-2 p-2">
-            <Input
-              type="date"
+            <DateInput
               controlSize="sm"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}

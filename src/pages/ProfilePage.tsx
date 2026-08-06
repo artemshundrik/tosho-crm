@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
 import { Link, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { PasswordInput } from "@/components/ui/password-input";
 import {
   Dialog,
@@ -1829,7 +1830,7 @@ export function ProfilePage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Дата народження</label>
-                  <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                  <DateInput value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Телефон</label>

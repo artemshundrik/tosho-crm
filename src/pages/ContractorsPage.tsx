@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
@@ -46,6 +47,7 @@ import {
   Loader2,
   MoreHorizontal,
   PlusCircle,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -61,6 +63,7 @@ type ContractorRow = {
   address?: string | null;
   delivery_info?: string | null;
   reminder_at?: string | null;
+  reminder_repeat?: string | null;
   reminder_comment?: string | null;
   notes?: string | null;
   created_at?: string | null;
@@ -76,6 +79,7 @@ type ContractorFormState = {
   deliveryInfo: string;
   reminderDate: string;
   reminderTime: string;
+  reminderRepeat: ContractorReminderRepeat;
   reminderComment: string;
   notes: string;
 };
@@ -92,11 +96,25 @@ const CONTRACTOR_COLUMNS = [
   "address",
   "delivery_info",
   "reminder_at",
+  "reminder_repeat",
   "reminder_comment",
   "notes",
   "created_at",
   "updated_at",
 ].join(",");
+
+/** Повтор нагадування. «none» — разове, як було до появи періодичності. */
+export type ContractorReminderRepeat = "none" | "weekly" | "monthly";
+
+const CONTRACTOR_REMINDER_REPEAT_LABEL: Record<ContractorReminderRepeat, string> = {
+  none: "Без повтору",
+  weekly: "Щотижня",
+  monthly: "Щомісяця",
+};
+
+function normalizeReminderRepeat(value?: string | null): ContractorReminderRepeat {
+  return value === "weekly" || value === "monthly" ? value : "none";
+}
 
 function normalizeKind(value?: string | null): "contractor" | "supplier" {
   return value === "supplier" ? "supplier" : "contractor";
@@ -111,6 +129,7 @@ const EMPTY_FORM: ContractorFormState = {
   deliveryInfo: "",
   reminderDate: "",
   reminderTime: "",
+  reminderRepeat: "none",
   reminderComment: "",
   notes: "",
 };
@@ -159,6 +178,7 @@ function normalizeFormFromRow(row?: ContractorRow | null): ContractorFormState {
       deliveryInfo: normalizeMultilineValue(row?.delivery_info),
       reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
       reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
+      reminderRepeat: normalizeReminderRepeat(row?.reminder_repeat),
       reminderComment: normalizeMultilineValue(row?.reminder_comment),
       notes: normalizeMultilineValue(row?.notes),
     };
@@ -173,6 +193,7 @@ function normalizeFormFromRow(row?: ContractorRow | null): ContractorFormState {
     deliveryInfo: normalizeMultilineValue(row?.delivery_info),
     reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
     reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
+    reminderRepeat: normalizeReminderRepeat(row?.reminder_repeat),
     reminderComment: normalizeMultilineValue(row?.reminder_comment),
     notes: normalizeMultilineValue(row?.notes),
   };
@@ -457,6 +478,9 @@ export default function ContractorsPage() {
       address: form.address.trim() || null,
       delivery_info: form.deliveryInfo.trim() || null,
       reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
+      // Періодичність без дати нагадування безглузда — прокручувати нема від чого.
+      reminder_repeat:
+        form.reminderRepeat === "none" || !form.reminderDate ? null : form.reminderRepeat,
       reminder_comment: form.reminderComment.trim() || null,
       notes: form.notes.trim() || null,
       updated_at: new Date().toISOString(),
@@ -858,8 +882,7 @@ export default function ContractorsPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Дата нагадування</label>
-              <Input
-                type="date"
+              <DateInput
                 value={form.reminderDate}
                 onChange={(event) => setForm((current) => ({ ...current, reminderDate: event.target.value }))}
               />
@@ -872,6 +895,51 @@ export default function ContractorsPage() {
                 value={form.reminderTime}
                 onChange={(event) => setForm((current) => ({ ...current, reminderTime: event.target.value }))}
               />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-foreground">Повторювати</label>
+              {/* Сегменти, а не дропдаун: варіантів три й усі мають бути видні
+                  одразу — так само, як тип відсутності в діалозі команди. */}
+              <div
+                role="radiogroup"
+                aria-label="Періодичність нагадування"
+                className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner"
+              >
+                {(["none", "weekly", "monthly"] as ContractorReminderRepeat[]).map((option) => {
+                  const active = form.reminderRepeat === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={!form.reminderDate}
+                      onClick={() => setForm((current) => ({ ...current, reminderRepeat: option }))}
+                      className={cn(
+                        "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-all duration-200",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+                        "disabled:cursor-not-allowed disabled:opacity-50",
+                        active
+                          ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)]"
+                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                      )}
+                    >
+                      {option !== "none" ? <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+                      {CONTRACTOR_REMINDER_REPEAT_LABEL[option]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {!form.reminderDate
+                  ? "Спершу вкажіть дату нагадування — від неї рахується повтор."
+                  : form.reminderRepeat === "none"
+                    ? "Нагадаємо один раз і більше не турбуватимемо."
+                    : `Після кожного нагадування дата зсунеться на ${
+                        form.reminderRepeat === "weekly" ? "тиждень" : "місяць"
+                      } уперед — час доби збережеться.`}
+              </p>
             </div>
 
             <div className="space-y-2 sm:col-span-2">

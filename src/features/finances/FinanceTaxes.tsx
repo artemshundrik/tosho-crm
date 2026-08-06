@@ -5,6 +5,7 @@ import { EditIconButton, DeleteIconButton } from "./financeRowActions";
 import { BENTO_COLORS, FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -434,7 +435,7 @@ function TaxDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Сплатити до</Label>
-              <Input controlSize="md" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
+              <DateInput controlSize="md" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-2">
               <Label>Статус</Label>
