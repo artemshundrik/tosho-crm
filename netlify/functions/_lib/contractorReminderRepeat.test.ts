@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rollReminderForward } from "./contractor-reminders";
+import { rollReminderForward } from "../contractor-reminders";
 
 /**
  * reminder_at зберігається справжнім UTC, а людина мислить київським настінним
