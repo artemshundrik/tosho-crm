@@ -510,34 +510,46 @@ export function deadlineUrgencyTone(value: Date | null | undefined): "neutral" |
 }
 
 /**
- * Пікер із чіповим тригером — для шапок і тулбарів, де дата не вводиться, а
+ * Пікер із ДОВІЛЬНИМ тригером — для шапок і тулбарів, де дата не вводиться, а
  * читається («Дедлайн: Завтра 14:00»).
  *
- * Панель та сама, що й у полів: один календар, одні швидкі дії, той самий захист
- * від країв вікна. Різниця лише в тому, за що її чіпляють. Підпис лишається за
- * викликачем — у різних місцях свої формулювання, зводити їх силоміць немає сенсу.
+ * Тригер свідомо лишається за викликачем. Ці пікери стоять у рядах з іншими
+ * чіпами (валюта, менеджер, замовник), і власний вигляд кнопки тут розсинхронив
+ * би весь ряд. Уніфікуємо ПАНЕЛЬ і поведінку — календар, швидкі дії, час,
+ * захист від країв вікна, — а не форму того, за що її смикають.
  */
-const DateTimeChip = React.forwardRef<
-  HTMLButtonElement,
+const DateTimePicker = React.forwardRef<
+  HTMLDivElement,
   {
     value: Date | null;
     onChange: (next: Date | null) => void;
-    children: React.ReactNode;
+    /** Будь-який елемент; отримує onClick від Popover через asChild. */
+    trigger: React.ReactNode;
     withTime?: boolean;
     timePresets?: string[];
-    /** Підсвітити терміновість. Вмикати ТІЛЬКИ на дедлайнах. */
-    urgency?: boolean;
-    disabled?: boolean;
-    className?: string;
+    align?: "start" | "center" | "end";
+    /**
+     * Контрольоване відкриття — коли панель має відкриватись ззовні. Напр.
+     * валідація «Вкажіть дедлайн» одразу розкриває пікер, замість того щоб
+     * лишати людину самій шукати, куди тиснути.
+     */
+    open?: boolean;
+    onOpenChange?: (next: boolean) => void;
   } & PanelBehaviourProps
 >(
   (
-    { value, onChange, children, withTime = true, timePresets = DEFAULT_TIME_PRESETS, urgency = false, disabled, className, draft = false, onDraftCommit, saving = false },
+    { value, onChange, trigger, withTime = true, timePresets = DEFAULT_TIME_PRESETS, align = "start", open: openProp, onOpenChange, draft = false, onDraftCommit, saving = false },
     forwardedRef
   ) => {
-    const [open, setOpen] = React.useState(false);
-    const tone = urgency ? deadlineUrgencyTone(value) : "neutral";
-
+    const [openState, setOpenState] = React.useState(false);
+    const open = openProp ?? openState;
+    const setOpen = React.useCallback(
+      (next: boolean) => {
+        setOpenState(next);
+        onOpenChange?.(next);
+      },
+      [onOpenChange]
+    );
     const timeValue = value ? format(value, "HH:mm") : "";
 
     const pickDate = React.useCallback(
@@ -552,7 +564,7 @@ const DateTimeChip = React.forwardRef<
         }
         if (!draft) setOpen(false);
       },
-      [onChange, timeValue, draft]
+      [onChange, timeValue, draft, setOpen]
     );
 
     const pickTime = React.useCallback(
@@ -566,42 +578,27 @@ const DateTimeChip = React.forwardRef<
     );
 
     return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            ref={forwardedRef}
-            type="button"
-            disabled={disabled}
-            className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:pointer-events-none disabled:opacity-50",
-              tone === "danger" && "border-transparent bg-danger-soft text-danger-foreground",
-              tone === "warning" && "border-transparent bg-warning-soft text-warning-foreground",
-              tone === "neutral" && "border-border/60 text-muted-foreground hover:text-foreground",
-              className
-            )}
-          >
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-            {children}
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
-          <PickerPanel
-            selected={value ?? undefined}
-            onPickDate={pickDate}
-            timeValue={withTime ? timeValue : undefined}
-            onPickTime={pickTime}
-            timePresets={timePresets}
-            draft={draft}
-            onDraftCommit={onDraftCommit}
-            onDraftCancel={() => setOpen(false)}
-            saving={saving}
-          />
-        </PopoverContent>
-      </Popover>
+      <div ref={forwardedRef} className="contents">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+          <PopoverContent align={align} className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
+            <PickerPanel
+              selected={value ?? undefined}
+              onPickDate={pickDate}
+              timeValue={withTime ? timeValue : undefined}
+              onPickTime={pickTime}
+              timePresets={timePresets}
+              draft={draft}
+              onDraftCommit={onDraftCommit}
+              onDraftCancel={() => setOpen(false)}
+              saving={saving}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   }
 );
-DateTimeChip.displayName = "DateTimeChip";
+DateTimePicker.displayName = "DateTimePicker";
 
-export { DateInput, DateTimeInput, DateTimeChip, TimeInput };
+export { DateInput, DateTimeInput, DateTimePicker, TimeInput };

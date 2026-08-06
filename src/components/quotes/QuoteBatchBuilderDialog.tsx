@@ -28,15 +28,13 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TimeInput } from "@/components/ui/picker-input";
+import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
 import { Chip } from "@/components/ui/chip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import {
@@ -111,8 +109,6 @@ const DELIVERY_OPTIONS = [
   { value: "cargo", label: "Вантажне перевезення", icon: Truck },
 ] as const;
 
-const DEFAULT_DEADLINE_TIME = "10:00";
-const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
 type QuoteTypeValue = (typeof QUOTE_TYPES)[number]["value"];
 
@@ -786,7 +782,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [managerId, setManagerId] = React.useState("");
   const [deadlineAt, setDeadlineAt] = React.useState("");
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
-  const [deadlineTimeDraft, setDeadlineTimeDraft] = React.useState(DEFAULT_DEADLINE_TIME);
   const [currency, setCurrency] = React.useState("UAH");
   const [notes, setNotes] = React.useState("");
   const [products, setProducts] = React.useState<ProductDraft[]>(() => [createProductDraft()]);
@@ -830,7 +825,6 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     setManagerId(currentUserId ?? "");
     setDeadlineAt("");
     setDeadlinePopoverOpen(false);
-    setDeadlineTimeDraft(DEFAULT_DEADLINE_TIME);
     setCurrency("UAH");
     setNotes("");
     setProducts([firstProduct]);
@@ -927,46 +921,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const selectedCustomer = customerOptions.find(
     (customer) => customer.id === customerId && customer.entityType === customerType
   );
-  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const deadlineDate = React.useMemo(() => parseDateTimeInput(deadlineAt), [deadlineAt]);
-  const deadlineTime = React.useMemo(() => {
-    if (!deadlineDate) return DEFAULT_DEADLINE_TIME;
-    return `${String(deadlineDate.getHours()).padStart(2, "0")}:${String(deadlineDate.getMinutes()).padStart(2, "0")}`;
-  }, [deadlineDate]);
 
-  React.useEffect(() => {
-    if (!deadlinePopoverOpen) return;
-    setDeadlineTimeDraft(deadlineTime);
-  }, [deadlinePopoverOpen, deadlineTime]);
 
-  const updateDeadlineDate = React.useCallback(
-    (date?: Date) => {
-      if (!date) {
-        setDeadlineAt("");
-        return;
-      }
-      const resolvedTime = isValidDeadlineTime(deadlineTimeDraft.trim())
-        ? deadlineTimeDraft.trim()
-        : deadlineTime;
-      const [hours, minutes] = resolvedTime.split(":").map((part) => Number(part) || 0);
-      const next = new Date(date);
-      next.setHours(hours, minutes, 0, 0);
-      setDeadlineAt(formatDateTimeInput(next));
-    },
-    [deadlineTime, deadlineTimeDraft]
-  );
 
-  const updateDeadlineTime = React.useCallback(
-    (value: string) => {
-      setDeadlineTimeDraft(value);
-      if (!isValidDeadlineTime(value) || !deadlineDate) return;
-      const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
-      const next = new Date(deadlineDate);
-      next.setHours(hours, minutes, 0, 0);
-      setDeadlineAt(formatDateTimeInput(next));
-    },
-    [deadlineDate]
-  );
 
   const activeProduct = products.find((product) => product.id === activeProductId) ?? products[0];
   const activeIndex = Math.max(0, products.findIndex((product) => product.id === activeProduct?.id));
@@ -1821,43 +1779,18 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     ))}
                   </SelectContent>
                 </Select>
-                <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-                  <PopoverTrigger asChild>
+                {/* Дедлайн — спільний пікер; тригером лишається чіп цього ряду. */}
+                <DateTimePicker
+                  value={deadlineDate ?? null}
+                  onChange={(next) => setDeadlineAt(next ? formatDateTimeInput(next) : "")}
+                  open={deadlinePopoverOpen}
+                  onOpenChange={setDeadlinePopoverOpen}
+                  trigger={
                     <Chip size="md" icon={<CalendarIcon />} active={Boolean(deadlineDate)}>
                       {deadlineDate ? format(deadlineDate, "d MMM, HH:mm", { locale: uk }) : "Дедлайн"}
                     </Chip>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={deadlineDate ?? undefined}
-                      onSelect={(date) => updateDeadlineDate(date ?? undefined)}
-                      captionLayout="dropdown-buttons"
-                      fromYear={currentYear - 3}
-                      toYear={currentYear + 5}
-                      initialFocus
-                    />
-                    <div className="border-t border-border/50 px-3 py-3">
-                      <div className="text-xs uppercase tracking-caps text-muted-foreground">
-                        Час дедлайну
-                      </div>
-                      <TimeInput
-                        value={deadlineTimeDraft}
-                        onChange={(event) => updateDeadlineTime(event.target.value)}
-                        onBlur={() => {
-                          const normalized = isValidDeadlineTime(deadlineTimeDraft.trim())
-                            ? deadlineTimeDraft.trim()
-                            : DEFAULT_DEADLINE_TIME;
-                          setDeadlineTimeDraft(normalized);
-                          updateDeadlineTime(normalized);
-                        }}
-                        step={60}
-                        className="mt-2 h-9"
-                      />
-                    </div>
-                    <DateQuickActions onSelect={(date) => updateDeadlineDate(date ?? undefined)} />
-                  </PopoverContent>
-                </Popover>
+                  }
+                />
                 <Select value={currency} onValueChange={setCurrency}>
                   <SelectTrigger className="h-9 w-[104px] rounded-full">
                     <SelectValue placeholder="Валюта" />

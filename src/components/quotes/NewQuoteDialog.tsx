@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TimeInput } from "@/components/ui/picker-input";
+import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Chip } from "@/components/ui/chip";
@@ -25,8 +25,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
@@ -138,7 +136,6 @@ const DELIVERY_OPTIONS = [
 ];
 
 const DEFAULT_DEADLINE_TIME = "10:00";
-const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 const createDefaultDeadline = (time = DEFAULT_DEADLINE_TIME) => {
   if (time === DEFAULT_DEADLINE_TIME) {
     const now = new Date();
@@ -656,40 +653,11 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const [customerPopoverOpen, setCustomerPopoverOpen] = React.useState(false);
   const [managerPopoverOpen, setManagerPopoverOpen] = React.useState(false);
   const [deadlinePopoverOpen, setDeadlinePopoverOpen] = React.useState(false);
-  const [deadlineTimeDraft, setDeadlineTimeDraft] = React.useState(DEFAULT_DEADLINE_TIME);
   const [currencyPopoverOpen, setCurrencyPopoverOpen] = React.useState(false);
   const [deliveryPopoverOpen, setDeliveryPopoverOpen] = React.useState(false);
-  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
-  const deadlineTime = React.useMemo(() => {
-    if (!deadline) return DEFAULT_DEADLINE_TIME;
-    return `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}`;
-  }, [deadline]);
 
-  const updateDeadlineDate = React.useCallback((date?: Date) => {
-    if (!date) {
-      setDeadline(undefined);
-      return;
-    }
-    const resolvedTime = isValidDeadlineTime(deadlineTimeDraft.trim()) ? deadlineTimeDraft.trim() : DEFAULT_DEADLINE_TIME;
-    const [hours, minutes] = resolvedTime.split(":").map((part) => Number(part) || 0);
-    const next = new Date(date);
-    next.setHours(hours, minutes, 0, 0);
-    setDeadline(next);
-  }, [deadlineTimeDraft]);
 
-  const updateDeadlineTime = React.useCallback((value: string) => {
-    setDeadlineTimeDraft(value);
-    if (!isValidDeadlineTime(value)) return;
-    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
-    const next = deadline ? new Date(deadline) : createDefaultDeadline(value);
-    next.setHours(hours, minutes, 0, 0);
-    setDeadline(next);
-  }, [deadline]);
 
-  React.useEffect(() => {
-    if (!deadlinePopoverOpen) return;
-    setDeadlineTimeDraft(deadlineTime);
-  }, [deadlinePopoverOpen, deadlineTime]);
 
   const selectedType = React.useMemo(
     () => catalogTypes.find((type) => type.id === categoryId),
@@ -1816,52 +1784,18 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             </PopoverContent>
           </Popover>
 
-          {/* Deadline */}
-          <Popover open={deadlinePopoverOpen} onOpenChange={setDeadlinePopoverOpen}>
-            <PopoverTrigger asChild>
+          {/* Дедлайн — спільний пікер; тригером лишається чіп цього ряду. */}
+          <DateTimePicker
+            value={deadline ?? null}
+            onChange={(next) => setDeadline(next ?? undefined)}
+            open={deadlinePopoverOpen}
+            onOpenChange={setDeadlinePopoverOpen}
+            trigger={
               <Chip size="md" icon={<CalendarIcon />} active={!!deadline}>
-                {deadline
-                  ? format(deadline, "d MMM, HH:mm", { locale: uk })
-                  : "Дедлайн *"}
+                {deadline ? format(deadline, "d MMM, HH:mm", { locale: uk }) : "Дедлайн *"}
               </Chip>
-            </PopoverTrigger>
-            <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={deadline}
-                onSelect={(date) => {
-                  updateDeadlineDate(date ?? undefined);
-                }}
-                captionLayout="dropdown-buttons"
-                fromYear={currentYear - 3}
-                toYear={currentYear + 5}
-                initialFocus
-              />
-              <div className="border-t border-border/50 px-3 py-3">
-                <div className="text-xs uppercase tracking-caps text-muted-foreground">
-                  Час дедлайну
-                </div>
-                <TimeInput
-                  value={deadlineTimeDraft}
-                  onChange={(e) => updateDeadlineTime(e.target.value)}
-                  onBlur={() => {
-                    const normalized = isValidDeadlineTime(deadlineTimeDraft.trim())
-                      ? deadlineTimeDraft.trim()
-                      : DEFAULT_DEADLINE_TIME;
-                    setDeadlineTimeDraft(normalized);
-                    updateDeadlineTime(normalized);
-                  }}
-                  step={60}
-                  className="mt-2 h-9"
-                />
-              </div>
-              <DateQuickActions
-                onSelect={(date) => {
-                  updateDeadlineDate(date ?? undefined);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
+            }
+          />
 
           {/* Currency */}
           <Popover open={currencyPopoverOpen} onOpenChange={setCurrencyPopoverOpen}>
