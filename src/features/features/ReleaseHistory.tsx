@@ -6,17 +6,19 @@ import { cn } from "@/lib/utils";
 import {
   CHANGE_TYPE_BAR,
   CHANGE_TYPE_TONE,
+  compareScopes,
   groupByMonth,
+  legendTotals,
   monthIn,
   monthOf,
   monthTitle,
+  monthTotals,
   paceDelta,
-  scopeBreakdown,
   summarize,
   typeLabel,
   workingDays,
   type Release,
-  type ScopeBucket,
+  type ScopeComparison,
 } from "@/lib/releaseHistory";
 
 /**
@@ -26,8 +28,8 @@ import {
  * мене», а «скільки роботи зроблено». Тому джерело тут git, а не курований
  * список анонсів — у стрічку більшість дрібних правок свідомо не потрапляє.
  *
- * ЧОМУ САМЕ РОЗДІЛИ, А НЕ ДНІ: обсяг без розподілу нічого не пояснює. 112 змін
- * за місяць виглядають однаково, чи то був один великий розділ, чи дванадцять
+ * ЧОМУ РОЗДІЛИ, А НЕ ДНІ: обсяг без розподілу нічого не пояснює. 112 змін за
+ * місяць виглядають однаково, чи то був один великий розділ, чи дванадцять
  * дрібних. Денна деталізація потрібна рідко, тож вона всередині розділу.
  */
 
@@ -62,12 +64,18 @@ function useReleases() {
   });
 }
 
+function formatDay(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "—" : DAY.format(date);
+}
+
 export function ReleaseHistory() {
   const { data: releases, isPending } = useReleases();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByMonth(releases ?? []), [releases]);
   const allTime = useMemo(() => summarize(releases ?? []), [releases]);
+  const months = useMemo(() => monthTotals(groups), [groups]);
 
   if (isPending) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Завантажую…</p>;
@@ -92,9 +100,14 @@ export function ReleaseHistory() {
   // показувало б падіння там, де його немає.
   const delta = previous ? paceDelta(current.releases, previous.releases) : null;
 
+  const rows = compareScopes(current.releases, previous?.releases ?? []);
+  const scale = Math.max(...rows.map((row) => Math.max(row.current, row.previous)), 1);
+  const legend = legendTotals(allTime.byType);
+  const thisMonthKey = new Date().toISOString().slice(0, 7);
+  const monthScale = Math.max(...months.map((month) => month.changes), 1);
+
   return (
     <div className="grid gap-8">
-      {/* Обсяг останнього місяця — перше, на що дивляться. */}
       <header className="grid gap-4">
         <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
           <p className="text-5xl font-light leading-none tracking-tighter tabular-nums">
@@ -102,8 +115,7 @@ export function ReleaseHistory() {
           </p>
           <p className="pb-1 text-sm leading-tight text-muted-foreground">
             <span className="block">
-              змін у{" "}
-              <span className="font-medium text-foreground">{monthIn(current.key)}</span>
+              змін у <span className="font-medium text-foreground">{monthIn(current.key)}</span>
             </span>
             <span className="block">за {days} днів роботи</span>
           </p>
@@ -113,7 +125,7 @@ export function ReleaseHistory() {
               <span
                 className={cn(
                   "block text-xl font-semibold tabular-nums",
-                  delta >= 0 ? "text-success-foreground" : "text-muted-foreground"
+                  delta >= 0 ? "text-chart-3" : "text-muted-foreground"
                 )}
               >
                 {delta > 0 ? "+" : ""}
@@ -136,7 +148,7 @@ export function ReleaseHistory() {
             <span className="font-medium text-foreground tabular-nums">{allTime.changes}</span> змін
             за весь час, із них
           </span>
-          {allTime.byType.map((item) => (
+          {legend.map((item) => (
             <span key={item.type} className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden
@@ -146,93 +158,155 @@ export function ReleaseHistory() {
                 )}
               />
               <span className="font-medium text-foreground tabular-nums">{item.count}</span>
-              {typeLabel(item.type)}
+              {item.label}
             </span>
           ))}
         </div>
       </header>
 
-      {groups.map((group) => {
-        const summary = summarize(group.releases);
-        const buckets = scopeBreakdown(group.releases);
-        const max = buckets[0]?.total ?? 1;
+      {/* Місяць до місяця. Смуга — обсяг, але поруч обов'язково скільки днів
+          враховано: без цього неповний місяць читається як провальний. */}
+      <section className="grid gap-2">
+        <header className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-sm font-semibold tracking-tight">Місяць до місяця</h2>
+          <span className="text-xs text-muted-foreground">
+            жоден місяць у вибірці поки не повний
+          </span>
+        </header>
 
-        return (
-          <section key={group.key} className="grid gap-3">
-            <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="text-sm font-semibold tracking-tight">{monthTitle(group.key)}</h2>
-              <span className="text-xs text-muted-foreground">
-                {summary.changes} змін · {summary.releases} релізів · {buckets.length} розділів
-              </span>
-            </header>
+        <div className="grid gap-1.5">
+          {months.map((month) => {
+            const partial = Number(month.firstDay.slice(8, 10)) > 1;
+            const ongoing = month.key === thisMonthKey;
+            return (
+              <div
+                key={month.key}
+                className="grid grid-cols-[minmax(5rem,8.5rem)_minmax(0,1fr)] items-center gap-3"
+              >
+                <span className="truncate text-right text-sm font-medium">
+                  {monthTitle(month.key)}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-6 shrink-0 rounded-md bg-chart-3/80"
+                    style={{ width: `${Math.max((month.changes / monthScale) * 55, 4)}%` }}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground tabular-nums">
+                      {month.changes}
+                    </span>{" "}
+                    змін за{" "}
+                    <span className="font-medium text-foreground tabular-nums">{month.days}</span>{" "}
+                    дн. · {month.perDay} за день
+                    {/* Неповні місяці треба називати неповними, інакше коротша
+                        смуга читається як «менше працювали». */}
+                    {ongoing ? <em className="not-italic"> · місяць ще триває</em> : null}
+                    {!ongoing && partial ? (
+                      <em className="not-italic"> · історія з {formatDay(month.firstDay)}</em>
+                    ) : null}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
-            <div className="grid gap-px">
-              {buckets.map((bucket) => (
-                <ScopeRow
-                  key={bucket.scope}
-                  bucket={bucket}
-                  share={bucket.total / max}
-                  open={expanded === `${group.key}:${bucket.scope}`}
-                  onToggle={() =>
-                    setExpanded((prev) =>
-                      prev === `${group.key}:${bucket.scope}`
-                        ? null
-                        : `${group.key}:${bucket.scope}`
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {/* Куди пішла робота — з рискою на місці минулого місяця. */}
+      <section className="grid gap-2">
+        <header className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-sm font-semibold tracking-tight">Куди пішла робота</h2>
+          {previous ? (
+            <span className="text-xs text-muted-foreground">
+              {monthTitle(current.key)} проти {monthOf(previous.key)} · риска — минулий місяць
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">{monthTitle(current.key)}</span>
+          )}
+        </header>
+
+        <div className="grid gap-px">
+          {rows.map((row) => (
+            <ScopeRow
+              key={row.scope}
+              row={row}
+              scale={scale}
+              hasPrevious={Boolean(previous)}
+              open={expanded === row.scope}
+              onToggle={() => setExpanded((prev) => (prev === row.scope ? null : row.scope))}
+            />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
 function ScopeRow({
-  bucket,
-  share,
+  row,
+  scale,
+  hasPrevious,
   open,
   onToggle,
 }: {
-  bucket: ScopeBucket;
-  /** Частка від найбільшого розділу місяця — задає довжину смуги. */
-  share: number;
+  row: ScopeComparison;
+  /** Найбільше значення обох місяців — щоб риска й смуга були в одній шкалі. */
+  scale: number;
+  hasPrevious: boolean;
   open: boolean;
   onToggle: () => void;
 }) {
+  const total = row.byType.reduce((sum, item) => sum + item.count, 0) || 1;
+
   return (
     <div>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="grid w-full cursor-pointer grid-cols-[minmax(5rem,8.5rem)_minmax(0,1fr)_2.25rem] items-center gap-3 rounded-lg py-1.5 pr-1 text-left transition-colors hover:bg-secondary/60"
+        className="grid w-full cursor-pointer grid-cols-[minmax(5rem,8.5rem)_minmax(0,1fr)_4.5rem] items-center gap-3 rounded-lg py-1.5 pr-1 text-left transition-colors hover:bg-secondary/60"
       >
-        <span className="truncate text-right text-sm font-medium">{bucket.scope}</span>
+        <span className="truncate text-right text-sm font-medium">{row.scope}</span>
 
-        {/* Довжина смуги — обсяг, заливка — склад роботи. Рейка на всю ширину
-            навмисно немає: однакові рамки з'їдають саме те порівняння, заради
-            якого смуга й малюється. */}
-        <span
-          className="flex h-5 min-w-px items-stretch overflow-hidden rounded-md bg-secondary"
-          style={{ width: `${Math.max(share * 100, 3)}%` }}
-        >
-          {bucket.byType.map((item) => (
+        <span className="relative flex h-5 items-stretch">
+          {/* Довжина — обсяг цього місяця, заливка — склад роботи. */}
+          <span
+            className="flex overflow-hidden rounded-md"
+            style={{ width: `${(row.current / scale) * 100}%` }}
+          >
+            {row.byType.map((item) => (
+              <span
+                key={item.type}
+                className={cn(CHANGE_TYPE_BAR[item.type] ?? CHANGE_TYPE_BAR.other)}
+                style={{ width: `${(item.count / total) * 100}%` }}
+                title={`${item.count} ${typeLabel(item.type)}`}
+              />
+            ))}
+          </span>
+
+          {hasPrevious && row.previous > 0 ? (
             <span
-              key={item.type}
-              className={cn(CHANGE_TYPE_BAR[item.type] ?? CHANGE_TYPE_BAR.other)}
-              style={{ width: `${(item.count / bucket.total) * 100}%` }}
-              title={`${item.count} ${typeLabel(item.type)}`}
+              aria-hidden
+              title={`минулого місяця: ${row.previous}`}
+              className="absolute -top-0.5 -bottom-0.5 w-0.5 rounded-full bg-foreground/45"
+              style={{ left: `${(row.previous / scale) * 100}%` }}
             />
-          ))}
+          ) : null}
         </span>
 
-        <span className="flex items-center justify-end gap-1 text-xs tabular-nums text-muted-foreground">
-          {bucket.total}
+        <span className="flex items-center justify-end gap-1.5 text-xs tabular-nums">
+          <span className="font-medium">{row.current}</span>
+          {hasPrevious && row.delta !== 0 ? (
+            <span className="text-muted-foreground">
+              {row.delta > 0 ? "+" : "−"}
+              {Math.abs(row.delta)}
+            </span>
+          ) : null}
           <ChevronDown
-            className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-180")}
+            className={cn(
+              "h-3 w-3 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180"
+            )}
           />
         </span>
       </button>
@@ -240,7 +314,7 @@ function ScopeRow({
       {open ? (
         <ul className="grid gap-1 py-2 pl-[calc(8.5rem+0.75rem)] pr-2">
           <li className="flex flex-wrap gap-1 pb-1">
-            {bucket.byType.map((item) => (
+            {row.byType.map((item) => (
               <span
                 key={item.type}
                 className={cn(
@@ -252,20 +326,17 @@ function ScopeRow({
               </span>
             ))}
           </li>
-          {bucket.changes.map((change) => {
-            const date = new Date(change.releasedAt);
-            return (
-              <li key={change.sha} className="flex gap-2 text-xs leading-5">
-                <time className="w-14 shrink-0 tabular-nums text-muted-foreground">
-                  {Number.isNaN(date.getTime()) ? "—" : DAY.format(date)}
-                </time>
-                <span className="min-w-0 flex-1">{change.subject}</span>
-                <code className="shrink-0 font-mono text-3xs text-muted-foreground">
-                  {change.sha}
-                </code>
-              </li>
-            );
-          })}
+          {row.changes.map((change) => (
+            <li key={change.sha} className="flex gap-2 text-xs leading-5">
+              <time className="w-14 shrink-0 tabular-nums text-muted-foreground">
+                {formatDay(change.releasedAt)}
+              </time>
+              <span className="min-w-0 flex-1">{change.subject}</span>
+              <code className="shrink-0 font-mono text-3xs text-muted-foreground">
+                {change.sha}
+              </code>
+            </li>
+          ))}
         </ul>
       ) : null}
     </div>

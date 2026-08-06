@@ -45,16 +45,40 @@ export const CHANGE_TYPE_TONE: Record<string, string> = {
   other: "bg-secondary text-muted-foreground",
 };
 
-/** Заливка смуги розподілу. Кольори ті самі, що в чипах типів. */
+/**
+ * Заливка смуги розподілу — з канонічної палітри графіків, а не зі статусних
+ * токенів: warning-foreground це темна печена помаранч для тексту попередження,
+ * і в смузі вона виглядає брудно.
+ *
+ * Кольорами позначені лише два типи, які насправді читають: нове й
+ * виправлення. Решта — сірим одним тоном, бо це 26 змін із 273, і три різні
+ * відтінки сірого в легенді лише засмічують її. Точний розклад видно в чипах,
+ * коли розділ розгорнути.
+ */
 export const CHANGE_TYPE_BAR: Record<string, string> = {
-  feat: "bg-success/70",
-  fix: "bg-warning/65",
-  perf: "bg-info/60",
-  refactor: "bg-muted-foreground/30",
-  style: "bg-muted-foreground/22",
-  test: "bg-muted-foreground/22",
-  other: "bg-muted-foreground/16",
+  feat: "bg-chart-3",
+  fix: "bg-chart-7",
+  perf: "bg-muted-foreground/35",
+  refactor: "bg-muted-foreground/35",
+  style: "bg-muted-foreground/35",
+  test: "bg-muted-foreground/35",
+  other: "bg-muted-foreground/35",
 };
+
+/** Легенда: два кольори плюс «решта» одним рядком. */
+export function legendTotals(
+  byType: Array<{ type: string; count: number }>
+): Array<{ type: string; label: string; count: number }> {
+  const named = byType.filter((item) => item.type === "feat" || item.type === "fix");
+  const rest = byType
+    .filter((item) => item.type !== "feat" && item.type !== "fix")
+    .reduce((sum, item) => sum + item.count, 0);
+
+  return [
+    ...named.map((item) => ({ type: item.type, label: typeLabel(item.type), count: item.count })),
+    ...(rest > 0 ? [{ type: "other", label: "решта", count: rest }] : []),
+  ];
+}
 
 /**
  * Скоупи комітів → назви розділів CRM. Невідомий скоуп показуємо як є:
@@ -244,6 +268,84 @@ export function paceDelta(current: Release[], previous: Release[]): number | nul
     return releases.reduce((sum, release) => sum + release.changes.length, 0) / days;
   };
   return deltaPercent(rate(current), rate(previous));
+}
+
+export type MonthTotals = {
+  key: string;
+  changes: number;
+  days: number;
+  perDay: number;
+  /** Найраніший день місяця у вибірці — щоб позначити обрізаний початок. */
+  firstDay: string;
+};
+
+/**
+ * Підсумки по місяцях для смуги «місяць до місяця».
+ *
+ * ГОЧА: місяці у вибірці майже ніколи не повні — поточний ще триває, а
+ * найдавніший обрізаний межею відновлення історії. Смуга за обсягом це
+ * показує чесно тільки разом із підписом, скільки днів у місяці враховано;
+ * firstDay існує саме для того, щоб такий місяць було чим позначити. Без
+ * підпису коротша смуга читається як «менше працювали», і це неправда.
+ */
+export function monthTotals(groups: Array<{ key: string; releases: Release[] }>): MonthTotals[] {
+  return groups.map((group) => {
+    const days = workingDays(group.releases);
+    const changes = group.releases.reduce((sum, release) => sum + release.changes.length, 0);
+    const dates = group.releases.map((release) => release.releasedAt.slice(0, 10)).sort();
+    return {
+      key: group.key,
+      changes,
+      days,
+      perDay: days === 0 ? 0 : Math.round((changes / days) * 10) / 10,
+      firstDay: dates[0] ?? `${group.key}-01`,
+    };
+  });
+}
+
+export type ScopeComparison = {
+  scope: string;
+  current: number;
+  previous: number;
+  /** Наскільки більше чи менше, у штуках. */
+  delta: number;
+  byType: Array<{ type: string; count: number }>;
+  /** Зміни обох періодів, найновіші першими. */
+  changes: ScopedChange[];
+};
+
+/**
+ * Зіставлення розділів двох періодів: скільки в кожному цього місяця, скільки
+ * було минулого. Саме тут видно, куди перемістилась робота — підсумки цього
+ * не кажуть.
+ *
+ * Порядок: спершу за поточним місяцем, потім за минулим, щоб розділи, які
+ * цього місяця не чіпали, не губились унизу без пояснення.
+ */
+export function compareScopes(current: Release[], previous: Release[]): ScopeComparison[] {
+  const currentBuckets = new Map(scopeBreakdown(current).map((b) => [b.scope, b]));
+  const previousBuckets = new Map(scopeBreakdown(previous).map((b) => [b.scope, b]));
+  const scopes = new Set([...currentBuckets.keys(), ...previousBuckets.keys()]);
+
+  return Array.from(scopes)
+    .map((scope) => {
+      const now = currentBuckets.get(scope);
+      const before = previousBuckets.get(scope);
+      return {
+        scope,
+        current: now?.total ?? 0,
+        previous: before?.total ?? 0,
+        delta: (now?.total ?? 0) - (before?.total ?? 0),
+        byType: now?.byType ?? before?.byType ?? [],
+        changes: [...(now?.changes ?? []), ...(before?.changes ?? [])].sort((a, b) =>
+          b.releasedAt.localeCompare(a.releasedAt)
+        ),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.current - a.current || b.previous - a.previous || a.scope.localeCompare(b.scope, "uk")
+    );
 }
 
 /**

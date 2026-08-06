@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareScopes,
   deltaPercent,
   groupByMonth,
+  legendTotals,
+  monthTotals,
   monthIn,
   monthOf,
   monthTitle,
@@ -182,6 +185,98 @@ describe("порівняння з минулим періодом", () => {
 
     expect(deltaPercent(114, 162)).toBe(-30);
     expect(paceDelta(august, july)).toBe(6);
+  });
+});
+
+describe("легенда", () => {
+  it("два кольори й «решта» одним рядком", () => {
+    const legend = legendTotals([
+      { type: "feat", count: 147 },
+      { type: "fix", count: 100 },
+      { type: "perf", count: 3 },
+      { type: "refactor", count: 14 },
+      { type: "style", count: 3 },
+      { type: "other", count: 6 },
+    ]);
+    expect(legend).toEqual([
+      { type: "feat", label: "нове", count: 147 },
+      { type: "fix", label: "виправлення", count: 100 },
+      { type: "other", label: "решта", count: 26 },
+    ]);
+  });
+
+  it("без дрібних типів «решти» немає", () => {
+    const legend = legendTotals([{ type: "feat", count: 5 }]);
+    expect(legend).toHaveLength(1);
+  });
+
+  it("сума легенди дорівнює сумі змін", () => {
+    const byType = [
+      { type: "feat", count: 9 },
+      { type: "refactor", count: 4 },
+      { type: "test", count: 2 },
+    ];
+    const legend = legendTotals(byType);
+    expect(legend.reduce((sum, item) => sum + item.count, 0)).toBe(15);
+  });
+});
+
+describe("зіставлення розділів", () => {
+  const august = [
+    release("2026-08-06T10:00:00Z", [
+      change({ scope: "chat", sha: "a1" }),
+      change({ scope: "chat", sha: "a2" }),
+      change({ scope: "team", sha: "a3" }),
+    ]),
+  ];
+  const july = [
+    release("2026-07-30T10:00:00Z", [
+      change({ scope: "chat", sha: "b1" }),
+      change({ scope: "finances", sha: "b2" }),
+      change({ scope: "finances", sha: "b3" }),
+    ]),
+  ];
+
+  it("рахує приріст і спад по розділу", () => {
+    const rows = compareScopes(august, july);
+    const chat = rows.find((row) => row.scope === "Обговорення");
+    expect(chat).toMatchObject({ current: 2, previous: 1, delta: 1 });
+  });
+
+  it("розділ без роботи цього місяця не губиться", () => {
+    const rows = compareScopes(august, july);
+    const finances = rows.find((row) => row.scope === "Фінанси");
+    expect(finances).toMatchObject({ current: 0, previous: 2, delta: -2 });
+  });
+
+  it("спершу за поточним місяцем, торішнє — нижче", () => {
+    const rows = compareScopes(august, july);
+    expect(rows.map((row) => row.scope)).toEqual(["Обговорення", "Команда", "Фінанси"]);
+  });
+
+  it("зміни обох періодів, найновіші першими", () => {
+    const chat = compareScopes(august, july).find((row) => row.scope === "Обговорення");
+    expect(chat?.changes.map((item) => item.sha)).toEqual(["a1", "a2", "b1"]);
+  });
+});
+
+describe("підсумки по місяцях", () => {
+  it("рахує дні, темп і початок вибірки", () => {
+    const totals = monthTotals([
+      {
+        key: "2026-07",
+        releases: [
+          release("2026-07-30T10:00:00Z", [change(), change()]),
+          release("2026-07-23T10:00:00Z", [change()]),
+        ],
+      },
+    ]);
+    expect(totals[0]).toMatchObject({
+      changes: 3,
+      days: 2,
+      perDay: 1.5,
+      firstDay: "2026-07-23", // історія починається не з 1 липня — це треба показати
+    });
   });
 });
 
