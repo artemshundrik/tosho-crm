@@ -941,47 +941,55 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     [monthlyFor, selectedMonth]
   );
 
-  const { fixed, variable } = React.useMemo(() => {
+  // Три кошики, а не два. Подія (корпоратив, ДР) технічно is_recurring — це те, що
+  // дає їй журнал позицій, — але за природою вона РАЗОВА. Тримати її в `fixed`
+  // означало завищувати «регулярну базу / міс» на суму корпоративу в тому місяці,
+  // коли він стався. Тому ділимо тут, у джерелі, а не в секціях нижче.
+  const { fixed, allEvents, variable } = React.useMemo(() => {
     const fixedList: FinanceExpense[] = [];
+    const eventList: FinanceExpense[] = [];
     const variableList: FinanceExpense[] = [];
     for (const expense of visibleExpenses) {
-      if (expense.isRecurring) fixedList.push(expense);
+      if (expense.eventType) eventList.push(expense);
+      else if (expense.isRecurring) fixedList.push(expense);
       else variableList.push(expense);
     }
     // Найдорожче на місяць — зверху, щоб одразу було видно, що з'їдає бюджет.
     fixedList.sort((a, b) => (monthlyForSelected(b) ?? 0) - (monthlyForSelected(a) ?? 0));
-    return { fixed: fixedList, variable: variableList };
+    return { fixed: fixedList, allEvents: eventList, variable: variableList };
   }, [visibleExpenses, monthlyForSelected]);
 
-  // Регулярна місячна база за вибраний місяць (змінні платежі — фактом того місяця).
+  // Регулярна місячна база — тільки справжні зобовʼязання: оренда, підписки,
+  // комуналка. Подій тут немає за побудовою `fixed` вище.
   const fixedBaseline = React.useMemo(
     () => fixed.reduce((sum, e) => sum + (monthlyForSelected(e) ?? 0), 0),
     [fixed, monthlyForSelected]
   );
 
+  // Подія показується ЛИШЕ в місяці своєї дати — інакше корпоратив із липня
+  // дублювався б у серпні, вересні й далі з усіма своїми позиціями.
+  const events = React.useMemo(
+    () =>
+      allEvents
+        .filter((e) => (e.expenseDate ?? "").slice(0, 7) === selectedMonth)
+        // Найсвіжіші зверху — вони разові за природою.
+        .sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? "")),
+    [allEvents, selectedMonth]
+  );
+
   // Дві різні природи витрат в одному блоці читались як каша: підписка на Dropbox
   // і оренда офісу — це різні рішення й різні розмови. Ділимо за наявністю бренду.
-  const { services, recurringOther, events } = React.useMemo(() => {
+  const { services, recurringOther } = React.useMemo(() => {
     const servicesList: FinanceExpense[] = [];
     const otherList: FinanceExpense[] = [];
-    const eventList: FinanceExpense[] = [];
     for (const expense of fixed) {
-      // Подія (корпоратив, ДР) — окремий світ: не платіж і не сервіс. Технічно вона
-      // is_recurring (це те, що дає їй журнал позицій), але за природою РАЗОВА —
-      // тож показуємо її ЛИШЕ в місяці її дати, інакше корпоратив із липня
-      // дублювався б у серпні, вересні й далі з усіма своїми позиціями.
-      if (expense.eventType) {
-        if ((expense.expenseDate ?? "").slice(0, 7) === selectedMonth) eventList.push(expense);
-      }
       // «Сервіси та підписки» = впізнаваний бренд І СТАЛА сума. Змінні з журналом
       // (логістика, комуналка) лишаються в «Інші регулярні» навіть із лого бренду.
-      else if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
+      if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
       else otherList.push(expense);
     }
-    // Найсвіжіші події зверху — вони разові за природою.
-    eventList.sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? ""));
-    return { services: servicesList, recurringOther: otherList, events: eventList };
-  }, [fixed, selectedMonth]);
+    return { services: servicesList, recurringOther: otherList };
+  }, [fixed]);
 
   const sumMonthly = React.useCallback(
     (list: FinanceExpense[]) => list.reduce((sum, e) => sum + (monthlyForSelected(e) ?? 0), 0),
@@ -1059,19 +1067,26 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   const undatedItems = React.useMemo(() => variableByMonth.get("") ?? [], [variableByMonth]);
 
   // --- Bento-підсумок місяця: разом + дельта до попереднього + розподіл --------
-  const monthTotal = fixedBaseline + selectedVariableSum;
+  // Подія в «разом за місяць» входить (це витрачені гроші), але в «регулярну базу»
+  // — ні: корпоратив не є щомісячним зобовʼязанням. Тому окремий доданок.
+  const eventsTotal = React.useMemo(() => sumMonthly(events), [events, sumMonthly]);
+  const monthTotal = fixedBaseline + eventsTotal + selectedVariableSum;
   const prevMonthKey = shiftMonthKey(selectedMonth, -1);
 
   // Той самий підрахунок, що й для вибраного місяця, тільки за попередній:
-  // регулярні — місячною вартістю (змінні — фактом того місяця), плюс змінні витрати.
+  // регулярні — місячною вартістю (змінні — фактом того місяця), плюс події того
+  // місяця й змінні витрати. Структура мусить збігатись, інакше Δ% бреше.
   const prevMonthTotal = React.useMemo(() => {
     const regular = fixed.reduce((sum, e) => sum + (monthlyFor(e, prevMonthKey) ?? 0), 0);
+    const eventsPrev = allEvents
+      .filter((e) => (e.expenseDate ?? "").slice(0, 7) === prevMonthKey)
+      .reduce((sum, e) => sum + (monthlyFor(e, prevMonthKey) ?? 0), 0);
     const variablePrev = (variableByMonth.get(prevMonthKey) ?? []).reduce(
       (sum, e) => sum + (expenseUahAmount(e, rates) ?? 0),
       0
     );
-    return regular + variablePrev;
-  }, [fixed, monthlyFor, prevMonthKey, variableByMonth, rates]);
+    return regular + eventsPrev + variablePrev;
+  }, [fixed, allEvents, monthlyFor, prevMonthKey, variableByMonth, rates]);
 
   // Δ% до попереднього місяця; null — якщо порівнювати нема з чим.
   const monthDeltaPct = prevMonthTotal > 0 ? ((monthTotal - prevMonthTotal) / prevMonthTotal) * 100 : null;
@@ -1096,7 +1111,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         label: "Події та свята",
         legend: "Події",
         items: events,
-        total: sumMonthly(events),
+        total: eventsTotal,
         perMonth: false,
       });
     }
@@ -1133,7 +1148,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       }
     }
     return { monthSections: sections, monthBuckets: buckets, sectionColor: colors };
-  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum, events, sumMonthly, missingEntryIds]);
+  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum, events, eventsTotal, missingEntryIds]);
 
   // Розгорнутість секцій: за замовчуванням відкриті, вибір живе в localStorage
   // (ключі динамічні — обʼєкти зʼявляються з даних, тому оверрайди поверх бази).
@@ -1706,7 +1721,7 @@ function ExpenseSection({
   colorClass: string;
   label: string;
   count: number;
-  /** Скільки журнальних витрат секції ще не внесено за місяць — видно й згорнутою. */
+  /** Скільки журнальних витрат секції ще не внесено за місяць — показуємо згорнутою. */
   missingCount?: number;
   totalText: string;
   open: boolean;
@@ -1730,7 +1745,9 @@ function ExpenseSection({
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", colorClass)} />
         <span className="text-sm font-semibold text-foreground">{label}</span>
         <span className="text-xs text-muted-foreground/80">· {count}</span>
-        {missingCount ? (
+        {/* Лічильник — лише коли секція згорнута. Розгорнута вже показує бейдж на
+            кожному рядку, і два сигнали про один факт читаються як шум. */}
+        {missingCount && !open ? (
           <Badge tone="warning" size="sm" className="text-3xs">
             {missingCount} не внесено
           </Badge>
