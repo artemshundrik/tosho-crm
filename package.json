@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-netlify-functions.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "check:feature-keys": "node scripts/check-feature-keys.mjs",
+    "check:functions": "node scripts/check-netlify-functions.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
