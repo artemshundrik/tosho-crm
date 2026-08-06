@@ -5,7 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { loadPayDefaults, loadPayRates, type DesignerPayDefaults, type DesignerPayRate } from "@/lib/designerPayroll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/ui/date-input";
+import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";

@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/ui/date-input";
+import { DateInput, TimeInput } from "@/components/ui/picker-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
@@ -890,8 +890,7 @@ export default function ContractorsPage() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Час нагадування</label>
-              <Input
-                type="time"
+              <TimeInput
                 value={form.reminderTime}
                 onChange={(event) => setForm((current) => ({ ...current, reminderTime: event.target.value }))}
               />

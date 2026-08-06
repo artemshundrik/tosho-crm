@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Chip } from "@/components/ui/chip";
@@ -1840,8 +1841,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 <div className="text-xs uppercase tracking-caps text-muted-foreground">
                   Час дедлайну
                 </div>
-                <Input
-                  type="time"
+                <TimeInput
                   value={deadlineTimeDraft}
                   onChange={(e) => updateDeadlineTime(e.target.value)}
                   onBlur={() => {

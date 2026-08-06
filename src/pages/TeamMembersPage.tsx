@@ -26,7 +26,7 @@ import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DateInput } from "@/components/ui/date-input";
+import { DateInput } from "@/components/ui/picker-input";
 import {
   Table,
   TableBody,

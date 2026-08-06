@@ -28,6 +28,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1840,8 +1841,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       <div className="text-xs uppercase tracking-caps text-muted-foreground">
                         Час дедлайну
                       </div>
-                      <Input
-                        type="time"
+                      <TimeInput
                         value={deadlineTimeDraft}
                         onChange={(event) => updateDeadlineTime(event.target.value)}
                         onBlur={() => {

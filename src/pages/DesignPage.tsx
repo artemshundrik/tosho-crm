@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DuplicateDesignTaskDialog } from "@/components/design/DuplicateDesignTaskDialog";
 import { DesignersDashboard } from "@/components/design/DesignersDashboard";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
@@ -6105,8 +6106,7 @@ export default function DesignPage() {
                     <div className="text-xs uppercase tracking-caps text-muted-foreground">
                       Час дедлайну
                     </div>
-                    <Input
-                      type="time"
+                    <TimeInput
                       value={createDeadlineTime}
                       onChange={(event) => updateCreateDeadlineTime(event.target.value)}
                       className="mt-2 h-9"

@@ -8,6 +8,7 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
@@ -7237,8 +7238,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
                           <div className="space-y-1.5">
                             <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <Input
-                              type="time"
+                            <TimeInput
                               controlSize="md"
                           className="w-full border-border/40 bg-muted/[0.03]"
                               value={customerDeadlineTime}
@@ -7308,8 +7308,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
                           <div className="space-y-1.5">
                             <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <Input
-                              type="time"
+                            <TimeInput
                               controlSize="md"
                           className="w-full border-border/40 bg-muted/[0.03]"
                               value={deadlineTime}
@@ -7419,8 +7418,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           </div>
                           <div className="space-y-1.5">
                             <div className={DEADLINE_FIELD_LABEL_CLASS}>Час</div>
-                            <Input
-                              type="time"
+                            <TimeInput
                               controlSize="md"
                           className="w-full border-border/40 bg-muted/[0.03]"
                               value={designDeadlineTime}
