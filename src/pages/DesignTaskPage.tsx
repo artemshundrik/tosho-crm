@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
+import { DateTimePicker } from "@/components/ui/picker-input";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -14,8 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1033,7 +1032,6 @@ const isUsableStorageUrl = (value?: string | null) => {
 const DESIGN_OUTPUT_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
-const DEADLINE_PRESET_TIMES = ["09:00", "12:00", "15:00", "18:00"];
 
 const parseActivityMetadata = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -1457,6 +1455,14 @@ export default function DesignTaskPage() {
   const [typeSaving, setTypeSaving] = useState(false);
   const [deadlineDraftDate, setDeadlineDraftDate] = useState<Date | undefined>();
   const [deadlineTime, setDeadlineTime] = useState("12:00");
+  /** Дата й час чернетки одним значенням — саме так їх приймає спільний пікер. */
+  const deadlineDraftValue = useMemo(() => {
+    if (!deadlineDraftDate) return null;
+    const [hours, minutes] = (deadlineTime || "12:00").split(":").map((part) => Number(part) || 0);
+    const next = new Date(deadlineDraftDate);
+    next.setHours(hours, minutes, 0, 0);
+    return next;
+  }, [deadlineDraftDate, deadlineTime]);
   const [estimatePendingAction, setEstimatePendingAction] = useState<
     | { mode: "assign"; nextAssigneeUserId: string | null }
     | { mode: "assign_self"; alsoStart: boolean }
@@ -3368,12 +3374,6 @@ export default function DesignTaskPage() {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   };
 
-  const normalizeDeadlineTimeInput = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 4);
-    if (digits.length === 0) return "";
-    if (digits.length <= 2) return digits;
-    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-  };
 
   const isValidDeadlineTime = (value: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 
@@ -9616,8 +9616,24 @@ export default function DesignTaskPage() {
                 onSave={applyCreativePay}
               />
             ) : null}
-            <Popover open={headerDeadlinePopoverOpen} onOpenChange={setHeaderDeadlinePopoverOpen}>
-              <PopoverTrigger asChild>
+            {/* Дедлайн — спільний пікер у режимі чернетки: клік по дню тут пише
+                в базу, тому вибір застосовує «Зберегти», а не сам клік. */}
+            <DateTimePicker
+              value={deadlineDraftValue}
+              onChange={(next) => {
+                if (!next) {
+                  setDeadlineDraftDate(undefined);
+                  return;
+                }
+                setDeadlineDraftDate(next);
+                setDeadlineTime(format(next, "HH:mm"));
+              }}
+              open={headerDeadlinePopoverOpen}
+              onOpenChange={setHeaderDeadlinePopoverOpen}
+              draft
+              onDraftCommit={applyDeadlineDraft}
+              saving={deadlineSaving}
+              trigger={
                 <Button
                   type="button"
                   variant="outline"
@@ -9628,71 +9644,8 @@ export default function DesignTaskPage() {
                   <CalendarClock className="h-3.5 w-3.5" />
                   Дедлайн: {deadlineLabel.label}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[350px] max-w-[calc(100vw-2rem)] p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={deadlineDraftDate}
-                  onSelect={(date) => {
-                    setDeadlineDraftDate(date ?? undefined);
-                  }}
-                  captionLayout="dropdown-buttons"
-                  fromYear={new Date().getFullYear() - 3}
-                  toYear={new Date().getFullYear() + 5}
-                  initialFocus
-                />
-                <div className="space-y-2 border-t border-border/50 px-2 py-3">
-                  <Input
-                    value={deadlineTime}
-                    onChange={(event) => setDeadlineTime(normalizeDeadlineTimeInput(event.target.value))}
-                    onBlur={() => {
-                      setDeadlineTime((prev) => (isValidDeadlineTime(prev) ? prev : "12:00"));
-                    }}
-                    placeholder="HH:MM"
-                    className="h-9 text-sm"
-                  />
-                  <div className="grid w-full grid-cols-4 gap-1.5">
-                    {DEADLINE_PRESET_TIMES.map((time) => (
-                      <Button
-                        key={time}
-                        type="button"
-                        size="xs"
-                        variant={deadlineTime === time ? "secondary" : "outline"}
-                        className="w-full justify-center"
-                        onClick={() => setDeadlineTime(time)}
-                      >
-                        {time}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <DateQuickActions
-                  fullWidth
-                  onSelect={(date) => {
-                    setDeadlineDraftDate(date ?? undefined);
-                  }}
-                />
-                <div className="flex items-center justify-end gap-2 border-t border-border/50 px-2 py-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setHeaderDeadlinePopoverOpen(false)}
-                    disabled={deadlineSaving}
-                  >
-                    Скасувати
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={applyDeadlineDraft}
-                    disabled={deadlineSaving}
-                  >
-                    Зберегти
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+              }
+            />
             <Badge
               variant="outline"
               className={cn(

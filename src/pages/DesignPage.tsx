@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { DuplicateDesignTaskDialog } from "@/components/design/DuplicateDesignTaskDialog";
 import { DesignersDashboard } from "@/components/design/DesignersDashboard";
 import { Input } from "@/components/ui/input";
-import { TimeInput } from "@/components/ui/picker-input";
+import { DateTimePicker } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,8 +21,6 @@ import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "lucide-react";
@@ -1184,24 +1182,7 @@ export default function DesignPage() {
   useEffect(() => {
     initialLogoEntriesRef.current = initialLogoCache?.entries ?? [];
   }, [initialLogoCache?.entries]);
-  const updateCreateDeadlineDate = useCallback((date?: Date) => {
-    if (!date) {
-      setCreateDeadline(undefined);
-      return;
-    }
-    const next = new Date(date);
-    const [hours, minutes] = createDeadlineTime.split(":").map((part) => Number(part) || 0);
-    next.setHours(hours, minutes, 0, 0);
-    setCreateDeadline(next);
-  }, [createDeadlineTime]);
 
-  const updateCreateDeadlineTime = useCallback((value: string) => {
-    if (!isValidDeadlineTime(value)) return;
-    const [hours, minutes] = value.split(":").map((part) => Number(part) || 0);
-    const next = createDeadline ? new Date(createDeadline) : createDefaultDesignDeadline(value);
-    next.setHours(hours, minutes, 0, 0);
-    setCreateDeadline(next);
-  }, [createDeadline]);
   const openTask = (taskId: string, inNewTab = false) => {
     const href = `/design/${taskId}`;
     if (inNewTab) {
@@ -6073,8 +6054,13 @@ export default function DesignPage() {
                 }}
               />
 
-              <Popover open={createDeadlinePopoverOpen} onOpenChange={setCreateDeadlinePopoverOpen}>
-                <PopoverTrigger asChild>
+              {/* Дедлайн — спільний пікер; тригером лишається чіп цього ряду. */}
+              <DateTimePicker
+                value={createDeadline ?? null}
+                onChange={(next) => setCreateDeadline(next ?? undefined)}
+                open={createDeadlinePopoverOpen}
+                onOpenChange={setCreateDeadlinePopoverOpen}
+                trigger={
                   <Chip
                     size="md"
                     icon={<CalendarIcon className="h-4 w-4" />}
@@ -6082,43 +6068,11 @@ export default function DesignPage() {
                     className="min-w-[210px]"
                   >
                     {createDeadline
-                      ? `${format(createDeadline, "d MMM yyyy", { locale: uk })} · ${isValidDeadlineTime(createDeadlineTime) ? createDeadlineTime : "12:00"}`
+                      ? `${format(createDeadline, "d MMM yyyy", { locale: uk })} · ${createDeadlineTime}`
                       : "Дедлайн"}
                   </Chip>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-fit max-w-[calc(100vw-2rem)] p-0"
-                  align="start"
-                  collisionPadding={12}
-                >
-                  <Calendar
-                    mode="single"
-                    selected={createDeadline}
-                    onSelect={(date) => {
-                      updateCreateDeadlineDate(date ?? undefined);
-                    }}
-                    captionLayout="dropdown-buttons"
-                    fromYear={new Date().getFullYear() - 3}
-                    toYear={new Date().getFullYear() + 5}
-                    initialFocus
-                  />
-                  <div className="border-t border-border/50 px-3 py-3">
-                    <div className="text-xs uppercase tracking-caps text-muted-foreground">
-                      Час дедлайну
-                    </div>
-                    <TimeInput
-                      value={createDeadlineTime}
-                      onChange={(event) => updateCreateDeadlineTime(event.target.value)}
-                      className="mt-2 h-9"
-                    />
-                  </div>
-                  <DateQuickActions
-                    onSelect={(date) => {
-                      updateCreateDeadlineDate(date ?? undefined);
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
+                }
+              />
 
               <Popover open={createManagerPopoverOpen} onOpenChange={setCreateManagerPopoverOpen}>
                 <PopoverTrigger asChild>
