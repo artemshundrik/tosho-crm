@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   BellRing,
@@ -136,6 +137,18 @@ const monthLabel = (key: string) => {
   return `${MONTHS[(month || 1) - 1]} ${year}`;
 };
 
+const MONTHS_GENITIVE = [
+  "січень", "лютий", "березень", "квітень", "травень", "червень",
+  "липень", "серпень", "вересень", "жовтень", "листопад", "грудень",
+];
+
+// «YYYY-MM» → «серпень» — короткий підпис усередині фрази («не внесено за серпень»),
+// де рік зайвий, а велика літера посеред речення читається як помилка.
+const monthShort = (key: string) => {
+  const month = Number(key.slice(5, 7));
+  return MONTHS_GENITIVE[(month || 1) - 1] ?? key;
+};
+
 // Секція реєстру витрат — вона ж кошик bento-смуги (спільний ключ, порядок і колір).
 type MonthSection = {
   key: string;
@@ -146,6 +159,8 @@ type MonthSection = {
   total: number;
   /** true — сума «/ міс» (регулярні); false — сума за вибраний місяць (змінні). */
   perMonth: boolean;
+  /** Скільки журнальних витрат секції не мають запису за вибраний місяць. */
+  missingCount?: number;
 };
 
 // Shift a «YYYY-MM» key by a number of months.
@@ -863,14 +878,49 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
   const rates = useFxRates();
 
   // Місяць-у-фокусі — оголошуємо раніше за базлайни, бо змінні платежі рахуються
-  // саме за цей місяць (комуналка різна щомісяця).
+  // саме за цей місяць (комуналка різна щомісяця). Сповіщення «закрити місяць»
+  // веде сюди з ?month=YYYY-MM&highlight=missing — інакше людина приземлялась би
+  // на поточний місяць і не бачила того, про що їй написали.
   const currentKey = React.useMemo(() => todayISO().slice(0, 7), []);
-  const [selectedMonth, setSelectedMonth] = React.useState(currentKey);
+  const [searchParams] = useSearchParams();
+  const [selectedMonth, setSelectedMonth] = React.useState(() => {
+    const fromUrl = searchParams.get("month");
+    return fromUrl && /^\d{4}-\d{2}$/.test(fromUrl) ? fromUrl : currentKey;
+  });
+  const highlightMissing = searchParams.get("highlight") === "missing";
 
   // Записи журналу конкретної витрати за конкретний місяць.
   const entriesForMonth = React.useCallback(
     (expenseId: string, monthKey: string): ExpenseEntry[] =>
       (entriesByExpense.get(expenseId) ?? []).filter((en) => en.entryDate.slice(0, 7) === monthKey),
+    [entriesByExpense]
+  );
+
+  // «Не внесено за місяць» — ТЕ САМЕ правило, що й у крон-функції
+  // finance-month-close-reminders: журнальна витрата (не подія), у якої за
+  // вибраний місяць немає жодного запису, АЛЕ є історія за 3 попередні місяці.
+  // Умова про історію обовʼязкова: без неї давно закинуті статті («Кондиціонери»
+  // з нулем записів за весь час) світилися б червоним вічно.
+  const missingEntryIds = React.useMemo(() => {
+    const historyMonths = [1, 2, 3].map((d) => shiftMonthKey(selectedMonth, -d));
+    const ids = new Set<string>();
+    for (const e of visibleExpenses) {
+      if (!e.isRecurring || !e.amountVaries || e.eventType) continue;
+      if (entriesForMonth(e.id, selectedMonth).length > 0) continue;
+      if (historyMonths.some((m) => entriesForMonth(e.id, m).length > 0)) ids.add(e.id);
+    }
+    return ids;
+  }, [visibleExpenses, entriesForMonth, selectedMonth]);
+
+  // Дата останнього запису — підказка «останній запис — 13.07» під назвою.
+  const lastEntryDate = React.useCallback(
+    (expenseId: string): string | null => {
+      let latest: string | null = null;
+      for (const en of entriesByExpense.get(expenseId) ?? []) {
+        if (!latest || en.entryDate > latest) latest = en.entryDate;
+      }
+      return latest;
+    },
     [entriesByExpense]
   );
 
@@ -916,8 +966,13 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     const otherList: FinanceExpense[] = [];
     const eventList: FinanceExpense[] = [];
     for (const expense of fixed) {
-      // Подія (корпоратив, ДР) — окремий світ: не платіж і не сервіс.
-      if (expense.eventType) eventList.push(expense);
+      // Подія (корпоратив, ДР) — окремий світ: не платіж і не сервіс. Технічно вона
+      // is_recurring (це те, що дає їй журнал позицій), але за природою РАЗОВА —
+      // тож показуємо її ЛИШЕ в місяці її дати, інакше корпоратив із липня
+      // дублювався б у серпні, вересні й далі з усіма своїми позиціями.
+      if (expense.eventType) {
+        if ((expense.expenseDate ?? "").slice(0, 7) === selectedMonth) eventList.push(expense);
+      }
       // «Сервіси та підписки» = впізнаваний бренд І СТАЛА сума. Змінні з журналом
       // (логістика, комуналка) лишаються в «Інші регулярні» навіть із лого бренду.
       else if (isServiceExpense(expense) && !expense.amountVaries) servicesList.push(expense);
@@ -926,7 +981,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     // Найсвіжіші події зверху — вони разові за природою.
     eventList.sort((a, b) => (b.expenseDate ?? "").localeCompare(a.expenseDate ?? ""));
     return { services: servicesList, recurringOther: otherList, events: eventList };
-  }, [fixed]);
+  }, [fixed, selectedMonth]);
 
   const sumMonthly = React.useCallback(
     (list: FinanceExpense[]) => list.reduce((sum, e) => sum + (monthlyForSelected(e) ?? 0), 0),
@@ -1061,6 +1116,12 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       total: selectedVariableSum,
       perMonth: false,
     });
+    // Лічильник «N не внесено» — одним проходом по готових секціях, щоб не
+    // дублювати підрахунок у кожному push вище.
+    for (const s of sections) {
+      const n = s.items.reduce((sum, e) => sum + (missingEntryIds.has(e.id) ? 1 : 0), 0);
+      if (n > 0) s.missingCount = n;
+    }
     // Кольори роздаємо лише непорожнім (вони ж — сегменти смуги); решті — сірий у секції.
     const buckets: { key: string; label: string; amount: number; color: string }[] = [];
     const colors = new Map<string, string>();
@@ -1072,7 +1133,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       }
     }
     return { monthSections: sections, monthBuckets: buckets, sectionColor: colors };
-  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum, events, sumMonthly]);
+  }, [services, servicesBaseline, otherByObject, selectedItems, selectedVariableSum, events, sumMonthly, missingEntryIds]);
 
   // Розгорнутість секцій: за замовчуванням відкриті, вибір живе в localStorage
   // (ключі динамічні — обʼєкти зʼявляються з даних, тому оверрайди поверх бази).
@@ -1362,9 +1423,19 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
         : entriesForMonth(expense.id, selectedMonth);
     const hasEntries = monthEntries.length > 0;
     const journalOpen = openJournals.has(expense.id);
+    const missingEntry = missingEntryIds.has(expense.id);
+    const lastEntry = missingEntry ? lastEntryDate(expense.id) : null;
 
     return (
-      <div key={expense.id} className="overflow-hidden rounded-xl border border-border/40 bg-card shadow-card">
+      <div
+        key={expense.id}
+        className={cn(
+          "overflow-hidden rounded-xl border border-border/40 bg-card shadow-card",
+          // Перехід зі сповіщення «закрити місяць» підсвічує саме ті рядки,
+          // про які написали — інакше в довгому списку їх ще треба знайти.
+          missingEntry && highlightMissing && "border-warning/60 ring-1 ring-warning/25"
+        )}
+      >
         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
             <SubscriptionLogo
@@ -1380,13 +1451,22 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="truncate text-sm font-semibold text-foreground">{title}</span>
-                <Badge variant="outline" className="gap-1 text-3xs text-muted-foreground">
-                  {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
-                  {BILLING_PERIOD_LABELS[period]}
-                </Badge>
+                {/* Періодичність — лише у справді регулярних. Подія технічно monthly
+                    (щоб мати журнал позицій), але «Раз на місяць» на корпоративі — брехня. */}
+                {expense.eventType ? null : (
+                  <Badge variant="outline" className="gap-1 text-3xs text-muted-foreground">
+                    {period === "monthly" ? <Pin className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
+                    {BILLING_PERIOD_LABELS[period]}
+                  </Badge>
+                )}
                 {expense.amountVaries ? (
                   <Badge tone="info" size="sm" className="gap-1 text-3xs">
                     журнал по датах
+                  </Badge>
+                ) : null}
+                {missingEntry ? (
+                  <Badge tone="warning" size="sm" className="gap-1 text-3xs">
+                    не внесено за {monthShort(selectedMonth)}
                   </Badge>
                 ) : null}
                 {category ? (
@@ -1399,7 +1479,9 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 {expense.eventType ? (
                   <span className="font-medium text-foreground/80">{formatDate(expense.expenseDate)}</span>
                 ) : expense.amountVaries ? (
-                  <span className="font-medium text-foreground/80">по факту — записуй кожну дату</span>
+                  <span className="font-medium text-foreground/80">
+                    {lastEntry ? `останній запис — ${formatDate(lastEntry)}` : "по факту — записуй кожну дату"}
+                  </span>
                 ) : (
                   <span className="font-medium text-foreground/80">
                     {nativeAmountLabel(expense)} / {PERIOD_UNIT_SHORT[period]}
@@ -1548,6 +1630,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 colorClass={sectionColor.get(s.key) ?? "bg-muted-foreground/25"}
                 label={s.key === "variable" ? `${s.label} · ${monthLabel(selectedMonth)}` : s.label}
                 count={s.items.length}
+                missingCount={s.missingCount}
                 totalText={`${formatOrderMoney(s.total, "UAH")}${s.perMonth ? " / міс" : ""}`}
                 open={isSectionOpen(s.key)}
                 onToggle={() => toggleSection(s.key)}
@@ -1612,6 +1695,7 @@ function ExpenseSection({
   colorClass,
   label,
   count,
+  missingCount,
   totalText,
   open,
   onToggle,
@@ -1622,6 +1706,8 @@ function ExpenseSection({
   colorClass: string;
   label: string;
   count: number;
+  /** Скільки журнальних витрат секції ще не внесено за місяць — видно й згорнутою. */
+  missingCount?: number;
   totalText: string;
   open: boolean;
   onToggle: () => void;
@@ -1644,6 +1730,11 @@ function ExpenseSection({
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", colorClass)} />
         <span className="text-sm font-semibold text-foreground">{label}</span>
         <span className="text-xs text-muted-foreground/80">· {count}</span>
+        {missingCount ? (
+          <Badge tone="warning" size="sm" className="text-3xs">
+            {missingCount} не внесено
+          </Badge>
+        ) : null}
         <span className="ml-auto text-xs font-semibold tabular-nums text-muted-foreground">{totalText}</span>
         <ChevronDown
           className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}

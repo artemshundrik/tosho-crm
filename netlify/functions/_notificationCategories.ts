@@ -12,6 +12,7 @@ export type NotificationCategoryKey =
   | "probation"
   | "employment"
   | "finance_payment"
+  | "finance_month_close"
   | "admin_digest"
   | "business_digest";
 
@@ -31,6 +32,7 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "probation", label: "Випробувальний термін" },
   { key: "employment", label: "Працевлаштування" },
   { key: "finance_payment", label: "Платежі та підписки" },
+  { key: "finance_month_close", label: "Закриття місяця" },
   { key: "admin_digest", label: "Системний дайджест" },
   { key: "business_digest", label: "Бізнес-дайджест" },
 ];
@@ -54,6 +56,7 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "employment":
       return true;
     case "finance_payment":
+    case "finance_month_close":
       return isFinance;
     case "admin_digest":
       return access === "owner";

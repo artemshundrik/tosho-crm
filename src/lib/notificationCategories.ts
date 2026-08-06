@@ -14,6 +14,7 @@ export type NotificationCategoryKey =
   | "probation"
   | "employment"
   | "finance_payment"
+  | "finance_month_close"
   | "admin_digest"
   | "business_digest";
 
@@ -77,6 +78,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
     description: "Нагадування про майбутній платіж / списання підписки",
   },
   {
+    key: "finance_month_close",
+    label: "Закриття місяця",
+    description: "Журнальні витрати (комуналка, прибирання), не внесені за місяць",
+  },
+  {
     key: "admin_digest",
     label: "Системний дайджест",
     description: "Ранковий звіт про бекапи, storage, базу та cron",
@@ -111,8 +117,9 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
     case "probation":
     case "employment":
       return true;
-    // Платежі / підписки — лише фін-ролі.
+    // Платежі / підписки й закриття місяця — лише фін-ролі.
     case "finance_payment":
+    case "finance_month_close":
       return isFinance;
     // Системний дайджест — лише власник. Свідомо вужче за доступ до
     // Observability: у команді решта «адмінів» — це SEO, і щоденна технічна

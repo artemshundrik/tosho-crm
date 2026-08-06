@@ -16,6 +16,13 @@ import {
 // next_charge_date на період уперед, щоб нагадування повторювалось щоперіоду.
 // Тригер рахуємо ДАТОВОЮ арифметикою в Europe/Kiev (next_charge_date — це date,
 // floating wall-clock, а не UTC-момент).
+//
+// Дві речі, які тут НЕ можна плутати (спіймано 2026-08-06):
+//  1. ПРОКРУТКА дати робиться для ВСІХ регулярних зі сталою сумою й датою, а не
+//     лише для тих, у кого ввімкнене нагадування. Інакше дата в підписки без
+//     нагадування протухає й картка вічно показує «прострочено» (так висіла Tucha).
+//  2. СПОВІЩЕННЯ (і «скоро платіж», і «прострочено») — лише для рядків із
+//     reminder_lead_days: людина сама попросила за цим стежити.
 
 type HttpEvent = {
   httpMethod?: string;
@@ -44,6 +51,9 @@ type PendingNotificationRow = {
 
 const TIME_ZONE = "Europe/Kiev";
 const EXISTING_NOTIFICATION_LOOKBACK_DAYS = 60;
+// Наскільки давнє прострочення ще варте сповіщення. Якщо нагадування ввімкнули на
+// витраті з давно протухлою датою — прокручуємо мовчки, без «прострочено на 700 днів».
+const OVERDUE_NOTICE_MAX_DAYS = 45;
 const RECURRENCE_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 };
 const CURRENCY_SYMBOL: Record<string, string> = { UAH: "₴", USD: "$", EUR: "€" };
 
@@ -93,6 +103,11 @@ function rollForward(chargeDate: string, recurrence: string | null | undefined, 
   return next;
 }
 
+// Різниця в цілих днях між двома «YYYY-MM-DD» (обидві — floating-дати).
+function daysBetween(fromIso: string, toIso: string): number {
+  return Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / 86400000);
+}
+
 function formatDateUA(iso: string): string {
   const [y, m, d] = iso.split("-");
   return y && m && d ? `${d}.${m}.${y}` : iso;
@@ -139,12 +154,14 @@ export const handler = async (event: HttpEvent) => {
       now.getTime() - EXISTING_NOTIFICATION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    // Кандидати: регулярні сталі платежі з увімкненим нагадуванням і датою списання.
+    // Кандидати: ВСІ регулярні сталі платежі з датою списання. Фільтр на
+    // reminder_lead_days тут навмисно відсутній — інакше дата не прокручується
+    // тим, хто нагадування не вмикав, і протухає назавжди. Сповіщення нижче
+    // все одно шлемо лише тим, у кого воно ввімкнене.
     const expensesResult = await adminClient
       .schema("tosho")
       .from("finance_expenses")
       .select("id,team_id,supplier_name,category_id,amount,currency,recurrence,next_charge_date,reminder_lead_days")
-      .not("reminder_lead_days", "is", null)
       .eq("is_recurring", true)
       .eq("amount_varies", false)
       .not("next_charge_date", "is", null)
@@ -219,13 +236,51 @@ export const handler = async (event: HttpEvent) => {
 
     const pendingRows: PendingNotificationRow[] = [];
     let rolled = 0;
+    let overdueNotices = 0;
 
     for (const e of expenses) {
       if (!e.next_charge_date) continue;
 
-      // 1) Прокрутка: якщо дата минула — посуваємо на період уперед (щоб повторювалось).
+      const recipients = recipientsByTeam.get(e.team_id);
+      // Сповіщати можна лише коли людина сама попросила стежити за цим платежем
+      // І є кому слати. Прокрутка дати нижче від цього не залежить.
+      const canNotify = e.reminder_lead_days != null && Boolean(recipients && recipients.size > 0);
+
+      const name =
+        e.supplier_name?.trim() ||
+        (e.category_id ? categoryName.get(e.category_id) : null) ||
+        "Регулярний платіж";
+      const amountNum = typeof e.amount === "string" ? Number(e.amount) : e.amount ?? 0;
+      const amountText = formatAmount(Number.isFinite(amountNum as number) ? (amountNum as number) : 0, (e.currency ?? "UAH").toUpperCase());
+
+      // Одна витрата може дати два різні сповіщення (прострочено / скоро) — тіло
+      // однакове за структурою, різниться лише ключем дедупу й текстом.
+      const queue = (reminderKey: string, title: string, body: string) => {
+        if (!recipients) return;
+        const href = `/finances?tab=calendar&reminder=${encodeURIComponent(reminderKey)}&expenseId=${e.id}`;
+        for (const userId of recipients) {
+          const dedupeKey = `${userId}::${reminderKey}`;
+          if (existingKeys.has(dedupeKey)) continue;
+          existingKeys.add(dedupeKey);
+          pendingRows.push({ user_id: userId, title, body, href, type: "warning" });
+        }
+      };
+
       let charge = e.next_charge_date;
+
+      // 1) Дата минула. Спершу сказати, що платіж пропущено, і лише ПОТІМ прокрутити —
+      // інакше прострочення тихо їде на наступний період і людина про нього не дізнається.
       if (charge < today) {
+        const lateDays = daysBetween(charge, today);
+        if (canNotify && lateDays <= OVERDUE_NOTICE_MAX_DAYS) {
+          const lateText = lateDays === 1 ? "вчора" : `${lateDays} дн. тому`;
+          queue(
+            `expense:${e.id}:${charge}:overdue`,
+            `Платіж прострочено: ${name}`,
+            `${amountText} мали списатися ${formatDateUA(charge)} — ${lateText}. Перевірте, чи оплачено.`
+          );
+          overdueNotices += 1;
+        }
         const next = rollForward(charge, e.recurrence, today);
         if (next !== charge) {
           const upd = await adminClient
@@ -240,37 +295,20 @@ export const handler = async (event: HttpEvent) => {
         }
       }
 
+      if (!canNotify) continue;
+
       // 2) Вікно нагадування: fireDate <= today <= charge (дедуп зробить «раз на дату»).
       const lead = e.reminder_lead_days ?? 0;
       const fireDate = shiftDays(charge, -lead);
       if (!(fireDate <= today && today <= charge)) continue;
 
-      const recipients = recipientsByTeam.get(e.team_id);
-      if (!recipients || recipients.size === 0) continue;
-
-      const name =
-        e.supplier_name?.trim() ||
-        (e.category_id ? categoryName.get(e.category_id) : null) ||
-        "Регулярний платіж";
-      const amountNum = typeof e.amount === "string" ? Number(e.amount) : e.amount ?? 0;
-      const amountText = formatAmount(Number.isFinite(amountNum as number) ? (amountNum as number) : 0, (e.currency ?? "UAH").toUpperCase());
-      const reminderKey = `expense:${e.id}:${charge}`;
-      const href = `/finances?tab=calendar&reminder=${encodeURIComponent(reminderKey)}&expenseId=${e.id}`;
-      const daysLeft = Math.max(0, Math.round((Date.parse(`${charge}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000));
+      const daysLeft = Math.max(0, daysBetween(today, charge));
       const whenText = daysLeft === 0 ? "сьогодні" : daysLeft === 1 ? "завтра" : `за ${daysLeft} дн.`;
-
-      for (const userId of recipients) {
-        const dedupeKey = `${userId}::${reminderKey}`;
-        if (existingKeys.has(dedupeKey)) continue;
-        existingKeys.add(dedupeKey);
-        pendingRows.push({
-          user_id: userId,
-          title: `Платіж ${whenText}: ${name}`,
-          body: `${amountText} спишеться ${formatDateUA(charge)}. Переконайтесь, що є кошти на картці.`,
-          href,
-          type: "warning",
-        });
-      }
+      queue(
+        `expense:${e.id}:${charge}`,
+        `Платіж ${whenText}: ${name}`,
+        `${amountText} спишеться ${formatDateUA(charge)}. Переконайтесь, що є кошти на картці.`
+      );
     }
 
     let delivered = 0;
@@ -286,7 +324,15 @@ export const handler = async (event: HttpEvent) => {
       pushFailed = delivery.pushFailed;
     }
 
-    return jsonResponse(200, { success: true, scanned: expenses.length, rolled, delivered, pushDelivered, pushFailed });
+    return jsonResponse(200, {
+      success: true,
+      scanned: expenses.length,
+      rolled,
+      overdueNotices,
+      delivered,
+      pushDelivered,
+      pushFailed,
+    });
   } catch (error: unknown) {
     const message =
       typeof error === "object" && error && "message" in error && typeof (error as { message?: unknown }).message === "string"
