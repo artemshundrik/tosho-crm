@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,8 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { Calendar } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { SourceSelect } from "./customerSources";
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
@@ -26,12 +25,10 @@ import { cn } from "@/lib/utils";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { ImageUploadMode } from "@/types/catalog";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
-import { format } from "date-fns";
-import { uk } from "date-fns/locale";
 import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses } from "@/features/quotes/quotes-page/config";
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
-import { Building2, CalendarIcon, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
+import { Building2, Check, Image as ImageIcon, PlusCircle, Trash2, User, UserPlus } from "lucide-react";
 import { PackageCheck, ReceiptText } from "lucide-react";
 import { createEmptyCustomerDeliveryPoint, type CustomerDeliveryPoint } from "@/lib/customerDeliveryPoints";
 import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
@@ -220,8 +217,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const [ownershipOpen, setOwnershipOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
-  const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
-  const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [quickMode, setQuickMode] = React.useState(true);
   // Ковзна плашка для вкладок картки: TabsList від Radix не наш div, тож
   // механіку вдягаємо хуком, а не обгорткою.
@@ -237,7 +232,6 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
     [form.logoUploadMode, form.logoUrl, normalizedLogoUrl]
   );
   const displayedLogoUrl = form.logoUploadMode === "file" ? logoPreviewUrl : normalizedLogoUrl;
-  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const currentOwnership = ownershipOptions.find((option) => option.value === form.ownershipType);
   const isFopOwnership = form.ownershipType === "fop";
   const groupedOwnershipOptions = React.useMemo(() => {
@@ -255,22 +249,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
   const selectedManager =
     teamMembers.find((member) => member.id === form.managerId) ??
     teamMembers.find((member) => member.label === form.manager);
-  const reminderDateValue = React.useMemo(
-    () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
-    [form.reminderDate]
-  );
-  const eventDateValue = React.useMemo(
-    () => (form.eventDate ? new Date(`${form.eventDate}T00:00:00`) : undefined),
-    [form.eventDate]
-  );
 
   React.useEffect(() => {
     if (!open) {
       setOwnershipOpen(false);
       setLogoOpen(false);
       setManagerOpen(false);
-      setReminderDateOpen(false);
-      setEventDateOpen(false);
     }
   }, [open]);
 
@@ -1051,49 +1035,13 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Дата</Label>
-                    <Popover open={reminderDateOpen} onOpenChange={setReminderDateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "h-9 w-full justify-start px-3 text-sm font-normal",
-                            !form.reminderDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {form.reminderDate && reminderDateValue
-                            ? format(reminderDateValue, "d MMM yyyy", { locale: uk })
-                            : "Оберіть дату"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={reminderDateValue}
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              reminderDate: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setReminderDateOpen(false);
-                          }}
-                          captionLayout="dropdown-buttons"
-                          fromYear={currentYear - 3}
-                          toYear={currentYear + 5}
-                          initialFocus
-                        />
-                        <DateQuickActions
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              reminderDate: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setReminderDateOpen(false);
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DateInput
+                    className="h-9"
+                    value={form.reminderDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, reminderDate: e.target.value }))
+                    }
+                  />
                   </div>
                   <div className="grid gap-2">
                     <Label>Час</Label>
@@ -1130,49 +1078,13 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
                   </div>
                   <div className="grid gap-2">
                     <Label>Дата події</Label>
-                    <Popover open={eventDateOpen} onOpenChange={setEventDateOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "h-9 w-full justify-start px-3 text-sm font-normal",
-                            !form.eventDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {form.eventDate && eventDateValue
-                            ? format(eventDateValue, "d MMM yyyy", { locale: uk })
-                            : "Оберіть дату"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={eventDateValue}
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              eventDate: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setEventDateOpen(false);
-                          }}
-                          captionLayout="dropdown-buttons"
-                          fromYear={currentYear - 3}
-                          toYear={currentYear + 5}
-                          initialFocus
-                        />
-                        <DateQuickActions
-                          onSelect={(date) => {
-                            setForm((prev) => ({
-                              ...prev,
-                              eventDate: date ? format(date, "yyyy-MM-dd") : "",
-                            }));
-                            setEventDateOpen(false);
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DateInput
+                    className="h-9"
+                    value={form.eventDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, eventDate: e.target.value }))
+                    }
+                  />
                   </div>
                   <div className="grid gap-2 col-span-2">
                     <Label>Коментар події</Label>

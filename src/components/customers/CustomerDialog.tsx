@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,8 +34,6 @@ import {
 } from "@/lib/customerLtv";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { Calendar } from "@/components/ui/calendar";
-import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import {
   createEmptyCustomerLegalEntity,
@@ -59,7 +58,6 @@ import { statusLabels as quoteStatusLabels, statusClasses as quoteStatusClasses 
 import { DESIGN_STATUS_LABELS } from "@/lib/designTaskStatus";
 import { DESIGN_TASK_TYPE_ICONS, DESIGN_TASK_TYPE_LABELS, parseDesignTaskType } from "@/lib/designTaskType";
 import {
-  CalendarIcon,
   Image as ImageIcon,
   Loader2,
   PlusCircle,
@@ -298,13 +296,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   ltvEntry,
   ltvSegment,
 }) => {
-  const currentYear = React.useMemo(() => new Date().getFullYear(), []);
   const primaryLegalEntity = form.legalEntities[0] ?? createEmptyCustomerLegalEntity();
   const isFopOwnership = primaryLegalEntity.ownershipType === "fop";
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [managerOpen, setManagerOpen] = React.useState(false);
-  const [reminderDateOpen, setReminderDateOpen] = React.useState(false);
-  const [eventDateOpen, setEventDateOpen] = React.useState(false);
   const [activeLegalEntityId, setActiveLegalEntityId] = React.useState<string | null>(null);
   // Ковзна плашка для вкладок картки: TabsList від Radix не наш div, тож
   // механіку вдягаємо хуком, а не обгорткою.
@@ -323,14 +318,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   const displayedLogoUrl = form.logoUploadMode === "file" ? logoPreviewUrl : normalizedLogoUrl;
   const relatedTotalCount = calculations.length + orders.length + designTasks.length;
 
-  const reminderDateValue = React.useMemo(
-    () => (form.reminderDate ? new Date(`${form.reminderDate}T00:00:00`) : undefined),
-    [form.reminderDate]
-  );
-  const eventDateValue = React.useMemo(
-    () => (form.eventDate ? new Date(`${form.eventDate}T00:00:00`) : undefined),
-    [form.eventDate]
-  );
 
   const selectedManager =
     teamMembers.find((member) => member.id === form.managerId) ??
@@ -414,8 +401,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     if (!open) {
       setLogoOpen(false);
       setManagerOpen(false);
-      setReminderDateOpen(false);
-      setEventDateOpen(false);
     }
   }, [open]);
 
@@ -1491,49 +1476,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Дата</Label>
-                  <Popover open={reminderDateOpen} onOpenChange={setReminderDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          "h-9 w-full justify-start px-3 text-sm font-normal",
-                          !form.reminderDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {form.reminderDate && reminderDateValue
-                          ? format(reminderDateValue, "d MMM yyyy", { locale: uk })
-                          : "Оберіть дату"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={reminderDateValue}
-                        onSelect={(date) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            reminderDate: date ? format(date, "yyyy-MM-dd") : "",
-                          }));
-                          setReminderDateOpen(false);
-                        }}
-                        captionLayout="dropdown-buttons"
-                        fromYear={currentYear - 3}
-                        toYear={currentYear + 5}
-                        initialFocus
-                      />
-                      <DateQuickActions
-                        onSelect={(date) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            reminderDate: date ? format(date, "yyyy-MM-dd") : "",
-                          }));
-                          setReminderDateOpen(false);
-                        }}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DateInput
+                    className="h-9"
+                    value={form.reminderDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, reminderDate: e.target.value }))
+                    }
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label>Час</Label>
@@ -1570,49 +1519,13 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 </div>
                 <div className="grid gap-2">
                   <Label>Дата події</Label>
-                  <Popover open={eventDateOpen} onOpenChange={setEventDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          "h-9 w-full justify-start px-3 text-sm font-normal",
-                          !form.eventDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {form.eventDate && eventDateValue
-                          ? format(eventDateValue, "d MMM yyyy", { locale: uk })
-                          : "Оберіть дату"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={eventDateValue}
-                        onSelect={(date) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            eventDate: date ? format(date, "yyyy-MM-dd") : "",
-                          }));
-                          setEventDateOpen(false);
-                        }}
-                        captionLayout="dropdown-buttons"
-                        fromYear={currentYear - 3}
-                        toYear={currentYear + 5}
-                        initialFocus
-                      />
-                      <DateQuickActions
-                        onSelect={(date) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            eventDate: date ? format(date, "yyyy-MM-dd") : "",
-                          }));
-                          setEventDateOpen(false);
-                        }}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <DateInput
+                    className="h-9"
+                    value={form.eventDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, eventDate: e.target.value }))
+                    }
+                  />
                 </div>
                 <div className="grid gap-2 col-span-2">
                   <Label>Коментар події</Label>
