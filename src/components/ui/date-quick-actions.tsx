@@ -6,87 +6,65 @@ type DateQuickActionsProps = {
   onSelect: (date: Date | null) => void | Promise<void>;
   className?: string;
   clearLabel?: string;
+  /** @deprecated Сітка тепер завжди на всю ширину — проп лишено, щоб не правити виклики. */
   fullWidth?: boolean;
+  /**
+   * Без власної рамки, підпису й полів — коли блок кладуть у контейнер, який їх
+   * уже дає (панель пікера). Інакше виходить дві лінії поспіль.
+   */
+  flush?: boolean;
 };
 
+/**
+ * Швидкі дії під календарем.
+ *
+ * СІТКА, А НЕ ПІГУЛКИ (рішення 2026-08-06): раніше кнопки лежали інлайном і
+ * переносились — «Тиждень / Місяць / Очистити» щоразу давали ряд іншої довжини,
+ * а на вузькій панелі рвались посеред слова. Фіксовані три колонки означають, що
+ * блок займає ту саму висоту при будь-якому наборі слів і не залежить від ширини
+ * панелі: колонки стискаються, перенесення не буває.
+ */
 export function DateQuickActions({
   onSelect,
   className,
   clearLabel = "Очистити",
-  fullWidth = false,
+  flush = false,
 }: DateQuickActionsProps) {
   const today = startOfDay(new Date());
-  const tomorrow = addDays(today, 1);
-  const plusThree = addDays(today, 3);
-  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
-  const monthEnd = endOfMonth(today);
+  const actions: Array<{ label: string; value: Date | null; muted?: boolean }> = [
+    { label: "Сьогодні", value: today },
+    { label: "Завтра", value: addDays(today, 1) },
+    { label: "+3 дні", value: addDays(today, 3) },
+    { label: "Тиждень", value: endOfWeek(today, { weekStartsOn: 1 }) },
+    { label: "Місяць", value: endOfMonth(today) },
+    { label: clearLabel, value: null, muted: true },
+  ];
 
-  const actionButtonClass = cn(
-    "h-6.5 rounded-full border border-border/60 px-2 text-2xs font-medium",
-    fullWidth ? "w-full justify-center" : ""
-  );
-
-  return (
-    <div className={cn("flex border-t border-border/60 px-1.5 pb-2 pt-1.5", fullWidth ? "justify-stretch" : "justify-center", className)}>
-      <div className={cn(fullWidth ? "grid w-full grid-cols-3 gap-1" : "inline-grid grid-cols-[auto_auto_auto] gap-1")}>
+  const grid = (
+    <div className="grid grid-cols-3 gap-1.5">
+      {actions.map((action) => (
         <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionButtonClass}
-          onClick={() => void onSelect(today)}
-        >
-          Сьогодні
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionButtonClass}
-          onClick={() => void onSelect(tomorrow)}
-        >
-          Завтра
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionButtonClass}
-          onClick={() => void onSelect(plusThree)}
-        >
-          +3 дні
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionButtonClass}
-          onClick={() => void onSelect(weekEnd)}
-        >
-          Тиждень
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className={actionButtonClass}
-          onClick={() => void onSelect(monthEnd)}
-        >
-          Місяць
-        </Button>
-        <Button
+          key={action.label}
           type="button"
           size="sm"
           variant="ghost"
           className={cn(
-            "h-6.5 rounded-full border border-transparent px-2 text-2xs font-medium text-muted-foreground hover:text-foreground min-w-0",
-            fullWidth ? "w-full justify-center" : ""
+            "h-[30px] w-full justify-center rounded-[9px] border px-1.5 text-xs font-medium",
+            action.muted
+              ? "border-transparent text-muted-foreground hover:text-foreground"
+              : "border-border/60 hover:border-primary hover:text-primary"
           )}
-          onClick={() => void onSelect(null)}
+          onClick={() => void onSelect(action.value)}
         >
-          {clearLabel}
+          {action.label}
         </Button>
-      </div>
+      ))}
     </div>
+  );
+
+  if (flush) return <div className={className}>{grid}</div>;
+
+  return (
+    <div className={cn("border-t border-border/60 p-3", className)}>{grid}</div>
   );
 }

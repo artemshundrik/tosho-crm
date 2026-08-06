@@ -1,9 +1,10 @@
 import * as React from "react";
 import { format, parse, isValid } from "date-fns";
 import { uk } from "date-fns/locale";
-import { CalendarDays, Clock } from "lucide-react";
+import { CalendarDays, Clock, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Input, type InputControlSize } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { DateQuickActions } from "@/components/ui/date-quick-actions";
@@ -29,6 +30,62 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 type PickerInputProps = Omit<React.ComponentProps<"input">, "type"> & {
   controlSize?: InputControlSize;
 };
+
+type DateInputProps = PickerInputProps & {
+  /**
+   * Показати блок часу в панелі. Поки вимкнено за замовчуванням: чи зливати
+   * дату з часом в одне поле — окреме рішення, і поки воно не ухвалене,
+   * поведінка наявних місць не змінюється.
+   */
+  withTime?: boolean;
+  /** Значення часу «HH:MM» для блоку часу. */
+  timeValue?: string;
+  onTimeChange?: (next: string) => void;
+  /** Пресети робочих годин під полем часу. */
+  timePresets?: string[];
+  /**
+   * Режим чернетки: панель не застосовує вибір одразу, а показує
+   * «Скасувати / Зберегти». Для тригерів, які пишуть у базу самі.
+   */
+  draft?: boolean;
+  onDraftCommit?: () => void | Promise<void>;
+  /** Запит у дорозі: панель не приймає кліків, кнопка показує спінер. */
+  saving?: boolean;
+};
+
+const DEFAULT_TIME_PRESETS = ["10:00", "14:00", "18:00"];
+
+/**
+ * Геометрія панелі — під найширший стан, а не під поточний вміст.
+ *
+ * 320px мінус поля 12px з боків = 296px. Це рівно три колонки швидких дій по
+ * 94px із зазорами 6px, тобто найдовше «Очистити» влазить із запасом і сітка
+ * ніколи не переноситься. Ширина фіксована в усіх станах: змінюється лише
+ * висота, тож панель виглядає однаково в будь-якій формі.
+ */
+const PANEL_WIDTH_CLASS = "w-[320px] p-0";
+
+/**
+ * Захист від обрізання краєм вікна — усі чотири боки.
+ *
+ * `collisionPadding` тримає зазор від краю: без нього Radix ставить панель
+ * впритул і тінь зрізається. `sticky="always"` не дає їй відірватись від поля
+ * при прокрутці, `hideWhenDetached` ховає її, якщо поле виїхало зі скрол-контейнера
+ * (у Фінансах панелі мають власний `overflow-y`, і без цього панель зависала б
+ * посеред екрана без прив'язки).
+ *
+ * По висоті працює база `PopoverContent`: `max-h` від
+ * `--radix-popover-content-available-height` плюс `overflow-y-auto` — на низькому
+ * екрані панель стискається і скролиться всередині, а не вилазить за вікно.
+ * Порталювання лишаємо ввімкненим (дефолт): без нього будь-який предок з
+ * `overflow: hidden` обріже панель незалежно від колізій.
+ */
+const COLLISION_PROPS = {
+  sideOffset: 6,
+  collisionPadding: 12,
+  sticky: "always",
+  hideWhenDetached: true,
+} as const;
 
 /**
  * Записати значення так, щоб React побачив звичайний onChange.
@@ -71,8 +128,22 @@ const ICON_BUTTON_CLASS = cn(
 );
 
 /** Поле дати: набір із клавіатури + наш календар зі швидкими діями. */
-const DateInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
-  ({ className, disabled, ...props }, forwardedRef) => {
+const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
+  (
+    {
+      className,
+      disabled,
+      withTime = false,
+      timeValue = "",
+      onTimeChange,
+      timePresets = DEFAULT_TIME_PRESETS,
+      draft = false,
+      onDraftCommit,
+      saving = false,
+      ...props
+    },
+    forwardedRef
+  ) => {
     const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
     const [open, setOpen] = React.useState(false);
 
@@ -91,11 +162,15 @@ const DateInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
     const fromYear = Math.min(currentYear - 80, selectedYear);
     const toYear = Math.max(currentYear + 10, selectedYear);
 
-    const commit = React.useCallback((date: Date | null) => {
-      const node = innerRef.current;
-      if (node) commitNativeValue(node, date ? format(date, "yyyy-MM-dd") : "");
-      setOpen(false);
-    }, [innerRef]);
+    const commit = React.useCallback(
+      (date: Date | null) => {
+        const node = innerRef.current;
+        if (node) commitNativeValue(node, date ? format(date, "yyyy-MM-dd") : "");
+        // У режимі чернетки панель лишається відкритою: рішення застосує «Зберегти».
+        if (!draft) setOpen(false);
+      },
+      [innerRef, draft]
+    );
 
     return (
       <div className="relative">
@@ -106,19 +181,81 @@ const DateInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
               <CalendarDays className="h-4 w-4" aria-hidden />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-fit max-w-[calc(100vw-2rem)] p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={selected}
-              defaultMonth={selected}
-              onSelect={(date) => commit(date ?? null)}
-              captionLayout="dropdown-buttons"
-              fromYear={fromYear}
-              toYear={toYear}
-              locale={uk}
-              initialFocus
-            />
-            <DateQuickActions onSelect={(date) => commit(date)} />
+          <PopoverContent align="end" className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
+            <div className={cn(saving && "pointer-events-none select-none opacity-60")}>
+              <Calendar
+                mode="single"
+                selected={selected}
+                defaultMonth={selected}
+                onSelect={(date) => commit(date ?? null)}
+                captionLayout="dropdown-buttons"
+                fromYear={fromYear}
+                toYear={toYear}
+                locale={uk}
+                initialFocus
+                classNames={{
+                  // «Сьогодні» — лише крапка під числом, без заливки й обводки.
+                  // Рамка сперечалась із заливкою обраного дня, коли це один день.
+                  day_today:
+                    "font-semibold text-primary relative after:absolute after:bottom-1.5 after:left-0 after:right-0 after:mx-auto after:h-1 after:w-1 after:rounded-full after:bg-current after:content-[''] aria-selected:!bg-primary aria-selected:!text-primary-foreground aria-selected:after:bg-primary-foreground",
+                  // Недоступний день закреслюємо: бліде в календарі вже означає
+                  // «інший місяць», два різні сенси одним прийомом читались би як помилка.
+                  day_disabled: "text-muted-foreground/60 line-through",
+                }}
+              />
+
+              <div className="flex flex-col gap-3 border-t border-border/60 p-3">
+                {withTime ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Час</span>
+                    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-1.5">
+                      <TimeInput
+                        controlSize="sm"
+                        className="h-[34px] pr-8 text-sm font-semibold tabular-nums"
+                        value={timeValue}
+                        onChange={(event) => onTimeChange?.(event.target.value)}
+                      />
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {timePresets.map((preset) => (
+                          <Button
+                            key={preset}
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className={cn(
+                              "h-[30px] w-full justify-center rounded-[9px] border px-1 text-xs font-medium tabular-nums",
+                              preset === timeValue
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border/60 hover:border-primary hover:text-primary"
+                            )}
+                            onClick={() => onTimeChange?.(preset)}
+                          >
+                            {preset}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Швидко</span>
+                  <DateQuickActions flush onSelect={(date) => commit(date)} />
+                </div>
+              </div>
+            </div>
+
+            {draft ? (
+              <div className="grid grid-cols-2 gap-2 border-t border-border/60 p-3">
+                <Button type="button" variant="outline" size="sm" className="h-[34px]" disabled={saving} onClick={() => setOpen(false)}>
+                  Скасувати
+                </Button>
+                <Button type="button" size="sm" className="h-[34px] gap-1.5" disabled={saving} onClick={() => void onDraftCommit?.()}>
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                  {saving ? "Зберігаємо" : "Зберегти"}
+                </Button>
+              </div>
+            ) : null}
           </PopoverContent>
         </Popover>
       </div>
