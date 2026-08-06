@@ -92,6 +92,21 @@ describe("що показати при вході", () => {
     expect(plan).toMatchObject({ kind: "poster" });
   });
 
+  it("пачка дрібних покращень модалку НЕ відкриває — лише стрічку", () => {
+    // Найчастіший випадок: день правок, кожна корисна, жодна не варта
+    // того, щоб зупиняти сімнадцятьох людей на вході.
+    const plan = planUpdateModal({
+      unread: [
+        update({ importance: "minor" }),
+        update({ importance: "minor" }),
+        update({ importance: "minor" }),
+      ],
+      now: NOW,
+      shownThisSession: false,
+    });
+    expect(plan.kind).toBe("none");
+  });
+
   it("велика фіча поруч із дрібними — це вже реліз, тобто дайджест", () => {
     const plan = planUpdateModal({
       unread: [update({ importance: "major" }), update({ importance: "minor" })],
@@ -120,8 +135,13 @@ describe("що показати при вході", () => {
   });
 
   it("дайджест обрізається і йде від найновішого", () => {
+    // Найновіша — велика, інакше модалки взагалі не буде.
     const many = Array.from({ length: DIGEST_LIMIT + 3 }, (_, index) =>
-      update({ title: `Анонс ${index}`, publishedAt: daysAgo(index) })
+      update({
+        title: `Анонс ${index}`,
+        publishedAt: daysAgo(index),
+        importance: index === 0 ? "major" : "minor",
+      })
     );
     const plan = planUpdateModal({ unread: many, now: NOW, shownThisSession: false });
     if (plan.kind !== "digest") throw new Error("очікували дайджест");

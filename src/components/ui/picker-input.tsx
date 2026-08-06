@@ -11,48 +11,28 @@ import { DateQuickActions } from "@/components/ui/date-quick-actions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /**
- * Поля дати й часу з видимою іконкою, яка відкриває пікер.
+ * Поля дати, часу й дати-часу з єдиною панеллю.
  *
  * ЧОМУ ВЗАГАЛІ ОКРЕМИЙ КОМПОНЕНТ: у `src/index.css` глобально сховано
- * `::-webkit-calendar-picker-indicator` (`opacity: 0; display: none`) одразу для
- * `input[type=date]` і `input[type=time]` — інакше системна іконка ламала висоту
- * контролів. Побічний ефект: зникає єдина точка, якою відкривався пікер, і поле
- * перетворюється на набивання цифр руками.
+ * `::-webkit-calendar-picker-indicator` — інакше системна іконка ламала висоту
+ * контролів. Побічний ефект: зникає єдина точка, якою відкривався пікер.
  *
- * ЧОМУ САМЕ ТАК, А НЕ ІНАКШЕ (рішення 2026-08-06): у CRM жили два несумісні
- * патерни — наш Popover з `Calendar` і швидкими діями («Завтра», «Тиждень») і
- * голий нативний інпут. Вони не конкуренти: перший виграє там, де думають
- * відносно («нагадай через тиждень»), другий — там, де знають точну дату
- * («народився 15.03.1988»). Тому вони ЗЛИТІ в один контрол: саме поле лишається
- * нативним (набір із клавіатури, на мобільному — системне колесо), а іконка
- * відкриває НАШ календар зі швидкими діями. Один вигляд і обидва сценарії.
+ * ЧОМУ ПОЛЕ НАТИВНЕ, А КАЛЕНДАР СВІЙ: у CRM жили два несумісні патерни — наш
+ * Popover зі швидкими діями і голий нативний інпут. Вони не конкуренти: перший
+ * виграє там, де думають відносно («нагадай через тиждень»), другий — там, де
+ * знають точну дату («народився 15.03.1988»). Тому злиті: поле лишається
+ * нативним (набір із клавіатури, системне колесо на мобільному), а іконка
+ * відкриває наш календар.
  */
+
+type PickerKind = "date" | "time" | "datetime-local";
+
 type PickerInputProps = Omit<React.ComponentProps<"input">, "type"> & {
   controlSize?: InputControlSize;
 };
 
-type DateInputProps = PickerInputProps & {
-  /**
-   * Показати блок часу в панелі. Поки вимкнено за замовчуванням: чи зливати
-   * дату з часом в одне поле — окреме рішення, і поки воно не ухвалене,
-   * поведінка наявних місць не змінюється.
-   */
-  withTime?: boolean;
-  /** Значення часу «HH:MM» для блоку часу. */
-  timeValue?: string;
-  onTimeChange?: (next: string) => void;
-  /** Пресети робочих годин під полем часу. */
-  timePresets?: string[];
-  /**
-   * Режим чернетки: панель не застосовує вибір одразу, а показує
-   * «Скасувати / Зберегти». Для тригерів, які пишуть у базу самі.
-   */
-  draft?: boolean;
-  onDraftCommit?: () => void | Promise<void>;
-  /** Запит у дорозі: панель не приймає кліків, кнопка показує спінер. */
-  saving?: boolean;
-};
-
+/** Робоча година за замовчуванням, коли дату обрали, а часу ще немає. */
+const DEFAULT_TIME = "10:00";
 const DEFAULT_TIME_PRESETS = ["10:00", "14:00", "18:00"];
 
 /**
@@ -70,15 +50,14 @@ const PANEL_WIDTH_CLASS = "w-[320px] p-0";
  *
  * `collisionPadding` тримає зазор від краю: без нього Radix ставить панель
  * впритул і тінь зрізається. `sticky="always"` не дає їй відірватись від поля
- * при прокрутці, `hideWhenDetached` ховає її, якщо поле виїхало зі скрол-контейнера
- * (у Фінансах панелі мають власний `overflow-y`, і без цього панель зависала б
- * посеред екрана без прив'язки).
+ * при прокрутці, `hideWhenDetached` ховає її, якщо поле виїхало зі
+ * скрол-контейнера (у Фінансах панелі мають власний `overflow-y`).
  *
  * По висоті працює база `PopoverContent`: `max-h` від
  * `--radix-popover-content-available-height` плюс `overflow-y-auto` — на низькому
- * екрані панель стискається і скролиться всередині, а не вилазить за вікно.
- * Порталювання лишаємо ввімкненим (дефолт): без нього будь-який предок з
- * `overflow: hidden` обріже панель незалежно від колізій.
+ * екрані панель стискається і скролиться всередині. Порталювання лишаємо
+ * ввімкненим (дефолт): без нього будь-який предок з `overflow: hidden` обріже
+ * панель незалежно від колізій.
  */
 const COLLISION_PROPS = {
   sideOffset: 6,
@@ -90,12 +69,10 @@ const COLLISION_PROPS = {
 /**
  * Записати значення так, щоб React побачив звичайний onChange.
  *
- * Календар живе поза інпутом, а всі виклики компонента вже написані під
- * `onChange={(e) => setX(e.target.value)}`. Замість того щоб міняти API у 36
- * місцях (і плодити другий проп поруч із onChange), ставимо значення нативним
- * сеттером і кидаємо `input` — React ловить його штатно й кличе той самий
- * onChange. Просте присвоєння `node.value = …` React НЕ помітить: він тримає
- * власний кеш попереднього значення на DOM-вузлі.
+ * Календар живе поза інпутом, а всі виклики вже написані під
+ * `onChange={(e) => setX(e.target.value)}`. Ставимо значення нативним сеттером і
+ * кидаємо `input` — React ловить його штатно. Просте `node.value = …` він НЕ
+ * помітить: тримає власний кеш попереднього значення на DOM-вузлі.
  */
 function commitNativeValue(node: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
@@ -120,16 +97,19 @@ function useForwardedInputRef(forwardedRef: React.ForwardedRef<HTMLInputElement>
 /**
  * Свій підпис порожнього поля замість браузерного.
  *
- * На `<input type=date|time>` НЕ МОЖНА поставити placeholder: підказку формату
- * («дд.мм.рррр», «--:--») малює сам браузер за локаллю ОС. Тому вона в кожного
- * своя, латиницею і різна для дати й часу — рівно те, що виглядало неохайно.
+ * На `<input type=date|time|datetime-local>` НЕ МОЖНА поставити placeholder:
+ * підказку формату малює сам браузер за локаллю ОС. Тому вона в кожного своя й
+ * латиницею. Поки значення порожнє і поле не у фокусі — гасимо текст інпута
+ * (`text-transparent`) і кладемо поверх власний підпис.
  *
- * Прийом: поки значення порожнє і поле не у фокусі — гасимо текст самого інпута
- * (`text-transparent`) і кладемо поверх власний підпис. У фокусі підпис зникає,
- * і людина бачить рідні сегменти, у які друкує. Оверлей не ловить кліки, тож
- * поле й іконка працюють як завжди.
+ * Умова «не у фокусі» обовʼязкова: під час набору невалідна часткова дата дає
+ * порожнє value, і без неї підпис вилазив би поверх того, що друкують.
  */
-const PLACEHOLDER_TEXT = { date: "дд.мм.рррр", time: "гг:хв" } as const;
+const PLACEHOLDER_TEXT: Record<PickerKind, string> = {
+  date: "дд.мм.рррр",
+  time: "гг:хв",
+  "datetime-local": "дд.мм.рррр, гг:хв",
+};
 
 /** Відступ підпису мусить збігатися з падінгом інпута — він залежить від розміру. */
 const PLACEHOLDER_POSITION: Record<InputControlSize, string> = {
@@ -139,7 +119,7 @@ const PLACEHOLDER_POSITION: Record<InputControlSize, string> = {
 };
 
 function useEmptyPlaceholder(params: {
-  kind: "date" | "time";
+  kind: PickerKind;
   value: React.ComponentProps<"input">["value"];
   placeholder?: string;
   controlSize: InputControlSize;
@@ -148,10 +128,9 @@ function useEmptyPlaceholder(params: {
 }) {
   const [focused, setFocused] = React.useState(false);
   const isEmpty = !(typeof params.value === "string" ? params.value : "");
-  const visible = isEmpty && !focused;
 
   return {
-    visible,
+    visible: isEmpty && !focused,
     text: params.placeholder ?? PLACEHOLDER_TEXT[params.kind],
     className: PLACEHOLDER_POSITION[params.controlSize],
     handlers: {
@@ -177,35 +156,145 @@ const ICON_BUTTON_CLASS = cn(
   "disabled:pointer-events-none disabled:opacity-50"
 );
 
+function EmptyHint({ hint }: { hint: ReturnType<typeof useEmptyPlaceholder> }) {
+  if (!hint.visible) return null;
+  return (
+    <span
+      aria-hidden
+      className={cn("pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground", hint.className)}
+    >
+      {hint.text}
+    </span>
+  );
+}
+
+/** Спільна панель: календар → (час) → швидкі дії → (підтвердження). */
+function PickerPanel({
+  selected,
+  onPickDate,
+  timeValue,
+  onPickTime,
+  timePresets,
+  draft,
+  onDraftCommit,
+  onDraftCancel,
+  saving,
+}: {
+  selected?: Date;
+  onPickDate: (date: Date | null) => void;
+  /** undefined — блок часу не показуємо взагалі. */
+  timeValue?: string;
+  onPickTime?: (next: string) => void;
+  timePresets: string[];
+  draft: boolean;
+  onDraftCommit?: () => void | Promise<void>;
+  onDraftCancel: () => void;
+  saving: boolean;
+}) {
+  // Роки у випадайці: календар має діставати і до дат народження, і до
+  // договорів наперед. Межі рахуємо від ОБРАНОГО значення, а не лише від
+  // «сьогодні» — інакше вже збережена дата 1988 року в списку відсутня.
+  const currentYear = new Date().getFullYear();
+  const selectedYear = selected?.getFullYear() ?? currentYear;
+  const withTime = timeValue !== undefined;
+
+  return (
+    <>
+      <div className={cn(saving && "pointer-events-none select-none opacity-60")}>
+        <Calendar
+          mode="single"
+          selected={selected}
+          defaultMonth={selected}
+          onSelect={(date) => onPickDate(date ?? null)}
+          captionLayout="dropdown-buttons"
+          fromYear={Math.min(currentYear - 80, selectedYear)}
+          toYear={Math.max(currentYear + 10, selectedYear)}
+          locale={uk}
+          initialFocus
+          classNames={{
+            // «Сьогодні» — лише крапка під числом, без заливки й обводки: обводка
+            // сперечалась із заливкою обраного дня, коли це один і той самий день.
+            day_today:
+              "font-semibold text-primary relative after:absolute after:bottom-1.5 after:left-0 after:right-0 after:mx-auto after:h-1 after:w-1 after:rounded-full after:bg-current after:content-[''] aria-selected:!bg-primary aria-selected:!text-primary-foreground aria-selected:after:bg-primary-foreground",
+            // Недоступний день закреслюємо: бліде в календарі вже означає
+            // «інший місяць», два різні сенси одним прийомом читались би як помилка.
+            day_disabled: "text-muted-foreground/60 line-through",
+          }}
+        />
+
+        <div className="flex flex-col gap-3 border-t border-border/60 p-3">
+          {withTime ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Час</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {timePresets.map((preset) => (
+                  <Button
+                    key={preset}
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn(
+                      "h-[30px] w-full justify-center rounded-[9px] border px-1 text-xs font-medium tabular-nums",
+                      preset === timeValue
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/60 hover:border-primary hover:text-primary"
+                    )}
+                    onClick={() => onPickTime?.(preset)}
+                  >
+                    {preset}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Швидко</span>
+            <DateQuickActions flush onSelect={(date) => onPickDate(date)} />
+          </div>
+        </div>
+      </div>
+
+      {draft ? (
+        <div className="grid grid-cols-2 gap-2 border-t border-border/60 p-3">
+          <Button type="button" variant="outline" size="sm" className="h-[34px]" disabled={saving} onClick={onDraftCancel}>
+            Скасувати
+          </Button>
+          <Button type="button" size="sm" className="h-[34px] gap-1.5" disabled={saving} onClick={() => void onDraftCommit?.()}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+            {saving ? "Зберігаємо" : "Зберегти"}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+type PanelBehaviourProps = {
+  /**
+   * Режим чернетки: панель не закривається на вибір, а чекає «Зберегти».
+   *
+   * Правило одне: підтвердження потрібне ЛИШЕ там, де клік сам пише в базу.
+   * Якщо поруч є спільне «Зберегти» (форма) або окрема кнопка запису — панель
+   * закривається одразу, інакше на екрані два «Зберегти» й незрозуміло, котре
+   * справжнє.
+   */
+  draft?: boolean;
+  onDraftCommit?: () => void | Promise<void>;
+  /** Запит у дорозі: панель не приймає кліків, кнопка показує спінер. */
+  saving?: boolean;
+  timePresets?: string[];
+};
+
 /** Поле дати: набір із клавіатури + наш календар зі швидкими діями. */
-const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
+const DateInput = React.forwardRef<HTMLInputElement, PickerInputProps & PanelBehaviourProps>(
   (
-    {
-      className,
-      disabled,
-      withTime = false,
-      timeValue = "",
-      onTimeChange,
-      timePresets = DEFAULT_TIME_PRESETS,
-      draft = false,
-      onDraftCommit,
-      saving = false,
-      controlSize = "lg",
-      placeholder,
-      ...props
-    },
+    { className, disabled, draft = false, onDraftCommit, saving = false, timePresets = DEFAULT_TIME_PRESETS, controlSize = "lg", placeholder, ...props },
     forwardedRef
   ) => {
     const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
     const [open, setOpen] = React.useState(false);
-    const hint = useEmptyPlaceholder({
-      kind: "date",
-      value: props.value,
-      placeholder,
-      controlSize,
-      onFocus: props.onFocus,
-      onBlur: props.onBlur,
-    });
+    const hint = useEmptyPlaceholder({ kind: "date", value: props.value, placeholder, controlSize, onFocus: props.onFocus, onBlur: props.onBlur });
 
     const rawValue = typeof props.value === "string" ? props.value : "";
     const selected = React.useMemo(() => {
@@ -214,19 +303,10 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
       return isValid(parsed) ? parsed : undefined;
     }, [rawValue]);
 
-    // Роки в випадайці: календар має діставати і до дат народження, і до
-    // договорів наперед. Межі рахуємо від обраного значення, а не лише від
-    // «сьогодні» — інакше вже збережена дата 1988 року в списку відсутня.
-    const currentYear = new Date().getFullYear();
-    const selectedYear = selected?.getFullYear() ?? currentYear;
-    const fromYear = Math.min(currentYear - 80, selectedYear);
-    const toYear = Math.max(currentYear + 10, selectedYear);
-
-    const commit = React.useCallback(
+    const pickDate = React.useCallback(
       (date: Date | null) => {
         const node = innerRef.current;
         if (node) commitNativeValue(node, date ? format(date, "yyyy-MM-dd") : "");
-        // У режимі чернетки панель лишається відкритою: рішення застосує «Зберегти».
         if (!draft) setOpen(false);
       },
       [innerRef, draft]
@@ -243,17 +323,7 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
           ref={setRefs}
           className={cn("pr-9", hint.visible && "text-transparent", className)}
         />
-        {hint.visible ? (
-          <span
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground",
-              hint.className
-            )}
-          >
-            {hint.text}
-          </span>
-        ) : null}
+        <EmptyHint hint={hint} />
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button type="button" tabIndex={-1} aria-label="Відкрити календар" disabled={disabled} className={ICON_BUTTON_CLASS}>
@@ -261,80 +331,15 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
-            <div className={cn(saving && "pointer-events-none select-none opacity-60")}>
-              <Calendar
-                mode="single"
-                selected={selected}
-                defaultMonth={selected}
-                onSelect={(date) => commit(date ?? null)}
-                captionLayout="dropdown-buttons"
-                fromYear={fromYear}
-                toYear={toYear}
-                locale={uk}
-                initialFocus
-                classNames={{
-                  // «Сьогодні» — лише крапка під числом, без заливки й обводки.
-                  // Рамка сперечалась із заливкою обраного дня, коли це один день.
-                  day_today:
-                    "font-semibold text-primary relative after:absolute after:bottom-1.5 after:left-0 after:right-0 after:mx-auto after:h-1 after:w-1 after:rounded-full after:bg-current after:content-[''] aria-selected:!bg-primary aria-selected:!text-primary-foreground aria-selected:after:bg-primary-foreground",
-                  // Недоступний день закреслюємо: бліде в календарі вже означає
-                  // «інший місяць», два різні сенси одним прийомом читались би як помилка.
-                  day_disabled: "text-muted-foreground/60 line-through",
-                }}
-              />
-
-              <div className="flex flex-col gap-3 border-t border-border/60 p-3">
-                {withTime ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Час</span>
-                    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-1.5">
-                      <TimeInput
-                        controlSize="sm"
-                        className="h-[34px] pr-8 text-sm font-semibold tabular-nums"
-                        value={timeValue}
-                        onChange={(event) => onTimeChange?.(event.target.value)}
-                      />
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {timePresets.map((preset) => (
-                          <Button
-                            key={preset}
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className={cn(
-                              "h-[30px] w-full justify-center rounded-[9px] border px-1 text-xs font-medium tabular-nums",
-                              preset === timeValue
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border/60 hover:border-primary hover:text-primary"
-                            )}
-                            onClick={() => onTimeChange?.(preset)}
-                          >
-                            {preset}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Швидко</span>
-                  <DateQuickActions flush onSelect={(date) => commit(date)} />
-                </div>
-              </div>
-            </div>
-
-            {draft ? (
-              <div className="grid grid-cols-2 gap-2 border-t border-border/60 p-3">
-                <Button type="button" variant="outline" size="sm" className="h-[34px]" disabled={saving} onClick={() => setOpen(false)}>
-                  Скасувати
-                </Button>
-                <Button type="button" size="sm" className="h-[34px] gap-1.5" disabled={saving} onClick={() => void onDraftCommit?.()}>
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-                  {saving ? "Зберігаємо" : "Зберегти"}
-                </Button>
-              </div>
-            ) : null}
+            <PickerPanel
+              selected={selected}
+              onPickDate={pickDate}
+              timePresets={timePresets}
+              draft={draft}
+              onDraftCommit={onDraftCommit}
+              onDraftCancel={() => setOpen(false)}
+              saving={saving}
+            />
           </PopoverContent>
         </Popover>
       </div>
@@ -344,23 +349,108 @@ const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
 DateInput.displayName = "DateInput";
 
 /**
- * Поле часу: набір із клавіатури + нативний системний вибір часу.
+ * Поле дати-часу — одним контролом.
  *
- * Свого пікера часу в проєкті немає, та він і не потрібен — швидких дій на
- * кшталт «Завтра» для години не буває, а нативний уже дає і колесо на мобільному,
- * і контроль формату.
+ * Дедлайни й нагадування завжди йдуть парою «день + година», і двома полями це
+ * два окремі рухи: половина нагадувань у базі стоїть на 00:00, бо час просто
+ * забували. Тут «Завтра» ставить і день, і робочу годину, а саме поле показує
+ * обидві частини — не треба відкривати панель, щоб побачити час.
+ *
+ * Значення — нативний формат `datetime-local`: «YYYY-MM-DDTHH:MM».
+ */
+const DateTimeInput = React.forwardRef<HTMLInputElement, PickerInputProps & PanelBehaviourProps>(
+  (
+    { className, disabled, draft = false, onDraftCommit, saving = false, timePresets = DEFAULT_TIME_PRESETS, controlSize = "lg", placeholder, ...props },
+    forwardedRef
+  ) => {
+    const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
+    const [open, setOpen] = React.useState(false);
+    const hint = useEmptyPlaceholder({ kind: "datetime-local", value: props.value, placeholder, controlSize, onFocus: props.onFocus, onBlur: props.onBlur });
+
+    const rawValue = typeof props.value === "string" ? props.value : "";
+    const [datePart = "", timePart = ""] = rawValue.split("T");
+    const selected = React.useMemo(() => {
+      if (!datePart) return undefined;
+      const parsed = parse(datePart, "yyyy-MM-dd", new Date());
+      return isValid(parsed) ? parsed : undefined;
+    }, [datePart]);
+
+    const write = React.useCallback(
+      (nextDate: string, nextTime: string) => {
+        const node = innerRef.current;
+        if (!node) return;
+        commitNativeValue(node, nextDate ? `${nextDate}T${nextTime || DEFAULT_TIME}` : "");
+      },
+      [innerRef]
+    );
+
+    const pickDate = React.useCallback(
+      (date: Date | null) => {
+        // Очистити — значить очистити цілком: дата без часу тут не існує.
+        write(date ? format(date, "yyyy-MM-dd") : "", timePart);
+        if (!draft) setOpen(false);
+      },
+      [write, timePart, draft]
+    );
+
+    const pickTime = React.useCallback(
+      (next: string) => {
+        // Час без дати — теж не значення. Якщо дати ще немає, беремо сьогодні:
+        // людина клікнула годину, отже має на увазі найближчий день.
+        write(datePart || format(new Date(), "yyyy-MM-dd"), next);
+      },
+      [write, datePart]
+    );
+
+    return (
+      <div className="relative">
+        <Input
+          {...props}
+          {...hint.handlers}
+          type="datetime-local"
+          controlSize={controlSize}
+          disabled={disabled}
+          ref={setRefs}
+          className={cn("pr-9", hint.visible && "text-transparent", className)}
+        />
+        <EmptyHint hint={hint} />
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button type="button" tabIndex={-1} aria-label="Відкрити календар" disabled={disabled} className={ICON_BUTTON_CLASS}>
+              <CalendarDays className="h-4 w-4" aria-hidden />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
+            <PickerPanel
+              selected={selected}
+              onPickDate={pickDate}
+              timeValue={timePart || ""}
+              onPickTime={pickTime}
+              timePresets={timePresets}
+              draft={draft}
+              onDraftCommit={onDraftCommit}
+              onDraftCancel={() => setOpen(false)}
+              saving={saving}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  }
+);
+DateTimeInput.displayName = "DateTimeInput";
+
+/**
+ * Поле часу окремо — там, де дати поруч немає (журнал витрат тощо).
+ *
+ * Свого пікера часу в проєкті немає, та він і не потрібен: швидких дій на
+ * кшталт «Завтра» для години не буває, а нативний уже дає і колесо на
+ * мобільному, і контроль формату.
  */
 const TimeInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
   ({ className, disabled, controlSize = "lg", placeholder, ...props }, forwardedRef) => {
     const { innerRef, setRefs } = useForwardedInputRef(forwardedRef);
-    const hint = useEmptyPlaceholder({
-      kind: "time",
-      value: props.value,
-      placeholder,
-      controlSize,
-      onFocus: props.onFocus,
-      onBlur: props.onBlur,
-    });
+    const hint = useEmptyPlaceholder({ kind: "time", value: props.value, placeholder, controlSize, onFocus: props.onFocus, onBlur: props.onBlur });
 
     const openPicker = React.useCallback(() => {
       const node = innerRef.current;
@@ -385,17 +475,7 @@ const TimeInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
           ref={setRefs}
           className={cn("pr-9", hint.visible && "text-transparent", className)}
         />
-        {hint.visible ? (
-          <span
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-y-0 flex items-center text-muted-foreground",
-              hint.className
-            )}
-          >
-            {hint.text}
-          </span>
-        ) : null}
+        <EmptyHint hint={hint} />
         <button
           type="button"
           tabIndex={-1}
@@ -412,4 +492,116 @@ const TimeInput = React.forwardRef<HTMLInputElement, PickerInputProps>(
 );
 TimeInput.displayName = "TimeInput";
 
-export { DateInput, TimeInput };
+/**
+ * Тон терміновості для дедлайну.
+ *
+ * ЛИШЕ для дедлайнів (рішення 2026-08-06). У фінансах і профілі минула дата —
+ * це норма (дата оплати завжди позаду), і фарбувати кожне таке поле означало б
+ * зробити півсторінки червоною без причини. Колір має стояти там, де є наслідок
+ * пропуску.
+ */
+export function deadlineUrgencyTone(value: Date | null | undefined): "neutral" | "warning" | "danger" {
+  if (!value || Number.isNaN(value.getTime())) return "neutral";
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(value) - startOfDay(new Date())) / 86400000);
+  if (days < 0) return "danger";
+  if (days <= 1) return "warning";
+  return "neutral";
+}
+
+/**
+ * Пікер із чіповим тригером — для шапок і тулбарів, де дата не вводиться, а
+ * читається («Дедлайн: Завтра 14:00»).
+ *
+ * Панель та сама, що й у полів: один календар, одні швидкі дії, той самий захист
+ * від країв вікна. Різниця лише в тому, за що її чіпляють. Підпис лишається за
+ * викликачем — у різних місцях свої формулювання, зводити їх силоміць немає сенсу.
+ */
+const DateTimeChip = React.forwardRef<
+  HTMLButtonElement,
+  {
+    value: Date | null;
+    onChange: (next: Date | null) => void;
+    children: React.ReactNode;
+    withTime?: boolean;
+    timePresets?: string[];
+    /** Підсвітити терміновість. Вмикати ТІЛЬКИ на дедлайнах. */
+    urgency?: boolean;
+    disabled?: boolean;
+    className?: string;
+  } & PanelBehaviourProps
+>(
+  (
+    { value, onChange, children, withTime = true, timePresets = DEFAULT_TIME_PRESETS, urgency = false, disabled, className, draft = false, onDraftCommit, saving = false },
+    forwardedRef
+  ) => {
+    const [open, setOpen] = React.useState(false);
+    const tone = urgency ? deadlineUrgencyTone(value) : "neutral";
+
+    const timeValue = value ? format(value, "HH:mm") : "";
+
+    const pickDate = React.useCallback(
+      (date: Date | null) => {
+        if (!date) {
+          onChange(null);
+        } else {
+          const next = new Date(date);
+          const [h, m] = (timeValue || DEFAULT_TIME).split(":").map(Number);
+          next.setHours(h || 0, m || 0, 0, 0);
+          onChange(next);
+        }
+        if (!draft) setOpen(false);
+      },
+      [onChange, timeValue, draft]
+    );
+
+    const pickTime = React.useCallback(
+      (next: string) => {
+        const [h, m] = next.split(":").map(Number);
+        const base = value ? new Date(value) : new Date();
+        base.setHours(h || 0, m || 0, 0, 0);
+        onChange(base);
+      },
+      [onChange, value]
+    );
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            ref={forwardedRef}
+            type="button"
+            disabled={disabled}
+            className={cn(
+              "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:pointer-events-none disabled:opacity-50",
+              tone === "danger" && "border-transparent bg-danger-soft text-danger-foreground",
+              tone === "warning" && "border-transparent bg-warning-soft text-warning-foreground",
+              tone === "neutral" && "border-border/60 text-muted-foreground hover:text-foreground",
+              className
+            )}
+          >
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+            {children}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className={PANEL_WIDTH_CLASS} {...COLLISION_PROPS}>
+          <PickerPanel
+            selected={value ?? undefined}
+            onPickDate={pickDate}
+            timeValue={withTime ? timeValue : undefined}
+            onPickTime={pickTime}
+            timePresets={timePresets}
+            draft={draft}
+            onDraftCommit={onDraftCommit}
+            onDraftCancel={() => setOpen(false)}
+            saving={saving}
+          />
+        </PopoverContent>
+      </Popover>
+    );
+  }
+);
+DateTimeChip.displayName = "DateTimeChip";
+
+export { DateInput, DateTimeInput, DateTimeChip, TimeInput };
