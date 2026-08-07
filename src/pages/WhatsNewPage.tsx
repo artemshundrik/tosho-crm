@@ -2,16 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, SearchX } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
-import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
-import { cn } from "@/lib/utils";
 import { useVisibleUpdates } from "@/features/features/useVisibleUpdates";
 import { useMarkUpdatesRead } from "@/features/features/updateQueries";
-import { ReleaseHistory } from "@/features/features/ReleaseHistory";
 
 /**
  * Стрічка «Що нового» — історія змін у CRM.
@@ -20,58 +15,34 @@ import { ReleaseHistory } from "@/features/features/ReleaseHistory";
  * є», стрічка — «що змінилося». Більшість релізів це покращення наявних фіч,
  * тож каталогом їх не показати.
  *
- * Прочитаним усе позначається на вході на сторінку: людина сюди прийшла саме
- * читати, і лишати після цього бейдж означало б брехати лічильником.
+ * Лічильника непрочитаного тут навмисно немає. Стрічку читають, коли є
+ * настрій, а не щоб «обнулити бейдж»; позначка ж читання лишилась службовою —
+ * вона стримує повторний показ модалки анонсу.
  */
-
-type Filter = "all" | "unread" | "releases";
-
-const FILTER_LABEL: Record<Filter, string> = {
-  all: "Усі",
-  unread: "Непрочитані",
-  releases: "Релізи",
-};
 
 const DATE = new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long" });
 const MONTH = new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" });
 
 export default function WhatsNewPage() {
   const navigate = useNavigate();
-  const { viewUserId, accessRole, jobRole } = useAuth();
+  const { viewUserId } = useAuth();
   const { visible, unread, ready } = useVisibleUpdates();
   const markRead = useMarkUpdatesRead(viewUserId);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [marked, setMarked] = useState(false);
 
-  /**
-   * Вкладка «Релізи» — лише власнику й SEO. Решті команди цифри про обсяг
-   * робіт нічого не дають: їм потрібно знати, ЩО змінилось, а не скільки
-   * комітів на це пішло.
-   */
-  const canSeeReleases =
-    (accessRole ?? "").trim().toLowerCase() === "owner" ||
-    (jobRole ?? "").trim().toLowerCase() === "seo";
-
-  // Показане на цій сторінці вважаємо прочитаним — але список для рендеру
-  // фіксуємо ДО позначення, інакше фільтр «непрочитані» спорожнів би на очах.
-  const [frozenUnread, setFrozenUnread] = useState<Set<string> | null>(null);
-
+  // Позначаємо прочитаним мовчки: жодного лічильника це вже не гасить, але
+  // стримує модалку анонсу — інакше вона показала б те, що людина щойно
+  // прочитала тут.
   useEffect(() => {
-    if (!ready || frozenUnread) return;
-    setFrozenUnread(new Set(unread.map((update) => update.id)));
-    if (unread.length > 0) {
-      markRead(
-        unread.map((update) => update.id),
-        "feed"
-      );
-    }
-  }, [ready, unread, frozenUnread, markRead]);
+    if (!ready || marked || unread.length === 0) return;
+    setMarked(true);
+    markRead(
+      unread.map((update) => update.id),
+      "feed"
+    );
+  }, [ready, marked, unread, markRead]);
 
-  const shown = useMemo(() => {
-    if (filter === "unread") {
-      return visible.filter((update) => frozenUnread?.has(update.id));
-    }
-    return visible;
-  }, [visible, filter, frozenUnread]);
+  const shown = visible;
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof shown>();
@@ -87,46 +58,12 @@ export default function WhatsNewPage() {
 
   usePageHeaderActions(
     <UnifiedPageToolbar
-      topLeft={
-        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
-          {(Object.keys(FILTER_LABEL) as Filter[])
-            .filter((value) => value !== "releases" || canSeeReleases)
-            .map((value) => (
-            <Button
-              key={value}
-              variant="segmented"
-              size="xs"
-              aria-pressed={filter === value}
-              data-state={filter === value ? "on" : "off"}
-              onClick={() => setFilter(value)}
-              className={cn(SEGMENTED_TRIGGER, "gap-2")}
-            >
-              {FILTER_LABEL[value]}
-              {value === "releases" ? null : (
-                <CountBadge value={value === "all" ? visible.length : (frozenUnread?.size ?? 0)} />
-              )}
-            </Button>
-          ))}
-        </SegmentedGroup>
-      }
       meta={
-        filter === "releases" ? null : (
-          <ToolbarMeta count={shown.length} countLabel={shown.length === 1 ? "запис" : "записів"} />
-        )
+        <ToolbarMeta count={shown.length} countLabel={shown.length === 1 ? "запис" : "записів"} />
       }
     />,
-    [filter, visible.length, frozenUnread, shown.length, canSeeReleases]
+    [shown.length]
   );
-
-  if (filter === "releases" && canSeeReleases) {
-    return (
-      <div className="py-4">
-        <div className="mx-auto max-w-[760px]">
-          <ReleaseHistory />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="py-4">
@@ -141,7 +78,6 @@ export default function WhatsNewPage() {
             </header>
 
             {items.map((update) => {
-              const fresh = frozenUnread?.has(update.id);
               const date = new Date(update.publishedAt);
               return (
                 <article
@@ -149,11 +85,6 @@ export default function WhatsNewPage() {
                   className="border-b border-border py-5 last:border-b-0"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    {fresh ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                        Нове
-                      </span>
-                    ) : null}
                     {update.importance === "major" ? (
                       <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-semibold text-success-foreground">
                         Велика фіча
@@ -190,13 +121,9 @@ export default function WhatsNewPage() {
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
               <SearchX className="h-4 w-4" />
             </span>
-            <p className="text-sm font-semibold">
-              {filter === "unread" ? "Усе прочитано" : "Записів ще немає"}
-            </p>
+            <p className="text-sm font-semibold">Записів ще немає</p>
             <p className="max-w-[38ch] text-xs text-muted-foreground">
-              {filter === "unread"
-                ? "Нові оновлення зʼявляться тут після наступного релізу."
-                : "Тут буде історія змін у CRM."}
+              Тут буде історія змін у CRM.
             </p>
           </div>
         ) : null}

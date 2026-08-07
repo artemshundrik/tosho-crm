@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { filterByPeriod, useReleases, type Period } from "@/features/features/releaseQueries";
 import {
   CHANGE_TYPE_BAR,
   CHANGE_TYPE_TONE,
@@ -20,7 +19,6 @@ import {
   typeLabel,
   workingDays,
   type DayGroup,
-  type Release,
   type ScopeComparison,
   type Thread,
 } from "@/lib/releaseHistory";
@@ -57,35 +55,6 @@ const TIME = new Intl.DateTimeFormat("uk-UA", {
 /** Скільки днів показуємо в рейці. Далі за них ходять уже через місяці. */
 const RAIL_DAYS = 14;
 
-type ReleaseRow = {
-  id: string;
-  released_at: string;
-  title: string | null;
-  changes: unknown;
-};
-
-function useReleases() {
-  return useQuery({
-    queryKey: ["releases"],
-    staleTime: 10 * 60_000,
-    queryFn: async (): Promise<Release[]> => {
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("releases")
-        .select("id, released_at, title, changes")
-        .order("released_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return ((data ?? []) as ReleaseRow[]).map((row) => ({
-        id: row.id,
-        releasedAt: row.released_at,
-        title: row.title,
-        changes: Array.isArray(row.changes) ? (row.changes as Release["changes"]) : [],
-      }));
-    },
-  });
-}
-
 function fmt(iso: string, format: Intl.DateTimeFormat): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? "—" : format.format(date);
@@ -100,25 +69,28 @@ function hasRealTime(iso: string): boolean {
   return !Number.isNaN(new Date(iso).getTime());
 }
 
-export function ReleaseHistory() {
-  const { data: releases, isPending } = useReleases();
+export function ReleaseHistory({ period = { kind: "all" } }: { period?: Period }) {
+  const { data: all, isPending } = useReleases();
   const [pickedDay, setPickedDay] = useState<string | null>(null);
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [openScope, setOpenScope] = useState<string | null>(null);
 
-  const days = useMemo(() => groupByDay(releases ?? []), [releases]);
-  const groups = useMemo(() => groupByMonth(releases ?? []), [releases]);
-  const allTime = useMemo(() => summarize(releases ?? []), [releases]);
+  const releases = useMemo(() => filterByPeriod(all ?? [], period), [all, period]);
+  const days = useMemo(() => groupByDay(releases), [releases]);
+  const groups = useMemo(() => groupByMonth(releases), [releases]);
+  const allTime = useMemo(() => summarize(releases), [releases]);
   const months = useMemo(() => monthTotals(groups), [groups]);
 
   if (isPending) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Завантажую…</p>;
   }
 
-  if (!releases || releases.length === 0 || days.length === 0) {
+  if (days.length === 0) {
     return (
       <div className="py-16 text-center">
-        <p className="text-sm font-semibold">Історія порожня</p>
+        <p className="text-sm font-semibold">
+          {period.kind === "all" ? "Історія порожня" : "За цей період записів немає"}
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">
           Записи зʼявляться після наступного релізу.
         </p>

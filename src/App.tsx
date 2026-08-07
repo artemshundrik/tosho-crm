@@ -61,6 +61,7 @@ const TeamPage = lazyWithRetry(() =>
 );
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const WhatsNewPage = lazyWithRetry(() => import("./pages/WhatsNewPage"));
+const ReleasesPage = lazyWithRetry(() => import("./pages/ReleasesPage"));
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -1075,6 +1076,16 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <WhatsNewPage />
+            </RouteSuspense>
+          }
+        />
+        {/* Релізи. Гейт власник/SEO всередині сторінки — він лише дублює
+            політику RLS, база й так не віддасть таблицю решті команди. */}
+        <Route
+          path="releases"
+          element={
+            <RouteSuspense shell>
+              <ReleasesPage />
             </RouteSuspense>
           }
         />

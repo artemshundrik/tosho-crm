@@ -437,6 +437,7 @@ const ROUTES = {
   profile: "/profile",
   features: "/features",
   whatsNew: "/whats-new",
+  releases: "/releases",
   observability: "/admin/observability",
 } as const;
 
@@ -672,6 +673,14 @@ if (pathname === ROUTES.profile)
       subtitle: "Історія змін у CRM.",
       breadcrumbLabel: "Що нового",
       breadcrumbTo: ROUTES.whatsNew,
+      showPageHeader: false,
+    };
+  if (pathname === ROUTES.releases)
+    return {
+      title: "Релізи",
+      subtitle: "Скільки роботи зроблено — по днях і за період.",
+      breadcrumbLabel: "Релізи",
+      breadcrumbTo: ROUTES.releases,
       showPageHeader: false,
     };
   // fallback
@@ -1799,9 +1808,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     </Button>
                   </SheetTrigger>
 
+                  {/* Мобільне меню: дотик повз — універсальний жест закриття
+                      навігації, і втрачати тут нічого. */}
                   <SheetContent
                     side="left"
                     hideClose
+                    dismissible
                     className={cn(
                       "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 shadow-2xl backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
