@@ -114,6 +114,11 @@ import {
   syncDesignOutputFilesToQuoteAttachments,
 } from "@/lib/designTaskOutputSync";
 import { fetchDesignTaskMetadata } from "@/lib/designTaskMetadata";
+import {
+  applyDesignOutputVersion,
+  parseDesignOutputVersion,
+  resolveDesignOutputVersion,
+} from "@/lib/designOutputVersion";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
@@ -3960,8 +3965,17 @@ export default function DesignTaskPage() {
       const uploaded: DesignOutputFile[] = [];
       // If a per-правка timer is currently running, auto-link the uploaded visuals to it.
       const autoLinkChangeRequestId = designTimerBreakdown?.activeChangeRequestId ?? null;
+      // Номер версії рахуємо ОДИН раз на пачку: усі файли одного завантаження
+      // належать до того самого раунду правок і мають ділити суфікс. Візуали
+      // й макети рахуються окремо — перший макет після правок по візуалах
+      // усе одно його перша версія.
+      const uploadVersion = resolveDesignOutputVersion({
+        changeRequests: briefChangeRequests,
+        existingFiles: designOutputFiles.filter((entry) => entry.output_kind === uploadTargetKind),
+      });
       for (const file of accepted) {
-        const safeName = file.name.replace(/[^\w.-]+/g, "_");
+        const versionedName = applyDesignOutputVersion(file.name, uploadVersion);
+        const safeName = versionedName.replace(/[^\w.-]+/g, "_");
         const baseName = `${Date.now()}-${safeName}`;
         const candidatePaths = [`teams/${effectiveTeamId}/design-outputs/${task.quoteId}/${baseName}`];
 
@@ -3989,7 +4003,7 @@ export default function DesignTaskPage() {
 
         uploaded.push({
           id: crypto.randomUUID(),
-          file_name: file.name,
+          file_name: versionedName,
           file_size: storedSize,
           mime_type: storedContentType,
           storage_bucket: DESIGN_OUTPUT_BUCKET,
@@ -9002,6 +9016,10 @@ export default function DesignTaskPage() {
                       const isApproved = selectedIdSet.has(file.id);
                       const isSharedWithClient = selectedShareIdSet.has(rowKey);
                       const isRowSelected = outputSelectionIds.includes(rowKey);
+                      // Версію читаємо з самого імені: воно і є носієм правди
+                      // за межами CRM. Файли до цієї зміни версії не мають —
+                      // бейджа в них просто не буде.
+                      const fileVersion = parseDesignOutputVersion(file.file_name);
                       return (
                         <div
                           key={file.id}
@@ -9052,8 +9070,18 @@ export default function DesignTaskPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1 basis-48">
-                                  <div className="truncate text-sm font-medium text-foreground" title={displayName}>
-                                    {displayName}
+                                  <div className="flex min-w-0 items-center gap-1.5">
+                                    {fileVersion && fileVersion > 1 ? (
+                                      <span
+                                        className="shrink-0 rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground"
+                                        title={`Версія ${fileVersion} — завантажено після ${fileVersion - 1}-ї правки`}
+                                      >
+                                        v{fileVersion}
+                                      </span>
+                                    ) : null}
+                                    <div className="truncate text-sm font-medium text-foreground" title={displayName}>
+                                      {displayName}
+                                    </div>
                                   </div>
                                   <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
                                     <span>{formatFileSize(file.file_size)}</span>
