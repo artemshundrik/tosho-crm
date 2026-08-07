@@ -1,78 +1,262 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useReleases } from "@/features/features/releaseQueries";
 import {
-  CHANGE_TYPE_BAR,
   buildThreads,
+  daySessions,
   groupByDay,
-  groupByMonth,
-  legendTotals,
+  heatLevel,
+  heatThresholds,
   monthOf,
   monthTitle,
-  monthTotals,
-  paceDelta,
-  scopeBreakdown,
-  summarize,
+  punchMatrix,
+  scopeLabel,
+  streaksOf,
   type DayGroup,
-  type Release,
+  type ScopedChange,
   type Thread,
 } from "@/lib/releaseHistory";
 
 /**
  * Історія релізів — для власника й SEO.
  *
- * Відповідає на інше питання, ніж стрічка «Що нового»: не «що змінилося для
- * мене», а «скільки роботи зроблено». Тому джерело тут git, а не курований
- * список анонсів — у стрічку більшість дрібних правок свідомо не потрапляє.
+ * Три масштаби, всі керуються теплокартою: рік = сама карта, місяць = клік по
+ * назві місяця над нею, день = клік по клітинці чи рядку. Esc піднімає на
+ * рівень угору, стрілки гортають у межах рівня.
  *
- * ОДНА РЕЙКА ЗАМІСТЬ ТАБІВ: періоди були сегментованим перемикачем по місяцях,
- * і це ламалось від власного зростання — в історії вже 9 місяців, за рік буде
- * 21. Рейка показує місяці, клік розкриває місяць у дні, і на будь-якій
- * глибині це та сама смуга, лише з іншою кількістю поділок. Вона ж замінила
- * окремий блок «місяць до місяця»: порівняння місяців тепер видно просто з
- * висоти стовпчиків.
- *
- * ДВІ КОЛОНКИ: підсумки, розподіл і події йшли вниз одне за одним, і щоб
- * скласти картину, доводилось гортати. Тепер зведення липне праворуч, а
- * прокрутка потрібна лише щоб читати більше подій дня.
+ * Дані: tosho.releases, куди кожен успішний деплой пише сам (плагін Netlify).
+ * Час — ОЦІНКА за ритмом комітів (див. daySessions), і сторінка всюди чесно
+ * підписує його як оцінку; думання без комітів у неї не потрапляє.
  */
 
-const DAY_FULL = new Intl.DateTimeFormat("uk-UA", {
-  day: "numeric",
-  month: "long",
-  weekday: "long",
-  timeZone: "Europe/Kiev",
-});
-const TIME = new Intl.DateTimeFormat("uk-UA", {
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "Europe/Kiev",
-});
+const MON_S = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
+const MON_G = ["січня","лютого","березня","квітня","травня","червня","липня","серпня","вересня","жовтня","листопада","грудня"]; // prettier-ignore
+const WD_FULL = ["неділя", "понеділок", "вівторок", "середа", "четвер", "пʼятниця", "субота"];
+const WD_SHORT = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
 
-/** Рівень масштабу рейки. */
-type Zoom = { level: "months" } | { level: "days"; month: string };
+const fmtN = (n: number) => n.toLocaleString("uk-UA");
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const durTxt = (m: number) => {
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return h ? `${h} год${rest ? ` ${rest} хв` : ""}` : `${rest} хв`;
+};
+const timeOf = (iso: string) => iso.slice(11, 16);
+const fdate = (k: string) => `${Number(k.slice(8, 10))} ${MON_G[Number(k.slice(5, 7)) - 1]}`;
+const kindOf = (t: string) => (t === "feat" ? "new" : t === "fix" ? "fix" : "misc");
+/** Ніч для блоку сесії: старт після 21:00 або до 06:00. */
+const isNight = (startMin: number) => startMin >= 1260 || startMin < 360;
 
-function fmt(iso: string, format: Intl.DateTimeFormat): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "—" : format.format(date);
+const KIND_META = {
+  new: { label: "Нове", bar: "bg-chart-3" },
+  fix: { label: "Виправлено", bar: "bg-chart-7" },
+  misc: { label: "Решта", bar: "bg-muted-foreground/40" },
+} as const;
+
+/** Рівні теплокарти. Один зелений різної сили — «мало» це не «погано». */
+const HEAT_BG = [
+  "bg-secondary",
+  "bg-chart-3/25",
+  "bg-chart-3/45",
+  "bg-chart-3/70",
+  "bg-chart-3",
+] as const;
+
+type View = { t: "month"; k: string } | { t: "day"; k: string };
+
+type DayInfo = {
+  n: number;
+  ins: number;
+  del: number;
+  hours: number;
+  blocks: Array<[number, number]>;
+};
+
+/* ── Тултип — той самий патерн, що на дашборді дизайнерів ── */
+
+type TipRow = { label: string; value: string | number; color?: string; strong?: boolean };
+type TipModel = { title?: string; rows: TipRow[]; note?: string };
+type TipState = TipModel & { x: number; y: number };
+
+function TipView({ tip }: { tip: TipState }) {
+  const vw = typeof window === "undefined" ? 1280 : window.innerWidth;
+  const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+  const flipX = tip.x > vw * 0.62;
+  const flipY = tip.y > vh * 0.7;
+  return (
+    <div
+      role="tooltip"
+      style={{
+        position: "fixed",
+        left: tip.x,
+        top: tip.y,
+        transform: `translate(${flipX ? "calc(-100% - 14px)" : "14px"}, ${flipY ? "calc(-100% - 16px)" : "16px"})`,
+        zIndex: 60,
+        pointerEvents: "none",
+      }}
+      className="w-max max-w-[min(88vw,320px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-menu"
+    >
+      {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
+      <div className="flex flex-col gap-1">
+        {tip.rows.map((row, index) => (
+          <div key={index} className="flex items-center gap-3 whitespace-nowrap">
+            {row.color ? (
+              <span className={cn("h-2 w-2 shrink-0 rounded-sm", row.color)} aria-hidden />
+            ) : null}
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className={cn("ml-auto shrink-0 pl-3 tabular-nums", row.strong && "font-semibold")}>
+              {row.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {tip.note ? (
+        <div className="mt-1 max-w-[36ch] whitespace-normal text-3xs text-muted-foreground/80">
+          {tip.note}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
-export function ReleaseHistory() {
-  const { data: all, isPending } = useReleases();
-  const [zoom, setZoom] = useState<Zoom | null>(null);
-  const [pickedDay, setPickedDay] = useState<string | null>(null);
+function useTip() {
+  const [tip, setTip] = useState<TipState | null>(null);
+  const bind = useCallback(
+    (build: () => TipModel | null) => ({
+      onMouseEnter: (event: ReactMouseEvent) => {
+        const model = build();
+        if (model) setTip({ ...model, x: event.clientX, y: event.clientY });
+      },
+      onMouseMove: (event: ReactMouseEvent) => {
+        const { clientX, clientY } = event;
+        setTip((prev) => (prev ? { ...prev, x: clientX, y: clientY } : prev));
+      },
+      onMouseLeave: () => setTip(null),
+    }),
+    []
+  );
+  const overlay: ReactNode =
+    tip && typeof document !== "undefined" ? createPortal(<TipView tip={tip} />, document.body) : null;
+  return { bind, overlay };
+}
 
-  const releases = useMemo(() => all ?? [], [all]);
-  const days = useMemo(() => groupByDay(releases), [releases]);
-  const groups = useMemo(() => groupByMonth(releases), [releases]);
-  const months = useMemo(() => monthTotals(groups), [groups]);
+/** Пунктир «тут є розшифровка» — та сама конвенція, що на дашборді. */
+const HOV = "cursor-help border-b border-dashed border-muted-foreground/60";
+
+/* ── Діфстат «пʼять квадратиків», як у GitHub ── */
+
+function Squares({ ins, del }: { ins: number; del: number }) {
+  const total = ins + del;
+  let green = total === 0 ? 0 : Math.round((ins / total) * 5);
+  if (ins > 0 && green === 0) green = 1;
+  if (del > 0 && green === 5) green = 4;
+  return (
+    <span className="inline-flex gap-px" aria-hidden>
+      {Array.from({ length: 5 }, (_, i) => (
+        <i
+          key={i}
+          className={cn(
+            "h-1.5 w-1.5 rounded-[1.5px]",
+            total === 0 ? "bg-border" : i < green ? "bg-chart-3" : "bg-chart-8"
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+function Diff({ ins, del, dim }: { ins: number; del: number; dim?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs tabular-nums",
+        dim && "opacity-80"
+      )}
+    >
+      <span className="font-semibold text-chart-3">+{fmtN(ins)}</span>
+      <span className="font-semibold text-chart-8">−{fmtN(del)}</span>
+      <Squares ins={ins} del={del} />
+    </span>
+  );
+}
+
+/* ── Сторінка ── */
+
+export function ReleaseHistory() {
+  const { data: releases, isPending } = useReleases();
+  const [view, setView] = useState<View | null>(null);
+
+  const days = useMemo(() => groupByDay(releases ?? []), [releases]);
+
+  /** Довідник дня: кількість, рядки, сесії. Ключ — YYYY-MM-DD. */
+  const dayInfo = useMemo(() => {
+    const map = new Map<string, DayInfo>();
+    for (const group of days) {
+      const sessions = daySessions(group.changes.map((c) => c.releasedAt));
+      map.set(group.day, {
+        n: group.changes.length,
+        ins: group.changes.reduce((s, c) => s + (c.ins ?? 0), 0),
+        del: group.changes.reduce((s, c) => s + (c.del ?? 0), 0),
+        hours: sessions.hours,
+        blocks: sessions.blocks,
+      });
+    }
+    return map;
+  }, [days]);
+
+  const dayKeys = useMemo(() => Array.from(dayInfo.keys()).sort(), [dayInfo]);
+  const monthKeys = useMemo(
+    () => Array.from(new Set(dayKeys.map((k) => k.slice(0, 7)))).sort(),
+    [dayKeys]
+  );
+  const allChanges = useMemo(() => days.flatMap((d) => d.changes), [days]);
+  const punch = useMemo(() => punchMatrix(allChanges), [allChanges]);
+  const streaks = useMemo(() => streaksOf(dayKeys), [dayKeys]);
+  const thresholds = useMemo(
+    () => heatThresholds(dayKeys.map((k) => dayInfo.get(k)?.n ?? 0)),
+    [dayKeys, dayInfo]
+  );
+  const totals = useMemo(() => {
+    let n = 0, ins = 0, del = 0, hours = 0;
+    for (const info of dayInfo.values()) {
+      n += info.n; ins += info.ins; del += info.del; hours += info.hours;
+    }
+    return { n, ins, del, hours: Math.round(hours) };
+  }, [dayInfo]);
+
+  const { bind, overlay } = useTip();
+
+  const active: View = useMemo(
+    () => view ?? { t: "day", k: dayKeys.at(-1) ?? "" },
+    [view, dayKeys]
+  );
+
+  const go = useCallback((next: View) => setView(next), []);
+
+  /* Стрілки гортають рівень, Esc піднімає до місяця. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (event.key === "Escape" && active.t === "day") {
+        go({ t: "month", k: active.k.slice(0, 7) });
+        return;
+      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const keys = active.t === "day" ? dayKeys : monthKeys;
+      const index = keys.indexOf(active.k) + (event.key === "ArrowLeft" ? -1 : 1);
+      if (index >= 0 && index < keys.length) go({ t: active.t, k: keys[index] });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, dayKeys, monthKeys, go]);
 
   if (isPending) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Завантажую…</p>;
   }
-
-  if (days.length === 0) {
+  if (dayKeys.length === 0) {
     return (
       <div className="py-16 text-center">
         <p className="text-sm font-semibold">Історія порожня</p>
@@ -83,297 +267,746 @@ export function ReleaseHistory() {
     );
   }
 
-  // Стартуємо одразу в останньому місяці: питають майже завжди про нього.
-  const view: Zoom = zoom ?? { level: "days", month: months[0].key };
-  const inMonth = view.level === "days";
-  const month = view.level === "days" ? view.month : null;
+  const monthStat = (mk: string) => {
+    const list = dayKeys.filter((k) => k.startsWith(mk));
+    let n = 0, ins = 0, del = 0, hours = 0;
+    for (const k of list) {
+      const info = dayInfo.get(k) as DayInfo;
+      n += info.n; ins += info.ins; del += info.del; hours += info.hours;
+    }
+    return { n, ins, del, hours: Math.round(hours), d: list.length };
+  };
 
-  const scopedDays = month ? days.filter((item) => item.day.startsWith(month)) : days;
-  const scopedReleases = month
-    ? releases.filter((release) => release.releasedAt.slice(0, 7) === month)
-    : releases;
-
-  const day = scopedDays.find((item) => item.day === pickedDay) ?? scopedDays[0] ?? days[0];
-
-  const summary = summarize(scopedReleases);
-  const dayCount = scopedDays.length;
-  const perDay = dayCount === 0 ? 0 : summary.changes / dayCount;
-
-  const monthIndex = month ? months.findIndex((item) => item.key === month) : -1;
-  const previousMonth = monthIndex >= 0 ? months[monthIndex + 1] : undefined;
-  const delta =
-    month && previousMonth
-      ? paceDelta(
-          scopedReleases,
-          releases.filter((release) => release.releasedAt.slice(0, 7) === previousMonth.key)
-        )
-      : null;
-
-  // Рейка йде зліва направо від старого до нового — так читають час.
-  const railUnits = inMonth
-    ? scopedDays
-        .map((item) => ({ key: item.day, value: item.changes.length, label: item.day.slice(8, 10) }))
-        .reverse()
-    : months
-        .map((item) => ({
-          key: item.key,
-          value: item.changes,
-          label: monthTitle(item.key).slice(0, 3).toLowerCase(),
-        }))
-        .reverse();
-  const railMax = Math.max(...railUnits.map((unit) => unit.value), 1);
-  const selectedKey = inMonth ? day.day : "";
+  const currentStreak = streaks.find((s) => s.end === dayKeys.at(-1));
+  const bestOther = streaks.find((s) => s !== currentStreak);
+  const shownStreak = currentStreak ?? streaks[0];
+  const topInsDay = dayKeys.slice().sort((a, b) => (dayInfo.get(b)?.ins ?? 0) - (dayInfo.get(a)?.ins ?? 0))[0];
 
   return (
     <div className="grid gap-4">
-      {/* Шапка: де ми і скільки — одним рядком, без великих плиток. */}
-      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-border pb-3">
-        <div className="flex items-center gap-2">
-          {inMonth ? (
-            <button
-              type="button"
-              onClick={() => {
-                setZoom({ level: "months" });
-                setPickedDay(null);
-              }}
-              className="flex cursor-pointer items-center gap-1 rounded-md py-0.5 pr-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Усе
-            </button>
-          ) : null}
-          <h2 className="text-base font-semibold tracking-tight">
-            {month ? monthTitle(month) : "Уся історія"}
-          </h2>
-          {!inMonth ? (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              · {months.length} міс.
-            </span>
-          ) : null}
+      {overlay}
+
+      {/* Шапка: KPI з розшифровками на наведення */}
+      <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-border pb-3.5">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Релізи</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {fdate(dayKeys[0])} — сьогодні · {dayKeys.length} робочих днів
+          </p>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-baseline gap-x-5 gap-y-1">
-          <Kpi value={String(summary.changes)} label="змін" />
-          <Kpi value={perDay.toFixed(1)} label="за день" />
-          <Kpi value={String(dayCount)} label="днів" />
-          {delta !== null && previousMonth ? (
-            <Kpi
-              value={`${delta > 0 ? "+" : ""}${delta}%`}
-              label={`темп до ${monthOf(previousMonth.key)}`}
-              tone={delta >= 0 ? "up" : undefined}
-            />
+        <div className="ml-auto flex flex-wrap items-baseline gap-x-6 gap-y-1.5">
+          <span
+            className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
+            {...bind(() => ({
+              title: "Час — оцінка, не вимір",
+              rows: [
+                { label: "Разом", value: `≈${fmtN(totals.hours)} год`, strong: true },
+                { label: "У середньому", value: `≈${(totals.hours / dayKeys.length).toFixed(1)} год/день` },
+              ],
+              note: "Рахуємо за ритмом комітів: пауза понад 2 год починає нову сесію, до кожної +30 хв розігріву. Думання без комітів сюди не потрапляє.",
+            }))}
+          >
+            <b className={cn("text-xl font-semibold tabular-nums text-primary", HOV)}>
+              ≈{fmtN(totals.hours)}
+            </b>
+            год
+          </span>
+
+          <span
+            className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
+            {...bind(() => ({
+              title: `${fmtN(totals.n)} змін за ${monthKeys.length} місяців`,
+              rows: monthKeys.map((mk) => ({
+                label:
+                  monthTitle(mk).replace(/\s\d{4}$/, "") +
+                  (mk.slice(0, 4) !== dayKeys.at(-1)?.slice(0, 4) ? ` ’${mk.slice(2, 4)}` : ""),
+                value: fmtN(monthStat(mk).n),
+                strong: mk === monthKeys.at(-1),
+              })),
+              note: "Зміна = один коміт. Назва місяця над теплокартою відкриває його докладно.",
+            }))}
+          >
+            <b className={cn("text-xl font-semibold tabular-nums", HOV)}>{fmtN(totals.n)}</b>
+            змін
+          </span>
+
+          {shownStreak ? (
+            <span
+              className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
+              {...bind(() => ({
+                title: "Серія без пропусків",
+                rows: [
+                  { label: "Триває з", value: fdate(shownStreak.start), strong: true },
+                  { label: "Довжина", value: `${shownStreak.length} днів`, strong: true },
+                  ...(bestOther
+                    ? [{ label: "Попередній рекорд", value: `${bestOther.length} днів · до ${fdate(bestOther.end)}` }]
+                    : []),
+                ],
+                note: "День зараховується, якщо був хоч один коміт.",
+              }))}
+            >
+              <b className={cn("text-xl font-semibold tabular-nums text-chart-3", HOV)}>
+                {shownStreak.length}
+              </b>
+              днів поспіль
+            </span>
           ) : null}
+
+          <span
+            {...bind(() => ({
+              title: "Рядки коду",
+              rows: [
+                { label: "Додано", value: `+${fmtN(totals.ins)}`, color: "bg-chart-3" },
+                { label: "Вилучено", value: `−${fmtN(totals.del)}`, color: "bg-chart-8" },
+                { label: "Чистий приріст", value: `+${fmtN(totals.ins - totals.del)}`, strong: true },
+                ...(topInsDay
+                  ? [{ label: "Найбільший день", value: `${fdate(topInsDay)} · +${fmtN(dayInfo.get(topInsDay)?.ins ?? 0)}` }]
+                  : []),
+              ],
+              note: "Вилучене — теж робота: старий код не зникає сам. Великі сплески часто містять згенероване (типи бази тощо).",
+            }))}
+            className={cn("pb-0.5", HOV)}
+          >
+            <Diff ins={totals.ins} del={totals.del} />
+          </span>
         </div>
       </header>
 
-      {/* Рейка. Місяці або дні — той самий елемент, інша кількість поділок. */}
-      <section className="grid gap-1.5">
-        <div className="flex h-14 items-end gap-0.5" role="group" aria-label="Період">
-          {railUnits.map((unit) => {
-            const active = unit.key === selectedKey;
-            return (
-              <button
-                key={unit.key}
-                type="button"
-                aria-pressed={active}
-                title={`${unit.key} — ${unit.value} змін`}
-                onClick={() => {
-                  if (inMonth) {
-                    setPickedDay(unit.key);
-                  } else {
-                    setZoom({ level: "days", month: unit.key });
-                    setPickedDay(null);
-                  }
-                }}
-                className="group flex min-w-0 flex-1 cursor-pointer flex-col justify-end gap-1"
-              >
-                <span
-                  className={cn(
-                    "w-full rounded-[3px] transition-colors",
-                    active ? "bg-chart-3" : "bg-secondary group-hover:bg-muted-foreground/40"
-                  )}
-                  style={{ height: `${Math.max((unit.value / railMax) * 42, 3)}px` }}
-                />
-                <span
-                  className={cn(
-                    "truncate text-center text-3xs tabular-nums transition-colors",
-                    active ? "font-semibold text-foreground" : "text-muted-foreground"
-                  )}
-                >
-                  {unit.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="flex justify-between border-t border-border/60 pt-1.5 text-3xs text-muted-foreground">
-          <span>
-            {inMonth ? "дні місяця — клікай, щоб відкрити" : "місяці — клікай, щоб розкрити в дні"}
-          </span>
-          <span className="tabular-nums">{railUnits.length} поділок</span>
-        </p>
-      </section>
+      <Heatmap
+        dayKeys={dayKeys}
+        monthKeys={monthKeys}
+        dayInfo={dayInfo}
+        thresholds={thresholds}
+        active={active}
+        onPick={go}
+      />
 
-      {/* Тіло: події зліва, зведення липне справа. */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
-        <DayPanel day={day} />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
+        {active.t === "day" ? (
+          <DayView
+            day={active.k}
+            days={days}
+            dayKeys={dayKeys}
+            dayInfo={dayInfo}
+            avgHours={totals.hours / dayKeys.length}
+            bind={bind}
+            go={go}
+          />
+        ) : (
+          <MonthView
+            month={active.k}
+            monthKeys={monthKeys}
+            dayKeys={dayKeys}
+            days={days}
+            dayInfo={dayInfo}
+            monthStat={monthStat}
+            bind={bind}
+            go={go}
+          />
+        )}
 
-        <aside className="grid gap-3 lg:sticky lg:top-2">
-          <div className="rounded-xl border border-border bg-card p-3.5">
-            <h3 className="mb-2.5 text-3xs font-bold uppercase tracking-widest text-muted-foreground">
-              Куди пішла робота
+        <aside className="grid gap-3.5 lg:sticky lg:top-2">
+          <section className="rounded-xl border border-border bg-card p-3.5">
+            <h3 className="text-3xs font-bold uppercase tracking-widest text-muted-foreground">
+              Коли зазвичай працюєш
             </h3>
-            <ScopeList releases={scopedReleases} />
-          </div>
+            <p className="mb-2.5 mt-0.5 text-3xs text-muted-foreground">
+              За всі {dayKeys.length} днів. Темніше — більше комітів.
+            </p>
+            <Punch matrix={punch} />
+          </section>
 
-          <div className="rounded-xl border border-border bg-card p-3.5">
-            <h3 className="mb-2 text-3xs font-bold uppercase tracking-widest text-muted-foreground">
-              Склад
-            </h3>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {legendTotals(summary.byType).map((item) => (
-                <span key={item.type} className="inline-flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "h-2 w-2 shrink-0 rounded-[3px]",
-                      CHANGE_TYPE_BAR[item.type] ?? CHANGE_TYPE_BAR.other
-                    )}
-                  />
-                  <span className="font-medium text-foreground tabular-nums">{item.count}</span>
-                  {item.label}
-                </span>
-              ))}
-            </div>
-          </div>
+          <ScopePanel
+            month={active.t === "month" ? active.k : active.k.slice(0, 7)}
+            days={days}
+            bind={bind}
+          />
         </aside>
       </div>
     </div>
   );
 }
 
-function Kpi({ value, label, tone }: { value: string; label: string; tone?: "up" }) {
-  return (
-    <span className="flex items-baseline gap-1.5 text-xs text-muted-foreground">
-      <b
-        className={cn(
-          "text-xl font-semibold tracking-tight tabular-nums",
-          tone === "up" ? "text-chart-3" : "text-foreground"
-        )}
-      >
-        {value}
-      </b>
-      {label}
-    </span>
-  );
-}
+/* ── Теплокарта ── */
 
-function ScopeList({ releases }: { releases: Release[] }) {
-  const buckets = useMemo(() => scopeBreakdown(releases).slice(0, 9), [releases]);
-  const max = buckets[0]?.total ?? 1;
+function Heatmap({
+  dayKeys,
+  monthKeys,
+  dayInfo,
+  thresholds,
+  active,
+  onPick,
+}: {
+  dayKeys: string[];
+  monthKeys: string[];
+  dayInfo: Map<string, DayInfo>;
+  thresholds: [number, number, number, number];
+  active: View;
+  onPick: (view: View) => void;
+}) {
+  const { weeks, monthCols } = useMemo(() => {
+    const first = new Date(`${dayKeys[0]}T12:00:00Z`);
+    const last = new Date(`${dayKeys.at(-1)}T12:00:00Z`);
+    const start = new Date(first);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+
+    const cells: Array<{ key: string; before: boolean }> = [];
+    const monthCols: Array<{ col: number; mk: string }> = [];
+    let col = 0;
+    let seen = "";
+    for (const d = new Date(start); d <= last; d.setUTCDate(d.getUTCDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      if ((d.getUTCDay() + 6) % 7 === 0) {
+        col += 1;
+        const mk = key.slice(0, 7);
+        if (mk !== seen && monthKeys.includes(mk)) {
+          seen = mk;
+          monthCols.push({ col, mk });
+        }
+      }
+      cells.push({ key, before: key < dayKeys[0] });
+    }
+    const weeks: Array<typeof cells> = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    return { weeks, monthCols };
+  }, [dayKeys, monthKeys]);
 
   return (
-    <div className="grid gap-2">
-      {buckets.map((bucket) => (
-        <div key={bucket.scope} className="grid gap-1">
-          <div className="flex items-baseline justify-between gap-2 text-xs">
-            <span className="truncate text-muted-foreground">{bucket.scope}</span>
-            <span className="font-medium tabular-nums">{bucket.total}</span>
+    <section className="overflow-x-auto pb-1">
+      <div className="w-max">
+        {/* Назви місяців — кнопки: відкривають місяць цілком. */}
+        <div className="mb-1 flex gap-[3px] pl-[26px] text-3xs text-muted-foreground">
+          {monthCols.map((item, index) => (
+            <button
+              key={item.mk}
+              type="button"
+              onClick={() => onPick({ t: "month", k: item.mk })}
+              aria-pressed={active.k.startsWith(item.mk)}
+              title={`${monthTitle(item.mk)} — місяць цілком`}
+              className={cn(
+                "cursor-pointer rounded text-left transition-colors hover:text-foreground",
+                active.k.startsWith(item.mk) && "font-bold text-primary"
+              )}
+              style={{
+                width: `${((monthCols[index + 1]?.col ?? weeks.length + 1) - item.col) * 14 - 3}px`,
+              }}
+            >
+              {MON_S[Number(item.mk.slice(5, 7)) - 1]}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex">
+          <div className="mr-1.5 grid w-5 grid-rows-7 gap-[3px] text-right text-3xs leading-[11px] text-muted-foreground">
+            <span />
+            <span>пн</span>
+            <span />
+            <span>ср</span>
+            <span />
+            <span>пт</span>
+            <span />
           </div>
-          <span
-            className="flex h-1.5 overflow-hidden rounded-full"
-            style={{ width: `${Math.max((bucket.total / max) * 100, 4)}%` }}
-          >
-            {bucket.byType.map((item) => (
-              <span
-                key={item.type}
-                className={cn(CHANGE_TYPE_BAR[item.type] ?? CHANGE_TYPE_BAR.other)}
-                style={{ width: `${(item.count / bucket.total) * 100}%` }}
-              />
-            ))}
+          <div className="grid grid-flow-col gap-[3px]" style={{ gridTemplateRows: "repeat(7, 11px)" }}>
+            {weeks.flatMap((week) =>
+              week.map((cell) =>
+                cell.before ? (
+                  <span key={cell.key} className="h-[11px] w-[11px]" />
+                ) : (
+                  <button
+                    key={cell.key}
+                    type="button"
+                    onClick={() => onPick({ t: "day", k: cell.key })}
+                    aria-pressed={active.t === "day" && active.k === cell.key}
+                    title={`${fdate(cell.key)} — ${dayInfo.get(cell.key)?.n ?? 0} змін${
+                      dayInfo.has(cell.key) ? `, ≈${dayInfo.get(cell.key)?.hours} год` : ""
+                    }`}
+                    className={cn(
+                      "h-[11px] w-[11px] cursor-pointer rounded-[2px]",
+                      HEAT_BG[heatLevel(dayInfo.get(cell.key)?.n ?? 0, thresholds)],
+                      active.t === "day" &&
+                        active.k === cell.key &&
+                        "outline outline-2 outline-offset-1 outline-primary"
+                    )}
+                  />
+                )
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center gap-1.5 pl-[26px] text-3xs text-muted-foreground">
+          <span>менше</span>
+          {HEAT_BG.map((bg, index) => (
+            <i key={index} className={cn("h-[11px] w-[11px] rounded-[2px]", bg)} />
+          ))}
+          <span>більше</span>
+          <span className="ml-2">
+            · пороги: {thresholds.join(", ")} змін · назва місяця відкриває місяць цілком
           </span>
         </div>
-      ))}
-    </div>
+      </div>
+    </section>
   );
 }
 
-function DayPanel({ day }: { day: DayGroup }) {
-  const threads = useMemo(() => buildThreads(day.changes), [day.changes]);
-  const first = day.changes[0];
-  const last = day.changes[day.changes.length - 1];
-  const span =
-    first && last && first.releasedAt !== last.releasedAt
-      ? `${fmt(first.releasedAt, TIME)} — ${fmt(last.releasedAt, TIME)}`
-      : null;
+/* ── Місяць ── */
+
+function MonthView({
+  month,
+  monthKeys,
+  dayKeys,
+  days,
+  dayInfo,
+  monthStat,
+  bind,
+  go,
+}: {
+  month: string;
+  monthKeys: string[];
+  dayKeys: string[];
+  days: DayGroup[];
+  dayInfo: Map<string, DayInfo>;
+  monthStat: (mk: string) => { n: number; ins: number; del: number; hours: number; d: number };
+  bind: ReturnType<typeof useTip>["bind"];
+  go: (view: View) => void;
+}) {
+  const stat = monthStat(month);
+  const index = monthKeys.indexOf(month);
+  const prevKey = monthKeys[index - 1];
+  const prev = prevKey ? monthStat(prevKey) : null;
+  const rate = stat.n / Math.max(stat.d, 1);
+  const prevRate = prev ? prev.n / Math.max(prev.d, 1) : 0;
+  const delta = prev && prevRate > 0 ? Math.round(((rate - prevRate) / prevRate) * 100) : null;
+  const monthDays = dayKeys.filter((k) => k.startsWith(month)).reverse();
+
+  const previewOf = (k: string): string => {
+    const group = days.find((d) => d.day === k);
+    if (!group) return "";
+    const top = buildThreads(group.changes)[0];
+    return top ? (top.lead.plain ?? top.lead.subject) : "";
+  };
 
   return (
-    <div className="grid gap-2.5">
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-lg font-semibold tracking-tight first-letter:uppercase">
-          {fmt(`${day.day}T12:00:00Z`, DAY_FULL)}
-        </h2>
-        <span className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground tabular-nums">{day.changes.length}</span>{" "}
-          змін
-          {span ? ` · ${span}` : null}
-          {threads.length < day.changes.length ? ` · ${threads.length} справ` : null}
-        </span>
+    <div className="grid gap-3">
+      <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">{monthTitle(month)}</h2>
+          {month === monthKeys.at(-1) ? (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-3xs text-muted-foreground">
+              цей місяць
+            </span>
+          ) : null}
+          <span className="text-xs text-muted-foreground">
+            {fmtN(stat.n)} змін ·{" "}
+            <span
+              className={HOV}
+              {...bind(() => ({
+                title: `≈${stat.hours} год у ${monthOf(month)}`,
+                rows: [
+                  { label: "Днів із комітами", value: stat.d },
+                  { label: "У середньому", value: `≈${(stat.hours / Math.max(stat.d, 1)).toFixed(1)} год/день` },
+                ],
+                note: "Оцінка за ритмом комітів, як і загальна цифра вгорі.",
+              }))}
+            >
+              ≈{stat.hours} год
+            </span>{" "}
+            · {stat.d} {stat.d === 1 ? "день" : "днів"}
+          </span>
+          {delta !== null ? (
+            <span
+              className={cn(
+                "text-xs font-semibold tabular-nums",
+                delta >= 0 ? "text-chart-3" : "text-muted-foreground"
+              )}
+            >
+              {delta > 0 ? "+" : ""}
+              {delta}% темп
+            </span>
+          ) : null}
+          <Diff ins={stat.ins} del={stat.del} dim />
+
+          <span className="ml-auto flex gap-1">
+            <NavBtn label="сьогодні" onClick={() => go({ t: "day", k: dayKeys.at(-1) as string })} />
+            <NavBtn label="‹" disabled={index <= 0} onClick={() => go({ t: "month", k: monthKeys[index - 1] })} />
+            <NavBtn
+              label="›"
+              disabled={index >= monthKeys.length - 1}
+              onClick={() => go({ t: "month", k: monthKeys[index + 1] })}
+            />
+          </span>
+        </div>
       </header>
 
       <div className="grid gap-1.5">
-        {threads.map((thread) => (
-          <ThreadCard key={thread.id} thread={thread} />
-        ))}
+        {monthDays.map((k) => {
+          const info = dayInfo.get(k) as DayInfo;
+          const date = new Date(`${k}T12:00:00Z`);
+          const preview = previewOf(k);
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => go({ t: "day", k })}
+              className="flex w-full cursor-pointer items-baseline gap-3 rounded-xl border border-border bg-card px-3.5 py-2.5 text-left transition-colors hover:border-muted-foreground"
+            >
+              <span className="w-12 shrink-0 text-sm font-semibold">
+                {WD_SHORT[date.getUTCDay()]} {date.getUTCDate()}
+              </span>
+              <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">
+                {info.n} змін
+              </span>
+              <span className="w-[4.5rem] shrink-0 text-xs font-semibold tabular-nums text-primary">
+                ≈{info.hours} год
+              </span>
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {preview || "без подробиць — до відновлення історії часу комітів тут не було"}
+              </span>
+              <Squares ins={info.ins} del={info.del} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/**
- * Одна справа за день. Кілька комітів про одне зливаються в сюжет: список із
- * тринадцяти рядків читається як шум, п'ять справ — як зроблена робота.
- */
-function ThreadCard({ thread }: { thread: Thread }) {
+/* ── День ── */
+
+function DayView({
+  day,
+  days,
+  dayKeys,
+  dayInfo,
+  avgHours,
+  bind,
+  go,
+}: {
+  day: string;
+  days: DayGroup[];
+  dayKeys: string[];
+  dayInfo: Map<string, DayInfo>;
+  avgHours: number;
+  bind: ReturnType<typeof useTip>["bind"];
+  go: (view: View) => void;
+}) {
+  const info = dayInfo.get(day);
+  const group = days.find((d) => d.day === day);
+  const threads = useMemo(() => (group ? buildThreads(group.changes) : []), [group]);
+  const index = dayKeys.indexOf(day);
+  const date = new Date(`${day}T12:00:00Z`);
+  const lastKey = dayKeys.at(-1);
+
+  const daysAgo = lastKey ? Math.round((Date.parse(lastKey) - Date.parse(day)) / 86_400_000) : 0;
+  const rel = daysAgo === 0 ? "сьогодні" : daysAgo === 1 ? "вчора" : daysAgo < 5 ? `${daysAgo} дні тому` : `${daysAgo} днів тому`;
+
+  const groups: Array<[keyof typeof KIND_META, Thread[]]> = (["new", "fix", "misc"] as const)
+    .map((kind) => [kind, threads.filter((t) => kindOf(t.lead.type) === kind)] as [keyof typeof KIND_META, Thread[]])
+    .filter(([, list]) => list.length > 0);
+
+  if (!info) return null;
+
   return (
-    <article className="rounded-xl border border-border bg-card px-3.5 py-3">
-      <div className="flex items-baseline gap-3">
-        <time className="w-10 shrink-0 text-3xs tabular-nums text-muted-foreground">
-          {fmt(thread.lead.releasedAt, TIME)}
+    <div className="grid gap-3">
+      <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <button
+            type="button"
+            onClick={() => go({ t: "month", k: day.slice(0, 7) })}
+            className="cursor-pointer text-sm text-muted-foreground transition-colors hover:text-primary"
+          >
+            {monthTitle(day.slice(0, 7)).replace(/\s\d{4}$/, "")}
+          </button>
+          <span className="text-xs text-muted-foreground">›</span>
+          <h2 className="text-lg font-semibold tracking-tight">
+            <span className="capitalize">{WD_FULL[date.getUTCDay()]}</span>, {date.getUTCDate()}{" "}
+            {MON_G[date.getUTCMonth()]}
+          </h2>
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-3xs text-muted-foreground">
+            {rel}
+          </span>
+          {info.n > 0 ? (
+            <span className="text-xs text-muted-foreground">{info.n} змін</span>
+          ) : null}
+          <Diff ins={info.ins} del={info.del} dim />
+
+          <span className="ml-auto flex gap-1">
+            {day !== lastKey ? (
+              <NavBtn label="сьогодні" onClick={() => go({ t: "day", k: lastKey as string })} />
+            ) : null}
+            <NavBtn label="‹" disabled={index <= 0} onClick={() => go({ t: "day", k: dayKeys[index - 1] })} />
+            <NavBtn
+              label="›"
+              disabled={index >= dayKeys.length - 1}
+              onClick={() => go({ t: "day", k: dayKeys[index + 1] })}
+            />
+          </span>
+        </div>
+
+        {/* Час дня: оцінка + пігулки підходів. Ніч — фіолетова крапка. */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn("mr-1 text-base font-semibold text-primary", HOV)}
+            {...bind(() => ({
+              title: `≈${info.hours} год цього дня`,
+              rows: info.blocks.map(([from, to]) => ({
+                label: `${hhmm(from)}–${hhmm(to)}`,
+                value: durTxt(to - from + 30),
+                color: isNight(from) ? "bg-chart-7" : "bg-chart-1",
+              })),
+              note: "Кожен підхід: від першого до останнього коміта серії, +30 хв розігріву.",
+            }))}
+          >
+            ≈{info.hours} год
+          </span>
+          {info.blocks.map(([from, to], i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-3xs text-muted-foreground"
+            >
+              <i className={cn("h-1.5 w-1.5 rounded-full", isNight(from) ? "bg-chart-7" : "bg-chart-1")} />
+              <b className="font-semibold text-foreground">{durTxt(to - from + 30)}</b>
+              {hhmm(from)}–{hhmm(to)}
+            </span>
+          ))}
+          <span className="ml-auto text-3xs text-muted-foreground">
+            середнє <b className="font-semibold text-foreground">≈{avgHours.toFixed(1)} год</b>/день
+          </span>
+        </div>
+      </header>
+
+      {threads.length === 0 ? (
+        <p className="py-8 text-center text-xs text-muted-foreground">
+          {info.n} змін цього дня — без подробиць: до відновлення історії часу комітів тут не було.
+        </p>
+      ) : (
+        groups.map(([kind, list]) => (
+          <section key={kind}>
+            <h3 className="mb-1.5 flex items-center gap-2 text-3xs font-bold uppercase tracking-widest text-muted-foreground">
+              <i className={cn("h-1.5 w-1.5 rounded-[2px]", KIND_META[kind].bar)} />
+              {KIND_META[kind].label}
+              <em className="not-italic">{list.length}</em>
+            </h3>
+            <div className="grid gap-1.5">
+              {list.map((thread) => (
+                <ThreadCard key={thread.id} thread={thread} />
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+    </div>
+  );
+}
+
+function NavBtn({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-6 cursor-pointer rounded-md border border-border bg-card px-2 text-xs leading-none text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-35"
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ── Картка справи: жирний заголовок із крапкою типу, кроки під лівою рискою ── */
+
+function ThreadCard({ thread }: { thread: Thread }) {
+  const copy = (sha: string) => {
+    void navigator.clipboard?.writeText(sha);
+    toast.success(`Хеш скопійовано: ${sha}`);
+  };
+
+  return (
+    <article className="rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-muted-foreground">
+      <div className="flex items-baseline">
+        <time className="w-9 shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
+          {timeOf(thread.lead.releasedAt)}
         </time>
-        {/* Технічний оригінал у title: переказ AI може збрехати, і тоді це
-            єдиний спосіб помітити. */}
+        <i
+          className={cn(
+            "mx-2.5 h-2 w-2 shrink-0 self-center rounded-full",
+            KIND_META[kindOf(thread.lead.type)].bar
+          )}
+        />
         <span
-          className="min-w-0 flex-1 text-sm leading-snug"
+          className="min-w-0 flex-1 text-sm font-medium leading-snug"
           title={thread.lead.plain ? thread.lead.subject : undefined}
         >
           {thread.title}
         </span>
+        <ShaChip sha={thread.lead.sha} onCopy={copy} />
       </div>
 
-      <div className="ml-[3.25rem] mt-1.5 flex flex-wrap items-center gap-1.5 text-3xs text-muted-foreground">
+      <div className="ml-[3.75rem] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-3xs text-muted-foreground">
         {thread.scopes.map((scope) => (
           <span key={scope} className="rounded-full bg-secondary px-2 py-0.5 font-medium">
             {scope}
           </span>
         ))}
         {thread.count > 1 ? <span className="tabular-nums">{thread.count} зміни</span> : null}
+        <Diff
+          ins={thread.rest.reduce((s, c) => s + (c.ins ?? 0), thread.lead.ins ?? 0)}
+          del={thread.rest.reduce((s, c) => s + (c.del ?? 0), thread.lead.del ?? 0)}
+          dim
+        />
       </div>
 
       {thread.rest.length > 0 ? (
-        <ul className="ml-[3.25rem] mt-2 grid gap-1.5 border-t border-border/60 pt-2">
+        <ul className="ml-[4rem] mt-2 grid gap-1.5 border-l-2 border-border pl-3">
           {thread.rest.map((change) => (
-            <li key={change.sha} className="flex gap-3 text-xs leading-5 text-muted-foreground">
-              <time className="w-10 shrink-0 text-3xs tabular-nums">
-                {fmt(change.releasedAt, TIME)}
-              </time>
+            <li key={change.sha} className="flex items-baseline gap-2.5 text-xs leading-relaxed text-muted-foreground">
+              <time className="shrink-0 text-3xs tabular-nums">{timeOf(change.releasedAt)}</time>
               <span className="min-w-0 flex-1" title={change.plain ? change.subject : undefined}>
                 {change.plain ?? change.subject}
               </span>
+              <ShaChip sha={change.sha} onCopy={copy} />
             </li>
           ))}
         </ul>
       ) : null}
     </article>
   );
+}
+
+function ShaChip({ sha, onCopy }: { sha: string; onCopy: (sha: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCopy(sha)}
+      title="Копіювати"
+      className="ml-2.5 shrink-0 cursor-pointer rounded-md bg-secondary px-1.5 py-0.5 font-mono text-3xs text-muted-foreground transition-colors hover:text-primary"
+    >
+      {sha}
+    </button>
+  );
+}
+
+/* ── Карта годин ── */
+
+function Punch({ matrix }: { matrix: number[][] }) {
+  const max = Math.max(...matrix.flat(), 1);
+  const names = ["пн", "вт", "ср", "чт", "пт", "сб", "нд"];
+  return (
+    <div>
+      <div className="grid grid-cols-[16px_repeat(24,minmax(0,1fr))] items-center gap-[2px]">
+        {matrix.flatMap((row, dayIndex) => [
+          <span key={`l${dayIndex}`} className="pr-0.5 text-right text-3xs text-muted-foreground">
+            {names[dayIndex]}
+          </span>,
+          ...row.map((count, hour) => {
+            const level = count === 0 ? 0 : Math.min(4, Math.ceil((count / max) * 4));
+            return (
+              <span
+                key={`${dayIndex}-${hour}`}
+                title={`${names[dayIndex]}, ${String(hour).padStart(2, "0")}:00 — ${count} комітів`}
+                className={cn("aspect-square rounded-[2px]", HEAT_BG[level])}
+              />
+            );
+          }),
+        ])}
+      </div>
+      <div className="mt-1 grid grid-cols-[16px_repeat(24,minmax(0,1fr))] gap-[2px] text-3xs text-muted-foreground">
+        <span />
+        {Array.from({ length: 24 }, (_, hour) => (
+          <span key={hour} className="text-center">
+            {hour % 6 === 0 ? hour : ""}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Куди пішла робота (за вибраний місяць) ── */
+
+function ScopePanel({
+  month,
+  days,
+  bind,
+}: {
+  month: string;
+  days: DayGroup[];
+  bind: ReturnType<typeof useTip>["bind"];
+}) {
+  const list = useMemo(
+    () => days.filter((d) => d.day.startsWith(month)).flatMap((d) => d.changes),
+    [days, month]
+  );
+
+  const buckets = useMemo(() => {
+    const map = new Map<string, { n: number; new: number; fix: number; misc: number; big?: ScopedChange }>();
+    for (const change of list) {
+      const scope = change.scope ?? "Інше";
+      const label = scopeLabelOf(change);
+      const bucket = map.get(label) ?? { n: 0, new: 0, fix: 0, misc: 0 };
+      bucket.n += 1;
+      bucket[kindOf(change.type)] += 1;
+      const weight = (change.ins ?? 0) + (change.del ?? 0);
+      if (!bucket.big || weight > ((bucket.big.ins ?? 0) + (bucket.big.del ?? 0))) bucket.big = change;
+      map.set(label, bucket);
+      void scope;
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => b[1].n - a[1].n)
+      .slice(0, 8);
+  }, [list]);
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-3.5">
+      <h3 className="mb-2.5 text-3xs font-bold uppercase tracking-widest text-muted-foreground">
+        Куди пішла робота · {monthOf(month)}
+      </h3>
+
+      {buckets.length === 0 ? (
+        <p className="py-4 text-center text-3xs text-muted-foreground">
+          Деталі є з часу, коли recorder почав зберігати теми комітів.
+        </p>
+      ) : (
+        <div className="grid gap-2">
+          {buckets.map(([label, bucket]) => (
+            <div
+              key={label}
+              className={cn("grid gap-1", HOV, "border-b-0")}
+              {...bind(() => ({
+                title: `${label} — ${bucket.n} ${bucket.n === 1 ? "зміна" : bucket.n < 5 ? "зміни" : "змін"}`,
+                rows: [
+                  { label: "Нове", value: bucket.new, color: "bg-chart-3" },
+                  { label: "Виправлення", value: bucket.fix, color: "bg-chart-7" },
+                  ...(bucket.misc ? [{ label: "Решта", value: bucket.misc, color: "bg-muted-foreground/40" }] : []),
+                  { label: "Частка місяця", value: `${Math.round((bucket.n / Math.max(list.length, 1)) * 100)}%`, strong: true },
+                ],
+                note: bucket.big
+                  ? `Найбільше тут: «${(bucket.big.plain ?? bucket.big.subject).slice(0, 70)}${(bucket.big.plain ?? bucket.big.subject).length > 70 ? "…" : ""}»`
+                  : undefined,
+              }))}
+            >
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="truncate text-muted-foreground">{label}</span>
+                <span className="font-medium tabular-nums">{bucket.n}</span>
+              </div>
+              <div className="h-[5px] overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="flex h-full overflow-hidden rounded-full"
+                  style={{ width: `${Math.max((bucket.n / (buckets[0]?.[1].n ?? 1)) * 100, 4)}%` }}
+                >
+                  <span className="bg-chart-3" style={{ width: `${(bucket.new / bucket.n) * 100}%` }} />
+                  <span className="bg-chart-7" style={{ width: `${(bucket.fix / bucket.n) * 100}%` }} />
+                  <span className="bg-muted-foreground/40" style={{ width: `${(bucket.misc / bucket.n) * 100}%` }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function scopeLabelOf(change: ScopedChange): string {
+  return scopeLabel(change.scope);
 }

@@ -12,6 +12,9 @@ export type ReleaseChange = {
   type: string;
   scope: string | null;
   subject: string;
+  /** Рядків додано/вилучено — з --shortstat самого коміта. */
+  ins?: number;
+  del?: number;
   /**
    * Тема, переказана людською через AI. Технічний `subject` лишається поруч
    * навмисно: переказ може й збрехати, і тоді оригінал — єдиний спосіб це
@@ -449,6 +452,105 @@ export function buildThreads(changes: ScopedChange[]): Thread[] {
       };
     })
     .sort((a, b) => b.count - a.count || a.from.localeCompare(b.from));
+}
+
+/* ── Час: сесії з ритму комітів ─────────────────────────────────────────── */
+
+/** Пауза, що починає нову сесію, і розігрів перед першим комітом сесії. */
+export const SESSION_GAP_MIN = 120;
+export const SESSION_WARMUP_MIN = 30;
+
+export type DaySessions = {
+  /** [від, до] у хвилинах доби за настінним часом коміта. */
+  blocks: Array<[number, number]>;
+  /** Оцінка годин: сума сесій + розігрів на кожну. */
+  hours: number;
+};
+
+/**
+ * ОЦІНКА, НЕ ВИМІР. Час беремо прямо з ISO-рядка коміта (git %cI несе
+ * настінний час автора з поясом), тож жодної тайзонної математики: 14:18 у
+ * рядку — це 14:18 на стіні. Два коміти з паузою понад SESSION_GAP_MIN —
+ * різні сесії; думання без комітів сюди не потрапляє.
+ */
+export function daySessions(times: string[]): DaySessions {
+  const minutes = times
+    .map((iso) => Number(iso.slice(11, 13)) * 60 + Number(iso.slice(14, 16)))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+
+  if (minutes.length === 0) return { blocks: [], hours: 0 };
+
+  const blocks: Array<[number, number]> = [];
+  let start = minutes[0];
+  let prev = minutes[0];
+  for (const value of minutes.slice(1)) {
+    if (value - prev > SESSION_GAP_MIN) {
+      blocks.push([start, prev]);
+      start = value;
+    }
+    prev = value;
+  }
+  blocks.push([start, prev]);
+
+  const worked = blocks.reduce((sum, [from, to]) => sum + (to - from), 0);
+  const hours = (worked + blocks.length * SESSION_WARMUP_MIN) / 60;
+  return { blocks, hours: Math.round(hours * 10) / 10 };
+}
+
+export type Streak = { start: string; end: string; length: number };
+
+/** Серії календарно-суміжних днів, найдовші першими. */
+export function streaksOf(days: string[]): Streak[] {
+  const sorted = Array.from(new Set(days)).sort();
+  if (sorted.length === 0) return [];
+
+  const runs: Streak[] = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+  for (const day of sorted.slice(1)) {
+    if (Date.parse(day) - Date.parse(prev) !== 86_400_000) {
+      runs.push({ start, end: prev, length: diffDays(start, prev) });
+      start = day;
+    }
+    prev = day;
+  }
+  runs.push({ start, end: prev, length: diffDays(start, prev) });
+  return runs.sort((a, b) => b.length - a.length);
+}
+
+function diffDays(from: string, to: string): number {
+  return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+}
+
+/** 7×24: скільки комітів у кожну годину кожного дня тижня. Пн — рядок 0. */
+export function punchMatrix(changes: Array<{ releasedAt: string }>): number[][] {
+  const matrix = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  for (const change of changes) {
+    const day = new Date(`${change.releasedAt.slice(0, 10)}T12:00:00Z`);
+    const hour = Number(change.releasedAt.slice(11, 13));
+    if (Number.isNaN(day.getTime()) || !Number.isFinite(hour) || hour > 23) continue;
+    matrix[(day.getUTCDay() + 6) % 7][hour] += 1;
+  }
+  return matrix;
+}
+
+/**
+ * Пороги інтенсивності теплокарти — за квантилями наявних днів, а не жорсткою
+ * шкалою: «багато» в цьому репозиторії значить інше, ніж у будь-якому чужому.
+ */
+export function heatThresholds(counts: number[]): [number, number, number, number] {
+  const sorted = counts.filter((n) => n > 0).sort((a, b) => a - b);
+  const q = (p: number) => sorted[Math.min(Math.floor(sorted.length * p), sorted.length - 1)] ?? 1;
+  return [q(0.25), q(0.5), q(0.75), q(0.92)];
+}
+
+export function heatLevel(count: number, th: [number, number, number, number]): 0 | 1 | 2 | 3 | 4 {
+  if (count === 0) return 0;
+  if (count <= th[0]) return 1;
+  if (count <= th[1]) return 2;
+  if (count <= th[2]) return 3;
+  return 4;
 }
 
 export type MonthTotals = {

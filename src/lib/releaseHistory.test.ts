@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildThreads,
+  daySessions,
+  heatLevel,
+  heatThresholds,
+  punchMatrix,
+  streaksOf,
   compareScopes,
   deltaPercent,
   groupByDay,
@@ -418,6 +423,69 @@ describe("підсумки по місяцях", () => {
       perDay: 1.5,
       firstDay: "2026-07-23", // історія починається не з 1 липня — це треба показати
     });
+  });
+});
+
+describe("сесії дня", () => {
+  it("пауза понад дві години рве сесію", () => {
+    const { blocks, hours } = daySessions([
+      "2026-08-07T11:58:00+03:00",
+      "2026-08-07T13:00:00+03:00",
+      "2026-08-07T14:30:00+03:00",
+      "2026-08-07T15:41:00+03:00",
+      "2026-08-07T21:23:00+03:00",
+      "2026-08-07T22:37:00+03:00",
+    ]);
+    expect(blocks).toEqual([
+      [11 * 60 + 58, 15 * 60 + 41],
+      [21 * 60 + 23, 22 * 60 + 37],
+    ]);
+    // (223 + 74 робочих хвилин) + 2×30 розігріву = 357 хв ≈ 6 год
+    expect(hours).toBe(6);
+  });
+
+  it("час читається зі стіни, а не з UTC", () => {
+    // 00:05 за Києвом — це 21:05 попередньої доби в UTC; беремо стіну.
+    const { blocks } = daySessions(["2026-08-06T00:05:00+03:00"]);
+    expect(blocks).toEqual([[5, 5]]);
+  });
+
+  it("один коміт — одна сесія з самого розігріву", () => {
+    expect(daySessions(["2026-08-07T12:00:00+03:00"]).hours).toBe(0.5);
+  });
+
+  it("порожній день не падає", () => {
+    expect(daySessions([])).toEqual({ blocks: [], hours: 0 });
+  });
+});
+
+describe("серії днів", () => {
+  it("рахує довжину і межі, найдовша перша", () => {
+    const runs = streaksOf(["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-05"]);
+    expect(runs[0]).toEqual({ start: "2026-08-01", end: "2026-08-03", length: 3 });
+    expect(runs[1].length).toBe(1);
+  });
+
+  it("дублікати днів не ламають серію", () => {
+    expect(streaksOf(["2026-08-01", "2026-08-01", "2026-08-02"])[0].length).toBe(2);
+  });
+});
+
+describe("карта годин", () => {
+  it("кладе коміт у свій день тижня і годину", () => {
+    // 7 серпня 2026 — пʼятниця (рядок 4), 14:18 → колонка 14.
+    const matrix = punchMatrix([{ releasedAt: "2026-08-07T14:18:00+03:00" }]);
+    expect(matrix[4][14]).toBe(1);
+    expect(matrix.flat().reduce((a, b) => a + b, 0)).toBe(1);
+  });
+});
+
+describe("пороги теплокарти", () => {
+  it("нуль — окремий рівень, решта за квантилями", () => {
+    const th = heatThresholds([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 40]);
+    expect(heatLevel(0, th)).toBe(0);
+    expect(heatLevel(1, th)).toBe(1);
+    expect(heatLevel(40, th)).toBe(4);
   });
 });
 
