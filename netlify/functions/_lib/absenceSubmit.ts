@@ -63,6 +63,22 @@ export async function resolveAbsenceRecipients(
   workspaceId: string,
   scope: "approvers" | "workspace"
 ): Promise<string[]> {
+  const rows = await resolveAbsenceRecipientRows(adminClient, workspaceId, scope);
+  return rows.map((row) => row.userId);
+}
+
+export type AbsenceRecipientRow = { userId: string; isOwner: boolean; isSeo: boolean };
+
+/**
+ * Те саме коло людей, але з ролями. Потрібне там, де від ролі залежить не
+ * тільки «слати чи ні», а й ЩО слати: кнопку «Підтвердити» в Telegram видно
+ * лише тому, хто цю конкретну заявку справді може закрити.
+ */
+export async function resolveAbsenceRecipientRows(
+  adminClient: SupabaseClient,
+  workspaceId: string,
+  scope: "approvers" | "workspace"
+): Promise<AbsenceRecipientRow[]> {
   const { data: memberships, error } = await adminClient
     .schema("tosho")
     .from("memberships_view")
@@ -72,21 +88,29 @@ export async function resolveAbsenceRecipients(
 
   if (error) return [];
 
-  const ids = Array.from(
-    new Set(
-      ((memberships ?? []) as MembershipRoleRow[])
-        .filter((row) => row.user_id && (scope === "workspace" || isOwnerMembership(row) || isSeoMembership(row)))
-        .map((row) => row.user_id as string)
-    )
-  );
-  if (ids.length === 0) return [];
+  const byUserId = new Map<string, AbsenceRecipientRow>();
+  for (const row of (memberships ?? []) as MembershipRoleRow[]) {
+    const userId = row.user_id;
+    if (!userId) continue;
+    const isOwner = isOwnerMembership(row);
+    const isSeo = isSeoMembership(row);
+    if (scope === "approvers" && !isOwner && !isSeo) continue;
+    const existing = byUserId.get(userId);
+    // Кілька членств на людину — беремо найширші права.
+    byUserId.set(userId, {
+      userId,
+      isOwner: isOwner || (existing?.isOwner ?? false),
+      isSeo: isSeo || (existing?.isSeo ?? false),
+    });
+  }
+  if (byUserId.size === 0) return [];
 
   const { data: profiles } = await adminClient
     .schema("tosho")
     .from("team_member_profiles")
     .select("user_id,employment_status")
     .eq("workspace_id", workspaceId)
-    .in("user_id", ids);
+    .in("user_id", Array.from(byUserId.keys()));
 
   const offboarded = new Set(
     ((profiles ?? []) as ProfileStatusRow[])
@@ -95,7 +119,7 @@ export async function resolveAbsenceRecipients(
       .filter((value): value is string => Boolean(value))
   );
 
-  return ids.filter((id) => !offboarded.has(id));
+  return Array.from(byUserId.values()).filter((row) => !offboarded.has(row.userId));
 }
 
 export async function resolveMemberDisplayName(
@@ -167,8 +191,8 @@ export async function notifySubmittedAbsence(
   const quiet = isQuietHour(new Date());
 
   try {
-    const [recipients, actorName, todayResult, daysResult] = await Promise.all([
-      resolveAbsenceRecipients(adminClient, absence.workspace_id, approvedFact ? "workspace" : "approvers"),
+    const [recipientRows, actorName, todayResult, daysResult] = await Promise.all([
+      resolveAbsenceRecipientRows(adminClient, absence.workspace_id, approvedFact ? "workspace" : "approvers"),
       resolveMemberDisplayName(adminClient, absence.workspace_id, actorId),
       adminClient.schema("tosho").rpc("absence_today"),
       // Одиниця залежить від типу (відпустка — календарні, решта — робочі):
@@ -182,31 +206,46 @@ export async function notifySubmittedAbsence(
     ]);
 
     const businessDays = typeof daysResult.data === "number" ? daysResult.data : null;
-    const audience = quiet ? [] : recipients.filter((id) => id !== actorId);
+    const audience = quiet ? [] : recipientRows.filter((row) => row.userId !== actorId);
     if (audience.length === 0) return { businessDays, audienceCount: 0, deferred: quiet };
 
     const todayKey = typeof todayResult.data === "string" ? todayResult.data : "";
 
-    // Якщо відсутність стартує сьогодні, беремо ТОЙ САМИЙ href, який за
-    // годину згенерує team-events-reminders: його дедуплікація по href
-    // тоді проковтне повтор, і людина не отримає дві новини про одне.
+    // Якщо ФАКТ (лікарняний) стартує сьогодні, беремо ТОЙ САМИЙ href, який за
+    // годину згенерує team-events-reminders: його дедуплікація по href тоді
+    // проковтне повтор, і людина не отримає дві новини про одне. Для заявки на
+    // погодженні цей трюк не потрібен (крон анонсує лише approved) — їй
+    // важливіше вести одразу на вкладку, де стоять кнопки рішення.
     const eventKey =
-      absence.start_date === todayKey
+      approvedFact && absence.start_date === todayKey
         ? absence.end_date === todayKey
           ? `team-event:absence-single:${absence.id}:${todayKey}`
           : `team-event:absence-start:${absence.id}:${todayKey}`
         : null;
 
+    // Заявку самого SEO закриває лише власник — тому кнопку «Підтвердити»
+    // отримує не кожен адресат. Роль заявника видно з того ж списку: у колі
+    // approvers лежать саме owner і SEO.
+    const requesterPrivileged = recipientRows.some((row) => row.userId === absence.user_id);
+
     await deliverNotifications(
       adminClient,
-      audience.map((userId) => ({
-        user_id: userId,
+      audience.map((row) => ({
+        user_id: row.userId,
         title: approvedFact ? `${kindLabel}: ${actorName}` : `Заявка: ${kindLabel.toLowerCase()} — ${actorName}`,
         body: approvedFact
           ? `${range} — зафіксовано без погодження.`
           : `${range}${businessDays ? ` · ${businessDays} ${absence.kind === "vacation" ? "кал" : "роб"}. дн.` : ""}${comment ? ` — «${comment}»` : ""}`,
-        href: eventKey ? `/team?reminder=${encodeURIComponent(eventKey)}` : "/team",
+        href: eventKey
+          ? `/team?reminder=${encodeURIComponent(eventKey)}`
+          : approvedFact
+            ? "/team?tab=calendar"
+            : "/team?tab=requests",
         type: approvedFact ? "warning" : "info",
+        telegramActions:
+          !approvedFact && (row.isOwner || !requesterPrivileged)
+            ? [{ text: "✅ Підтвердити", callbackData: `absd:a:${absence.id}` }]
+            : undefined,
       })),
       { category: approvedFact ? "team_events" : "team_absences" }
     );
@@ -285,7 +324,8 @@ export async function notifyAbsenceRecordedForMember(
           action === "revoke"
             ? `${kindLabel} ${range} більше не в календарі. Внесено: ${actorName}.`
             : `${kindLabel} ${range}.${changed} Внесено: ${actorName}.`,
-        href: "/team",
+        // Свої записи людина бачить на «Запитах» — туди й ведемо.
+        href: "/team?tab=requests",
         type: action === "revoke" ? "warning" : "info",
       });
     }
@@ -302,7 +342,7 @@ export async function notifyAbsenceRecordedForMember(
             action === "record"
               ? `${range} — записано керівництвом.`
               : `${kindLabel} ${range} скасовано — людина на місці.`,
-          href: "/team",
+          href: "/team?tab=calendar",
           type: action === "record" ? "warning" : "info",
         });
       }

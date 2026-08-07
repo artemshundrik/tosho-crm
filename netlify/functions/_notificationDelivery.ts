@@ -16,7 +16,39 @@ type NotificationInsertRow = {
   body: string | null;
   href: string | null;
   type: "info" | "success" | "warning";
+  /**
+   * Кнопки-дії в Telegram (callback_data), поруч із «Перейти в CRM».
+   *
+   * НЕ колонка таблиці — поле знімається перед insert (toDbRow). Сенс: рішення,
+   * яке інакше коштує «відкрий CRM → знайди вкладку → натисни», робиться прямо
+   * з повідомлення. Обробник callback має сам перевірити права: кнопку видно
+   * тому, кому ми її надіслали, але натиснути її може будь-хто, хто дістався
+   * до чату (переслане повідомлення).
+   */
+  telegramActions?: Array<{ text: string; callbackData: string }>;
 };
+
+/** Рядок для БД: без полів, яких немає в таблиці notifications. */
+export function toDbRow(row: NotificationInsertRow) {
+  const { telegramActions: _telegramActions, ...dbRow } = row;
+  return dbRow;
+}
+
+/**
+ * Клавіатура під повідомленням у Telegram.
+ *
+ * Дія (якщо є) стоїть ПЕРЕД посиланням: у переважній більшості випадків
+ * відповідь — «так», і заради неї не варто йти в браузер. Коли дії немає,
+ * лишається рівно те, що було роками, — один рядок «Відкрити в CRM».
+ */
+export function buildNotificationKeyboard(row: NotificationInsertRow, url: string) {
+  const actionButtons = (row.telegramActions ?? []).map((action) => ({
+    text: action.text,
+    callback_data: action.callbackData,
+  }));
+  const openButton = { text: actionButtons.length > 0 ? "Перейти в CRM" : "Відкрити в CRM", url };
+  return actionButtons.length > 0 ? [actionButtons, [openButton]] : [[openButton]];
+}
 
 type PushSubscriptionRow = {
   endpoint: string;
@@ -77,14 +109,14 @@ async function insertNotificationRows(
   options?: DeliverNotificationsOptions
 ) {
   if (!options?.dedupeByHref) {
-    const { error } = await adminClient.from("notifications").insert(rows);
+    const { error } = await adminClient.from("notifications").insert(rows.map(toDbRow));
     if (error) throw new Error(error.message);
     return rows;
   }
 
   const insertedRows: NotificationInsertRow[] = [];
   for (const row of rows) {
-    const { error } = await adminClient.from("notifications").insert([row]);
+    const { error } = await adminClient.from("notifications").insert([toDbRow(row)]);
     if (error) {
       if (isDuplicateNotificationError(error)) continue;
       throw new Error(error.message);
@@ -229,7 +261,7 @@ async function deliverTelegram(
     const text = `<b>${escapeTelegramHtml(row.title)}</b>${row.body ? `\n${escapeTelegramHtml(row.body)}` : ""}`;
     const result = await sendTelegramMessage(chatId, text, {
       parseMode: "HTML",
-      replyMarkup: { inline_keyboard: [[{ text: "Відкрити в CRM", url: buildTelegramUrl(row.href) }]] },
+      replyMarkup: { inline_keyboard: buildNotificationKeyboard(row, buildTelegramUrl(row.href)) },
     });
 
     if (result.ok) {

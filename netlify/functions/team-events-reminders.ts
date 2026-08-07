@@ -75,6 +75,8 @@ type PendingNotificationRow = {
   body: string;
   href: string;
   type: "info" | "success" | "warning";
+  /** Кнопки-дії в Telegram — див. _notificationDelivery. У базу не пишуться. */
+  telegramActions?: Array<{ text: string; callbackData: string }>;
 };
 
 const TEAM_EVENTS_TIME_ZONE = "Europe/Kiev";
@@ -528,7 +530,13 @@ export const handler = async (event: HttpEvent) => {
         const dedupeKey = `${approverId}::${href}`;
         if (existingKeys.has(dedupeKey)) continue;
         existingKeys.add(dedupeKey);
-        escalationRows.push({ user_id: approverId, ...notification });
+        escalationRows.push({
+          user_id: approverId,
+          ...notification,
+          // Пул уже відфільтрований за правом вирішувати саме цю заявку, тож
+          // кнопка не приведе до 403. Права все одно перевіряються при кліку.
+          telegramActions: [{ text: "✅ Підтвердити", callbackData: `absd:a:${request.id}` }],
+        });
       }
     }
 

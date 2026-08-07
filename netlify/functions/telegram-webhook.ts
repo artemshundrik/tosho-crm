@@ -4,6 +4,7 @@ import {
   answerTelegramCallback,
   editTelegramMessageText,
   editTelegramReplyMarkup,
+  escapeTelegramHtml,
   sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
@@ -21,6 +22,7 @@ import {
   submitAbsenceFromBot,
 } from "./_absenceBotFlow";
 import { resolveMemberWorkspaceId } from "./_lib/absenceSubmit";
+import { decideAbsenceRequest } from "./_lib/absenceDecision";
 import {
   visibleNotificationCategories,
   type NotificationCategory,
@@ -102,6 +104,16 @@ async function loadSettingsByChat(adminClient: AdminClient, chatId: number): Pro
     .eq("telegram_chat_id", chatId)
     .maybeSingle();
   return (data as SettingsRow | null) ?? null;
+}
+
+/** Абсолютне посилання в CRM для кнопок бота. */
+function buildAppUrl(path: string): string {
+  const base = process.env.PUBLIC_APP_URL || "https://tosho.pro";
+  try {
+    return new URL(path, base).toString();
+  } catch {
+    return base;
+  }
 }
 
 /**
@@ -583,6 +595,18 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     return;
   }
 
+  // Погодження заявки прямо з повідомлення. Права перевіряє decideAbsenceRequest —
+  // кнопку ми надсилаємо тому, хто може вирішувати, але натиснути її здатен
+  // будь-хто, кому повідомлення переслали, тож довіряти самій кнопці не можна.
+  if (data.startsWith("absd:")) {
+    if (!(await isActiveMember(adminClient, row.user_id))) {
+      await answerTelegramCallback(cb.id, "Доступ призупинено");
+      return;
+    }
+    await handleAbsenceDecisionCallback(adminClient, cb.id, chatId, messageId, row.user_id, data);
+    return;
+  }
+
   // Флоу оформлення відсутності (_absenceBotFlow): кнопки редагують одне
   // повідомлення, подання йде через RPC-перевтілення з усіма RLS/квотами.
   if (data.startsWith("abs:")) {
@@ -626,6 +650,54 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
 
   await editTelegramReplyMarkup(chatId, messageId, buildSettingsKeyboard(row, cats));
   await answerTelegramCallback(cb.id, toastText);
+}
+
+/**
+ * Кнопка «Підтвердити» під сповіщенням про заявку.
+ *
+ * Відповідь на callback тримаємо ДО кінця роботи (а не одразу, як у флоу
+ * оформлення): рішення — це запис у базу, і людині треба показати саме його
+ * результат, включно з «заявку вже опрацювали», якщо хтось натиснув першим.
+ * Telegram дає на це ~10 секунд, чого вистачає.
+ *
+ * Після успіху кнопки прибираємо: повторний клік по тій самій заявці все одно
+ * впав би на перевірці статусу, але порожня кнопка виглядає як «не спрацювало».
+ */
+async function handleAbsenceDecisionCallback(
+  adminClient: AdminClient,
+  callbackId: string,
+  chatId: number,
+  messageId: number,
+  userId: string,
+  data: string
+) {
+  const parts = data.split(":"); // ["absd", verb, absenceId]
+  const absenceId = parts[2]?.trim();
+  if (parts[1] !== "a" || !absenceId) {
+    await answerTelegramCallback(callbackId, "Невідома дія");
+    return;
+  }
+
+  const result = await decideAbsenceRequest({
+    adminClient,
+    // Бот не має JWT: членство читаємо адмінським клієнтом, але лише після
+    // isActiveMember вище — блокований співробітник сюди не доходить.
+    actorClient: adminClient,
+    actorId: userId,
+    absenceId,
+    decision: "approved",
+  });
+
+  if (!result.ok) {
+    await answerTelegramCallback(callbackId, result.error);
+    return;
+  }
+
+  await answerTelegramCallback(callbackId, "Погоджено");
+  await editTelegramReplyMarkup(chatId, messageId, [
+    [{ text: "Відкрити в CRM", url: buildAppUrl("/team?tab=requests") }],
+  ]);
+  await sendTelegramMessage(chatId, `✅ Погоджено: ${escapeTelegramHtml(result.summary)}`, { parseMode: "HTML" });
 }
 
 /**

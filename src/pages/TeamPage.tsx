@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { DEFAULT_TEAM_TAB, resolveTeamTab, type TeamTab } from "@/lib/teamTabs";
 import {
   Award,
   Cake,
@@ -130,7 +132,6 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
  * а місячна навігація стає миттєвою й без мережі.
  */
 
-type TeamTab = "people" | "calendar" | "requests";
 
 /** Контекст для approver'а під заявкою: перетини і навантаження заявника. */
 type AbsenceDecideContext = {
@@ -311,7 +312,34 @@ export function TeamPage() {
    */
   const viewerIsOwner = permissions.isSuperAdmin;
 
-  const [tab, setTab] = useState<TeamTab>("people");
+  /**
+   * Активна вкладка живе в URL (`?tab=`), а не лише в стані.
+   *
+   * Причина конкретна: сповіщення «Заявка: відпустка — Ілля» вело на /team, і
+   * SEO щоразу відкривав «Людей», а далі клацав у «Запити» — тобто посилання
+   * не доводило до дії, заради якої його надіслали. Тепер href веде рівно на
+   * потрібну вкладку. Для сповіщень, які вже лежать у дзвіночку зі старим
+   * href, вкладку виводимо з ключа `reminder=` — переписувати їх у базі
+   * не можна: на цьому href тримається дедуп повторів.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: TeamTab = useMemo(() => resolveTeamTab(searchParams), [searchParams]);
+  const setTab = useCallback(
+    (next: TeamTab) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === DEFAULT_TEAM_TAB) params.delete("tab");
+          else params.set("tab", next);
+          // Ключ сповіщення відпрацював і більше не має тягнути вкладку назад.
+          params.delete("reminder");
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
@@ -1296,6 +1324,7 @@ export function TeamPage() {
       roleFilter,
       roleOptions,
       search,
+      setTab,
       sortMode,
       tab,
       userId,
