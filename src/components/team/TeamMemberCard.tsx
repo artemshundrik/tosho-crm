@@ -42,6 +42,8 @@ export type TeamMemberCardPerson = {
   birthdayLabel: string | null;
   birthdayDaysUntil: number | null;
   presenceLabel: string;
+  /** Точний момент останнього пінгу — тултип до відносного підпису. */
+  presenceExact?: string | null;
 };
 
 function ContactRow({ icon: Icon, value, successMessage }: { icon: LucideIcon; value: string; successMessage: string }) {
@@ -164,7 +166,9 @@ export function TeamMemberCard({
               aria-hidden
               className={cn("h-1.5 w-1.5 shrink-0 rounded-full", person.online ? "tone-dot-success" : "bg-border")}
             />
-            <span className="truncate">{person.presenceLabel}</span>
+            <span className="truncate" title={person.presenceExact || undefined}>
+              {person.presenceLabel}
+            </span>
           </div>
         </div>
       </div>

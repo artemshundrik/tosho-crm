@@ -87,6 +87,7 @@ import {
   type AbsenceBalance,
 } from "@/lib/teamAbsenceQuotas";
 import { toneBadgeClass, toneTextClass, type Tone } from "@/lib/statusTones";
+import { formatLastSeenAgo, formatLastSeenExact } from "@/lib/lastSeen";
 import { getInitialsFromName } from "@/lib/userName";
 import {
   invalidateWorkspaceMemberDirectory,
@@ -254,13 +255,9 @@ function formatRoleLabel(value?: string | null) {
 function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
   if (online) return "Зараз онлайн";
   if (!lastSeenAt) return "Давно не заходив";
-  const date = new Date(lastSeenAt);
-  if (Number.isNaN(date.getTime())) return "Не в мережі";
-  const diffMinutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
-  if (diffMinutes < 60) return `${diffMinutes} хв тому`;
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} год тому`;
-  return `${Math.round(diffHours / 24)} дн тому`;
+  // Дві суміжні одиниці («3 дн 4 год тому») — спільний форматер на всі
+  // поверхні, замість чотирьох копій, що округлювали по-різному.
+  return `Був(ла) ${formatLastSeenAgo(lastSeenAt)}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1535,6 +1532,7 @@ export function TeamPage() {
                   presenceLabel: member.inactive
                     ? "Співпрацю завершено"
                     : formatPresenceText(member.lastSeenAt, member.online),
+                  presenceExact: member.inactive ? null : formatLastSeenExact(member.lastSeenAt),
                   absence: toAvatarAbsence(member.absenceToday),
                 };
                 // Приватність: свій баланс бачить кожен, чужі — лише owner/SEO.

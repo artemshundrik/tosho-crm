@@ -41,6 +41,7 @@ import {
   isNoiseActivity,
 } from "@/components/team/activityCategories";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { formatLastSeenAgo } from "@/lib/lastSeen";
 
 export type PulsePerson = {
   userId: string;
@@ -95,15 +96,8 @@ function formatMinutes(min: number) {
 
 function formatRelative(iso: string) {
   if (!iso) return "—";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "щойно";
-  if (min < 60) return `${min} хв тому`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `${hours} год тому`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} дн тому`;
-  return new Date(iso).toLocaleDateString("uk-UA", { dateStyle: "short" });
+  // Спільний форматер: дві суміжні одиниці, після 30 днів — дата.
+  return formatLastSeenAgo(iso);
 }
 
 export type PulsePeriodState = {

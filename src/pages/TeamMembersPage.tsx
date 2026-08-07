@@ -78,6 +78,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } from "@/lib/userName";
+import { formatLastSeenAgo } from "@/lib/lastSeen";
 import {
   getEmploymentStatusLabel,
   formatEmploymentDate,
@@ -1121,14 +1122,8 @@ export function TeamMembersPage() {
 
   const formatRelativeTime = (dateStr?: string | null) => {
     if (!dateStr) return "Немає даних";
-    const deltaMs = Date.now() - new Date(dateStr).getTime();
-    const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return "щойно";
-    if (minutes < 60) return `${minutes} хв тому`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} год тому`;
-    const days = Math.floor(hours / 24);
-    return `${days} дн тому`;
+    // Спільний форматер: дві суміжні одиниці, після 30 днів — дата.
+    return formatLastSeenAgo(dateStr);
   };
 
   const getMemberDisplayName = useCallback((member: Member) => {

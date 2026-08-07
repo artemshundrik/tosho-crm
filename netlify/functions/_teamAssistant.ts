@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { escapeTelegramHtml } from "./_telegram";
 import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import { formatJobRole } from "../../src/lib/jobRoles";
+import { formatLastSeenAgo } from "../../src/lib/lastSeen";
 // Людські підписи дій — той самий довідник, що показує вкладка «Пульс».
 // Без нього у відповідь летіли сирі ключі на кшталт design_task_brief_change_request.
 import { actionLabel, isNoiseActivity } from "../../src/components/team/activityCategories";
@@ -94,21 +95,15 @@ export async function loadPresence(admin: SupabaseClient): Promise<Map<string, P
   return map;
 }
 
-/** «щойно» / «14 хв тому» / «вчора о 17:32» — людською мовою, а не ISO. */
+/**
+ * «зараз онлайн» / «3 дн 4 год тому» — людською мовою, а не ISO.
+ * Та сама двоодинична точність, що й у CRM (src/lib/lastSeen.ts).
+ */
 export function formatLastSeen(lastSeenAt: string | null, now: Date): string {
   if (!lastSeenAt) return "не заходив";
   const minutes = Math.floor((now.getTime() - new Date(lastSeenAt).getTime()) / 60_000);
   if (minutes < 3) return "зараз онлайн";
-  if (minutes < 60) return `${minutes} хв тому`;
-  if (minutes < 60 * 20) return `${Math.round(minutes / 60)} год тому`;
-  const label = new Intl.DateTimeFormat("uk-UA", {
-    timeZone: TIME_ZONE,
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(lastSeenAt));
-  return label;
+  return formatLastSeenAgo(lastSeenAt, now);
 }
 
 /** Онлайн вважаємо тих, хто пінгував протягом 5 хвилин. */
