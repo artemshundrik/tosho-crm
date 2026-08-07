@@ -30,7 +30,9 @@ export default function ReleasesPage() {
   if (!canSee) return <Navigate to="/whats-new" replace />;
 
   return (
-    <div className="py-4">
+    // Без власного верхнього відступу: каркас уже дає pt-6, а смуги дій у цього
+    // розділу немає — власний py-4 зверху давав 40px порожнечі.
+    <div className="pb-10">
       {/* Ширше за стрічку: тут дві колонки, а не текст для читання підряд. */}
       <div className="mx-auto max-w-[1180px]">
         <ReleaseHistory />

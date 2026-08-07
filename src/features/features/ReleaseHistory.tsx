@@ -235,17 +235,24 @@ export function ReleaseHistory() {
    * що й робочу, — інакше порівнювали б 60 днів зі 171 і різниця виглядала б
    * як «поза комітами 300 годин», хоча це просто різні відрізки історії.
    */
-  const WORK_SINCE = "20 травня";
-  const workTotal = useMemo(
-    () => Math.round(Array.from(work?.values() ?? []).reduce((sum, w) => sum + w.hours, 0)),
-    [work]
-  );
-  const commitHoursSince = useMemo(() => {
-    if (!work || work.size === 0) return 0;
-    const from = Array.from(work.keys()).sort()[0];
-    let sum = 0;
-    for (const [day, info] of dayInfo) if (day >= from) sum += info.hours;
-    return Math.round(sum);
+  const hoursSplit = useMemo(() => {
+    const claude = Array.from(work?.values() ?? []).reduce((sum, w) => sum + w.hours, 0);
+    const from = work && work.size > 0 ? Array.from(work.keys()).sort()[0] : null;
+    let commitsBefore = 0;
+    let commitsAfter = 0;
+    for (const [day, info] of dayInfo) {
+      if (from && day >= from) commitsAfter += info.hours;
+      else commitsBefore += info.hours;
+    }
+    return {
+      from,
+      claude: Math.round(claude),
+      commitsBefore: Math.round(commitsBefore),
+      commitsAfter: Math.round(commitsAfter),
+      // Періоди не перетинаються, тож складати їх чесно: до появи транскриптів
+      // єдиний прилад — коміти, після — сесії. Кожен відрізок міряний один раз.
+      total: Math.round(commitsBefore + (from ? claude : 0)),
+    };
   }, [work, dayInfo]);
 
   const active: View = useMemo(
@@ -320,22 +327,30 @@ export function ReleaseHistory() {
             className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
             {...bind(() => ({
               title: "Час — оцінка, не вимір",
-              rows: [
-                ...(workTotal > 0
-                  ? [
-                      { label: `За роботою (з ${WORK_SINCE})`, value: `≈${fmtN(workTotal)} год`, strong: true },
-                      { label: "З них дійшло до комітів", value: `≈${fmtN(commitHoursSince)} год` },
-                    ]
-                  : []),
-                { label: "За комітами, уся історія", value: `≈${fmtN(totals.hours)} год` },
-              ],
-              note: "Два прилади, не доданки. Робота міряється ритмом сесій Claude Code (є з 20 травня) і бачить те, що не закінчилось комітом; коміти міряються своїм ритмом і покривають усю історію.",
+              rows: hoursSplit.from
+                ? [
+                    {
+                      label: `До ${fdate(hoursSplit.from)} — за комітами`,
+                      value: `≈${fmtN(hoursSplit.commitsBefore)} год`,
+                    },
+                    {
+                      label: `Від ${fdate(hoursSplit.from)} — за роботою`,
+                      value: `≈${fmtN(hoursSplit.claude)} год`,
+                    },
+                    { label: "Разом", value: `≈${fmtN(hoursSplit.total)} год`, strong: true },
+                    {
+                      label: "Для звірки: коміти за той самий пізній період",
+                      value: `≈${fmtN(hoursSplit.commitsAfter)} год`,
+                    },
+                  ]
+                : [{ label: "За комітами", value: `≈${fmtN(totals.hours)} год`, strong: true }],
+              note: "Кожен відрізок міряний одним приладом: до появи транскриптів Claude єдине джерело — коміти, після — ритм сесій. Тому суму складати чесно. Обидва прилади дають близькі числа на спільному періоді, і це їх взаємна перевірка.",
             }))}
           >
             <b className={cn("text-xl font-semibold tabular-nums text-primary", HOV)}>
-              ≈{fmtN(workTotal > 0 ? workTotal : totals.hours)}
+              ≈{fmtN(hoursSplit.total || totals.hours)}
             </b>
-            год{workTotal > 0 ? " за роботою" : ""}
+            год
           </span>
 
           <span
