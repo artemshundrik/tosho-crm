@@ -49,8 +49,27 @@ export function collect(range, cwd = process.cwd()) {
  * Помилка AI ніколи не зриває запис: без переказу історія просто лишається
  * технічною, і це набагато краще, ніж її відсутність.
  */
-export async function rewriteSubjects(changes, env = process.env) {
+/**
+ * Ознаки того, що тему писали для програміста, а не для людини: склеєні слова
+ * (DateTimeInput), службові імена (_lib), розширення файлів, латинські
+ * абревіатури.
+ *
+ * НАВІЩО: замір по 60 останніх комітах — технічних лише 10%. Решта вже
+ * читається нормально, і переказувати їх означає платити за те, щоб AI
+ * переставив слова місцями, а заразом ризикувати, що він щось перекрутить.
+ * Дешевше й безпечніше писати теми людською одразу, а AI лишити на ті випадки,
+ * де без технічної назви не обійтись.
+ */
+const TECHNICAL =
+  /(?:[a-zа-яіїєґ][A-ZА-ЯІЇЄҐ])|(?:^|[\s(«"])_[a-z]|\.(?:ts|tsx|mjs|sql|json)\b|(?:^|\s)(?:RLS|RPC|SQL|IDOR|JWT|CTE|DOM|SSR|CORS)\b/;
+
+export function needsRewrite(subject) {
+  return TECHNICAL.test(subject);
+}
+
+export async function rewriteSubjects(all, env = process.env) {
   const key = env.OPENAI_API_KEY;
+  const changes = all.filter((change) => needsRewrite(change.subject));
   if (!key || changes.length === 0) return new Map();
 
   const list = changes.map((c) => `${c.sha}\t${c.scope ?? "—"}\t${c.subject}`).join("\n");

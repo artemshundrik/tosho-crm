@@ -12,8 +12,9 @@ export default defineConfig({
   test: {
     environment: "node",
     // Netlify-функції теж тестуємо: там живе логіка отримувачів і порогів,
-    // помилка в якій не падає, а тихо дає неправильні числа.
-    include: ["src/**/*.test.ts", "netlify/**/*.test.ts"],
+    // помилка в якій не падає, а тихо дає неправильні числа. Скрипти релізів —
+    // з тієї ж причини: вони вирішують, що піде в звіт керівництву.
+    include: ["src/**/*.test.ts", "netlify/**/*.test.ts", "scripts/**/*.test.mjs"],
     passWithNoTests: false,
   },
 });
