@@ -36,9 +36,13 @@ if (entries.length === 0) {
 const problems = [];
 
 for (const entry of entries) {
-  // Netlify не чіпає те, що починається з _ або крапки. Саме тому спільний код
-  // і тести функцій живуть у _lib.
-  if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+  // Крапка на початку — службові файли. А от підкреслення НЕ ховає файл від
+  // Netlify: _systemHealth.ts деплоїться функцією «_systemHealth» (символ
+  // дозволений). Ховає лише ТЕКА з підкресленням (_lib) — у ній немає
+  // однойменного входу, тож функцією вона не стає. Тому теки на _ пропускаємо,
+  // а файли на _ перевіряємо як усі: «_щось.test.ts» — та сама крапка в імені.
+  if (entry.name.startsWith(".")) continue;
+  if (entry.isDirectory() && entry.name.startsWith("_")) continue;
 
   if (entry.isDirectory()) {
     if (!VALID_NAME.test(entry.name)) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildNotificationKeyboard, toDbRow } from "./_notificationDelivery";
+import { buildNotificationKeyboard, toDbRow } from "../_notificationDelivery";
 
 const baseRow = {
   user_id: "u-1",
