@@ -388,6 +388,9 @@ export type Database = {
           expires_at: string
           locked_by: string
           locked_by_name: string
+          release_requested_at: string
+          release_requested_by: string
+          release_requested_by_name: string
         }[]
       }
       can_manage_team: { Args: { p_team_id: string }; Returns: boolean }
@@ -404,6 +407,10 @@ export type Database = {
       current_club_id: { Args: never; Returns: string }
       current_team_id: { Args: never; Returns: string }
       current_team_role: { Args: never; Returns: string }
+      force_release_entity_lock: {
+        Args: { p_entity_id: string; p_entity_type: string; p_team_id: string }
+        Returns: boolean
+      }
       get_my_team_ids: { Args: never; Returns: string[] }
       has_role: {
         Args: { p_role: string; p_team_id: string }
@@ -443,6 +450,20 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      request_entity_lock_release: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_team_id: string
+          p_user_id: string
+          p_user_label?: string
+        }
+        Returns: {
+          locked_by: string
+          locked_by_name: string
+          requested: boolean
+        }[]
       }
       role_rank: { Args: { r: string }; Returns: number }
       set_quote_status: {
@@ -1638,6 +1659,9 @@ export type Database = {
           locked_at: string
           locked_by: string
           locked_by_name: string | null
+          release_requested_at: string | null
+          release_requested_by: string | null
+          release_requested_by_name: string | null
           team_id: string
           updated_at: string
         }
@@ -1650,6 +1674,9 @@ export type Database = {
           locked_at?: string
           locked_by: string
           locked_by_name?: string | null
+          release_requested_at?: string | null
+          release_requested_by?: string | null
+          release_requested_by_name?: string | null
           team_id: string
           updated_at?: string
         }
@@ -1662,6 +1689,9 @@ export type Database = {
           locked_at?: string
           locked_by?: string
           locked_by_name?: string | null
+          release_requested_at?: string | null
+          release_requested_by?: string | null
+          release_requested_by_name?: string | null
           team_id?: string
           updated_at?: string
         }

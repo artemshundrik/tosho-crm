@@ -86,6 +86,7 @@ import { NewQuoteDialog } from "@/components/quotes";
 import type { NewQuoteFormData } from "@/components/quotes";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { useEntityLock } from "@/hooks/useEntityLock";
+import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
@@ -723,7 +724,7 @@ function renderBriefRichText(value: string | null | undefined) {
 
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
-  const { userId, jobRole, permissions } = useAuth();
+  const { userId, jobRole, accessRole, permissions } = useAuth();
   const initialCache = readQuoteDetailsCache(teamId, quoteId);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
@@ -5905,14 +5906,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
           </div>
           <div className="space-y-6 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain xl:pb-8">
-            {quoteLockedByOther || statusError || quoteRequirementsHint ? (
+            {quoteLockedByOther || quoteLock.releaseRequestedByName || quoteLock.idleSecondsLeft !== null || quoteLock.releasedReason || statusError || quoteRequirementsHint ? (
               <div className="space-y-3">
-                {quoteLockedByOther ? (
-                  <div className="tone-warning rounded-lg border px-4 py-3 text-sm">
-                    <span className="font-medium">Режим лише перегляду.</span>{" "}
-                    Запис редагує {quoteLock.holderName ?? "інший користувач"}.
-                  </div>
-                ) : null}
+                <EntityLockBanner
+                  lock={quoteLock}
+                  subject="прорахунок"
+                  onRelease={quoteLock.release}
+                  canForceRelease={accessRole === "owner" || jobRole === "seo"}
+                />
 
                 {statusError && (
                   <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">

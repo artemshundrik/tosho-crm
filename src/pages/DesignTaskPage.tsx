@@ -124,6 +124,7 @@ import { EntityViewersBar } from "@/components/app/workspace-presence-widgets";
 import { EntityHeader } from "@/components/app/headers/EntityHeader";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { useEntityLock } from "@/hooks/useEntityLock";
+import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { type ActivityRow } from "@/lib/activity";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
@@ -1332,7 +1333,7 @@ const getTaskOwnerRole = (
 
 export default function DesignTaskPage() {
   const { id } = useParams();
-  const { teamId, userId, permissions } = useAuth();
+  const { teamId, userId, accessRole, jobRole, permissions } = useAuth();
   const navigate = useNavigate();
   const initialCache = readDesignTaskPageCache(teamId ?? "", id ?? "");
   const { getEntityViewers } = useWorkspacePresence();
@@ -1622,6 +1623,10 @@ export default function DesignTaskPage() {
   const canManageDesignStatuses = permissions.canManageDesignStatuses;
   const canEditBriefChangeRequests = permissions.canEditDesignBriefChangeRequests;
   const canSelfAssign = permissions.canSelfAssignDesign;
+  // Збереження ТЗ оголошене значно нижче, а лок потрібен тут — тримаємо його
+  // через ref, щоб не тягнути півсторінки коду вгору заради одного виклику.
+  const saveBriefBeforeReleaseRef = useRef<null | (() => Promise<void>)>(null);
+
   const designTaskLock = useEntityLock({
     teamId: effectiveTeamId,
     entityType: "design_task",
@@ -1629,6 +1634,10 @@ export default function DesignTaskPage() {
     userId,
     userLabel: userId ? memberById[userId] ?? null : null,
     enabled: !!effectiveTeamId && !!id && !!userId,
+    // Перед тим як віддати лок — зберегти недописане й покласти версію в
+    // історію. Інакше автозвільнення через простій означало б, що людина
+    // повертається до порожнього поля.
+    onBeforeRelease: () => saveBriefBeforeReleaseRef.current?.(),
   });
   const designTaskLockedByOther = designTaskLock.lockedByOther;
 
@@ -5822,6 +5831,14 @@ export default function DesignTaskPage() {
     }
   };
 
+  // Автозбереження перед віддачею лока. Зберігаємо ЛИШЕ якщо є незбережене:
+  // інакше кожне автозвільнення плодило б порожню версію в історії.
+  saveBriefBeforeReleaseRef.current = async () => {
+    if (!briefDirty || briefSaving) return;
+    await saveDesignBrief();
+  };
+
+
   const createBriefChangeRequest = async () => {
     if (!task || !effectiveTeamId || changeRequestSaving) return;
     if (!ensureCanEdit()) return;
@@ -9758,12 +9775,13 @@ export default function DesignTaskPage() {
         hint={null}
       />
 
-      {designTaskLockedByOther ? (
-        <div className="mx-4 rounded-xl border tone-warning-subtle px-4 py-3 text-sm text-foreground sm:mx-5 md:mx-6 xl:mx-8">
-          <span className="font-medium">Режим лише перегляду.</span>{" "}
-          ТЗ редагує {designTaskLock.holderName ?? "інший користувач"}.
-        </div>
-      ) : null}
+      <EntityLockBanner
+        lock={designTaskLock}
+        subject="ТЗ"
+        onRelease={designTaskLock.release}
+        canForceRelease={accessRole === "owner" || jobRole === "seo"}
+        className="mx-4 sm:mx-5 md:mx-6 xl:mx-8"
+      />
 
       <div className="sticky top-0 z-30 border-b border-border/50 bg-background/95 px-4 py-2 backdrop-blur sm:px-5 md:px-6 xl:px-8 xl:pr-10">
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
