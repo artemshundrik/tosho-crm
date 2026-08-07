@@ -3,9 +3,9 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Release } from "@/lib/releaseHistory";
 
 /**
- * Запит історії релізів окремо від компонента: перемикач періоду живе в
- * тулбарі сторінки, а самі дані — в тілі. Обидва беруть той самий ключ, тож
- * React Query віддає один результат на двох, без другого походу в базу.
+ * Запит історії релізів окремо від компонента — щоб сторінка й тулбар могли
+ * брати той самий ключ і React Query віддавав один результат, без другого
+ * походу в базу.
  */
 
 type ReleaseRow = {
@@ -35,12 +35,4 @@ export function useReleases() {
       }));
     },
   });
-}
-
-/** Вибраний період. «Усе» лишає повну історію, місяць звужує до свого ключа. */
-export type Period = { kind: "all" } | { kind: "month"; key: string };
-
-export function filterByPeriod(releases: Release[], period: Period): Release[] {
-  if (period.kind === "all") return releases;
-  return releases.filter((release) => release.releasedAt.slice(0, 7) === period.key);
 }
