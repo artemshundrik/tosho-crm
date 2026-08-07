@@ -23,19 +23,31 @@ const SEP = "\x1f";
  * Коміти діапазону. Раніше docs і chore відкидались як «про процес», але
  * `chore(design): бекфіл версій` — це реальна робота, просто названа службово.
  * Тепер беремо все: у зведеннях невідомі типи й так падають у «решту».
+ *
+ * Разом із темою збираємо й обсяг у рядках (--shortstat): «26 комітів» і
+ * «26 комітів на вісім тисяч рядків» — це різні дні, і сторінка релізів
+ * показує різницю. Формат: рядок-заголовок із маркером @, за ним необовʼязковий
+ * рядок статистики.
  */
 export function collect(range, cwd = process.cwd()) {
-  const args = ["log", "--no-merges", `--format=%H${SEP}%cI${SEP}%s`];
+  const args = ["log", "--no-merges", "--shortstat", `--format=@${SEP}%H${SEP}%cI${SEP}%s`];
   if (range) args.splice(1, 0, range);
-  const raw = execFileSync("git", args, { encoding: "utf8", cwd }).trim();
+  const raw = execFileSync("git", args, { encoding: "utf8", cwd, maxBuffer: 64 * 1024 * 1024 }).trim();
   if (!raw) return [];
-  return raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [sha, at, subject] = line.split(SEP);
-      return { sha: sha.slice(0, 8), ...parse(subject ?? ""), at };
-    });
+
+  const changes = [];
+  let current = null;
+  for (const line of raw.split("\n")) {
+    if (line.startsWith(`@${SEP}`)) {
+      const [, sha, at, subject] = line.split(SEP);
+      current = { sha: sha.slice(0, 8), ...parse(subject ?? ""), at, ins: 0, del: 0 };
+      changes.push(current);
+    } else if (current && line.includes("changed")) {
+      current.ins = Number(line.match(/(\d+) insertion/)?.[1] ?? 0);
+      current.del = Number(line.match(/(\d+) deletion/)?.[1] ?? 0);
+    }
+  }
+  return changes;
 }
 
 /**

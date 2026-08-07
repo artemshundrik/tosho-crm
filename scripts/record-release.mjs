@@ -37,20 +37,27 @@ const psql = (sql) =>
  * добовий крок правдивий.
  */
 if (process.argv.includes("--backfill")) {
-  const raw = git(["log", "--no-merges", "--format=%H%x1f%cI%x1f%s", "-300"]);
-  const byDay = new Map();
+  /**
+   * САМОЗАХИСТ ВІД ЗАДВОЄННЯ: бекфіл ключується головою дня, а голова дня
+   * змінюється з кожним новим комітом — наївний повторний прогін створив би
+   * другий рядок на той самий день. Тому пишемо ЛИШЕ дні, суворо старіші за
+   * найранішій уже записаний: у ту частину історії recorder ще не ступав.
+   */
+  const boundary =
+    psql("select min(released_at)::date from tosho.releases") || "9999-12-31";
+  console.log(`Межа: пишемо лише дні до ${boundary}`);
 
-  for (const line of raw.split("\n").filter(Boolean)) {
-    const [sha, iso, subject] = line.split("");
-    const change = { sha: sha.slice(0, 8), ...parse(subject ?? ""), at: iso };
-    const day = iso.slice(0, 10);
-    const bucket = byDay.get(day) ?? { day, iso, head: sha, changes: [] };
+  const byDay = new Map();
+  for (const change of collect("-1500")) {
+    const day = change.at.slice(0, 10);
+    if (day >= boundary) continue;
+    const bucket = byDay.get(day) ?? { day, iso: change.at, head: change.sha, changes: [] };
     // git іде від найновішого — перший побачений у дні і є головою дня.
     bucket.changes.push(change);
     byDay.set(day, bucket);
   }
 
-  const days = Array.from(byDay.values()).filter((bucket) => bucket.changes.length > 0);
+  const days = Array.from(byDay.values());
   console.log(`Відновлюємо ${days.length} днів, ${days.reduce((n, d) => n + d.changes.length, 0)} змін`);
 
   if (DRY) {
@@ -63,7 +70,7 @@ if (process.argv.includes("--backfill")) {
     psql(
       `insert into tosho.releases (commit_ref, released_at, changes)
        values ('${bucket.head}', '${bucket.iso}'::timestamptz, '${payload}'::jsonb)
-       on conflict (commit_ref) do update set changes = excluded.changes`
+       on conflict (commit_ref) do nothing`
     );
   }
   console.log("Історію відновлено.");
@@ -80,16 +87,8 @@ if (process.argv.includes("--backfill")) {
  * `at` значення з git, і тільки там, де його ще немає.
  */
 if (process.argv.includes("--enrich")) {
-  // Ключ — рівно ті 8 символів, які зберігає сам записувач: %h скорочує до 7.
-  const times = new Map(
-    git(["log", "--no-merges", "--format=%H%x1f%cI", "-500"])
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        const [sha, at] = line.split("\x1f");
-        return [sha.slice(0, 8), at];
-      })
-  );
+  // Ключ — ті самі 8 символів, які зберігає записувач.
+  const known = new Map(collect("-1500").map((c) => [c.sha, c]));
 
   const rows = psql(
     "select id || '\x1f' || changes::text from tosho.releases order by released_at"
@@ -104,12 +103,10 @@ if (process.argv.includes("--enrich")) {
     let changed = false;
 
     for (const change of changes) {
-      if (change.at) continue;
-      const at = times.get(change.sha);
-      if (!at) continue; // коміта вже немає в зрізі git — лишаємо без часу
-      change.at = at;
-      changed = true;
-      filled += 1;
+      const src = known.get(change.sha);
+      if (!src) continue; // коміта вже немає в зрізі git — лишаємо як є
+      if (!change.at) { change.at = src.at; changed = true; filled += 1; }
+      if (change.ins === undefined) { change.ins = src.ins; change.del = src.del; changed = true; }
     }
 
     if (!changed) continue;
