@@ -6,6 +6,14 @@ import { runSaleTotal, type QuoteRunPricingRow } from "./_lib/quotePricing";
 import { formatLastSeen, loadPresence, shortName } from "./_teamAssistant";
 import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import {
+  businessReleaseBullets,
+  fetchDayChanges,
+  summarizeDay,
+  summarizeWeek,
+  techReleaseLine,
+  weeklyReleaseLine,
+} from "./_lib/releasesDigest";
+import {
   TONE_EMOJI,
   collectSystemSignals,
   worstTone,
@@ -266,10 +274,18 @@ async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string, 
     teamIds,
   });
 
-  return renderTechMessage(signals, todayKey);
+  // Що вчора викотилось: цифри доречні — це звіт власнику про власну роботу.
+  let releaseLine: string | null = null;
+  try {
+    releaseLine = techReleaseLine(summarizeDay(await fetchDayChanges(admin, yesterdayKey)));
+  } catch {
+    // Релізи — прикраса тех-звіту, не його суть: без них звіт усе одно йде.
+  }
+
+  return renderTechMessage(signals, todayKey, releaseLine);
 }
 
-function renderTechMessage(signals: Signal[], todayKey: string) {
+function renderTechMessage(signals: Signal[], todayKey: string, releaseLine?: string | null) {
   const tone = worstTone(signals);
   const problems = signals.filter((s) => s.tone === "warning" || s.tone === "danger");
   const good = signals.filter((s) => s.tone === "good");
@@ -287,6 +303,7 @@ function renderTechMessage(signals: Signal[], todayKey: string) {
     }
   }
   for (const s of neutral) lines.push(`${TONE_EMOJI[s.tone]} ${escapeTelegramHtml(s.text)}`);
+  if (releaseLine) lines.push("", escapeTelegramHtml(releaseLine));
 
   return {
     tone,
@@ -1071,6 +1088,31 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
   }
 
   if (aiCost > 0) lines.push("", `AI за сьогодні: $${aiCost.toFixed(2)}`);
+
+  /**
+   * «Що нового в CRM» — справи людською мовою, СВІДОМО без цифр: щоденні числа
+   * комітів стають метрикою тиску, з якої роблять хибні висновки (день із
+   * двома комітами ≠ лінивий день — думання не комітиться). Обсяги — раз на
+   * тиждень, у пʼятницю.
+   */
+  try {
+    const todayChanges = await fetchDayChanges(admin, todayKey);
+    const bullets = businessReleaseBullets(todayChanges);
+    if (bullets.length > 0) {
+      lines.push("", "<b>Що нового в CRM</b>");
+      for (const bullet of bullets) lines.push(`• ${escapeTelegramHtml(bullet)}`);
+    }
+    const isFriday = new Date(`${todayKey}T12:00:00Z`).getUTCDay() === 5;
+    if (isFriday) {
+      const week = await Promise.all(
+        Array.from({ length: 7 }, (_, i) => fetchDayChanges(admin, shiftDays(todayKey, -i)))
+      );
+      const weekLine = weeklyReleaseLine(summarizeWeek(week));
+      if (weekLine) lines.push(escapeTelegramHtml(weekLine));
+    }
+  } catch {
+    // Релізи — прикраса дайджесту, не його суть: без них звіт усе одно йде.
+  }
 
   // Порожній звіт краще за мовчанку: інакше не відрізниш вихідний від зламаного cron.
   if (lines.length === 1) lines.push("", "За сьогодні активності не було.");

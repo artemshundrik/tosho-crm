@@ -28,6 +28,8 @@
     "_lib/assistantAccess.ts",
     "_lib/assistantAccess.test.ts",
     "_lib/quotePricing.ts",
+    "_lib/releasesDigest.ts",
+    "_lib/releasesDigest.test.ts",
     "_lib/teamMembers.ts",
     "_lib/teamMembers.test.ts",
     "customer-lead-reminders.ts",
