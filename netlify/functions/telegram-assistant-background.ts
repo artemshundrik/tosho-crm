@@ -12,6 +12,7 @@ import {
 } from "./_designAssistant";
 import { answerAdminQuery, type AdminIntent } from "./_adminAssistant";
 import { answerQuotesQuery, type QuotesIntent } from "./_quotesAssistant";
+import { answerOrdersQuery, type OrdersIntent } from "./_ordersAssistant";
 import {
   loadPresence,
   renderPersonSummary,
@@ -66,11 +67,13 @@ const PERSON_INTENTS = new Set(["designer_workload", "designer_summary", "person
 const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken", "explain_problem"];
 const QUOTES_INTENTS: QuotesIntent[] = [
   "quotes_pipeline",
+  "quotes_list",
   "quotes_created",
   "quotes_approved",
   "quotes_overdue",
   "customer_summary",
 ];
+const ORDERS_INTENTS: OrdersIntent[] = ["orders_list"];
 
 function isAdminIntent(value: string): value is AdminIntent {
   return (ADMIN_INTENTS as string[]).includes(value);
@@ -78,6 +81,10 @@ function isAdminIntent(value: string): value is AdminIntent {
 
 function isQuotesIntent(value: string): value is QuotesIntent {
   return (QUOTES_INTENTS as string[]).includes(value);
+}
+
+function isOrdersIntent(value: string): value is OrdersIntent {
+  return (ORDERS_INTENTS as string[]).includes(value);
 }
 
 const TEAM_INTENTS: TeamIntent[] = ["team_list", "person_summary", "who_is_online", "who_is_absent"];
@@ -163,9 +170,9 @@ const TOOL = {
     properties: {
       intent: {
         type: "string",
-        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...TEAM_INTENTS],
+        enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...ORDERS_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих; quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих (ЛИШЕ цифри по статусах, без переліку); quotes_list — просять ПОКАЗАТИ перелік прорахунків («список прорахунків», «які зараз прорахунки», «покажи прорахунки»); quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; orders_list — просять перелік ЗАМОВЛЕНЬ («список замовлень», «покажи замовлення», «що у виробництві», «які замовлення в роботі»); team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -210,7 +217,12 @@ const SYSTEM_PROMPT = [
   "• «що не працює», «є проблеми?», «все ок?» = whats_broken",
   "• «що це значить», «що за помилка», «а це погано?» = explain_problem",
   "• «як система», «стан», «бекапи», «cron» = system_health",
-  "• «воронка», «скільки відкритих прорахунків» = quotes_pipeline",
+  "• «воронка», «скільки відкритих прорахунків» = quotes_pipeline (тільки цифри)",
+  "• «список прорахунків», «покажи прорахунки», «які зараз прорахунки» = quotes_list",
+  "• «список замовлень», «покажи замовлення», «що у виробництві» = orders_list",
+  "• різниця: quotes_pipeline — розклад по статусах цифрами; quotes_list — сам перелік із назвами й сумами",
+  "• статус у списку клади в status: «затверджені» = approved, «на погодженні» = awaiting_approval,",
+  "  «у виробництві» = in_production, «готові» = ready",
   "• «скільки прорахунків завели» = quotes_created; «скільки затвердили» = quotes_approved",
   "• «що по клієнту X» = customer_summary, назву клієнта клади в query",
   "• «покажи задачу DZ-0412» = task_details, номер або назву клади в query",
@@ -253,6 +265,7 @@ function parseToolCall(payload: Record<string, unknown>): DesignQuery | null {
         INTENTS.includes(rawIntent as DesignIntent) ||
         isAdminIntent(rawIntent) ||
         isQuotesIntent(rawIntent) ||
+        isOrdersIntent(rawIntent) ||
         isTeamIntent(rawIntent);
       const intent = (known ? rawIntent : "help") as DesignIntent;
       const period = PERIODS.includes(args.period as DesignPeriod) ? (args.period as DesignPeriod) : null;
@@ -384,6 +397,25 @@ export const handler = async (event: HttpEvent) => {
         admin,
         teamIds: [teamId],
         intent: query.intent,
+        status: query.status ?? null,
+        period: query.period ?? null,
+        query: query.query ?? null,
+        limit: query.limit ?? 8,
+        now,
+      });
+    }
+
+    // Замовлення — та сама комерційна таємниця, що прорахунки: у них суми
+    // клієнтів, тож і гейт той самий.
+    if (isOrdersIntent(query.intent)) {
+      if (!canUseQuotes(level)) {
+        return "🔒 Замовлення й суми доступні керівництву та менеджерам. Про дизайн-задачі питай вільно.";
+      }
+      return answerOrdersQuery({
+        admin,
+        teamIds: [teamId],
+        intent: query.intent,
+        status: query.status ?? null,
         period: query.period ?? null,
         query: query.query ?? null,
         limit: query.limit ?? 8,
@@ -420,6 +452,7 @@ export const handler = async (event: HttpEvent) => {
       const known =
         isAdminIntent(directIntent) ||
         isQuotesIntent(directIntent) ||
+        isOrdersIntent(directIntent) ||
         isTeamIntent(directIntent) ||
         INTENTS.includes(directIntent as DesignIntent)
           ? (directIntent as DesignIntent)

@@ -444,7 +444,13 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
     { text: "🧑\u200d💼 Команда", callback_data: "qa:team_list" },
   ];
   if (canUseQuotes(level)) {
-    buttons.push({ text: "📊 Воронка", callback_data: "qa:quotes_pipeline" });
+    // Воронка дає цифри по статусах, список — самі прорахунки з сумами.
+    // Це різні питання, тож і кнопки різні.
+    buttons.push(
+      { text: "📊 Воронка", callback_data: "qa:quotes_pipeline" },
+      { text: "🧾 Список прорахунків", callback_data: "qa:quotes_list" },
+      { text: "📦 Замовлення", callback_data: "qa:orders_list" }
+    );
   }
   if (canSeeAiCosts(level)) {
     buttons.push({ text: "💰 AI-кости", callback_data: "qa:ai_usage" });

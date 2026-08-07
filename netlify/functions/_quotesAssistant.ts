@@ -14,6 +14,7 @@ const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
 export type QuotesIntent =
   | "quotes_pipeline"
+  | "quotes_list"
   | "quotes_created"
   | "quotes_approved"
   | "quotes_overdue"
@@ -92,10 +93,37 @@ function quoteLine(quote: QuoteRow, amount: number): string {
   );
 }
 
+/**
+ * Слово користувача про статус → статус прорахунку в базі.
+ * Модель нормалізує під дизайн-задачі («в роботі» → in_progress), тож синоніми
+ * розводимо тут: у прорахунків свій життєвий цикл, і `in_progress` у ньому
+ * означає «на прорахунку», а не «дизайнер малює».
+ */
+const STATUS_ALIASES: Record<string, string> = {
+  new: "new",
+  draft: "new",
+  estimating: "estimating",
+  in_progress: "estimating",
+  estimated: "estimated",
+  sent: "estimated",
+  awaiting_approval: "awaiting_approval",
+  approved: "approved",
+  cancelled: "cancelled",
+  canceled: "cancelled",
+  rejected: "cancelled",
+};
+
+function resolveQuoteStatus(value: string | null): string | null {
+  const key = (value ?? "").trim().toLowerCase();
+  return key ? STATUS_ALIASES[key] ?? null : null;
+}
+
 export async function answerQuotesQuery(params: {
   admin: SupabaseClient;
   teamIds: string[];
   intent: QuotesIntent;
+  /** Статус зі слів користувача; null — усі відкриті. Використовує quotes_list. */
+  status?: string | null;
   period: DesignPeriod | null;
   query: string | null;
   limit: number;
@@ -106,6 +134,59 @@ export async function answerQuotesQuery(params: {
   const resolved = resolvePeriod(period ?? "this_month", now);
 
   switch (intent) {
+    case "quotes_list": {
+      const status = resolveQuoteStatus(params.status ?? null);
+      let request = admin
+        .schema("tosho")
+        .from("quotes")
+        .select("id,number,status,customer_name,created_at")
+        .in("team_id", teamIds)
+        .order("created_at", { ascending: false })
+        .limit(2000);
+
+      // Період звужує, лише коли його назвали: «покажи прорахунки» має
+      // показати все відкрите, а не тільки заведене цього місяця.
+      const window = period ? resolvePeriod(period, now) : null;
+      if (window?.startIso) request = request.gte("created_at", window.startIso);
+      if (window?.endIso) request = request.lt("created_at", window.endIso);
+
+      const customer = normalize(params.query ?? "");
+      // Шукаємо по знормалізованому, показуємо як написав користувач.
+      const customerLabel = (params.query ?? "").trim();
+      if (customer) request = request.ilike("customer_name", `%${customer}%`);
+
+      if (status) request = request.eq("status", status);
+      else request = request.not("status", "in", `(${CLOSED_STATUSES.join(",")})`);
+
+      const { data, error } = await request;
+      if (error) throw new Error(`quotes (list): ${error.message}`);
+
+      const rows = (data ?? []) as QuoteRow[];
+      const scope = [
+        status ? (STATUS_LABELS[status] ?? status).toLowerCase() : null,
+        customer ? `по «${customerLabel}»` : null,
+        window ? window.label : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      if (rows.length === 0) {
+        return scope ? `Прорахунків ${escapeTelegramHtml(scope)} не знайшов.` : "Відкритих прорахунків зараз немає.";
+      }
+
+      const totals = await sumByQuote(admin, rows.map((r) => r.id));
+      const sum = rows.reduce((acc, r) => acc + (totals.get(r.id) ?? 0), 0);
+      const heading = scope ? `Прорахунки ${scope}` : "Відкриті прорахунки";
+
+      const lines = [
+        `🧾 <b>${escapeTelegramHtml(heading)}</b> — ${rows.length} на ${escapeTelegramHtml(formatMoney(sum))}`,
+        "",
+      ];
+      for (const row of rows.slice(0, limit)) lines.push(quoteLine(row, totals.get(row.id) ?? 0));
+      if (rows.length > limit) lines.push("", `…і ще ${rows.length - limit}`);
+      return lines.join("\n");
+    }
+
     case "quotes_pipeline": {
       const { data, error } = await admin
         .schema("tosho")
