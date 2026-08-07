@@ -12,6 +12,12 @@ export type ReleaseChange = {
   type: string;
   scope: string | null;
   subject: string;
+  /**
+   * Час самого коміта. Необов'язковий: записи, зроблені до того, як recorder
+   * почав його зберігати, його не мають — там показуємо зміну без часу, а не
+   * підставляємо час релізу, бо це були б вигадані хвилини.
+   */
+  at?: string;
 };
 
 export type Release = {
@@ -93,6 +99,7 @@ export const SCOPE_LABEL: Record<string, string> = {
   // Продукт
   features: "Можливості",
   updates: "Анонси",
+  releases: "Релізи",
   quotes: "Прорахунки",
   orders: "Замовлення",
   customers: "Замовники",
@@ -268,6 +275,174 @@ export function paceDelta(current: Release[], previous: Release[]): number | nul
     return releases.reduce((sum, release) => sum + release.changes.length, 0) / days;
   };
   return deltaPercent(rate(current), rate(previous));
+}
+
+export type DayGroup = {
+  /** YYYY-MM-DD */
+  day: string;
+  changes: ScopedChange[];
+  byType: Array<{ type: string; count: number }>;
+};
+
+/**
+ * Один день = один запис, навіть якщо пушів того дня було кілька. Людина питає
+ * «що зроблено сьогодні», а не «що було в третьому пуші».
+ */
+export function groupByDay(releases: Release[]): DayGroup[] {
+  const map = new Map<string, ScopedChange[]>();
+
+  for (const release of releases) {
+    const day = release.releasedAt.slice(0, 10);
+    const list = map.get(day) ?? [];
+    for (const change of release.changes) {
+      list.push({ ...change, releasedAt: change.at ?? release.releasedAt });
+    }
+    map.set(day, list);
+  }
+
+  return Array.from(map.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([day, changes]) => ({
+      day,
+      changes: changes.sort((a, b) => a.releasedAt.localeCompare(b.releasedAt)),
+      byType: countByType(changes),
+    }));
+}
+
+/**
+ * Часті слова, які збігаються в будь-яких двох темах і тому нічого не кажуть
+ * про спорідненість. «коли» тут теж: як окреме слово воно порожнє, а всередині
+ * лапок його ловить окреме правило.
+ */
+const NOISE_STEMS = new Set([
+  "біль",
+  "коли",
+  "нема",
+  "післ",
+  "пере",
+  "чере",
+  "тепе",
+  "тіль",
+  "ютьс",
+  "ться",
+  "може",
+  "було",
+  "буде",
+  "одра",
+  "разо",
+]);
+
+/**
+ * Грубий стем: чотирьох літер вистачає, щоб «версія», «версій» і «версії»
+ * зійшлися, і мало, щоб «версія» злилася з «верстка». Повноцінна морфологія
+ * тут не потрібна — ми не шукаємо сенс, лише спорідненість двох рядків.
+ */
+function stems(subject: string): Set<string> {
+  const words = subject
+    .toLowerCase()
+    .replace(/[«»„“”"'(),.:;—–\-/]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 4)
+    .map((word) => word.slice(0, 4))
+    .filter((stem) => !NOISE_STEMS.has(stem) && !/^\d+$/.test(stem));
+  return new Set(words);
+}
+
+/** Фрази в лапках — найсильніша ознака спільної теми: це назва самої фічі. */
+function quoted(subject: string): Set<string> {
+  return new Set(
+    [...subject.matchAll(/«([^»]{3,40})»/g)].map((match) => match[1].trim().toLowerCase())
+  );
+}
+
+function intersects(a: Set<string>, b: Set<string>): number {
+  let count = 0;
+  for (const item of a) if (b.has(item)) count += 1;
+  return count;
+}
+
+export type Thread = {
+  id: string;
+  /** Заголовок = тема головної зміни. Нічого не вигадуємо. */
+  title: string;
+  lead: ScopedChange;
+  rest: ScopedChange[];
+  count: number;
+  scopes: string[];
+  byType: Array<{ type: string; count: number }>;
+  from: string;
+  to: string;
+};
+
+/**
+ * Склейка змін одного дня в сюжети.
+ *
+ * НАВІЩО: три окремі коміти про «коли був» — це насправді одна закінчена
+ * справа. Списком із тринадцяти рядків це читається як шум; п'ятьма сюжетами —
+ * як зроблена робота. Саме заради цього розділ і існує.
+ *
+ * Спорідненими вважаємо зміни зі спільною фразою в лапках або з двома
+ * спільними основами слів. Заголовок беремо в головної зміни (нове важливіше
+ * за виправлення, за рівності — раніше за часом), а не вигадуємо: вигаданий
+ * заголовок гірший за технічний, бо йому не можна вірити.
+ */
+export function buildThreads(changes: ScopedChange[]): Thread[] {
+  const items = changes.map((change) => ({
+    change,
+    stems: stems(change.subject),
+    quoted: quoted(change.subject),
+  }));
+
+  // Union-find: спорідненість транзитивна, інакше ланцюжок A–B–C розпадеться.
+  const parent = items.map((_, index) => index);
+  const find = (index: number): number => {
+    while (parent[index] !== index) {
+      parent[index] = parent[parent[index]];
+      index = parent[index];
+    }
+    return index;
+  };
+  const union = (a: number, b: number) => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) parent[rootB] = rootA;
+  };
+
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      const sharedQuote = intersects(items[i].quoted, items[j].quoted) > 0;
+      const sharedStems = intersects(items[i].stems, items[j].stems);
+      if (sharedQuote || sharedStems >= 2) union(i, j);
+    }
+  }
+
+  const clusters = new Map<number, ScopedChange[]>();
+  items.forEach((item, index) => {
+    const root = find(index);
+    const list = clusters.get(root) ?? [];
+    list.push(item.change);
+    clusters.set(root, list);
+  });
+
+  const rank = (change: ScopedChange) => (change.type === "feat" ? 0 : change.type === "fix" ? 1 : 2);
+
+  return Array.from(clusters.values())
+    .map((group) => {
+      const sorted = [...group].sort((a, b) => a.releasedAt.localeCompare(b.releasedAt));
+      const lead = [...sorted].sort((a, b) => rank(a) - rank(b))[0];
+      return {
+        id: lead.sha,
+        title: lead.subject,
+        lead,
+        rest: sorted.filter((change) => change.sha !== lead.sha),
+        count: sorted.length,
+        scopes: Array.from(new Set(sorted.map((change) => scopeLabel(change.scope)))),
+        byType: countByType(sorted),
+        from: sorted[0].releasedAt,
+        to: sorted[sorted.length - 1].releasedAt,
+      };
+    })
+    .sort((a, b) => b.count - a.count || a.from.localeCompare(b.from));
 }
 
 export type MonthTotals = {

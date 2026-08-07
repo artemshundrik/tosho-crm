@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildThreads,
   compareScopes,
   deltaPercent,
+  groupByDay,
   groupByMonth,
   legendTotals,
   monthTotals,
@@ -16,6 +18,7 @@ import {
   workingDays,
   type Release,
   type ReleaseChange,
+  type ScopedChange,
 } from "./releaseHistory";
 
 /**
@@ -30,7 +33,13 @@ function change(patch: Partial<ReleaseChange> = {}): ReleaseChange {
     type: patch.type ?? "feat",
     scope: patch.scope ?? null,
     subject: patch.subject ?? "щось зроблено",
+    ...(patch.at ? { at: patch.at } : {}),
   };
+}
+
+function scoped(patch: Partial<ReleaseChange> = {}): ScopedChange {
+  // buildThreads працює вже зі згрупованими змінами, де час розвʼязаний.
+  return { ...change(patch), releasedAt: patch.at ?? "2026-08-07T12:00:00Z" };
 }
 
 function release(releasedAt: string, changes: ReleaseChange[]): Release {
@@ -185,6 +194,124 @@ describe("порівняння з минулим періодом", () => {
 
     expect(deltaPercent(114, 162)).toBe(-30);
     expect(paceDelta(august, july)).toBe(6);
+  });
+});
+
+describe("групування по днях", () => {
+  it("кілька пушів одного дня — один день", () => {
+    const days = groupByDay([
+      release("2026-08-07T15:41:00Z", [change({ sha: "a" })]),
+      release("2026-08-07T11:58:00Z", [change({ sha: "b" }), change({ sha: "c" })]),
+      release("2026-08-06T20:00:00Z", [change({ sha: "d" })]),
+    ]);
+    expect(days.map((day) => day.day)).toEqual(["2026-08-07", "2026-08-06"]);
+    expect(days[0].changes).toHaveLength(3);
+  });
+
+  it("час беремо з коміта, коли він є", () => {
+    const days = groupByDay([
+      release("2026-08-07T16:00:00Z", [
+        change({ sha: "a", at: "2026-08-07T11:58:00Z" }),
+        change({ sha: "b" }),
+      ]),
+    ]);
+    // Перша — та, що з часом коміта; друга падає на час релізу.
+    expect(days[0].changes[0].releasedAt).toBe("2026-08-07T11:58:00Z");
+    expect(days[0].changes[1].releasedAt).toBe("2026-08-07T16:00:00Z");
+  });
+});
+
+describe("склейка змін у сюжети", () => {
+  const at = (time: string) => `2026-08-07T${time}:00Z`;
+
+  it("фраза в лапках збирає розкидані коміти в одну справу", () => {
+    // Реальний випадок: три коміти про «коли був» у двох різних розділах.
+    const threads = buildThreads([
+      scoped({
+        sha: "1",
+        type: "feat",
+        scope: "team",
+        subject: "точний «коли був» — дві одиниці часу",
+        at: at("14:18"),
+      }),
+      scoped({
+        sha: "2",
+        type: "fix",
+        scope: "team",
+        subject: "«коли був» показує правду замість 30-хв вікна",
+        at: at("14:33"),
+      }),
+      scoped({
+        sha: "3",
+        type: "feat",
+        scope: "ui",
+        subject: "«коли був» у картці людини на всіх поверхнях",
+        at: at("14:41"),
+      }),
+    ]).map((thread) => ({ ...thread, lead: thread.lead.sha }));
+
+    expect(threads).toHaveLength(1);
+    expect(threads[0].count).toBe(3);
+    // Розділи різні — склейка не має спиратись на скоуп.
+    expect(threads[0].scopes.sort()).toEqual(["Інтерфейс", "Команда"]);
+  });
+
+  it("спільні основи слів теж склеюють", () => {
+    // «версія в імені файлу» і «версій в іменах … файлів» — три спільні основи.
+    const threads = buildThreads([
+      scoped({ sha: "1", type: "feat", subject: "версія в імені файлу дизайнера", at: at("15:21") }),
+      scoped({
+        sha: "2",
+        type: "chore",
+        subject: "бекфіл версій в іменах уже завантажених файлів",
+        at: at("15:41"),
+      }),
+    ]);
+    expect(threads).toHaveLength(1);
+    expect(threads[0].count).toBe(2);
+  });
+
+  it("непов'язане не злипається", () => {
+    const threads = buildThreads([
+      scoped({ sha: "1", subject: "список прорахунків і замовлень у боті", at: at("14:08") }),
+      scoped({ sha: "2", subject: "таблиця підрядників у три колонки", at: at("12:47") }),
+    ]);
+    expect(threads).toHaveLength(2);
+  });
+
+  it("одне спільне слово — ще не сюжет", () => {
+    const threads = buildThreads([
+      scoped({ sha: "1", subject: "селектор типів у модалці більше не пливе", at: at("12:06") }),
+      scoped({ sha: "2", subject: "заявка власника більше не застрягає", at: at("13:39") }),
+    ]);
+    expect(threads).toHaveLength(2);
+  });
+
+  it("заголовок — тема головної зміни, нове важливіше за виправлення", () => {
+    const threads = buildThreads([
+      scoped({ sha: "1", type: "fix", subject: "дровер шапка підвал не тримались", at: at("10:00") }),
+      scoped({ sha: "2", type: "feat", subject: "дровер з нерухомими шапка підвал", at: at("11:00") }),
+    ]);
+    expect(threads[0].title).toBe("дровер з нерухомими шапка підвал");
+    expect(threads[0].rest.map((item) => item.sha)).toEqual(["1"]);
+  });
+
+  it("жодна зміна не губиться і не дублюється", () => {
+    const input = Array.from({ length: 7 }, (_, i) =>
+      scoped({ sha: `s${i}`, subject: `тема ${i} слово${i} інше${i}`, at: at("12:00") })
+    );
+    const threads = buildThreads(input);
+    const shas = threads.flatMap((thread) => [thread.lead.sha, ...thread.rest.map((r) => r.sha)]);
+    expect(shas.sort()).toEqual(input.map((c) => c.sha).sort());
+  });
+
+  it("великі сюжети першими", () => {
+    const threads = buildThreads([
+      scoped({ sha: "1", subject: "самотня зміна про геть інше", at: at("09:00") }),
+      scoped({ sha: "2", subject: "версія імені файлу", at: at("10:00") }),
+      scoped({ sha: "3", subject: "версій іменах файлів", at: at("11:00") }),
+    ]);
+    expect(threads[0].count).toBe(2);
   });
 });
 

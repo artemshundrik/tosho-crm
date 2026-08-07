@@ -51,7 +51,7 @@ if (process.argv.includes("--backfill")) {
 
   for (const line of raw.split("\n").filter(Boolean)) {
     const [sha, iso, subject] = line.split("");
-    const change = { sha: sha.slice(0, 8), ...parse(subject ?? "") };
+    const change = { sha: sha.slice(0, 8), ...parse(subject ?? ""), at: iso };
     if (!isProductChange(change)) continue;
     const day = iso.slice(0, 10);
     const bucket = byDay.get(day) ?? { day, iso, head: sha, changes: [] };
@@ -73,10 +73,64 @@ if (process.argv.includes("--backfill")) {
     psql(
       `insert into tosho.releases (commit_ref, released_at, changes)
        values ('${bucket.head}', '${bucket.iso}'::timestamptz, '${payload}'::jsonb)
-       on conflict (commit_ref) do nothing`
+       on conflict (commit_ref) do update set changes = excluded.changes`
     );
   }
   console.log("Історію відновлено.");
+  process.exit(0);
+}
+
+/**
+ * Дозаписує час коміта в уже збережені записи.
+ *
+ * НАВІЩО ОКРЕМИЙ РЕЖИМ, А НЕ ПОВТОРНИЙ --backfill: бекфіл ключується головою
+ * дня, а голова дня змінюється з кожним новим комітом. Повторний запуск створив
+ * би НОВИЙ рядок на той самий день поруч зі старим, і всі зміни того дня
+ * порахувались би двічі. Тут ми не чіпаємо склад записів — лише додаємо полю
+ * `at` значення з git, і тільки там, де його ще немає.
+ */
+if (process.argv.includes("--enrich")) {
+  // Ключ — рівно ті 8 символів, які зберігає сам записувач: %h скорочує до 7.
+  const times = new Map(
+    git(["log", "--no-merges", "--format=%H%x1f%cI", "-500"])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, at] = line.split("\x1f");
+        return [sha.slice(0, 8), at];
+      })
+  );
+
+  const rows = psql(
+    "select id || '\x1f' || changes::text from tosho.releases order by released_at"
+  ).split("\n").filter(Boolean);
+
+  let touched = 0;
+  let filled = 0;
+
+  for (const row of rows) {
+    const [id, json] = row.split("\x1f");
+    const changes = JSON.parse(json);
+    let changed = false;
+
+    for (const change of changes) {
+      if (change.at) continue;
+      const at = times.get(change.sha);
+      if (!at) continue; // коміта вже немає в зрізі git — лишаємо без часу
+      change.at = at;
+      changed = true;
+      filled += 1;
+    }
+
+    if (!changed) continue;
+    if (!DRY) {
+      const payload = JSON.stringify(changes).replace(/'/g, "''");
+      psql(`update tosho.releases set changes = '${payload}'::jsonb where id = '${id}'`);
+    }
+    touched += 1;
+  }
+
+  console.log(`${DRY ? "[dry] " : ""}Записів оновлено: ${touched}, проставлено часів: ${filled}.`);
   process.exit(0);
 }
 
@@ -92,7 +146,7 @@ const lastRef = psql("select commit_ref from tosho.releases order by released_at
 // Перший запуск: беремо розумний зріз, а не всю історію проєкту.
 const range = lastRef ? `${lastRef}..HEAD` : "HEAD~40..HEAD";
 
-const raw = git(["log", range, "--no-merges", "--format=%H%x1f%s"]);
+const raw = git(["log", range, "--no-merges", "--format=%H%x1f%cI%x1f%s"]);
 if (!raw) {
   console.log("Нових комітів немає.");
   process.exit(0);
@@ -101,8 +155,8 @@ if (!raw) {
 const changes = raw
   .split("\n")
   .map((line) => {
-    const [sha, subject] = line.split("");
-    return { sha: sha.slice(0, 8), ...parse(subject ?? "") };
+    const [sha, iso, subject] = line.split("");
+    return { sha: sha.slice(0, 8), ...parse(subject ?? ""), at: iso };
   })
   .filter(isProductChange);
 
