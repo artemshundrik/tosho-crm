@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMous
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useReleases } from "@/features/features/releaseQueries";
+import { useReleases, useWorkSessions } from "@/features/features/releaseQueries";
 import {
   buildThreads,
   daySessions,
@@ -18,6 +18,7 @@ import {
   type ScopedChange,
   type Thread,
 } from "@/lib/releaseHistory";
+import type { WorkSession } from "@/features/features/releaseQueries";
 
 /**
  * Історія релізів — для власника й SEO.
@@ -186,6 +187,7 @@ function Diff({ ins, del, dim }: { ins: number; del: number; dim?: boolean }) {
 
 export function ReleaseHistory() {
   const { data: releases, isPending } = useReleases();
+  const { data: work } = useWorkSessions();
   const [view, setView] = useState<View | null>(null);
 
   const days = useMemo(() => groupByDay(releases ?? []), [releases]);
@@ -227,6 +229,24 @@ export function ReleaseHistory() {
   }, [dayInfo]);
 
   const { bind, overlay } = useTip();
+
+  /**
+   * Підсумки годин двома приладами. Комітну суму рахуємо ЗА ТОЙ САМИЙ період,
+   * що й робочу, — інакше порівнювали б 60 днів зі 171 і різниця виглядала б
+   * як «поза комітами 300 годин», хоча це просто різні відрізки історії.
+   */
+  const WORK_SINCE = "20 травня";
+  const workTotal = useMemo(
+    () => Math.round(Array.from(work?.values() ?? []).reduce((sum, w) => sum + w.hours, 0)),
+    [work]
+  );
+  const commitHoursSince = useMemo(() => {
+    if (!work || work.size === 0) return 0;
+    const from = Array.from(work.keys()).sort()[0];
+    let sum = 0;
+    for (const [day, info] of dayInfo) if (day >= from) sum += info.hours;
+    return Math.round(sum);
+  }, [work, dayInfo]);
 
   const active: View = useMemo(
     () => view ?? { t: "day", k: dayKeys.at(-1) ?? "" },
@@ -301,16 +321,21 @@ export function ReleaseHistory() {
             {...bind(() => ({
               title: "Час — оцінка, не вимір",
               rows: [
-                { label: "Разом", value: `≈${fmtN(totals.hours)} год`, strong: true },
-                { label: "У середньому", value: `≈${(totals.hours / dayKeys.length).toFixed(1)} год/день` },
+                ...(workTotal > 0
+                  ? [
+                      { label: `За роботою (з ${WORK_SINCE})`, value: `≈${fmtN(workTotal)} год`, strong: true },
+                      { label: "З них дійшло до комітів", value: `≈${fmtN(commitHoursSince)} год` },
+                    ]
+                  : []),
+                { label: "За комітами, уся історія", value: `≈${fmtN(totals.hours)} год` },
               ],
-              note: "Рахуємо за ритмом комітів: пауза понад 2 год починає нову сесію, до кожної +30 хв розігріву. Думання без комітів сюди не потрапляє.",
+              note: "Два прилади, не доданки. Робота міряється ритмом сесій Claude Code (є з 20 травня) і бачить те, що не закінчилось комітом; коміти міряються своїм ритмом і покривають усю історію.",
             }))}
           >
             <b className={cn("text-xl font-semibold tabular-nums text-primary", HOV)}>
-              ≈{fmtN(totals.hours)}
+              ≈{fmtN(workTotal > 0 ? workTotal : totals.hours)}
             </b>
-            год
+            год{workTotal > 0 ? " за роботою" : ""}
           </span>
 
           <span
@@ -390,6 +415,7 @@ export function ReleaseHistory() {
             dayKeys={dayKeys}
             dayInfo={dayInfo}
             avgHours={totals.hours / dayKeys.length}
+            work={work?.get(active.k) ?? null}
             bind={bind}
             go={go}
           />
@@ -680,6 +706,7 @@ function DayView({
   dayKeys,
   dayInfo,
   avgHours,
+  work,
   bind,
   go,
 }: {
@@ -688,6 +715,7 @@ function DayView({
   dayKeys: string[];
   dayInfo: Map<string, DayInfo>;
   avgHours: number;
+  work: WorkSession | null;
   bind: ReturnType<typeof useTip>["bind"];
   go: (view: View) => void;
 }) {
@@ -744,35 +772,81 @@ function DayView({
           </span>
         </div>
 
-        {/* Час дня: оцінка + пігулки підходів. Ніч — фіолетова крапка. */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {/*
+          Час дня двома приладами. Провідна цифра — з ритму сесій Claude, бо
+          вона ловить і роботу, що не закінчилась комітом (реальний випадок:
+          7 серпня о 08:50 робота йшла, перший коміт був об 11:58). Коміти
+          лишаються поруч другим рядком — вони показують, скільки з того часу
+          дійшло до викоту. ЦІ ЦИФРИ НЕ ДОДАЮТЬСЯ: це один час, різні прилади.
+        */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <span
             className={cn("mr-1 text-base font-semibold text-primary", HOV)}
-            {...bind(() => ({
-              title: `≈${info.hours} год цього дня`,
-              rows: info.blocks.map(([from, to]) => ({
-                label: `${hhmm(from)}–${hhmm(to)}`,
-                value: durTxt(to - from + 30),
-                color: isNight(from) ? "bg-chart-7" : "bg-chart-1",
-              })),
-              note: "Кожен підхід: від першого до останнього коміта серії, +30 хв розігріву.",
-            }))}
+            {...bind(() =>
+              work
+                ? {
+                    title: `≈${work.hours} год за роботою`,
+                    rows: work.blocks.map((b) => ({
+                      label: `${hhmm(b.from)}–${hhmm(b.to)}`,
+                      value: durTxt(b.to - b.from + 5),
+                      color: isNight(b.from) ? "bg-chart-7" : "bg-chart-1",
+                    })),
+                    note: "З ритму сесій Claude Code: пауза понад 30 хв рве підхід, +5 хв розігріву. Бачить і те, що не закінчилось комітом.",
+                  }
+                : {
+                    title: "Годин за роботою немає",
+                    rows: [{ label: "Коміти цього дня", value: info.n }],
+                    note: "Сесії Claude Code є лише з 20 травня. Раніше час можна оцінити тільки за комітами — дірку показуємо порожньою, а не нулем.",
+                  }
+            )}
           >
-            ≈{info.hours} год
+            {work ? `≈${work.hours} год` : "— год"}
           </span>
-          {info.blocks.map(([from, to], i) => (
-            <span
-              key={i}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-3xs text-muted-foreground"
-            >
-              <i className={cn("h-1.5 w-1.5 rounded-full", isNight(from) ? "bg-chart-7" : "bg-chart-1")} />
-              <b className="font-semibold text-foreground">{durTxt(to - from + 30)}</b>
-              {hhmm(from)}–{hhmm(to)}
-            </span>
-          ))}
+
+          {(work ? work.blocks.map((b) => [b.from, b.to] as [number, number]) : []).map(
+            ([from, to], i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-3xs text-muted-foreground"
+              >
+                <i
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    isNight(from) ? "bg-chart-7" : "bg-chart-1"
+                  )}
+                />
+                <b className="font-semibold text-foreground">{durTxt(to - from + 5)}</b>
+                {hhmm(from)}–{hhmm(to)}
+              </span>
+            )
+          )}
+
           <span className="ml-auto text-3xs text-muted-foreground">
             середнє <b className="font-semibold text-foreground">≈{avgHours.toFixed(1)} год</b>/день
           </span>
+
+          {/* Другий прилад — окремим рядком, щоб не читалось як доданок. */}
+          {info.blocks.length > 0 ? (
+            <span
+              className={cn("w-full text-3xs text-muted-foreground", HOV, "border-b-0")}
+              {...bind(() => ({
+                title: `≈${info.hours} год за комітами`,
+                rows: info.blocks.map(([from, to]) => ({
+                  label: `${hhmm(from)}–${hhmm(to)}`,
+                  value: durTxt(to - from + 30),
+                })),
+                note: "Оцінка за ритмом комітів. Менша за роботу з Claude настільки, скільки часу пішло на те, що комітом не закінчилось.",
+              }))}
+            >
+              із них дійшло до комітів:{" "}
+              <b className="font-semibold text-foreground">≈{info.hours} год</b>
+              {work && work.hours > info.hours ? (
+                <span className="ml-1.5">
+                  · поза комітами ≈{(work.hours - info.hours).toFixed(1)} год
+                </span>
+              ) : null}
+            </span>
+          ) : null}
         </div>
       </header>
 

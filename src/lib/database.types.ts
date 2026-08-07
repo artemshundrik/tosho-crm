@@ -3670,6 +3670,30 @@ export type Database = {
         }
         Relationships: []
       }
+      work_sessions: {
+        Row: {
+          blocks: Json
+          day: string
+          hours: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          day: string
+          hours: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          day?: string
+          hours?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       runtime_errors: {
         Row: {
           actor_name: string | null

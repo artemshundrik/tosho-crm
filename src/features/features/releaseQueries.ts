@@ -36,3 +36,40 @@ export function useReleases() {
     },
   });
 }
+
+/** Робочі години з ритму сесій Claude Code — другий прилад поруч із комітами. */
+export type WorkSession = {
+  day: string;
+  hours: number;
+  blocks: Array<{ from: number; to: number }>;
+};
+
+/**
+ * Окремий запит, бо джерело інше: релізи пише деплой, а години завантажує
+ * скрипт із локальної машини. Дірка в даних тут нормальна — до 20 травня
+ * Claude Code не було, і сторінка показує це порожнечею, а не нулем.
+ */
+export function useWorkSessions() {
+  return useQuery({
+    queryKey: ["work-sessions"],
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<Map<string, WorkSession>> => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("work_sessions")
+        .select("day, hours, blocks")
+        .order("day", { ascending: false })
+        .limit(400);
+      if (error) throw error;
+      const map = new Map<string, WorkSession>();
+      for (const row of (data ?? []) as Array<{ day: string; hours: number; blocks: unknown }>) {
+        map.set(row.day, {
+          day: row.day,
+          hours: Number(row.hours) || 0,
+          blocks: Array.isArray(row.blocks) ? (row.blocks as WorkSession["blocks"]) : [],
+        });
+      }
+      return map;
+    },
+  });
+}
