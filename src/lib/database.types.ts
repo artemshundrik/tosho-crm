@@ -468,6 +468,27 @@ export type Database = {
   }
   tosho: {
     Tables: {
+      _contractors_phone_backup: {
+        Row: {
+          id: string | null
+          name: string | null
+          phone: string | null
+          snapshot_at: string | null
+        }
+        Insert: {
+          id?: string | null
+          name?: string | null
+          phone?: string | null
+          snapshot_at?: string | null
+        }
+        Update: {
+          id?: string | null
+          name?: string | null
+          phone?: string | null
+          snapshot_at?: string | null
+        }
+        Relationships: []
+      }
       _healthcheck: {
         Row: {
           created_at: string
@@ -1131,51 +1152,69 @@ export type Database = {
           contact_name: string | null
           created_at: string
           delivery_info: string | null
+          delivery_points: Json
+          edrpou: string | null
+          emails: string[]
           id: string
           kind: string
+          legal_name: string | null
           name: string
           notes: string | null
-          phone: string | null
+          ownership_type: string | null
+          phones: string[]
           reminder_at: string | null
           reminder_comment: string | null
           reminder_repeat: string | null
           services: string | null
           team_id: string
           updated_at: string
+          website: string | null
         }
         Insert: {
           address?: string | null
           contact_name?: string | null
           created_at?: string
           delivery_info?: string | null
+          delivery_points?: Json
+          edrpou?: string | null
+          emails?: string[]
           id?: string
           kind?: string
+          legal_name?: string | null
           name: string
           notes?: string | null
-          phone?: string | null
+          ownership_type?: string | null
+          phones?: string[]
           reminder_at?: string | null
           reminder_comment?: string | null
           reminder_repeat?: string | null
           services?: string | null
           team_id: string
           updated_at?: string
+          website?: string | null
         }
         Update: {
           address?: string | null
           contact_name?: string | null
           created_at?: string
           delivery_info?: string | null
+          delivery_points?: Json
+          edrpou?: string | null
+          emails?: string[]
           id?: string
           kind?: string
+          legal_name?: string | null
           name?: string
           notes?: string | null
-          phone?: string | null
+          ownership_type?: string | null
+          phones?: string[]
           reminder_at?: string | null
           reminder_comment?: string | null
           reminder_repeat?: string | null
           services?: string | null
           team_id?: string
           updated_at?: string
+          website?: string | null
         }
         Relationships: []
       }
