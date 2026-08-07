@@ -12,10 +12,13 @@
 --
 -- А що МІНЯЄТЬСЯ тут:
 --   1) check-констрейнт kind — новий дозволений тип;
---   2) RLS self-insert — wfh подається ЛИШЕ як pending (погодження SEO),
---     у тому ж вікні дат, що відпустка й day-off;
---   3) RPC бота вже виводить статус як «sick → approved, решта → pending»,
---     тож wfh автоматично піде на погодження — розширюємо лише whitelist.
+--   2) RLS self-insert — wfh подається як pending (погодження SEO) у тому ж
+--     вікні дат, що відпустка й day-off. ВЛАСНИК — виняток: його запис іде
+--     одразу approved через адмінську політику (над ним керівника немає,
+--     і pending власника не міг би вирішити ніхто — тупик, спійманий
+--     тестом CEO 2026-08-07);
+--   3) RPC бота виводить статус «sick або власник → approved, решта →
+--     pending» — розширюємо whitelist і додаємо перевірку ролі.
 --
 -- Гард дублів (guard_team_absence_duplicate) ловить wfh автоматично: він
 -- порівнює kind+дати без переліку типів.
@@ -84,6 +87,7 @@ set search_path to 'tosho', 'public'
 as $$
 declare
   v_workspace uuid;
+  v_is_owner boolean;
   v_status text;
   v_id uuid;
   v_start date;
@@ -98,8 +102,8 @@ begin
   end if;
 
   -- Воркспейс — із членства самої людини, не з параметрів виклику.
-  select mv.workspace_id
-    into v_workspace
+  select mv.workspace_id, lower(coalesce(mv.access_role::text, '')) = 'owner'
+    into v_workspace, v_is_owner
   from tosho.memberships_view mv
   where mv.user_id = p_user_id
   order by mv.created_at asc, mv.workspace_id asc
@@ -110,8 +114,13 @@ begin
   end if;
 
   -- Статус виводиться з типу, як і в HTTP-поданні: лікарняний — факт,
-  -- решта (включно з wfh) чекає рішення. RLS нижче перевіряє ту саму пару.
-  v_status := case when p_kind = 'sick_leave' then 'approved' else 'pending' end;
+  -- решта (включно з wfh) чекає рішення. ВЛАСНИК — виняток для всіх типів:
+  -- над ним керівника немає, і його pending не міг би вирішити ніхто
+  -- (сам собі — заборонено, SEO заявку власника — теж).
+  v_status := case
+    when p_kind = 'sick_leave' or coalesce(v_is_owner, false) then 'approved'
+    else 'pending'
+  end;
 
   -- Перевтілення. set_config(…, true) — на транзакцію; SET LOCAL ROLE
   -- дозволений, бо session_user (authenticator/postgres) має членство в

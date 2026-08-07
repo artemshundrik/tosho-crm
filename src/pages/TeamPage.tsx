@@ -273,6 +273,12 @@ export function TeamPage() {
 
   /** Вносити відсутності за інших і бачити чужі залишки може owner/SEO. */
   const canManageAbsences = permissions.isSuperAdmin || permissions.isSeo;
+  /**
+   * Хто може ВИРІШИТИ конкретну заявку. Правило сервера: заявку SEO або
+   * власника вирішує лише власник. Кнопки, які завжди відповідають 403,
+   * гірші за їхню відсутність — тому ховаємо їх ще тут.
+   */
+  const viewerIsOwner = permissions.isSuperAdmin;
 
   const [tab, setTab] = useState<TeamTab>("people");
   const [search, setSearch] = useState("");
@@ -1701,6 +1707,13 @@ export function TeamPage() {
                   <div className="divide-y divide-border/40">
                     {pendingRequests.map((absence) => {
                       const member = memberById.get(absence.userId);
+                      const requesterPrivileged =
+                        (member?.accessRole ?? "").toLowerCase() === "owner" ||
+                        (member?.jobRole ?? "").toLowerCase() === "seo";
+                      const decidableByViewer =
+                        canManageAbsences &&
+                        absence.userId !== userId &&
+                        (viewerIsOwner || !requesterPrivileged);
                       return (
                         <AbsenceRow
                           key={absence.id}
@@ -1716,7 +1729,12 @@ export function TeamPage() {
                           onDelete={() => handleAbsenceDelete(absence)}
                           decisionComment={decisionComments.get(absence.id) ?? null}
                           balance={balances.get(absence.userId) ?? null}
-                          canDecide={canManageAbsences && absence.userId !== userId}
+                          canDecide={decidableByViewer}
+                          decisionNote={
+                            !decidableByViewer && absence.userId !== userId && requesterPrivileged
+                              ? "вирішує власник"
+                              : undefined
+                          }
                           deciding={decidingId === absence.id}
                           onApprove={() => void handleDecide(absence, "approved")}
                           onDecline={() => setDeclineTarget(absence)}
@@ -1954,6 +1972,7 @@ function AbsenceRow({
   decisionComment,
   balance,
   canDecide,
+  decisionNote,
   deciding,
   onApprove,
   onDecline,
@@ -1978,6 +1997,8 @@ function AbsenceRow({
   /** Баланс заявника — щоб рішення приймалось із цифрами перед очима. */
   balance?: AbsenceBalance | null;
   canDecide?: boolean;
+  /** Чому кнопок немає: напр. «вирішує власник» — для заявок SEO очима SEO. */
+  decisionNote?: string;
   deciding?: boolean;
   onApprove?: () => void;
   onDecline?: () => void;
@@ -2085,6 +2106,9 @@ function AbsenceRow({
             Відхилити
           </Button>
         </div>
+      ) : null}
+      {!canDecide && decisionNote && absence.status === "pending" ? (
+        <span className="shrink-0 text-2xs text-muted-foreground/80">{decisionNote}</span>
       ) : null}
       {canCancel ? (
         <Button

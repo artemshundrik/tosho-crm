@@ -189,14 +189,16 @@ export function confirmScreen(
   kind: AbsenceBotKind,
   start: string,
   end: string,
-  businessDays: number | null
+  businessDays: number | null,
+  /** Власник: погоджувати нікому, запис зафіксується одразу. */
+  instant = false
 ): { text: string; keyboard: InlineKeyboard } {
   const days = daysLabel(businessDays, kind);
   return {
     text: [
       `${KIND_EMOJI[kind]} <b>${label(kind)} · ${rangeLabel(start, end)}</b>` + (days ? ` · ${days}` : ""),
       "",
-      kind === "sick_leave"
+      kind === "sick_leave" || instant
         ? "Зафіксується одразу — команда отримає сповіщення."
         : "Заявка піде на погодження SEO — рішення прийде сюди.",
     ].join("\n"),

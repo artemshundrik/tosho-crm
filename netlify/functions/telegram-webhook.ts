@@ -362,14 +362,17 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
       return;
     }
     const workspaceId = await resolveMemberWorkspaceId(adminClient, settings.user_id);
-    const days = await countQuotaDaysForUser(
-      adminClient,
-      workspaceId,
+    const [days, textFlowRole] = await Promise.all([
+      countQuotaDaysForUser(adminClient, workspaceId, absenceDraft.kind, absenceDraft.start, absenceDraft.end),
+      loadRole(adminClient, settings.user_id),
+    ]);
+    const screen = confirmScreen(
       absenceDraft.kind,
       absenceDraft.start,
-      absenceDraft.end
+      absenceDraft.end,
+      days,
+      isOwnerRole(textFlowRole)
     );
-    const screen = confirmScreen(absenceDraft.kind, absenceDraft.start, absenceDraft.end, days);
     await sendTelegramMessage(chatId, screen.text, {
       parseMode: "HTML",
       replyMarkup: { inline_keyboard: screen.keyboard },
@@ -666,8 +669,11 @@ async function handleAbsenceCallback(
       return;
     }
     const workspaceId = await resolveMemberWorkspaceId(adminClient, userId);
-    const days = await countQuotaDaysForUser(adminClient, workspaceId, kind, range.start, range.end);
-    const screen = confirmScreen(kind, range.start, range.end, days);
+    const [days, actorRole] = await Promise.all([
+      countQuotaDaysForUser(adminClient, workspaceId, kind, range.start, range.end),
+      loadRole(adminClient, userId),
+    ]);
+    const screen = confirmScreen(kind, range.start, range.end, days, isOwnerRole(actorRole));
     await editTelegramMessageText(chatId, messageId, screen.text, {
       replyMarkup: { inline_keyboard: screen.keyboard },
     });

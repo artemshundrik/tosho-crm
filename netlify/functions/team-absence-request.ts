@@ -275,9 +275,9 @@ async function handleSubmit(params: {
   const { data: membership, error: membershipError } = await userClient
     .schema("tosho")
     .from("memberships_view")
-    .select("workspace_id")
+    .select("workspace_id,access_role")
     .eq("user_id", actorId)
-    .maybeSingle<{ workspace_id?: string | null }>();
+    .maybeSingle<{ workspace_id?: string | null; access_role?: string | null }>();
 
   if (membershipError) return jsonResponse(500, { error: membershipError.message });
   const workspaceId = membership?.workspace_id ?? null;
@@ -285,7 +285,13 @@ async function handleSubmit(params: {
 
   // Лікарняний — факт, а не прохання: він одразу approved (і саме тому в БД
   // на нього стоїть квота й межі дат). Решта чекає на рішення.
-  const status = kind === "sick_leave" ? "approved" : "pending";
+  //
+  // ВЛАСНИК — виняток для всіх типів: над ним керівника немає, і його
+  // pending не міг би вирішити ніхто (сам собі — заборонено, SEO заявку
+  // власника — теж). Тестове подання CEO 2026-08-07 застрягло саме так.
+  // Заявка SEO лишається pending — її вирішує власник.
+  const actorIsOwner = isOwnerMembership(membership);
+  const status = kind === "sick_leave" || actorIsOwner ? "approved" : "pending";
 
   const { data: inserted, error: insertError } = await userClient
     .schema("tosho")
