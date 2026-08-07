@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { cn } from "@/lib/utils";
@@ -13,6 +15,8 @@ import {
 import { formatJobRole } from "@/lib/jobRoles";
 import { getInitialsFromName } from "@/lib/userName";
 import { isInactiveEmployment } from "@/lib/employment";
+import { formatLastSeenAgo, formatLastSeenExact } from "@/lib/lastSeen";
+import { supabase } from "@/lib/supabaseClient";
 
 /**
  * Картка людини під курсором — для поверхонь, де ухвалюють РІШЕННЯ про людину:
@@ -24,6 +28,38 @@ import { isInactiveEmployment } from "@/lib/employment";
  * ЩО СВІДОМО НЕ ПОКАЗУЄМО: залишок відпустки, ставки й виплати — приватне
  * (бачить сама людина + owner/SEO, і то на своїй сторінці, а не під курсором).
  */
+
+/**
+ * «Коли був» картка вміє діставати САМА — ліниво, при першому наведенні.
+ *
+ * Інакше кожна поверхня (Прорахунки, Дизайн, …) мала б тягнути user_presence
+ * заради поля, яке здебільшого ніхто не дивиться. Кеш короткий: присутність
+ * живе хвилинами, і вічний кеш показував би вчорашнє як сьогоднішнє.
+ * Сторінка Команди передає підпис сама (їй присутність уже відома) — тоді
+ * запиту не буде взагалі.
+ */
+const lastSeenCache = new Map<string, { at: number; lastSeenAt: string | null }>();
+const LAST_SEEN_TTL_MS = 60_000;
+
+async function loadLastSeenAt(userId: string): Promise<string | null> {
+  const cached = lastSeenCache.get(userId);
+  if (cached && Date.now() - cached.at < LAST_SEEN_TTL_MS) return cached.lastSeenAt;
+  try {
+    const { data } = await supabase
+      .from("user_presence")
+      .select("last_seen_at")
+      .eq("user_id", userId)
+      .order("last_seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ last_seen_at?: string | null }>();
+    const lastSeenAt = data?.last_seen_at ?? null;
+    lastSeenCache.set(userId, { at: Date.now(), lastSeenAt });
+    return lastSeenAt;
+  } catch {
+    // Картка — допоміжна річ: не показати рядок краще, ніж зламати наведення.
+    return null;
+  }
+}
 
 /**
  * Рядок директорії → дані картки. Один конвертер на всі сторінки: інакше
@@ -126,6 +162,22 @@ export function PersonHoverCard({
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
 }) {
+  const [fetchedLastSeen, setFetchedLastSeen] = React.useState<string | null>(null);
+  const requestedRef = React.useRef<string | null>(null);
+
+  // Тягнемо лише коли поверхня підпису не дала й людина не онлайн.
+  const needsLastSeen = !person.lastSeenLabel && !person.online;
+  const handleEnter = React.useCallback(() => {
+    if (!needsLastSeen) return;
+    if (requestedRef.current === person.userId) return;
+    requestedRef.current = person.userId;
+    void loadLastSeenAt(person.userId).then(setFetchedLastSeen);
+  }, [needsLastSeen, person.userId]);
+
+  const lastSeenValue = person.online
+    ? "Зараз онлайн"
+    : (person.lastSeenLabel ?? (fetchedLastSeen ? formatLastSeenAgo(fetchedLastSeen) : null));
+  const lastSeenExact = fetchedLastSeen ? formatLastSeenExact(fetchedLastSeen) : undefined;
   const contacts = [person.email?.trim(), person.phone?.trim()].filter(Boolean).join(" · ");
 
   const card = (
@@ -165,7 +217,7 @@ export function PersonHoverCard({
         </div>
       ) : null}
 
-      {typeof person.activeTasks === "number" || person.lastSeenLabel ? (
+      {typeof person.activeTasks === "number" || lastSeenValue ? (
         <div className="mt-2.5 space-y-1 text-2xs text-muted-foreground">
           {typeof person.activeTasks === "number" ? (
             <div>
@@ -186,10 +238,12 @@ export function PersonHoverCard({
               ) : null}
             </div>
           ) : null}
-          {person.lastSeenLabel ? (
+          {lastSeenValue ? (
             <div className="flex items-center justify-between gap-3">
               <span>У мережі</span>
-              <span className="font-medium text-foreground">{person.lastSeenLabel}</span>
+              <span className="font-medium text-foreground" title={lastSeenExact}>
+                {lastSeenValue}
+              </span>
             </div>
           ) : null}
         </div>
@@ -203,7 +257,11 @@ export function PersonHoverCard({
 
   return (
     <HoverTip label={card} side={side} contentClassName="max-w-none rounded-[14px] p-3">
-      {children}
+      {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так
+          підпис встигає приїхати до того, як людина його шукатиме. */}
+      <span className="inline-flex" onMouseEnter={handleEnter} onFocusCapture={handleEnter}>
+        {children}
+      </span>
     </HoverTip>
   );
 }
