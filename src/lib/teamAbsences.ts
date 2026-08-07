@@ -15,7 +15,7 @@ export type { QuotaAbsenceKind };
 // RLS: читає будь-який учасник воркспейсу, пише owner/SEO. Self-service запити
 // (Фаза 2) додадуть insert самому за себе зі статусом pending.
 
-export type TeamAbsenceKind = "sick_leave" | "day_off" | "vacation" | "other";
+export type TeamAbsenceKind = "sick_leave" | "day_off" | "vacation" | "wfh" | "other";
 
 /**
  * pending → approved | declined; cancelled = заявник відкликав.
@@ -45,6 +45,7 @@ export const TEAM_ABSENCE_KIND_OPTIONS: Array<{ value: TeamAbsenceKind; label: s
   { value: "vacation", label: "Відпустка" },
   { value: "day_off", label: "Day-off" },
   { value: "sick_leave", label: "Лікарняний" },
+  { value: "wfh", label: "З дому" },
   { value: "other", label: "Інше" },
 ];
 
@@ -52,6 +53,7 @@ export const TEAM_ABSENCE_KIND_LABELS: Record<TeamAbsenceKind, string> = {
   sick_leave: "Лікарняний",
   day_off: "Day-off",
   vacation: "Відпустка",
+  wfh: "З дому",
   other: "Інше",
 };
 
@@ -74,6 +76,10 @@ export const TEAM_ABSENCE_KIND_TONE: Record<TeamAbsenceKind, Tone> = {
   // дні народження й річниці переїхали на festive, тож жовтий на сторінці
   // означає рівно одне — лікарняний.
   sick_leave: "warning",
+  // Зелена родина навмисно: зелений у нас означає «працює» (онлайн-крапка,
+  // чип «На місці») — і людина з дому САМЕ ПРАЦЮЄ. Це присутність в іншому
+  // місці, а не відсутність.
+  wfh: "success",
   other: "neutral",
 };
 
@@ -81,15 +87,29 @@ export const TEAM_ABSENCE_KIND_BADGE_CLASSES: Record<TeamAbsenceKind, string> = 
   sick_leave: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.sick_leave],
   day_off: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.day_off],
   vacation: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.vacation],
+  wfh: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.wfh],
   other: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.other],
 };
 
+/**
+ * «З дому» — присутність, а не відсутність. Один предикат на всі поверхні,
+ * що вирішують «людини немає»: аватарки, «Зараз відсутні», повернення,
+ * ескалації «тонких тижнів». Планер і журнал wfh ПОКАЗУЮТЬ — але як контур,
+ * не заливку.
+ */
+export function isPresenceKind(kind: TeamAbsenceKind): boolean {
+  return kind === "wfh";
+}
+
 export function isQuotaAbsenceKind(kind: TeamAbsenceKind): kind is QuotaAbsenceKind {
-  return kind !== "other";
+  // «Інше» — без ліміту за задумом; «з дому» — не відсутність узагалі.
+  return kind !== "other" && kind !== "wfh";
 }
 
 export function normalizeTeamAbsenceKind(value?: string | null): TeamAbsenceKind {
-  return value === "sick_leave" || value === "day_off" || value === "vacation" ? value : "other";
+  return value === "sick_leave" || value === "day_off" || value === "vacation" || value === "wfh"
+    ? value
+    : "other";
 }
 
 export function normalizeTeamAbsenceStatus(value?: string | null): TeamAbsenceStatus {

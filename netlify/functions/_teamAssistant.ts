@@ -492,10 +492,14 @@ export async function renderWhoIsAbsent(params: {
     (row) => row.start_date && row.end_date && label(row.user_id)
   );
 
+  // «З дому» — присутність, а не відсутність: окрема секція, не в лічильнику.
+  const isWfh = (row: AbsenceJournalRow) => kindOf(row) === "wfh";
+  const wfhToday = rows.filter((row) => isWfh(row) && row.start_date! <= todayKey);
+
   const today = rows
-    .filter((row) => row.start_date! <= todayKey)
+    .filter((row) => !isWfh(row) && row.start_date! <= todayKey)
     .sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
-  const startTomorrow = rows.filter((row) => row.start_date === tomorrowKey);
+  const startTomorrow = rows.filter((row) => !isWfh(row) && row.start_date === tomorrowKey);
   const backTomorrow = today.filter((row) => row.end_date === todayKey);
 
   const holidays = new Map(
@@ -524,6 +528,13 @@ export async function renderWhoIsAbsent(params: {
         `${emojiOf(row)} ${escapeTelegramHtml(label(row.user_id)!)} — ${kindLabel(row).toLowerCase()}, ${until}`
       );
     }
+  }
+
+  if (wfhToday.length > 0) {
+    lines.push(
+      "",
+      `🏠 <b>З дому</b>: ${wfhToday.map((row) => escapeTelegramHtml(label(row.user_id) as string)).join(" · ")}`
+    );
   }
 
   const tomorrow: string[] = [];

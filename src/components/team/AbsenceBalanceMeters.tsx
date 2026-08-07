@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { toneDotClass, toneTextClass } from "@/lib/statusTones";
 import {
+  isQuotaAbsenceKind,
   QUOTA_ABSENCE_KINDS,
   TEAM_ABSENCE_KIND_LABELS,
   TEAM_ABSENCE_KIND_TONE,
@@ -226,7 +227,8 @@ export function buildBalanceEntries(
 ): Record<QuotaAbsenceKind, BalanceEntry[]> {
   const map: Record<QuotaAbsenceKind, BalanceEntry[]> = { vacation: [], day_off: [], sick_leave: [] };
   absences.forEach((absence) => {
-    if (absence.kind === "other") return;
+    // Лише квотовані типи: «інше» без ліміту, «з дому» — не відсутність.
+    if (!isQuotaAbsenceKind(absence.kind)) return;
     if (absence.status !== "approved" && absence.status !== "pending") return;
     map[absence.kind].push({
       id: absence.id,

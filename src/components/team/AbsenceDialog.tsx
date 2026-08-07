@@ -264,7 +264,9 @@ export function AbsenceDialog({
             {isRequest
               ? sickAsFact
                 ? "Лікарняний погодження не потребує — фіксуємо одразу і повідомляємо керівництво."
-                : `Заявка піде на погодження${approverLabel ? ` — ${approverLabel}` : ""}. Скасувати можна, поки її не вирішили.`
+                : value.kind === "wfh"
+                  ? `Квоту не списує і норму не ріже. Заявка піде на погодження${approverLabel ? ` — ${approverLabel}` : ""}.`
+                  : `Заявка піде на погодження${approverLabel ? ` — ${approverLabel}` : ""}. Скасувати можна, поки її не вирішили.`
               : "Вихідні та свята всередині діапазону квоту не списують."}
           </DialogDescription>
         </DialogHeader>

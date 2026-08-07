@@ -56,6 +56,7 @@ const ABSENCE_KIND_LABELS: Record<string, string> = {
   vacation: "відпустка",
   day_off: "day-off",
   sick_leave: "лікарняний",
+  wfh: "робота з дому",
   other: "відсутність",
 };
 
@@ -200,6 +201,23 @@ function buildEventNotification(
   if (!absence) return null;
   const label = absenceLabel(absence.kind);
   const range = formatAbsenceRange(absence);
+  const wfh = (absence.kind ?? "").trim() === "wfh";
+
+  // «З дому» — присутність: людина працює, просто не в офісі. Тексти інші
+  // («працює з дому», а не «відсутній»), а «завершення» не шлемо взагалі —
+  // «повертається з дому» звучало б, ніби вона десь зникала.
+  if (wfh) {
+    if (kind === "absence-end") return null;
+    return {
+      title: `Сьогодні ${name} працює з дому`,
+      body:
+        kind === "absence-single"
+          ? "Один день. Задачі й дзвінки — як звичайно."
+          : `Період: ${range}. Задачі й дзвінки — як звичайно.`,
+      href: `/team?reminder=${encodeURIComponent(`team-event:absence-${kind === "absence-single" ? "single" : "start"}:${absence.id}:${todayKey}`)}`,
+      type: "info",
+    };
+  }
 
   if (kind === "absence-single") {
     return {

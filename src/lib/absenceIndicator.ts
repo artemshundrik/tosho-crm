@@ -1,4 +1,4 @@
-import { CalendarOff, Coffee, Plane, Thermometer, type LucideIcon } from "lucide-react";
+import { CalendarOff, Coffee, House, Plane, Thermometer, type LucideIcon } from "lucide-react";
 
 import type { Tone } from "@/lib/statusTones";
 
@@ -17,7 +17,7 @@ import type { Tone } from "@/lib/statusTones";
  * розраховувати. Маркер звільнення перебиває і те, і те.
  */
 
-export type AbsenceIndicatorKind = "vacation" | "sick_leave" | "day_off" | "other";
+export type AbsenceIndicatorKind = "vacation" | "sick_leave" | "day_off" | "wfh" | "other";
 
 export type AvatarAbsence = {
   kind: AbsenceIndicatorKind;
@@ -31,6 +31,9 @@ const KIND_TONE: Record<AbsenceIndicatorKind, Tone> = {
   vacation: "info",
   sick_leave: "warning",
   day_off: "accent",
+  // Зелена родина = «працює». На аватарки wfh не потрапляє ніколи
+  // (toAvatarAbsence віддає null), але чипи й планер його показують.
+  wfh: "success",
   other: "neutral",
 };
 
@@ -54,6 +57,7 @@ export const ABSENCE_KIND_ICONS: Record<AbsenceIndicatorKind, LucideIcon> = {
   vacation: Plane,
   sick_leave: Thermometer,
   day_off: Coffee,
+  wfh: House,
   other: CalendarOff,
 };
 
@@ -94,6 +98,7 @@ const KIND_LABEL: Record<AbsenceIndicatorKind, string> = {
   vacation: "у відпустці",
   sick_leave: "на лікарняному",
   day_off: "day-off",
+  wfh: "працює з дому",
   other: "відсутній",
 };
 
@@ -124,11 +129,19 @@ export function formatReturnDate(absence: AvatarAbsence): string {
   return shortDate(key);
 }
 
-/** Рядок директорії → проп аватарки. null, якщо людина на місці. */
+/**
+ * Рядок директорії → проп аватарки. null, якщо людина на місці.
+ *
+ * «З дому» ТЕЖ null навмисно: це присутність, а не відсутність — людина
+ * працює, на неї можна розраховувати, і кільце «не чіпай» збрехало б на
+ * кожній сторінці застосунку. Де wfh показувати треба (чип на картці,
+ * планер), туди він приходить іншим шляхом, не через аватарку.
+ */
 export function toAvatarAbsence(
   value?: { kind: string; startDate?: string | null; endDate?: string | null } | null
 ): AvatarAbsence | null {
   if (!value) return null;
+  if (value.kind === "wfh") return null;
   const kind =
     value.kind === "vacation" || value.kind === "sick_leave" || value.kind === "day_off"
       ? value.kind

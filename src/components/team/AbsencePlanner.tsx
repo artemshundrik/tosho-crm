@@ -369,11 +369,17 @@ function AbsencePlannerImpl({
                     ? () => onPickDay?.(person.userId, days[segment.startIndex])
                     : undefined;
 
+                // «З дому» — контур замість заливки: заливка означає «людини
+                // немає», а тут вона Є, просто не в офісі. Різниця зчитується
+                // боковим зором, дальтоніку допомагає іконка будиночка.
+                const wfhBar = segment.absence.kind === "wfh";
                 const barClass = cn(
                   "z-10 mx-0.5 flex h-[26px] items-center gap-1.5 self-center overflow-hidden rounded-full border text-3xs font-semibold",
                   "[container-type:inline-size] justify-center px-0",
                   "@min-[96px]:justify-start @min-[96px]:px-2",
-                  toneBadgeClass[tone],
+                  wfhBar
+                    ? "border-[1.5px] border-[hsl(var(--success-foreground)/0.45)] bg-transparent text-[hsl(var(--success-foreground))]"
+                    : toneBadgeClass[tone],
                   pending &&
                     "border-dashed [background-image:repeating-linear-gradient(45deg,transparent_0_5px,hsl(var(--card)/0.5)_5px_10px)]",
                   handleClick &&

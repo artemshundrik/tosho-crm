@@ -20,13 +20,14 @@ export type SubmittedAbsenceRow = {
   status: string;
 };
 
-export const SELF_SERVICE_ABSENCE_KINDS = new Set(["vacation", "day_off", "sick_leave"]);
+export const SELF_SERVICE_ABSENCE_KINDS = new Set(["vacation", "day_off", "sick_leave", "wfh"]);
 export const ABSENCE_DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 export const ABSENCE_KIND_LABELS: Record<string, string> = {
   vacation: "Відпустка",
   day_off: "Day-off",
   sick_leave: "Лікарняний",
+  wfh: "З дому",
   other: "Відсутність",
 };
 

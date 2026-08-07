@@ -18,7 +18,7 @@ function makeQueryRecorder() {
     calls.push({ method, args });
     return builder;
   };
-  ["select", "eq", "lte", "gte", "lt", "order", "in"].forEach((method) => {
+  ["select", "eq", "neq", "lte", "gte", "lt", "order", "in"].forEach((method) => {
     builder[method] = chain(method);
   });
   // Кінець ланцюга: код або await-ить білдер, або читає .data
@@ -50,6 +50,15 @@ describe("loadAbsences", () => {
 
     const eqCalls = recorder.calls.filter((call) => call.method === "eq");
     expect(eqCalls).toContainEqual({ method: "eq", args: ["status", "approved"] });
+  });
+
+  it("виключає «з дому» — людина працює, норма не ріжеться", async () => {
+    await loadAbsences({ workspaceId: "ws-1", userId: "user-1", monthKey: "2026-07" });
+
+    // Зняти цей фільтр = тиждень wfh зменшує норму і ПІДВИЩУЄ бонус за
+    // перевиконання. Це фінансовий важіль, тож контракт стережемо тестом.
+    const neqCalls = recorder.calls.filter((call) => call.method === "neq");
+    expect(neqCalls).toContainEqual({ method: "neq", args: ["kind", "wfh"] });
   });
 
   it("фільтрує по воркспейсу й людині та бере перетин діапазонів", async () => {

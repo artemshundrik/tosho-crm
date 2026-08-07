@@ -21,14 +21,15 @@ import {
 // CRM (scripts/team-absences-bot-rpc.sql). Сповіщення — тим самим кодом, що й
 // HTTP-подання (_lib/absenceSubmit.ts).
 
-export type AbsenceBotKind = "vacation" | "day_off" | "sick_leave";
+export type AbsenceBotKind = "vacation" | "day_off" | "sick_leave" | "wfh";
 
-const BOT_KINDS = new Set<AbsenceBotKind>(["vacation", "day_off", "sick_leave"]);
+const BOT_KINDS = new Set<AbsenceBotKind>(["vacation", "day_off", "sick_leave", "wfh"]);
 
 const KIND_EMOJI: Record<AbsenceBotKind, string> = {
   vacation: "🏖",
   day_off: "🌤",
   sick_leave: "🤒",
+  wfh: "🏠",
 };
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,11 +59,11 @@ export function kindMenuScreen(): { text: string; keyboard: InlineKeyboard } {
       "📝 <b>Оформити відсутність</b>",
       "",
       "🤒 Лікарняний — фіксується одразу, без погодження",
-      "🏖 Відпустка · 🌤 Day-off — заявка на рішення SEO",
+      "🏖 Відпустка · 🌤 Day-off · 🏠 З дому — заявка на рішення SEO",
       "",
       "Можна одразу текстом:",
       "<code>лікарняний 05.08–08.08</code>",
-      "<code>day-off 15.08</code>",
+      "<code>з дому 06.08</code>",
       "<code>відпустка 12.08–19.08</code>",
     ].join("\n"),
     keyboard: [
@@ -70,7 +71,10 @@ export function kindMenuScreen(): { text: string; keyboard: InlineKeyboard } {
         { text: "🤒 Лікарняний", callback_data: "abs:k:sick_leave" },
         { text: "🌤 Day-off", callback_data: "abs:k:day_off" },
       ],
-      [{ text: "🏖 Відпустка", callback_data: "abs:k:vacation" }],
+      [
+        { text: "🏖 Відпустка", callback_data: "abs:k:vacation" },
+        { text: "🏠 З дому", callback_data: "abs:k:wfh" },
+      ],
       [{ text: "🏝 Хто відсутній сьогодні", callback_data: "qa:who_is_absent" }],
     ],
   };
@@ -99,6 +103,27 @@ export function presetMenuScreen(kind: AbsenceBotKind): { text: string; keyboard
         [
           { text: "До кінця тижня", callback_data: "abs:s:sick_leave:0:eow" },
           { text: "Вчора–сьогодні", callback_data: "abs:s:sick_leave:-1:0" },
+        ],
+        [back],
+      ],
+    };
+  }
+
+  if (kind === "wfh") {
+    return {
+      text: [
+        "🏠 <b>З дому</b> — які дні?",
+        "",
+        "Квоту не списує й норму не ріже. Заявка піде на погодження SEO.",
+        "Інші дати — напиши: <code>з дому 06.08–08.08</code>",
+      ].join("\n"),
+      keyboard: [
+        [
+          { text: "Сьогодні", callback_data: "abs:s:wfh:0:0" },
+          { text: "Завтра", callback_data: "abs:s:wfh:1:1" },
+        ],
+        [
+          { text: "До кінця тижня", callback_data: "abs:s:wfh:0:eow" },
         ],
         [back],
       ],
@@ -190,6 +215,7 @@ const KIND_PATTERNS: Array<[RegExp, AbsenceBotKind]> = [
   [/^(лікарнян|хворі|болі|sick)/i, "sick_leave"],
   [/^(day[\s-]?off|дей[\s-]?оф|відгул)/i, "day_off"],
   [/^(відпустк|vacation)/i, "vacation"],
+  [/^(з\s?дому|вдома|дистанційн|віддалено|remote|wfh)/i, "wfh"],
 ];
 
 export type ParsedAbsenceText = {
@@ -237,8 +263,8 @@ export function parseAbsenceText(raw: string, now: Date): ParsedAbsenceText | nu
     // Питання, а не подання: «лікарняний у Олени?» має піти асистенту.
     // Ознаки питання — знак питання або довга фраза без жодної дати.
     if (/\?/.test(text) || text.split(/\s+/).length > 3) return null;
-    // «хворію» без дат — сьогоднішній лікарняний, найчастіший кейс.
-    if (kind === "sick_leave") return { kind, start: todayKey, end: todayKey };
+    // «хворію» / «з дому» без дат — найчастіший кейс «сьогодні».
+    if (kind === "sick_leave" || kind === "wfh") return { kind, start: todayKey, end: todayKey };
     return { kind, start: null, end: null };
   }
 

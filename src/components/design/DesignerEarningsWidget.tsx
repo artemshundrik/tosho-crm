@@ -73,6 +73,9 @@ const ABSENCE_CELL_CLASS: Record<TeamAbsenceKind, string> = {
   sick_leave: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.sick_leave],
   vacation: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.vacation],
   day_off: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.day_off],
+  // Сюди wfh не долітає: loadAbsences його виключає (норма не ріжеться),
+  // тож день «з дому» у смужці — звичайний робочий. Запис лише для типу.
+  wfh: toneBadgeClass[TEAM_ABSENCE_KIND_TONE.wfh],
   other: "border-dashed border-foreground/30 bg-muted",
 };
 

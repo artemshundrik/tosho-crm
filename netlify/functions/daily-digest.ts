@@ -691,8 +691,10 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     const rows = ((currentAbs.data ?? []) as AbsRow[]).filter(
       (r) => r.user_id && r.start_date && r.end_date && nameByUser.has(r.user_id)
     );
-    const outToday = rows.filter((r) => r.start_date! <= todayKey);
-    const startTomorrow = rows.filter((r) => r.start_date === tomorrowKey);
+    // «З дому» — присутність: у списку відсутніх їй не місце, окремий рядок.
+    const wfhToday = rows.filter((r) => (r.kind ?? "") === "wfh" && r.start_date! <= todayKey);
+    const outToday = rows.filter((r) => (r.kind ?? "") !== "wfh" && r.start_date! <= todayKey);
+    const startTomorrow = rows.filter((r) => (r.kind ?? "") !== "wfh" && r.start_date === tomorrowKey);
     const backTomorrow = outToday.filter((r) => r.end_date === todayKey);
 
     const absenceSection: string[] = [];
@@ -727,6 +729,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     const pendingRows = ((pendingAbs.data ?? []) as AbsRow[]).filter(
       (r) => r.user_id && nameByUser.has(r.user_id)
     );
+    if (wfhToday.length > 0) {
+      absenceSection.push(
+        `• 🏠 З дому: ${escapeTelegramHtml(wfhToday.map((r) => nameByUser.get(r.user_id!) ?? "—").join(" · "))}`
+      );
+    }
     if (pendingRows.length > 0) {
       const oldestDays = pendingRows.reduce((oldest, r) => {
         if (!r.created_at) return oldest;

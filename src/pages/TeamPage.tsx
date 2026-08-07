@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
+  House,
   LayoutGrid,
   Loader2,
   PartyPopper,
@@ -59,6 +60,8 @@ import {
   createTeamAbsence,
   decideAbsenceRequest,
   deleteTeamAbsence,
+  isPresenceKind,
+  isQuotaAbsenceKind,
   listTeamAbsencesInRange,
   loadAbsenceDecisionComments,
   updateTeamAbsence,
@@ -434,9 +437,9 @@ export function TeamPage() {
       byUser.set(
         userId,
         buildBalanceEntries(list, (absence) =>
-          absence.kind === "other"
-            ? 0
-            : countQuotaDaysInYear(absence.kind, absence, year, exceptions)
+          isQuotaAbsenceKind(absence.kind)
+            ? countQuotaDaysInYear(absence.kind, absence, year, exceptions)
+            : 0
         )
       );
     });
@@ -538,6 +541,9 @@ export function TeamPage() {
           (other) =>
             other.id !== request.id &&
             other.userId !== request.userId &&
+            // Колега «з дому» працює — блок відповідає на «чи не лишимось
+            // без рук», тож wfh тут не перетин.
+            !isPresenceKind(other.kind) &&
             (other.status === "approved" || other.status === "pending") &&
             other.startDate <= request.endDate &&
             other.endDate >= request.startDate
@@ -583,8 +589,22 @@ export function TeamPage() {
   const awayToday = useMemo(
     () =>
       activeMembers
-        .filter((member) => absenceTodayByUser.has(member.userId))
+        .filter((member) => {
+          const absence = absenceTodayByUser.get(member.userId);
+          // «З дому» — не відсутність: людина працює, у списку їй не місце.
+          return absence ? !isPresenceKind(absence.kind) : false;
+        })
         .map((member) => ({ member, absence: absenceTodayByUser.get(member.userId)! })),
+    [activeMembers, absenceTodayByUser]
+  );
+
+  /** Хто сьогодні працює з дому — окремий рядок під списком відсутніх. */
+  const wfhToday = useMemo(
+    () =>
+      activeMembers.filter((member) => {
+        const absence = absenceTodayByUser.get(member.userId);
+        return absence ? isPresenceKind(absence.kind) : false;
+      }),
     [activeMembers, absenceTodayByUser]
   );
 
@@ -603,8 +623,10 @@ export function TeamPage() {
 
     const list = enrichedMembers.filter((member) => {
       if (roleFilter !== "all" && (member.jobRole ?? "") !== roleFilter) return false;
-      if (peopleFilter === "away" && !absenceTodayByUser.has(member.userId)) return false;
-      if (peopleFilter === "present" && (member.inactive || absenceTodayByUser.has(member.userId))) return false;
+      const todaysAbsence = absenceTodayByUser.get(member.userId);
+      const awayNow = Boolean(todaysAbsence && !isPresenceKind(todaysAbsence.kind));
+      if (peopleFilter === "away" && !awayNow) return false;
+      if (peopleFilter === "present" && (member.inactive || awayNow)) return false;
       if (!normalizedSearch) return true;
       const haystack = [member.label, member.email ?? "", formatRoleLabel(member.jobRole)].join(" ").toLowerCase();
       return haystack.includes(normalizedSearch);
@@ -750,7 +772,8 @@ export function TeamPage() {
         });
       }
       const absence = absenceTodayByUser.get(member.userId);
-      if (absence) {
+      // «Повертається з дому» — нонсенс: людина й не зникала.
+      if (absence && !isPresenceKind(absence.kind)) {
         const back = addDaysKey(absence.endDate, 1);
         const daysUntil = eachDateKey(todayKey, back).length - 1;
         if (daysUntil >= 0 && daysUntil <= 45) {
@@ -963,7 +986,9 @@ export function TeamPage() {
             // Сама людина виключена навмисно: цей блок відповідає на питання
             // «чи не лишимось без рук», а не «чи не подаю я вдруге». Власний
             // конфлікт показує окремий рядок — findOwnConflict нижче.
+            // «З дому» — теж не перетин: руки на місці.
             absence.userId !== forUserId &&
+            !isPresenceKind(absence.kind) &&
             absence.startDate <= endDate &&
             absence.endDate >= startDate
         )
@@ -1295,7 +1320,11 @@ export function TeamPage() {
               </CardHeader>
               <CardContent className="space-y-2.5">
                 {awayToday.length === 0 ? (
-                  <EmptyRow icon={CheckCircle2} title="Вся команда на місці" compact />
+                  <EmptyRow
+                    icon={CheckCircle2}
+                    title={wfhToday.length > 0 ? "Відсутніх немає" : "Вся команда на місці"}
+                    compact
+                  />
                 ) : (
                   awayToday.map(({ member, absence }) => (
                     <div key={member.userId} className="flex items-center gap-2.5">
@@ -1314,6 +1343,17 @@ export function TeamPage() {
                     </div>
                   ))
                 )}
+                              {wfhToday.length > 0 ? (
+                  <div className="flex items-center gap-2 border-t border-border/40 pt-2.5 text-2xs">
+                    <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border", toneBadgeClass.success)}>
+                      <House className="h-2.5 w-2.5" aria-hidden />
+                    </span>
+                    <span className="text-muted-foreground">З дому:</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold text-foreground">
+                      {wfhToday.map((member) => member.label.split(" ")[0]).join(" · ")}
+                    </span>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -1545,7 +1585,7 @@ export function TeamPage() {
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden />
             ) : null}
             <div className="ml-auto flex flex-wrap items-center gap-3 text-2xs text-muted-foreground">
-              {(["vacation", "sick_leave", "day_off"] as TeamAbsenceKind[]).map((kind) => (
+              {(["vacation", "sick_leave", "day_off", "wfh"] as TeamAbsenceKind[]).map((kind) => (
                 <AbsenceKindChip key={kind} kind={kind} size="sm" />
               ))}
               <span className="inline-flex items-center gap-1.5">
@@ -1947,12 +1987,13 @@ function AbsenceRow({
   /** Перетини з іншими відсутностями + навантаження заявника — для рішення. */
   decideContext?: AbsenceDecideContext | null;
 }) {
-  // «Інше» квоти не має — рахуємо його робочими днями просто щоб показати обсяг.
-  const quotaKind = absence.kind === "other" ? "day_off" : absence.kind;
+  // «Інше» і «з дому» квоти не мають — рахуємо робочими днями, щоб показати
+  // обсяг («3 роб. дн.»), але рядка «залишиться N із M» для них не буде.
+  const quotaKind = isQuotaAbsenceKind(absence.kind) ? absence.kind : "day_off";
   const chargedDays = countQuotaDaysInYear(quotaKind, absence, year, exceptions);
   const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
   const restOnly = chargedDays === 0;
-  const bucket = balance && absence.kind !== "other" ? balance[absence.kind] : null;
+  const bucket = balance && isQuotaAbsenceKind(absence.kind) ? balance[absence.kind] : null;
 
   return (
     <div className="group flex items-center gap-3 py-2.5">
