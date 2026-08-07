@@ -161,7 +161,9 @@ export function ContentHeader({
 
       {/* View settings drawer: places + methods */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
+        {/* Сам дровер нічого не редагує — лише перелічує позиції й методи та
+            відкриває для них окремі модалки. Втрачати при закритті нічого. */}
+        <SheetContent side="right" dismissible className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Налаштування виду</SheetTitle>
             <SheetDescription>

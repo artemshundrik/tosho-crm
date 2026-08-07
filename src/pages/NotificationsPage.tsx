@@ -896,7 +896,9 @@ export default function NotificationsPage() {
           </div>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-h-[92dvh] w-[calc(100vw-0.75rem)] max-w-[760px] overflow-y-auto p-3 sm:max-h-[88dvh] sm:w-auto sm:p-6">
+        {/* Кожен тумблер зберігається одразу — кнопки «Зберегти» тут немає,
+            тож закриття кліком повз нічого не втрачає. */}
+        <DialogContent dismissible className="max-h-[92dvh] w-[calc(100vw-0.75rem)] max-w-[760px] overflow-y-auto p-3 sm:max-h-[88dvh] sm:w-auto sm:p-6">
           <DialogHeader>
             <DialogTitle>Налаштування сповіщень</DialogTitle>
             <DialogDescription className="hidden sm:block">

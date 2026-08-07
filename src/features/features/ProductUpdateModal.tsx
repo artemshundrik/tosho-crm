@@ -97,7 +97,9 @@ export function ProductUpdateModal() {
         if (!next) close();
       }}
     >
+      {/* Анонс оновлення — нічого не вводять, клік повз закриває. */}
       <DialogContent
+        dismissible
         className={cn(
           "gap-0 overflow-hidden p-0 sm:gap-0 sm:p-0",
           plan.kind === "poster" ? "max-w-[440px]" : "max-w-[560px]"

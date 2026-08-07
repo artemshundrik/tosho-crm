@@ -730,7 +730,8 @@ export function CustomerLeadQuickViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="top-[3vh] max-h-[92vh] max-w-[780px] translate-y-0 overflow-y-auto sm:top-[4vh]">
+      {/* Швидкий перегляд — лише читання, редагування живе в CustomerDialog. */}
+      <DialogContent dismissible className="top-[3vh] max-h-[92vh] max-w-[780px] translate-y-0 overflow-y-auto sm:top-[4vh]">
         <DialogHeader>
           <DialogTitle>Картка {entityKind === "lead" ? "ліда" : "замовника"}</DialogTitle>
           <DialogDescription>Швидкий перегляд пов’язаної сутності без переходу на сторінку замовників.</DialogDescription>

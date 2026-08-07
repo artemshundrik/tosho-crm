@@ -208,7 +208,8 @@ export function AbsenceYearReportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[820px]">
+      {/* Річний звіт — лише читання й копіювання. */}
+      <DialogContent dismissible className="max-w-[820px]">
         <DialogHeader>
           <DialogTitle>Відсутності за {year} рік</DialogTitle>
           <DialogDescription>

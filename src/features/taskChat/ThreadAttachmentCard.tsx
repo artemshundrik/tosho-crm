@@ -147,7 +147,8 @@ function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-fit max-w-[min(96vw,1100px)] gap-0 overflow-hidden p-0">
+      {/* Перегляд вкладення — закривати кліком повз тут природно, втрачати нічого. */}
+      <DialogContent dismissible className="max-h-[92vh] w-fit max-w-[min(96vw,1100px)] gap-0 overflow-hidden p-0">
         <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
             <FileText className="h-4 w-4" />

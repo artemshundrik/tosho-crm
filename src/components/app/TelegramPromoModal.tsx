@@ -112,7 +112,8 @@ export function TelegramPromoModal() {
         if (!next) dismiss();
       }}
     >
-      <DialogContent hideClose className="max-w-[400px] gap-0 overflow-hidden p-0 sm:gap-0 sm:p-0">
+      {/* Промо без хрестика: клік повз — основний спосіб його відпустити. */}
+      <DialogContent hideClose dismissible className="max-w-[400px] gap-0 overflow-hidden p-0 sm:gap-0 sm:p-0">
         <div className="relative">
           <img src="/brand/promo-telegram.png" alt="" className="block w-full" loading="eager" />
           <button

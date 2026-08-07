@@ -86,7 +86,8 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[900px] gap-0 overflow-hidden p-0 sm:gap-0 sm:p-0">
+      {/* Демо-тур: усе всередині — імітація, нічого не зберігається. */}
+      <DialogContent dismissible className="max-w-[900px] gap-0 overflow-hidden p-0 sm:gap-0 sm:p-0">
         {feature ? (
           <div className="grid md:grid-cols-[1fr_1.02fr]">
             {/* ── Ліворуч: історія ── */}
