@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
@@ -169,7 +169,7 @@ export function ContentHeader({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="mt-6 space-y-6">
+          <SheetBody className="-mx-6 space-y-6 px-6">
             {/* Places */}
             <section className="space-y-3">
               <div className="flex items-center gap-2">
@@ -237,7 +237,7 @@ export function ContentHeader({
                 </button>
               </div>
             </section>
-          </div>
+          </SheetBody>
         </SheetContent>
       </Sheet>
 

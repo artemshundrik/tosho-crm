@@ -29,8 +29,18 @@ const SheetOverlay = React.forwardRef<
 ))
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 
+/**
+ * Дровер — колонка з трьох частин: шапка, вміст, підвал.
+ *
+ * `flex flex-col` тут не косметика, а те, що взагалі робить шапку й підвал
+ * нерухомими. Раніше `overflow-y-auto` вішали на весь дровер, тож при прокрутці
+ * їхало все разом — і заголовок, і кнопки «Скасувати / Зберегти». `shrink-0` на
+ * шапці при цьому нічого не давав, бо батько не був flex-контейнером.
+ *
+ * Прокручується лише середина — див. `SheetBody`.
+ */
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
@@ -84,7 +94,7 @@ const SheetHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-2 text-center sm:text-left",
+      "flex shrink-0 flex-col space-y-2 text-center sm:text-left",
       className
     )}
     {...props}
@@ -92,13 +102,31 @@ const SheetHeader = ({
 )
 SheetHeader.displayName = "SheetHeader"
 
+/**
+ * Прокрутна середина дровера.
+ *
+ * Єдине місце, де має стояти `overflow-y-auto`. Якщо повісити його на
+ * `SheetContent`, поїде весь дровер разом із шапкою й підвалом.
+ *
+ * `min-h-0` обовʼязковий: flex-елемент за замовчуванням не стискається менше за
+ * свій вміст, тож без нього `flex-1` не обмежить висоту й прокрутки не буде —
+ * замість неї дровер просто виїде за екран.
+ */
+const SheetBody = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)} {...props} />
+)
+SheetBody.displayName = "SheetBody"
+
 const SheetFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex shrink-0 flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
       className
     )}
     {...props}
@@ -138,6 +166,7 @@ export {
   SheetClose,
   SheetContent,
   SheetHeader,
+  SheetBody,
   SheetFooter,
   SheetTitle,
   SheetDescription,

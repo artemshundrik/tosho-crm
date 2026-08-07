@@ -28,6 +28,7 @@ import {
   SheetDescription,
   SheetFooter,
   SheetHeader,
+  SheetBody,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -845,7 +846,7 @@ export default function SampleStockPage() {
           }
         }}
       >
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-[760px]">
+        <SheetContent className="w-full gap-0 p-0 sm:max-w-[760px]">
           <div className="shrink-0 border-b bg-muted/20 px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">
@@ -857,7 +858,7 @@ export default function SampleStockPage() {
             </SheetHeader>
           </div>
 
-          <div className="space-y-6 px-6 py-6">
+          <SheetBody className="space-y-6 px-6 py-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <label className="text-sm font-medium text-foreground">Назва</label>
@@ -973,8 +974,9 @@ export default function SampleStockPage() {
             </div>
 
             {formError ? <div className="text-sm text-destructive">{formError}</div> : null}
+          </SheetBody>
 
-            <SheetFooter className="border-t border-border/50 pt-4">
+          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                 Скасувати
               </Button>
@@ -982,8 +984,7 @@ export default function SampleStockPage() {
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {editingRow ? "Зберегти зміни" : "Створити товар"}
               </Button>
-            </SheetFooter>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
@@ -997,7 +998,7 @@ export default function SampleStockPage() {
           }
         }}
       >
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-[520px]">
+        <SheetContent className="w-full gap-0 p-0 sm:max-w-[520px]">
           <div className="border-b bg-muted/20 px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">{MOVEMENT_LABELS[movement.type]}</SheetTitle>
@@ -1005,7 +1006,7 @@ export default function SampleStockPage() {
             </SheetHeader>
           </div>
 
-          <div className="space-y-5 px-6 py-6">
+          <SheetBody className="space-y-5 px-6 py-6">
             {movementTarget ? (
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
@@ -1061,8 +1062,9 @@ export default function SampleStockPage() {
             </div>
 
             {movementError ? <div className="text-sm text-destructive">{movementError}</div> : null}
+          </SheetBody>
 
-            <SheetFooter className="border-t border-border/50 pt-4">
+          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setMovementTarget(null)} disabled={movementSaving}>
                 Скасувати
               </Button>
@@ -1070,8 +1072,7 @@ export default function SampleStockPage() {
                 {movementSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Застосувати
               </Button>
-            </SheetFooter>
-          </div>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 
