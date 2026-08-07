@@ -24,6 +24,17 @@ const formatLocal = (digits: string): string =>
     .filter(Boolean)
     .join(" ");
 
+/**
+ * «+380671234567» → «+380 67 123 45 67» для показу в списках і картках.
+ * Усе, що не схоже на повний український номер, віддаємо як є: у базі
+ * трапляються міські й закордонні, і псувати їх розбивкою 2-3-2-2 не можна.
+ */
+export const formatUaPhone = (value: string): string => {
+  const raw = (value ?? "").trim();
+  if (!/^\+?380\d{9}$/.test(raw.replace(/[\s()-]/g, ""))) return raw;
+  return `+380 ${formatLocal(toLocalDigits(raw))}`;
+};
+
 type PhoneInputProps = {
   value: string;
   onChange: (phone: string) => void;

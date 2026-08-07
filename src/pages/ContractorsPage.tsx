@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
@@ -22,6 +22,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { TagsInput, splitTags } from "@/components/ui/tags-input";
+import { PhoneListInput } from "@/components/ui/phone-list-input";
+import { formatUaPhone } from "@/components/ui/phone-input";
+import { DigitsInput } from "@/components/ui/digits-input";
 import { DateInput, TimeInput } from "@/components/ui/picker-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -30,6 +34,7 @@ import {
   SheetDescription,
   SheetFooter,
   SheetHeader,
+  SheetBody,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,6 +49,7 @@ import {
 } from "@/lib/reminderDateTime";
 import {
   Building2,
+  ChevronRight,
   Loader2,
   MoreHorizontal,
   PlusCircle,
@@ -51,6 +57,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { DeliveryPointsSection } from "@/components/customers/DeliveryPointsSection";
+import {
+  createEmptyCustomerDeliveryPoint,
+  parseCustomerDeliveryPoints,
+  serializeCustomerDeliveryPoints,
+  DELIVERY_POINT_TYPE_ICONS,
+  DELIVERY_POINT_TYPE_LABELS,
+  type CustomerDeliveryPoint,
+} from "@/lib/customerDeliveryPoints";
 
 type ContractorRow = {
   id: string;
@@ -58,10 +73,18 @@ type ContractorRow = {
   kind?: "contractor" | "supplier" | null;
   name?: string | null;
   services?: string | null;
+  phones?: string[] | null;
+  emails?: string[] | null;
+  website?: string | null;
+  edrpou?: string | null;
+  legal_name?: string | null;
+  ownership_type?: string | null;
   contact_name?: string | null;
-  phone?: string | null;
   address?: string | null;
+  /** Сирий текст доставки до міграції на `delivery_points`. Лишився в 5 записів. */
   delivery_info?: string | null;
+  /** jsonb-масив у форматі `customerDeliveryPoints` — спільному із замовниками. */
+  delivery_points?: unknown;
   reminder_at?: string | null;
   reminder_repeat?: string | null;
   reminder_comment?: string | null;
@@ -72,17 +95,27 @@ type ContractorRow = {
 
 type ContractorFormState = {
   name: string;
+  legalName: string;
+  ownershipType: string;
+  edrpou: string;
   services: string;
+  phones: string[];
+  emails: string;
+  website: string;
   contactName: string;
-  phone: string;
   address: string;
   deliveryInfo: string;
+  deliveryPoints: CustomerDeliveryPoint[];
   reminderDate: string;
   reminderTime: string;
   reminderRepeat: ContractorReminderRepeat;
   reminderComment: string;
   notes: string;
 };
+
+/** Форми власності, що реально трапляються в базі контрагентів. */
+const OWNERSHIP_OPTIONS = ["ТОВ", "ТзОВ", "ФОП", "ПП", "ПрАТ", "АТ"];
+const OWNERSHIP_NONE = "__none__";
 
 const ALL_SERVICES_FILTER = "__all__";
 const CONTRACTOR_COLUMNS = [
@@ -91,10 +124,16 @@ const CONTRACTOR_COLUMNS = [
   "kind",
   "name",
   "services",
+  "phones",
+  "emails",
+  "website",
+  "edrpou",
+  "legal_name",
+  "ownership_type",
   "contact_name",
-  "phone",
   "address",
   "delivery_info",
+  "delivery_points",
   "reminder_at",
   "reminder_repeat",
   "reminder_comment",
@@ -116,17 +155,453 @@ function normalizeReminderRepeat(value?: string | null): ContractorReminderRepea
   return value === "weekly" || value === "monthly" ? value : "none";
 }
 
+/** Скільки послуг влазить у рядок до «+N». У базі максимум 4, тож поки не спрацьовує. */
+const SERVICE_TAGS_IN_ROW = 4;
+
+const stopRowClick = (event: { stopPropagation: () => void }) => event.stopPropagation();
+
+/** «·» між шматками мета-рядка. */
+function joinWithDots(parts: ReactNode[]) {
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 ? <span className="mx-1.5 opacity-50">·</span> : null}
+      {part}
+    </Fragment>
+  ));
+}
+
+/** «НП №327», «Поштомат №7966» — згорнута точка доставки для рядка таблиці. */
+function formatDeliveryPointBadge(point: CustomerDeliveryPoint) {
+  const number = point.address.match(/№\s*(\d+)/)?.[1];
+  if (point.type === "np_branch") return number ? `НП №${number}` : `НП, ${point.city || "відділення"}`;
+  if (point.type === "np_postomat") return number ? `Поштомат №${number}` : "Поштомат НП";
+  if (point.type === "np_courier") return point.city ? `Кур'єр НП, ${point.city}` : "Кур'єр НП";
+  return point.city || DELIVERY_POINT_TYPE_LABELS[point.type];
+}
+
+/** Пошта й сайт одним списком: обидва — клікабельні адреси, а не текст. */
+function collectContractorLinks(row: ContractorRow) {
+  const website = row.website?.trim() ?? "";
+  return [
+    ...(row.emails ?? []).map((email) => ({ key: email, label: email, href: `mailto:${email}` })),
+    ...(website
+      ? [{ key: website, label: website, href: website.startsWith("http") ? website : `https://${website}` }]
+      : []),
+  ];
+}
+
+function MetaLink({ label, href }: { label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      target={href.startsWith("mailto:") ? undefined : "_blank"}
+      rel={href.startsWith("mailto:") ? undefined : "noreferrer"}
+      onClick={stopRowClick}
+      className="text-primary hover:underline underline-offset-2"
+    >
+      {label}
+    </a>
+  );
+}
+
+/**
+ * Другий рядок під назвою: контакт, адреса, ЄДРПОУ, юрособа.
+ * Ці поля потрібні, щоб упізнати контрагента, а не щоб порівнювати рядки між
+ * собою, — окремі колонки лише розганяли таблицю вшир і різали кожну до
+ * трьох слів. Тут вони живуть текстом і місця займають рівно стільки, скільки є.
+ */
+function ContractorMeta({ row }: { row: ContractorRow }) {
+  const contact = splitIntoLines(row.contact_name).join(", ");
+  const address = splitIntoLines(row.address).join(", ");
+  const edrpou = row.edrpou?.trim() ?? "";
+  const legalName = row.legal_name?.trim() ?? "";
+  const links = collectContractorLinks(row);
+
+  // Пошта підіймається в перший рядок, тільки коли адреси немає: у «Валко» й
+  // «Кліше» адреси не існує взагалі, і без цього перший рядок був би з самого
+  // імені, а другий — напівпорожній.
+  const inlineLink = !address && links.length > 0 ? links[0] : null;
+  const restLinks = inlineLink ? links.slice(1) : links;
+
+  const primary: ReactNode[] = [
+    contact || null,
+    address || null,
+    inlineLink ? <MetaLink key={inlineLink.key} label={inlineLink.label} href={inlineLink.href} /> : null,
+  ].filter(Boolean) as ReactNode[];
+
+  const secondary: ReactNode[] = [
+    edrpou ? (
+      <span key="edrpou" className="font-mono text-2xs">
+        {row.ownership_type === "ФОП" ? "ІПН" : "ЄДРПОУ"} {edrpou}
+      </span>
+    ) : null,
+    legalName || null,
+    ...restLinks.map((link) => <MetaLink key={link.key} label={link.label} href={link.href} />),
+  ].filter(Boolean) as ReactNode[];
+
+  if (primary.length === 0 && secondary.length === 0) return null;
+
+  return (
+    <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+      {primary.length > 0 ? <div>{joinWithDots(primary)}</div> : null}
+      {secondary.length > 0 ? <div>{joinWithDots(secondary)}</div> : null}
+    </div>
+  );
+}
+
+/** Послуги пілюлями — той самий вигляд, що й у формі, щоб таблиця й дровер збігались. */
+function ServiceTags({ value, limit }: { value?: string | null; limit?: number }) {
+  const tags = splitTags(value ?? "");
+  if (tags.length === 0) return <span className="text-muted-foreground">—</span>;
+  const shown = limit ? tags.slice(0, limit) : tags;
+  const hidden = tags.length - shown.length;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
+        >
+          {tag}
+        </span>
+      ))}
+      {hidden > 0 ? <span className="self-center text-2xs text-muted-foreground">+{hidden}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * Колонка «Звʼязок»: телефони й згорнута точка доставки.
+ * Телефони лишились окремою колонкою, бо саме їх шукають найчастіше, і кожен
+ * має бути клікабельним. Пошта й сайт пішли в мета-рядок — по них не дзвонять.
+ */
+function ContactColumn({ row, points }: { row: ContractorRow; points: CustomerDeliveryPoint[] }) {
+  const phones = row.phones ?? [];
+  const [firstPoint, ...restPoints] = points;
+
+  if (phones.length === 0 && !firstPoint) return <span className="text-muted-foreground">—</span>;
+
+  const PointIcon = firstPoint ? DELIVERY_POINT_TYPE_ICONS[firstPoint.type] : null;
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      {phones.map((phone) => (
+        <a
+          key={phone}
+          href={`tel:${phone}`}
+          onClick={stopRowClick}
+          className="text-xs tabular-nums text-foreground hover:text-primary"
+        >
+          {formatUaPhone(phone)}
+        </a>
+      ))}
+      {firstPoint && PointIcon ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground">
+          <PointIcon className="h-3 w-3 shrink-0" aria-hidden />
+          {formatDeliveryPointBadge(firstPoint)}
+          {restPoints.length > 0 ? <span className="opacity-70">+{restPoints.length}</span> : null}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xs leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Розгорнутий рядок: те, що свідомо не влізло в три колонки.
+ * Показуємо лише непорожнє — інакше половина панелі була б із «Не вказано».
+ * Виняток — точки доставки й реквізити: їхня відсутність сама по собі є
+ * відповіддю на питання «а куди це везти» й «від кого рахунок».
+ */
+function ContractorDetail({
+  row,
+  points,
+  onEdit,
+  onDelete,
+}: {
+  row: ContractorRow;
+  points: CustomerDeliveryPoint[];
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const tags = splitTags(row.services ?? "");
+  const legalName = row.legal_name?.trim() ?? "";
+  const edrpou = row.edrpou?.trim() ?? "";
+  const ownership = row.ownership_type?.trim() ?? "";
+  const legacyDelivery = splitIntoLines(row.delivery_info);
+
+  return (
+    <div className="rounded-inner bg-muted/40 p-3.5">
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+        <DetailField label="Точки доставки">
+          {points.length === 0 ? (
+            <span className="text-muted-foreground">Не вказано</span>
+          ) : (
+            <div className="space-y-1.5">
+              {points.map((point) => {
+                const recipient = [point.contactName, formatUaPhone(point.contactPhone)].filter(Boolean).join(" · ");
+                return (
+                  <div key={point.id}>
+                    <span className="font-medium">
+                      {[point.city, point.address].filter(Boolean).join(", ") ||
+                        DELIVERY_POINT_TYPE_LABELS[point.type]}
+                    </span>
+                    {recipient ? <span className="text-muted-foreground"> — {recipient}</span> : null}
+                    {point.comment ? (
+                      <div className="text-muted-foreground">{point.comment}</div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DetailField>
+
+        <DetailField label="Реквізити">
+          {legalName || edrpou ? (
+            <div className="space-y-0.5">
+              {/* Форму власності не дублюємо: юрназву часто вписують уже разом
+                  із нею — «ТОВ «Планета Прінт»», а не «Планета Прінт». */}
+              {legalName ? (
+                <div>{ownership && !legalName.startsWith(ownership) ? `${ownership} ${legalName}` : legalName}</div>
+              ) : null}
+              {edrpou ? (
+                <div className="font-mono text-2xs">
+                  {ownership === "ФОП" ? "ІПН" : "ЄДРПОУ"} {edrpou}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">Не вказано</span>
+          )}
+        </DetailField>
+
+        {tags.length > SERVICE_TAGS_IN_ROW ? (
+          <DetailField label="Усі послуги">
+            <ServiceTags value={row.services} />
+          </DetailField>
+        ) : null}
+
+        {row.reminder_at ? (
+          <DetailField label="Нагадування">
+            <div>
+              {new Date(row.reminder_at).toLocaleString("uk-UA", { dateStyle: "medium", timeStyle: "short" })}
+              {row.reminder_repeat && row.reminder_repeat !== "none"
+                ? ` · ${CONTRACTOR_REMINDER_REPEAT_LABEL[normalizeReminderRepeat(row.reminder_repeat)]}`
+                : null}
+            </div>
+            {row.reminder_comment ? (
+              <div className="text-muted-foreground">{row.reminder_comment}</div>
+            ) : null}
+          </DetailField>
+        ) : null}
+
+        {legacyDelivery.length > 0 ? (
+          <DetailField label="Стара нотатка про доставку">
+            <div className="whitespace-pre-wrap text-muted-foreground">{legacyDelivery.join("\n")}</div>
+          </DetailField>
+        ) : null}
+
+        {splitIntoLines(row.notes).length > 0 ? (
+          <DetailField label="Нотатки">{renderLinkedLines(row.notes)}</DetailField>
+        ) : null}
+      </div>
+
+      <div className="mt-3.5 flex justify-end gap-2 border-t border-border/40 pt-3">
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onEdit}>
+          Редагувати
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 text-xs text-destructive hover:text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Видалити
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RowActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEdit}>Редагувати</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+          <Trash2 className="mr-2 h-4 w-4" />
+          Видалити
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Одна таблиця на обидві вкладки — підрядники й постачальники відрізняються
+ * лише заголовком першої колонки, а жили двома копіями тієї самої розмітки.
+ *
+ * Три колонки замість шести: контакт, адреса та ЄДРПОУ пішли другим рядком під
+ * назву, решта — у розкриття рядка. Мобільні картки тепер теж спільні, тож
+ * вкладка постачальників уперше має вигляд на телефоні.
+ */
+function ContractorsTable({
+  rows,
+  title,
+  expandedId,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  rows: ContractorRow[];
+  title: string;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  onEdit: (row: ContractorRow) => void;
+  onDelete: (row: ContractorRow) => void;
+}) {
+  return (
+    <>
+      <div className="space-y-2.5 md:hidden">
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="rounded-inner border border-border bg-card p-3.5"
+            onClick={() => onEdit(row)}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium leading-snug">{row.name ?? "Без назви"}</div>
+                <ContractorMeta row={row} />
+              </div>
+              <div className="shrink-0" onClick={stopRowClick}>
+                <RowActions onEdit={() => onEdit(row)} onDelete={() => onDelete(row)} />
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              <ServiceTags value={row.services} />
+              <ContactColumn row={row} points={parseCustomerDeliveryPoints(row.delivery_points)} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block">
+        <Table
+          variant="list"
+          size="md"
+          stickyHeader
+          // Комірка розкриття щільно тулиться до свого рядка: padding таблиці
+          // (`[&_td]:py-3.5`) специфічніший за клас на самій комірці, тож
+          // перебиваємо його теж із рівня таблиці, через data-атрибут.
+          className="[&_td[data-slot=detail]]:pt-0 [&_td[data-slot=detail]]:pb-4"
+        >
+          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md">
+            <TableRow>
+              <TableHead className="w-[46%]">{title}</TableHead>
+              <TableHead className="w-[26%]">Послуги</TableHead>
+              <TableHead className="w-[20%]">Звʼязок</TableHead>
+              <TableHead className="w-[92px]" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => {
+              const points = parseCustomerDeliveryPoints(row.delivery_points);
+              const expanded = expandedId === row.id;
+              return (
+                <Fragment key={row.id}>
+                  <TableRow
+                    className={cn("group cursor-pointer", expanded && "border-b-0")}
+                    onClick={() => onToggle(row.id)}
+                  >
+                    <TableCell className="align-top">
+                      <div className="min-w-0">
+                        <div className="font-medium leading-snug">{row.name ?? "Без назви"}</div>
+                        <ContractorMeta row={row} />
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <ServiceTags value={row.services} limit={SERVICE_TAGS_IN_ROW} />
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <ContactColumn row={row} points={points} />
+                    </TableCell>
+                    <TableCell className="align-top" onClick={stopRowClick}>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                          <RowActions onEdit={() => onEdit(row)} onDelete={() => onDelete(row)} />
+                        </div>
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-label={expanded ? "Згорнути рядок" : "Розгорнути рядок"}
+                          onClick={() => onToggle(row.id)}
+                          className="grid h-8 w-6 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                        >
+                          <ChevronRight
+                            className={cn("h-4 w-4 transition-transform", expanded && "rotate-90")}
+                            aria-hidden
+                          />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+
+                  {expanded ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell data-slot="detail" colSpan={4}>
+                        <ContractorDetail
+                          row={row}
+                          points={points}
+                          onEdit={() => onEdit(row)}
+                          onDelete={() => onDelete(row)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
 function normalizeKind(value?: string | null): "contractor" | "supplier" {
   return value === "supplier" ? "supplier" : "contractor";
 }
 
 const EMPTY_FORM: ContractorFormState = {
   name: "",
+  legalName: "",
+  ownershipType: "",
+  edrpou: "",
   services: "",
+  phones: [],
+  emails: "",
+  website: "",
   contactName: "",
-  phone: "",
   address: "",
   deliveryInfo: "",
+  deliveryPoints: [],
   reminderDate: "",
   reminderTime: "",
   reminderRepeat: "none",
@@ -164,33 +639,30 @@ function normalizeMultilineValue(value?: string | null) {
     .join("\n");
 }
 
+/**
+ * Рядок бази → стан форми.
+ *
+ * Тут раніше жила евристика «якщо в контакті є цифри, а в телефоні немає —
+ * поля переплутані місцями, міняємо». Вона мала сенс, доки телефони лежали
+ * вільним текстом. Після переїзду на `phones[]` колонка `phone` порожня в
+ * усіх записах, тож умова стала завжди істинною для будь-якого контакту з
+ * цифрою — і при збереженні затирала імʼя. Зловив на «Голден Арт»
+ * («1.Шевчук Андрій, 2.Сергій»). Прибрано разом зі старим полем.
+ */
 function normalizeFormFromRow(row?: ContractorRow | null): ContractorFormState {
-  const contact = normalizeMultilineValue(row?.contact_name);
-  const phone = normalizeMultilineValue(row?.phone);
-
-  if (/\d/.test(contact) && !/\d/.test(phone)) {
-    return {
-      name: row?.name?.trim() ?? "",
-      services: row?.services?.trim() ?? "",
-      contactName: phone,
-      phone: contact,
-      address: normalizeMultilineValue(row?.address),
-      deliveryInfo: normalizeMultilineValue(row?.delivery_info),
-      reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
-      reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
-      reminderRepeat: normalizeReminderRepeat(row?.reminder_repeat),
-      reminderComment: normalizeMultilineValue(row?.reminder_comment),
-      notes: normalizeMultilineValue(row?.notes),
-    };
-  }
-
   return {
     name: row?.name?.trim() ?? "",
     services: row?.services?.trim() ?? "",
-    contactName: contact,
-    phone,
+    legalName: row?.legal_name?.trim() ?? "",
+    ownershipType: row?.ownership_type?.trim() ?? "",
+    edrpou: row?.edrpou?.trim() ?? "",
+    phones: row?.phones ?? [],
+    emails: (row?.emails ?? []).join(", "),
+    website: row?.website?.trim() ?? "",
+    contactName: normalizeMultilineValue(row?.contact_name),
     address: normalizeMultilineValue(row?.address),
     deliveryInfo: normalizeMultilineValue(row?.delivery_info),
+    deliveryPoints: parseCustomerDeliveryPoints(row?.delivery_points),
     reminderDate: getLocalReminderDateInputValue(row?.reminder_at),
     reminderTime: getLocalReminderTimeInputValue(row?.reminder_at),
     reminderRepeat: normalizeReminderRepeat(row?.reminder_repeat),
@@ -252,6 +724,8 @@ export default function ContractorsPage() {
   const [activeTab, setActiveTab] = useState<"contractors" | "suppliers">("contractors");
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState(ALL_SERVICES_FILTER);
+  /** Розгорнутий рядок один: кілька відкритих деталей перетворюють таблицю на список карток. */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<ContractorRow | null>(null);
@@ -313,14 +787,19 @@ export default function ContractorsPage() {
   const serviceOptions = useMemo(() => {
     const currentKind = activeTab === "suppliers" ? "supplier" : "contractor";
 
-    return Array.from(
-      new Set(
-        rows
-          .filter((row) => normalizeKind(row.kind) === currentKind)
-          .map((row) => row.services?.trim() ?? "")
-          .filter(Boolean)
-      )
-    ).sort((left, right) => left.localeCompare(right, "uk"));
+    // Розбираємо на окремі теги: у базі 12 із 38 підрядників уже пишуть кілька
+    // послуг через кому, і як цілий рядок вони ніколи не збігалися з фільтром.
+    // Дублі гасимо без регістру, щоб «Дерево» і «дерево» не жили окремо.
+    const byLower = new Map<string, string>();
+    rows
+      .filter((row) => normalizeKind(row.kind) === currentKind)
+      .flatMap((row) => splitTags(row.services ?? ""))
+      .forEach((tag) => {
+        const key = tag.toLocaleLowerCase("uk");
+        if (!byLower.has(key)) byLower.set(key, tag);
+      });
+
+    return Array.from(byLower.values()).sort((left, right) => left.localeCompare(right, "uk"));
   }, [activeTab, rows]);
 
   const filteredRows = useMemo(() => {
@@ -329,17 +808,32 @@ export default function ContractorsPage() {
 
     return rows.filter((row) => {
       if (normalizeKind(row.kind) !== currentKind) return false;
-      const matchesService = serviceFilter === ALL_SERVICES_FILTER || (row.services?.trim() ?? "") === serviceFilter;
+      const matchesService =
+        serviceFilter === ALL_SERVICES_FILTER ||
+        splitTags(row.services ?? "").some(
+          (tag) => tag.toLocaleLowerCase("uk") === serviceFilter.toLocaleLowerCase("uk")
+        );
       if (!matchesService) return false;
       if (!normalizedSearch) return true;
+
+      // Точки доставки теж шукані: «327» або «Малехів» — це те, як менеджер
+      // згадує контрагента, коли треба відправити посилку.
+      const deliveryPoints = parseCustomerDeliveryPoints(row.delivery_points)
+        .map((point) => [point.city, point.address, point.contactName, point.contactPhone].join(" "))
+        .join(" ");
 
       const haystack = [
         row.name,
         row.services,
         row.contact_name,
-        row.phone,
+        (row.phones ?? []).join(" "),
+        (row.emails ?? []).join(" "),
+        row.website,
         row.address,
+        row.edrpou,
+        row.legal_name,
         row.delivery_info,
+        deliveryPoints,
         row.notes,
       ]
         .filter(Boolean)
@@ -378,6 +872,45 @@ export default function ContractorsPage() {
   const clearFilters = useCallback(() => {
     setSearch("");
     setServiceFilter(ALL_SERVICES_FILTER);
+  }, []);
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
+  }, []);
+
+  const addDeliveryPoint = useCallback(() => {
+    setForm((current) => ({
+      ...current,
+      deliveryPoints: [
+        ...current.deliveryPoints,
+        { ...createEmptyCustomerDeliveryPoint(), isDefault: current.deliveryPoints.length === 0 },
+      ],
+    }));
+  }, []);
+
+  const removeDeliveryPoint = useCallback((index: number) => {
+    setForm((current) => {
+      const next = current.deliveryPoints.filter((_, i) => i !== index);
+      // Якщо видалили основну точку — основною стає перша з решти.
+      if (next.length > 0 && !next.some((point) => point.isDefault)) {
+        next[0] = { ...next[0], isDefault: true };
+      }
+      return { ...current, deliveryPoints: next };
+    });
+  }, []);
+
+  const updateDeliveryPoint = useCallback((index: number, patch: Partial<CustomerDeliveryPoint>) => {
+    setForm((current) => ({
+      ...current,
+      deliveryPoints: current.deliveryPoints.map((point, i) => (i === index ? { ...point, ...patch } : point)),
+    }));
+  }, []);
+
+  const setDefaultDeliveryPoint = useCallback((index: number) => {
+    setForm((current) => ({
+      ...current,
+      deliveryPoints: current.deliveryPoints.map((point, i) => ({ ...point, isDefault: i === index })),
+    }));
   }, []);
 
   const headerActions = useMemo(() => (
@@ -473,10 +1006,16 @@ export default function ContractorsPage() {
       kind: editingRow?.id ? normalizeKind(editingRow.kind) : (activeTab === "suppliers" ? "supplier" : "contractor"),
       name: form.name.trim(),
       services: form.services.trim() || null,
+      legal_name: form.legalName.trim() || null,
+      ownership_type: form.ownershipType.trim() || null,
+      edrpou: form.edrpou.trim() || null,
+      phones: form.phones,
+      emails: splitTags(form.emails),
+      website: form.website.trim() || null,
       contact_name: form.contactName.trim() || null,
-      phone: form.phone.trim() || null,
       address: form.address.trim() || null,
       delivery_info: form.deliveryInfo.trim() || null,
+      delivery_points: serializeCustomerDeliveryPoints(form.deliveryPoints),
       reminder_at: buildReminderAtIso(form.reminderDate, form.reminderTime),
       // Періодичність без дати нагадування безглузда — прокручувати нема від чого.
       reminder_repeat:
@@ -576,135 +1115,14 @@ export default function ContractorsPage() {
                   : "За цими фільтрами нічого не знайдено."}
               </div>
             ) : (
-              <>
-                <div className="space-y-3 md:hidden">
-                  {filteredRows.map((row) => (
-                    <div
-                      key={row.id}
-                      className="rounded-inner border border-border bg-card p-4"
-                      onClick={() => openEdit(row)}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{row.name ?? "Без назви"}</div>
-                          <div className="truncate text-xs text-muted-foreground">{row.services?.trim() || "Послугу не вказано"}</div>
-                        </div>
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => setDeleteTarget(row)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Видалити
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid gap-3 text-sm">
-                        <div>
-                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Контакт</div>
-                          {renderLinkedLines(row.contact_name)}
-                        </div>
-                        <div>
-                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Телефон / реквізити</div>
-                          {renderLinkedLines(row.phone)}
-                        </div>
-                        <div>
-                          <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Адреса / сайт</div>
-                          {renderLinkedLines(row.address)}
-                        </div>
-                        {splitIntoLines(row.delivery_info).length > 0 ? (
-                          <div>
-                            <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Нова Пошта / доставка</div>
-                            {renderLinkedLines(row.delivery_info)}
-                          </div>
-                        ) : null}
-                        {splitIntoLines(row.notes).length > 0 ? (
-                          <div>
-                            <div className="mb-1 text-xs uppercase tracking-caps-tight text-muted-foreground">Нотатки</div>
-                            {renderLinkedLines(row.notes)}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="hidden md:block">
-                  <Table variant="list" size="md">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[34%] pl-6">Підрядник</TableHead>
-                        <TableHead className="w-[92px] px-2">Послуги</TableHead>
-                        <TableHead className="w-[30%] pl-2">Контакт</TableHead>
-                        <TableHead className="w-[18%]">Телефон / реквізити</TableHead>
-                        <TableHead className="w-[16%]">Адреса / сайт</TableHead>
-                        <TableHead className="w-[16%]">Нова Пошта</TableHead>
-                        <TableHead className="w-12" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredRows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="group cursor-pointer hover:bg-muted/10"
-                          onClick={() => openEdit(row)}
-                        >
-                          <TableCell className="pl-6 align-top">
-                            <div className="min-w-0">
-                              <div className="font-medium">{row.name ?? "Без назви"}</div>
-                              {row.notes?.trim() ? (
-                                <div className="line-clamp-2 text-xs text-muted-foreground">{row.notes}</div>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-top px-2 whitespace-pre-wrap break-words">
-                            {row.services?.trim() || <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="align-top pl-2">{renderLinkedLines(row.contact_name)}</TableCell>
-                          <TableCell className="align-top">{renderLinkedLines(row.phone)}</TableCell>
-                          <TableCell className="align-top">{renderLinkedLines(row.address)}</TableCell>
-                          <TableCell className="align-top">{renderLinkedLines(row.delivery_info)}</TableCell>
-                          <TableCell
-                            className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => setDeleteTarget(row)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Видалити
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </>
+              <ContractorsTable
+                rows={filteredRows}
+                title="Контрагент"
+                expandedId={expandedId}
+                onToggle={toggleExpanded}
+                onEdit={openEdit}
+                onDelete={setDeleteTarget}
+              />
             )}
           </div>
         </TabsContent>
@@ -727,69 +1145,14 @@ export default function ContractorsPage() {
                 За цими фільтрами нічого не знайдено.
               </div>
             ) : (
-              <div className="hidden md:block">
-                <Table variant="list" size="md">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[34%] pl-6">Постачальник</TableHead>
-                      <TableHead className="w-[92px] px-2">Послуги</TableHead>
-                      <TableHead className="w-[30%] pl-2">Контакт</TableHead>
-                      <TableHead className="w-[18%]">Телефон / реквізити</TableHead>
-                      <TableHead className="w-[16%]">Адреса / сайт</TableHead>
-                      <TableHead className="w-[16%]">Нова Пошта</TableHead>
-                      <TableHead className="w-12" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRows.map((row) => (
-                      <TableRow
-                        key={`supplier-${row.id}`}
-                        className="group cursor-pointer hover:bg-muted/10"
-                        onClick={() => openEdit(row)}
-                        >
-                          <TableCell className="pl-6 align-top">
-                            <div className="min-w-0">
-                              <div className="font-medium">{row.name ?? "Без назви"}</div>
-                              {row.notes?.trim() ? (
-                                <div className="line-clamp-2 text-xs text-muted-foreground">{row.notes}</div>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        <TableCell className="align-top px-2 whitespace-pre-wrap break-words">
-                          {row.services?.trim() || <span className="text-muted-foreground">—</span>}
-                        </TableCell>
-                        <TableCell className="align-top pl-2">{renderLinkedLines(row.contact_name)}</TableCell>
-                        <TableCell className="align-top">{renderLinkedLines(row.phone)}</TableCell>
-                        <TableCell className="align-top">{renderLinkedLines(row.address)}</TableCell>
-                        <TableCell className="align-top">{renderLinkedLines(row.delivery_info)}</TableCell>
-                        <TableCell
-                          className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => setDeleteTarget(row)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Видалити
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <ContractorsTable
+                rows={filteredRows}
+                title="Постачальник"
+                expandedId={expandedId}
+                onToggle={toggleExpanded}
+                onEdit={openEdit}
+                onDelete={setDeleteTarget}
+              />
             )}
           </div>
         </TabsContent>
@@ -806,7 +1169,7 @@ export default function ContractorsPage() {
           }
         }}
       >
-        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-[760px]">
+        <SheetContent className="w-full gap-0 p-0 sm:max-w-[760px]">
           <div className="shrink-0 border-b bg-muted/20 px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">
@@ -820,7 +1183,7 @@ export default function ContractorsPage() {
             </SheetHeader>
           </div>
 
-          <div className="space-y-6 px-6 py-6">
+          <SheetBody className="space-y-6 px-6 py-6">
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -832,12 +1195,87 @@ export default function ContractorsPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Юридична назва</label>
+              <Input
+                value={form.legalName}
+                onChange={(event) => setForm((current) => ({ ...current, legalName: event.target.value }))}
+                placeholder="Якщо відрізняється від назви"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Форма власності</label>
+              <Select
+                value={form.ownershipType || OWNERSHIP_NONE}
+                onValueChange={(next) =>
+                  setForm((current) => ({ ...current, ownershipType: next === OWNERSHIP_NONE ? "" : next }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Не вказано" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={OWNERSHIP_NONE}>Не вказано</SelectItem>
+                  {OWNERSHIP_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                {form.ownershipType === "ФОП" ? "ІПН (10 цифр)" : "Код ЄДРПОУ (8 цифр)"}
+              </label>
+              <DigitsInput
+                value={form.edrpou}
+                onChange={(next) => setForm((current) => ({ ...current, edrpou: next }))}
+                maxLength={form.ownershipType === "ФОП" ? 10 : 8}
+                validLength={form.ownershipType === "ФОП" ? 10 : 8}
+                placeholder={form.ownershipType === "ФОП" ? "10-значний ІПН" : "8-значний код"}
+              />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-foreground">Телефони</label>
+              <PhoneListInput
+                value={form.phones}
+                onValueChange={(next) => setForm((current) => ({ ...current, phones: next }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Пошта</label>
+              <TagsInput
+                value={form.emails}
+                onValueChange={(next) => setForm((current) => ({ ...current, emails: next }))}
+                options={[]}
+                placeholder="info@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Сайт</label>
+              <Input
+                value={form.website}
+                onChange={(event) => setForm((current) => ({ ...current, website: event.target.value }))}
+                placeholder="https://example.com"
+              />
+            </div>
+
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium text-foreground">Послуги</label>
-              <Input
+              {/* Підказує вже заведені послуги — інакше кожен вигадує своє
+                  формулювання, і в базі зʼявляються «УФ-друк», «уф друк» і
+                  «УФ друк» як три різні речі. Вписати нове можна завжди. */}
+              <TagsInput
                 value={form.services}
-                onChange={(event) => setForm((current) => ({ ...current, services: event.target.value }))}
-                placeholder="УФ-друк, висічка, вишивка..."
+                onValueChange={(next) => setForm((current) => ({ ...current, services: next }))}
+                options={serviceOptions}
+                placeholder="УФ-друк, висічка, вишивка…"
               />
             </div>
 
@@ -851,34 +1289,48 @@ export default function ContractorsPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Телефон / контакти</label>
-              <Input
-                value={form.phone}
-                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-                placeholder="Телефони, email, месенджери"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Адреса / сайт</label>
+              {/* Уже просто адреса: сайт і пошта мають власні поля вище. */}
+              <label className="text-sm font-medium text-foreground">Адреса</label>
               <AddressAutocomplete
                 as="textarea"
                 value={form.address}
                 onChange={(address) => setForm((current) => ({ ...current, address }))}
-                placeholder="Адреса складу, сайт або email"
+                placeholder="Адреса офісу або складу"
                 rows={4}
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Нова Пошта / доставка</label>
-              <Textarea
-                value={form.deliveryInfo}
-                onChange={(event) => setForm((current) => ({ ...current, deliveryInfo: event.target.value }))}
-                placeholder="Відділення, ЄДРПОУ, ПІБ отримувача"
-                rows={4}
+            {/* Точки доставки — той самий компонент і той самий формат, що в
+                картці замовника: одні відділення НП, один парсер, одна дорога
+                до ТТН. Вільний текст цього не вмів: у ньому лежали місто,
+                номер відділення, ЄДРПОУ й ПІБ одним рядком. */}
+            <div className="sm:col-span-2">
+              <DeliveryPointsSection
+                points={form.deliveryPoints}
+                onAdd={addDeliveryPoint}
+                onRemove={removeDeliveryPoint}
+                onUpdate={updateDeliveryPoint}
+                onSetDefault={setDefaultDeliveryPoint}
+                defaultEdrpou={form.edrpou}
               />
             </div>
+
+            {/* Лишок міграції: показуємо тільки там, де вільний текст досі є
+                (5 записів). У новому підряднику цього поля не існує взагалі. */}
+            {form.deliveryInfo ? (
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-sm font-medium text-foreground">Стара нотатка про доставку</label>
+                <Textarea
+                  value={form.deliveryInfo}
+                  onChange={(event) => setForm((current) => ({ ...current, deliveryInfo: event.target.value }))}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Те, що лишилось у полі «Нова Пошта / доставка» до переїзду на точки. Перенесіть потрібне вгору
+                  й очистіть.
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Дата нагадування</label>
@@ -964,7 +1416,9 @@ export default function ContractorsPage() {
 
           {formError ? <div className="text-sm text-destructive">{formError}</div> : null}
 
-          <SheetFooter className="border-t border-border/50 pt-4">
+          </SheetBody>
+
+          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Скасувати
             </Button>
@@ -975,7 +1429,6 @@ export default function ContractorsPage() {
                 : (activeTab === "contractors" ? "Створити підрядника" : "Створити постачальника")}
             </Button>
           </SheetFooter>
-          </div>
         </SheetContent>
       </Sheet>
 
