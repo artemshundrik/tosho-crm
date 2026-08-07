@@ -80,9 +80,15 @@ export function needsRewrite(subject) {
 }
 
 export async function rewriteSubjects(all, env = process.env) {
-  const key = env.OPENAI_API_KEY;
   const changes = all.filter((change) => needsRewrite(change.subject));
-  if (!key || changes.length === 0) return new Map();
+  if (changes.length === 0) return new Map();
+
+  const key = env.OPENAI_API_KEY;
+  if (!key) {
+    // Мовчазне «нічого не переказано» вже одного разу з'їло цілий прогін.
+    console.warn(`[release] немає OPENAI_API_KEY — ${changes.length} тем лишаються технічними`);
+    return new Map();
+  }
 
   const list = changes.map((c) => `${c.sha}\t${c.scope ?? "—"}\t${c.subject}`).join("\n");
 

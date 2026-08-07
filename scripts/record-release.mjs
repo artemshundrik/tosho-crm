@@ -16,7 +16,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { collect, parse, rewriteSubjects } from "./lib/releaseCommits.mjs";
+import { collect, needsRewrite, parse, rewriteSubjects } from "./lib/releaseCommits.mjs";
 
 const DRY = process.argv.includes("--dry");
 const DB_URL = process.env.BACKUP_DB_URL;
@@ -118,6 +118,60 @@ if (process.argv.includes("--enrich")) {
   }
 
   console.log(`${DRY ? "[dry] " : ""}Записів оновлено: ${touched}, проставлено часів: ${filled}.`);
+  process.exit(0);
+}
+
+/**
+ * Дозаписує людський переказ у вже збережені записи.
+ *
+ * НАВІЩО ОКРЕМО: відновлена історія писалась без AI, тож технічні теми з тих
+ * місяців так і лишились технічними. Женемо через переказ ЛИШЕ ті, що його
+ * потребують (needsRewrite) — решта вже читається, і платити за перестановку
+ * слів немає сенсу. Пачками, щоб один збій не втратив усе.
+ */
+if (process.argv.includes("--replain")) {
+  const since = process.argv.find((a) => a.startsWith("--since="))?.slice(8) ?? "";
+  if (since) console.log(`Межа переказу: від ${since}`);
+  const rows = psql(
+    "select id || '\x1f' || changes::text from tosho.releases order by released_at"
+  ).split("\n").filter(Boolean);
+
+  const pending = [];
+  const parsed = rows.map((row) => {
+    const [id, json] = row.split("\x1f");
+    const changes = JSON.parse(json);
+    for (const change of changes) {
+      // Межа: коміти мертвої Fayna переказувати немає сенсу — це інший продукт.
+      if (since && (change.at ?? "") < since) continue;
+      if (!change.plain && needsRewrite(change.subject)) pending.push(change);
+    }
+    return { id, changes };
+  });
+
+  const total = parsed.reduce((n, r) => n + r.changes.length, 0);
+  console.log(`Технічних тем без переказу: ${pending.length} із ${total}`);
+  if (DRY || pending.length === 0) {
+    pending.slice(0, 12).forEach((c) => console.log(`  · ${c.subject}`));
+    process.exit(0);
+  }
+
+  const SIZE = 40;
+  let done = 0;
+  for (let i = 0; i < pending.length; i += SIZE) {
+    const batch = pending.slice(i, i + SIZE);
+    const plain = await rewriteSubjects(batch);
+    for (const change of batch) {
+      if (plain.has(change.sha)) { change.plain = plain.get(change.sha); done += 1; }
+    }
+    console.log(`  пачка ${Math.floor(i / SIZE) + 1}: ${plain.size} переказано`);
+  }
+
+  for (const { id, changes } of parsed) {
+    if (!changes.some((c) => c.plain)) continue;
+    const payload = JSON.stringify(changes).replace(/'/g, "''");
+    psql(`update tosho.releases set changes = '${payload}'::jsonb where id = '${id}'`);
+  }
+  console.log(`Готово: переказано ${done}.`);
   process.exit(0);
 }
 
