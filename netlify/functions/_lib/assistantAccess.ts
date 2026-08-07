@@ -56,6 +56,14 @@ export function canSeeSystemHealth(level: AccessLevel, isOwner: boolean): boolea
   return isOwner;
 }
 
+/**
+ * Обсяг зробленої роботи: релізи, години, що викотилось. Той самий предикат,
+ * що на сторінці «Релізи» — керівництво (owner + SEO мають level "full").
+ */
+export function canSeeReleases(level: AccessLevel): boolean {
+  return level === "full";
+}
+
 /** Витрати на AI — це бюджет, його бачить керівництво. */
 export function canSeeAiCosts(level: AccessLevel): boolean {
   return level === "full";

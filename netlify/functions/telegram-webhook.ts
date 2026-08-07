@@ -28,7 +28,8 @@ import {
   type NotificationCategory,
   type RoleContext,
 } from "./_notificationCategories";
-import { canSeeAiCosts, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
+import { canSeeAiCosts,
+  canSeeReleases, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
 import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dropboxHealth";
 
 // Telegram webhook:
@@ -463,6 +464,9 @@ function buildQuickKeyboard(role: RoleContext): InlineKeyboard {
       { text: "🧾 Список прорахунків", callback_data: "qa:quotes_list" },
       { text: "📦 Замовлення", callback_data: "qa:orders_list" }
     );
+  }
+  if (canSeeReleases(level)) {
+    buttons.push({ text: "🚀 Що викотили", callback_data: "qa:releases" });
   }
   if (canSeeAiCosts(level)) {
     buttons.push({ text: "💰 AI-кости", callback_data: "qa:ai_usage" });

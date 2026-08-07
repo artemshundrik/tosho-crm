@@ -13,7 +13,12 @@ import { classifyAiBudget } from "../../src/lib/systemHealthThresholds";
 
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 
-export type AdminIntent = "ai_usage" | "system_health" | "whats_broken" | "explain_problem";
+export type AdminIntent =
+  | "ai_usage"
+  | "system_health"
+  | "whats_broken"
+  | "explain_problem"
+  | "releases";
 
 /**
  * Пояснення сигналів: що це, чому буває і що робити.
@@ -329,6 +334,63 @@ async function answerExplainProblem(params: {
   return lines.join("\n").trimEnd();
 }
 
+/**
+ * «Що викотили» — обсяг роботи за останні дні.
+ *
+ * Дві цифри свідомо різні й НЕ додаються: години — з ритму сесій Claude Code
+ * (бачать і те, що не закінчилось комітом), зміни — з релізів, тобто з того,
+ * що реально поїхало в прод. Саме різниця між ними й цікава.
+ */
+async function answerReleases(params: { admin: SupabaseClient; now: Date }): Promise<string> {
+  const { admin, now } = params;
+  const from = new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10);
+
+  const [releasesResult, hoursResult] = await Promise.all([
+    admin
+      .schema("tosho")
+      .from("releases")
+      .select("released_at, changes")
+      .gte("released_at", `${from}T00:00:00+03:00`)
+      .order("released_at", { ascending: false }),
+    admin.schema("tosho").from("work_sessions").select("day, hours").gte("day", from),
+  ]);
+
+  if (releasesResult.error) throw new Error(`releases: ${releasesResult.error.message}`);
+
+  type Change = { subject?: string; plain?: string; at?: string };
+  const rows = (releasesResult.data ?? []) as Array<{ released_at: string; changes: unknown }>;
+  const changes: Change[] = rows.flatMap((row) =>
+    Array.isArray(row.changes) ? (row.changes as Change[]) : []
+  );
+
+  if (changes.length === 0) {
+    return "За останній тиждень у прод нічого не викочували.";
+  }
+
+  const days = new Set(changes.map((c) => (c.at ?? "").slice(0, 10)).filter(Boolean));
+  const hours = ((hoursResult.data ?? []) as Array<{ hours: number }>).reduce(
+    (sum, row) => sum + (Number(row.hours) || 0),
+    0
+  );
+
+  const lines = [
+    `<b>За тиждень: ${changes.length} змін у ${days.size} ${days.size === 1 ? "день" : "днів"}</b>`,
+  ];
+  if (hours > 0) lines.push(`Робочих годин: ≈${Math.round(hours)}`);
+  lines.push("");
+
+  // Найсвіжіші справи — людською, якщо переказ є.
+  const recent = changes
+    .slice()
+    .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))
+    .slice(0, 5);
+  for (const change of recent) {
+    lines.push(`• ${change.plain ?? change.subject ?? "—"}`);
+  }
+
+  return lines.join("\n");
+}
+
 export async function answerAdminQuery(params: {
   admin: SupabaseClient;
   intent: AdminIntent;
@@ -339,6 +401,8 @@ export async function answerAdminQuery(params: {
 }): Promise<string> {
   const { admin, intent, workspaceId, teamIds, period, now } = params;
   switch (intent) {
+    case "releases":
+      return answerReleases({ admin, now });
     case "ai_usage":
       return answerAiUsage({ admin, workspaceId, period, now });
     case "system_health":

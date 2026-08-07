@@ -25,6 +25,7 @@ import { loadDesignMembers, matchMember } from "./_designAssistant";
 import {
   canQueryOtherPeople,
   canSeeAiCosts,
+  canSeeReleases,
   canSeeSystemHealth,
   canUseQuotes,
   type AccessLevel,
@@ -64,7 +65,13 @@ type Payload = {
 /** Інтенти, які стосуються конкретної людини — їх звужуємо до себе. */
 const PERSON_INTENTS = new Set(["designer_workload", "designer_summary", "person_summary", "time_spent"]);
 
-const ADMIN_INTENTS: AdminIntent[] = ["ai_usage", "system_health", "whats_broken", "explain_problem"];
+const ADMIN_INTENTS: AdminIntent[] = [
+  "ai_usage",
+  "system_health",
+  "whats_broken",
+  "explain_problem",
+  "releases",
+];
 const QUOTES_INTENTS: QuotesIntent[] = [
   "quotes_pipeline",
   "quotes_list",
@@ -172,7 +179,7 @@ const TOOL = {
         type: "string",
         enum: [...INTENTS, ...ADMIN_INTENTS, ...QUOTES_INTENTS, ...ORDERS_INTENTS, ...TEAM_INTENTS],
         description:
-          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих (ЛИШЕ цифри по статусах, без переліку); quotes_list — просять ПОКАЗАТИ перелік прорахунків («список прорахунків», «які зараз прорахунки», «покажи прорахунки»); quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; orders_list — просять перелік ЗАМОВЛЕНЬ («список замовлень», «покажи замовлення», «що у виробництві», «які замовлення в роботі»); team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
+          "workload_now — скільки задач зараз активно (без конкретної людини); designer_workload — скільки зараз у конкретного дизайнера; tasks_list — просять показати список задач; created_count — скільки СТВОРЕНО за період; approved_count — скільки ЗАТВЕРДЖЕНО/зроблено за період; revisions — правки; time_spent — час за таймерами; deadlines — дедлайни або прострочене; designer_summary — загальне «як справи» по людині; stuck — що найдовше висить; team_workload — хто чим завантажений, розподіл по всіх дизайнерах; task_details — питають про КОНКРЕТНУ задачу за номером або назвою; quotes_pipeline — воронка прорахунків, скільки відкритих (ЛИШЕ цифри по статусах, без переліку); quotes_list — просять ПОКАЗАТИ перелік прорахунків («список прорахунків», «які зараз прорахунки», «покажи прорахунки»); quotes_created — скільки прорахунків завели за період; quotes_approved — скільки прорахунків затвердили за період; quotes_overdue — прострочені прорахунки; customer_summary — усе по конкретному КЛІЄНТУ; orders_list — просять перелік ЗАМОВЛЕНЬ («список замовлень», «покажи замовлення», «що у виробництві», «які замовлення в роботі»); team_list — «дай список менеджерів / дизайнерів», «хто в команді»; who_is_online — «хто зараз у системі», «хто онлайн», «хто сьогодні працює», «коли востаннє заходили»; who_is_absent — «хто відсутній», «хто у відпустці», «хто на лікарняному», «кого сьогодні немає»; person_summary — статистика по конкретній ЛЮДИНІ (менеджеру, PM, будь-кому): що робила, скільки прорахунків, замовлень; releases — «що викотили», «що нового в CRM», «скільки зробили за тиждень», «скільки годин працювали»; ai_usage — витрати на AI; system_health — загальний стан системи, бекапи, база, storage, cron; whats_broken — «що не працює», «які проблеми»; explain_problem — просять ПОЯСНИТИ проблему чи сигнал: «що це значить», «що за помилка», «а це страшно?», «що робити з цим»; help — незрозуміло або поза цим списком.",
       },
       designer: {
         type: ["string", "null"],
@@ -214,6 +221,7 @@ const SYSTEM_PROMPT = [
   "• «скільки зараз у Ірини» = designer_workload",
   "• «покажи», «список», «які саме» = tasks_list",
   "• «що по AI», «скільки витратили на AI» = ai_usage",
+  "• «що викотили», «що нового в CRM», «скільки зробили за тиждень» = releases",
   "• «що не працює», «є проблеми?», «все ок?» = whats_broken",
   "• «що це значить», «що за помилка», «а це погано?» = explain_problem",
   "• «як система», «стан», «бекапи», «cron» = system_health",
@@ -342,7 +350,11 @@ export const handler = async (event: HttpEvent) => {
 
     if (isAdminIntent(query.intent)) {
       const allowed =
-        query.intent === "ai_usage" ? canSeeAiCosts(level) : canSeeSystemHealth(level, isOwner);
+        query.intent === "ai_usage"
+          ? canSeeAiCosts(level)
+          : query.intent === "releases"
+            ? canSeeReleases(level)
+            : canSeeSystemHealth(level, isOwner);
       // explain_problem пояснює ті самі сигнали, що whats_broken, тож і доступ
       // до нього такий самий — окремої умови не треба.
       if (!allowed) {
