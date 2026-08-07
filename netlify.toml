@@ -13,6 +13,12 @@ git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exc
 [build.environment]
 NODE_VERSION = "20"
 
+# Історія релізів пишеться на кожен УСПІШНИЙ деплой (подія onSuccess), а не
+# після збірки: ці стадії розходяться, і запис на «збірка ок» клав би в історію
+# реліз, якого користувачі не бачили. Плагін не валить деплой за жодних умов.
+[[plugins]]
+package = "/plugins/record-release"
+
 [functions]
 directory = "netlify/functions"
 node_bundler = "esbuild"

@@ -16,6 +16,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { collect, parse, rewriteSubjects } from "./lib/releaseCommits.mjs";
 
 const DRY = process.argv.includes("--dry");
 const DB_URL = process.env.BACKUP_DB_URL;
@@ -28,16 +29,6 @@ if (!DB_URL) {
 const git = (args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const psql = (sql) =>
   execFileSync("psql", [DB_URL, "-tAq", "-c", sql], { encoding: "utf8" }).trim();
-
-/** `feat(features): текст` → {type, scope, subject}. Без конвенції — type "other". */
-function parse(subject) {
-  const match = subject.match(/^([a-z]+)(?:\(([^)]+)\))?!?:\s*(.+)$/);
-  if (!match) return { type: "other", scope: null, subject };
-  return { type: match[1], scope: match[2] ?? null, subject: match[3] };
-}
-
-/** Документи й службові коміти в обсяг роботи не рахуємо: вони про процес. */
-const isProductChange = (change) => !["docs", "chore"].includes(change.type);
 
 /**
  * Відновлення історії: один запис на календарний день, бо релізи в цьому
@@ -52,7 +43,6 @@ if (process.argv.includes("--backfill")) {
   for (const line of raw.split("\n").filter(Boolean)) {
     const [sha, iso, subject] = line.split("");
     const change = { sha: sha.slice(0, 8), ...parse(subject ?? ""), at: iso };
-    if (!isProductChange(change)) continue;
     const day = iso.slice(0, 10);
     const bucket = byDay.get(day) ?? { day, iso, head: sha, changes: [] };
     // git іде від найновішого — перший побачений у дні і є головою дня.
@@ -146,22 +136,10 @@ const lastRef = psql("select commit_ref from tosho.releases order by released_at
 // Перший запуск: беремо розумний зріз, а не всю історію проєкту.
 const range = lastRef ? `${lastRef}..HEAD` : "HEAD~40..HEAD";
 
-const raw = git(["log", range, "--no-merges", "--format=%H%x1f%cI%x1f%s"]);
-if (!raw) {
-  console.log("Нових комітів немає.");
-  process.exit(0);
-}
-
-const changes = raw
-  .split("\n")
-  .map((line) => {
-    const [sha, iso, subject] = line.split("");
-    return { sha: sha.slice(0, 8), ...parse(subject ?? ""), at: iso };
-  })
-  .filter(isProductChange);
+const changes = collect(range);
 
 if (changes.length === 0) {
-  console.log("Змістовних змін немає (лише docs/chore).");
+  console.log("Нових комітів немає.");
   process.exit(0);
 }
 
@@ -183,7 +161,14 @@ if (DRY) {
   process.exit(0);
 }
 
-const payload = JSON.stringify(changes).replace(/'/g, "''");
+// Переказ людською — той самий, що в плагіні Netlify.
+const plain = await rewriteSubjects(changes);
+const enriched = changes.map((change) =>
+  plain.has(change.sha) ? { ...change, plain: plain.get(change.sha) } : change
+);
+console.log(`Переказано людською: ${plain.size} із ${changes.length}`);
+
+const payload = JSON.stringify(enriched).replace(/'/g, "''");
 psql(
   `insert into tosho.releases (commit_ref, changes) values ('${head}', '${payload}'::jsonb)
    on conflict (commit_ref) do nothing`

@@ -13,6 +13,12 @@ export type ReleaseChange = {
   scope: string | null;
   subject: string;
   /**
+   * Тема, переказана людською через AI. Технічний `subject` лишається поруч
+   * навмисно: переказ може й збрехати, і тоді оригінал — єдиний спосіб це
+   * помітити.
+   */
+  plain?: string;
+  /**
    * Час самого коміта. Необов'язковий: записи, зроблені до того, як recorder
    * почав його зберігати, його не мають — там показуємо зміну без часу, а не
    * підставляємо час релізу, бо це були б вигадані хвилини.
@@ -432,7 +438,7 @@ export function buildThreads(changes: ScopedChange[]): Thread[] {
       const lead = [...sorted].sort((a, b) => rank(a) - rank(b))[0];
       return {
         id: lead.sha,
-        title: lead.subject,
+        title: lead.plain ?? lead.subject,
         lead,
         rest: sorted.filter((change) => change.sha !== lead.sha),
         count: sorted.length,

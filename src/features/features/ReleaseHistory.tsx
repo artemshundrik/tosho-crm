@@ -361,7 +361,14 @@ function ThreadCard({
     <>
       <span className="w-11 shrink-0 pt-px text-xs tabular-nums text-muted-foreground">{time}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium leading-snug">{thread.title}</span>
+        {/* Технічний оригінал у title: переказ AI може збрехати, і тоді це
+            єдиний спосіб помітити. */}
+        <span
+          className="block text-sm font-medium leading-snug"
+          title={thread.lead.plain ? thread.lead.subject : undefined}
+        >
+          {thread.title}
+        </span>
         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-3xs text-muted-foreground">
           {thread.scopes.map((scope) => (
             <span key={scope} className="rounded-full bg-secondary px-2 py-0.5 font-medium">
@@ -426,7 +433,12 @@ function ThreadCard({
                 >
                   {typeLabel(change.type)}.
                 </span>{" "}
-                {change.subject}
+                {change.plain ?? change.subject}
+                {change.plain ? (
+                  <span className="mt-0.5 block text-3xs text-muted-foreground/70">
+                    {change.subject}
+                  </span>
+                ) : null}
               </span>
               <code className="shrink-0 font-mono text-3xs text-muted-foreground">
                 {change.sha}

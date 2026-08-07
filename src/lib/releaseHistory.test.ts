@@ -34,6 +34,7 @@ function change(patch: Partial<ReleaseChange> = {}): ReleaseChange {
     scope: patch.scope ?? null,
     subject: patch.subject ?? "щось зроблено",
     ...(patch.at ? { at: patch.at } : {}),
+    ...(patch.plain ? { plain: patch.plain } : {}),
   };
 }
 
@@ -285,6 +286,19 @@ describe("склейка змін у сюжети", () => {
       scoped({ sha: "2", subject: "заявка власника більше не застрягає", at: at("13:39") }),
     ]);
     expect(threads).toHaveLength(2);
+  });
+
+  it("людський переказ стає заголовком, коли він є", () => {
+    const threads = buildThreads([
+      scoped({
+        sha: "1",
+        subject: "DateTimeInput і DateTimePicker на спільну панель",
+        plain: "поля дати й часу тепер мають спільну панель вибору",
+      }),
+    ]);
+    expect(threads[0].title).toBe("поля дати й часу тепер мають спільну панель вибору");
+    // Технічний оригінал нікуди не дівається — інакше хибний переказ не спіймати.
+    expect(threads[0].lead.subject).toBe("DateTimeInput і DateTimePicker на спільну панель");
   });
 
   it("заголовок — тема головної зміни, нове важливіше за виправлення", () => {
