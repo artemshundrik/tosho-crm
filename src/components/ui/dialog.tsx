@@ -2,6 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UnsavedChangesPrompt, useUnsavedGuard } from "@/components/ui/unsaved-guard";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -29,12 +30,39 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
   hideClose?: boolean;
+  /**
+   * Чи закривати модалку кліком повз неї. За замовчуванням — НІ.
+   *
+   * Те саме правило й з тієї ж причини, що в `SheetContent`: клік повз — промах,
+   * а не намір, і донедавна він стирав усе введене. Замовчування захисне, бо
+   * ціна помилки асиметрична: забутий захист коштує роботи, забутий
+   * `dismissible` — лише секунди роздратування.
+   *
+   * `AlertDialog` (на ньому `ConfirmDialog`) сюди не входить: Radix там ігнорує
+   * клік повз від початку, тож підтвердження вже захищені.
+   *
+   * Вмикати лише там, де втрачати нічого: перегляд, звіт, промо, налаштування,
+   * що зберігаються одразу. Esc і хрестик закривають у будь-якому разі.
+   */
+  dismissible?: boolean;
+  /**
+   * Явний сигнал «є незбережені зміни». Якщо не переданий, модалка визначає це
+   * сама — див. `useUnsavedGuard`.
+   */
+  isDirty?: boolean;
 };
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideClose = false, ...props }, ref) => (
+>(({ className, children, hideClose = false, dismissible = false, isDirty, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
+  const guard = useUnsavedGuard({ enabled: !dismissible, isDirty });
+  // Прихований Close, щоб закрити модалку з-під вікна підтвердження: покласти
+  // `DialogClose` всередину AlertDialog не можна — там він підхопить контекст
+  // того діалогу й закриє підтвердження замість модалки.
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+
+  return (
   <DialogPortal>
     <DialogOverlay />
 
@@ -55,12 +83,37 @@ const DialogContent = React.forwardRef<
         className
       )}
       translate="no"
+      onInteractOutside={(event) => {
+        // Спершу віддаємо подію споживачу: він міг сам вирішити її скасувати.
+        onInteractOutside?.(event);
+        if (!dismissible) event.preventDefault();
+      }}
+      onEscapeKeyDown={(event) => {
+        onEscapeKeyDown?.(event);
+        if (event.defaultPrevented) return;
+        if (guard.shouldBlock()) {
+          event.preventDefault();
+          guard.ask();
+        }
+      }}
       {...props}
     >
+      {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
+          і поставив би сюди фокус при відкритті. CSS-клас `hidden` не рятує —
+          фільтр дивиться на властивість, а не на стилі. */}
+      <DialogClose ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {children}
 
       {!hideClose && (
         <DialogClose
+          data-unsaved-ignore
+          onClick={(event) => {
+            // Radix пропускає власний обробник, якщо подію скасували.
+            if (guard.shouldBlock()) {
+              event.preventDefault();
+              guard.ask();
+            }
+          }}
           className={cn(
             "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -70,9 +123,18 @@ const DialogContent = React.forwardRef<
           <span className="sr-only">Close</span>
         </DialogClose>
       )}
+      <UnsavedChangesPrompt
+        open={guard.asking}
+        onDismiss={guard.dismiss}
+        onDiscard={() => {
+          guard.dismiss();
+          closeRef.current?.click();
+        }}
+      />
     </DialogPrimitive.Content>
   </DialogPortal>
-));
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

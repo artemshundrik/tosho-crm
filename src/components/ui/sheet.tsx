@@ -4,6 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { UnsavedChangesPrompt, useUnsavedGuard } from "@/components/ui/unsaved-guard"
 
 const Sheet = SheetPrimitive.Root
 
@@ -62,30 +63,96 @@ interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
     VariantProps<typeof sheetVariants> {
   hideClose?: boolean
+  /**
+   * Чи закривати дровер кліком повз нього. За замовчуванням — НІ.
+   *
+   * Замовчування навмисно захисне. Більшість дроверів у CRM — форми, а клік
+   * повз модалку не намір, а промах (особливо на тачі), і коштував він усього
+   * введеного: жодна з 33 форм не мала захисту від втрати даних.
+   *
+   * Замовчування саме таке, а не навпаки, через асиметрію ціни помилки: забутий
+   * захист на новій формі стирає роботу, а забутий `dismissible` на новій
+   * інформаційній модалці лише трохи дратує й помітний одразу.
+   *
+   * Вмикати лише там, де втрачати нічого: перегляд, звіт, промо, налаштування,
+   * що зберігаються одразу. Esc і хрестик закривають у будь-якому разі.
+   */
+  dismissible?: boolean
+  /**
+   * Явний сигнал «у формі є незбережені зміни». Якщо не переданий, дровер
+   * визначає це сам — див. `useUnsavedGuard`. Передавати лише там, де
+   * автовизначення перестраховується, а точність важлива.
+   */
+  isDirty?: boolean
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideClose = false, ...props }, ref) => (
+>(({ side = "right", className, children, hideClose = false, dismissible = false, isDirty, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
+  const guard = useUnsavedGuard({ enabled: !dismissible, isDirty })
+  // Закрити дровер «по-справжньому» з-під вікна підтвердження. Radix не дає
+  // дотягнутись до `onOpenChange` з контенту, а класти сюди `SheetPrimitive.Close`
+  // не можна: всередині AlertDialog він підхопив би контекст ТОГО діалогу й
+  // закривав би підтвердження, а не дровер.
+  const closeRef = React.useRef<HTMLButtonElement>(null)
+
+  return (
   <SheetPortal>
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
       translate="no"
+      onInteractOutside={(event) => {
+        // Спершу віддаємо подію споживачу: він міг сам вирішити її скасувати.
+        onInteractOutside?.(event)
+        if (!dismissible) event.preventDefault()
+      }}
+      onEscapeKeyDown={(event) => {
+        onEscapeKeyDown?.(event)
+        if (event.defaultPrevented) return
+        if (guard.shouldBlock()) {
+          event.preventDefault()
+          guard.ask()
+        }
+      }}
       {...props}
     >
+      {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
+          і поставив би сюди фокус при відкритті. CSS-клас `hidden` його не
+          рятує — фільтр дивиться на властивість, а не на стилі. */}
+      <SheetPrimitive.Close ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {!hideClose ? (
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <SheetPrimitive.Close
+          data-unsaved-ignore
+          onClick={(event) => {
+            // Radix пропускає власний обробник, якщо подію скасували, — саме так
+            // хрестик і перехоплюється, без підміни примітива.
+            if (guard.shouldBlock()) {
+              event.preventDefault()
+              guard.ask()
+            }
+          }}
+          className="absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none data-[state=open]:bg-secondary"
+        >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
       ) : null}
       {children}
+      <UnsavedChangesPrompt
+        open={guard.asking}
+        onDismiss={guard.dismiss}
+        onDiscard={() => {
+          guard.dismiss()
+          closeRef.current?.click()
+        }}
+      />
     </SheetPrimitive.Content>
   </SheetPortal>
-))
+  )
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({
