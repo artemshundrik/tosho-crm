@@ -312,7 +312,13 @@ export function AbsenceDialog({
             <div
               role="radiogroup"
               aria-label="Тип відсутності"
-              className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner"
+              className={cn(
+                "grid gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner",
+                // 5 типів в один рядок уже не влазять — підписи ламались на
+                // два рядки і пігулки пливли по висоті. Сітка дає рівні ряди:
+                // 5 → 3+2; 4 (режим заявки) → 2×2 на вузькому, один ряд на sm.
+                kindOptions.length > 4 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"
+              )}
             >
               {kindOptions.map((option) => {
                 const KindIcon = ABSENCE_KIND_ICONS[option.value];
@@ -325,7 +331,7 @@ export function AbsenceDialog({
                     aria-checked={active}
                     onClick={() => setValue((prev) => ({ ...prev, kind: option.value }))}
                     className={cn(
-                      "flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-all duration-200",
+                      "flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-all duration-200",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       active
                         ? cn("shadow-[var(--shadow-elevated-sm)]", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])
