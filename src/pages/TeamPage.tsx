@@ -254,10 +254,11 @@ function formatRoleLabel(value?: string | null) {
 
 function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
   if (online) return "Зараз онлайн";
-  if (!lastSeenAt) return "Давно не заходив";
-  // Дві суміжні одиниці («3 дн 4 год тому») — спільний форматер на всі
-  // поверхні, замість чотирьох копій, що округлювали по-різному.
-  return `Був(ла) ${formatLastSeenAgo(lastSeenAt)}`;
+  // Після фолбека на повну історію порожнє значення = людина СПРАВДІ жодного
+  // разу не заходила (нема рядка в user_presence) — кажемо це, а не туманне
+  // «давно», що з'являлось усім поза 30-хвилинним вікном.
+  if (!lastSeenAt) return "Ще не заходив(ла)";
+  return `${formatLastSeenAgo(lastSeenAt)}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -267,6 +268,39 @@ function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
 export function TeamPage() {
   const { userId, teamId, loading, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
+
+  /**
+   * ПОВНА історія «коли був» — окремо від контексту присутності.
+   *
+   * Контекст живить хедерний віджет «хто онлайн» і навмисно тягне з БД лише
+   * останні 30 хвилин (DB_HISTORY_WINDOW_MS) — тому картки показували
+   * «Давно не заходив» усім, хто закрив вкладку годину тому, хоча точна
+   * мітка лежить у user_presence. На проді просто зараз половина команди
+   * (11 із 22 рядків) — поза тим вікном. Тут тягнемо всі рядки команди:
+   * їх десятки, і це разове читання на завантаження сторінки.
+   */
+  const [lastSeenByUser, setLastSeenByUser] = useState<Map<string, string>>(() => new Map());
+
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("user_presence")
+        .select("user_id,last_seen_at")
+        .eq("team_id", teamId)
+        .limit(500);
+      if (cancelled || error) return;
+      const map = new Map<string, string>();
+      ((data ?? []) as Array<{ user_id?: string | null; last_seen_at?: string | null }>).forEach((row) => {
+        if (row.user_id && row.last_seen_at) map.set(row.user_id, row.last_seen_at);
+      });
+      setLastSeenByUser(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
 
   /** Вносити відсутності за інших і бачити чужі залишки може owner/SEO. */
   const canManageAbsences = permissions.isSuperAdmin || permissions.isSeo;
@@ -404,14 +438,15 @@ export function TeamPage() {
         return {
           ...member,
           online: Boolean(presence?.online) && !inactive,
-          lastSeenAt: presence?.lastSeenAt ?? null,
+          // Контекст знає лише останні 30 хв — далі беремо повну історію.
+          lastSeenAt: presence?.lastSeenAt ?? lastSeenByUser.get(member.userId) ?? null,
           inactive,
           birthdayInsight: getBirthdayInsight(member.birthDate),
           anniversaryInsight: getWorkAnniversaryInsight(member.startDate),
           tenureDays: getEmploymentDurationDays(member.startDate),
         };
       }),
-    [members, presenceByUserId]
+    [lastSeenByUser, members, presenceByUserId]
   );
 
   const memberById = useMemo(

@@ -17,8 +17,22 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** Після цього порога відносний час («43 дн тому») гірший за дату. */
+/** Після цього порога відносний час («43 дні тому») гірший за дату. */
 const RELATIVE_LIMIT_DAYS = 30;
+
+/** «1 день / 3 дні / 5 днів» — повні слова, як просив CEO, не «дн». */
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return `${n} ${many}`;
+  if (mod10 === 1) return `${n} ${one}`;
+  if (mod10 >= 2 && mod10 <= 4) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+const days_ = (n: number) => plural(n, "день", "дні", "днів");
+const hours_ = (n: number) => plural(n, "годину", "години", "годин");
+const minutes_ = (n: number) => plural(n, "хвилину", "хвилини", "хвилин");
 
 export function formatLastSeenAgo(lastSeenAt: string | null | undefined, now = new Date()): string {
   if (!lastSeenAt) return "не заходив";
@@ -40,9 +54,9 @@ export function formatLastSeenAgo(lastSeenAt: string | null | undefined, now = n
       year: "numeric",
     }).format(new Date(seen));
   }
-  if (days > 0) return hours > 0 ? `${days} дн ${hours} год тому` : `${days} дн тому`;
-  if (hours > 0) return minutes > 0 ? `${hours} год ${minutes} хв тому` : `${hours} год тому`;
-  return `${minutes} хв тому`;
+  if (days > 0) return hours > 0 ? `${days_(days)} ${hours_(hours)} тому` : `${days_(days)} тому`;
+  if (hours > 0) return minutes > 0 ? `${hours_(hours)} ${minutes_(minutes)} тому` : `${hours_(hours)} тому`;
+  return `${minutes_(minutes)} тому`;
 }
 
 /**

@@ -19,22 +19,24 @@ describe("formatLastSeenAgo — дві суміжні одиниці", () => {
 
   it("до хвилини — «щойно», далі хвилини без секунд", () => {
     expect(formatLastSeenAgo(ago(20_000), NOW)).toBe("щойно");
-    expect(formatLastSeenAgo(ago(54 * MIN), NOW)).toBe("54 хв тому");
+    expect(formatLastSeenAgo(ago(54 * MIN), NOW)).toBe("54 хвилини тому");
+    expect(formatLastSeenAgo(ago(12 * MIN), NOW)).toBe("12 хвилин тому");
   });
 
   it("години йдуть із хвилинами — те, чого бракувало", () => {
-    expect(formatLastSeenAgo(ago(HOUR + 12 * MIN), NOW)).toBe("1 год 12 хв тому");
-    expect(formatLastSeenAgo(ago(5 * HOUR), NOW)).toBe("5 год тому");
+    expect(formatLastSeenAgo(ago(HOUR + 12 * MIN), NOW)).toBe("1 годину 12 хвилин тому");
+    expect(formatLastSeenAgo(ago(5 * HOUR), NOW)).toBe("5 годин тому");
   });
 
   it("дні йдуть із годинами, хвилини вже не мають сенсу", () => {
-    expect(formatLastSeenAgo(ago(3 * DAY + 4 * HOUR + 54 * MIN), NOW)).toBe("3 дн 4 год тому");
-    expect(formatLastSeenAgo(ago(2 * DAY), NOW)).toBe("2 дн тому");
+    expect(formatLastSeenAgo(ago(3 * DAY + 4 * HOUR + 54 * MIN), NOW)).toBe("3 дні 4 години тому");
+    expect(formatLastSeenAgo(ago(2 * DAY), NOW)).toBe("2 дні тому");
+    expect(formatLastSeenAgo(ago(21 * DAY), NOW)).toBe("21 день тому");
   });
 
   it("рівно на межах не з'являється «0 хв» і «0 год»", () => {
-    expect(formatLastSeenAgo(ago(HOUR), NOW)).toBe("1 год тому");
-    expect(formatLastSeenAgo(ago(DAY), NOW)).toBe("1 дн тому");
+    expect(formatLastSeenAgo(ago(HOUR), NOW)).toBe("1 годину тому");
+    expect(formatLastSeenAgo(ago(DAY), NOW)).toBe("1 день тому");
   });
 
   it("понад 30 днів — конкретна дата замість «43 дн тому»", () => {
