@@ -125,6 +125,10 @@ export function PartyHoverCard({
 }) {
   const [info, setInfo] = React.useState<PartyHoverInfo | null>(null);
   const [loading, setLoading] = React.useState(false);
+  // Було: картка відкривалась одразу зі спінером «Завантажуємо контакти…» і
+  // доростала, коли відповідь приходила. Тепер HoverTip чекає готовності,
+  // а спінер лишився фолбеком для повільної мережі (ліміт очікування).
+  const [settled, setSettled] = React.useState(false);
   const requestedRef = React.useRef<string | null>(null);
 
   const handleEnter = React.useCallback(() => {
@@ -135,7 +139,10 @@ export function PartyHoverCard({
     setLoading(true);
     void loadPartyHoverInfo(target.kind, target.id)
       .then((value) => setInfo(value))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setSettled(true);
+      });
   }, [target]);
 
   if (!target) return <>{children}</>;
@@ -145,6 +152,7 @@ export function PartyHoverCard({
       label={<CardBody target={target} info={info} loading={loading} />}
       side={side}
       contentClassName="max-w-none rounded-[14px] p-3"
+      ready={settled}
     >
       {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так
           контакти встигають приїхати до того, як людина їх шукатиме. */}

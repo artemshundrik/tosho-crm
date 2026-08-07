@@ -162,7 +162,10 @@ export function PersonHoverCard({
   children: React.ReactNode;
   side?: "top" | "bottom" | "left" | "right";
 }) {
-  const [fetchedLastSeen, setFetchedLastSeen] = React.useState<string | null>(null);
+  // undefined = ще вантажиться, null = завантажили і рядка немає.
+  // Розрізнення важливе: на undefined тримаємо бульбашку зачиненою (ready),
+  // щоб вона не відкривалась порожньою і не доростала — не «стрибала».
+  const [fetchedLastSeen, setFetchedLastSeen] = React.useState<string | null | undefined>(undefined);
   const requestedRef = React.useRef<string | null>(null);
 
   // Тягнемо лише коли поверхня підпису не дала й людина не онлайн.
@@ -171,9 +174,10 @@ export function PersonHoverCard({
     if (!needsLastSeen) return;
     if (requestedRef.current === person.userId) return;
     requestedRef.current = person.userId;
-    void loadLastSeenAt(person.userId).then(setFetchedLastSeen);
+    void loadLastSeenAt(person.userId).then((value) => setFetchedLastSeen(value));
   }, [needsLastSeen, person.userId]);
 
+  const ready = !needsLastSeen || fetchedLastSeen !== undefined;
   const lastSeenValue = person.online
     ? "Зараз онлайн"
     : (person.lastSeenLabel ?? (fetchedLastSeen ? formatLastSeenAgo(fetchedLastSeen) : null));
@@ -256,9 +260,9 @@ export function PersonHoverCard({
   );
 
   return (
-    <HoverTip label={card} side={side} contentClassName="max-w-none rounded-[14px] p-3">
+    <HoverTip label={card} side={side} contentClassName="max-w-none rounded-[14px] p-3" ready={ready}>
       {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так
-          підпис встигає приїхати до того, як людина його шукатиме. */}
+          картка відкривається вже ПОВНОЮ (HoverTip чекає ready). */}
       <span className="inline-flex" onMouseEnter={handleEnter} onFocusCapture={handleEnter}>
         {children}
       </span>
