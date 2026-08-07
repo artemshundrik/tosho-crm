@@ -56,7 +56,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   const navigate = useNavigate();
   // Режим «Дивитись як» — лише для owner (canUseViewAs рахується від РЕАЛЬНИХ
   // прав, тож із увімкненого режиму його не можна «загубити»).
-  const { canUseViewAs, viewAs, moduleAccess, permissions } = useAuth();
+  const { canUseViewAs, viewAs, moduleAccess, permissions, accessRole, jobRole } = useAuth();
   const [viewAsOpen, setViewAsOpen] = useState(false);
 
   /**
@@ -92,10 +92,14 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
    * «Релізи» — обсяг зробленої роботи. Решті команди ці цифри нічого не дають:
    * їм треба знати, ЩО змінилось, і для цього є «Що нового». Гейт дублює
    * політику RLS на таблиці.
+   *
+   * ГОЧА: роль беремо з useAuth, а НЕ з userData — там лежать підписи для
+   * показу («Власник», «SEO-спеціаліст»), а не ключі ролей, і порівняння з
+   * "owner" мовчки давало false.
    */
   const canSeeReleases =
-    userData.accessRole.trim().toLowerCase() === "owner" ||
-    (userData.jobRole ?? "").trim().toLowerCase() === "seo";
+    (accessRole ?? "").trim().toLowerCase() === "owner" ||
+    (jobRole ?? "").trim().toLowerCase() === "seo";
 
   useEffect(() => {
     async function getUserData() {
