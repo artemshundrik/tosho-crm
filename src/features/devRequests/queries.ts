@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isKnownModuleKey } from "@/lib/projectMap";
+import { toAuditEntries, type AuditEntry } from "./history";
 import {
   toDevRequest,
   type DevRequest,
@@ -16,6 +18,7 @@ const SELECT_COLUMNS =
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */
   board: (teamId: string | null) => ["devRequests", teamId, "board"] as const,
+  history: (id: string | null) => ["devRequests", id, "history"] as const,
 };
 
 /**
@@ -37,6 +40,60 @@ export function useDevRequestBoard(teamId: string | null) {
         .limit(300);
       if (error) throw error;
       return (data ?? []).map((row) => toDevRequest(row));
+    },
+  });
+}
+
+/**
+ * Історія змін картки.
+ *
+ * Свого журналу в запитів немає — поля пише генеричний аудит-тригер
+ * (tosho.audit_row_change у scripts/audit-log.sql), а читає їх RPC
+ * tosho.get_audit_log. Вона SECURITY DEFINER і має власний гейт: workspace
+ * owner/admin плюс окрема умова для приватних карток запитів. Тобто відмова
+ * тут — нормальний, очікуваний стан, а не поломка: `retry: false`, і секція
+ * в дровері просто не показується (див. DevRequestDetailsSheet).
+ *
+ * p_team_id передаємо разом із workspace: картки, заведені з Telegram і
+ * Cowork, можуть не мати workspace_id, і без другого ключа їхня історія
+ * лишилась би невидимою.
+ */
+export function useDevRequestHistory(request: DevRequest | null, userId: string | null) {
+  const requestId = request?.id ?? null;
+  const teamId = request?.teamId ?? null;
+
+  return useQuery({
+    queryKey: devRequestKeys.history(requestId),
+    enabled: Boolean(requestId && userId),
+    retry: false,
+    staleTime: 30_000,
+    queryFn: async (): Promise<AuditEntry[]> => {
+      // workspace_id у контексті авторизації немає — резолвимо тим самим
+      // кешованим помічником, що й при створенні картки.
+      const workspaceId = await resolveWorkspaceId(userId);
+      if (!workspaceId) return [];
+      const { data, error } = await supabase.schema("tosho").rpc("get_audit_log", {
+        p_workspace_id: workspaceId,
+        p_entity_type: "dev_request",
+        p_entity_id: requestId as string,
+        p_limit: 50,
+        p_team_id: teamId ?? undefined,
+      });
+      if (error) throw error;
+      const entries = toAuditEntries(data);
+
+      // Ім'я того, хто змінив. RPC віддає лише user_id: колонка actor_name у
+      // базі майже завжди порожня, її навмисно резолвлять на читанні. Довідник
+      // модульно кешований (listWorkspaceMembersForDisplay), тож зайвого
+      // запиту тут не виникає.
+      if (!entries.some((entry) => entry.actorUserId && !entry.actorName)) return entries;
+      const members = await listWorkspaceMembersForDisplay(workspaceId);
+      const nameById = new Map(members.map((member) => [member.userId, member.label]));
+      return entries.map((entry) =>
+        entry.actorName || !entry.actorUserId
+          ? entry
+          : { ...entry, actorName: nameById.get(entry.actorUserId) ?? null }
+      );
     },
   });
 }

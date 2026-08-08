@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { PlusCircle, Trash2, X } from "lucide-react";
+import { PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -12,11 +12,11 @@ import { Button } from "@/components/ui/button";
 import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
+import { DevRequestDetailsSheet } from "@/features/devRequests/DevRequestDetailsSheet";
 import {
   NewDevRequestDialog,
   type NewDevRequestInput,
 } from "@/features/devRequests/NewDevRequestDialog";
-import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import {
   useCreateDevRequest,
   useDeleteDevRequest,
@@ -28,16 +28,6 @@ import type { DevRequest, RequestStatus } from "@/features/devRequests/types";
 
 /** Скільки відкритих карток віддаємо моделі на звірку дублів. */
 const OPEN_TITLES_LIMIT = 50;
-
-/**
- * Подій activity_log у запитів поки немає — історію полів пише аудит-тригер, і
- * вона з'явиться в стрічці окремим кроком фази 2. Порожній список означає
- * «стрічка лише з повідомлень», і панель тоді в activity_log не ходить взагалі.
- *
- * Стала на рівні модуля, а не літерал у JSX: інакше кожен рендер сторінки
- * створював би новий масив.
- */
-const NO_THREAD_EVENTS: string[] = [];
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -230,58 +220,25 @@ export default function DevRequestsPage() {
         <p className="mb-4 text-sm text-destructive">Не вдалося завантажити запити.</p>
       ) : null}
 
-      {/* items-start обов'язковий: без нього колонка обговорення розтягнулась би
-          на висоту дошки, а дошка росте разом із кількістю карток. */}
-      <div className="flex items-start gap-4">
-        {/* min-w-0 тримає горизонтальну прокрутку дошки всередині неї самої:
-            без цього flex-елемент роздувся б по вмісту й скрол поїхав би на
-            всю сторінку. */}
-        <div className="min-w-0 flex-1">
-          <DevRequestBoard
-            requests={requests}
-            onMove={handleMove}
-            onSelect={setSelected}
-            onEdit={openEdit}
-            onDelete={setPendingDelete}
-            canManage={canSee}
-          />
-        </div>
+      {/* Дошка на всю ширину: деталі картки відкриваються дровером-накладкою, а
+          не колонкою збоку — інакше вона з'їдала б ширину саме тоді, коли
+          дошку прокручують горизонтально. */}
+      <DevRequestBoard
+        requests={requests}
+        onMove={handleMove}
+        onSelect={setSelected}
+        onEdit={openEdit}
+        onDelete={setPendingDelete}
+        canManage={canSee}
+      />
 
-        {/* Обговорення поруч із дошкою, а не поверх неї. Нижче xl місця на дві
-            колонки немає — там панель ховаємо, дошка лишається на всю ширину.
-            pt-* повторює верхній відступ дошки, щоб шапки збіглися по лінії. */}
-        {selected ? (
-          <aside className="hidden w-[380px] shrink-0 pt-4 md:pt-5 xl:block">
-            {/* Заголовок із закриттям: без нього обрана картка лишалась обраною
-                назавжди — панель можна було лише підмінити іншою карткою, але
-                не прибрати. */}
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-medium" title={selected.title}>
-                <span className="text-muted-foreground">{selected.label}</span> {selected.title}
-              </p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={() => setSelected(null)}
-                aria-label="Закрити обговорення"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            {/* Висота задається тут, бо сама панель тягнеться під батька
-                (h-full flex-1). Той самий прийом, що в дизайн-задачі. */}
-            <div className="flex max-h-[calc(100dvh-13rem)] min-h-[420px] flex-col">
-              <TaskThreadRail
-                threadKey={`dev-request:${selected.id}`}
-                eventActions={NO_THREAD_EVENTS}
-                quoteId={null}
-                teamId={selected.teamId}
-              />
-            </div>
-          </aside>
-        ) : null}
-      </div>
+      <DevRequestDetailsSheet
+        request={selected}
+        onClose={() => setSelected(null)}
+        onEdit={openEdit}
+        onDelete={setPendingDelete}
+        canManage={canSee}
+      />
 
       <NewDevRequestDialog
         open={dialogOpen}

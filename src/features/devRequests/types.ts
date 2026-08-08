@@ -47,6 +47,26 @@ export type DevRequest = {
 };
 
 /**
+ * Підписи станів. Один список на дошку й на історію змін: у стрічці «Стан на
+ * дошці: У черзі → В роботі» мають стояти рівно ті слова, що на колонках.
+ *
+ * «Вхідні», а НЕ «Треба уточнити». Статус triage означає «щойно прилетіло, ще
+ * не розбирали» — це кошик входу, а не діагноз картці. Старий підпис читався
+ * як «в картці бракує інформації», тож зрозумілі задачі з Cowork і Telegram
+ * виглядали браком, хоч із ними все гаразд. Не повертайте назад: «уточнити» —
+ * це стан ОДНІЄЇ картки, а не колонки, і живе він у тексті картки, а не в
+ * підписі стовпчика.
+ */
+export const STATUS_LABELS: Record<RequestStatus, string> = {
+  triage: "Вхідні",
+  queued: "У черзі",
+  in_progress: "В роботі",
+  done_local: "Готово локально",
+  released: "Викочено",
+  wont_do: "Не робимо",
+};
+
+/**
  * «Не робимо» на дошці окремою колонкою не стоїть: це тупик, а не етап.
  * Показуємо його окремим фільтром, щоб дошка лишалась про роботу в польоті.
  *
@@ -65,17 +85,13 @@ export const BOARD_COLUMNS: Array<{
   icon: ComponentType<{ className?: string }>;
   toneClassName?: string;
 }> = [
-  // «Вхідні», а НЕ «Треба уточнити». Статус triage означає «щойно прилетіло,
-  // ще не розбирали» — це кошик входу, а не діагноз картці. Старий підпис
-  // читався як «в картці бракує інформації», тож зрозумілі задачі з Cowork і
-  // Telegram виглядали браком, хоч із ними все гаразд. Не повертайте назад:
-  // «уточнити» — це стан ОДНІЄЇ картки, а не колонки, і живе він у тексті
-  // картки, а не в підписі стовпчика.
-  { status: "triage", label: "Вхідні", icon: Inbox, toneClassName: "tone-text-warning" },
-  { status: "queued", label: "У черзі", icon: ListTodo },
-  { status: "in_progress", label: "В роботі", icon: Hammer, toneClassName: "tone-text-info" },
-  { status: "done_local", label: "Готово локально", icon: PackageCheck, toneClassName: "tone-text-accent" },
-  { status: "released", label: "Викочено", icon: Rocket, toneClassName: "tone-text-success" },
+  // Підписи беруться зі STATUS_LABELS — див. коментар там, зокрема про те,
+  // чому колонка називається «Вхідні», а не «Треба уточнити».
+  { status: "triage", label: STATUS_LABELS.triage, icon: Inbox, toneClassName: "tone-text-warning" },
+  { status: "queued", label: STATUS_LABELS.queued, icon: ListTodo },
+  { status: "in_progress", label: STATUS_LABELS.in_progress, icon: Hammer, toneClassName: "tone-text-info" },
+  { status: "done_local", label: STATUS_LABELS.done_local, icon: PackageCheck, toneClassName: "tone-text-accent" },
+  { status: "released", label: STATUS_LABELS.released, icon: Rocket, toneClassName: "tone-text-success" },
 ];
 
 export const KIND_LABELS: Record<RequestKind, string> = {
