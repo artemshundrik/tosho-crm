@@ -84,7 +84,8 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import { threadKeys } from "@/features/taskChat/queries";
-import { threadKeyForQuote } from "@/lib/taskThread";
+import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
+import { quoteIdFromRef, threadKeyForQuote } from "@/lib/taskThread";
 import { useQueryClient } from "@tanstack/react-query";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StorageObjectVideo } from "@/components/app/StorageObjectVideo";
@@ -11810,7 +11811,9 @@ export default function DesignTaskPage() {
           <section className="flex max-h-[70vh] min-h-[360px] flex-col xl:max-h-none xl:min-h-0 xl:flex-1">
             {effectiveTeamId ? (
               <TaskThreadRail
-                quoteRef={String(task.quoteId)}
+                threadKey={threadKeyForQuote(String(task.quoteId))}
+                eventActions={THREAD_EVENT_ACTIONS}
+                quoteId={quoteIdFromRef(String(task.quoteId))}
                 teamId={effectiveTeamId}
                 canManage={canManageAssignments}
                 onAttachFiles={async (files) => {

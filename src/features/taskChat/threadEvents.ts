@@ -37,13 +37,23 @@ type ActivityRow = {
 /**
  * `quoteRef` — те, що лежить у metadata->>quote_id. Буває виду
  * `standalone-<uuid>`, тому порівнюємо як текст без приведення до uuid.
+ *
+ * `actions` — білий список дій, який задає сторінка-власник нитки: у різних
+ * сутностей події звуться по-різному. Порожній список означає «стрічка лише з
+ * повідомлень», і тоді в базу не ходимо взагалі.
  */
-export async function fetchThreadEvents(quoteRef: string, teamId: string): Promise<ThreadEntry[]> {
+export async function fetchThreadEvents(
+  quoteRef: string,
+  teamId: string,
+  actions: readonly string[]
+): Promise<ThreadEntry[]> {
+  if (actions.length === 0) return [];
+
   const { data, error } = await supabase
     .from("activity_log")
     .select("id,action,title,created_at,user_id")
     .eq("team_id", teamId)
-    .in("action", [...THREAD_EVENT_ACTIONS])
+    .in("action", [...actions])
     .eq("metadata->>quote_id", quoteRef)
     .order("created_at", { ascending: false })
     .limit(200);

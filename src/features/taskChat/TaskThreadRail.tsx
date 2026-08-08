@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquare, Upload } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { countUnread, threadKeyForQuote, type ThreadAttachment, type ThreadEntry } from "@/lib/taskThread";
+import { countUnread, type ThreadAttachment, type ThreadEntry } from "@/lib/taskThread";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { cn } from "@/lib/utils";
@@ -25,11 +25,23 @@ import { useThreadRealtime } from "./useThreadRealtime";
 const READ_DELAY_MS = 3000;
 /** Стала порожня посилка — щоб не створювати новий масив щорендеру. */
 const EMPTY_REACTIONS: ThreadReaction[] = [];
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Props = {
-  /** quote_id справи; у самостійних задач має вигляд `standalone-<uuid>`. */
-  quoteRef: string;
+  /**
+   * Готовий ключ нитки — його рахує викликач (`quote:<ref>` для прорахунку,
+   * `dev-request:<id>` для запиту на доробку). Панель нічого з нього не виводить.
+   */
+  threadKey: string;
+  /**
+   * Які дії з activity_log показувати в історії подій. Порожній масив —
+   * стрічка лише з повідомлень.
+   */
+  eventActions: readonly string[];
+  /**
+   * FK на tosho.quotes, якщо нитка справді про прорахунок. Для решти сутностей
+   * null: колонка quote_id приймає лише справжній uuid прорахунку.
+   */
+  quoteId?: string | null;
   teamId: string;
   /** Керівник може видаляти чужі повідомлення; свої може кожен. */
   canManage?: boolean;
@@ -44,14 +56,18 @@ type Props = {
  * Нитка одна на справу: та сама розмова відкривається і з дизайн-задачі, і зі
  * сторінки прорахунку. Історія подій — окремо, згорнута (див. ThreadHistory).
  */
-export function TaskThreadRail({ quoteRef, teamId, canManage = false, onAttachFiles, attaching }: Props) {
+export function TaskThreadRail({
+  threadKey,
+  eventActions,
+  quoteId = null,
+  teamId,
+  canManage = false,
+  onAttachFiles,
+  attaching,
+}: Props) {
   const { userId, session } = useAuth();
-  const threadKey = threadKeyForQuote(quoteRef);
-  // FK на tosho.quotes: у колонку quote_id можна класти лише справжній uuid.
-  // Для самостійних задач лишаємо null — нитку тримає thread_key.
-  const quoteId = UUID_RE.test(quoteRef) ? quoteRef : null;
 
-  const entriesQuery = useThreadEntries(threadKey, teamId);
+  const entriesQuery = useThreadEntries(threadKey, teamId, eventActions);
   const readQuery = useThreadRead(threadKey, userId ?? null);
   const sendMutation = useSendThreadMessage(threadKey);
   const markRead = useMarkThreadRead(threadKey);

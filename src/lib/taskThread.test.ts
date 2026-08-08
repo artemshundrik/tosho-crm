@@ -4,6 +4,7 @@ import {
   buildThreadBlocks,
   countUnread,
   designTaskKpi,
+  quoteIdFromRef,
   quoteRefFromThreadKey,
   threadKeyForOrder,
   threadKeyForQuote,
@@ -39,6 +40,30 @@ describe("ключ нитки", () => {
 
   it("для нитки замовлення посилання на прорахунок відсутнє", () => {
     expect(quoteRefFromThreadKey(threadKeyForOrder("o1"))).toBeNull();
+  });
+});
+
+describe("посилання на прорахунок у колонці quote_id", () => {
+  it("справжній uuid лягає в FK як є", () => {
+    expect(quoteIdFromRef("743c0115-8086-4c57-aad8-6e7f7630e49f")).toBe(
+      "743c0115-8086-4c57-aad8-6e7f7630e49f"
+    );
+  });
+
+  it("самостійна задача FK не отримує", () => {
+    expect(quoteIdFromRef("standalone-743c0115-8086-4c57-aad8-6e7f7630e49f")).toBeNull();
+  });
+
+  it("перевірка не прив'язана до версії uuid", () => {
+    // Форма uuid без RFC-версії: у FK такий рядок теж допустимий.
+    expect(quoteIdFromRef("00000000-0000-0000-0000-000000000000")).toBe(
+      "00000000-0000-0000-0000-000000000000"
+    );
+  });
+
+  it("сміття FK не отримує", () => {
+    expect(quoteIdFromRef("")).toBeNull();
+    expect(quoteIdFromRef("REQ-42")).toBeNull();
   });
 });
 

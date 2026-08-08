@@ -56,8 +56,18 @@ async function fetchMessages(threadKey: string): Promise<ThreadEntry[]> {
 /**
  * Стрічка = повідомлення (tosho.quote_comments) + події (public.activity_log).
  * Два джерела зливаються тут; сортує їх buildThreadBlocks.
+ *
+ * `eventActions` у ключі запиту НЕМАЄ свідомо: набір подій однозначно випливає
+ * з простору імен ключа нитки (`quote:` → події дизайн-задачі, `dev-request:` →
+ * жодних), тож двох різних наборів на один ключ не буває. Додати їх у ключ
+ * означало б зламати інвалідацію, яка по всьому проєкту робиться саме за
+ * threadKeys.entries(threadKey).
  */
-export function useThreadEntries(threadKey: string | null, teamId: string | null) {
+export function useThreadEntries(
+  threadKey: string | null,
+  teamId: string | null,
+  eventActions: readonly string[]
+) {
   return useQuery({
     queryKey: threadKeys.entries(threadKey ?? "none"),
     enabled: Boolean(threadKey),
@@ -67,7 +77,9 @@ export function useThreadEntries(threadKey: string | null, teamId: string | null
       const quoteRef = quoteRefFromThreadKey(key);
       const [messages, events] = await Promise.all([
         fetchMessages(key),
-        quoteRef && teamId ? fetchThreadEvents(quoteRef, teamId) : Promise.resolve([]),
+        quoteRef && teamId
+          ? fetchThreadEvents(quoteRef, teamId, eventActions)
+          : Promise.resolve([]),
       ]);
       return [...messages, ...events];
     },

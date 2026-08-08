@@ -57,6 +57,22 @@ export function threadKeyForOrder(orderId: string): string {
   return `order:${orderId}`;
 }
 
+/**
+ * Навмисно ЛАГІДНА перевірка: лише форма uuid, без вимог до версії й варіанта.
+ * Сувора RFC-перевірка тут була б іншою поведінкою, а колонка quote_id приймає
+ * будь-який uuid, який реально лежить у tosho.quotes.
+ */
+const QUOTE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * FK на tosho.quotes: у колонку quote_id можна класти лише справжній uuid.
+ * У самостійних задач quote_id має вигляд `standalone-<uuid>` — для них
+ * повертаємо null, і нитку тримає сам thread_key.
+ */
+export function quoteIdFromRef(quoteRef: string): string | null {
+  return QUOTE_UUID_RE.test(quoteRef) ? quoteRef : null;
+}
+
 /** Посилання на прорахунок із ключа нитки, або null для замовлень без нього. */
 export function quoteRefFromThreadKey(threadKey: string): string | null {
   return threadKey.startsWith("quote:") ? threadKey.slice("quote:".length) : null;
