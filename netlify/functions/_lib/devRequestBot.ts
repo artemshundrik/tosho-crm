@@ -25,17 +25,44 @@ export function isTaskCommand(command: string | null | undefined): boolean {
   return typeof command === "string" && (TASK_COMMANDS as readonly string[]).includes(command);
 }
 
-const KIND_LABELS: Record<DevRequestKind, string> = {
+/**
+ * Людські підписи типу й пріоритету.
+ *
+ * Експортовані, бо їх читає не лише бот: той самий рядок «тип · напрямок ·
+ * пріоритет» показує і відповідь ендпоінта захоплення (_lib/devRequestCapture.ts).
+ * Третя копія цих словників розійшлась би з дошкою на першій же правці.
+ */
+export const KIND_LABELS: Record<DevRequestKind, string> = {
   bug: "Не працює",
   friction: "Незручно",
   feature: "Нова можливість",
 };
 
-const PRIORITY_LABELS: Record<DevRequestPriority, string> = {
+export const PRIORITY_LABELS: Record<DevRequestPriority, string> = {
   low: "Не горить",
   normal: "Звичайний",
   high: "Терміново",
 };
+
+export type DevRequestMetaInput = {
+  kind: DevRequestKind;
+  /** Ключ напрямку. Невідомий чи порожній — рядок просто коротший. */
+  moduleKey: string | null;
+  priority: DevRequestPriority;
+};
+
+/**
+ * Рядок «Не працює · Прорахунки · Терміново».
+ *
+ * Порожні частини випадають разом із роздільником: невідомий напрямок має
+ * робити рядок коротшим, а не додавати «null» чи «· ·».
+ */
+export function buildDevRequestMeta(input: DevRequestMetaInput): string {
+  return [KIND_LABELS[input.kind], moduleKeyLabel(input.moduleKey), PRIORITY_LABELS[input.priority]]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
 
 /** Людський підпис «REQ-42». Той самий формат, що на дошці. */
 export function formatRequestNumber(number: number): string {
@@ -87,10 +114,7 @@ export type DevRequestReplyInput = {
  * відповідь гірша за зайву картку.
  */
 export function buildDevRequestReply(input: DevRequestReplyInput): string {
-  const meta = [KIND_LABELS[input.kind], moduleKeyLabel(input.moduleKey), PRIORITY_LABELS[input.priority]]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
+  const meta = buildDevRequestMeta(input);
 
   const lines = [
     `📝 <b>${escapeTelegramHtml(formatRequestNumber(input.number))}</b> — записав`,
