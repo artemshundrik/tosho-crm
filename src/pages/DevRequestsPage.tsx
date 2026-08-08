@@ -11,6 +11,7 @@ import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
 import { NewDevRequestDialog } from "@/features/devRequests/NewDevRequestDialog";
+import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import {
   useCreateDevRequest,
   useDevRequestBoard,
@@ -20,6 +21,16 @@ import type { DevRequest, RequestKind, RequestStatus } from "@/features/devReque
 
 /** Скільки відкритих карток віддаємо моделі на звірку дублів. */
 const OPEN_TITLES_LIMIT = 50;
+
+/**
+ * Подій activity_log у запитів поки немає — історію полів пише аудит-тригер, і
+ * вона з'явиться в стрічці окремим кроком фази 2. Порожній список означає
+ * «стрічка лише з повідомлень», і панель тоді в activity_log не ходить взагалі.
+ *
+ * Стала на рівні модуля, а не літерал у JSX: інакше кожен рендер сторінки
+ * створював би новий масив.
+ */
+const NO_THREAD_EVENTS: string[] = [];
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -148,10 +159,13 @@ export default function DevRequestsPage() {
         <p className="mb-4 text-sm text-destructive">Не вдалося завантажити запити.</p>
       ) : null}
 
-      <div className="flex gap-4">
-        {/* data-атрибут — єдиний поки слід вибору: панель обговорення
-            приїде наступною задачею й читатиме той самий стан. */}
-        <div className="min-w-0 flex-1" data-selected-request={selected?.id}>
+      {/* items-start обов'язковий: без нього колонка обговорення розтягнулась би
+          на висоту дошки, а дошка росте разом із кількістю карток. */}
+      <div className="flex items-start gap-4">
+        {/* min-w-0 тримає горизонтальну прокрутку дошки всередині неї самої:
+            без цього flex-елемент роздувся б по вмісту й скрол поїхав би на
+            всю сторінку. */}
+        <div className="min-w-0 flex-1">
           <DevRequestBoard
             requests={requests}
             onMove={handleMove}
@@ -159,6 +173,24 @@ export default function DevRequestsPage() {
             canMove={canSee}
           />
         </div>
+
+        {/* Обговорення поруч із дошкою, а не поверх неї. Нижче xl місця на дві
+            колонки немає — там панель ховаємо, дошка лишається на всю ширину.
+            pt-* повторює верхній відступ дошки, щоб шапки збіглися по лінії. */}
+        {selected ? (
+          <aside className="hidden w-[380px] shrink-0 pt-4 md:pt-5 xl:block">
+            {/* Висота задається тут, бо сама панель тягнеться під батька
+                (h-full flex-1). Той самий прийом, що в дизайн-задачі. */}
+            <div className="flex max-h-[calc(100dvh-13rem)] min-h-[420px] flex-col">
+              <TaskThreadRail
+                threadKey={`dev-request:${selected.id}`}
+                eventActions={NO_THREAD_EVENTS}
+                quoteId={null}
+                teamId={selected.teamId}
+              />
+            </div>
+          </aside>
+        ) : null}
       </div>
 
       <NewDevRequestDialog
