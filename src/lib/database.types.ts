@@ -1433,6 +1433,78 @@ export type Database = {
         }
         Relationships: []
       }
+      dev_requests: {
+        Row: {
+          asked_by_count: number
+          assumptions: Json
+          author_user_id: string | null
+          body: string | null
+          commit_shas: string[]
+          created_at: string
+          created_by: string | null
+          id: string
+          is_private: boolean
+          kind: string
+          number: number
+          released_at: string | null
+          status: string
+          team_id: string
+          tg_chat_id: number | null
+          tg_message_id: number | null
+          tg_user_id: number | null
+          tg_username: string | null
+          title: string
+          updated_at: string
+          workspace_id: string | null
+        }
+        Insert: {
+          asked_by_count?: number
+          assumptions?: Json
+          author_user_id?: string | null
+          body?: string | null
+          commit_shas?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_private?: boolean
+          kind?: string
+          number: number
+          released_at?: string | null
+          status?: string
+          team_id: string
+          tg_chat_id?: number | null
+          tg_message_id?: number | null
+          tg_user_id?: number | null
+          tg_username?: string | null
+          title: string
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          asked_by_count?: number
+          assumptions?: Json
+          author_user_id?: string | null
+          body?: string | null
+          commit_shas?: string[]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_private?: boolean
+          kind?: string
+          number?: number
+          released_at?: string | null
+          status?: string
+          team_id?: string
+          tg_chat_id?: number | null
+          tg_message_id?: number | null
+          tg_user_id?: number | null
+          tg_username?: string | null
+          title?: string
+          updated_at?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       digest_log: {
         Row: {
           created_at: string
@@ -3670,30 +3742,6 @@ export type Database = {
         }
         Relationships: []
       }
-      work_sessions: {
-        Row: {
-          blocks: Json
-          day: string
-          hours: number
-          source: string
-          updated_at: string
-        }
-        Insert: {
-          blocks?: Json
-          day: string
-          hours: number
-          source?: string
-          updated_at?: string
-        }
-        Update: {
-          blocks?: Json
-          day?: string
-          hours?: number
-          source?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       runtime_errors: {
         Row: {
           actor_name: string | null
@@ -4659,6 +4707,30 @@ export type Database = {
           },
         ]
       }
+      work_sessions: {
+        Row: {
+          blocks: Json
+          day: string
+          hours: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          day: string
+          hours: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          day?: string
+          hours?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workspace_invites: {
         Row: {
           accepted_at: string | null
@@ -4962,6 +5034,7 @@ export type Database = {
         Args: { p_user_id: string; p_workspace_id: string }
         Returns: boolean
       }
+      is_owner_or_seo: { Args: never; Returns: boolean }
       is_user_blocked: { Args: { _user_id: string }; Returns: boolean }
       is_workspace_admin:
         | { Args: { p_workspace_id: string }; Returns: boolean }
