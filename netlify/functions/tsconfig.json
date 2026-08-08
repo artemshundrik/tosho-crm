@@ -27,6 +27,7 @@
     "_telegram.ts",
     "_lib/assistantAccess.ts",
     "_lib/assistantAccess.test.ts",
+    "_lib/devRequestDraft.ts",
     "_lib/quotePricing.ts",
     "_lib/releasesDigest.ts",
     "_lib/releasesDigest.test.ts",
