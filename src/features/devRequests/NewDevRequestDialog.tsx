@@ -41,7 +41,27 @@ export type NewDevRequestInput = {
   kind: RequestKind;
   moduleKey: string | null;
   priority: RequestPriority;
-  /** Напрямок і пріоритет лишились такими, як їх поставив розбір. */
+  /**
+   * Напрямок і пріоритет лишились такими, як їх поставив розбір.
+   *
+   * У режимі правки завжди false: людина відкрила картку й натиснула
+   * «Зберегти» — класифікацію підтверджено, навіть якщо жодне поле не
+   * змінилось.
+   */
+  autoClassified: boolean;
+  isPrivate: boolean;
+};
+
+/** Картка, яку редагуємо. Рівно ті поля, які вікно вміє показати й змінити. */
+export type EditableDevRequest = {
+  id: string;
+  /** «REQ-3» — у заголовку вікна, щоб було видно, що саме правимо. */
+  label: string;
+  title: string;
+  body: string;
+  kind: RequestKind;
+  moduleKey: string | null;
+  priority: RequestPriority | null;
   autoClassified: boolean;
   isPrivate: boolean;
 };
@@ -53,6 +73,14 @@ export type NewDevRequestDialogProps = {
   error: string | null;
   /** Відкриті картки — щоб модель підказала дубль. */
   openTitles: Array<{ id: string; label: string; title: string }>;
+  /**
+   * Картка для правки. null (чи відсутній) — вікно працює як «Новий запит».
+   *
+   * Друге майже таке саме вікно завелося б рівно до першої розбіжності: у
+   * створенні й правці однакові поля, однакові списки й однакова звірка
+   * напрямку з реєстром.
+   */
+  request?: EditableDevRequest | null;
   onSubmit: (input: NewDevRequestInput) => void;
 };
 
@@ -87,13 +115,18 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * Вікно «Новий запит».
+ * Вікно запиту: створення і правка одним компонентом.
  *
- * Головний сценарій тут не друк, а розповідь: натиснути кнопку, сказати своїми
- * словами що заважає — і отримати заповнені «Суть» і «Подробиці». Диктування
- * кличеться з `clean: false` навмисно: прибирати «еее» окремим викликом не
- * треба, це зробить розбір разом зі структуруванням, інакше платимо двічі за
- * той самий текст.
+ * Головний сценарій СТВОРЕННЯ — не друк, а розповідь: натиснути кнопку,
+ * сказати своїми словами що заважає — і отримати заповнені «Суть» і
+ * «Подробиці». Диктування кличеться з `clean: false` навмисно: прибирати «еее»
+ * окремим викликом не треба, це зробить розбір разом зі структуруванням,
+ * інакше платимо двічі за той самий текст.
+ *
+ * У ПРАВЦІ розповіді голосом немає, і це не економія: розбір повертає ще й
+ * «схоже на дубль» та «це вже працює» — підказки, які мають сенс рівно один
+ * раз, поки картки ще не існує. Правлять же те, що вже на дошці, руками й
+ * прицільно.
  */
 export function NewDevRequestDialog({
   open,
@@ -101,6 +134,7 @@ export function NewDevRequestDialog({
   saving,
   error,
   openTitles,
+  request = null,
   onSubmit,
 }: NewDevRequestDialogProps) {
   const fieldId = useId();
@@ -204,28 +238,45 @@ export function NewDevRequestDialog({
   });
   const { cancel: cancelDictation } = dictation;
 
+  /**
+   * Що вже налито у форму: id картки або "new".
+   *
+   * Пропс `request` — це картка з дошки, і варто комусь почати передавати її
+   * прямо з кешу (а не знімком, як зараз), кожен рефетч мінятиме посилання.
+   * Без цієї позначки такий рефетч перезаливав би форму посеред набору тексту
+   * й затирав написане — помилка, яку потім шукають годинами.
+   */
+  const filledForRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (open) {
-      // Скидаємо на відкритті, а не на закритті: очищення полів під час
-      // згасання вікна людина встигає побачити.
-      setTitle("");
-      setBody("");
-      setKind("friction");
-      setModuleKey(null);
-      setPriority("normal");
-      setIsPrivate(false);
-      setDuplicateOf(null);
-      setExistingFeature(null);
-      setAutoClassified(false);
-      setDraftError(null);
-      setDrafting(false);
-      kindTouchedRef.current = false;
-      classificationTouchedRef.current = false;
-    } else {
+    if (!open) {
+      filledForRef.current = null;
       // Закрили посеред розповіді — мікрофон має згаснути разом із вікном.
       cancelDictation();
+      return;
     }
-  }, [open, cancelDictation]);
+    const formKey = request?.id ?? "new";
+    if (filledForRef.current === formKey) return;
+    filledForRef.current = formKey;
+
+    // Наливаємо на відкритті, а не чистимо на закритті: очищення полів під час
+    // згасання вікна людина встигає побачити.
+    setTitle(request?.title ?? "");
+    setBody(request?.body ?? "");
+    setKind(request?.kind ?? "friction");
+    setModuleKey(request?.moduleKey ?? null);
+    setPriority(request?.priority ?? "normal");
+    setIsPrivate(request?.isPrivate ?? false);
+    setDuplicateOf(null);
+    setExistingFeature(null);
+    setAutoClassified(request?.autoClassified ?? false);
+    setDraftError(null);
+    setDrafting(false);
+    kindTouchedRef.current = false;
+    classificationTouchedRef.current = false;
+  }, [open, request, cancelDictation]);
+
+  const isEdit = request !== null;
 
   const isRecording = dictation.state === "recording";
   // «Розбираю» для людини одне: і розпізнавання голосу, і розбір тексту.
@@ -256,57 +307,61 @@ export function NewDevRequestDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>Новий запит</DialogTitle>
+          <DialogTitle>{isEdit ? `Редагувати ${request.label}` : "Новий запит"}</DialogTitle>
           <DialogDescription>
-            Що заважає в роботі або чого бракує. Формулювати не обов'язково — можна просто розказати.
+            {isEdit
+              ? "Виправте, що не так: текст, тип, напрямок або пріоритет."
+              : "Що заважає в роботі або чого бракує. Формулювати не обов'язково — можна просто розказати."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-          {/* ── Розповідь голосом ── */}
-          <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant={isRecording ? "controlDestructive" : "control"}
-                size="sm"
-                className="shrink-0 gap-1.5"
-                onClick={() => {
-                  if (isRecording) dictation.stop();
-                  else if (!isBusy) void dictation.start();
-                }}
-                disabled={!dictation.isSupported || isBusy}
-                aria-pressed={isRecording}
-              >
-                {isBusy ? (
-                  <>
-                    <Loader2 className="animate-spin" />
-                    Розбираю…
-                  </>
-                ) : isRecording ? (
-                  <>
-                    <Square className="fill-current" />
-                    <span className="tabular-nums">Зупинити · {formatElapsed(dictation.elapsedMs)}</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic />
-                    Розказати голосом
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground">{hint}</p>
+          {/* ── Розповідь голосом (лише на створенні) ── */}
+          {isEdit ? null : (
+            <div className="space-y-2 rounded-xl border border-border/60 bg-muted/20 p-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant={isRecording ? "controlDestructive" : "control"}
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  onClick={() => {
+                    if (isRecording) dictation.stop();
+                    else if (!isBusy) void dictation.start();
+                  }}
+                  disabled={!dictation.isSupported || isBusy}
+                  aria-pressed={isRecording}
+                >
+                  {isBusy ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Розбираю…
+                    </>
+                  ) : isRecording ? (
+                    <>
+                      <Square className="fill-current" />
+                      <span className="tabular-nums">Зупинити · {formatElapsed(dictation.elapsedMs)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic />
+                      Розказати голосом
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground">{hint}</p>
+              </div>
+              {!dictation.isSupported ? (
+                <p className="text-xs text-muted-foreground">
+                  Цей браузер не вміє записувати звук — залишається набрати текст руками.
+                </p>
+              ) : null}
+              {dictation.state === "error" && dictation.error ? (
+                <p className="text-xs tone-text-danger">{dictation.error}</p>
+              ) : null}
+              {draftError ? <p className="text-xs tone-text-warning">{draftError}</p> : null}
             </div>
-            {!dictation.isSupported ? (
-              <p className="text-xs text-muted-foreground">
-                Цей браузер не вміє записувати звук — залишається набрати текст руками.
-              </p>
-            ) : null}
-            {dictation.state === "error" && dictation.error ? (
-              <p className="text-xs tone-text-danger">{dictation.error}</p>
-            ) : null}
-            {draftError ? <p className="text-xs tone-text-warning">{draftError}</p> : null}
-          </div>
+          )}
 
           {duplicateOf ? (
             <p className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
@@ -426,9 +481,14 @@ export function NewDevRequestDialog({
             </div>
           </div>
 
+          {/* У правці формулювання інше навмисно: збереження гасить прапорець
+              незалежно від того, чи щось змінили, — і людина має знати про це
+              ДО натискання, а не дізнатись із зниклої позначки на картці. */}
           {autoClassified ? (
             <p className="-mt-2 text-xs text-muted-foreground">
-              Напрямок і пріоритет проставив розбір — виправте, якщо не туди.
+              {isEdit
+                ? "Напрямок і пріоритет проставив розбір. Збережете — вважатимемо, що ви їх підтвердили."
+                : "Напрямок і пріоритет проставив розбір — виправте, якщо не туди."}
             </p>
           ) : null}
 
@@ -462,8 +522,10 @@ export function NewDevRequestDialog({
             {saving ? (
               <>
                 <Loader2 className="animate-spin" />
-                Створюємо…
+                {isEdit ? "Зберігаємо…" : "Створюємо…"}
               </>
+            ) : isEdit ? (
+              "Зберегти"
             ) : (
               "Створити"
             )}

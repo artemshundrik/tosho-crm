@@ -1,39 +1,62 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { ChevronsUp, Lock, MoreVertical, PencilLine, Sparkles, Trash2, Users } from "lucide-react";
+
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
-import { BOARD_COLUMNS, KIND_LABELS, type DevRequest, type RequestStatus } from "./types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuItemDestructive,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { cn } from "@/lib/utils";
+import {
+  CARD_MENU_ATTR,
+  buildRequestChips,
+  isCardMenuTarget,
+  resolveAuthor,
+  type ChipWeight,
+} from "./cardModel";
+import { BOARD_COLUMNS, type DevRequest, type RequestStatus } from "./types";
 
 type DevRequestBoardProps = {
   requests: DevRequest[];
   onMove: (id: string, status: RequestStatus) => void;
   /** Клік по картці — відкриває обговорення збоку. */
   onSelect: (request: DevRequest) => void;
-  canMove: boolean;
+  onEdit: (request: DevRequest) => void;
+  onDelete: (request: DevRequest) => void;
+  /**
+   * Рухати, редагувати й видаляти. Один прапорець на всі три дії навмисно: у
+   * базі це теж одне право — політики update і delete на tosho.dev_requests
+   * стоять на тому самому предикаті tosho.is_owner_or_seo().
+   */
+  canManage: boolean;
 };
 
-/**
- * Автор картки: ім'я з Telegram, а якщо його немає — нікнейм.
- *
- * Обидва поля необов'язкові й незалежні: у Telegram username можна не мати
- * взагалі. Показувати лише «@username» означало б, що частина карток лишиться
- * без автора; показувати обидва — шум у мета-рядку, тож нікнейм ховаємо в
- * підказку, коли ім'я вже видно.
- */
-function resolveAuthor(request: DevRequest): { label: string; hint?: string } | null {
-  if (request.displayName) {
-    return {
-      label: request.displayName,
-      hint: request.tgUsername ? `@${request.tgUsername}` : undefined,
-    };
+/** Мітка: тон рівно за «гучністю», свого набору кольорів картка не заводить. */
+function chipClassName(weight: ChipWeight): string {
+  if (weight === "quiet") {
+    return "rounded-full border-border/40 bg-transparent px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground/70";
   }
-  if (request.tgUsername) return { label: `@${request.tgUsername}` };
-  return null;
+  return "rounded-full border-border/60 bg-muted/20 px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground";
 }
 
-export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequestBoardProps) {
+export function DevRequestBoard({
+  requests,
+  onMove,
+  onSelect,
+  onEdit,
+  onDelete,
+  canManage,
+}: DevRequestBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStatus, setHoverStatus] = useState<RequestStatus | null>(null);
   // Після drop браузер стріляє click по картці-джерелу — без паузи кожне
@@ -42,6 +65,15 @@ export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequ
   // обробнику, тож зайвий рендер не потрібен.
   const suppressClickRef = useRef(false);
   const releaseTimerRef = useRef<number | null>(null);
+  /**
+   * Натиснули на меню — перетягування не починаємо.
+   *
+   * Пишеться на pointerdown (він приходить першим у ланцюжку
+   * pointerdown → mousedown → dragstart), бо в самому dragstart цього вже не
+   * видно: подія стріляє на КАРТЦІ, а не на кнопці. Пояснення —
+   * у cardModel.isCardMenuTarget.
+   */
+  const menuPressedRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -64,6 +96,7 @@ export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequ
   const stopDragging = useCallback(() => {
     setDraggingId(null);
     setHoverStatus(null);
+    menuPressedRef.current = false;
     if (releaseTimerRef.current !== null) window.clearTimeout(releaseTimerRef.current);
     releaseTimerRef.current = window.setTimeout(() => {
       suppressClickRef.current = false;
@@ -72,6 +105,11 @@ export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequ
   }, []);
 
   const startDragging = useCallback((event: DragEvent<HTMLDivElement>, id: string) => {
+    // Жест почався на кнопці меню — це не перетягування картки.
+    if (menuPressedRef.current) {
+      event.preventDefault();
+      return;
+    }
     setDraggingId(id);
     suppressClickRef.current = true;
     // Без dataTransfer Firefox взагалі не починає перетягування.
@@ -114,13 +152,13 @@ export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequ
             }
             bodyClassName="space-y-2 px-2.5 pb-2.5 pt-2.5"
             onDragOver={(event) => {
-              if (!canMove || !draggingId) return;
+              if (!canManage || !draggingId) return;
               event.preventDefault();
               event.dataTransfer.dropEffect = "move";
               if (hoverStatus !== column.status) setHoverStatus(column.status);
             }}
             onDragEnter={(event) => {
-              if (!canMove || !draggingId) return;
+              if (!canManage || !draggingId) return;
               event.preventDefault();
               if (hoverStatus !== column.status) setHoverStatus(column.status);
             }}
@@ -131,47 +169,151 @@ export function DevRequestBoard({ requests, onMove, onSelect, canMove }: DevRequ
               setHoverStatus((current) => (current === column.status ? null : current));
             }}
             onDrop={(event) => {
-              if (!canMove) return;
+              if (!canManage) return;
               event.preventDefault();
               handleDrop(column.status);
             }}
           >
             {items.map((request) => {
               const author = resolveAuthor(request);
+              const chips = buildRequestChips(request);
               return (
                 <KanbanCard
                   key={request.id}
-                  draggable={canMove}
+                  draggable={canManage}
                   onClick={() => {
                     if (suppressClickRef.current) return;
                     onSelect(request);
                   }}
+                  // pointerdown, а не mousedown: відкриваючись, Radix гасить
+                  // типову дію pointerdown — а разом із нею й сам mousedown,
+                  // тож на кнопці меню того обробника могло б і не бути.
+                  // Capture-фаза (згори вниз) із тієї ж причини: перехопити
+                  // треба ДО того, як подію обробить сама кнопка.
+                  onPointerDownCapture={(event) => {
+                    menuPressedRef.current = isCardMenuTarget(event.target);
+                  }}
                   onDragStart={(event) => startDragging(event, request.id)}
                   onDragEnd={stopDragging}
                   className={cn(
-                    "p-3 transition-[border-color,opacity] hover:border-foreground/24",
-                    canMove && "cursor-grab active:cursor-grabbing",
+                    // Розкладка й класи — ті самі, що на дошках дизайну та
+                    // прорахунків (DesignPage/QuotesPage): картка запиту має
+                    // читатись як їхня рідня, а не як гість із іншого проєкту.
+                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-3 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+                    canManage && "cursor-grab active:cursor-grabbing",
                     draggingId === request.id && "opacity-50"
                   )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">{request.label}</span>
-                    {request.isPrivate ? (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                        закрита
+                  {/* ── Номер, «закрита» і меню ── */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <HoverCopyText
+                        value={request.label}
+                        textClassName="font-mono text-[13px] font-medium tracking-wide whitespace-nowrap text-muted-foreground"
+                        successMessage="Номер запиту скопійовано"
+                        copyLabel="Скопіювати номер запиту"
+                      />
+                      {request.isPrivate ? (
+                        <Badge
+                          variant="outline"
+                          className="h-5 gap-1 rounded-full border-border/60 bg-secondary px-2 text-3xs font-semibold normal-case tracking-normal text-muted-foreground"
+                          title="Видно лише власнику й СЕО"
+                        >
+                          <Lock className="h-3 w-3" />
+                          Закрита
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    {canManage ? (
+                      // Обгортка з позначкою: за нею pointerdown упізнає меню й
+                      // не дає картці поїхати за кнопкою.
+                      <div {...{ [CARD_MENU_ATTR]: "" }} className="shrink-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground"
+                              aria-label="Дії із запитом"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          {/* Меню їде в портал, але в дереві React лишається
+                              всередині картки — тож без stopPropagation клік по
+                              пункту відкривав би ще й обговорення. */}
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-52"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <DropdownMenuItem onClick={() => onEdit(request)}>
+                              <PencilLine />
+                              Редагувати
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="-mx-1.5" />
+                            <DropdownMenuItemDestructive onClick={() => onDelete(request)}>
+                              <Trash2 />
+                              Видалити
+                            </DropdownMenuItemDestructive>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* ── Тема ── */}
+                  <p className="mt-2 text-sm font-medium leading-snug line-clamp-3" title={request.title}>
+                    {request.title}
+                  </p>
+
+                  {/* ── Мітки: тип, напрямок, пріоритет ── */}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {chips.map((chip) =>
+                      chip.weight === "loud" ? (
+                        <Badge key={chip.key} tone="danger" className="h-5 gap-1 px-2 text-2xs">
+                          <ChevronsUp className="h-3 w-3" />
+                          {chip.label}
+                        </Badge>
+                      ) : (
+                        <Badge key={chip.key} variant="outline" className={chipClassName(chip.weight)}>
+                          {chip.label}
+                        </Badge>
+                      )
+                    )}
+                    {/* Підказка, а не помилка: класифікацію поставив розбір, і
+                        її ще ніхто не звіряв. Без плашки й без кольору — це
+                        привід глянути, а не привід хвилюватись. */}
+                    {request.autoClassified ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-2xs text-muted-foreground/70"
+                        title="Тип, напрямок і пріоритет проставив розбір — людина ще не підтверджувала"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        розбір
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-sm font-medium leading-snug">{request.title}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                    <span>{KIND_LABELS[request.kind]}</span>
-                    {request.askedByCount > 1 ? <span>· просили {request.askedByCount}</span> : null}
-                    {author ? (
-                      <span title={author.hint} className="truncate">
-                        · {author.label}
+
+                  {/* ── Автор і скільки людей просили ── */}
+                  {author || request.askedByCount > 1 ? (
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-[13px] text-muted-foreground">
+                      <span className="min-w-0 truncate" title={author?.hint}>
+                        {author?.label ?? ""}
                       </span>
-                    ) : null}
-                  </div>
+                      {request.askedByCount > 1 ? (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1"
+                          title="Стільки людей просили те саме"
+                        >
+                          <Users className="h-3.5 w-3.5" />
+                          просили {request.askedByCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </KanbanCard>
               );
             })}

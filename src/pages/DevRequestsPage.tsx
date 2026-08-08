@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { PlusCircle, X } from "lucide-react";
+import { PlusCircle, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
@@ -17,8 +19,10 @@ import {
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import {
   useCreateDevRequest,
+  useDeleteDevRequest,
   useDevRequestBoard,
   useMoveDevRequest,
+  useUpdateDevRequest,
 } from "@/features/devRequests/queries";
 import type { DevRequest, RequestStatus } from "@/features/devRequests/types";
 
@@ -50,7 +54,14 @@ export default function DevRequestsPage() {
   const { accessRole, jobRole, teamId, userId } = useAuth();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  /**
+   * Картка, яку правимо. null при відкритому вікні = «новий запит».
+   * Вікно одне на обидва режими — див. NewDevRequestDialog.
+   */
+  const [editing, setEditing] = useState<DevRequest | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  /** Картка, яку просять видалити. Без підтвердження не видаляємо. */
+  const [pendingDelete, setPendingDelete] = useState<DevRequest | null>(null);
   // Вибрана картка — під панель обговорення, яку додає наступна задача.
   const [selected, setSelected] = useState<DevRequest | null>(null);
 
@@ -61,6 +72,8 @@ export default function DevRequestsPage() {
   const board = useDevRequestBoard(teamId);
   const createRequest = useCreateDevRequest();
   const moveRequest = useMoveDevRequest(teamId);
+  const updateRequest = useUpdateDevRequest(teamId);
+  const deleteRequest = useDeleteDevRequest(teamId);
 
   const requests = useMemo(() => {
     const all = board.data ?? [];
@@ -97,34 +110,86 @@ export default function DevRequestsPage() {
     [moveRequest]
   );
 
-  const handleCreate = useCallback(
+  const handleSubmit = useCallback(
     // Тип бере вікно: воно віддає ще й напрямок, пріоритет і прапорець
     // автопроставлення, а перелічувати ці поля вдруге означало б розійтися з
     // ним на наступній зміні.
     (input: NewDevRequestInput) => {
-      if (!teamId || !userId) {
-        setCreateError("Не вдалося визначити команду.");
+      if (editing) {
+        // autoClassified у мутацію не їде свідомо: правка руками ЗАВЖДИ гасить
+        // прапорець, і вирішує це шар даних, а не форма.
+        updateRequest.mutate(
+          { id: editing.id, ...input },
+          {
+            onSuccess: () => {
+              setDialogOpen(false);
+              setEditing(null);
+              // Шапка панелі обговорення показує тему — після правки вона має
+              // збігатися з карткою, а не лишатись старою до перевибору.
+              // autoClassified тут гасимо руками: у базу мутація пише false, і
+              // локальна копія не має розходитись із тим, що там лежить.
+              setSelected((current) =>
+                current && current.id === editing.id
+                  ? { ...current, ...input, autoClassified: false }
+                  : current
+              );
+            },
+            onError: (error) =>
+              setFormError(error instanceof Error ? error.message : "Не вдалося зберегти"),
+          }
+        );
         return;
       }
-      setCreateError(null);
+
+      if (!teamId || !userId) {
+        setFormError("Не вдалося визначити команду.");
+        return;
+      }
       createRequest.mutate(
         { teamId, authorUserId: userId, ...input },
         {
           onSuccess: () => setDialogOpen(false),
           onError: (error) =>
-            setCreateError(error instanceof Error ? error.message : "Не вдалося створити"),
+            setFormError(error instanceof Error ? error.message : "Не вдалося створити"),
         }
       );
     },
-    [createRequest, teamId, userId]
+    [createRequest, editing, teamId, updateRequest, userId]
   );
+
+  const openCreate = useCallback(() => {
+    setEditing(null);
+    setFormError(null);
+    setDialogOpen(true);
+  }, []);
+
+  const openEdit = useCallback((request: DevRequest) => {
+    setEditing(request);
+    setFormError(null);
+    setDialogOpen(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    deleteRequest.mutate(target.id, {
+      onSuccess: () => {
+        setPendingDelete(null);
+        // Видалену картку не можна лишати відкритою збоку: панель показувала б
+        // обговорення справи, якої вже немає.
+        setSelected((current) => (current?.id === target.id ? null : current));
+      },
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : "Не вдалося видалити"),
+    });
+  }, [deleteRequest, pendingDelete]);
 
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
         topRight={
           <Button
-            onClick={() => setDialogOpen(true)}
+            onClick={openCreate}
             className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
           >
             <PlusCircle className="h-4 w-4" />
@@ -148,7 +213,7 @@ export default function DevRequestsPage() {
         }
       />
     ),
-    [board.isFetching, requests.length, search]
+    [board.isFetching, openCreate, requests.length, search]
   );
 
   // Хук стоїть ДО раннього return: інакше на редиректі порядок хуків
@@ -176,7 +241,9 @@ export default function DevRequestsPage() {
             requests={requests}
             onMove={handleMove}
             onSelect={setSelected}
-            canMove={canSee}
+            onEdit={openEdit}
+            onDelete={setPendingDelete}
+            canManage={canSee}
           />
         </div>
 
@@ -219,10 +286,35 @@ export default function DevRequestsPage() {
       <NewDevRequestDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        saving={createRequest.isPending}
-        error={createError}
+        saving={editing ? updateRequest.isPending : createRequest.isPending}
+        error={formError}
         openTitles={openTitles}
-        onSubmit={handleCreate}
+        request={editing}
+        onSubmit={handleSubmit}
+      />
+
+      {/* Підтвердження обов'язкове: видалення незворотне, а картка на дошці
+          стоїть за кнопкою в один клік. */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        title={`Видалити ${pendingDelete?.label ?? "запит"}?`}
+        description={
+          pendingDelete ? (
+            <>
+              «{pendingDelete.title}» зникне з дошки назавжди — разом з обговоренням у картці.
+              Відновити не вийде.
+            </>
+          ) : null
+        }
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        loading={deleteRequest.isPending}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

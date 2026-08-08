@@ -134,3 +134,79 @@ export function useMoveDevRequest(teamId: string | null) {
     },
   });
 }
+
+export type UpdateDevRequestInput = {
+  id: string;
+  title: string;
+  body: string;
+  kind: RequestKind;
+  moduleKey: string | null;
+  priority: RequestPriority | null;
+  isPrivate: boolean;
+};
+
+/**
+ * Правка картки руками.
+ *
+ * auto_classified тут завжди false, і це не побічний ефект, а суть: прапорець
+ * означає «напрямок і пріоритет так і лишились такими, як їх поставив розбір».
+ * Щойно людина відкрила вікно й зберегла — класифікацію підтверджено, навіть
+ * якщо жодне поле не змінилось. Інакше статистика «наскільки розбору можна
+ * довіряти» рахувала б переглянуті людиною картки як заслугу моделі.
+ */
+export function useUpdateDevRequest(teamId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateDevRequestInput) => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("dev_requests")
+        .update({
+          title: input.title,
+          body: input.body || null,
+          kind: input.kind,
+          // Останній рубіж перед записом — той самий, що й на створенні:
+          // констрейнта на module_key в базі немає, реєстр живе в коді.
+          module_key: isKnownModuleKey(input.moduleKey) ? input.moduleKey : null,
+          priority: input.priority,
+          auto_classified: false,
+          is_private: input.isPrivate,
+        })
+        .eq("id", input.id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      // Той самий привід, що й у переміщенні: 0 рядків від RLS приходить без
+      // помилки, тож без цієї перевірки «зберегли» показало б успіх на нічому.
+      if (!data) throw new Error("Немає прав редагувати цю картку");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
+    },
+  });
+}
+
+/**
+ * Видалення картки. Політику DELETE заведено окремо
+ * (scripts/dev-requests-delete-policy.sql) — до неї видалення мовчки чіпало
+ * 0 рядків навіть у власника.
+ */
+export function useDeleteDevRequest(teamId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("dev_requests")
+        .delete()
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Немає прав видалити цю картку");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
+    },
+  });
+}
