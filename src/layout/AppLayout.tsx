@@ -10,6 +10,7 @@ import {
   Loader2,
   Factory,
   FolderKanban,
+  Inbox,
   KeyRound,
   LayoutGrid,
   Megaphone,
@@ -438,6 +439,7 @@ const ROUTES = {
   features: "/features",
   whatsNew: "/whats-new",
   releases: "/releases",
+  devRequests: "/dev-requests",
   observability: "/admin/observability",
 } as const;
 
@@ -482,6 +484,11 @@ const baseSidebarLinks: SidebarLink[] = [
     icon: Megaphone,
     moduleKey: "marketing",
   },
+  // moduleKey тут навмисно НЕМАЄ: hasModuleAccess вважає незаписаний ключ
+  // дозволеним, тож новий ключ відкрив би приватний розділ усім, у кого в
+  // module_access лежить старий JSON. Видимість задає явна гілка у
+  // visibleSidebarLinks — власник і СЕО.
+  { label: "Запити", to: ROUTES.devRequests, group: "operations", icon: Inbox },
 
   // Акаунт
   //
@@ -683,6 +690,14 @@ if (pathname === ROUTES.profile)
       breadcrumbTo: ROUTES.releases,
       showPageHeader: false,
     };
+  if (pathname === ROUTES.devRequests)
+    return {
+      title: "Запити на доробку",
+      subtitle: "Що просить команда і що ми вирішили зробити.",
+      breadcrumbLabel: "Запити",
+      breadcrumbTo: ROUTES.devRequests,
+      showPageHeader: false,
+    };
   // fallback
   return {
     title: "Огляд",
@@ -786,6 +801,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { userId, teamId, session, permissions, jobRole, viewUserId, moduleAccess } = useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
+  const isSeoJobRole = (jobRole ?? "").trim().toLowerCase() === "seo";
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
     teamId,
@@ -825,6 +841,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         if (link.to === ROUTES.observability) {
           return permissions.isSuperAdmin || permissions.isAdmin;
         }
+        // Пункт без moduleKey фільтр нижче пропускає ВСІМ — тому «Запити»
+        // звужуємо тут явно, до тих самих власника й СЕО, що їх пускає RLS.
+        if (link.to === ROUTES.devRequests) {
+          return permissions.isSuperAdmin || isSeoJobRole;
+        }
         if (!link.moduleKey) return true;
         // Доступи ще вантажаться — краще не показати пункт, ніж блимнути ним.
         if (moduleAccess === undefined) return false;
@@ -848,7 +869,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         if (permissions.isSuperAdmin) return !hiddenExplicitly;
         return hasModuleAccess(moduleAccess, link.moduleKey);
       }),
-    [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
+    [moduleAccess, isFinanceJobRole, isSeoJobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {

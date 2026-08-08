@@ -62,6 +62,7 @@ const TeamPage = lazyWithRetry(() =>
 const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const WhatsNewPage = lazyWithRetry(() => import("./pages/WhatsNewPage"));
 const ReleasesPage = lazyWithRetry(() => import("./pages/ReleasesPage"));
+const DevRequestsPage = lazyWithRetry(() => import("./pages/DevRequestsPage"));
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -1086,6 +1087,17 @@ function AppRoutes() {
           element={
             <RouteSuspense shell>
               <ReleasesPage />
+            </RouteSuspense>
+          }
+        />
+        {/* Запити на доробку. Без ModuleRouteGate навмисно: ключ модуля для
+            приватного розділу — пастка (незаписаний ключ вважається
+            дозволеним), тож гейт власник/SEO живе в самій сторінці й у RLS. */}
+        <Route
+          path="dev-requests"
+          element={
+            <RouteSuspense shell>
+              <DevRequestsPage />
             </RouteSuspense>
           }
         />
