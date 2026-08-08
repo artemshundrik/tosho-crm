@@ -64,6 +64,14 @@ create table if not exists tosho.dev_requests (
   author_user_id uuid,
   tg_user_id     bigint,
   tg_username    text,
+  /**
+   * Ім'я автора як його показує Telegram.
+   *
+   * Не дублікат tg_username: у Telegram username НЕОБОВ'ЯЗКОВИЙ, і без цього
+   * поля автор без «@» лишався б у картці безіменним числом — тобто рівно той
+   * випадок, заради якого картка вміє жити без прив'язаного акаунта.
+   */
+  display_name   text,
   tg_chat_id     bigint,
   tg_message_id  bigint,
   /** Скільки людей просили те саме. Пріоритетний сигнал. */
@@ -82,6 +90,11 @@ create table if not exists tosho.dev_requests (
     check (status in ('triage', 'queued', 'in_progress', 'done_local', 'released', 'wont_do')),
   constraint dev_requests_number_unique unique (team_id, number)
 );
+
+-- Догін для баз, де таблиця вже створена першою версією цього файлу:
+-- create table if not exists колонку не додає.
+alter table tosho.dev_requests
+  add column if not exists display_name text;
 
 comment on table tosho.dev_requests is
   'Запити на доробку CRM: з робочого чату, з дошки або заднім числом із релізу. Дизайн — docs/DEV_REQUESTS_DESIGN.md';

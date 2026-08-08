@@ -221,7 +221,11 @@ Git-лог читається форматом `--format=@${SEP}%H${SEP}%cI${SEP
 
 ### 7.1 `tosho.dev_requests`
 
-Ключові поля: `id uuid pk`, `number int` (людський `REQ-42` збирає застосунок), `team_id`, `workspace_id`, `title`, `body`, `kind` (`bug|friction|feature`), `status` (text + check), `is_private boolean default false`, `author_user_id uuid null`, `tg_user_id bigint`, `tg_username text`, `tg_chat_id bigint`, `tg_message_id bigint`, `source_link text`, `asked_by_count int default 1`, `assumptions jsonb default '[]'`, `commit_shas text[] default '{}'`, `released_at timestamptz`, `created_at/updated_at`, `created_by`.
+Ключові поля: `id uuid pk`, `number int` (людський `REQ-42` збирає застосунок), `team_id`, `workspace_id`, `title`, `body`, `kind` (`bug|friction|feature`), `status` (text + check), `is_private boolean default false`, `author_user_id uuid null`, `tg_user_id bigint`, `tg_username text`, `display_name text`, `tg_chat_id bigint`, `tg_message_id bigint`, `asked_by_count int default 1`, `assumptions jsonb default '[]'`, `commit_shas text[] default '{}'`, `released_at timestamptz`, `created_at/updated_at`, `created_by`.
+
+**`source_link` не заводимо** (початкова чернетка його мала). Посилання на вихідне повідомлення повністю виводиться з `tg_chat_id` + `tg_message_id`, а окрема колонка була б третім місцем, де та сама правда може розійтися.
+
+**`display_name` навпаки обов'язковий.** У Telegram `username` необов'язковий, тож без цього поля автор без «@» лишається в картці безіменним числом — а це рівно той випадок, заради якого картка вміє жити без прив'язаного акаунта (§4.3).
 
 Конвенції беремо з найсвіжіших таблиць: `uuid` PK, статуси через `check`, `updated_at` тригером, `comment on` українською, файл закінчується `notify pgrst, 'reload schema';`.
 

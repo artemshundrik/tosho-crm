@@ -1442,6 +1442,7 @@ export type Database = {
           commit_shas: string[]
           created_at: string
           created_by: string | null
+          display_name: string | null
           id: string
           is_private: boolean
           kind: string
@@ -1465,6 +1466,7 @@ export type Database = {
           commit_shas?: string[]
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           id?: string
           is_private?: boolean
           kind?: string
@@ -1488,6 +1490,7 @@ export type Database = {
           commit_shas?: string[]
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           id?: string
           is_private?: boolean
           kind?: string
