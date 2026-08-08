@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOARD_COLUMNS, formatRequestNumber, toDevRequest } from "./types";
+import { BOARD_COLUMNS, MODULE_LABELS, formatRequestNumber, toDevRequest } from "./types";
 
 describe("номер запиту", () => {
   it("збирається застосунком, а не базою", () => {
@@ -18,6 +18,9 @@ describe("мапер рядка", () => {
       body: null,
       kind: "bug",
       status: "queued",
+      module_key: "quotes",
+      priority: "high",
+      auto_classified: true,
       is_private: false,
       author_user_id: null,
       tg_username: "vasya",
@@ -35,6 +38,9 @@ describe("мапер рядка", () => {
       body: "",
       kind: "bug",
       status: "queued",
+      moduleKey: "quotes",
+      priority: "high",
+      autoClassified: true,
       isPrivate: false,
       authorUserId: null,
       tgUsername: "vasya",
@@ -53,6 +59,9 @@ describe("мапер рядка", () => {
       body: null,
       kind: "friction",
       status: "щось_нове",
+      module_key: null,
+      priority: null,
+      auto_classified: false,
       is_private: false,
       author_user_id: null,
       tg_username: null,
@@ -61,6 +70,61 @@ describe("мапер рядка", () => {
       created_at: "2026-08-08T10:00:00Z",
     };
     expect(toDevRequest(row).status).toBe("triage");
+  });
+});
+
+/**
+ * Констрейнта на module_key в базі немає — напрямок звіряє застосунок. Ці три
+ * випадки і є вся його відповідальність: чужий ключ не має доїхати до картки
+ * під виглядом справжнього напрямку.
+ */
+describe("напрямок і пріоритет", () => {
+  function row(overrides: Partial<Parameters<typeof toDevRequest>[0]>) {
+    return {
+      id: "1",
+      number: 1,
+      team_id: "t",
+      title: "щось",
+      body: null,
+      kind: "friction",
+      status: "queued",
+      module_key: null,
+      priority: null,
+      auto_classified: false,
+      is_private: false,
+      author_user_id: null,
+      tg_username: null,
+      display_name: null,
+      asked_by_count: 1,
+      created_at: "2026-08-08T10:00:00Z",
+      ...overrides,
+    };
+  }
+
+  it("ключ із реєстру модулів проходить", () => {
+    expect(toDevRequest(row({ module_key: "design" })).moduleKey).toBe("design");
+  });
+
+  it("вигаданий ключ читаємо як «напрямку немає»", () => {
+    expect(toDevRequest(row({ module_key: "payments" })).moduleKey).toBeNull();
+  });
+
+  it("невідомий пріоритет не стає «терміново»", () => {
+    expect(toDevRequest(row({ priority: "urgent" })).priority).toBeNull();
+    expect(toDevRequest(row({ priority: "low" })).priority).toBe("low");
+  });
+
+  it("порожній auto_classified читається як «ставила людина»", () => {
+    expect(toDevRequest(row({ auto_classified: null })).autoClassified).toBe(false);
+    expect(toDevRequest(row({ auto_classified: true })).autoClassified).toBe(true);
+  });
+});
+
+describe("підпис напрямку", () => {
+  it("береться з реєстру модулів, а не з власного списку", () => {
+    expect(MODULE_LABELS.quotes).toBe("Прорахунки");
+    expect(MODULE_LABELS.design).toBe("Дизайн");
+    expect(MODULE_LABELS.payments).toBeUndefined();
   });
 });
 

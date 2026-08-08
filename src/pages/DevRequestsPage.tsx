@@ -10,14 +10,17 @@ import { Button } from "@/components/ui/button";
 import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
-import { NewDevRequestDialog } from "@/features/devRequests/NewDevRequestDialog";
+import {
+  NewDevRequestDialog,
+  type NewDevRequestInput,
+} from "@/features/devRequests/NewDevRequestDialog";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import {
   useCreateDevRequest,
   useDevRequestBoard,
   useMoveDevRequest,
 } from "@/features/devRequests/queries";
-import type { DevRequest, RequestKind, RequestStatus } from "@/features/devRequests/types";
+import type { DevRequest, RequestStatus } from "@/features/devRequests/types";
 
 /** Скільки відкритих карток віддаємо моделі на звірку дублів. */
 const OPEN_TITLES_LIMIT = 50;
@@ -95,7 +98,10 @@ export default function DevRequestsPage() {
   );
 
   const handleCreate = useCallback(
-    (input: { title: string; body: string; kind: RequestKind; isPrivate: boolean }) => {
+    // Тип бере вікно: воно віддає ще й напрямок, пріоритет і прапорець
+    // автопроставлення, а перелічувати ці поля вдруге означало б розійтися з
+    // ним на наступній зміні.
+    (input: NewDevRequestInput) => {
       if (!teamId || !userId) {
         setCreateError("Не вдалося визначити команду.");
         return;

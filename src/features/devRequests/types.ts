@@ -1,6 +1,9 @@
 import type { ComponentType } from "react";
 import { Hammer, HelpCircle, ListTodo, PackageCheck, Rocket } from "lucide-react";
 
+import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
+import { isKnownModuleKey } from "@/lib/projectMap";
+
 export const REQUEST_STATUSES = [
   "triage",
   "queued",
@@ -15,6 +18,9 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 export const REQUEST_KINDS = ["bug", "friction", "feature"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
+export const REQUEST_PRIORITIES = ["low", "normal", "high"] as const;
+export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
+
 export type DevRequest = {
   id: string;
   number: number;
@@ -25,6 +31,11 @@ export type DevRequest = {
   body: string;
   kind: RequestKind;
   status: RequestStatus;
+  /** Напрямок CRM — ключ модуля з реєстру. Невідомий ключ читаємо як «немає». */
+  moduleKey: string | null;
+  priority: RequestPriority | null;
+  /** Напрямок і пріоритет проставив розбір, а не людина. */
+  autoClassified: boolean;
   isPrivate: boolean;
   authorUserId: string | null;
   tgUsername: string | null;
@@ -66,6 +77,21 @@ export const KIND_LABELS: Record<RequestKind, string> = {
   feature: "Нова можливість",
 };
 
+export const PRIORITY_LABELS: Record<RequestPriority, string> = {
+  low: "Не горить",
+  normal: "Звичайний",
+  high: "Терміново",
+};
+
+/**
+ * Людський підпис напрямку. Рядки НЕ дублюються — вони з того самого реєстру
+ * модулів, що й перемикачі доступів і карта для розбору. Доданий модуль
+ * зʼявляється у списку сам.
+ */
+export const MODULE_LABELS: Record<string, string> = Object.fromEntries(
+  MODULE_DEFINITIONS.map((item) => [item.key, item.label])
+);
+
 export function formatRequestNumber(number: number): string {
   return `REQ-${number}`;
 }
@@ -78,6 +104,9 @@ type DevRequestRow = {
   body: string | null;
   kind: string;
   status: string;
+  module_key: string | null;
+  priority: string | null;
+  auto_classified: boolean | null;
   is_private: boolean;
   author_user_id: string | null;
   tg_username: string | null;
@@ -96,6 +125,21 @@ function asKind(raw: string): RequestKind {
   return (REQUEST_KINDS as readonly string[]).includes(raw) ? (raw as RequestKind) : "friction";
 }
 
+function asPriority(raw: string | null): RequestPriority | null {
+  return raw && (REQUEST_PRIORITIES as readonly string[]).includes(raw)
+    ? (raw as RequestPriority)
+    : null;
+}
+
+/**
+ * Констрейнта на module_key в базі немає — напрямок звіряється застосунком.
+ * Ключ, якого в реєстрі вже (чи ще) немає, читаємо як «напрямку немає»: пустий
+ * чип чесніший за підпис «undefined» і одразу видно, що картку варто глянути.
+ */
+function asModuleKey(raw: string | null): string | null {
+  return isKnownModuleKey(raw) ? raw : null;
+}
+
 export function toDevRequest(row: DevRequestRow): DevRequest {
   return {
     id: row.id,
@@ -106,6 +150,9 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     body: row.body ?? "",
     kind: asKind(row.kind),
     status: asStatus(row.status),
+    moduleKey: asModuleKey(row.module_key),
+    priority: asPriority(row.priority),
+    autoClassified: row.auto_classified ?? false,
     isPrivate: row.is_private,
     authorUserId: row.author_user_id,
     tgUsername: row.tg_username,

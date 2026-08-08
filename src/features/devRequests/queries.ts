@@ -1,10 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { resolveWorkspaceId } from "@/lib/workspace";
-import { toDevRequest, type DevRequest, type RequestKind, type RequestStatus } from "./types";
+import { isKnownModuleKey } from "@/lib/projectMap";
+import {
+  toDevRequest,
+  type DevRequest,
+  type RequestKind,
+  type RequestPriority,
+  type RequestStatus,
+} from "./types";
 
 const SELECT_COLUMNS =
-  "id,number,team_id,title,body,kind,status,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
+  "id,number,team_id,title,body,kind,status,module_key,priority,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
 
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */
@@ -39,6 +46,11 @@ export type CreateDevRequestInput = {
   title: string;
   body: string;
   kind: RequestKind;
+  /** Напрямок CRM: ключ модуля або null, якщо не визначили. */
+  moduleKey: string | null;
+  priority: RequestPriority | null;
+  /** Напрямок і пріоритет так і лишились такими, як їх поставив розбір. */
+  autoClassified: boolean;
   isPrivate: boolean;
   authorUserId: string;
 };
@@ -79,6 +91,12 @@ export function useCreateDevRequest() {
           body: input.body || null,
           kind: input.kind,
           status: "queued",
+          // Констрейнта на module_key в базі немає навмисно (реєстр живе в
+          // коді), тож останній рубіж перед записом — тут. Ключ, якого в
+          // реєстрі немає, пишемо як «немає напрямку».
+          module_key: isKnownModuleKey(input.moduleKey) ? input.moduleKey : null,
+          priority: input.priority,
+          auto_classified: input.autoClassified,
           is_private: input.isPrivate,
           author_user_id: input.authorUserId,
           created_by: input.authorUserId,

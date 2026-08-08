@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Loader2, Mic, Square } from "lucide-react";
+import { Lightbulb, Loader2, Mic, Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,9 +21,30 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MODULE_KEYS } from "@/lib/moduleAccess";
+import { isKnownModuleKey } from "@/lib/projectMap";
 import { supabase } from "@/lib/supabaseClient";
 import { useDictation } from "@/lib/useDictation";
-import { KIND_LABELS, REQUEST_KINDS, type RequestKind } from "./types";
+import {
+  KIND_LABELS,
+  MODULE_LABELS,
+  PRIORITY_LABELS,
+  REQUEST_KINDS,
+  REQUEST_PRIORITIES,
+  type RequestKind,
+  type RequestPriority,
+} from "./types";
+
+export type NewDevRequestInput = {
+  title: string;
+  body: string;
+  kind: RequestKind;
+  moduleKey: string | null;
+  priority: RequestPriority;
+  /** Напрямок і пріоритет лишились такими, як їх поставив розбір. */
+  autoClassified: boolean;
+  isPrivate: boolean;
+};
 
 export type NewDevRequestDialogProps = {
   open: boolean;
@@ -32,7 +53,7 @@ export type NewDevRequestDialogProps = {
   error: string | null;
   /** Відкриті картки — щоб модель підказала дубль. */
   openTitles: Array<{ id: string; label: string; title: string }>;
-  onSubmit: (input: { title: string; body: string; kind: RequestKind; isPrivate: boolean }) => void;
+  onSubmit: (input: NewDevRequestInput) => void;
 };
 
 type DraftResponse = {
@@ -40,11 +61,23 @@ type DraftResponse = {
   body?: string | null;
   kind?: string | null;
   duplicateOf?: string | null;
+  moduleKey?: string | null;
+  priority?: string | null;
+  existingFeature?: string | null;
 };
+
+/** Значення «немає напрямку»: Radix Select не приймає порожній рядок як value. */
+const NO_MODULE = "__none__";
 
 function asKind(value: unknown): RequestKind | null {
   return typeof value === "string" && (REQUEST_KINDS as readonly string[]).includes(value)
     ? (value as RequestKind)
+    : null;
+}
+
+function asPriority(value: unknown): RequestPriority | null {
+  return typeof value === "string" && (REQUEST_PRIORITIES as readonly string[]).includes(value)
+    ? (value as RequestPriority)
     : null;
 }
 
@@ -74,13 +107,24 @@ export function NewDevRequestDialog({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [kind, setKind] = useState<RequestKind>("friction");
+  const [moduleKey, setModuleKey] = useState<string | null>(null);
+  const [priority, setPriority] = useState<RequestPriority>("normal");
   const [isPrivate, setIsPrivate] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [duplicateOf, setDuplicateOf] = useState<string | null>(null);
+  const [existingFeature, setExistingFeature] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  /**
+   * Чи напрямок із пріоритетом так і лишились такими, як їх поставив розбір.
+   * Правка руками гасить прапорець — інакше за цим полем не можна було б
+   * порахувати, наскільки розбору взагалі можна довіряти.
+   */
+  const [autoClassified, setAutoClassified] = useState(false);
   // Тип, обраний руками, надиктоване не перебиває — так само, як спосіб оплати
   // в замовленні без прорахунку.
   const kindTouchedRef = useRef(false);
+  /** Те саме для напрямку й пріоритету: обране людиною розбір не затирає. */
+  const classificationTouchedRef = useRef(false);
 
   // Надиктоване ДОПИСУЄМО, а не затираємо: людина могла почати друкувати сама, і
   // втратити це через голос було б гірше, ніж дописати зайвий абзац.
@@ -121,6 +165,24 @@ export function NewDevRequestDialog({
         const draftKind = asKind(draft.kind);
         if (draftKind && !kindTouchedRef.current) setKind(draftKind);
         setDuplicateOf((draft.duplicateOf ?? "").trim() || null);
+        setExistingFeature((draft.existingFeature ?? "").trim() || null);
+
+        // Напрямок функція вже звірила з реєстром, але відповідь приходить із
+        // мережі — перевіряємо ще раз тут, щоб у Select не потрапило значення,
+        // якого немає в списку.
+        if (!classificationTouchedRef.current) {
+          const draftModule = isKnownModuleKey(draft.moduleKey) ? draft.moduleKey : null;
+          const draftPriority = asPriority(draft.priority);
+          setModuleKey(draftModule);
+          setPriority(draftPriority ?? "normal");
+          // «Проставлено автоматично» — лише коли розбір справді щось вирішив.
+          // Аварійна відповідь (розбір упав) теж містить пріоритет "normal", і
+          // без цієї умови вона зараховувалась би в успішні класифікації —
+          // тобто саме та статистика, заради якої прапорець і заведено, брехала б.
+          setAutoClassified(
+            Boolean(draftModule) || (draftPriority !== null && draftPriority !== "normal")
+          );
+        }
       } catch {
         // Що б не сталося — мережа, сесія, поламана відповідь — надиктоване
         // лишається в описі. Це єдине, що не можна втрачати.
@@ -149,11 +211,16 @@ export function NewDevRequestDialog({
       setTitle("");
       setBody("");
       setKind("friction");
+      setModuleKey(null);
+      setPriority("normal");
       setIsPrivate(false);
       setDuplicateOf(null);
+      setExistingFeature(null);
+      setAutoClassified(false);
       setDraftError(null);
       setDrafting(false);
       kindTouchedRef.current = false;
+      classificationTouchedRef.current = false;
     } else {
       // Закрили посеред розповіді — мікрофон має згаснути разом із вікном.
       cancelDictation();
@@ -174,7 +241,15 @@ export function NewDevRequestDialog({
 
   const handleSubmit = () => {
     if (!canSubmit) return;
-    onSubmit({ title: title.trim(), body: body.trim(), kind, isPrivate });
+    onSubmit({
+      title: title.trim(),
+      body: body.trim(),
+      kind,
+      moduleKey,
+      priority,
+      autoClassified,
+      isPrivate,
+    });
   };
 
   return (
@@ -239,6 +314,20 @@ export function NewDevRequestDialog({
             </p>
           ) : null}
 
+          {/* Підказка помітна, але нічого не блокує: впевнена неправильна
+              відповідь гірша за зайву картку, тож рішення лишається за людиною,
+              а мовчки не зникає нічого. */}
+          {existingFeature ? (
+            <div className="flex items-start gap-2 rounded-lg border tone-warning-subtle px-3 py-2 text-xs leading-5">
+              <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <span className="font-medium">Схоже, це вже працює:</span> {existingFeature}
+                <br />
+                Якщо це не воно — створюйте картку, нічого страшного.
+              </span>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <Label htmlFor={`${fieldId}-title`}>
               Суть <span className="text-destructive">*</span>
@@ -284,6 +373,64 @@ export function NewDevRequestDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Напрямок і пріоритет проставляє розбір, але останнє слово за
+              людиною: неправильний напрямок псує статистику тихіше й довше,
+              ніж порожній. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldId}-module`}>Напрямок</Label>
+              <Select
+                value={moduleKey ?? NO_MODULE}
+                onValueChange={(value) => {
+                  classificationTouchedRef.current = true;
+                  setAutoClassified(false);
+                  setModuleKey(value === NO_MODULE ? null : value);
+                }}
+              >
+                <SelectTrigger id={`${fieldId}-module`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_MODULE}>Не визначено</SelectItem>
+                  {MODULE_KEYS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {MODULE_LABELS[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldId}-priority`}>Пріоритет</Label>
+              <Select
+                value={priority}
+                onValueChange={(value) => {
+                  classificationTouchedRef.current = true;
+                  setAutoClassified(false);
+                  setPriority(value as RequestPriority);
+                }}
+              >
+                <SelectTrigger id={`${fieldId}-priority`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REQUEST_PRIORITIES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {PRIORITY_LABELS[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {autoClassified ? (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Напрямок і пріоритет проставив розбір — виправте, якщо не туди.
+            </p>
+          ) : null}
 
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5">
             <div className="min-w-0">
