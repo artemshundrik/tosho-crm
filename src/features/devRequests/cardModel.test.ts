@@ -6,6 +6,7 @@ import {
   isCardMenuTarget,
   isUrgentCard,
   resolveAuthor,
+  shouldRestoreMenuFocus,
 } from "./cardModel";
 import type { DevRequest } from "./types";
 
@@ -174,6 +175,21 @@ describe("натиснули на меню картки", () => {
       },
     });
     expect(seen).toEqual([`[${CARD_MENU_ATTR}]`]);
+  });
+});
+
+/**
+ * Рінг на «⋯» після кліку мишею. Полагоджено не глушінням рінга, а тим, кому
+ * повертаємо фокус, — тож тест захищає саме доступність: клавіатура має
+ * отримати фокус назад завжди.
+ */
+describe("фокус після закриття меню картки", () => {
+  it("клавіатурі фокус повертаємо — інакше Tab почне обхід спочатку", () => {
+    expect(shouldRestoreMenuFocus("keyboard")).toBe(true);
+  });
+
+  it("миші не повертаємо — саме звідти брався синій ореол на кнопці", () => {
+    expect(shouldRestoreMenuFocus("pointer")).toBe(false);
   });
 });
 
