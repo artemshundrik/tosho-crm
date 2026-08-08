@@ -113,6 +113,14 @@ export type BoardCard = {
   /** Ключ напрямку з реєстру модулів. Невідомий читаємо як «немає». */
   moduleKey: string | null;
   priority: DevRequestPriority | null;
+  /**
+   * Приватна картка: у CRM її бачать лише власник і SEO.
+   *
+   * Тут вона не фільтрується (обидва входи відкриті саме цим людям), але
+   * позначається: той, хто збирається переслати список чи зробити скріншот, має
+   * бачити, який саме рядок не для всіх — ДО того, як натисне «поділитись».
+   */
+  isPrivate: boolean;
   createdAt: string;
 };
 
@@ -124,6 +132,7 @@ type BoardRow = {
   status?: string | null;
   module_key?: string | null;
   priority?: string | null;
+  is_private?: boolean | null;
   created_at?: string | null;
 };
 
@@ -155,8 +164,16 @@ export function toBoardCard(row: BoardRow): BoardCard | null {
     status,
     moduleKey: isKnownModuleKey(row.module_key) ? row.module_key : null,
     priority,
+    // Невідоме значення читаємо як «приватна»: зайвий замок на спільній картці
+    // дешевший за відсутній на приватній.
+    isPrivate: row.is_private !== false,
     createdAt: (row.created_at ?? "").trim(),
   };
+}
+
+/** Замок у рядку списку. Порожньо для спільних карток — позначаємо лише виняток. */
+export function privacyMark(card: Pick<BoardCard, "isPrivate">): string {
+  return card.isPrivate ? "🔒 " : "";
 }
 
 /**
@@ -294,6 +311,8 @@ export type BoardCardJson = {
   module: string | null;
   priority: string | null;
   urgent: boolean;
+  /** true — картку видно лише власнику й SEO. Показуючи її комусь, це варто знати. */
+  private: boolean;
 };
 
 function toCardJson(card: BoardCard): BoardCardJson {
@@ -309,6 +328,7 @@ function toCardJson(card: BoardCard): BoardCardJson {
     module: moduleKeyLabel(card.moduleKey),
     priority: card.priority ? PRIORITY_LABELS[card.priority] : null,
     urgent: card.priority === "high",
+    private: card.isPrivate,
   };
 }
 
@@ -346,7 +366,11 @@ export function buildBoardListResponse(input: {
       lines.push("", `${group.label} (${group.cards.length})`);
       for (const card of group.cards) {
         const meta = boardCardMeta(card);
-        lines.push(`${priorityMark(card.priority)}${card.label} — ${card.title}${meta ? ` · ${meta}` : ""}`);
+        lines.push(
+          `${privacyMark(card)}${priorityMark(card.priority)}${card.label} — ${card.title}${
+            meta ? ` · ${meta}` : ""
+          }`
+        );
       }
     }
     if (input.hasMore) {
@@ -416,7 +440,8 @@ export function cardNotFoundMessage(number: number): string {
 
 /* --------------------------------- База -------------------------------- */
 
-const SELECT_COLUMNS = "number,title,body,kind,status,module_key,priority,created_at";
+// is_private тут не для фільтрації, а для позначки 🔒 — див. BoardCard.isPrivate.
+const SELECT_COLUMNS = "number,title,body,kind,status,module_key,priority,is_private,created_at";
 
 /**
  * Відкриті картки команди.
@@ -473,7 +498,27 @@ export async function fetchBoardCard(
 export type BoardMoveResult =
   | { ok: true; card: BoardCard; previousStatus: BoardStatus }
   | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "released" }
   | { ok: false; reason: "failed"; message: string };
+
+/**
+ * Викочене руками не знімають.
+ *
+ * Перелік дозволених статусів захищає лише те, куди картку СТАВЛЯТЬ, — і цього
+ * мало: пересунувши викочену картку в «В роботі», ми лишили б їй заповнені
+ * released_at і commit_shas, і дошка почала б суперечити розділу «Релізи».
+ * Тобто рівно та брехня, від якої захищає заборона ставити «Викочено» руками,
+ * тільки з іншого боку.
+ *
+ * Якщо в проді щось не працює — це НОВА картка: реліз таки був, а поламане в
+ * ньому — окремий факт зі своєю історією.
+ */
+export const RELEASED_IS_A_FACT_MESSAGE =
+  "уже викочено — це факт деплою, і руками його не знімають. Якщо в проді щось не так, заведи нову картку.";
+
+export function releasedCardMessage(number: number): string {
+  return `${formatRequestNumber(number)} ${RELEASED_IS_A_FACT_MESSAGE}`;
+}
 
 /**
  * Пересунути картку.
@@ -494,6 +539,7 @@ export async function moveBoardCard(
 ): Promise<BoardMoveResult> {
   const current = await fetchBoardCard(admin, teamId, number);
   if (!current) return { ok: false, reason: "not_found" };
+  if (current.status === "released") return { ok: false, reason: "released" };
 
   const { data, error } = await admin
     .schema("tosho")

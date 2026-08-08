@@ -5,6 +5,8 @@ import {
   isMovableStatus,
   MOVABLE_STATUSES,
   priorityMark,
+  privacyMark,
+  releasedCardMessage,
   sortBoardCards,
   STATUS_EMOJI,
   STATUS_LABELS,
@@ -69,6 +71,42 @@ const NUMBERS_PER_ROW = 4;
 /** Скільки знаків опису лізе в екран картки, поки його ще читають. */
 export const QUEUE_BODY_CHARS = 700;
 
+/**
+ * Стеля теми в повідомленні — уже ПІСЛЯ екранування.
+ *
+ * Ліміт Telegram — 4096 знаків на повідомлення, і перевищення означає не
+ * обрізаний текст, а мовчазну відмову: sendMessage поверне помилку, людина
+ * набере «/черга» й не отримає нічого. Тема в базі не обмежена ніяк (поле text,
+ * форма створення без maxLength), тож вісім карток із довгими темами кладуть
+ * список без жодного зловмисника.
+ *
+ * Рахуємо саме екрановану довжину: «&» перетворюється на «&amp;», тобто
+ * полотно з амперсандів роздувається вп'ятеро, і ліміт по сирому тексту тут не
+ * захищає.
+ */
+export const QUEUE_TITLE_CHARS = 200;
+
+/** Те саме для опису: 700 знаків самих «&» дали б 3500 після екранування. */
+const QUEUE_BODY_ESCAPED_CHARS = 1200;
+
+/**
+ * Екранування з межею по РЕЗУЛЬТАТУ.
+ *
+ * Ріжемо сирий рядок і щоразу міряємо екранований: різати вже екранований було
+ * б небезпечно — зріз посеред «&amp;» лишає голий «&», на якому розбір HTML у
+ * Telegram може впасти цілком. Цикл обмежений max ітерацій, кожна на короткому
+ * рядку.
+ */
+export function escapeClamped(raw: string | null | undefined, maxEscaped: number): string {
+  const text = (raw ?? "").trim();
+  const escaped = escapeTelegramHtml(text);
+  if (escaped.length <= maxEscaped) return escaped;
+
+  let cut = Math.min(text.length, maxEscaped);
+  while (cut > 0 && escapeTelegramHtml(text.slice(0, cut)).length > maxEscaped - 1) cut -= 1;
+  return `${escapeTelegramHtml(text.slice(0, cut).trimEnd())}…`;
+}
+
 export const QUEUE_FORBIDDEN_MESSAGE =
   "Черга запитів — для керівництва: у ній видно й приватні картки.\n\nЩоб завести задачу, перешли мені повідомлення або напиши /задача — це доступно всім.";
 
@@ -76,6 +114,9 @@ export const QUEUE_FORBIDDEN_MESSAGE =
 export const QUEUE_FORBIDDEN_TOAST = "Черга доступна лише керівництву";
 
 export const QUEUE_CARD_GONE_TOAST = "Картки вже немає";
+
+/** Спроба зняти «Викочено». Toast короткий, повний текст — у самій картці. */
+export const QUEUE_RELEASED_TOAST = "Викочене не знімають — заведи нову картку";
 
 export const QUEUE_FAILED_TOAST = "Не вдалось — спробуй ще раз";
 
@@ -165,7 +206,8 @@ export function queueListScreen(input: { cards: BoardCard[]; hasMore?: boolean }
     for (const card of group.cards) {
       const kindMeta = boardCardMeta(card);
       lines.push(
-        `${priorityMark(card.priority)}${escapeTelegramHtml(card.label)} · ${escapeTelegramHtml(card.title)}` +
+        `${privacyMark(card)}${priorityMark(card.priority)}${escapeTelegramHtml(card.label)} · ` +
+          escapeClamped(card.title, QUEUE_TITLE_CHARS) +
           (kindMeta ? ` — <i>${escapeTelegramHtml(kindMeta)}</i>` : "")
       );
     }
@@ -236,24 +278,33 @@ export function queueCardScreen(card: BoardCard, boardUrl: string): QueueScreen 
   const meta = boardCardMeta(card);
 
   const lines = [
-    `${priorityMark(card.priority)}<b>${escapeTelegramHtml(card.label)}</b> · <i>${escapeTelegramHtml(
-      STATUS_LABELS[card.status]
-    )}</i>`,
+    `${privacyMark(card)}${priorityMark(card.priority)}<b>${escapeTelegramHtml(
+      card.label
+    )}</b> · <i>${escapeTelegramHtml(STATUS_LABELS[card.status])}</i>`,
     "",
-    `<b>${escapeTelegramHtml(card.title)}</b>`,
+    `<b>${escapeClamped(card.title, QUEUE_TITLE_CHARS)}</b>`,
   ];
   if (body.text) {
-    lines.push("", escapeTelegramHtml(body.text));
-    if (body.truncated) lines.push("", "<i>Опис обрізано — повністю на дошці.</i>");
+    const escapedBody = escapeClamped(body.text, QUEUE_BODY_ESCAPED_CHARS);
+    lines.push("", escapedBody);
+    if (body.truncated || escapedBody.endsWith("…")) {
+      lines.push("", "<i>Опис обрізано — повністю на дошці.</i>");
+    }
   }
   if (meta) lines.push("", escapeTelegramHtml(meta));
 
-  const actions: InlineKeyboardButton[] = MOVABLE_STATUSES.filter((status) => status !== card.status).map(
-    (status) => ({
-      text: `${STATUS_EMOJI[status]} ${MOVE_LABELS[status]}`,
-      callback_data: queueMoveCallback(card.number, status),
-    })
-  );
+  // Викочену картку руками не знімають — це факт деплою (див.
+  // moveBoardCard). Кнопок дій у неї немає взагалі, і про це сказано прямо:
+  // мовчазно порожній ряд читався б як «щось відвалилось».
+  const released = card.status === "released";
+  if (released) lines.push("", `<i>${escapeTelegramHtml(releasedCardMessage(card.number))}</i>`);
+
+  const actions: InlineKeyboardButton[] = released
+    ? []
+    : MOVABLE_STATUSES.filter((status) => status !== card.status).map((status) => ({
+        text: `${STATUS_EMOJI[status]} ${MOVE_LABELS[status]}`,
+        callback_data: queueMoveCallback(card.number, status),
+      }));
 
   const keyboard: InlineKeyboard = [];
   for (let i = 0; i < actions.length; i += 2) keyboard.push(actions.slice(i, i + 2));

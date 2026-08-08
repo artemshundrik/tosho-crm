@@ -55,6 +55,7 @@ import {
   QUEUE_FAILED_TOAST,
   QUEUE_FORBIDDEN_MESSAGE,
   QUEUE_FORBIDDEN_TOAST,
+  QUEUE_RELEASED_TOAST,
   QUEUE_UNKNOWN_TOAST,
 } from "./_lib/devRequestQueue";
 import {
@@ -1002,6 +1003,19 @@ async function handleQueueCallback(
         await editTelegramMessageText(chatId, messageId, gone.text, {
           replyMarkup: { inline_keyboard: gone.keyboard },
         });
+        return;
+      }
+      // Картку встигли викотити між показом і натисканням (або кнопку зібрали
+      // руками). Перемальовуємо її — на екрані буде видно, чому дій немає.
+      if (result.reason === "released") {
+        await answerTelegramCallback(callbackId, QUEUE_RELEASED_TOAST);
+        const card = await fetchBoardCard(adminClient, teamId, parsed.number);
+        if (card) {
+          const screen = queueCardScreen(card, boardUrl);
+          await editTelegramMessageText(chatId, messageId, screen.text, {
+            replyMarkup: { inline_keyboard: screen.keyboard },
+          });
+        }
         return;
       }
       console.error("dev request move failed:", result.message);

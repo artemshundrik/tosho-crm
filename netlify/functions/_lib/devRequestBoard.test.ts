@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,8 +10,10 @@ import {
   groupBoardCards,
   isMovableStatus,
   MOVABLE_STATUSES,
+  moveBoardCard,
   OPEN_STATUSES,
   parseBoardBody,
+  releasedCardMessage,
   sortBoardCards,
   toBoardCard,
   type BoardCard,
@@ -31,6 +34,7 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
     status: "triage",
     moduleKey: "quotes",
     priority: "normal",
+    isPrivate: false,
     createdAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
   };
@@ -315,5 +319,117 @@ describe("cardNotFoundMessage", () => {
     const message = cardNotFoundMessage(404);
     expect(message).toContain("REQ-404");
     expect(message).toContain("list");
+  });
+});
+
+describe("приватність картки", () => {
+  it("приватна картка позначена замком — щоб її не переслали не глянувши", () => {
+    const response = buildBoardListResponse({
+      cards: [card({ number: 3, isPrivate: true, title: "Про зарплати" })],
+      hasMore: false,
+      url: URL,
+    });
+    expect(response.groups[0].cards[0].private).toBe(true);
+    expect(response.message).toContain("🔒 REQ-3");
+  });
+
+  it("спільна картка замка не має — позначаємо лише виняток", () => {
+    const response = buildBoardListResponse({ cards: [card({ number: 3 })], hasMore: false, url: URL });
+    expect(response.groups[0].cards[0].private).toBe(false);
+    expect(response.message).not.toContain("🔒");
+  });
+
+  it("колонки в рядку немає — вважаємо приватною, а не спільною", () => {
+    // Fail-safe: зайвий замок на спільній картці дешевший за відсутній на
+    // приватній, а забути колонку в новому select — легко.
+    expect(toBoardCard({ number: 5, title: "Щось" })?.isPrivate).toBe(true);
+    expect(toBoardCard({ number: 5, title: "Щось", is_private: false })?.isPrivate).toBe(false);
+  });
+});
+
+/* ------------------------- moveBoardCard: запис ------------------------- */
+
+type ChainStub = {
+  select: () => ChainStub;
+  eq: () => ChainStub;
+  update: (patch: Record<string, unknown>) => ChainStub;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: null }>;
+};
+
+/**
+ * Найтонша заглушка supabase-js, якої вистачає для moveBoardCard: ланцюжок
+ * select/eq/update/maybeSingle над одним рядком плюс журнал записів. Потрібна
+ * саме щоб довести ВІДСУТНІСТЬ запису, а не лише текст відповіді.
+ */
+function fakeAdmin(initial: Record<string, unknown> | null) {
+  const state = { row: initial, updates: [] as Array<Record<string, unknown>> };
+  const chain: ChainStub = {
+    select: () => chain,
+    eq: () => chain,
+    update: (patch) => {
+      state.updates.push(patch);
+      state.row = state.row ? { ...state.row, ...patch } : null;
+      return chain;
+    },
+    maybeSingle: async () => ({ data: state.row, error: null }),
+  };
+  const admin = { schema: () => ({ from: () => chain }) } as unknown as SupabaseClient;
+  return { admin, state };
+}
+
+function row(overrides: Record<string, unknown> = {}) {
+  return {
+    number: 4,
+    title: "Дошка не оновлюється",
+    body: "",
+    kind: "bug",
+    status: "triage",
+    module_key: "quotes",
+    priority: "normal",
+    is_private: false,
+    created_at: "2026-08-01T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("moveBoardCard", () => {
+  it("відкриту картку рухає й повертає попередній стан", async () => {
+    const { admin, state } = fakeAdmin(row());
+    const result = await moveBoardCard(admin, "team-1", 4, "in_progress");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.previousStatus).toBe("triage");
+      expect(result.card.status).toBe("in_progress");
+    }
+    expect(state.updates).toEqual([{ status: "in_progress" }]);
+  });
+
+  it("ВИКОЧЕНУ не чіпає — і в базу не пише жодного рядка", async () => {
+    // Перелік дозволених статусів захищає лише те, КУДИ ставлять. Без цієї
+    // перевірки викочену картку можна було б повернути «в роботу», лишивши їй
+    // released_at і commit_shas, — і дошка почала б суперечити «Релізам».
+    const { admin, state } = fakeAdmin(row({ status: "released" }));
+    const result = await moveBoardCard(admin, "team-1", 4, "in_progress");
+    expect(result).toEqual({ ok: false, reason: "released" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("«Готово локально» рухати можна — це не суперечить жодному запису", async () => {
+    const { admin } = fakeAdmin(row({ status: "done_local" }));
+    const result = await moveBoardCard(admin, "team-1", 4, "in_progress");
+    expect(result.ok).toBe(true);
+  });
+
+  it("картки немає — not_found без запису", async () => {
+    const { admin, state } = fakeAdmin(null);
+    const result = await moveBoardCard(admin, "team-1", 4, "queued");
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("відмова пояснює, що робити далі", () => {
+    const message = releasedCardMessage(4);
+    expect(message).toContain("REQ-4");
+    expect(message).toContain("нову картку");
   });
 });

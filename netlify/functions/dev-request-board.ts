@@ -9,6 +9,7 @@ import {
   fetchOpenBoardCards,
   moveBoardCard,
   parseBoardBody,
+  releasedCardMessage,
 } from "./_lib/devRequestBoard";
 import { CAPTURE_TOKEN_HEADER, isUuid, readHeader, tokenMatches } from "./_lib/devRequestCapture";
 
@@ -108,6 +109,10 @@ export const handler = async (event: HttpEvent) => {
     if (!result.ok) {
       if (result.reason === "not_found") {
         return json(404, { error: cardNotFoundMessage(parsed.number) });
+      }
+      // 409, а не 400: із запитом усе гаразд, це стан картки не дозволяє дію.
+      if (result.reason === "released") {
+        return json(409, { error: releasedCardMessage(parsed.number) });
       }
       console.error("dev-request-board move failed:", result.message);
       return json(500, { error: "Не зміг пересунути картку. Спробуй ще раз за хвилину." });

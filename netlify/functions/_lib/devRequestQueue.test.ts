@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BoardCard } from "./devRequestBoard";
 import {
   clampCardBody,
+  escapeClamped,
   isOwnerOrSeo,
   isQueueCommand,
   moveToast,
@@ -15,7 +16,11 @@ import {
   queueMoveCallback,
   QUEUE_BODY_CHARS,
   QUEUE_LIST_MAX,
+  QUEUE_TITLE_CHARS,
 } from "./devRequestQueue";
+
+/** Ліміт повідомлення Telegram. Перевищення = мовчазна відмова, а не обрізання. */
+const TELEGRAM_MESSAGE_LIMIT = 4096;
 
 const BOARD_URL = "https://tosho.pro/dev-requests";
 
@@ -30,6 +35,7 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
     status: "triage",
     moduleKey: "quotes",
     priority: "normal",
+    isPrivate: false,
     createdAt: "2026-08-01T10:00:00.000Z",
     ...overrides,
   };
@@ -253,6 +259,69 @@ describe("clampCardBody", () => {
     const result = clampCardBody("я".repeat(2000));
     expect(result.truncated).toBe(true);
     expect(result.text.length).toBeLessThanOrEqual(QUEUE_BODY_CHARS + 1);
+  });
+});
+
+describe("escapeClamped — межа рахується ПІСЛЯ екранування", () => {
+  it("короткий текст лише екранується", () => {
+    expect(escapeClamped("Ціна < 0", 100)).toBe("Ціна &lt; 0");
+    expect(escapeClamped(null, 100)).toBe("");
+  });
+
+  it("довгий текст ріжеться до межі", () => {
+    const result = escapeClamped("я".repeat(500), 100);
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result.endsWith("…")).toBe(true);
+  });
+
+  it("полотно з амперсандів не роздувається вп'ятеро й не лишає голого «&»", () => {
+    // «&» → «&amp;»: 200 символів стали б 1000. Саме через це межу міряють по
+    // результату, а різати доводиться сирий рядок — зріз посеред «&amp;» лишив
+    // би «&am», на якому розбір HTML у Telegram падає цілком.
+    const result = escapeClamped("&".repeat(500), 100);
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result.replace(/…$/, "").endsWith("&amp;")).toBe(true);
+    expect(/&(?!amp;|lt;|gt;)/.test(result)).toBe(false);
+  });
+});
+
+describe("довгі теми не кладуть повідомлення мовчки", () => {
+  it("тема без обмежень у базі ріжеться в списку", () => {
+    const screen = queueListScreen({ cards: [card({ number: 1, title: "я".repeat(5000) })] });
+    expect(screen.text.length).toBeLessThan(TELEGRAM_MESSAGE_LIMIT);
+    expect(screen.text).toContain("…");
+  });
+
+  it("вісім довгих тем разом теж влазять — інакше «/черга» мовчки не відповіла б", () => {
+    // Реальний випадок без зловмисника: вісім карток із темами по 500 знаків.
+    const many = Array.from({ length: 12 }, (_, index) =>
+      card({ number: index + 1, title: "тема ".repeat(200), body: "опис ".repeat(500) })
+    );
+    expect(queueListScreen({ cards: many }).text.length).toBeLessThan(TELEGRAM_MESSAGE_LIMIT);
+  });
+
+  it("картка з полотном замість опису теж влазить", () => {
+    const screen = queueCardScreen(
+      card({ number: 1, title: "&".repeat(1000), body: "&".repeat(5000) }),
+      BOARD_URL
+    );
+    expect(screen.text.length).toBeLessThan(TELEGRAM_MESSAGE_LIMIT);
+    expect(screen.text).toContain("Опис обрізано");
+    expect(QUEUE_TITLE_CHARS).toBeLessThanOrEqual(400);
+  });
+});
+
+describe("приватні й викочені картки", () => {
+  it("приватна позначена замком — і в списку, і на картці", () => {
+    const priv = card({ number: 3, isPrivate: true, title: "Про зарплати" });
+    expect(queueListScreen({ cards: [priv] }).text).toContain("🔒 REQ-3");
+    expect(queueCardScreen(priv, BOARD_URL).text).toContain("🔒");
+  });
+
+  it("викочена картка не має кнопок дій — і пояснює чому", () => {
+    const screen = queueCardScreen(card({ number: 3, status: "released" }), BOARD_URL);
+    expect(callbacks(screen.keyboard)).toEqual(["dq:l"]);
+    expect(screen.text).toContain("факт деплою");
   });
 });
 
