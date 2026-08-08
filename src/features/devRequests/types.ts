@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Hammer, HelpCircle, ListTodo, PackageCheck, Rocket } from "lucide-react";
+import { Hammer, Inbox, ListTodo, PackageCheck, Rocket } from "lucide-react";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
 import { isKnownModuleKey } from "@/lib/projectMap";
@@ -64,7 +64,13 @@ export const BOARD_COLUMNS: Array<{
   icon: ComponentType<{ className?: string }>;
   toneClassName?: string;
 }> = [
-  { status: "triage", label: "Треба уточнити", icon: HelpCircle, toneClassName: "tone-text-warning" },
+  // «Вхідні», а НЕ «Треба уточнити». Статус triage означає «щойно прилетіло,
+  // ще не розбирали» — це кошик входу, а не діагноз картці. Старий підпис
+  // читався як «в картці бракує інформації», тож зрозумілі задачі з Cowork і
+  // Telegram виглядали браком, хоч із ними все гаразд. Не повертайте назад:
+  // «уточнити» — це стан ОДНІЄЇ картки, а не колонки, і живе він у тексті
+  // картки, а не в підписі стовпчика.
+  { status: "triage", label: "Вхідні", icon: Inbox, toneClassName: "tone-text-warning" },
   { status: "queued", label: "У черзі", icon: ListTodo },
   { status: "in_progress", label: "В роботі", icon: Hammer, toneClassName: "tone-text-info" },
   { status: "done_local", label: "Готово локально", icon: PackageCheck, toneClassName: "tone-text-accent" },
