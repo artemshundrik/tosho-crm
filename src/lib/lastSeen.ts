@@ -20,8 +20,14 @@ const DAY = 24 * HOUR;
 /** Після цього порога відносний час («43 дні тому») гірший за дату. */
 const RELATIVE_LIMIT_DAYS = 30;
 
-/** «1 день / 3 дні / 5 днів» — повні слова, як просив CEO, не «дн». */
-function plural(n: number, one: string, few: string, many: string): string {
+/**
+ * «1 день / 3 дні / 5 днів» — повні слова, як просив CEO, не «дн».
+ *
+ * Експортується, бо копій цього правила в проєкті вже вісім (employment,
+ * taskThread, amountInWords, TeamMemberCard, AbsenceDialog…). Дев'яту не
+ * заводимо: нове місце, якому треба відмінювання, бере цю.
+ */
+export function pluralUk(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 14) return `${n} ${many}`;
@@ -30,9 +36,9 @@ function plural(n: number, one: string, few: string, many: string): string {
   return `${n} ${many}`;
 }
 
-const days_ = (n: number) => plural(n, "день", "дні", "днів");
-const hours_ = (n: number) => plural(n, "годину", "години", "годин");
-const minutes_ = (n: number) => plural(n, "хвилину", "хвилини", "хвилин");
+const days_ = (n: number) => pluralUk(n, "день", "дні", "днів");
+const hours_ = (n: number) => pluralUk(n, "годину", "години", "годин");
+const minutes_ = (n: number) => pluralUk(n, "хвилину", "хвилини", "хвилин");
 
 export function formatLastSeenAgo(lastSeenAt: string | null | undefined, now = new Date()): string {
   if (!lastSeenAt) return "не заходив";

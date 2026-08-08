@@ -13,6 +13,7 @@ import {
   techReleaseLine,
   weeklyReleaseLine,
 } from "./_lib/releasesDigest";
+import { fetchTriageCreatedAt, inboxLine, summarizeInbox } from "./_lib/devRequestsDigest";
 import {
   TONE_EMOJI,
   collectSystemSignals,
@@ -282,10 +283,22 @@ async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string, 
     // Релізи — прикраса тех-звіту, не його суть: без них звіт усе одно йде.
   }
 
-  return renderTechMessage(signals, todayKey, releaseLine);
+  // Скільки запитів чекає розбору. На порожньому кошику рядка немає.
+  let inbox: string | null = null;
+  try {
+    inbox = inboxLine(summarizeInbox(await fetchTriageCreatedAt(admin, teamIds), now));
+  } catch {
+    // Той самий принцип, що й з релізами: кошик не має права завалити звіт.
+  }
+
+  return renderTechMessage(signals, todayKey, { releaseLine, inboxLine: inbox });
 }
 
-function renderTechMessage(signals: Signal[], todayKey: string, releaseLine?: string | null) {
+function renderTechMessage(
+  signals: Signal[],
+  todayKey: string,
+  tail: { releaseLine?: string | null; inboxLine?: string | null } = {}
+) {
   const tone = worstTone(signals);
   const problems = signals.filter((s) => s.tone === "warning" || s.tone === "danger");
   const good = signals.filter((s) => s.tone === "good");
@@ -303,7 +316,13 @@ function renderTechMessage(signals: Signal[], todayKey: string, releaseLine?: st
     }
   }
   for (const s of neutral) lines.push(`${TONE_EMOJI[s.tone]} ${escapeTelegramHtml(s.text)}`);
-  if (releaseLine) lines.push("", escapeTelegramHtml(releaseLine));
+  // Реліз і кошик — один блок «про роботу над самою CRM», тож порожній рядок
+  // перед ним один на двох, а не по одному на кожен.
+  if (tail.releaseLine) lines.push("", escapeTelegramHtml(tail.releaseLine));
+  if (tail.inboxLine) {
+    if (!tail.releaseLine) lines.push("");
+    lines.push(escapeTelegramHtml(tail.inboxLine));
+  }
 
   return {
     tone,
