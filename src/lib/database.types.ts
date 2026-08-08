@@ -1438,6 +1438,7 @@ export type Database = {
           asked_by_count: number
           assumptions: Json
           author_user_id: string | null
+          auto_classified: boolean
           body: string | null
           commit_shas: string[]
           created_at: string
@@ -1446,7 +1447,9 @@ export type Database = {
           id: string
           is_private: boolean
           kind: string
+          module_key: string | null
           number: number
+          priority: string | null
           released_at: string | null
           status: string
           team_id: string
@@ -1462,6 +1465,7 @@ export type Database = {
           asked_by_count?: number
           assumptions?: Json
           author_user_id?: string | null
+          auto_classified?: boolean
           body?: string | null
           commit_shas?: string[]
           created_at?: string
@@ -1470,7 +1474,9 @@ export type Database = {
           id?: string
           is_private?: boolean
           kind?: string
+          module_key?: string | null
           number: number
+          priority?: string | null
           released_at?: string | null
           status?: string
           team_id: string
@@ -1486,6 +1492,7 @@ export type Database = {
           asked_by_count?: number
           assumptions?: Json
           author_user_id?: string | null
+          auto_classified?: boolean
           body?: string | null
           commit_shas?: string[]
           created_at?: string
@@ -1494,7 +1501,9 @@ export type Database = {
           id?: string
           is_private?: boolean
           kind?: string
+          module_key?: string | null
           number?: number
+          priority?: string | null
           released_at?: string | null
           status?: string
           team_id?: string
