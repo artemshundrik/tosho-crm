@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, X } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -179,6 +179,23 @@ export default function DevRequestsPage() {
             pt-* повторює верхній відступ дошки, щоб шапки збіглися по лінії. */}
         {selected ? (
           <aside className="hidden w-[380px] shrink-0 pt-4 md:pt-5 xl:block">
+            {/* Заголовок із закриттям: без нього обрана картка лишалась обраною
+                назавжди — панель можна було лише підмінити іншою карткою, але
+                не прибрати. */}
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="truncate text-sm font-medium" title={selected.title}>
+                <span className="text-muted-foreground">{selected.label}</span> {selected.title}
+              </p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => setSelected(null)}
+                aria-label="Закрити обговорення"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             {/* Висота задається тут, бо сама панель тягнеться під батька
                 (h-full flex-1). Той самий прийом, що в дизайн-задачі. */}
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-[420px] flex-col">
