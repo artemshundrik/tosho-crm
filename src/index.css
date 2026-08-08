@@ -1248,6 +1248,21 @@
     background-color: hsl(var(--card));
   }
 
+  /* Термінова картка запиту підсвічена ЦІЛКОМ, а не самою міткою: «Терміново»
+     треба впізнавати з іншого кінця дошки, не вчитуючись у ряд міток.
+     Градієнт, а не суцільна заливка, — насиченість мусить падати зверху вниз,
+     інакше червоний прямокутник перебиває сам текст картки (те саме правило,
+     що й у родини .tone-*-subtle). Кольори — тонові змінні, тож темна тема
+     працює без окремої гілки. */
+  .dev-request-card-urgent {
+    border-color: hsl(var(--danger-soft-border) / 0.8);
+    background-image: linear-gradient(
+      to bottom,
+      hsl(var(--danger-soft) / 0.75),
+      hsl(var(--card)) 62%
+    );
+  }
+
   .kanban-empty-state {
     background-color: hsl(var(--secondary));
   }

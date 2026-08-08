@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { ChevronsUp, Lock, MoreVertical, PencilLine, Sparkles, Trash2, Users } from "lucide-react";
+import type { ComponentType } from "react";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
@@ -16,15 +17,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
+import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import {
   CARD_MENU_ATTR,
-  buildRequestChips,
+  buildCardMeta,
   isCardMenuTarget,
-  resolveAuthor,
+  isUrgentCard,
+  type CardMetaKey,
   type ChipWeight,
 } from "./cardModel";
-import { BOARD_COLUMNS, type DevRequest, type RequestStatus } from "./types";
+import {
+  BOARD_COLUMNS,
+  KIND_ICONS,
+  KIND_LABELS,
+  KIND_TONE,
+  type DevRequest,
+  type RequestStatus,
+} from "./types";
 
 type DevRequestBoardProps = {
   requests: DevRequest[];
@@ -44,10 +54,20 @@ type DevRequestBoardProps = {
 /** Мітка: тон рівно за «гучністю», свого набору кольорів картка не заводить. */
 function chipClassName(weight: ChipWeight): string {
   if (weight === "quiet") {
-    return "rounded-full border-border/40 bg-transparent px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground/70";
+    return "rounded-full border-border/40 bg-transparent px-2 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground/70";
   }
-  return "rounded-full border-border/60 bg-muted/20 px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground";
+  return "rounded-full border-border/60 bg-muted/20 px-2 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground";
 }
+
+/**
+ * Іконка при мітці — лише там, де вона додає сенсу, а не повторює слово.
+ * «Просили 3» без людей читається як номер, «закрита» без замка — як стан
+ * задачі, а не як обмеження доступу. Напрямку й автору іконка не потрібна.
+ */
+const META_ICONS: Partial<Record<CardMetaKey, ComponentType<{ className?: string }>>> = {
+  asked: Users,
+  private: Lock,
+};
 
 export function DevRequestBoard({
   requests,
@@ -175,8 +195,9 @@ export function DevRequestBoard({
             }}
           >
             {items.map((request) => {
-              const author = resolveAuthor(request);
-              const chips = buildRequestChips(request);
+              const meta = buildCardMeta(request);
+              const KindIcon = KIND_ICONS[request.kind];
+              const urgent = isUrgentCard(request);
               return (
                 <KanbanCard
                   key={request.id}
@@ -199,36 +220,34 @@ export function DevRequestBoard({
                     // Розкладка й класи — ті самі, що на дошках дизайну та
                     // прорахунків (DesignPage/QuotesPage): картка запиту має
                     // читатись як їхня рідня, а не як гість із іншого проєкту.
-                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-3 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-2.5 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+                    urgent && "dev-request-card-urgent",
                     canManage && "cursor-grab active:cursor-grabbing",
                     draggingId === request.id && "opacity-50"
                   )}
                 >
-                  {/* ── Номер, «закрита» і меню ── */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <HoverCopyText
-                        value={request.label}
-                        textClassName="font-mono text-[13px] font-medium tracking-wide whitespace-nowrap text-muted-foreground"
-                        successMessage="Номер запиту скопійовано"
-                        copyLabel="Скопіювати номер запиту"
-                      />
-                      {request.isPrivate ? (
-                        <Badge
-                          variant="outline"
-                          className="h-5 gap-1 rounded-full border-border/60 bg-secondary px-2 text-3xs font-semibold normal-case tracking-normal text-muted-foreground"
-                          title="Видно лише власнику й СЕО"
-                        >
-                          <Lock className="h-3 w-3" />
-                          Закрита
-                        </Badge>
-                      ) : null}
-                    </div>
+                  {/* ── Тип словом, номер і меню ── */}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1 text-2xs font-semibold",
+                        toneTextClass[KIND_TONE[request.kind]]
+                      )}
+                    >
+                      <KindIcon className="h-3.5 w-3.5" />
+                      {KIND_LABELS[request.kind]}
+                    </span>
+                    <HoverCopyText
+                      value={request.label}
+                      textClassName="font-mono text-2xs font-semibold tracking-wide whitespace-nowrap text-muted-foreground"
+                      successMessage="Номер запиту скопійовано"
+                      copyLabel="Скопіювати номер запиту"
+                    />
 
                     {canManage ? (
                       // Обгортка з позначкою: за нею pointerdown упізнає меню й
                       // не дає картці поїхати за кнопкою.
-                      <div {...{ [CARD_MENU_ATTR]: "" }} className="shrink-0">
+                      <div {...{ [CARD_MENU_ATTR]: "" }} className="ml-auto shrink-0">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -265,24 +284,34 @@ export function DevRequestBoard({
                   </div>
 
                   {/* ── Тема ── */}
-                  <p className="mt-2 text-sm font-medium leading-snug line-clamp-3" title={request.title}>
+                  <p
+                    className="mt-1.5 text-[13px] font-medium leading-snug line-clamp-3"
+                    title={request.title}
+                  >
                     {request.title}
                   </p>
 
-                  {/* ── Мітки: тип, напрямок, пріоритет ── */}
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    {chips.map((chip) =>
-                      chip.weight === "loud" ? (
-                        <Badge key={chip.key} tone="danger" className="h-5 gap-1 px-2 text-2xs">
+                  {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {meta.map((item) => {
+                      const MetaIcon = META_ICONS[item.key];
+                      return item.weight === "loud" ? (
+                        <Badge key={item.key} tone="danger" className="h-5 gap-1 px-2 text-2xs">
                           <ChevronsUp className="h-3 w-3" />
-                          {chip.label}
+                          {item.label}
                         </Badge>
                       ) : (
-                        <Badge key={chip.key} variant="outline" className={chipClassName(chip.weight)}>
-                          {chip.label}
+                        <Badge
+                          key={item.key}
+                          variant="outline"
+                          className={cn("gap-1", chipClassName(item.weight))}
+                          title={item.hint}
+                        >
+                          {MetaIcon ? <MetaIcon className="h-3 w-3" /> : null}
+                          {item.label}
                         </Badge>
-                      )
-                    )}
+                      );
+                    })}
                     {/* Підказка, а не помилка: класифікацію поставив розбір, і
                         її ще ніхто не звіряв. Без плашки й без кольору — це
                         привід глянути, а не привід хвилюватись. */}
@@ -296,24 +325,6 @@ export function DevRequestBoard({
                       </span>
                     ) : null}
                   </div>
-
-                  {/* ── Автор і скільки людей просили ── */}
-                  {author || request.askedByCount > 1 ? (
-                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-[13px] text-muted-foreground">
-                      <span className="min-w-0 truncate" title={author?.hint}>
-                        {author?.label ?? ""}
-                      </span>
-                      {request.askedByCount > 1 ? (
-                        <span
-                          className="inline-flex shrink-0 items-center gap-1"
-                          title="Стільки людей просили те саме"
-                        >
-                          <Users className="h-3.5 w-3.5" />
-                          просили {request.askedByCount}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </KanbanCard>
               );
             })}

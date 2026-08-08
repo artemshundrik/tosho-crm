@@ -1,8 +1,9 @@
 import type { ComponentType } from "react";
-import { Hammer, Inbox, ListTodo, PackageCheck, Rocket } from "lucide-react";
+import { Bug, Hammer, Inbox, Info, ListTodo, PackageCheck, Plus, Rocket } from "lucide-react";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
 import { isKnownModuleKey } from "@/lib/projectMap";
+import type { Tone } from "@/lib/statusTones";
 
 export const REQUEST_STATUSES = [
   "triage",
@@ -83,10 +84,53 @@ export const KIND_LABELS: Record<RequestKind, string> = {
   feature: "Нова можливість",
 };
 
+/**
+ * Тон типу запиту. Береться з реєстру тонів (src/lib/statusTones.ts), свого
+ * набору кольорів картка не заводить: «не працює» звучить як помилка (danger),
+ * «незручно» — як попередження (warning), «нова можливість» — як щось нове
+ * (accent, той самий тон, що й «Готово локально» на дошці).
+ */
+export const KIND_TONE: Record<RequestKind, Tone> = {
+  bug: "danger",
+  friction: "warning",
+  feature: "accent",
+};
+
+/**
+ * Іконка типу. Потрібна не для краси: тип у верхньому рядку картки позначений
+ * кольором, а колір сам по собі не читається дальтоніком і не переживає
+ * чорно-білий друк дошки. Слово + іконка + тон — три канали на одне значення.
+ */
+export const KIND_ICONS: Record<RequestKind, ComponentType<{ className?: string }>> = {
+  bug: Bug,
+  friction: Info,
+  feature: Plus,
+};
+
+/**
+ * Підписи пріоритету у ФОРМІ. Тут «Звичайний» потрібен: у списку вибору має
+ * бути видно всі три значення, зокрема й те, що стоїть за замовчуванням.
+ */
 export const PRIORITY_LABELS: Record<RequestPriority, string> = {
   low: "Не горить",
   normal: "Звичайний",
   high: "Терміново",
+};
+
+/**
+ * Підписи пріоритету НА КАРТЦІ. «Звичайного» тут немає навмисно.
+ *
+ * Мітка «Звичайний» — порожнє слово: вона стоїть на більшості карток, нічого
+ * не розрізняє і з'їдає місце в ряду, який сканують очима. Підписуємо лише
+ * два краї шкали — «Терміново» і «Не горить».
+ *
+ * Це саме ТИП, а не домовленість у коментарі: `Exclude<…, "normal">` не дасть
+ * дописати «звичайний» назад, не переписавши сигнатуру, — а переписати її
+ * випадково, «поки правив верстку», уже не вийде.
+ */
+export const CARD_PRIORITY_LABELS: Record<Exclude<RequestPriority, "normal">, string> = {
+  low: PRIORITY_LABELS.low,
+  high: PRIORITY_LABELS.high,
 };
 
 /**

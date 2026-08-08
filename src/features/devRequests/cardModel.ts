@@ -1,13 +1,13 @@
 import { moduleKeyLabel } from "@/lib/projectMap";
-import { KIND_LABELS, PRIORITY_LABELS, type DevRequest } from "./types";
+import { CARD_PRIORITY_LABELS, type DevRequest } from "./types";
 
 /**
  * Чиста логіка картки на дошці запитів.
  *
- * Винесена з компонента навмисно: тут два правила, які легко зламати
- * непомітно — «порожній напрямок не показуємо взагалі» і «кнопка меню не
- * починає перетягування». Обидва в JSX виглядають як дрібниця, а ламаються
- * тихо, тож живуть окремо й під тестами.
+ * Винесена з компонента навмисно: тут правила, які легко зламати непомітно —
+ * «звичайний пріоритет не підписуємо», «порожній напрямок називаємо словами»
+ * і «кнопка меню не починає перетягування». У JSX кожне виглядає як дрібниця,
+ * а ламається тихо, тож усі живуть окремо й під тестами.
  */
 
 /**
@@ -38,44 +38,102 @@ export function isCardMenuTarget(target: unknown): boolean {
  * Наскільки гучно звучить мітка.
  *  - `loud` — видно з відстані (терміново);
  *  - `normal` — рядова мітка;
- *  - `quiet` — присутня, але не тягне на себе увагу (не горить).
+ *  - `quiet` — присутня, але не тягне на себе увагу (не горить, порожній
+ *    напрямок).
  */
 export type ChipWeight = "quiet" | "normal" | "loud";
 
-export type RequestChip = {
-  key: "kind" | "module" | "priority";
+export type CardMetaKey = "priority" | "module" | "author" | "asked" | "private";
+
+export type CardMeta = {
+  key: CardMetaKey;
   label: string;
   weight: ChipWeight;
+  /** Підказка на наведення: нікнейм автора, пояснення лічильника. */
+  hint?: string;
 };
 
 /**
- * Мітки картки: тип, напрямок, пріоритет.
+ * Як підписано напрямок, якого ще немає.
  *
- * Напрямку немає — мітки немає. Порожній чип гірший за його відсутність: він
- * займає місце в ряду й читається як справжня категорія «—».
- *
- * Пріоритет `high` голосний, `low` тихий, і це не про колір, а про задум:
- * дошку сканують очима, і єдине, що має чіплятись поглядом, — «Терміново».
- * Підпис напрямку береться з реєстру модулів через `moduleKeyLabel`, свого
- * списку рядків тут немає.
+ * Порожнє місце читається як «поля немає», а це неправда: напрямок є, його
+ * просто ніхто не поставив. Слова роблять пропуск видимим — і зрозуміло, що
+ * картку варто відкрити й дозаповнити руками.
  */
-export function buildRequestChips(request: DevRequest): RequestChip[] {
-  const chips: RequestChip[] = [
-    { key: "kind", label: KIND_LABELS[request.kind], weight: "normal" },
-  ];
+export const MODULE_UNSET_LABEL = "напрямок не визначено";
 
-  const moduleLabel = moduleKeyLabel(request.moduleKey);
-  if (moduleLabel) chips.push({ key: "module", label: moduleLabel, weight: "normal" });
+/**
+ * Нижній рядок картки: пріоритет, напрямок, автор, «просили N», «закрита».
+ *
+ * Тип запиту сюди НЕ входить — він піднятий у верхній рядок, словом і тоном
+ * (див. KIND_TONE/KIND_ICONS). Порядок сталий: спершу те, що змінює чергу
+ * (пріоритет), потім те, що каже «куди» (напрямок), і аж потім «від кого».
+ *
+ * Пріоритет `high` голосний, `low` тихий, «звичайний» не підписується взагалі
+ * — див. CARD_PRIORITY_LABELS. Підпис напрямку береться з реєстру модулів
+ * через `moduleKeyLabel`, свого списку рядків тут немає.
+ */
+export function buildCardMeta(request: DevRequest): CardMeta[] {
+  const meta: CardMeta[] = [];
 
-  if (request.priority) {
-    chips.push({
+  // Тільки два краї шкали. `normal` і непроставлений пріоритет — однаково
+  // порожній звук, і показувати їх нічим не краще за мовчання.
+  if (request.priority === "high" || request.priority === "low") {
+    meta.push({
       key: "priority",
-      label: PRIORITY_LABELS[request.priority],
-      weight: request.priority === "high" ? "loud" : request.priority === "low" ? "quiet" : "normal",
+      label: CARD_PRIORITY_LABELS[request.priority],
+      weight: request.priority === "high" ? "loud" : "quiet",
     });
   }
 
-  return chips;
+  const moduleLabel = moduleKeyLabel(request.moduleKey);
+  meta.push(
+    moduleLabel
+      ? { key: "module", label: moduleLabel, weight: "normal" }
+      : {
+          key: "module",
+          label: MODULE_UNSET_LABEL,
+          weight: "quiet",
+          hint: "Напрямок ще ніхто не поставив — відкрийте картку й оберіть",
+        }
+  );
+
+  const author = resolveAuthor(request);
+  if (author) {
+    meta.push({ key: "author", label: author.label, weight: "normal", hint: author.hint });
+  }
+
+  if (request.askedByCount > 1) {
+    meta.push({
+      key: "asked",
+      label: `просили ${request.askedByCount}`,
+      weight: "normal",
+      hint: "Стільки людей просили те саме",
+    });
+  }
+
+  if (request.isPrivate) {
+    meta.push({
+      key: "private",
+      label: "закрита",
+      weight: "normal",
+      hint: "Видно лише власнику й СЕО",
+    });
+  }
+
+  return meta;
+}
+
+/**
+ * Чи підсвічувати картку цілком.
+ *
+ * Правило те саме, що й у гучної мітки, і тримається однією функцією
+ * навмисно: підсвітка картки й слово «Терміново» мають вмикатись разом. Якби
+ * умова стояла в JSX окремо, вони б із часом розійшлись — і на дошці
+ * зʼявилась би червона картка без пояснення або пояснення без картки.
+ */
+export function isUrgentCard(request: DevRequest): boolean {
+  return request.priority === "high";
 }
 
 /**
