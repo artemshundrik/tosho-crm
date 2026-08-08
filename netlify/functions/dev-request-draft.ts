@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { buildProjectMap, isKnownModuleKey } from "../../src/lib/projectMap";
 import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
 
@@ -8,6 +9,11 @@ import { logAiUsage } from "./_aiUsageLog";
 // від «еее» робить цей самий виклик разом зі структуруванням, інакше платимо
 // двічі за той самий текст) і назви відкритих карток, щоб модель могла вказати
 // на очевидний дубль.
+//
+// Разом із текстом у промпт іде карта CRM (src/lib/projectMap.ts) — перелік
+// напрямків і того, що застосунок уже вміє. Без неї модель охайно переказувала
+// сказане, але не могла ні поставити напрямок, ні помітити, що просять уже
+// наявне.
 //
 // Контур env/auth/fetch — той самий, що в transcribe.ts: OPENAI_API_KEY лишається
 // на сервері, кожен виклик іде під валідним Supabase JWT, а користувача
@@ -32,11 +38,19 @@ type RequestBody = {
 const KINDS = ["bug", "friction", "feature"] as const;
 type Kind = (typeof KINDS)[number];
 
+const PRIORITIES = ["low", "normal", "high"] as const;
+type Priority = (typeof PRIORITIES)[number];
+
 type Draft = {
   title: string;
   body: string;
   kind: Kind;
   duplicateOf: string | null;
+  /** Ключ напрямку з реєстру модулів. Вигаданий моделлю — обнуляється. */
+  moduleKey: string | null;
+  priority: Priority;
+  /** «Схоже, це вже працює: …» — назва наявної можливості й де її шукати. */
+  existingFeature: string | null;
 };
 
 /** Хвилина мовлення ≈ 900 знаків; 6000 — це вже дуже довга розповідь. */
@@ -47,6 +61,8 @@ const MAX_OPEN_TITLES = 50;
 const MAX_TITLE_CHARS = 200;
 /** Скільки знаків тексту стають назвою, коли розбір не вдався. */
 const FALLBACK_TITLE_CHARS = 80;
+/** Підказка «це вже працює» має бути рядком, а не переказом половини карти. */
+const MAX_EXISTING_FEATURE_CHARS = 160;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -77,7 +93,10 @@ const SYSTEM_PROMPT = [
   '  "title": "одне речення до 80 символів, з великої літери, без крапки в кінці",',
   '  "body": "структурований опис: що не так, де саме це видно, як має бути. Абзаци через \\n\\n. Якщо чогось не сказали — не вигадуй",',
   '  "kind": "bug | friction | feature",',
-  '  "duplicateOf": "label наявної картки або null"',
+  '  "duplicateOf": "label наявної картки або null",',
+  '  "moduleKey": "ключ напрямку з карти CRM нижче або null",',
+  '  "priority": "low | normal | high",',
+  '  "existingFeature": "коротко: назва наявної можливості й де її шукати, або null"',
   "}",
   "",
   "Правила:",
@@ -86,7 +105,15 @@ const SYSTEM_PROMPT = [
   "- Не додавай того, чого не було сказано. Порожній опис кращий за вигаданий.",
   '- kind: "bug" — щось зламано; "friction" — працює, але незручно; "feature" — нового немає.',
   "- duplicateOf став лише за очевидного збігу теми, інакше null.",
+  "- moduleKey бери ДОСЛІВНО з переліку напрямків у карті CRM і став, лише якщо впевнений. Не впевнений — null. Свої ключі не вигадуй.",
+  "- Порожній напрямок кращий за неправильний: порожнє поле змусить людину глянути самій, а неправильне введе в оману й зіпсує статистику.",
+  '- priority: "high" — щось зламано й заважає працювати прямо зараз; "normal" — звичайна доробка; "low" — косметика й «колись було б добре». За замовчуванням "normal".',
+  "- existingFeature заповнюй, лише якщо в списку «що CRM уже вміє» справді є те, що робить рівно це. Схожа назва — не привід. Список неповний, тож відсутність у ньому нічого не доводить: сумніваєшся — null.",
 ].join("\n");
+
+// Карта збирається один раз на холодний старт: реєстри статичні, а платити
+// токенами за її перезбирання на кожен виклик не треба.
+const DEVELOPER_PROMPT = `${SYSTEM_PROMPT}\n\nКАРТА CRM\n${buildProjectMap()}`;
 
 // Структурований вихід задається так само, як у tosho-ai.ts — це єдине місце в
 // проєкті, де Responses API просять про JSON (transcribe.ts повертає простий
@@ -94,14 +121,21 @@ const SYSTEM_PROMPT = [
 const DRAFT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "body", "kind", "duplicateOf"],
+  required: ["title", "body", "kind", "duplicateOf", "moduleKey", "priority", "existingFeature"],
   properties: {
     title: { type: "string" },
     body: { type: "string" },
     kind: { type: "string", enum: [...KINDS] },
     // strict: true вимагає, щоб поле було в required, тож «немає дубля» — це
-    // саме null, а не відсутнє поле.
+    // саме null, а не відсутнє поле. Те саме стосується moduleKey й
+    // existingFeature: «не знаю» треба вміти сказати явно.
     duplicateOf: { type: ["string", "null"] },
+    // Перелік ключів не дублюємо в схему enum-ом: він уже є в карті, а
+    // правдивість відповіді все одно звіряє isKnownModuleKey — схема не
+    // врятує від «схожого, але не того» ключа краще за реєстр.
+    moduleKey: { type: ["string", "null"] },
+    priority: { type: "string", enum: [...PRIORITIES] },
+    existingFeature: { type: ["string", "null"] },
   },
 } as const;
 
@@ -120,6 +154,13 @@ function asKind(value: unknown): Kind {
     : "friction";
 }
 
+/** Незрозумілий пріоритет — це «звичайна доробка», а не «горить». */
+function asPriority(value: unknown): Priority {
+  return typeof value === "string" && (PRIORITIES as readonly string[]).includes(value)
+    ? (value as Priority)
+    : "normal";
+}
+
 /**
  * Спільна нормалізація — і для розібраної відповіді, і для аварійного варіанта.
  *
@@ -134,12 +175,33 @@ function normalizeDraft(draft: Partial<Draft>, rawText: string): Draft {
     body: normalizeText(draft.body),
     kind: asKind(draft.kind),
     duplicateOf: normalizeText(draft.duplicateOf) || null,
+    // Єдине місце, де напрямок звіряється з реєстром модулів. Модель
+    // регулярно вигадує правдоподібні ключі («payments», «tasks»), і такий
+    // напрямок нікуди не веде, зате виглядає як робота розбору — картка
+    // здається класифікованою, а статистика по напрямках бреше. Порожньо
+    // краще: людина побачить пусте поле й обере сама.
+    moduleKey: isKnownModuleKey(draft.moduleKey) ? draft.moduleKey : null,
+    priority: asPriority(draft.priority),
+    existingFeature:
+      normalizeText(draft.existingFeature).slice(0, MAX_EXISTING_FEATURE_CHARS) || null,
   };
 }
 
 /** Аварійний варіант: надиктоване не має пропадати, навіть коли розбір упав. */
 function fallbackDraft(rawText: string): Draft {
-  return normalizeDraft({ title: "", body: rawText, kind: "friction", duplicateOf: null }, rawText);
+  return normalizeDraft(
+    {
+      title: "",
+      body: rawText,
+      kind: "friction",
+      duplicateOf: null,
+      // Розбору не було — вигадувати напрямок і підказку нема з чого.
+      moduleKey: null,
+      priority: "normal",
+      existingFeature: null,
+    },
+    rawText
+  );
 }
 
 /** Витягнути текст відповіді Responses API: спершу зручний output_text, потім структура. */
@@ -257,7 +319,7 @@ export const handler = async (event: HttpEvent) => {
         model,
         reasoning: { effort: "low" },
         input: [
-          { role: "developer", content: SYSTEM_PROMPT },
+          { role: "developer", content: DEVELOPER_PROMPT },
           { role: "user", content: [{ type: "input_text", text: buildUserPrompt(rawText, openTitles) }] },
         ],
         max_output_tokens: 1600,
