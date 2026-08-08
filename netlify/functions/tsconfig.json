@@ -32,6 +32,8 @@
     "_lib/devRequestBoard.test.ts",
     "_lib/devRequestBot.ts",
     "_lib/devRequestBot.test.ts",
+    "_lib/devRequestQueue.ts",
+    "_lib/devRequestQueue.test.ts",
     "_lib/devRequestCapture.ts",
     "_lib/devRequestCapture.test.ts",
     "_lib/devRequestDraft.ts",

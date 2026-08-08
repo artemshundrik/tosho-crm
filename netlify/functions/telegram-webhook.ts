@@ -38,6 +38,26 @@ import {
   isTaskCommand,
 } from "./_lib/devRequestBot";
 import {
+  BOARD_PATH,
+  fetchBoardCard,
+  fetchOpenBoardCards,
+  moveBoardCard,
+} from "./_lib/devRequestBoard";
+import {
+  isOwnerOrSeo,
+  isQueueCommand,
+  moveToast,
+  parseQueueCallback,
+  queueCardGoneScreen,
+  queueCardScreen,
+  queueListScreen,
+  QUEUE_CARD_GONE_TOAST,
+  QUEUE_FAILED_TOAST,
+  QUEUE_FORBIDDEN_MESSAGE,
+  QUEUE_FORBIDDEN_TOAST,
+  QUEUE_UNKNOWN_TOAST,
+} from "./_lib/devRequestQueue";
+import {
   forwardOriginName,
   isForwardedMessage,
   isPrivateChat,
@@ -275,6 +295,37 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
+  // Черга запитів: подивитись відкриті картки й посунути їх (_lib/devRequestQueue).
+  //
+  // Гейт по ролі всередині resolveQueueAccess і він ОБОВ'ЯЗКОВИЙ: бот ходить
+  // під service-role, тобто RLS обходить, і політика dev_requests_privileged_read
+  // для нього не діє. Без цієї перевірки будь-хто з підключеним ботом побачив
+  // би приватні картки.
+  if (isQueueCommand(command)) {
+    const settings = await loadSettingsByChat(adminClient, chatId);
+    if (!settings) {
+      await sendTelegramMessage(chatId, NOT_LINKED, { parseMode: "HTML" });
+      return;
+    }
+    const access = await resolveQueueAccess(adminClient, settings.user_id);
+    if (!access.ok) {
+      await sendTelegramMessage(chatId, access.message);
+      return;
+    }
+
+    try {
+      const { cards, hasMore } = await fetchOpenBoardCards(adminClient, access.teamId);
+      const screen = queueListScreen({ cards, hasMore });
+      await sendTelegramMessage(chatId, screen.text, {
+        parseMode: "HTML",
+        replyMarkup: screen.keyboard.length > 0 ? { inline_keyboard: screen.keyboard } : undefined,
+      });
+    } catch {
+      await sendTelegramMessage(chatId, "Не зміг прочитати чергу. Спробуй ще раз за хвилину.");
+    }
+    return;
+  }
+
   /**
    * Стан зв'язку CRM ↔ Dropbox однією командою.
    *
@@ -449,6 +500,49 @@ function isAssistantAllowed(_role: RoleContext): boolean {
 
 function isOwnerRole(role: RoleContext): boolean {
   return (role.accessRole ?? "").trim().toLowerCase() === "owner";
+}
+
+type QueueAccess =
+  | { ok: true; teamId: string }
+  | { ok: false; message: string; toast: string };
+
+/**
+ * Гейт черги запитів: людина працює, має роль owner/SEO — і в неї є команда.
+ *
+ * ОДИН резолв на всі входи: і на «/черга», і на КОЖНЕ натискання кнопки.
+ * Перевіряти лише на команді було б діркою: кнопку можна переслати іншій
+ * людині, і натиснути її здатен будь-хто, у кого підключений бот (той самий
+ * урок, що з погодженням заявок — див. handleAbsenceDecisionCallback).
+ *
+ * Повертає і текст для чату, і короткий toast для callback — щоб місце виклику
+ * не гадало причину відмови за рядком повідомлення.
+ */
+async function resolveQueueAccess(adminClient: AdminClient, userId: string): Promise<QueueAccess> {
+  if (!(await isActiveMember(adminClient, userId))) {
+    return { ok: false, message: DEACTIVATED_MESSAGE, toast: "Доступ призупинено" };
+  }
+
+  const role = await loadRole(adminClient, userId);
+  if (!isOwnerOrSeo(role)) {
+    return { ok: false, message: QUEUE_FORBIDDEN_MESSAGE, toast: QUEUE_FORBIDDEN_TOAST };
+  }
+
+  // team_id — ключ, на якому живуть картки. workspace_id тут не потрібен.
+  const { data } = await adminClient
+    .from("team_members")
+    .select("team_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const teamId = (data?.team_id as string | undefined) ?? null;
+  if (!teamId) {
+    return {
+      ok: false,
+      message: "Не можу визначити твою команду в CRM. Напиши адміну.",
+      toast: "Не бачу твоєї команди",
+    };
+  }
+
+  return { ok: true, teamId };
 }
 
 const DEACTIVATED_MESSAGE =
@@ -744,6 +838,18 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
     return;
   }
 
+  // Черга запитів. Права перевіряємо тут щоразу — з тієї ж причини, що й у
+  // гілці absd: кнопку зі списком карток можна переслати кому завгодно.
+  if (data.startsWith("dq:")) {
+    const access = await resolveQueueAccess(adminClient, row.user_id);
+    if (!access.ok) {
+      await answerTelegramCallback(cb.id, access.toast);
+      return;
+    }
+    await handleQueueCallback(adminClient, cb.id, chatId, messageId, access.teamId, data);
+    return;
+  }
+
   // Флоу оформлення відсутності (_absenceBotFlow): кнопки редагують одне
   // повідомлення, подання йде через RPC-перевтілення з усіма RLS/квотами.
   if (data.startsWith("abs:")) {
@@ -835,6 +941,83 @@ async function handleAbsenceDecisionCallback(
     [{ text: "Відкрити в CRM", url: buildAppUrl("/team?tab=requests") }],
   ]);
   await sendTelegramMessage(chatId, `✅ Погоджено: ${escapeTelegramHtml(result.summary)}`, { parseMode: "HTML" });
+}
+
+/**
+ * Кроки черги запитів: список → картка → зміна статусу.
+ *
+ * Стан їде в callback_data (номер картки + статус), тож сервер нічого не
+ * тримає, а кожен крок — це editMessageText ТОГО САМОГО повідомлення: у чаті
+ * не росте стрічка з десяти списків, які потім гортати.
+ *
+ * Права сюди приходять уже перевіреними (resolveQueueAccess у місці виклику),
+ * а teamId — не з кнопки, а з людини: підроблений callback_data не дотягнеться
+ * до чужої команди.
+ */
+async function handleQueueCallback(
+  adminClient: AdminClient,
+  callbackId: string,
+  chatId: number,
+  messageId: number,
+  teamId: string,
+  data: string
+) {
+  const parsed = parseQueueCallback(data);
+  if (!parsed) {
+    await answerTelegramCallback(callbackId, QUEUE_UNKNOWN_TOAST);
+    return;
+  }
+
+  const boardUrl = buildAppUrl(BOARD_PATH);
+
+  try {
+    if (parsed.kind === "list") {
+      const { cards, hasMore } = await fetchOpenBoardCards(adminClient, teamId);
+      const screen = queueListScreen({ cards, hasMore });
+      await answerTelegramCallback(callbackId);
+      await editTelegramMessageText(chatId, messageId, screen.text, {
+        replyMarkup: { inline_keyboard: screen.keyboard },
+      });
+      return;
+    }
+
+    if (parsed.kind === "card") {
+      const card = await fetchBoardCard(adminClient, teamId, parsed.number);
+      await answerTelegramCallback(callbackId, card ? undefined : QUEUE_CARD_GONE_TOAST);
+      const screen = card ? queueCardScreen(card, boardUrl) : queueCardGoneScreen(parsed.number);
+      await editTelegramMessageText(chatId, messageId, screen.text, {
+        replyMarkup: { inline_keyboard: screen.keyboard },
+      });
+      return;
+    }
+
+    // Зміна статусу — це запис у базу, тож на callback відповідаємо ПІСЛЯ
+    // нього: людині треба побачити результат, а не «прийнято». Telegram дає на
+    // це ~10 секунд, чого вистачає з запасом.
+    const result = await moveBoardCard(adminClient, teamId, parsed.number, parsed.status);
+    if (!result.ok) {
+      if (result.reason === "not_found") {
+        await answerTelegramCallback(callbackId, QUEUE_CARD_GONE_TOAST);
+        const gone = queueCardGoneScreen(parsed.number);
+        await editTelegramMessageText(chatId, messageId, gone.text, {
+          replyMarkup: { inline_keyboard: gone.keyboard },
+        });
+        return;
+      }
+      console.error("dev request move failed:", result.message);
+      await answerTelegramCallback(callbackId, QUEUE_FAILED_TOAST);
+      return;
+    }
+
+    await answerTelegramCallback(callbackId, moveToast(parsed.status));
+    const screen = queueCardScreen(result.card, boardUrl);
+    await editTelegramMessageText(chatId, messageId, screen.text, {
+      replyMarkup: { inline_keyboard: screen.keyboard },
+    });
+  } catch (error) {
+    console.error("queue callback failed:", error instanceof Error ? error.message : error);
+    await answerTelegramCallback(callbackId, QUEUE_FAILED_TOAST);
+  }
 }
 
 /**
