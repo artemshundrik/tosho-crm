@@ -12,12 +12,39 @@
 
 ---
 
-## Що НЕ входить у цей план
+## Порядок виконання — Telegram відкладено
 
-- Тріаж повідомлень моделлю, батчинг, автостворення карток із чату — окремий план «фаза 1В».
-- Зв'язок картки з релізом через sha, автостворення карток заднім числом — фаза 2.
-- Спека-режим — фаза 3.
-- Фаза 0 (підключити 10 людей) — організаційна, коду не потребує: механіка посилань уже є в [ProfilePage.tsx:409](../../../src/pages/ProfilePage.tsx).
+Рішення Артема 2026-08-08: **починаємо з дошки й голосу, без Telegram.** Спершу переконуємось, що працює найпростіший шлях — «сказав уголос → з'явилась охайна картка» — і лише потім підключаємо чат.
+
+**Робимо зараз, у цьому порядку:**
+
+| # | Задача | Навіщо |
+|---|---|---|
+| 6 | Таблиця, приватність, нумерація | фундамент |
+| 7 | Регенерація типів | без неї не компілюється |
+| 8 | Типи й мапер картки | |
+| 9 | Шар запитів до бази | |
+| 10 | Дошка | |
+| 11 | Вікно «Новий запит» | |
+| **15** | **Функція розбору надиктованого** | «агент розуміє, робить назву й опис» |
+| **16** | **Диктування у вікні** | |
+| 12 | Сторінка з гейтом і тулбаром | |
+| 13 | Маршрут і сайдбар | |
+| 14 | Обговорення в картці | |
+
+**Відкладено (Tasks 1–5, частина А).** Готові до виконання, але не зараз: тип апдейта, мовчання в групі, `telegram_user_id`, резолвер за `from.id`, відповідь у нитку. Поки їх не зроблено, **бота в групу додавати не можна** — він відповідатиме «Акаунт не підключено» на кожне повідомлення.
+
+**Поза цим планом:** тріаж повідомлень моделлю (фаза 1В), зв'язок із релізом через sha (фаза 2), спека-режим (фаза 3).
+
+## Як картка рухається по дошці
+
+Автоматичного переходу на створенні **немає навмисно**. Картка з дошки народжується одразу в `У черзі`: людина, яка її завела, вже вирішила, що це робимо. Далі:
+
+- `В роботі` — ставить той, хто взявся. Коли за задачу беруся я, картку рухаю сам.
+- `Готово локально` — за фактом коміта.
+- `Викочено` — за фактом деплою (фаза 2, звірка sha).
+
+Статус має відображати те, що **сталося**, а не намір. Автоперехід на створенні зробив би дошку красивою й брехливою.
 
 ---
 
@@ -49,9 +76,13 @@
 
 ---
 
-# ЧАСТИНА А — безпечна група й ідентифікація
+# ЧАСТИНА А — безпечна група й ідентифікація · ВІДКЛАДЕНО
 
-Після частини А бота **можна додавати в групу**: він там мовчатиме. Це самостійна цінність — сьогодні додавання бота в групу викликало б спам і зіпсовані зв'язки.
+> **Не виконувати в цьому раунді.** Артем вирішив спершу перевірити дошку й голос. Задачі 1–5 залишені готовими до роботи — повернемось до них, коли дошка заживе.
+>
+> Поки їх не зроблено, бота в робочу групу додавати **не можна**.
+
+Після частини А бота можна додавати в групу: він там мовчатиме. Це самостійна цінність — сьогодні додавання бота в групу викликало б спам і зіпсовані зв'язки.
 
 ---
 
@@ -1866,6 +1897,363 @@ git commit -m "feat(запити): обговорення прямо в карт
 
 ---
 
+### Task 15: Функція, що робить із надиктованого охайну картку
+
+**Files:**
+- Create: `netlify/functions/dev-request-draft.ts`
+
+Диктування вже є (`useDictation` → `transcribe.ts`), і воно віддає **текст**. Ця функція перетворює усний потік на `{title, body, kind}` і заразом підказує, чи це не дубль уже відкритої картки. Окремою функцією, а не режимом `transcribe.ts`, бо той шарить `DictationContext` із трьома наявними споживачами — ризикувати ними заради нової фічі не варто.
+
+- [ ] **Step 1: Написати функцію**
+
+Створити `netlify/functions/dev-request-draft.ts`:
+
+```ts
+import { createClient } from "@supabase/supabase-js";
+import { logAiUsage } from "./_aiUsageLog";
+import { chatCostUsd } from "./_aiPricing";
+
+/**
+ * Надиктований потік → охайна картка запиту.
+ *
+ * Модель тут робить рівно одне: перекладає усне мовлення в назву, опис і тип.
+ * Жодних рішень про пріоритет чи статус — це справа людини.
+ */
+
+type RequestBody = {
+  text?: string;
+  /** Назви відкритих карток — щоб модель могла підказати дубль. Не більше 50. */
+  openTitles?: Array<{ id: string; label: string; title: string }>;
+};
+
+type Draft = {
+  title: string;
+  body: string;
+  kind: "bug" | "friction" | "feature";
+  duplicateOf: string | null;
+};
+
+const PROMPT = `Ти перетворюєш усний запит українського співробітника на картку задачі для CRM.
+
+Поверни JSON:
+{
+  "title": "одне речення до 80 символів, з великої літери, без крапки в кінці",
+  "body": "структурований опис: що не так, де саме це видно, як має бути. Абзаци через \\n\\n. Якщо чогось не сказали — не вигадуй",
+  "kind": "bug | friction | feature",
+  "duplicateOf": "label наявної картки або null"
+}
+
+Правила:
+- Назва описує СУТЬ з погляду людини, яка користується CRM, а не спосіб реалізації.
+- Прибирай слова-паразити, повтори й самовиправлення ("ну", "тобто", "ой ні, не так").
+- Не додавай того, чого не було сказано. Порожній опис кращий за вигаданий.
+- kind: "bug" — щось зламано; "friction" — працює, але незручно; "feature" — нового немає.
+- duplicateOf став лише за очевидного збігу теми, інакше null.`;
+
+function jsonResponse(statusCode: number, body: Record<string, unknown>) {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify(body),
+  };
+}
+
+export const handler = async (event: {
+  httpMethod?: string;
+  headers?: Record<string, string | undefined>;
+  body?: string | null;
+}) => {
+  if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method not allowed" });
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) return jsonResponse(503, { error: "Supabase is not configured" });
+  if (!apiKey) return jsonResponse(503, { error: "OPENAI_API_KEY is not configured" });
+
+  // Той самий гейт, що й у transcribe.ts: перевіряємо користувача ДО того, як
+  // витрачати кредити OpenAI.
+  const authHeader = event.headers?.authorization || event.headers?.Authorization;
+  const token =
+    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : null;
+  if (!token) return jsonResponse(401, { error: "Missing Authorization token" });
+
+  const userClient = createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userData, error: userError } = await userClient.auth.getUser();
+  if (userError || !userData?.user) return jsonResponse(401, { error: "Unauthorized" });
+  const user = userData.user;
+
+  let body: RequestBody;
+  try {
+    body = JSON.parse(event.body ?? "{}") as RequestBody;
+  } catch {
+    return jsonResponse(400, { error: "Invalid JSON body" });
+  }
+
+  const text = (body.text ?? "").trim();
+  if (text.length < 3) return jsonResponse(400, { error: "Порожній текст" });
+
+  const known = (body.openTitles ?? []).slice(0, 50);
+  const knownBlock = known.length
+    ? `\n\nВідкриті картки:\n${known.map((item) => `${item.label}: ${item.title}`).join("\n")}`
+    : "";
+
+  const model = process.env.OPENAI_MODEL || "gpt-5.4";
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      reasoning: { effort: "low" },
+      text: { format: { type: "json_object" } },
+      input: [
+        { role: "developer", content: PROMPT + knownBlock },
+        { role: "user", content: [{ type: "input_text", text }] },
+      ],
+      max_output_tokens: 1200,
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    output?: Array<{ content?: Array<{ text?: string }> }>;
+    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  } | null;
+
+  // Логуємо до перевірки response.ok: виклик уже оплачений незалежно від того,
+  // чи вдалось розібрати відповідь.
+  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: membershipRows } = await adminClient
+    .schema("tosho")
+    .from("memberships_view")
+    .select("workspace_id")
+    .eq("user_id", user.id)
+    .limit(1);
+  const workspaceId = (membershipRows as Array<{ workspace_id?: string | null }> | null)?.[0]?.workspace_id ?? null;
+  const usage = payload?.usage ?? {};
+  const cost = chatCostUsd(model, usage.input_tokens ?? 0, usage.output_tokens ?? 0);
+  await logAiUsage(adminClient, {
+    workspaceId,
+    userId: user.id,
+    actorName: (user.user_metadata as Record<string, unknown> | null)?.full_name as string | undefined,
+    kind: "chat",
+    model,
+    inputTokens: usage.input_tokens ?? null,
+    outputTokens: usage.output_tokens ?? null,
+    totalTokens: usage.total_tokens ?? null,
+    costUsd: cost.costUsd,
+    metadata: { source: "dev_request_draft", text: text.slice(0, 500) },
+  });
+
+  if (!response.ok) return jsonResponse(502, { error: "Не вдалося розібрати надиктоване" });
+
+  const raw = payload?.output?.[0]?.content?.[0]?.text ?? "";
+  let draft: Draft;
+  try {
+    const parsed = JSON.parse(raw) as Partial<Draft>;
+    draft = {
+      title: (parsed.title ?? "").trim().slice(0, 120),
+      body: (parsed.body ?? "").trim(),
+      kind: parsed.kind === "bug" || parsed.kind === "feature" ? parsed.kind : "friction",
+      duplicateOf: parsed.duplicateOf?.trim() || null,
+    };
+  } catch {
+    // Модель повернула не JSON — краще віддати сирий текст у опис, ніж нічого:
+    // людина допише назву сама, і надиктоване не пропаде.
+    draft = { title: "", body: text, kind: "friction", duplicateOf: null };
+  }
+
+  if (!draft.title) draft.title = text.slice(0, 80);
+  return jsonResponse(200, draft);
+};
+```
+
+- [ ] **Step 2: Перевірити, що сигнатури хелперів збігаються**
+
+```bash
+grep -n "export async function logAiUsage" -A 16 netlify/functions/_aiUsageLog.ts
+grep -n "export function chatCostUsd" -A 4 netlify/functions/_aiPricing.ts
+```
+
+Привести виклики до справжніх сигнатур, якщо імена полів відрізняються. Самі хелпери не міняти.
+
+- [ ] **Step 3: Перевірити типи й лінт**
+
+```bash
+npm run typecheck:functions && npx tsc --noEmit && npm run lint && npm run check:functions
+```
+
+Очікується: без помилок. `check:functions` перевіряє, що нову функцію правильно оформлено для Netlify.
+
+- [ ] **Step 4: Коміт**
+
+```bash
+git add netlify/functions/dev-request-draft.ts
+git commit -m "feat(запити): надиктоване перетворюється на охайну назву й опис"
+```
+
+---
+
+### Task 16: Диктування прямо у вікні «Новий запит»
+
+**Files:**
+- Modify: `src/features/devRequests/NewDevRequestDialog.tsx`
+
+- [ ] **Step 1: Додати імпорти**
+
+```tsx
+import { Loader2, Mic, Square } from "lucide-react";
+import { useDictation } from "@/lib/useDictation";
+import { supabase } from "@/lib/supabaseClient";
+```
+
+- [ ] **Step 2: Розширити пропси**
+
+Додати в `NewDevRequestDialogProps`:
+
+```ts
+  /** Відкриті картки — щоб модель підказала дубль. */
+  openTitles: Array<{ id: string; label: string; title: string }>;
+```
+
+- [ ] **Step 3: Додати стан і диктування**
+
+Усередині компонента, після наявних `useState`:
+
+```tsx
+  const [drafting, setDrafting] = useState(false);
+  const [duplicateHint, setDuplicateHint] = useState<string | null>(null);
+
+  // clean: false — прибирати «ееее» тут не треба, це зробить наступний крок
+  // разом зі структуруванням. Інакше платимо за дві обробки того самого тексту.
+  const dictation = useDictation({
+    context: "brief",
+    clean: false,
+    onResult: (text) => {
+      void draftFromSpeech(text);
+    },
+  });
+
+  const draftFromSpeech = async (text: string) => {
+    setDrafting(true);
+    setDuplicateHint(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Сесія завершилась");
+
+      const response = await fetch("/.netlify/functions/dev-request-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ text, openTitles }),
+      });
+      const draft = (await response.json()) as {
+        title?: string;
+        body?: string;
+        kind?: RequestKind;
+        duplicateOf?: string | null;
+      };
+      if (!response.ok) throw new Error("Не вдалося розібрати надиктоване");
+
+      // Дописуємо, а не затираємо: людина могла щось надрукувати до диктування.
+      setTitle((current) => current.trim() || (draft.title ?? ""));
+      setBody((current) => (current.trim() ? `${current}\n\n${draft.body ?? ""}` : draft.body ?? ""));
+      if (draft.kind) setKind(draft.kind);
+      setDuplicateHint(draft.duplicateOf ?? null);
+    } catch {
+      // Надиктоване не губимо: кладемо сирий текст у опис, назву людина
+      // допише сама.
+      setBody((current) => (current.trim() ? `${current}\n\n${text}` : text));
+    } finally {
+      setDrafting(false);
+    }
+  };
+```
+
+- [ ] **Step 4: Додати кнопку й підказку в розмітку**
+
+Одразу під `DialogDescription` вставити:
+
+```tsx
+        <div className="flex items-center gap-3 rounded-lg border border-dashed p-3">
+          <Button
+            type="button"
+            variant={dictation.state === "recording" ? "destructive" : "secondary"}
+            size="sm"
+            className="gap-2"
+            disabled={!dictation.isSupported || drafting || dictation.state === "transcribing"}
+            onClick={() => (dictation.state === "recording" ? dictation.stop() : dictation.start())}
+          >
+            {dictation.state === "recording" ? (
+              <>
+                <Square className="h-4 w-4" /> Зупинити
+              </>
+            ) : (
+              <>
+                <Mic className="h-4 w-4" /> Розказати голосом
+              </>
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {dictation.state === "recording"
+              ? "Записую… розкажіть, що не так і як має бути"
+              : dictation.state === "transcribing" || drafting
+                ? "Розбираю сказане…"
+                : "Скажіть своїми словами — назву й опис зберу сам"}
+          </p>
+          {drafting || dictation.state === "transcribing" ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : null}
+        </div>
+
+        {duplicateHint ? (
+          <p className="rounded-lg bg-muted p-2 text-xs text-muted-foreground">
+            Схоже на вже наявну картку {duplicateHint}. Якщо це вона — краще додати коментар туди.
+          </p>
+        ) : null}
+```
+
+- [ ] **Step 5: Передати відкриті картки зі сторінки**
+
+У `src/pages/DevRequestsPage.tsx` додати перед `return`:
+
+```tsx
+  const openTitles = useMemo(
+    () =>
+      (board.data ?? [])
+        .filter((request) => request.status !== "released" && request.status !== "wont_do")
+        .slice(0, 50)
+        .map((request) => ({ id: request.id, label: request.label, title: request.title })),
+    [board.data]
+  );
+```
+
+І передати в діалог: `openTitles={openTitles}`.
+
+- [ ] **Step 6: Перевірити типи, лінт і тести**
+
+```bash
+npx tsc --noEmit && npm run lint && npm run test
+```
+
+Очікується: без помилок, тести зелені.
+
+- [ ] **Step 7: Коміт**
+
+```bash
+git add src/features/devRequests/NewDevRequestDialog.tsx src/pages/DevRequestsPage.tsx
+git commit -m "feat(запити): запит можна просто розказати голосом"
+```
+
+---
+
 ## Фінальна перевірка перед звітом
 
 - [ ] **Крок 1: Повний прогін**
@@ -1902,11 +2290,13 @@ git log --oneline @{u}..HEAD | cat
 
 ---
 
-## Definition of Done
+## Definition of Done цього раунду
 
-- Бота можна додати в робочу групу, і він там мовчить: жодних «Акаунт не підключено», `/start` у групі нічого не псує.
-- `telegram_user_id` заповнений для всіх підключених, нові підключення пишуть його самі.
 - `/dev-requests` відкривається у власника й СЕО, менеджера редиректить на `/whats-new`.
+- **Можна натиснути «Розказати голосом», надиктувати задачу своїми словами — і отримати заповнені назву, опис і тип.** Якщо схоже на наявну картку, вікно про це попереджає.
+- Якщо розбір надиктованого впав — текст не губиться, він лягає в опис як є.
 - Картку можна створити з дошки, вона отримує номер `REQ-N`, її можна перетягнути між колонками.
 - Закриту картку не видно нікому, крім власника й СЕО — доведено запитом від імені менеджера.
 - Панель обговорення працює і в дизайн-задачі (не зламали), і в картці запиту.
+
+**Не входить у цей раунд:** Telegram (задачі 1–5). Бота в групу поки не додаємо.
