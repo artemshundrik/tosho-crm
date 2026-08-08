@@ -184,7 +184,7 @@ curl -s -X POST https://tosho.pro/.netlify/functions/dev-request-board \
     }
   ],
   "url": "https://tosho.pro/dev-requests",
-  "message": "📋 Черга запитів — 7 відкритих\n\nВхідні (1)\nREQ-9 — Не видно, хто останній редагував прорахунок · Незручно · Прорахунки · Звичайний\n\nhttps://tosho.pro/dev-requests"
+  "message": "📋 Черга запитів — 7 відкритих\n\nВхідні (1)\nREQ-9 — Не видно, хто останній редагував прорахунок · Незручно · Прорахунки\n\nhttps://tosho.pro/dev-requests"
 }
 ```
 

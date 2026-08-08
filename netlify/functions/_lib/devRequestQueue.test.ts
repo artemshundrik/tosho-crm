@@ -195,7 +195,9 @@ describe("queueCardScreen", () => {
     expect(screen.text).toContain("Вхідні");
     expect(screen.text).toContain("Дошка не оновлюється після зміни статусу");
     expect(screen.text).toContain("Після зміни статусу картка лишається в старій колонці.");
-    expect(screen.text).toContain("Не працює · Прорахунки · Звичайний");
+    expect(screen.text).toContain("Не працює · Прорахунки");
+    // «Звичайний» не пишемо: мітка стоїть на більшості карток і нічого не розрізняє.
+    expect(screen.text).not.toContain("Звичайний");
     expect(screen.keyboard.flat().some((button) => "url" in button && button.url === BOARD_URL)).toBe(true);
   });
 

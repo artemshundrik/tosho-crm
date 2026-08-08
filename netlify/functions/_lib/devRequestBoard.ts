@@ -223,12 +223,16 @@ export function priorityMark(priority: DevRequestPriority | null): string {
  *
  * Окремо від buildDevRequestMeta: там пріоритет обов'язковий (розбір завжди
  * його ставить), а в базі колонка nullable — стара картка може бути без нього.
+ *
+ * «Звичайний» не пишемо — та сама причина, що й у CARD_PRIORITY_LABELS на
+ * дошці: ця мітка стоїть на більшості карток, нічого не розрізняє і з'їдає
+ * місце в рядку, який сканують очима. Підписуємо лише краї шкали.
  */
 export function boardCardMeta(card: BoardCard): string {
   return [
     KIND_LABELS[card.kind],
     moduleKeyLabel(card.moduleKey),
-    card.priority ? PRIORITY_LABELS[card.priority] : null,
+    card.priority && card.priority !== "normal" ? PRIORITY_LABELS[card.priority] : null,
   ]
     .map((part) => (part ?? "").trim())
     .filter(Boolean)

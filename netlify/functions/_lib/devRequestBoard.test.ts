@@ -232,6 +232,17 @@ describe("boardCardMeta", () => {
     expect(meta).not.toContain("null");
     expect(meta).not.toContain("·");
   });
+
+  it("«Звичайний» не пишемо — та сама причина, що й на дошці", () => {
+    // Мітка стоїть на більшості карток, нічого не розрізняє і з'їдає місце в
+    // рядку, який сканують очима. Підписуємо лише краї шкали.
+    expect(boardCardMeta(card({ kind: "bug", moduleKey: "quotes", priority: "normal" }))).toBe(
+      "Не працює · Прорахунки"
+    );
+    expect(boardCardMeta(card({ kind: "bug", moduleKey: "quotes", priority: "low" }))).toBe(
+      "Не працює · Прорахунки · Не горить"
+    );
+  });
 });
 
 describe("buildBoardListResponse", () => {
