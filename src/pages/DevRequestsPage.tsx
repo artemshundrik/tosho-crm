@@ -262,8 +262,7 @@ export default function DevRequestsPage() {
         description={
           pendingDelete ? (
             <>
-              «{pendingDelete.title}» зникне з дошки назавжди — разом з обговоренням у картці.
-              Відновити не вийде.
+              «{pendingDelete.title}» зникне з дошки назавжди. Відновити не вийде.
             </>
           ) : null
         }
