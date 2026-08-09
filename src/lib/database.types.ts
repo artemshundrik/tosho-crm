@@ -5065,6 +5065,7 @@ export type Database = {
             Returns: boolean
           }
       my_workspace_id: { Args: never; Returns: string }
+      next_dev_request_number: { Args: { p_team_id: string }; Returns: number }
       next_document_number: {
         Args: {
           p_entity_key: string

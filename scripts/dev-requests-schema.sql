@@ -86,6 +86,8 @@ create table if not exists tosho.dev_requests (
   updated_at     timestamptz not null default now(),
   constraint dev_requests_kind_check
     check (kind in ('bug', 'friction', 'feature')),
+  -- Перелік не остаточний: статус 'someday' («Ідеї») додає окремим файлом
+  -- scripts/dev-requests-someday.sql. На чистій базі треба запустити обидва.
   constraint dev_requests_status_check
     check (status in ('triage', 'queued', 'in_progress', 'done_local', 'released', 'wont_do')),
   constraint dev_requests_number_unique unique (team_id, number)
