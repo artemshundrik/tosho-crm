@@ -201,14 +201,35 @@ describe("queueCardScreen", () => {
     expect(screen.keyboard.flat().some((button) => "url" in button && button.url === BOARD_URL)).toBe(true);
   });
 
-  it("три дії людини — і жодної, що ставлять факти", () => {
+  it("чотири дії людини — і жодної, що ставлять факти", () => {
     const screen = queueCardScreen(card({ number: 12, status: "triage" }), BOARD_URL);
     const data = callbacks(screen.keyboard);
     expect(data).toContain("dq:m:12:in_progress");
     expect(data).toContain("dq:m:12:queued");
+    expect(data).toContain("dq:m:12:someday");
     expect(data).toContain("dq:m:12:wont_do");
     expect(data.join(" ")).not.toContain("done_local");
     expect(data.join(" ")).not.toContain("released");
+  });
+
+  it("«В ідеї» підписана дієсловом, як і сусідні кнопки", () => {
+    const screen = queueCardScreen(card({ number: 12, status: "queued" }), BOARD_URL);
+    const idea = screen.keyboard.flat().find((button) => "callback_data" in button && button.callback_data === "dq:m:12:someday");
+    expect(idea?.text).toBe("💡 В ідеї");
+  });
+
+  /**
+   * Дорога назад із «Ідей» саме тут: у списку черги такої картки вже немає
+   * (someday поза OPEN_STATUSES), а екран картки після переміщення показують
+   * повторно — тож кнопка «У чергу» на ньому є єдиним способом передумати з
+   * телефона.
+   */
+  it("картка з «Ідей» має чим повернутись у чергу", () => {
+    const screen = queueCardScreen(card({ number: 12, status: "someday" }), BOARD_URL);
+    const data = callbacks(screen.keyboard);
+    expect(data).toContain("dq:m:12:queued");
+    expect(data).not.toContain("dq:m:12:someday");
+    expect(screen.text).toContain("Ідеї");
   });
 
   it("кнопки поточного стану немає — вона нічого не робить", () => {
@@ -331,6 +352,7 @@ describe("moveToast і екран зниклої картки", () => {
   it("toast називає новий стан", () => {
     expect(moveToast("in_progress")).toContain("В роботі");
     expect(moveToast("wont_do")).toContain("Не робимо");
+    expect(moveToast("someday")).toContain("Ідеї");
   });
 
   it("картка зникла — кажемо прямо й лишаємо шлях назад", () => {

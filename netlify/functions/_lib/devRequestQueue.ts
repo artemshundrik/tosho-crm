@@ -264,6 +264,9 @@ export function clampCardBody(raw: string | null | undefined, max: number = QUEU
 const MOVE_LABELS: Record<MovableStatus, string> = {
   in_progress: "В роботу",
   queued: "У чергу",
+  // «В ідеї», а не «Ідеї»: сусіди — дієслова («в роботу», «у чергу»), і одинокий
+  // іменник читався б як назва розділу, а не як дія над цією карткою.
+  someday: "В ідеї",
   wont_do: "Не робимо",
 };
 
