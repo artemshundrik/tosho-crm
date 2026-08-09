@@ -396,6 +396,7 @@ export default function DevRequestsPage() {
             onSelect={setSelected}
             onEdit={openEdit}
             onDelete={setPendingDelete}
+            viewerId={userId}
             canManage={canSee}
           />
         </div>
@@ -412,6 +413,7 @@ export default function DevRequestsPage() {
           <DevRequestWall
             requests={requests}
             emptyText="Ідей поки немає. Картка потрапляє сюди дією «В ідеї» в меню на дошці."
+            viewerId={userId}
             onSelect={setSelected}
             onMove={handleMove}
             onEdit={openEdit}

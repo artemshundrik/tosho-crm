@@ -1,22 +1,14 @@
 import { Lightbulb } from "lucide-react";
 
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
-import { CARD_MENU_ATTR, formatIdleAge, idleDays, isCardMenuTarget } from "./cardModel";
+import { CARD_MENU_ATTR, buildCardMeta, formatIdleAge, idleDays, isCardMenuTarget } from "./cardModel";
 import { ChecklistBar } from "./ChecklistBar";
 import { PriorityBars } from "./PriorityBars";
-import {
-  KIND_ICONS,
-  KIND_LABELS,
-  KIND_TONE,
-  ZONE_ICONS,
-  ZONE_LABELS,
-  ZONE_TONE,
-  type DevRequest,
-  type RequestStatus,
-} from "./types";
+import { CardMetaChip } from "./CardMetaChip";
+import { KIND_ICONS, KIND_LABELS, KIND_TONE, type DevRequest, type RequestStatus } from "./types";
 
 /**
  * «Ідеї» — стіна нотаток.
@@ -38,6 +30,7 @@ import {
 export function DevRequestWall({
   requests,
   emptyText,
+  viewerId,
   onSelect,
   onMove,
   onEdit,
@@ -46,6 +39,8 @@ export function DevRequestWall({
 }: {
   requests: DevRequest[];
   emptyText: string;
+  /** Хто дивиться — щоб не підписувати автором власні картки. */
+  viewerId: string | null;
   onSelect: (request: DevRequest) => void;
   onMove: (id: string, status: RequestStatus) => void;
   onEdit: (request: DevRequest) => void;
@@ -64,7 +59,6 @@ export function DevRequestWall({
     <div className="[column-gap:0.75rem] columns-1 sm:columns-2 lg:columns-3 xl:columns-4">
       {requests.map((request) => {
         const KindIcon = KIND_ICONS[request.kind];
-        const ZoneIcon = request.zone ? ZONE_ICONS[request.zone] : null;
         const ageLabel = formatIdleAge(request.createdAt);
         // Місяць — межа, після якої «відклали» починає означати «забули».
         const stale = idleDays(request.createdAt) >= 30;
@@ -93,9 +87,23 @@ export function DevRequestWall({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             )}
           >
+            {/* Порядок той самий, що на дошці: пріоритет → тип словом → номер
+                → меню. «Ідеї» — це ті самі картки в іншому вигляді, і читатись
+                вони мають однаково. */}
             <div className="flex items-center gap-2">
-              <span className={cn("shrink-0", toneTextClass[KIND_TONE[request.kind]])}>
+              <PriorityBars priority={request.priority} />
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 text-2xs font-semibold",
+                  toneTextClass[KIND_TONE[request.kind]],
+                  request.autoClassified && "border-b border-dashed border-current pb-px"
+                )}
+                title={
+                  request.autoClassified ? "Тип поставив розбір — людина ще не звіряла" : undefined
+                }
+              >
                 <KindIcon className="h-3.5 w-3.5" />
+                {KIND_LABELS[request.kind]}
               </span>
               <HoverCopyText
                 value={request.label}
@@ -103,7 +111,7 @@ export function DevRequestWall({
                 successMessage="Номер запиту скопійовано"
                 copyLabel="Скопіювати номер запиту"
               />
-              <PriorityBars priority={request.priority} className="ml-auto" />
+              <span className="ml-auto" />
               {canManage ? (
                 <div {...{ [CARD_MENU_ATTR]: "" }} className="shrink-0">
                   <CardActionsMenu
@@ -135,24 +143,12 @@ export function DevRequestWall({
                 те, що половина роботи вже зроблена. */}
             <ChecklistBar items={request.checklist} className="mt-2.5" />
 
+            {/* Мітки — той самий buildCardMeta, що й на дошці: колір, порядок і
+                склад мають збігатись за побудовою, а не за домовленістю. */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              {request.zone && ZoneIcon ? (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-medium",
-                    toneSubtleClass[ZONE_TONE[request.zone]],
-                    toneTextClass[ZONE_TONE[request.zone]]
-                  )}
-                >
-                  <ZoneIcon className="h-3 w-3" />
-                  {ZONE_LABELS[request.zone]}
-                </span>
-              ) : null}
-              {request.theme ? (
-                <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary">
-                  {request.theme}
-                </span>
-              ) : null}
+              {buildCardMeta(request, { viewerId }).map((item) => (
+                <CardMetaChip key={item.key} item={item} zone={request.zone} />
+              ))}
               <span
                 className={cn(
                   "ml-auto shrink-0 text-2xs",
@@ -166,7 +162,6 @@ export function DevRequestWall({
               </span>
             </div>
 
-            <span className="sr-only">{KIND_LABELS[request.kind]}</span>
           </div>
         );
       })}

@@ -88,32 +88,38 @@ export type CardMeta = {
  */
 export const MODULE_UNSET_LABEL = "напрямок не визначено";
 
+export type CardMetaOptions = {
+  /**
+   * Хто дивиться. Свій автор із мітки зникає: усі картки заводить власник, і
+   * підпис «Артем» стояв на кожній — однаковий, найдовший у ряду й ні про що.
+   * Чужий автор лишається: саме він і є інформацією («це просила Юлія»).
+   */
+  viewerId?: string | null;
+};
+
 /**
- * Нижній рядок картки: тема, зона, напрямок, автор, «просили N», «закрита».
+ * Нижній рядок картки: зона, тема, напрямок, автор, «просили N», «закрита».
  *
  * Ані типу, ані пріоритету тут немає — обидва підняті у верхній рядок: тип
  * словом і тоном (KIND_TONE/KIND_ICONS), пріоритет стовпчиками (PriorityBars).
  * Пріоритет пішов звідси 2026-08-09: чіп зі словом можна лише прочитати, а
  * пріоритет сканують по колонці згори вниз, не читаючи.
  *
- * Порядок сталий і йде від загального до окремого: тема (яка це робота
- * взагалі) → зона (що чіпаємо) → напрямок (де в CRM) → від кого → сигнали.
+ * ПОРЯДОК: зона → тема → напрямок → від кого → сигнали. Першою стоїть зона, бо
+ * вона єдина кольорова — і слугує якорем, від якого око читає решту ряду.
+ * Правило кольору просте й одне на весь ряд: КОЛІР МАЄ ЛИШЕ ЗОНА. Тема й
+ * напрямок контурні. Доти кольорових було дві, порядок різнився між дошкою та
+ * «Ідеями», і ряд читався як випадковий набір плашок.
+ *
  * Підпис напрямку береться з реєстру модулів через `moduleKeyLabel`, підпис
  * зони — з ZONE_LABELS; своїх списків рядків тут немає.
+ *
+ * Ця функція — ЄДИНЕ джерело нижнього ряду для всіх виглядів (дошка, стіна
+ * «Ідей»). Малювати мітки окремо в компоненті не можна: саме так вони й
+ * розійшлися між дошкою та «Ідеями» першого разу.
  */
-export function buildCardMeta(request: DevRequest): CardMeta[] {
+export function buildCardMeta(request: DevRequest, options: CardMetaOptions = {}): CardMeta[] {
   const meta: CardMeta[] = [];
-
-  // Тема — найширша мітка, тож стоїть першою: вона каже, що картка не сама по
-  // собі, а частина роботи, і решту рядка читають уже в цьому контексті.
-  if (request.theme) {
-    meta.push({
-      key: "theme",
-      label: request.theme,
-      weight: "normal",
-      hint: "Тема: інші картки цієї ж роботи",
-    });
-  }
 
   if (request.zone) {
     meta.push({
@@ -121,6 +127,15 @@ export function buildCardMeta(request: DevRequest): CardMeta[] {
       label: ZONE_LABELS[request.zone],
       weight: "normal",
       hint: "Що чіпає ця робота",
+    });
+  }
+
+  if (request.theme) {
+    meta.push({
+      key: "theme",
+      label: request.theme,
+      weight: "normal",
+      hint: "Тема: інші картки цієї ж роботи",
     });
   }
 
@@ -132,7 +147,9 @@ export function buildCardMeta(request: DevRequest): CardMeta[] {
     meta.push({ key: "module", label: moduleLabel, weight: "normal" });
   }
 
-  const author = resolveAuthor(request);
+  const isOwnCard =
+    Boolean(options.viewerId) && request.authorUserId === options.viewerId;
+  const author = isOwnCard ? null : resolveAuthor(request);
   if (author) {
     meta.push({ key: "author", label: author.label, weight: "normal", hint: author.hint });
   }

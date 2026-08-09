@@ -1,24 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Layers, Lightbulb, Lock, Users } from "lucide-react";
-import type { ComponentType } from "react";
+import { Lightbulb } from "lucide-react";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
-import { Badge } from "@/components/ui/badge";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
-import {
-  CARD_MENU_ATTR,
-  buildCardMeta,
-  isCardMenuTarget,
-  isUrgentCard,
-  type CardMetaKey,
-  type ChipWeight,
-} from "./cardModel";
+import { CARD_MENU_ATTR, buildCardMeta, isCardMenuTarget, isUrgentCard } from "./cardModel";
+import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
 import { PriorityBars } from "./PriorityBars";
 import {
@@ -26,11 +18,8 @@ import {
   KIND_ICONS,
   KIND_LABELS,
   KIND_TONE,
-  ZONE_ICONS,
-  ZONE_TONE,
   type DevRequest,
   type RequestStatus,
-  type RequestZone,
 } from "./types";
 
 type DevRequestBoardProps = {
@@ -40,6 +29,8 @@ type DevRequestBoardProps = {
   onSelect: (request: DevRequest) => void;
   onEdit: (request: DevRequest) => void;
   onDelete: (request: DevRequest) => void;
+  /** Хто дивиться — щоб не підписувати автором власні картки. */
+  viewerId: string | null;
   /**
    * Рухати, редагувати й видаляти. Один прапорець на всі три дії навмисно: у
    * базі це теж одне право — політики update і delete на tosho.dev_requests
@@ -48,51 +39,13 @@ type DevRequestBoardProps = {
   canManage: boolean;
 };
 
-/** Геометрія мітки — одна на всі: колір далі накладається зверху. */
-const CHIP_SHAPE = "rounded-full px-2 py-0.5 text-2xs font-medium normal-case tracking-normal";
-
-/** Мітка: тон рівно за «гучністю», свого набору кольорів картка не заводить. */
-function chipClassName(weight: ChipWeight): string {
-  if (weight === "quiet") {
-    return cn(CHIP_SHAPE, "border-border/40 bg-transparent text-muted-foreground/70");
-  }
-  return cn(CHIP_SHAPE, "border-border/60 bg-muted/20 text-muted-foreground");
-}
-
-/**
- * Мітка зони: заливка, текст і іконка — одного тону.
- *
- * `tone-*-subtle` дає лише фон і межу, кольору тексту в ньому немає. Через це
- * мітка зони спершу успадковувала сірий `text-muted-foreground` від звичайного
- * чіпа — сірий текст на кольоровій заливці читається як бруд, а не як мітка.
- * Тому тут свій набір, а не chipClassName поверх якого домальовано фон.
- */
-function zoneChipClassName(zone: RequestZone): string {
-  return cn(
-    CHIP_SHAPE,
-    "border-transparent",
-    toneSubtleClass[ZONE_TONE[zone]],
-    toneTextClass[ZONE_TONE[zone]]
-  );
-}
-
-/**
- * Іконка при мітці — лише там, де вона додає сенсу, а не повторює слово.
- * «Просили 3» без людей читається як номер, «закрита» без замка — як стан
- * задачі, а не як обмеження доступу. Напрямку й автору іконка не потрібна.
- */
-const META_ICONS: Partial<Record<CardMetaKey, ComponentType<{ className?: string }>>> = {
-  asked: Users,
-  private: Lock,
-  theme: Layers,
-};
-
 export function DevRequestBoard({
   requests,
   onMove,
   onSelect,
   onEdit,
   onDelete,
+  viewerId,
   canManage,
 }: DevRequestBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -217,7 +170,7 @@ export function DevRequestBoard({
             }}
           >
             {items.map((request) => {
-              const meta = buildCardMeta(request);
+              const meta = buildCardMeta(request, { viewerId });
               const KindIcon = KIND_ICONS[request.kind];
               const urgent = isUrgentCard(request);
               return (
@@ -313,37 +266,14 @@ export function DevRequestBoard({
 
                   {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {meta.map((item) => {
-                      // Зона має власну іконку за значенням, решта — сталу.
-                      const MetaIcon =
-                        item.key === "zone" && request.zone
-                          ? ZONE_ICONS[request.zone]
-                          : META_ICONS[item.key];
-                      // Зона — заливена мітка в тоні зони, решта чіпів лишається
-                      // контурною: так мітка не читається як другий тип, навіть
-                      // коли тони збігаються.
-                      const zoneOfItem = item.key === "zone" ? request.zone : null;
-                      return (
-                        <Badge
-                          key={item.key}
-                          variant="outline"
-                          className={cn(
-                            "gap-1",
-                            zoneOfItem ? zoneChipClassName(zoneOfItem) : chipClassName(item.weight),
-                            // Пунктир і тут — розбір міг припустити зону так
-                            // само, як і тип. border-current бере колір тону,
-                            // тож межа лишається кольоровою, а не сірою.
-                            zoneOfItem &&
-                              request.autoClassified &&
-                              "border border-dashed border-current"
-                          )}
-                          title={item.hint}
-                        >
-                          {MetaIcon ? <MetaIcon className="h-3 w-3" /> : null}
-                          {item.label}
-                        </Badge>
-                      );
-                    })}
+                    {meta.map((item) => (
+                      <CardMetaChip
+                        key={item.key}
+                        item={item}
+                        zone={request.zone}
+                        autoClassified={request.autoClassified}
+                      />
+                    ))}
                   </div>
                 </KanbanCard>
               );

@@ -7,6 +7,7 @@ import {
   isUrgentCard,
   resolveAuthor,
   shouldRestoreMenuFocus,
+  type CardMetaOptions,
 } from "./cardModel";
 import type { DevRequest } from "./types";
 
@@ -36,9 +37,10 @@ function request(overrides: Partial<DevRequest> = {}): DevRequest {
   };
 }
 
-const keys = (req: DevRequest) => buildCardMeta(req).map((item) => item.key);
-const chip = (req: DevRequest, key: string) =>
-  buildCardMeta(req).find((item) => item.key === key);
+const keys = (req: DevRequest, options?: CardMetaOptions) =>
+  buildCardMeta(req, options).map((item) => item.key);
+const chip = (req: DevRequest, key: string, options?: CardMetaOptions) =>
+  buildCardMeta(req, options).find((item) => item.key === key);
 
 describe("нижній рядок картки", () => {
   /**
@@ -126,7 +128,7 @@ describe("нижній рядок картки", () => {
     expect(keys(request({ askedByCount: 1 }))).not.toContain("asked");
   });
 
-  it("порядок сталий: тема → зона → напрямок → автор → просили → закрита", () => {
+  it("порядок сталий: зона → тема → напрямок → автор → просили → закрита", () => {
     expect(
       keys(
         request({
@@ -139,7 +141,7 @@ describe("нижній рядок картки", () => {
           isPrivate: true,
         })
       )
-    ).toEqual(["theme", "zone", "module", "author", "asked", "private"]);
+    ).toEqual(["zone", "theme", "module", "author", "asked", "private"]);
   });
 });
 
@@ -147,6 +149,28 @@ describe("нижній рядок картки", () => {
  * Підсвітка картки й повна шкала пріоритету вмикаються з однієї умови —
  * інакше з часом на дошці зʼявиться червона картка без пояснення.
  */
+/**
+ * Свій автор із мітки зникає: усі картки заводить власник, і підпис «Артем»
+ * стояв на кожній — однаковий, найдовший у ряду й ні про що. Чужий лишається:
+ * саме він і є інформацією («це просила Юлія»).
+ */
+describe("автор картки", () => {
+  it("свою картку автором не підписуємо", () => {
+    const own = request({ authorUserId: "u1", displayName: "Артем" });
+    expect(keys(own)).toContain("author");
+    expect(keys(own, { viewerId: "u1" })).not.toContain("author");
+  });
+
+  it("чужу — підписуємо", () => {
+    const other = request({ authorUserId: "u2", displayName: "Юлія" });
+    expect(chip(other, "author", { viewerId: "u1" })?.label).toBe("Юлія");
+  });
+
+  it("без viewerId нічого не ховаємо", () => {
+    expect(keys(request({ authorUserId: "u1", displayName: "Артем" }))).toContain("author");
+  });
+});
+
 describe("підсвітка термінової картки", () => {
   it("горить лише на «терміново»", () => {
     expect(isUrgentCard(request({ priority: "high" }))).toBe(true);
