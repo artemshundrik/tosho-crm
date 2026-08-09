@@ -60,15 +60,28 @@ DropdownMenuSubContent.displayName =
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+    /**
+     * Чи «доїжджає» меню на 8 px при відкритті.
+     *
+     * За замовчуванням так — це рух shadcn, який доречний, коли меню виринає
+     * з іконки чи картки. Але коли тригер стоїть у тулбарі й меню падає рівно
+     * під ним, ті самі 8 px читаються не як рух, а як промах позиціонування:
+     * панель ніби спершу стала не туди, а потім поправилась. Там ставимо
+     * `slide={false}` — лишається проявлення без переїзду.
+     */
+    slide?: boolean;
+  }
+>(({ className, sideOffset = 4, slide = true, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
         "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-[--radix-dropdown-menu-content-transform-origin]",
+        slide &&
+          "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className
       )}
       {...props}

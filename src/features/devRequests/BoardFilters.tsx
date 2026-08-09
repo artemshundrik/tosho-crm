@@ -170,7 +170,9 @@ export function BoardFilters({
             ) : null}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[260px] p-1.5">
+        {/* slide={false}: тригер стоїть у тулбарі, панель падає рівно під ним, і
+            типові 8 px переїзду читаються не як рух, а як промах позиціонування. */}
+        <PopoverContent align="start" slide={false} className="w-[260px] p-1.5">
           <p className="px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Зона
           </p>
