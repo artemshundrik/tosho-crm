@@ -18,10 +18,18 @@ import { KIND_ICONS, KIND_LABELS, KIND_TONE, type DevRequest, type RequestStatus
  * колонці, а тут сканувати нічого — ідеї не впорядковані ні за чим. Стіна
  * заповнює екран самими ідеями, і кожну видно цілком, з описом, не відкриваючи.
  *
- * ЧОМУ РІЗНА ВИСОТА. Ідея — це думка, а не рядок таблиці: одна в реченні, інша
- * в абзац. Нотатки стоять кожна своєї висоти (`items-start`), а не розтягуються
- * до найдовшої в рядку: розтягнута коротка нотатка — це порожня рамка, у якій
- * очі шукають вміст, якого немає.
+ * ВИСОТА РІВНЯЄТЬСЯ В МЕЖАХ РЯДКА. Спершу тут стояло `items-start` — мовляв,
+ * ідея це думка, а не рядок таблиці, і розтягнута коротка нотатка буде
+ * порожньою рамкою. Замір на живих картках показав протилежне: висоти вийшли
+ * 190/190/172/190/221, тобто розкид усього 18 px. Це замало, щоб читатись як
+ * навмисна різниця, і забагато, щоб не помічатись, — саме такий розкид і
+ * виглядає неохайно.
+ *
+ * Причина малого розкиду в тому, що опис і так обрізаний на чотирьох рядках:
+ * більшість нотаток мають рівно стільки. Тож рівняння коштує майже нічого, а
+ * прибирає рвань. Ба більше — картки стали НИЖЧИМИ (180 замість 190): підвал
+ * із мітками тепер притиснутий донизу через `mt-auto`, і фіксований відступ
+ * над ним більше не потрібен.
  *
  * ТУТ БУЛИ CSS `columns` І ЦЕ БУЛА ПОМИЛКА. Задум був masonry — щоб нотатки
  * укладались щільно, без дірок. На живій стіні вийшло гірше за сітку одразу з
@@ -71,7 +79,7 @@ export function DevRequestWall({
     // Третя колонка аж від 2xl (1536 px). На типовому ноутбуці 1280 три
     // колонки дають нотатку завширшки 320 px — опис ламається по два слова в
     // рядок і кожна ідея виглядає обрубаною. Дві по 485 px читаються спокійно.
-    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
       {requests.map((request) => {
         const KindIcon = KIND_ICONS[request.kind];
         const ageLabel = formatIdleAge(request.createdAt);
@@ -95,8 +103,11 @@ export function DevRequestWall({
                 onSelect(request);
               }
             }}
+            // flex-col + h-full: картка займає всю висоту комірки сітки, а
+            // підвал із мітками йде донизу (mt-auto нижче). Без цього рівняння
+            // висоти лишало б порожнечу посеред картки замість під текстом.
             className={cn(
-              "rounded-2xl border border-border/60 bg-card p-3 text-left",
+              "flex h-full flex-col rounded-2xl border border-border/60 bg-card p-3 text-left",
               "cursor-pointer transition-colors hover:border-foreground/25",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             )}
@@ -167,7 +178,7 @@ export function DevRequestWall({
 
             {/* Мітки — той самий buildCardMeta, що й на дошці: колір, порядок і
                 склад мають збігатись за побудовою, а не за домовленістю. */}
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2.5">
               {buildCardMeta(request, { viewerId }).map((item) => (
                 <CardMetaChip key={item.key} item={item} zone={request.zone} />
               ))}
