@@ -207,6 +207,18 @@ export function formatIdleAge(createdAt: string, now: Date = new Date()): string
 }
 
 /**
+ * Скільки днів картка лежить. Поруч із formatIdleAge, а не замість: підпис
+ * читає людина, а число потрібне тому, хто вирішує, чи підсвічувати вік.
+ * Розбирати підпис назад у дні («чи є там слово „місяців“») — саме той спосіб
+ * зламатись тихо, від якого тут і рятує окрема функція.
+ */
+export function idleDays(createdAt: string, now: Date = new Date()): number {
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return 0;
+  return Math.floor(Math.max(0, now.getTime() - created) / DAY_MS);
+}
+
+/**
  * Автор картки: ім'я з Telegram, а якщо його немає — нікнейм.
  *
  * Обидва поля необов'язкові й незалежні: у Telegram username можна не мати

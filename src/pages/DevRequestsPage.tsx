@@ -26,6 +26,7 @@ import {
 } from "@/features/devRequests/BoardFilters";
 import { DevRequestDetailsSheet } from "@/features/devRequests/DevRequestDetailsSheet";
 import { DevRequestList } from "@/features/devRequests/DevRequestList";
+import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
 import {
   NewDevRequestDialog,
   type NewDevRequestInput,
@@ -403,20 +404,31 @@ export default function DevRequestsPage() {
            яку прокручують убік. Відступи, що їх у режимі полотна не дає
            каркас, повертаємо тут — тими самими кроками (px-4/5/6). */
         <div className="px-4 py-4 md:px-5 md:py-5 lg:px-6">
-        <DevRequestList
-          requests={requests}
-          showAge={view === "someday"}
-          emptyText={
-            view === "someday"
-              ? "Ідей поки немає. Картка потрапляє сюди дією «В ідеї» в меню на дошці."
-              : "Відхилених карток немає."
-          }
-          onSelect={setSelected}
-          onMove={handleMove}
-          onEdit={openEdit}
-          onDelete={setPendingDelete}
-          canManage={canSee}
-        />
+        {view === "someday" ? (
+          /* «Ідеї» — стіною нотаток, а не списком: рядок на всю ширину показує
+             чотири поля й лишає порожнечу посередині, бо сканувати тут нема
+             чого — ідеї не впорядковані ні за чим. «Не робимо» лишається
+             списком: туди заглядають рідко й по конкретну картку. */
+          <DevRequestWall
+            requests={requests}
+            emptyText="Ідей поки немає. Картка потрапляє сюди дією «В ідеї» в меню на дошці."
+            onSelect={setSelected}
+            onMove={handleMove}
+            onEdit={openEdit}
+            onDelete={setPendingDelete}
+            canManage={canSee}
+          />
+        ) : (
+          <DevRequestList
+            requests={requests}
+            emptyText="Відхилених карток немає."
+            onSelect={setSelected}
+            onMove={handleMove}
+            onEdit={openEdit}
+            onDelete={setPendingDelete}
+            canManage={canSee}
+          />
+        )}
         </div>
       )}
 

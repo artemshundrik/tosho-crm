@@ -1,22 +1,16 @@
-import { Clock3, ListTodo } from "lucide-react";
+import { ListTodo } from "lucide-react";
 
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { moduleKeyLabel } from "@/lib/projectMap";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
-import { MODULE_UNSET_LABEL, formatIdleAge } from "./cardModel";
+import { MODULE_UNSET_LABEL } from "./cardModel";
 import { PriorityBars } from "./PriorityBars";
 import { KIND_ICONS, KIND_LABELS, KIND_TONE, type DevRequest, type RequestStatus } from "./types";
 
 type DevRequestListProps = {
   requests: DevRequest[];
-  /**
-   * Показувати вік картки. Увімкнено для «Ідей»: саме вік не дає купі
-   * відкладеного стати другим цвинтарем — див. formatIdleAge. Для «Не робимо»
-   * вимкнено: там справу вже закрито, і «лежить 7 місяців» нічого не додає.
-   */
-  showAge?: boolean;
   /** Що написати, коли список порожній. Різний для «Ідей» і «Не робимо». */
   emptyText: string;
   onSelect: (request: DevRequest) => void;
@@ -27,19 +21,26 @@ type DevRequestListProps = {
 };
 
 /**
- * «Ідеї» та «Не робимо» — СПИСКОМ, а не канбаном.
+ * «Не робимо» — СПИСКОМ, а не канбаном і не стіною.
  *
- * Обидва стани колонок на дошці не мають (розгорнуто над BOARD_COLUMNS у
- * types.ts), тож і показані вони мають бути інакше: канбан-картка обіцяє, що
- * її кудись рухають, а тут рух рівно один — назад у чергу, і робиться він з
- * меню. Рядок на картку: номер, тема, тип, напрямок, вік.
+ * Стан колонки на дошці не має (розгорнуто над BOARD_COLUMNS у types.ts), тож
+ * і показаний він має бути інакше: канбан-картка обіцяє, що її кудись рухають,
+ * а тут рух рівно один — назад у чергу, і робиться він з меню.
+ *
+ * ЧОМУ НЕ СТІНА, як в «Ідеях». Стіна показує кожну картку цілком, з описом, —
+ * це потрібно, коли з купи ВИБИРАЮТЬ. У «Не робимо» не вибирають: туди
+ * заходять по конкретну картку, згадавши, що її колись відхилили. Для пошуку
+ * очима по одній колонці рядок кращий за нотатку.
+ *
+ * ВІКУ ТУТ НЕМАЄ, і це не пропуск: справу закрито, тож «лежить 7 місяців»
+ * нічого не додає. У «Ідеях» вік лишився — там він єдине, що не дає купі
+ * відкладеного стати другим цвинтарем (див. formatIdleAge).
  *
  * Клік по рядку відкриває ту саму панель деталей, що й на дошці: список — це
  * інший вигляд тих самих карток, а не інший розділ.
  */
 export function DevRequestList({
   requests,
-  showAge = false,
   emptyText,
   onSelect,
   onMove,
@@ -60,8 +61,6 @@ export function DevRequestList({
       {requests.map((request) => {
         const KindIcon = KIND_ICONS[request.kind];
         const moduleLabel = moduleKeyLabel(request.moduleKey);
-        const age = showAge ? formatIdleAge(request.createdAt) : null;
-
         return (
           <li key={request.id}>
             {/*
@@ -115,17 +114,6 @@ export function DevRequestList({
               >
                 {moduleLabel ?? MODULE_UNSET_LABEL}
               </span>
-
-              {/* Вік без тону й без плашки: це мітка, а не тривога. */}
-              {age ? (
-                <span
-                  className="inline-flex w-32 shrink-0 items-center gap-1 text-2xs text-muted-foreground/80"
-                  title={`Заведено ${new Date(request.createdAt).toLocaleDateString("uk-UA")}`}
-                >
-                  <Clock3 className="h-3 w-3 shrink-0" />
-                  {age}
-                </span>
-              ) : null}
 
               {canManage ? (
                 <div className="shrink-0">
