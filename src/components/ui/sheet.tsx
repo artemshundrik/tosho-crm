@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { UnsavedChangesPrompt, useUnsavedGuard } from "@/components/ui/unsaved-guard"
+import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard"
 
 const Sheet = SheetPrimitive.Root
 
@@ -107,7 +107,17 @@ const SheetContent = React.forwardRef<
       onInteractOutside={(event) => {
         // Спершу віддаємо подію споживачу: він міг сам вирішити її скасувати.
         onInteractOutside?.(event)
-        if (!dismissible) event.preventDefault()
+        if (event.defaultPrevented || dismissible) return
+        /**
+         * Клік повз поводиться так само, як Esc: порожню форму закриває, а
+         * заповнену — питає. Раніше тут стояв беззастережний preventDefault,
+         * тобто клік повз не робив НІЧОГО — і порожній дровер ігнорував його
+         * так само, як заповнений (REQ-5).
+         */
+        if (guard.shouldBlock()) {
+          event.preventDefault()
+          guard.ask()
+        }
       }}
       onEscapeKeyDown={(event) => {
         onEscapeKeyDown?.(event)
@@ -124,7 +134,7 @@ const SheetContent = React.forwardRef<
           рятує — фільтр дивиться на властивість, а не на стилі. */}
       {/* Слухач захисту — усередині вмісту, щоб жити рівно стільки, скільки
           відкритий дровер. Пояснення — у useUnsavedGuard. */}
-      <guard.Listener />
+      <UnsavedGuardListener enabled={guard.listening} touchedRef={guard.touchedRef} />
       <SheetPrimitive.Close ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {!hideClose ? (
         <SheetPrimitive.Close

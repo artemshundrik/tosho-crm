@@ -2,7 +2,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { UnsavedChangesPrompt, useUnsavedGuard } from "@/components/ui/unsaved-guard";
+import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -86,7 +86,21 @@ const DialogContent = React.forwardRef<
       onInteractOutside={(event) => {
         // Спершу віддаємо подію споживачу: він міг сам вирішити її скасувати.
         onInteractOutside?.(event);
-        if (!dismissible) event.preventDefault();
+        if (event.defaultPrevented || dismissible) return;
+        /**
+         * Клік повз поводиться так само, як Esc: порожню форму закриває, а
+         * заповнену — питає.
+         *
+         * Раніше тут стояв беззастережний preventDefault, тобто клік повз
+         * НЕ РОБИВ НІЧОГО: ні закривав, ні питав. Порожня форма ігнорувала
+         * клік так само, як заповнена, і це читалось як зламана взаємодія —
+         * саме на це поскаржився Артем (REQ-5). Захист від втрати введеного
+         * при цьому нікуди не подівся: він просто питає, замість мовчати.
+         */
+        if (guard.shouldBlock()) {
+          event.preventDefault();
+          guard.ask();
+        }
       }}
       onEscapeKeyDown={(event) => {
         onEscapeKeyDown?.(event);
@@ -104,7 +118,7 @@ const DialogContent = React.forwardRef<
       {/* Слухач захисту — саме ТУТ, усередині вмісту: він має жити рівно стільки,
           скільки відкрите вікно. Ззовні він висів би й на закритому, і клік, яким
           вікно відкривають, позначав би форму зміненою. */}
-      <guard.Listener />
+      <UnsavedGuardListener enabled={guard.listening} touchedRef={guard.touchedRef} />
       <DialogClose ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {children}
 
