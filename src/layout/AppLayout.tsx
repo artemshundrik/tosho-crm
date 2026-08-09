@@ -927,6 +927,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     location.pathname.startsWith(ROUTES.sampleStock) ||
     location.pathname.startsWith(ROUTES.notifications) ||
     location.pathname.startsWith(ROUTES.membersAccess) ||
+    // Тільки беклог: він канбан і має поводитись як дошки дизайну й
+    // прорахунків — іти наскрізь до правого краю, щоб колонки заїжджали під
+    // сайдбар при горизонтальному скролі. «Релізи» й «Здоровʼя» — звичайні
+    // сторінки з читомою шириною, їм полотно нашкодило б.
+    location.pathname.startsWith(DEV_PATHS.backlog) ||
     location.pathname.startsWith(ROUTES.finances);
 
   // Optional workspace logo (kept null by default to avoid heavy legacy team queries)

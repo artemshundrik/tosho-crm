@@ -288,11 +288,17 @@ export default function DevRequestsPage() {
   if (!canSee) return <Navigate to="/whats-new" replace />;
 
   return (
-    <div className="pb-8">
+    // Без власних бічних відступів: маршрут працює в режимі полотна (див.
+    // isCanvasMode в AppLayout), і дошка сама дає собі px-4/md:px-5 — рівно
+    // як на дизайні та прорахунках. Свій padding тут перекрив би це й
+    // відрізав би колонки від правого краю.
+    <div>
       {/* Помилка окремим рядком, а не замість дошки: кеш міг лишитись із
           минулого відкриття, і показати його корисніше за порожній екран. */}
       {board.error ? (
-        <p className="mb-4 text-sm text-destructive">Не вдалося завантажити запити.</p>
+        <p className="px-4 pt-4 text-sm text-destructive md:px-5">
+          Не вдалося завантажити запити.
+        </p>
       ) : null}
 
       {/* Дошка на всю ширину: деталі картки відкриваються дровером-накладкою, а
@@ -312,6 +318,10 @@ export default function DevRequestsPage() {
           canManage={canSee}
         />
       ) : (
+        /* Списку полотно ні до чого — це читомий стовпчик рядків, а не дошка,
+           яку прокручують убік. Відступи, що їх у режимі полотна не дає
+           каркас, повертаємо тут — тими самими кроками (px-4/5/6). */
+        <div className="px-4 py-4 md:px-5 md:py-5 lg:px-6">
         <DevRequestList
           requests={requests}
           showAge={view === "someday"}
@@ -326,6 +336,7 @@ export default function DevRequestsPage() {
           onDelete={setPendingDelete}
           canManage={canSee}
         />
+        </div>
       )}
 
       <DevRequestDetailsSheet
