@@ -122,6 +122,9 @@ const SheetContent = React.forwardRef<
       {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
           і поставив би сюди фокус при відкритті. CSS-клас `hidden` його не
           рятує — фільтр дивиться на властивість, а не на стилі. */}
+      {/* Слухач захисту — усередині вмісту, щоб жити рівно стільки, скільки
+          відкритий дровер. Пояснення — у useUnsavedGuard. */}
+      <guard.Listener />
       <SheetPrimitive.Close ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {!hideClose ? (
         <SheetPrimitive.Close

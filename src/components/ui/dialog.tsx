@@ -101,6 +101,10 @@ const DialogContent = React.forwardRef<
       {/* НЕ прибирати tabIndex={-1}: Radix шукає перший елемент із tabIndex >= 0
           і поставив би сюди фокус при відкритті. CSS-клас `hidden` не рятує —
           фільтр дивиться на властивість, а не на стилі. */}
+      {/* Слухач захисту — саме ТУТ, усередині вмісту: він має жити рівно стільки,
+          скільки відкрите вікно. Ззовні він висів би й на закритому, і клік, яким
+          вікно відкривають, позначав би форму зміненою. */}
+      <guard.Listener />
       <DialogClose ref={closeRef} data-unsaved-ignore className="hidden" aria-hidden tabIndex={-1} />
       {children}
 
