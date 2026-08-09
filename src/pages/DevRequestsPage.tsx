@@ -27,6 +27,8 @@ import {
 import { DevRequestDetailsSheet } from "@/features/devRequests/DevRequestDetailsSheet";
 import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
+import { GroupControl } from "@/features/devRequests/GroupControl";
+import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devRequests/grouping";
 import {
   NewDevRequestDialog,
   type NewDevRequestInput,
@@ -83,6 +85,15 @@ export default function DevRequestsPage() {
   const kanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [kanbanViewportHeight, setKanbanViewportHeight] = useState<number | null>(null);
   const [filters, setFilters] = useState<BoardFilterState>(EMPTY_BOARD_FILTERS);
+  // Групування памʼятається між заходами, фільтри — ні. Це різні за строком
+  // життя речі: зріз «за типом» людина обирає раз і надовго, а фільтр — щоб
+  // один раз подивитись. Знайти вранці дошку з учорашнім фільтром означало б
+  // побачити не всі картки й не зрозуміти чому.
+  const [groupBy, setGroupBy] = useState<GroupKey>(readGroupKey);
+  const changeGroupBy = useCallback((next: GroupKey) => {
+    setGroupBy(next);
+    writeGroupKey(next);
+  }, []);
 
   const canSee =
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
@@ -329,6 +340,14 @@ export default function DevRequestsPage() {
             Новий запит
           </Button>
         }
+        // Ряд збирається вже від 640 px, а не від 1280, як у типовому тулбарі.
+        // Там ця межа розрахована на розсип фільтрів; тут їх троє — пошук,
+        // «Фільтр» і групування, — і вони спокійно стоять поруч на ноутбуку.
+        // За типової межі на 1100 px тулбар розпадався на ТРИ ряди, останнім із
+        // яких був самотній лічильник карток.
+        bottomRowClassName="sm:flex-row sm:items-center"
+        searchClassName="sm:max-w-[340px] sm:flex-none"
+        metaClassName="sm:ml-auto sm:flex-none"
         search={
           <ToolbarSearch
             value={search}
@@ -338,7 +357,14 @@ export default function DevRequestsPage() {
         }
         // Фільтри в нижньому ряду, поруч із пошуком: обидва звужують те саме —
         // що зараз на екрані. Верхній ряд лишається за вибором вигляду.
-        filters={<BoardFilters requests={inView} state={filters} onChange={setFilters} />}
+        filters={
+          <>
+            <BoardFilters requests={inView} state={filters} onChange={setFilters} />
+            {/* Групування лише на дошці: «Ідеї» — стіна нотаток без колонок,
+                а «Не робимо» — плаский список. Різати там нема чого. */}
+            {view === "board" ? <GroupControl value={groupBy} onChange={changeGroupBy} /> : null}
+          </>
+        }
         meta={
           <ToolbarMeta
             count={requests.length}
@@ -354,7 +380,18 @@ export default function DevRequestsPage() {
         }
       />
     ),
-    [board.isFetching, counts, filters, inView, openCreate, requests.length, search, view]
+    [
+      board.isFetching,
+      changeGroupBy,
+      counts,
+      filters,
+      groupBy,
+      inView,
+      openCreate,
+      requests.length,
+      search,
+      view,
+    ]
   );
 
   // Хук стоїть ДО раннього return: інакше на редиректі порядок хуків
@@ -397,6 +434,7 @@ export default function DevRequestsPage() {
             onEdit={openEdit}
             onDelete={setPendingDelete}
             viewerId={userId}
+            groupBy={groupBy}
             canManage={canSee}
           />
         </div>

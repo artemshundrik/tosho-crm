@@ -12,6 +12,14 @@ import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, isCardMenuTarget, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
+import { GroupHeading } from "./GroupHeading";
+import {
+  collapsedKey,
+  groupRequests,
+  readCollapsedGroups,
+  writeCollapsedGroups,
+  type GroupKey,
+} from "./grouping";
 import { PriorityBars } from "./PriorityBars";
 import {
   BOARD_COLUMNS,
@@ -37,6 +45,8 @@ type DevRequestBoardProps = {
    * стоять на тому самому предикаті tosho.is_owner_or_seo().
    */
   canManage: boolean;
+  /** Чим ріжемо колонки. «none» — суцільний список, як було завжди. */
+  groupBy: GroupKey;
 };
 
 export function DevRequestBoard({
@@ -47,9 +57,11 @@ export function DevRequestBoard({
   onDelete,
   viewerId,
   canManage,
+  groupBy,
 }: DevRequestBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStatus, setHoverStatus] = useState<RequestStatus | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsedGroups);
   // Після drop браузер стріляє click по картці-джерелу — без паузи кожне
   // перетягування відкривало б обговорення. Той самий прийом, що й на дошці
   // дизайну (DesignPage: suppressCardClick), але через ref: клік читає його в
@@ -84,6 +96,16 @@ export function DevRequestBoard({
     }
     return map;
   }, [requests]);
+
+  const toggleGroup = useCallback((id: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      writeCollapsedGroups(next);
+      return next;
+    });
+  }, []);
 
   const stopDragging = useCallback(() => {
     setDraggingId(null);
@@ -121,6 +143,112 @@ export function DevRequestBoard({
     },
     [draggingId, onMove, requests, stopDragging]
   );
+
+  // Рендер картки винесений, бо колонка малює її двома шляхами — суцільним
+  // списком і всередині груп. Дублювати сто рядків розмітки заради цього не
+  // варто: розійдуться вони на першій же правці.
+  const renderCard = (request: DevRequest) => {
+    const meta = buildCardMeta(request, { viewerId });
+    const KindIcon = KIND_ICONS[request.kind];
+    const urgent = isUrgentCard(request);
+    return (
+      <KanbanCard
+        key={request.id}
+        draggable={canManage}
+        onClick={() => {
+          if (suppressClickRef.current) return;
+          onSelect(request);
+        }}
+        // pointerdown, а не mousedown: відкриваючись, Radix гасить типову дію
+        // pointerdown — а разом із нею й сам mousedown, тож на кнопці меню того
+        // обробника могло б і не бути. Capture-фаза (згори вниз) із тієї ж
+        // причини: перехопити треба ДО того, як подію обробить сама кнопка.
+        onPointerDownCapture={(event) => {
+          menuPressedRef.current = isCardMenuTarget(event.target);
+        }}
+        onDragStart={(event) => startDragging(event, request.id)}
+        onDragEnd={stopDragging}
+        className={cn(
+          // Розкладка й класи — ті самі, що на дошках дизайну та прорахунків
+          // (DesignPage/QuotesPage): картка запиту має читатись як їхня рідня,
+          // а не як гість із іншого проєкту.
+          "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-2.5 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
+          urgent && "dev-request-card-urgent",
+          canManage && "cursor-grab active:cursor-grabbing",
+          draggingId === request.id && "opacity-50"
+        )}
+      >
+        {/* ── Пріоритет, тип словом, номер і меню ── */}
+        <div className="flex items-center gap-2">
+          <PriorityBars priority={request.priority} />
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 text-2xs font-semibold",
+              toneTextClass[KIND_TONE[request.kind]],
+              // Пунктир під тим, що припустив розбір, — замість окремого рядка
+              // «✨ розбір» після автора. Той рядок читався як ще одне метаполе
+              // картки, хоча насправді це примітка про якість решти полів; і він
+              // не казав, ЩО саме припустили. Мова коректорської правки:
+              // підкреслено рівно те, що варто звірити.
+              request.autoClassified && "border-b border-dashed border-current pb-px"
+            )}
+            title={
+              request.autoClassified ? "Тип поставив розбір — людина ще не звіряла" : undefined
+            }
+          >
+            <KindIcon className="h-3.5 w-3.5" />
+            {KIND_LABELS[request.kind]}
+          </span>
+          <HoverCopyText
+            value={request.label}
+            textClassName="font-mono text-2xs font-semibold tracking-wide whitespace-nowrap text-muted-foreground"
+            successMessage="Номер запиту скопійовано"
+            copyLabel="Скопіювати номер запиту"
+          />
+
+          {canManage ? (
+            // Обгортка з позначкою: за нею pointerdown упізнає меню й не дає
+            // картці поїхати за кнопкою.
+            <div {...{ [CARD_MENU_ATTR]: "" }} className="ml-auto shrink-0">
+              <CardActionsMenu
+                // Єдина дорога в «Ідеї»: колонки в них немає, тож перетягнути
+                // картку туди неможливо в принципі.
+                move={{
+                  label: "В ідеї",
+                  icon: Lightbulb,
+                  onSelect: () => onMove(request.id, "someday"),
+                }}
+                onEdit={() => onEdit(request)}
+                onDelete={() => onDelete(request)}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Тема ── */}
+        <p className="mt-1.5 text-[13px] font-medium leading-snug line-clamp-3" title={request.title}>
+          {request.title}
+        </p>
+
+        {/* ── Пункти великої задачі ──
+            Одразу під назвою, а не в ряду міток: це не властивість картки, а її
+            стан. Рендерить null, коли пунктів немає. */}
+        <ChecklistBar items={request.checklist} className="mt-2" />
+
+        {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {meta.map((item) => (
+            <CardMetaChip
+              key={item.key}
+              item={item}
+              zone={request.zone}
+              autoClassified={request.autoClassified}
+            />
+          ))}
+        </div>
+      </KanbanCard>
+    );
+  };
 
   return (
     // h-full + items-stretch: колонки тягнуться на всю висоту дошки, а не на
@@ -169,115 +297,22 @@ export function DevRequestBoard({
               handleDrop(column.status);
             }}
           >
-            {items.map((request) => {
-              const meta = buildCardMeta(request, { viewerId });
-              const KindIcon = KIND_ICONS[request.kind];
-              const urgent = isUrgentCard(request);
-              return (
-                <KanbanCard
-                  key={request.id}
-                  draggable={canManage}
-                  onClick={() => {
-                    if (suppressClickRef.current) return;
-                    onSelect(request);
-                  }}
-                  // pointerdown, а не mousedown: відкриваючись, Radix гасить
-                  // типову дію pointerdown — а разом із нею й сам mousedown,
-                  // тож на кнопці меню того обробника могло б і не бути.
-                  // Capture-фаза (згори вниз) із тієї ж причини: перехопити
-                  // треба ДО того, як подію обробить сама кнопка.
-                  onPointerDownCapture={(event) => {
-                    menuPressedRef.current = isCardMenuTarget(event.target);
-                  }}
-                  onDragStart={(event) => startDragging(event, request.id)}
-                  onDragEnd={stopDragging}
-                  className={cn(
-                    // Розкладка й класи — ті самі, що на дошках дизайну та
-                    // прорахунків (DesignPage/QuotesPage): картка запиту має
-                    // читатись як їхня рідня, а не як гість із іншого проєкту.
-                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-2.5 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
-                    urgent && "dev-request-card-urgent",
-                    canManage && "cursor-grab active:cursor-grabbing",
-                    draggingId === request.id && "opacity-50"
-                  )}
-                >
-                  {/* ── Пріоритет, тип словом, номер і меню ── */}
-                  <div className="flex items-center gap-2">
-                    <PriorityBars priority={request.priority} />
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1 text-2xs font-semibold",
-                        toneTextClass[KIND_TONE[request.kind]],
-                        // Пунктир під тим, що припустив розбір, — замість
-                        // окремого рядка «✨ розбір» після автора. Той рядок
-                        // читався як ще одне метаполе картки, хоча насправді
-                        // це примітка про якість решти полів; і він не казав,
-                        // ЩО саме припустили. Мова коректорської правки:
-                        // підкреслено рівно те, що варто звірити.
-                        request.autoClassified && "border-b border-dashed border-current pb-px"
-                      )}
-                      title={
-                        request.autoClassified
-                          ? "Тип поставив розбір — людина ще не звіряла"
-                          : undefined
-                      }
-                    >
-                      <KindIcon className="h-3.5 w-3.5" />
-                      {KIND_LABELS[request.kind]}
-                    </span>
-                    <HoverCopyText
-                      value={request.label}
-                      textClassName="font-mono text-2xs font-semibold tracking-wide whitespace-nowrap text-muted-foreground"
-                      successMessage="Номер запиту скопійовано"
-                      copyLabel="Скопіювати номер запиту"
-                    />
-
-                    {canManage ? (
-                      // Обгортка з позначкою: за нею pointerdown упізнає меню й
-                      // не дає картці поїхати за кнопкою.
-                      <div {...{ [CARD_MENU_ATTR]: "" }} className="ml-auto shrink-0">
-                        <CardActionsMenu
-                          // Єдина дорога в «Ідеї»: колонки в них немає, тож
-                          // перетягнути картку туди неможливо в принципі.
-                          move={{
-                            label: "В ідеї",
-                            icon: Lightbulb,
-                            onSelect: () => onMove(request.id, "someday"),
-                          }}
-                          onEdit={() => onEdit(request)}
-                          onDelete={() => onDelete(request)}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* ── Тема ── */}
-                  <p
-                    className="mt-1.5 text-[13px] font-medium leading-snug line-clamp-3"
-                    title={request.title}
-                  >
-                    {request.title}
-                  </p>
-
-                  {/* ── Пункти великої задачі ──
-                      Одразу під назвою, а не в ряду міток: це не властивість
-                      картки, а її стан. Рендерить null, коли пунктів немає. */}
-                  <ChecklistBar items={request.checklist} className="mt-2" />
-
-                  {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {meta.map((item) => (
-                      <CardMetaChip
-                        key={item.key}
-                        item={item}
-                        zone={request.zone}
-                        autoClassified={request.autoClassified}
+            {groupBy === "none"
+              ? items.map(renderCard)
+              : groupRequests(items, groupBy).map((group) => {
+                  const key = collapsedKey(groupBy, group.id);
+                  const isCollapsed = collapsed.has(key);
+                  return (
+                    <div key={group.id} className="space-y-2">
+                      <GroupHeading
+                        group={group}
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleGroup(key)}
                       />
-                    ))}
-                  </div>
-                </KanbanCard>
-              );
-            })}
+                      {isCollapsed ? null : group.items.map(renderCard)}
+                    </div>
+                  );
+                })}
             {items.length === 0 ? (
               <p className="px-1 py-6 text-center text-xs text-muted-foreground">Порожньо</p>
             ) : null}

@@ -1,7 +1,9 @@
-import { useMemo } from "react";
-import { RotateCcw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, ListFilter, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
 import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import {
@@ -14,25 +16,27 @@ import {
 } from "./types";
 
 /**
- * Фільтри дошки: зона, тема, «нерозібрані».
+ * Фільтри дошки: зона й тема.
  *
- * ЧОМУ ЧІПИ, А НЕ ВИПАДАЙКИ. Фільтр тут вмикають, дивлячись на дошку, і
- * найчастіше на один клік: «покажи все про вигляд». Випадайка на кожен фільтр
- * — це два кліки й закритий список, у якому не видно, скільки чого є. Чіп
- * одразу показує і назву, і кількість, і чи він увімкнений.
+ * ЧОМУ КНОПКА, А НЕ ЧІПИ РОЗСИПОМ. Чіпи були правильні, поки їх було три. Зон
+ * пʼять із закритим набором, а теми ростуть самі з кожного розбору — тобто ряд
+ * переповнювався б і далі, скільки його не лагодь: спершу він ламався надвоє,
+ * потім ховав хвіст за краєм екрана. Плюс чіп заввишки 28 px не сідав на одну
+ * лінію з 40-піксельним пошуком, і тулбар виглядав зібраним нашвидкуруч.
+ *
+ * Тепер у ряду одна кнопка з числом увімкнених, а поруч — чіпи ВИБРАНОГО з
+ * хрестиком. Ряд не росте від кількості тем: активних фільтрів ставлять
+ * один-два, стільки чіпів там і буде. Те, заради чого чіпи задумувались —
+ * видно назву й кількість одразу, — не зникло, а переїхало на клік углиб.
  *
  * У МЕЖАХ ГРУПИ — АБО, МІЖ ГРУПАМИ — І. Дві зони разом означають «вигляд або
  * швидкість», а зона плюс тема — «вигляд І в темі навігація». Це те, чого
  * очікують від фільтрів скрізь, і саме тому правило не варто вигадувати своє.
  *
- * Чіпи з нулем не показуємо: фільтр, який гарантовано дасть порожньо, —
- * не вибір, а пастка.
- *
  * ЧІПА «НЕРОЗІБРАНІ» ТУТ БІЛЬШЕ НЕМАЄ. Він рахував картки без напрямку АБО без
  * зони — і на живій дошці це виявилась половина всіх карток. Фільтр, під який
  * підпадає половина, нічого не звужує: він не каже «оце потребує уваги», він
- * каже «тут усе». Якщо колись знадобиться, це має бути окремий вигляд, а не
- * чіп поруч із зонами.
+ * каже «тут усе».
  */
 export type BoardFilterState = {
   zones: Set<RequestZone>;
@@ -46,6 +50,10 @@ export const EMPTY_BOARD_FILTERS: BoardFilterState = {
 
 export function hasActiveFilters(state: BoardFilterState): boolean {
   return state.zones.size > 0 || state.themes.size > 0;
+}
+
+export function activeFilterCount(state: BoardFilterState): number {
+  return state.zones.size + state.themes.size;
 }
 
 /** Чи проходить картка крізь фільтри. Порожній фільтр пропускає все. */
@@ -62,8 +70,49 @@ function toggle<T>(set: Set<T>, value: T): Set<T> {
   return next;
 }
 
-const CHIP =
-  "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-2xs font-medium transition-colors";
+/** Рядок у панелі: галочка, іконка, назва, кількість. */
+function FilterRow({
+  selected,
+  disabled,
+  label,
+  count,
+  icon: Icon,
+  onSelect,
+}: {
+  selected: boolean;
+  disabled?: boolean;
+  label: string;
+  count: number;
+  icon?: React.ComponentType<{ className?: string }>;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={selected}
+      disabled={disabled}
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-[var(--radius)] px-2 py-1.5 text-left text-[13px] transition-colors",
+        selected ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/60",
+        disabled && "cursor-default opacity-40 hover:bg-transparent"
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+          selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+        )}
+      >
+        {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
+      </span>
+      {Icon ? <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="shrink-0 font-mono text-2xs tabular-nums opacity-60">{count}</span>
+    </button>
+  );
+}
 
 export function BoardFilters({
   requests,
@@ -75,6 +124,8 @@ export function BoardFilters({
   state: BoardFilterState;
   onChange: (next: BoardFilterState) => void;
 }) {
+  const [open, setOpen] = useState(false);
+
   const counts = useMemo(() => {
     const zones = new Map<RequestZone, number>();
     const themes = new Map<string, number>();
@@ -87,85 +138,120 @@ export function BoardFilters({
 
   const themeList = useMemo(
     () =>
-      Array.from(counts.themes.entries())
-        // Часті теми першими: рідкісна тема на початку ряду з'їдає місце в тих,
-        // хто справді збирає роботу.
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "uk"))
-        .slice(0, 6),
+      Array.from(counts.themes.entries()).sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "uk")
+      ),
     [counts.themes]
   );
 
-  const zoneList = REQUEST_ZONES.filter((zone) => (counts.zones.get(zone) ?? 0) > 0);
-  const active = hasActiveFilters(state);
-
-  if (zoneList.length === 0 && themeList.length === 0) return null;
+  const active = activeFilterCount(state);
+  // Порожня дошка — фільтрувати нічого; кнопка без вмісту тільки заважає.
+  if (counts.zones.size === 0 && themeList.length === 0 && active === 0) return null;
 
   return (
-    // Один ряд зі скролом, а не перенос: на вузькому екрані чіпи лягали в два
-    // ряди й тулбар підростав удвічі, зсуваючи саму дошку вниз. Смуга тут
-    // доречніша — фільтрів небагато, і горизонтальний жест звичний саме на
-    // дошці, яку й так гортають убік.
-    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {zoneList.map((zone) => {
+    <div className="flex min-w-0 items-center gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              TOOLBAR_CONTROL,
+              "shrink-0 gap-2 px-3.5 text-sm font-normal",
+              active > 0 && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+            )}
+          >
+            <ListFilter className="h-4 w-4" />
+            Фільтр
+            {active > 0 ? (
+              <span className="rounded-full bg-primary/20 px-1.5 font-mono text-2xs tabular-nums">
+                {active}
+              </span>
+            ) : null}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[260px] p-1.5">
+          <p className="px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
+            Зона
+          </p>
+          {REQUEST_ZONES.map((zone) => {
+            const count = counts.zones.get(zone) ?? 0;
+            const selected = state.zones.has(zone);
+            return (
+              <FilterRow
+                key={zone}
+                selected={selected}
+                // Зону з нулем показуємо, але тьмяно й без кліку. У ряду вона
+                // була б брехнею — натиснув і отримав порожньо; у списку каже
+                // правду: такого просто немає.
+                disabled={count === 0 && !selected}
+                label={ZONE_LABELS[zone]}
+                count={count}
+                icon={ZONE_ICONS[zone]}
+                onSelect={() => onChange({ ...state, zones: toggle(state.zones, zone) })}
+              />
+            );
+          })}
+
+          {themeList.length > 0 ? (
+            <>
+              <div className="-mx-1.5 my-1.5 h-px bg-border" />
+              <p className="px-2 pb-1 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
+                Тема
+              </p>
+              {/* Теми ростуть самі з розбору — список має власну прокрутку,
+                  інакше панель колись переросте екран. */}
+              <div className="max-h-[210px] overflow-y-auto">
+                {themeList.map(([theme, count]) => (
+                  <FilterRow
+                    key={theme}
+                    selected={state.themes.has(theme)}
+                    label={theme}
+                    count={count}
+                    onSelect={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+
+      {/* Вибране — чіпами поруч: зняти фільтр можна не відкриваючи панель.
+          Саме тут 28-піксельний чіп доречний, бо він уже не орган керування, а
+          позначка стану. */}
+      {Array.from(state.zones).map((zone) => {
         const Icon = ZONE_ICONS[zone];
-        const on = state.zones.has(zone);
         return (
           <button
-            key={zone}
+            key={`zone-${zone}`}
             type="button"
-            aria-pressed={on}
             onClick={() => onChange({ ...state, zones: toggle(state.zones, zone) })}
+            title={`Прибрати фільтр «${ZONE_LABELS[zone]}»`}
             className={cn(
-              CHIP,
-              on
-                ? cn("border-transparent", toneSubtleClass[ZONE_TONE[zone]], toneTextClass[ZONE_TONE[zone]])
-                : "border-border/60 text-muted-foreground hover:border-foreground/25 hover:text-foreground"
+              "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-transparent pl-2.5 pr-2 text-2xs font-medium transition-opacity hover:opacity-80",
+              toneSubtleClass[ZONE_TONE[zone]],
+              toneTextClass[ZONE_TONE[zone]]
             )}
           >
             <Icon className="h-3 w-3" />
             {ZONE_LABELS[zone]}
-            <span className="tabular-nums opacity-70">{counts.zones.get(zone)}</span>
+            <X className="h-3 w-3 opacity-70" />
           </button>
         );
       })}
-
-      {themeList.length > 0 && zoneList.length > 0 ? (
-        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-      ) : null}
-
-      {themeList.map(([theme, count]) => {
-        const on = state.themes.has(theme);
-        return (
-          <button
-            key={theme}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
-            className={cn(
-              CHIP,
-              on
-                ? "border-transparent bg-primary/12 text-primary"
-                : "border-border/60 text-muted-foreground hover:border-foreground/25 hover:text-foreground"
-            )}
-          >
-            {theme}
-            <span className="tabular-nums opacity-70">{count}</span>
-          </button>
-        );
-      })}
-
-      {active ? (
-        <Button
+      {Array.from(state.themes).map((theme) => (
+        <button
+          key={`theme-${theme}`}
           type="button"
-          variant="ghost"
-          size="xs"
-          className="h-7 gap-1.5 px-2 text-2xs text-muted-foreground"
-          onClick={() => onChange(EMPTY_BOARD_FILTERS)}
+          onClick={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
+          title={`Прибрати фільтр «${theme}»`}
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-primary/12 pl-2.5 pr-2 text-2xs font-medium text-primary transition-opacity hover:opacity-80"
         >
-          <RotateCcw className="h-3 w-3" />
-          скинути
-        </Button>
-      ) : null}
+          {theme}
+          <X className="h-3 w-3 opacity-70" />
+        </button>
+      ))}
     </div>
   );
 }
