@@ -62,11 +62,15 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
 
     const tried = measurable.filter((def) => ["tried", "using"].includes(stateOf(def))).length;
 
-    // Власнику плашка не ховається ніколи — навіть на 100%. Він єдиний, хто
-    // має бачити те саме, що бачить команда: інакше неможливо перевірити, як
-    // воно виглядає, бо він завжди все вже спробував (він це й замовляв).
-    const isOwner = (accessRole ?? "").trim().toLowerCase() === "owner";
-    if (tried >= measurable.length && !isOwner) return { kind: "hidden" };
+    /**
+     * Усе спробувано — плашки немає. Ні в кого, включно з власником.
+     *
+     * Виняток для власника тут був, щоб він міг побачити плашку очима команди.
+     * На практиці це означало «4 з 4 · усе спробовано» в найдорожчому місці
+     * сайдбару щодня й назавжди: він замовляє фічі, тож у нього завжди 100%.
+     * Перевірити вигляд плашки все одно можна режимом «Дивитись як».
+     */
+    if (tried >= measurable.length) return { kind: "hidden" };
 
     return { kind: "ring", tried, total: measurable.length };
   }, [moduleAccess, accessRole, jobRole, adoption, now]);
@@ -78,7 +82,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
     return (
       <button
         type="button"
-        onClick={() => navigate("/features")}
+        onClick={() => navigate("/whats-new/features")}
         aria-label="Можливості CRM"
         title="Можливості CRM"
         className="mx-auto grid h-9 w-9 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -124,7 +128,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
   return (
     <button
       type="button"
-      onClick={() => navigate("/features")}
+      onClick={() => navigate("/whats-new/features")}
       className="group/plate flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-card p-2.5 text-left transition-colors hover:border-foreground/25"
     >
       <span

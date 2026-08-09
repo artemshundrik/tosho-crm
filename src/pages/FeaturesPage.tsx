@@ -7,6 +7,7 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { WhatsNewTabs } from "@/components/app/WhatsNewTabs";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import { defaultModuleAccess } from "@/lib/moduleAccess";
@@ -140,7 +141,10 @@ export default function FeaturesPage() {
   // Тулбар — у слот шапки, як на решті сторінок списків.
   usePageHeaderActions(
     <UnifiedPageToolbar
-      topLeft={
+      // Верхній ряд — рівень розділу («Оновлення» / «Можливості»), нижній —
+      // фільтри всередині вкладки. Разом вони читалися б як один список.
+      topLeft={<WhatsNewTabs />}
+      filters={
         <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
           {(Object.keys(FILTER_LABEL) as Filter[]).map((value) => (
             <Button
