@@ -835,12 +835,17 @@ function DayView({
               work
                 ? {
                     title: `≈${work.hours} год за роботою`,
-                    rows: work.blocks.map((b) => ({
+                    rows: (work.blocks.map((b) => ({
                       label: `${hhmm(b.from)}–${hhmm(b.to)}`,
-                      value: durTxt(b.to - b.from + 5),
+                      value: durTxt(b.to - b.from),
                       color: isNight(b.from) ? "bg-chart-7" : "bg-chart-1",
-                    })),
-                    note: "З ритму сесій Claude Code: пауза понад 30 хв рве підхід, +5 хв розігріву. Бачить і те, що не закінчилось комітом.",
+                    })) as TipRow[]).concat([
+                      {
+                        label: `Розігрів · ${work.blocks.length} × 5 хв`,
+                        value: durTxt(work.blocks.length * 5),
+                      },
+                    ]),
+                    note: "З ритму сесій Claude Code: пауза понад 30 хв рве підхід. До кожного підходу додаємо 5 хв на розігрів — час, коли робота вже почалась, а перше повідомлення ще ні. Бачить і те, що не закінчилось комітом.",
                   }
                 : {
                     title: "Годин за роботою немає",
@@ -864,20 +869,25 @@ function DayView({
                     isNight(from) ? "bg-chart-7" : "bg-chart-1"
                   )}
                 />
-                <b className="font-semibold text-foreground">{durTxt(to - from + 5)}</b>
+                {/* Рівно різниця між кінцем і початком, без розігріву. Доти
+                    тут стояло `+ 5`, і підпис не сходився з власним проміжком:
+                    «00:01–00:10 · 14 хв» читалось як помилка. Розігрів
+                    лишається в загальній цифрі й показаний окремим рядком у
+                    підказці — там йому й місце. */}
+                <b className="font-semibold text-foreground">{durTxt(to - from)}</b>
                 {hhmm(from)}–{hhmm(to)}
               </span>
             )
           )}
 
-          <span className="ml-auto text-3xs text-muted-foreground">
-            середнє <b className="font-semibold text-foreground">≈{avgHours.toFixed(1)} год</b>/день
-          </span>
-
-          {/* Другий прилад — окремим рядком, щоб не читалось як доданок. */}
+          {/* Другий прилад і середнє — ОДИН нижній ряд, а не два розкидані
+              кінці. Доти «середнє» лишалось у хвості верхнього ряду, а «за
+              комітами» перескакувало на свій рядок через w-full: між ними
+              зяяла порожнеча, і читалось це як дві незв'язані підписи. */}
+          <div className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1">
           {info.blocks.length > 0 ? (
             <span
-              className={cn("w-full text-3xs text-muted-foreground", HOV, "border-b-0")}
+              className={cn("text-3xs text-muted-foreground", HOV, "border-b-0")}
               {...bind(() => ({
                 title: `≈${info.hours} год за комітами`,
                 rows: info.blocks.map(([from, to]) => ({
@@ -913,6 +923,10 @@ function DayView({
               )}
             </span>
           ) : null}
+          <span className="ml-auto text-3xs text-muted-foreground">
+            середнє <b className="font-semibold text-foreground">≈{avgHours.toFixed(1)} год</b>/день
+          </span>
+          </div>
         </div>
       </header>
 
