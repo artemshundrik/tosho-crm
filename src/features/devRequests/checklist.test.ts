@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checklistProgress,
+  waitingDays,
   groupChecklist,
   nextState,
   parseChecklist,
@@ -123,5 +124,28 @@ describe("groupChecklist", () => {
     ]);
     expect(groups.map((entry) => entry.group)).toEqual(["Документи", "Дошка", null]);
     expect(groups[0].items).toHaveLength(2);
+  });
+});
+
+describe("waitingDays", () => {
+  const now = new Date("2026-08-09T12:00:00Z");
+
+  it("рахує дні від дати початку очікування", () => {
+    expect(waitingDays(item({ state: "waiting", since: "2026-07-30" }), now)).toBe(10);
+  });
+
+  it("пункт не в очікуванні — нічого не рахуємо", () => {
+    expect(waitingDays(item({ state: "todo", since: "2026-07-30" }), now)).toBeNull();
+    expect(waitingDays(item({ state: "done", since: "2026-07-30" }), now)).toBeNull();
+  });
+
+  it("очікування без дати — теж null, а не «20 000 днів»", () => {
+    expect(waitingDays(item({ state: "waiting", since: null }), now)).toBeNull();
+    expect(waitingDays(item({ state: "waiting", since: "не дата" }), now)).toBeNull();
+  });
+
+  it("сьогоднішнє очікування — нуль, а не мінус", () => {
+    expect(waitingDays(item({ state: "waiting", since: "2026-08-09" }), now)).toBe(0);
+    expect(waitingDays(item({ state: "waiting", since: "2026-08-20" }), now)).toBe(0);
   });
 });

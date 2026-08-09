@@ -179,6 +179,19 @@ export function groupChecklist(items: ChecklistItem[]): Array<{ group: string | 
   return groups;
 }
 
+/**
+ * Скільки днів висить це очікування. null — пункт не чекає або дати немає.
+ *
+ * На екрані показуємо саме дні, а не дату початку: питання ж не «коли
+ * почалось», а «скільки вже висить» — і віднімати в голові щоразу нікому.
+ */
+export function waitingDays(item: ChecklistItem, now = new Date()): number | null {
+  if (item.state !== "waiting" || !item.since) return null;
+  const started = Date.parse(`${item.since}T00:00:00Z`);
+  if (Number.isNaN(started)) return null;
+  return Math.max(0, Math.floor((now.getTime() - started) / 86_400_000));
+}
+
 /** Сьогодні в YYYY-MM-DD — для позначки, відколи чекаємо. */
 export function today(now = new Date()): string {
   return now.toISOString().slice(0, 10);

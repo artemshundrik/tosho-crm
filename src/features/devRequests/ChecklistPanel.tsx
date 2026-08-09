@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, User, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { pluralUk } from "@/lib/lastSeen";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +15,7 @@ import {
   groupChecklist,
   nextState,
   today,
+  waitingDays,
   type ChecklistItem,
 } from "./checklist";
 
@@ -128,6 +130,7 @@ export function ChecklistPanel({
 
           {group.items.map((item) => {
             const StateIcon = CHECK_STATE_ICONS[item.state];
+            const days = waitingDays(item);
             return (
               <div key={item.id} className="rounded-[var(--radius)] px-1 py-1 hover:bg-muted/20">
                 <div className="flex items-start gap-2.5">
@@ -148,7 +151,10 @@ export function ChecklistPanel({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-1.5">
-                      {item.kind === "question" ? (
+                      {/* Знак питання лише поза групами. Усередині «Чекаємо на
+                          СЕО» він дублює заголовок, і дві іконки поспіль
+                          зливаються в одну кляксу, з якої не читається жодна. */}
+                      {item.kind === "question" && !item.group ? (
                         <QUESTION_ICON className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-foreground" />
                       ) : null}
                       <span
@@ -166,17 +172,37 @@ export function ChecklistPanel({
                       </p>
                     ) : null}
 
+                    {/* Очікування — ОДИН рядок замість поля вводу з рамкою й
+                        сирої дати. Рамка обіцяла форму, хоч це одне слово, яке
+                        міняють раз на місяць; дату «з 2026-07-30» доводилось
+                        віднімати в голові, хоч питання завжди про те, скільки
+                        вже висить. */}
                     {item.state === "waiting" ? (
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <Input
+                      <div className="mt-1 inline-flex items-center gap-1.5 text-2xs text-warning-foreground">
+                        <User className="h-3 w-3 shrink-0" />
+                        <input
                           value={item.who ?? ""}
                           disabled={!canManage}
                           onChange={(event) => patch(item.id, { who: event.target.value || null })}
-                          placeholder="на кого чекаємо"
-                          className="h-6 w-40 px-2 text-2xs"
+                          placeholder="на кого"
+                          // size замість фіксованої ширини: поле займає рівно
+                          // стільки, скільки в ньому слово, і не тягне за собою
+                          // порожній прямокутник.
+                          size={Math.max(7, (item.who ?? "").length)}
+                          className={cn(
+                            "border-b border-dashed border-current bg-transparent p-0 text-2xs",
+                            "placeholder:text-warning-foreground/50",
+                            "focus:outline-none focus:border-solid",
+                            "disabled:cursor-default disabled:border-none"
+                          )}
                         />
-                        {item.since ? (
-                          <span className="text-2xs text-muted-foreground">з {item.since}</span>
+                        {days !== null ? (
+                          <>
+                            <span className="text-muted-foreground/60">·</span>
+                            <span className="text-muted-foreground">
+                              {days === 0 ? "сьогодні" : pluralUk(days, "день", "дні", "днів")}
+                            </span>
+                          </>
                         ) : null}
                       </div>
                     ) : null}
