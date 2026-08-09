@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -72,6 +72,8 @@ export default function DevRequestsPage() {
   const [pendingDelete, setPendingDelete] = useState<DevRequest | null>(null);
   // Вибрана картка — під панель обговорення, яку додає наступна задача.
   const [selected, setSelected] = useState<DevRequest | null>(null);
+  const kanbanViewportRef = useRef<HTMLDivElement | null>(null);
+  const [kanbanViewportHeight, setKanbanViewportHeight] = useState<number | null>(null);
 
   const canSee =
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
@@ -82,6 +84,54 @@ export default function DevRequestsPage() {
   const moveRequest = useMoveDevRequest(teamId);
   const updateRequest = useUpdateDevRequest(teamId);
   const deleteRequest = useDeleteDevRequest(teamId);
+
+  /**
+   * Висота дошки — рівно до низу вікна, як на дизайні та прорахунках.
+   *
+   * Без неї дошка росла вниз за найдовшою колонкою: сторінка прокручувалась
+   * цілком, шапка з пошуком їхала геть, а решта колонок лишалась короткою.
+   * З фіксованою висотою прокручується вміст КОЛОНКИ (у KanbanColumn на тілі
+   * стоїть overflow-y-auto), а сама дошка стоїть на місці.
+   *
+   * useLayoutEffect і синхронний перший вимір — щоб дошка одразу малювалась
+   * потрібної висоти, а не схлопувалась під картки й стрибала за кадр.
+   * ResizeObserver ловить те, що resize не ловить: розгортання сайдбару, появу
+   * смуги «Дивитись як», зміну висоти тулбара.
+   */
+  useLayoutEffect(() => {
+    if (view !== "board") return;
+    if (typeof window === "undefined") return;
+
+    const viewport = kanbanViewportRef.current;
+    if (!viewport) return;
+
+    let frameId = 0;
+    const measure = () => {
+      frameId = 0;
+      const rect = viewport.getBoundingClientRect();
+      // 12px — той самий повітряний зазор під дошкою, що й на прорахунках.
+      const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
+      setKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+    const scheduleMeasure = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+    window.addEventListener("resize", scheduleMeasure);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(scheduleMeasure) : null;
+    resizeObserver?.observe(viewport);
+    if (viewport.parentElement) resizeObserver?.observe(viewport.parentElement);
+
+    return () => {
+      window.removeEventListener("resize", scheduleMeasure);
+      if (frameId) window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+    };
+  }, [view]);
 
   /**
    * Пошук діє всередині відкритого вигляду, а не поверх усього одразу: набране
@@ -309,14 +359,20 @@ export default function DevRequestsPage() {
           роботи вони не є, і стовпчик у ряду з рештою читався б саме так.
           Розгорнуто над BOARD_COLUMNS у features/devRequests/types.ts. */}
       {view === "board" ? (
-        <DevRequestBoard
-          requests={requests}
-          onMove={handleMove}
-          onSelect={setSelected}
-          onEdit={openEdit}
-          onDelete={setPendingDelete}
-          canManage={canSee}
-        />
+        <div
+          ref={kanbanViewportRef}
+          className="min-h-0 overflow-hidden"
+          style={kanbanViewportHeight ? { height: `${kanbanViewportHeight}px` } : undefined}
+        >
+          <DevRequestBoard
+            requests={requests}
+            onMove={handleMove}
+            onSelect={setSelected}
+            onEdit={openEdit}
+            onDelete={setPendingDelete}
+            canManage={canSee}
+          />
+        </div>
       ) : (
         /* Списку полотно ні до чого — це читомий стовпчик рядків, а не дошка,
            яку прокручують убік. Відступи, що їх у режимі полотна не дає

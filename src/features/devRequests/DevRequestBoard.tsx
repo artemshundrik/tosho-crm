@@ -169,7 +169,10 @@ export function DevRequestBoard({
   );
 
   return (
-    <KanbanBoard>
+    // h-full + items-stretch: колонки тягнуться на всю висоту дошки, а не на
+    // висоту найдовшої з них. Без цього фіксована висота ззовні нічого не дає —
+    // короткі колонки лишаються короткими, а довга однаково росте вниз.
+    <KanbanBoard className="h-full pb-2 md:pb-3" rowClassName="h-full items-stretch">
       {BOARD_COLUMNS.map((column) => {
         const items = byStatus.get(column.status) ?? [];
         return (
