@@ -210,8 +210,16 @@ export function DevRequestDetailsSheet({
                       робота», а не сканується очима по колонці. */}
                   <DetailRow label="Зона роботи">
                     {shown.zone ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <ZoneIcon className={cn("h-3.5 w-3.5", toneTextClass[ZONE_TONE[shown.zone]])} />
+                      // Колір на всьому рядку, а не лише на іконці, — як у
+                      // «Типу» вище: два сусідні рядки одного блоку не мають
+                      // фарбуватись за різними правилами.
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 font-medium",
+                          toneTextClass[ZONE_TONE[shown.zone]]
+                        )}
+                      >
+                        <ZoneIcon className="h-3.5 w-3.5" />
                         {ZONE_LABELS[shown.zone]}
                       </span>
                     ) : (

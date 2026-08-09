@@ -29,6 +29,7 @@ import {
   ZONE_TONE,
   type DevRequest,
   type RequestStatus,
+  type RequestZone,
 } from "./types";
 
 type DevRequestBoardProps = {
@@ -46,12 +47,32 @@ type DevRequestBoardProps = {
   canManage: boolean;
 };
 
+/** Геометрія мітки — одна на всі: колір далі накладається зверху. */
+const CHIP_SHAPE = "rounded-full px-2 py-0.5 text-2xs font-medium normal-case tracking-normal";
+
 /** Мітка: тон рівно за «гучністю», свого набору кольорів картка не заводить. */
 function chipClassName(weight: ChipWeight): string {
   if (weight === "quiet") {
-    return "rounded-full border-border/40 bg-transparent px-2 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground/70";
+    return cn(CHIP_SHAPE, "border-border/40 bg-transparent text-muted-foreground/70");
   }
-  return "rounded-full border-border/60 bg-muted/20 px-2 py-0.5 text-2xs font-medium normal-case tracking-normal text-muted-foreground";
+  return cn(CHIP_SHAPE, "border-border/60 bg-muted/20 text-muted-foreground");
+}
+
+/**
+ * Мітка зони: заливка, текст і іконка — одного тону.
+ *
+ * `tone-*-subtle` дає лише фон і межу, кольору тексту в ньому немає. Через це
+ * мітка зони спершу успадковувала сірий `text-muted-foreground` від звичайного
+ * чіпа — сірий текст на кольоровій заливці читається як бруд, а не як мітка.
+ * Тому тут свій набір, а не chipClassName поверх якого домальовано фон.
+ */
+function zoneChipClassName(zone: RequestZone): string {
+  return cn(
+    CHIP_SHAPE,
+    "border-transparent",
+    toneSubtleClass[ZONE_TONE[zone]],
+    toneTextClass[ZONE_TONE[zone]]
+  );
 }
 
 /**
@@ -289,22 +310,23 @@ export function DevRequestBoard({
                         item.key === "zone" && request.zone
                           ? ZONE_ICONS[request.zone]
                           : META_ICONS[item.key];
-                      const isZone = item.key === "zone" && request.zone;
+                      // Зона — заливена мітка в тоні зони, решта чіпів лишається
+                      // контурною: так мітка не читається як другий тип, навіть
+                      // коли тони збігаються.
+                      const zoneOfItem = item.key === "zone" ? request.zone : null;
                       return (
                         <Badge
                           key={item.key}
                           variant="outline"
                           className={cn(
                             "gap-1",
-                            chipClassName(item.weight),
-                            // Зона — заливена мітка в тоні зони, решта чіпів
-                            // лишається контурною: так мітка не читається як
-                            // другий тип, навіть коли тони збігаються.
-                            isZone && request.zone && toneSubtleClass[ZONE_TONE[request.zone]],
-                            isZone && "border-transparent",
+                            zoneOfItem ? zoneChipClassName(zoneOfItem) : chipClassName(item.weight),
                             // Пунктир і тут — розбір міг припустити зону так
-                            // само, як і тип.
-                            isZone && request.autoClassified && "border border-dashed border-current"
+                            // само, як і тип. border-current бере колір тону,
+                            // тож межа лишається кольоровою, а не сірою.
+                            zoneOfItem &&
+                              request.autoClassified &&
+                              "border border-dashed border-current"
                           )}
                           title={item.hint}
                         >
