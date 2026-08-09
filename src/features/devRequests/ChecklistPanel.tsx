@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, User, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,31 +178,32 @@ export function ChecklistPanel({
                         віднімати в голові, хоч питання завжди про те, скільки
                         вже висить. */}
                     {item.state === "waiting" ? (
-                      <div className="mt-1 inline-flex items-center gap-1.5 text-2xs text-warning-foreground">
-                        <User className="h-3 w-3 shrink-0" />
+                      // Один акцент на рядок — жовта лише іконка стану зліва.
+                      // Доти жовтими були ще й імʼя та пунктир під ним, і три
+                      // акценти в рядку кричали наввипередки, хоч головне тут —
+                      // сам текст пункту.
+                      <div className="mt-1 inline-flex items-baseline gap-1.5 text-2xs text-muted-foreground">
                         <input
                           value={item.who ?? ""}
                           disabled={!canManage}
                           onChange={(event) => patch(item.id, { who: event.target.value || null })}
                           placeholder="на кого"
-                          // size замість фіксованої ширини: поле займає рівно
-                          // стільки, скільки в ньому слово, і не тягне за собою
-                          // порожній прямокутник.
-                          size={Math.max(7, (item.who ?? "").length)}
+                          // Ширина рівно по слову. Був мінімум у 7 символів, і
+                          // під «СЕО» тягнувся пунктир удвічі довший за саме
+                          // слово — саме він і виглядав недоладно.
+                          size={Math.max(3, (item.who ?? "на кого").length)}
                           className={cn(
-                            "border-b border-dashed border-current bg-transparent p-0 text-2xs",
-                            "placeholder:text-warning-foreground/50",
-                            "focus:outline-none focus:border-solid",
+                            "border-b border-dashed border-muted-foreground/35 bg-transparent p-0 text-2xs text-foreground",
+                            "placeholder:text-muted-foreground/60",
+                            "transition-colors hover:border-muted-foreground/70",
+                            "focus:border-solid focus:border-primary/60 focus:outline-none",
                             "disabled:cursor-default disabled:border-none"
                           )}
                         />
                         {days !== null ? (
-                          <>
-                            <span className="text-muted-foreground/60">·</span>
-                            <span className="text-muted-foreground">
-                              {days === 0 ? "сьогодні" : pluralUk(days, "день", "дні", "днів")}
-                            </span>
-                          </>
+                          <span>
+                            · {days === 0 ? "сьогодні" : pluralUk(days, "день", "дні", "днів")}
+                          </span>
                         ) : null}
                       </div>
                     ) : null}
