@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
+import { parseChecklist, type ChecklistItem } from "./checklist";
 import { isKnownModuleKey } from "@/lib/projectMap";
 import type { Tone } from "@/lib/statusTones";
 
@@ -70,6 +71,8 @@ export type DevRequest = {
   zone: RequestZone | null;
   /** Вільна мітка-тема: групує картки однієї роботи замість дерева підзадач. */
   theme: string | null;
+  /** Пункти великої задачі. Порожній масив — звичайна картка. */
+  checklist: ChecklistItem[];
   /** Напрямок і пріоритет проставив розбір, а не людина. */
   autoClassified: boolean;
   isPrivate: boolean;
@@ -298,6 +301,7 @@ type DevRequestRow = {
   priority: string | null;
   zone: string | null;
   theme: string | null;
+  checklist: unknown;
   auto_classified: boolean | null;
   is_private: boolean;
   author_user_id: string | null;
@@ -357,6 +361,7 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     priority: asPriority(row.priority),
     zone: asZone(row.zone),
     theme: asTheme(row.theme),
+    checklist: parseChecklist(row.checklist),
     autoClassified: row.auto_classified ?? false,
     isPrivate: row.is_private,
     authorUserId: row.author_user_id,

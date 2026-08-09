@@ -1440,6 +1440,7 @@ export type Database = {
           author_user_id: string | null
           auto_classified: boolean
           body: string | null
+          checklist: Json
           commit_shas: string[]
           created_at: string
           created_by: string | null
@@ -1469,6 +1470,7 @@ export type Database = {
           author_user_id?: string | null
           auto_classified?: boolean
           body?: string | null
+          checklist?: Json
           commit_shas?: string[]
           created_at?: string
           created_by?: string | null
@@ -1498,6 +1500,7 @@ export type Database = {
           author_user_id?: string | null
           auto_classified?: boolean
           body?: string | null
+          checklist?: Json
           commit_shas?: string[]
           created_at?: string
           created_by?: string | null

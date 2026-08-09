@@ -19,6 +19,7 @@ import {
   type CardMetaKey,
   type ChipWeight,
 } from "./cardModel";
+import { ChecklistBar } from "./ChecklistBar";
 import { PriorityBars } from "./PriorityBars";
 import {
   BOARD_COLUMNS,
@@ -304,6 +305,11 @@ export function DevRequestBoard({
                   >
                     {request.title}
                   </p>
+
+                  {/* ── Пункти великої задачі ──
+                      Одразу під назвою, а не в ряду міток: це не властивість
+                      картки, а її стан. Рендерить null, коли пунктів немає. */}
+                  <ChecklistBar items={request.checklist} className="mt-2" />
 
                   {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
