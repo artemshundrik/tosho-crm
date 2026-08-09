@@ -7,8 +7,8 @@ import {
   Inbox,
   Info,
   KeyRound,
+  Laptop,
   ListTodo,
-  PackageCheck,
   Plus,
   Rocket,
   SwatchBook,
@@ -149,7 +149,10 @@ export const BOARD_COLUMNS: Array<{
   { status: "triage", label: STATUS_LABELS.triage, icon: Inbox, toneClassName: "tone-text-warning" },
   { status: "queued", label: STATUS_LABELS.queued, icon: ListTodo },
   { status: "in_progress", label: STATUS_LABELS.in_progress, icon: Hammer, toneClassName: "tone-text-info" },
-  { status: "done_local", label: STATUS_LABELS.done_local, icon: PackageCheck, toneClassName: "tone-text-accent" },
+  // Ноутбук, а не пакунок: «локально» тут — це «на моєму компʼютері, у прод ще
+  // не поїхало». Пакунок читався як щось спаковане й готове до відправлення —
+  // тобто рівно навпаки, і плутав саме там, де різниця найважливіша.
+  { status: "done_local", label: STATUS_LABELS.done_local, icon: Laptop, toneClassName: "tone-text-accent" },
   { status: "released", label: STATUS_LABELS.released, icon: Rocket, toneClassName: "tone-text-success" },
 ];
 
