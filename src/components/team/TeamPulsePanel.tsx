@@ -50,6 +50,14 @@ export type PulsePerson = {
   initials: string;
   jobRole: string | null;
   online: boolean;
+  /**
+   * Коли людина востаннє відкривала CRM. Це presence-пінг, і він пишеться
+   * ОДРАЗУ при завантаженні сторінки — на відміну від активних хвилин, які
+   * набігають лише поки вкладка видима. Через цю асиметрію Пульс мовчав про
+   * тих, хто заходив на хвилину: на картці «був 50 хв тому», а в Пульсі
+   * людини немає взагалі. Тепер вони тут — з нулями, але видимі.
+   */
+  lastSeenAt?: string | null;
 };
 
 type ActivityRow = {
@@ -305,10 +313,27 @@ export function TeamPulsePanel({
       if (minutes <= 0 || byId.has(userId) || !memberIdsRef.current.has(userId)) continue;
       byId.set(userId, { userId, actions: 0, minutes, lastActiveAt: "", byCategory: [] });
     }
+    // Заходив, але не набрав ані дії, ані хвилини — усе одно в списку.
+    // Присутність рахуємо за period, а не «сьогодні»: остання позначка одна, і
+    // в місячному чи річному вигляді вона має потрапляти у свій відрізок.
+    const periodFrom = period.start.getTime();
+    const periodTo = period.end.getTime();
+    for (const person of people) {
+      if (byId.has(person.userId)) continue;
+      const seen = person.lastSeenAt ? Date.parse(person.lastSeenAt) : NaN;
+      if (Number.isNaN(seen) || seen < periodFrom || seen >= periodTo) continue;
+      byId.set(person.userId, {
+        userId: person.userId,
+        actions: 0,
+        minutes: 0,
+        lastActiveAt: person.lastSeenAt ?? "",
+        byCategory: [],
+      });
+    }
     return Array.from(byId.values()).sort(
       (a, b) => b.actions - a.actions || b.minutes - a.minutes
     );
-  }, [groups, minutesByUser]);
+  }, [groups, minutesByUser, people, period]);
 
   const maxGroupTotal = rankedPeople[0]?.actions ?? 0;
 
@@ -468,7 +493,11 @@ export function TeamPulsePanel({
                     <span className="truncate">
                       {entry.actions > 0
                         ? `Остання дія ${formatRelative(entry.lastActiveAt)}`
-                        : "Присутність без дій"}
+                        : entry.minutes > 0
+                          ? "Присутність без дій"
+                          : entry.lastActiveAt
+                            ? `Заходив ${formatRelative(entry.lastActiveAt)}`
+                            : "Заходив"}
                     </span>
                   </div>
                 </div>

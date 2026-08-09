@@ -230,13 +230,29 @@ export function ReleaseHistory() {
     () => heatThresholds(dayKeys.map((k) => dayInfo.get(k)?.n ?? 0)),
     [dayKeys, dayInfo]
   );
+  /**
+   * Години дня — ОДНА шкала на всю сторінку.
+   *
+   * Доти сторінка мішала дві: великою цифрою дня стояла робота з транскриптів,
+   * а середнє, місячні підсумки й підказки теплокарти рахувались за ритмом
+   * комітів. Виходило «≈1.7 год» поруч із «середнє ≈3.0 год/день» — числа з
+   * різних приладів в одному рядку, і це читалось як помилка розрахунку.
+   *
+   * Правило просте: де є транскрипт — беремо його, це прямий вимір. Де немає
+   * (усе до 20 травня) — лишається оцінка за комітами, єдине, що там є.
+   */
+  const hoursOf = useCallback(
+    (day: string) => work?.get(day)?.hours ?? dayInfo.get(day)?.hours ?? 0,
+    [work, dayInfo]
+  );
+
   const totals = useMemo(() => {
     let n = 0, ins = 0, del = 0, hours = 0;
-    for (const info of dayInfo.values()) {
-      n += info.n; ins += info.ins; del += info.del; hours += info.hours;
+    for (const [day, info] of dayInfo) {
+      n += info.n; ins += info.ins; del += info.del; hours += hoursOf(day);
     }
     return { n, ins, del, hours: Math.round(hours) };
-  }, [dayInfo]);
+  }, [dayInfo, hoursOf]);
 
   const { bind, overlay } = useTip();
 
@@ -309,7 +325,7 @@ export function ReleaseHistory() {
     let n = 0, ins = 0, del = 0, hours = 0;
     for (const k of list) {
       const info = dayInfo.get(k) as DayInfo;
-      n += info.n; ins += info.ins; del += info.del; hours += info.hours;
+      n += info.n; ins += info.ins; del += info.del; hours += hoursOf(k);
     }
     return { n, ins, del, hours: Math.round(hours), d: list.length };
   };
@@ -427,6 +443,7 @@ export function ReleaseHistory() {
         dayKeys={dayKeys}
         monthKeys={monthKeys}
         dayInfo={dayInfo}
+        hoursOf={hoursOf}
         thresholds={thresholds}
         active={active}
         onPick={go}
@@ -452,6 +469,7 @@ export function ReleaseHistory() {
             days={days}
             dayInfo={dayInfo}
             monthStat={monthStat}
+            hoursOf={hoursOf}
             bind={bind}
             go={go}
           />
@@ -485,6 +503,7 @@ function Heatmap({
   dayKeys,
   monthKeys,
   dayInfo,
+  hoursOf,
   thresholds,
   active,
   onPick,
@@ -492,6 +511,8 @@ function Heatmap({
   dayKeys: string[];
   monthKeys: string[];
   dayInfo: Map<string, DayInfo>;
+  /** Години дня однією шкалою — див. hoursOf у ReleaseHistory. */
+  hoursOf: (day: string) => number;
   thresholds: [number, number, number, number];
   active: View;
   onPick: (view: View) => void;
@@ -570,7 +591,7 @@ function Heatmap({
                     onClick={() => onPick({ t: "day", k: cell.key })}
                     aria-pressed={active.t === "day" && active.k === cell.key}
                     title={`${fdate(cell.key)} — ${dayInfo.get(cell.key)?.n ?? 0} змін${
-                      dayInfo.has(cell.key) ? `, ≈${dayInfo.get(cell.key)?.hours} год` : ""
+                      dayInfo.has(cell.key) ? `, ≈${fmtN(hoursOf(cell.key))} год` : ""
                     }`}
                     className={cn(
                       "h-[11px] w-[11px] cursor-pointer rounded-[2px]",
@@ -610,6 +631,7 @@ function MonthView({
   days,
   dayInfo,
   monthStat,
+  hoursOf,
   bind,
   go,
 }: {
@@ -619,6 +641,8 @@ function MonthView({
   days: DayGroup[];
   dayInfo: Map<string, DayInfo>;
   monthStat: (mk: string) => { n: number; ins: number; del: number; hours: number; d: number };
+  /** Години дня однією шкалою — див. hoursOf у ReleaseHistory. */
+  hoursOf: (day: string) => number;
   bind: ReturnType<typeof useTip>["bind"];
   go: (view: View) => void;
 }) {
@@ -709,7 +733,7 @@ function MonthView({
                 {info.n} змін
               </span>
               <span className="w-[4.5rem] shrink-0 text-xs font-semibold tabular-nums text-primary">
-                ≈{info.hours} год
+                ≈{fmtN(hoursOf(k))} год
               </span>
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {preview || "без подробиць — до відновлення історії часу комітів тут не було"}

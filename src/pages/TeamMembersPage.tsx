@@ -1150,6 +1150,9 @@ export function TeamMembersPage() {
         initials: getInitialsFromName(displayName, member?.email ?? null),
         jobRole: member?.job_role ?? null,
         online: !!memberPresenceByUserId[userId]?.online,
+        // Той самий візит, що показує картка людини. Пульс без нього мовчав
+        // про тих, хто заходив, але не набрав активних хвилин.
+        lastSeenAt: memberPresenceByUserId[userId]?.lastSeenAt || null,
       };
     },
     [members, memberProfilesByUserId, memberPresenceByUserId, getMemberDisplayName]
