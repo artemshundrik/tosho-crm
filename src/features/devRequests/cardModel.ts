@@ -1,3 +1,4 @@
+import { pluralUk } from "@/lib/lastSeen";
 import { moduleKeyLabel } from "@/lib/projectMap";
 import { CARD_PRIORITY_LABELS, type DevRequest } from "./types";
 
@@ -154,6 +155,42 @@ export function buildCardMeta(request: DevRequest): CardMeta[] {
  */
 export function isUrgentCard(request: DevRequest): boolean {
   return request.priority === "high";
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Місяць у днях — рівно, без календаря: різниця в 1-2 дні на такій шкалі нічого не значить. */
+const DAYS_IN_MONTH = 30;
+const DAYS_IN_YEAR = 365;
+
+/**
+ * «Лежить 7 місяців» — вік картки в списку «Ідеї».
+ *
+ * НАВІЩО: купа відкладеного тим і небезпечна, що виглядає однаково свіжою в
+ * будь-якому віці. Без віку «Ідеї» за пів року стають другим цвинтарем — тим
+ * самим, від якого їх і відділяли від черги. Мітка тримає це видимим: коли
+ * зазираєш у список, одразу зрозуміло, що більшість старих ідей уже не про цю
+ * CRM. Це НЕ нагадування й не сповіщення — нічого не спрацьовує й нікого не
+ * смикає, картка просто носить свій вік із собою.
+ *
+ * ШКАЛА ГРУБА НАВМИСНО: дні → місяці → роки, і завжди одна одиниця. Тут
+ * потрібне «давно чи ні», а не точність: «лежить 7 місяців 12 днів» додає
+ * знаків і не додає жодного рішення. Тому й формат свій, а не formatLastSeenAgo
+ * (той показує дві суміжні одиниці — це правильно для «коли людину бачили», але
+ * надлишково для «коли це записали»). Відмінювання спільне — pluralUk.
+ *
+ * null — дати немає або вона нечитабельна: краще без мітки, ніж «лежить NaN».
+ */
+export function formatIdleAge(createdAt: string, now: Date = new Date()): string | null {
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return null;
+
+  const days = Math.floor(Math.max(0, now.getTime() - created) / DAY_MS);
+  if (days < 1) return "сьогодні";
+  if (days < DAYS_IN_MONTH) return `лежить ${pluralUk(days, "день", "дні", "днів")}`;
+  if (days < DAYS_IN_YEAR) {
+    return `лежить ${pluralUk(Math.floor(days / DAYS_IN_MONTH), "місяць", "місяці", "місяців")}`;
+  }
+  return `лежить ${pluralUk(Math.floor(days / DAYS_IN_YEAR), "рік", "роки", "років")}`;
 }
 
 /**

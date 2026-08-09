@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { ChevronsUp, Lock, MoreVertical, PencilLine, Sparkles, Trash2, Users } from "lucide-react";
+import { ChevronsUp, Lightbulb, Lock, Sparkles, Users } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
@@ -7,27 +7,17 @@ import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuItemDestructive,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
+import { CardActionsMenu } from "./CardActionsMenu";
 import {
   CARD_MENU_ATTR,
   buildCardMeta,
   isCardMenuTarget,
   isUrgentCard,
-  shouldRestoreMenuFocus,
   type CardMetaKey,
   type ChipWeight,
-  type MenuOpenSource,
 } from "./cardModel";
 import {
   BOARD_COLUMNS,
@@ -71,70 +61,6 @@ const META_ICONS: Partial<Record<CardMetaKey, ComponentType<{ className?: string
   private: Lock,
 };
 
-/**
- * Меню картки на «⋯».
- *
- * Окремий компонент, бо йому потрібен власний ref на КОЖНУ картку: одна
- * змінна на всю дошку означала б, що спосіб відкриття однієї картки вирішує
- * поведінку іншої. Хуки всередині map() класти не можна, тож компонент.
- */
-function CardActionsMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
-  // Ref, а не стан: значення читає обробник закриття в тому ж такті, і
-  // перемальовувати картку через це нема потреби.
-  const openedByRef = useRef<MenuOpenSource>("pointer");
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
-          aria-label="Дії із запитом"
-          // Обидва обробники стріляють РАНІШЕ за обробники Radix: Slot
-          // складає їх так, що спершу йде обробник дитини. Тобто спосіб
-          // відкриття вже записаний, коли меню відкривається.
-          onPointerDown={() => {
-            openedByRef.current = "pointer";
-          }}
-          onKeyDown={(event) => {
-            // Рівно ті клавіші, якими Radix відкриває меню.
-            if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
-              openedByRef.current = "keyboard";
-            }
-          }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      {/* Меню їде в портал, але в дереві React лишається всередині картки —
-          тож без stopPropagation клік по пункту відкривав би ще й деталі. */}
-      <DropdownMenuContent
-        align="end"
-        className="w-52"
-        onClick={(event) => event.stopPropagation()}
-        onCloseAutoFocus={(event) => {
-          // Мишею відкрили — фокус на кнопку не повертаємо, інакше на ній
-          // лишається рінг. Клавіатурі повертаємо завжди. Пояснення — у
-          // cardModel.shouldRestoreMenuFocus.
-          if (!shouldRestoreMenuFocus(openedByRef.current)) event.preventDefault();
-        }}
-      >
-        <DropdownMenuItem onClick={onEdit}>
-          <PencilLine />
-          Редагувати
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="-mx-1.5" />
-        <DropdownMenuItemDestructive onClick={onDelete}>
-          <Trash2 />
-          Видалити
-        </DropdownMenuItemDestructive>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function DevRequestBoard({
   requests,
   onMove,
@@ -172,7 +98,8 @@ export function DevRequestBoard({
     const map = new Map<RequestStatus, DevRequest[]>();
     for (const column of BOARD_COLUMNS) map.set(column.status, []);
     for (const request of requests) {
-      // «Не робимо» колонки не має — такі картки на дошку свідомо не потрапляють.
+      // Колонок лише п'ять: «Не робимо» і «Ідеї» на дошку свідомо не
+      // потрапляють, для них є списки за перемиканням (див. BOARD_COLUMNS).
       const bucket = map.get(request.status);
       if (bucket) bucket.push(request);
     }
@@ -315,6 +242,13 @@ export function DevRequestBoard({
                       // не дає картці поїхати за кнопкою.
                       <div {...{ [CARD_MENU_ATTR]: "" }} className="ml-auto shrink-0">
                         <CardActionsMenu
+                          // Єдина дорога в «Ідеї»: колонки в них немає, тож
+                          // перетягнути картку туди неможливо в принципі.
+                          move={{
+                            label: "В ідеї",
+                            icon: Lightbulb,
+                            onSelect: () => onMove(request.id, "someday"),
+                          }}
                           onEdit={() => onEdit(request)}
                           onDelete={() => onDelete(request)}
                         />

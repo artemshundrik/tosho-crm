@@ -3,6 +3,7 @@ import {
   CARD_MENU_ATTR,
   MODULE_UNSET_LABEL,
   buildCardMeta,
+  formatIdleAge,
   isCardMenuTarget,
   isUrgentCard,
   resolveAuthor,
@@ -190,6 +191,53 @@ describe("фокус після закриття меню картки", () => {
 
   it("миші не повертаємо — саме звідти брався синій ореол на кнопці", () => {
     expect(shouldRestoreMenuFocus("pointer")).toBe(false);
+  });
+});
+
+/**
+ * Вік у списку «Ідеї» — єдиний запобіжник проти того, щоб купа відкладеного
+ * стала другим цвинтарем. Тому перевіряємо не лише число, а й відмінювання:
+ * «лежить 2 місяць» читається як поломка й підриває довіру до самої мітки.
+ */
+describe("вік відкладеної картки", () => {
+  const now = new Date("2026-08-09T12:00:00.000Z");
+  const ago = (days: number) =>
+    new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  it("сьогоднішня картка ще не «лежить»", () => {
+    expect(formatIdleAge(ago(0), now)).toBe("сьогодні");
+    expect(formatIdleAge(ago(0.9), now)).toBe("сьогодні");
+  });
+
+  it("дні відмінюються: 1 день / 3 дні / 5 днів / 11 днів", () => {
+    expect(formatIdleAge(ago(1), now)).toBe("лежить 1 день");
+    expect(formatIdleAge(ago(3), now)).toBe("лежить 3 дні");
+    expect(formatIdleAge(ago(5), now)).toBe("лежить 5 днів");
+    // 11-14 — виняток української: «одинадцять днів», а не «день».
+    expect(formatIdleAge(ago(11), now)).toBe("лежить 11 днів");
+    expect(formatIdleAge(ago(21), now)).toBe("лежить 21 день");
+  });
+
+  it("після місяця рахуємо місяцями — саме той випадок зі спеки", () => {
+    expect(formatIdleAge(ago(30), now)).toBe("лежить 1 місяць");
+    expect(formatIdleAge(ago(70), now)).toBe("лежить 2 місяці");
+    expect(formatIdleAge(ago(7 * 30 + 3), now)).toBe("лежить 7 місяців");
+  });
+
+  it("між місяцями й роками діри немає — 364 дні не стають «0 років»", () => {
+    expect(formatIdleAge(ago(364), now)).toBe("лежить 12 місяців");
+    expect(formatIdleAge(ago(365), now)).toBe("лежить 1 рік");
+    expect(formatIdleAge(ago(365 * 2), now)).toBe("лежить 2 роки");
+    expect(formatIdleAge(ago(365 * 5), now)).toBe("лежить 5 років");
+  });
+
+  it("дата з майбутнього не дає від'ємного віку", () => {
+    expect(formatIdleAge(ago(-10), now)).toBe("сьогодні");
+  });
+
+  it("нечитабельна дата = мітки немає, а не «лежить NaN днів»", () => {
+    expect(formatIdleAge("", now)).toBeNull();
+    expect(formatIdleAge("позавчора", now)).toBeNull();
   });
 });
 

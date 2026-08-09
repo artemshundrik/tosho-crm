@@ -1,18 +1,24 @@
 import { useCallback, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { PlusCircle, Trash2 } from "lucide-react";
+import { KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { TOOLBAR_ACTION_BUTTON } from "@/components/ui/controlStyles";
+import {
+  SEGMENTED_GROUP,
+  SEGMENTED_TRIGGER,
+  TOOLBAR_ACTION_BUTTON,
+} from "@/components/ui/controlStyles";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
 import { DevRequestDetailsSheet } from "@/features/devRequests/DevRequestDetailsSheet";
+import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import {
   NewDevRequestDialog,
   type NewDevRequestInput,
@@ -24,10 +30,21 @@ import {
   useMoveDevRequest,
   useUpdateDevRequest,
 } from "@/features/devRequests/queries";
-import type { DevRequest, RequestStatus } from "@/features/devRequests/types";
+import {
+  isOpenRequestStatus,
+  type DevRequest,
+  type RequestStatus,
+} from "@/features/devRequests/types";
 
 /** Скільки відкритих карток віддаємо моделі на звірку дублів. */
 const OPEN_TITLES_LIMIT = 50;
+
+/**
+ * Що показано зараз. «Ідеї» та «Не робимо» — саме окремі ВИГЛЯДИ, а не
+ * фільтри дошки й не шоста колонка: чому так, розгорнуто над BOARD_COLUMNS у
+ * src/features/devRequests/types.ts.
+ */
+type BoardView = "board" | "someday" | "wont_do";
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -43,6 +60,7 @@ export default function DevRequestsPage() {
   // workspace_id потрібен лише при створенні картки й резолвиться в мутації.
   const { accessRole, jobRole, teamId, userId } = useAuth();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<BoardView>("board");
   const [dialogOpen, setDialogOpen] = useState(false);
   /**
    * Картка, яку правимо. null при відкритому вікні = «новий запит».
@@ -65,29 +83,49 @@ export default function DevRequestsPage() {
   const updateRequest = useUpdateDevRequest(teamId);
   const deleteRequest = useDeleteDevRequest(teamId);
 
+  /**
+   * Пошук діє всередині відкритого вигляду, а не поверх усього одразу: набране
+   * в полі слово має звужувати те, що зараз на екрані, а не підмішувати в дошку
+   * картки з «Ідей».
+   */
   const requests = useMemo(() => {
     const all = board.data ?? [];
+    const inView = all.filter((request) =>
+      view === "board" ? request.status !== "someday" && request.status !== "wont_do" : request.status === view
+    );
     const needle = search.trim().toLowerCase();
-    if (!needle) return all;
-    return all.filter(
+    if (!needle) return inView;
+    return inView.filter(
       (request) =>
         request.title.toLowerCase().includes(needle) ||
         request.label.toLowerCase().includes(needle)
     );
-  }, [board.data, search]);
+  }, [board.data, search, view]);
+
+  /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
+  const counts = useMemo(() => {
+    const all = board.data ?? [];
+    return {
+      board: all.filter((r) => r.status !== "someday" && r.status !== "wont_do").length,
+      someday: all.filter((r) => r.status === "someday").length,
+      wont_do: all.filter((r) => r.status === "wont_do").length,
+    };
+  }, [board.data]);
 
   /**
    * Звіряти дублі треба з усією дошкою, а не з тим, що лишилось після пошуку:
    * інакше набраний у полі фільтр ховав би від моделі саме ту картку, на яку
    * вона мала б показати.
    *
-   * «Викочено» і «не робимо» до відкритих не належать: перше вже в проді,
-   * друге — свідома відмова. Пропонувати дописати коментар туди безглуздо.
+   * Що таке «відкрита» — вирішує isOpenRequestStatus (types.ts), а не список
+   * винятків тут. Раніше стояло віднімання («усе, крім released і wont_do»), і
+   * кожен новий стан мовчки потрапляв у звірку: «Ідеї» — це відкладене, і
+   * пропонувати дописати коментар туди так само безглуздо, як у викочене.
    */
   const openTitles = useMemo(
     () =>
       (board.data ?? [])
-        .filter((request) => request.status !== "released" && request.status !== "wont_do")
+        .filter((request) => isOpenRequestStatus(request.status))
         .slice(0, OPEN_TITLES_LIMIT)
         .map((request) => ({ id: request.id, label: request.label, title: request.title })),
     [board.data]
@@ -177,6 +215,43 @@ export default function DevRequestsPage() {
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
+        topLeft={
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={view === "board"}
+              onClick={() => setView("board")}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              <KanbanSquare className="h-4 w-4" />
+              Дошка
+              <CountBadge value={counts.board} />
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={view === "someday"}
+              onClick={() => setView("someday")}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              <Lightbulb className="h-4 w-4" />
+              Ідеї
+              <CountBadge value={counts.someday} />
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={view === "wont_do"}
+              onClick={() => setView("wont_do")}
+              className={cn(SEGMENTED_TRIGGER, "gap-2")}
+            >
+              <XCircle className="h-4 w-4" />
+              Не робимо
+              <CountBadge value={counts.wont_do} />
+            </Button>
+          </SegmentedGroup>
+        }
         topRight={
           <Button
             onClick={openCreate}
@@ -203,7 +278,7 @@ export default function DevRequestsPage() {
         }
       />
     ),
-    [board.isFetching, openCreate, requests.length, search]
+    [board.isFetching, counts, openCreate, requests.length, search, view]
   );
 
   // Хук стоїть ДО раннього return: інакше на редиректі порядок хуків
@@ -222,15 +297,36 @@ export default function DevRequestsPage() {
 
       {/* Дошка на всю ширину: деталі картки відкриваються дровером-накладкою, а
           не колонкою збоку — інакше вона з'їдала б ширину саме тоді, коли
-          дошку прокручують горизонтально. */}
-      <DevRequestBoard
-        requests={requests}
-        onMove={handleMove}
-        onSelect={setSelected}
-        onEdit={openEdit}
-        onDelete={setPendingDelete}
-        canManage={canSee}
-      />
+          дошку прокручують горизонтально.
+
+          «Ідеї» та «Не робимо» показані СПИСКОМ, а не шостою колонкою: етапом
+          роботи вони не є, і стовпчик у ряду з рештою читався б саме так.
+          Розгорнуто над BOARD_COLUMNS у features/devRequests/types.ts. */}
+      {view === "board" ? (
+        <DevRequestBoard
+          requests={requests}
+          onMove={handleMove}
+          onSelect={setSelected}
+          onEdit={openEdit}
+          onDelete={setPendingDelete}
+          canManage={canSee}
+        />
+      ) : (
+        <DevRequestList
+          requests={requests}
+          showAge={view === "someday"}
+          emptyText={
+            view === "someday"
+              ? "Ідей поки немає. Картка потрапляє сюди дією «В ідеї» в меню на дошці."
+              : "Відхилених карток немає."
+          }
+          onSelect={setSelected}
+          onMove={handleMove}
+          onEdit={openEdit}
+          onDelete={setPendingDelete}
+          canManage={canSee}
+        />
+      )}
 
       <DevRequestDetailsSheet
         request={selected}

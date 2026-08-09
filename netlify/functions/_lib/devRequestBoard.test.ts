@@ -41,14 +41,24 @@ function card(overrides: Partial<BoardCard> = {}): BoardCard {
 }
 
 describe("статуси черги", () => {
-  it("відкрито все, крім тупиків «Викочено» і «Не робимо»", () => {
+  it("відкрито рівно чотири стани — решта в черзі не рахується", () => {
     expect(OPEN_STATUSES).toEqual(["triage", "queued", "in_progress", "done_local"]);
     expect(OPEN_STATUSES).not.toContain("released");
     expect(OPEN_STATUSES).not.toContain("wont_do");
   });
 
-  it("з телефона ставляться рівно три статуси — ті, що ставить людина", () => {
-    expect([...MOVABLE_STATUSES].sort()).toEqual(["in_progress", "queued", "wont_do"]);
+  /**
+   * Найважливіший тест «Ідей». Весь сенс статусу someday — у тому, що
+   * відкладене НЕ лежить у черзі: інакше за її довжиною не видно, скільки
+   * роботи справді попереду. Щойно someday опиниться у відкритих, затія
+   * скасована — причому мовчки, бо нічого не зламається.
+   */
+  it("«Ідеї» до відкритої черги НЕ належать — інакше вони знову стають чергою", () => {
+    expect(OPEN_STATUSES).not.toContain("someday");
+  });
+
+  it("з телефона ставляться рівно чотири статуси — ті, що ставить людина", () => {
+    expect([...MOVABLE_STATUSES].sort()).toEqual(["in_progress", "queued", "someday", "wont_do"]);
   });
 
   it("«done_local» і «released» ставлять факти, тож руками їх не пересунути", () => {
@@ -58,6 +68,7 @@ describe("статуси черги", () => {
     expect(isMovableStatus("released")).toBe(false);
     expect(isMovableStatus("triage")).toBe(false);
     expect(isMovableStatus("in_progress")).toBe(true);
+    expect(isMovableStatus("someday")).toBe(true);
     expect(isMovableStatus("")).toBe(false);
     expect(isMovableStatus(undefined)).toBe(false);
   });
@@ -86,6 +97,15 @@ describe("parseBoardBody", () => {
     });
   });
 
+  it("«постав REQ-7 в ідеї» з телефона проходить", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "move", number: 7, status: "someday" }))).toEqual({
+      ok: true,
+      action: "move",
+      number: 7,
+      status: "someday",
+    });
+  });
+
   it("заборонений статус — 400 з ПЕРЕЛІКОМ дозволених, а не голе «ні»", () => {
     for (const status of ["released", "done_local", "triage", "готово"]) {
       const result = parseBoardBody(JSON.stringify({ action: "move", number: 3, status }));
@@ -95,6 +115,7 @@ describe("parseBoardBody", () => {
       expect(result.error).toContain("in_progress");
       expect(result.error).toContain("queued");
       expect(result.error).toContain("wont_do");
+      expect(result.error).toContain("someday");
     }
   });
 
@@ -208,6 +229,21 @@ describe("groupBoardCards", () => {
     ]);
     expect(groups.map((group) => group.status)).toEqual(["triage", "in_progress", "done_local"]);
     expect(groups.map((group) => group.label)).toEqual(["Вхідні", "В роботі", "Готово локально"]);
+  });
+
+  /**
+   * Другий рубіж після OPEN_STATUSES: вибірка з бази й розкладка по групах —
+   * різні місця, і картка з «Ідей» могла б доїхати сюди іншим шляхом (скажімо,
+   * після move, коли відповідь збирають із уже прочитаного набору).
+   */
+  it("«Ідеї» й «Не робимо» групи не отримують — у черзі їх немає", () => {
+    const groups = groupBoardCards([
+      card({ number: 1, status: "queued" }),
+      card({ number: 2, status: "someday" }),
+      card({ number: 3, status: "wont_do" }),
+    ]);
+    expect(groups.map((group) => group.status)).toEqual(["queued"]);
+    expect(groups.flatMap((group) => group.cards).map((item) => item.number)).toEqual([1]);
   });
 
   it("усередині групи діє те саме сортування", () => {

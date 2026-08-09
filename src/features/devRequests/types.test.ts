@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { BOARD_COLUMNS, MODULE_LABELS, formatRequestNumber, toDevRequest } from "./types";
+import {
+  BOARD_COLUMNS,
+  MODULE_LABELS,
+  OFF_BOARD_STATUSES,
+  OPEN_STATUSES,
+  STATUS_LABELS,
+  formatRequestNumber,
+  isOpenRequestStatus,
+  toDevRequest,
+} from "./types";
 
 describe("номер запиту", () => {
   it("збирається застосунком, а не базою", () => {
@@ -146,5 +155,48 @@ describe("колонки дошки", () => {
    */
   it("перша колонка — кошик входу, а не діагноз картці", () => {
     expect(BOARD_COLUMNS[0]?.label).toBe("Вхідні");
+  });
+
+  /**
+   * ЦЕЙ ТЕСТ — СТОРОЖ РІШЕННЯ, а не перевірка коду.
+   *
+   * «Ідеї» й «Не робимо» колонок не мають навмисно: колонка читається як етап
+   * роботи, а ці стани роботою не є. Якщо ви прийшли сюди, бо тест «заважає
+   * додати колонку», — перечитайте коментар над BOARD_COLUMNS: купа «колись
+   * зроблю» в ряду з рештою стовпчиків повертає рівно ту ваду, від якої її й
+   * відділяли від черги.
+   */
+  it("«Ідеї» та «Не робимо» колонками НЕ стають — вони живуть списками", () => {
+    const columns = BOARD_COLUMNS.map((c) => c.status);
+    expect(columns).not.toContain("someday");
+    expect(columns).not.toContain("wont_do");
+    expect(columns).toHaveLength(5);
+    expect([...OFF_BOARD_STATUSES]).toEqual(["someday", "wont_do"]);
+  });
+});
+
+describe("відкрита черга", () => {
+  it("«Ідеї» до неї не належать — так само, як викочене й відхилене", () => {
+    expect(isOpenRequestStatus("queued")).toBe(true);
+    expect(isOpenRequestStatus("triage")).toBe(true);
+    expect(isOpenRequestStatus("someday")).toBe(false);
+    expect(isOpenRequestStatus("wont_do")).toBe(false);
+    expect(isOpenRequestStatus("released")).toBe(false);
+  });
+
+  /**
+   * Перелік ДОЗВОЛЕНИХ, а не заборонених: із відніманням («усе, крім
+   * released») кожен новий стан потрапляв би у відкриту чергу сам собою — і
+   * саме так «Ідеї» ледь не опинились у списку, з якого їх виносили.
+   */
+  it("дзеркалить OPEN_STATUSES із функцій — одна відповідь на дошку, бота й ендпоінт", () => {
+    expect([...OPEN_STATUSES]).toEqual(["triage", "queued", "in_progress", "done_local"]);
+  });
+});
+
+describe("підписи станів", () => {
+  it("«Ідеї» — саме так, як на перемикачі", () => {
+    expect(STATUS_LABELS.someday).toBe("Ідеї");
+    expect(STATUS_LABELS.wont_do).toBe("Не робимо");
   });
 });
