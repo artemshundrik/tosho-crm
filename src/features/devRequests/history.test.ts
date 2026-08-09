@@ -158,3 +158,38 @@ describe("розбір відповіді аудиту", () => {
     ]);
   });
 });
+
+/**
+ * Підписи полів історії мають збігатися з тим, як ті самі поля названі у формі
+ * створення. Розбіжність тут не косметична: «Тема» означала і назву картки, і
+ * тему групування, тож рядок «Тема: A → B» не давав зрозуміти, що змінилось.
+ */
+describe("підписи полів", () => {
+  it("title — це «Суть», а «Тема» лишається за theme", () => {
+    expect(auditFieldLabel("title")).toBe("Суть");
+    expect(auditFieldLabel("theme")).toBe("Тема");
+  });
+
+  it("зона й пункти мають людські підписи, а не сирі назви колонок", () => {
+    expect(auditFieldLabel("zone")).toBe("Зона роботи");
+    expect(auditFieldLabel("checklist")).toBe("Пункти");
+  });
+});
+
+describe("значення чекліста", () => {
+  it("масив читається кількістю, а не сирим JSON", () => {
+    expect(auditValueLabel("checklist", [{ text: "a" }, { text: "b" }])).toBe("2 пункти");
+    expect(auditValueLabel("checklist", [{ text: "a" }])).toBe("1 пункт");
+    expect(auditValueLabel("checklist", Array.from({ length: 20 }, () => ({})))).toBe("20 пунктів");
+  });
+
+  it("порожній список — «порожньо», а не «0 пунктів»", () => {
+    expect(auditValueLabel("checklist", [])).toBe("порожньо");
+    expect(auditValueLabel("checklist", null)).toBe("порожньо");
+  });
+
+  it("зона перекладається тим самим словом, що й на картці", () => {
+    expect(auditValueLabel("zone", "logic")).toBe("логіка");
+    expect(auditValueLabel("zone", null)).toBe("порожньо");
+  });
+});

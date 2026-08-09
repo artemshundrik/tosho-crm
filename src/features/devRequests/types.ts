@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Bug,
+  CircleSlash,
   Database,
   Gauge,
   Hammer,
@@ -8,6 +9,7 @@ import {
   Info,
   KeyRound,
   Laptop,
+  Lightbulb,
   ListTodo,
   Plus,
   Rocket,
@@ -106,6 +108,37 @@ export const STATUS_LABELS: Record<RequestStatus, string> = {
 };
 
 /**
+ * Іконка й тон СТАТУСУ — для всіх семи, а не лише для колонок дошки.
+ *
+ * BOARD_COLUMNS нижче описує п'ять етапів, але дровер картки відкривають ще й
+ * зі списків «Ідеї» та «Не робимо», і статус там треба показати теж. Тримати
+ * для цього другий набір іконок означало б, що «Вхідні» на дошці й «Вхідні» у
+ * дровері колись розійдуться.
+ *
+ * Тон «Не робимо» — neutral, а не danger: відхилена картка не аварія, це
+ * рішення. Червоне тут кричало б про помилку там, де її немає.
+ */
+export const STATUS_ICONS: Record<RequestStatus, ComponentType<{ className?: string }>> = {
+  triage: Inbox,
+  queued: ListTodo,
+  in_progress: Hammer,
+  done_local: Laptop,
+  released: Rocket,
+  someday: Lightbulb,
+  wont_do: CircleSlash,
+};
+
+export const STATUS_TONE: Record<RequestStatus, Tone> = {
+  triage: "warning",
+  queued: "neutral",
+  in_progress: "info",
+  done_local: "accent",
+  released: "success",
+  someday: "neutral",
+  wont_do: "neutral",
+};
+
+/**
  * КОЛОНОК П'ЯТЬ. «Не робимо» і «Ідеї» сюди НЕ додаються — ніколи.
  *
  * Дошка показує роботу в польоті: кожна колонка — етап, який картка проходить
@@ -146,14 +179,14 @@ export const BOARD_COLUMNS: Array<{
 }> = [
   // Підписи беруться зі STATUS_LABELS — див. коментар там, зокрема про те,
   // чому колонка називається «Вхідні», а не «Треба уточнити».
-  { status: "triage", label: STATUS_LABELS.triage, icon: Inbox, toneClassName: "tone-text-warning" },
-  { status: "queued", label: STATUS_LABELS.queued, icon: ListTodo },
-  { status: "in_progress", label: STATUS_LABELS.in_progress, icon: Hammer, toneClassName: "tone-text-info" },
+  { status: "triage", label: STATUS_LABELS.triage, icon: STATUS_ICONS.triage, toneClassName: "tone-text-warning" },
+  { status: "queued", label: STATUS_LABELS.queued, icon: STATUS_ICONS.queued },
+  { status: "in_progress", label: STATUS_LABELS.in_progress, icon: STATUS_ICONS.in_progress, toneClassName: "tone-text-info" },
   // Ноутбук, а не пакунок: «локально» тут — це «на моєму компʼютері, у прод ще
   // не поїхало». Пакунок читався як щось спаковане й готове до відправлення —
   // тобто рівно навпаки, і плутав саме там, де різниця найважливіша.
-  { status: "done_local", label: STATUS_LABELS.done_local, icon: Laptop, toneClassName: "tone-text-accent" },
-  { status: "released", label: STATUS_LABELS.released, icon: Rocket, toneClassName: "tone-text-success" },
+  { status: "done_local", label: STATUS_LABELS.done_local, icon: STATUS_ICONS.done_local, toneClassName: "tone-text-accent" },
+  { status: "released", label: STATUS_LABELS.released, icon: STATUS_ICONS.released, toneClassName: "tone-text-success" },
 ];
 
 /**

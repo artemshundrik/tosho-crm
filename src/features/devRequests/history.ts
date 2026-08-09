@@ -1,5 +1,6 @@
+import { pluralUk } from "@/lib/lastSeen";
 import { moduleKeyLabel } from "@/lib/projectMap";
-import { KIND_LABELS, PRIORITY_LABELS, STATUS_LABELS } from "./types";
+import { KIND_LABELS, PRIORITY_LABELS, STATUS_LABELS, ZONE_LABELS } from "./types";
 
 /**
  * Історія змін картки запиту: як прочитати те, що пише аудит-тригер.
@@ -47,8 +48,14 @@ const HIDDEN_FIELDS = new Set([
 ]);
 
 const FIELD_LABELS: Record<string, string> = {
-  title: "Тема",
+  // «Суть», а не «Тема», — так це поле підписане у формі створення. Доти воно
+  // звалось «Темою» й крало назву в справжньої `theme`, тож у рядку історії
+  // «Тема: ... → ...» неможливо було зрозуміти, про яке з двох полів мова.
+  title: "Суть",
   body: "Опис",
+  theme: "Тема",
+  zone: "Зона роботи",
+  checklist: "Пункти",
   kind: "Тип",
   status: "Стан на дошці",
   module_key: "Напрямок",
@@ -99,6 +106,17 @@ export function auditValueLabel(field: string, value: unknown): string {
       return value ? "лише власник і СЕО" : "вся команда";
     case "auto_classified":
       return value ? "ні, поставив агент" : "так, підтверджено людиною";
+    case "zone":
+      return ZONE_LABELS[value as keyof typeof ZONE_LABELS] ?? String(value);
+    case "checklist":
+      // Чеклист — масив обʼєктів, і в рядок історії він лягав сирим JSON: сто
+      // символів `[{"id":"d1","kind":"task",…`, обрізаних на півслові. Читати
+      // там нічого, а от скільки пунктів було й стало — цілком зрозуміло.
+      return Array.isArray(value)
+        ? value.length === 0
+          ? "порожньо"
+          : pluralUk(value.length, "пункт", "пункти", "пунктів")
+        : "порожньо";
     default:
       break;
   }
