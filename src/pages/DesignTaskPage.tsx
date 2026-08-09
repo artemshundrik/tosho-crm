@@ -171,6 +171,9 @@ import {
   BRIEF_SURFACE_FRAME_CLASS,
   BRIEF_SURFACE_TEXT_CLASS,
   BRIEF_TEXTAREA_CLASS,
+  BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT,
+  BRIEF_INLINE_TEXTAREA_MAX_HEIGHT,
+  resizeBriefTextarea,
 } from "@/components/brief/briefSurfaceStyles";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -442,8 +445,6 @@ const DESIGN_OUTPUT_KIND_LABELS: Record<DesignOutputKind, string> = {
   layout: "Макет",
 };
 
-const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
-const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
 
 const CHANGE_REQUEST_REACTION_EMOJIS = ["👍", "❤️", "👀", "✅", "🤔", "🎉"] as const;
 
@@ -620,20 +621,6 @@ function buildDropboxExportFileName(params: {
 
 function normalizeDropboxFolderNameDraft(value?: string | null, fallback = "Замовлення") {
   return sanitizeDropboxNameSegment((value ?? "").trim(), fallback);
-}
-
-function resizeTextareaToContent(
-  textarea: HTMLTextAreaElement | null,
-  maxHeight: number,
-  minHeight = 0
-) {
-  if (!textarea) return;
-  textarea.style.height = "0px";
-  const naturalHeight = textarea.scrollHeight;
-  const clamped = Math.min(naturalHeight, maxHeight);
-  const final = minHeight > 0 ? Math.max(clamped, minHeight) : clamped;
-  textarea.style.height = `${final}px`;
-  textarea.style.overflowY = naturalHeight > maxHeight ? "auto" : "hidden";
 }
 
 function formatBriefSelection(
@@ -2785,8 +2772,8 @@ export default function DesignTaskPage() {
   }, [changeRequestEditDraft, changeRequestEditingId, changeRequestEditDraftKey]);
 
   useEffect(() => {
-    resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
-    resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+    resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+    resizeBriefTextarea(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
   }, [briefDraft, briefEditorOpen, briefInlineEditing]);
 
   useEffect(() => {
@@ -2839,7 +2826,7 @@ export default function DesignTaskPage() {
         if (!target) return;
         target.focus();
         target.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
-        resizeTextareaToContent(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+        resizeBriefTextarea(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
       });
     },
     [briefSaving, designTaskLockedByOther]
@@ -9922,7 +9909,7 @@ export default function DesignTaskPage() {
                         setBriefInlineEditing(true);
                       }}
                       onAfterInsert={() =>
-                        resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
+                        resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
                       }
                       context="brief"
                       disabled={briefSaving || designTaskLockedByOther}
@@ -9936,7 +9923,7 @@ export default function DesignTaskPage() {
                       onChange={(event) => {
                         setBriefDraft(event.target.value);
                         setBriefDirty(true);
-                        resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+                        resizeBriefTextarea(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
                       }}
                       onBlur={handleBriefInlineBlur}
                       placeholder="Опишіть задачу для дизайнера…"

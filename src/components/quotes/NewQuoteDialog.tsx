@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Chip } from "@/components/ui/chip";
 import {
@@ -2455,9 +2456,16 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       context="brief"
                     />
                   </div>
-                  <Textarea
+                  {/* Той самий компонент і ті самі межі, що в «Новій
+                      дизайн-задачі»: два поля з однаковою роллю мають і
+                      виглядати однаково. Доти тут стояла Textarea з ручним
+                      вушком, а там AutoTextarea — і людина, яка заводила
+                      задачу обома шляхами, бачила різні поля. */}
+                  <AutoTextarea
                     ref={briefTextareaRef}
-                    className="min-h-[180px] resize-y text-foreground placeholder:text-muted-foreground"
+                    minRows={7}
+                    maxRows={16}
+                    className="text-foreground placeholder:text-muted-foreground"
                     placeholder="Опишіть задачу для дизайнера: референси, текст, побажання, обмеження"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}

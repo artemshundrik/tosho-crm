@@ -55,6 +55,9 @@ import {
   BRIEF_SURFACE_FRAME_CLASS,
   BRIEF_SURFACE_TEXT_CLASS,
   BRIEF_TEXTAREA_CLASS,
+  BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT,
+  BRIEF_INLINE_TEXTAREA_MAX_HEIGHT,
+  resizeBriefTextarea,
 } from "@/components/brief/briefSurfaceStyles";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import {
@@ -625,16 +628,15 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
   }
 }
 
-const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;
-const BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT = 560;
 
-function resizeTextareaToContent(textarea: HTMLTextAreaElement | null, maxHeight: number) {
-  if (!textarea) return;
-  textarea.style.height = "0px";
-  const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
-  textarea.style.height = `${Math.max(nextHeight, 140)}px`;
-  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
-}
+/**
+ * Мінімум інлайнового поля ТЗ на цій сторінці.
+ *
+ * Був зашитий у власну копію resizeTextareaToContent, через що однойменна
+ * функція на сторінці задачі поводилась інакше. Тепер функція спільна, а
+ * мінімум лишився тут — він саме про цю сторінку.
+ */
+const BRIEF_MIN_HEIGHT = 140;
 
 function formatBriefSelection(
   textarea: HTMLTextAreaElement,
@@ -1963,8 +1965,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [quote?.notes, quote?.id, notesDirty]);
 
   useEffect(() => {
-    resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
-    resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+    resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
+    resizeBriefTextarea(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
   }, [briefEditorOpen, briefInlineEditing, briefText]);
 
   useEffect(() => {
@@ -2018,7 +2020,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         target.focus();
         target.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
         setBriefSelection({ start: formatted.selectionStart, end: formatted.selectionEnd });
-        resizeTextareaToContent(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+        resizeBriefTextarea(target, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
       });
     },
     [briefSaving]
@@ -7522,7 +7524,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             setBriefInlineEditing(true);
                           }}
                           onAfterInsert={() =>
-                            resizeTextareaToContent(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT)
+                            resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT)
                           }
                           context="brief"
                         />
@@ -7545,7 +7547,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           onChange={(event) => {
                             setBriefText(event.target.value);
                             setBriefDirty(true);
-                            resizeTextareaToContent(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT);
+                            resizeBriefTextarea(event.currentTarget, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
                           }}
                           onBlur={handleBriefInlineBlur}
                           placeholder="Опишіть задачу для дизайнера. Тут тільки зміст задачі, без дедлайнів."
@@ -8855,7 +8857,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   setBriefDirty(true);
                 }}
                 onAfterInsert={() =>
-                  resizeTextareaToContent(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT)
+                  resizeBriefTextarea(briefDialogTextareaRef.current, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT)
                 }
                 context="brief"
                 disabled={briefSaving}
@@ -8868,7 +8870,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             onChange={(event) => {
               setBriefText(event.target.value);
               setBriefDirty(true);
-              resizeTextareaToContent(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT);
+              resizeBriefTextarea(event.currentTarget, BRIEF_DIALOG_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
             }}
             onSelect={syncBriefSelection}
             onKeyUp={syncBriefSelection}
