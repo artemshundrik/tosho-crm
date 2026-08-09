@@ -68,3 +68,46 @@ describe("isMutatingTarget", () => {
     expect(isMutatingTarget(null)).toBe(false);
   });
 });
+
+/**
+ * Регресія на протилежну поломку: ЧИСТА форма питала «закрити без збереження?»
+ * при кожному натисканні «Скасувати».
+ *
+ * Причина — черговість. Слухач висить у фазі захоплення й спрацьовував раніше
+ * за React-обробник кнопки, тож клік по «Скасувати» позначав форму зміненою за
+ * мить до того, як цей самий клік питав `shouldBlock()`. Хрестик і Esc від
+ * цього захищені атрибутом `data-unsaved-ignore`, а кнопок «Скасувати» в
+ * застосунку 72, і жодна не позначена.
+ *
+ * Тут перевіряється сама черговість, а не компонент: позначка має лягати
+ * НАСТУПНИМ мікротаском, тобто після повного обходу події.
+ */
+describe("черговість позначки", () => {
+  it("клік не встигає порахувати сам себе зміною", async () => {
+    let touched = false;
+    const mark = (event: Event) => {
+      if (!isMutatingTarget(event.target as Element | null)) return;
+      queueMicrotask(() => {
+        touched = true;
+      });
+    };
+    document.addEventListener("click", mark, true);
+
+    const button = render(`<button type="button">Скасувати</button>`) as HTMLButtonElement;
+    // Обробник у фазі спливання — саме там React питає shouldBlock().
+    let seenAtHandler: boolean | null = null;
+    button.addEventListener("click", () => {
+      seenAtHandler = touched;
+    });
+    button.click();
+
+    // На момент обробника закриття форма ще НЕ вважається зміненою.
+    expect(seenAtHandler).toBe(false);
+
+    // А от наступним мікротаском позначка лягає — справжня зміна не губиться.
+    await Promise.resolve();
+    expect(touched).toBe(true);
+
+    document.removeEventListener("click", mark, true);
+  });
+});

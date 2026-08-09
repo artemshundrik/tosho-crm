@@ -93,8 +93,26 @@ export function useUnsavedGuard({ enabled, isDirty }: UnsavedGuardOptions) {
     const markAlways = () => {
       touchedRef.current = true;
     };
+    /**
+     * Позначку ставимо НАСТУПНИМ мікротаском, а не одразу.
+     *
+     * Слухач висить у фазі захоплення, тобто спрацьовує раніше за React-обробник
+     * кнопки. Тому клік по «Скасувати» встигав позначити форму зміненою за мить
+     * до того, як цей самий клік питав `shouldBlock()` — і ЧИСТА форма питала
+     * «закрити без збереження?» завжди. Позначені `data-unsaved-ignore` лише
+     * хрестик і Esc у примітивах, а кнопок «Скасувати» в застосунку 72, і жодна
+     * не позначена: тегувати кожну означало б забути на сімдесят третій.
+     *
+     * Мікротаск виконується після всього обходу події, включно з обробником
+     * React. Тож клік, який закриває модалку, більше не встигає порахувати сам
+     * себе зміною, а клік по перемикачу чи опції — встигає, бо `shouldBlock()`
+     * там ніхто не питає.
+     */
     const markIfMutating = (event: Event) => {
-      if (isMutatingTarget(event.target as Element | null)) touchedRef.current = true;
+      if (!isMutatingTarget(event.target as Element | null)) return;
+      queueMicrotask(() => {
+        touchedRef.current = true;
+      });
     };
     // Вибір опції з клавіатури кліку не породжує: Radix віддає фокус самому
     // елементу й слухає keydown. Без цього людина, що ходить Tab'ом, лишалась
