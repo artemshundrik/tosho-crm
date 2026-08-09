@@ -62,27 +62,6 @@ describe("matchesBoardFilters", () => {
     // Тема збіглась, зона ні — теж не проходить.
     expect(matchesBoardFilters(request({ zone: "data", theme: "навігація" }), state)).toBe(false);
   });
-
-  /**
-   * «Нерозібрані» — найкорисніший із трьох: показує рівно те, чого розбір не
-   * зміг класифікувати, тобто те, що чекає на людину. Достатньо, щоб бракувало
-   * ОДНОГО поля: картка з напрямком, але без зони, так само недорозібрана.
-   */
-  describe("нерозібрані", () => {
-    const state = { ...EMPTY_BOARD_FILTERS, unclassified: true };
-
-    it("бракує напрямку — проходить", () => {
-      expect(matchesBoardFilters(request({ moduleKey: null, zone: "polish" }), state)).toBe(true);
-    });
-
-    it("бракує зони — теж проходить", () => {
-      expect(matchesBoardFilters(request({ moduleKey: "design", zone: null }), state)).toBe(true);
-    });
-
-    it("обидва поля на місці — не проходить", () => {
-      expect(matchesBoardFilters(request({ moduleKey: "design", zone: "polish" }), state)).toBe(false);
-    });
-  });
 });
 
 describe("hasActiveFilters", () => {
@@ -93,6 +72,5 @@ describe("hasActiveFilters", () => {
   it("будь-який увімкнений фільтр робить стан активним", () => {
     expect(hasActiveFilters({ ...EMPTY_BOARD_FILTERS, zones: zones("data") })).toBe(true);
     expect(hasActiveFilters({ ...EMPTY_BOARD_FILTERS, themes: new Set(["AI"]) })).toBe(true);
-    expect(hasActiveFilters({ ...EMPTY_BOARD_FILTERS, unclassified: true })).toBe(true);
   });
 });

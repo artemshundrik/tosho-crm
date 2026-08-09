@@ -27,29 +27,31 @@ import {
  *
  * Чіпи з нулем не показуємо: фільтр, який гарантовано дасть порожньо, —
  * не вибір, а пастка.
+ *
+ * ЧІПА «НЕРОЗІБРАНІ» ТУТ БІЛЬШЕ НЕМАЄ. Він рахував картки без напрямку АБО без
+ * зони — і на живій дошці це виявилась половина всіх карток. Фільтр, під який
+ * підпадає половина, нічого не звужує: він не каже «оце потребує уваги», він
+ * каже «тут усе». Якщо колись знадобиться, це має бути окремий вигляд, а не
+ * чіп поруч із зонами.
  */
 export type BoardFilterState = {
   zones: Set<RequestZone>;
   themes: Set<string>;
-  /** Лише картки, де розбір не проставив напрямок або зону. */
-  unclassified: boolean;
 };
 
 export const EMPTY_BOARD_FILTERS: BoardFilterState = {
   zones: new Set(),
   themes: new Set(),
-  unclassified: false,
 };
 
 export function hasActiveFilters(state: BoardFilterState): boolean {
-  return state.zones.size > 0 || state.themes.size > 0 || state.unclassified;
+  return state.zones.size > 0 || state.themes.size > 0;
 }
 
 /** Чи проходить картка крізь фільтри. Порожній фільтр пропускає все. */
 export function matchesBoardFilters(request: DevRequest, state: BoardFilterState): boolean {
   if (state.zones.size > 0 && (!request.zone || !state.zones.has(request.zone))) return false;
   if (state.themes.size > 0 && (!request.theme || !state.themes.has(request.theme))) return false;
-  if (state.unclassified && request.moduleKey && request.zone) return false;
   return true;
 }
 
@@ -76,13 +78,11 @@ export function BoardFilters({
   const counts = useMemo(() => {
     const zones = new Map<RequestZone, number>();
     const themes = new Map<string, number>();
-    let unclassified = 0;
     for (const request of requests) {
       if (request.zone) zones.set(request.zone, (zones.get(request.zone) ?? 0) + 1);
       if (request.theme) themes.set(request.theme, (themes.get(request.theme) ?? 0) + 1);
-      if (!request.moduleKey || !request.zone) unclassified += 1;
     }
-    return { zones, themes, unclassified };
+    return { zones, themes };
   }, [requests]);
 
   const themeList = useMemo(
@@ -98,10 +98,14 @@ export function BoardFilters({
   const zoneList = REQUEST_ZONES.filter((zone) => (counts.zones.get(zone) ?? 0) > 0);
   const active = hasActiveFilters(state);
 
-  if (zoneList.length === 0 && themeList.length === 0 && counts.unclassified === 0) return null;
+  if (zoneList.length === 0 && themeList.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    // Один ряд зі скролом, а не перенос: на вузькому екрані чіпи лягали в два
+    // ряди й тулбар підростав удвічі, зсуваючи саму дошку вниз. Смуга тут
+    // доречніша — фільтрів небагато, і горизонтальний жест звичний саме на
+    // дошці, яку й так гортають убік.
+    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {zoneList.map((zone) => {
         const Icon = ZONE_ICONS[zone];
         const on = state.zones.has(zone);
@@ -149,30 +153,6 @@ export function BoardFilters({
           </button>
         );
       })}
-
-      {counts.unclassified > 0 ? (
-        <>
-          <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
-          <button
-            type="button"
-            aria-pressed={state.unclassified}
-            // Найкорисніший фільтр із трьох: показує рівно те, що розбір не
-            // зміг класифікувати, — тобто те, що чекає на людину. Без нього
-            // такі картки нічим не відрізняються від решти.
-            title="Картки без напрямку або без зони — розбір не був упевнений"
-            onClick={() => onChange({ ...state, unclassified: !state.unclassified })}
-            className={cn(
-              CHIP,
-              state.unclassified
-                ? "border-transparent bg-warning-soft text-warning-foreground"
-                : "border-dashed border-border/70 text-muted-foreground hover:border-foreground/25 hover:text-foreground"
-            )}
-          >
-            нерозібрані
-            <span className="tabular-nums opacity-70">{counts.unclassified}</span>
-          </button>
-        </>
-      ) : null}
 
       {active ? (
         <Button
