@@ -5,6 +5,8 @@ import {
   buildDevRequestReply,
   formatRequestNumber,
   isTaskCommand,
+  isTaskPromptReply,
+  EMPTY_TASK_COMMAND_MESSAGE,
 } from "./devRequestBot";
 
 describe("isTaskCommand", () => {
@@ -107,5 +109,31 @@ describe("formatRequestNumber", () => {
   it("той самий формат, що на дошці", () => {
     expect(formatRequestNumber(1)).toBe("REQ-1");
     expect(formatRequestNumber(326)).toBe("REQ-326");
+  });
+});
+
+/**
+ * Відповідь на «Слухаю. Що записати?» — єдиний шлях, яким задача заводиться
+ * БЕЗ команди. Тап по «task» у меню Telegram відправляє команду одразу й
+ * дописати до неї текст не дає, тож зламається це тихо: людина відповість
+ * боту, а картка не заведеться.
+ */
+describe("isTaskPromptReply", () => {
+  it("упізнає відповідь на поточне запитання", () => {
+    expect(isTaskPromptReply(EMPTY_TASK_COMMAND_MESSAGE)).toBe(true);
+  });
+
+  it("упізнає й стару підказку — у чатах лишились її повідомлення", () => {
+    expect(
+      isTaskPromptReply("Напиши, що саме записати:\n/задача кнопка не працює")
+    ).toBe(true);
+  });
+
+  it("будь-яка інша відповідь боту задачею не стає", () => {
+    expect(isTaskPromptReply("Цю задачу вже записано ✅")).toBe(false);
+    expect(isTaskPromptReply("REQ-42 — записав")).toBe(false);
+    expect(isTaskPromptReply("")).toBe(false);
+    expect(isTaskPromptReply(null)).toBe(false);
+    expect(isTaskPromptReply(undefined)).toBe(false);
   });
 });

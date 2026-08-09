@@ -27,7 +27,20 @@ export type PersistentKeyboard = {
   is_persistent: true;
 };
 
-type ReplyMarkup = { inline_keyboard: InlineKeyboard } | PersistentKeyboard;
+/**
+ * Просить клієнт одразу відкрити поле вводу з наведенням на цю відповідь.
+ *
+ * Потрібен там, де тап по команді в меню Telegram відправляє її одразу й
+ * дописати аргумент нема як (див. «/задача» в _lib/devRequestBot.ts).
+ */
+type ForceReply = {
+  force_reply: true;
+  /** Підказка в порожньому полі вводу. Bot API: до 64 символів. */
+  input_field_placeholder?: string;
+  selective?: boolean;
+};
+
+type ReplyMarkup = { inline_keyboard: InlineKeyboard } | PersistentKeyboard | ForceReply;
 
 export type TelegramApiResult = {
   ok: boolean;

@@ -50,6 +50,11 @@ export type TelegramMessage = {
   forward_from_chat?: TelegramChat | null;
   forward_sender_name?: string | null;
   forward_date?: number | null;
+  /**
+   * На що відповідали. Потрібне, щоб упізнати відповідь на наше запитання
+   * «Що записати?» — тоді вільний текст стає задачею без жодної команди.
+   */
+  reply_to_message?: { text?: string | null } | null;
 };
 
 function trimmed(value?: string | null): string {

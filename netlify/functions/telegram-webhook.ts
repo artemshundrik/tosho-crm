@@ -34,6 +34,8 @@ import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dro
 import { buildAppUrl } from "./_lib/appUrl";
 import {
   EMPTY_TASK_COMMAND_MESSAGE,
+  TASK_PROMPT_PLACEHOLDER,
+  isTaskPromptReply,
   NON_TEXT_FORWARD_MESSAGE,
   isTaskCommand,
 } from "./_lib/devRequestBot";
@@ -192,6 +194,18 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
     return;
   }
 
+  /**
+   * Відповідь на наше «Слухаю. Що записати?» — це задача, без жодної команди.
+   *
+   * Стоїть ПЕРЕД розбором команди навмисно: людина відповідає вільним текстом,
+   * а він може початися з «/» (шляхом до файлу, наприклад), і тоді парсер
+   * прийняв би це за команду й мовчки з'їв.
+   */
+  if (isTaskPromptReply(message.reply_to_message?.text)) {
+    await handleDevRequestCapture(adminClient, message, { text, forwarded: false });
+    return;
+  }
+
   // Зрізає «@botname» — інакше скопійована з групи команда не спрацювала б.
   const { command, args } = parseCommand(text);
   const username = message.from?.username ?? null;
@@ -289,7 +303,15 @@ async function handleMessage(adminClient: AdminClient, message: NonNullable<Tele
   // Власна думка: «/задача …» (або «/task …» латиницею).
   if (isTaskCommand(command)) {
     if (!args) {
-      await sendTelegramMessage(chatId, EMPTY_TASK_COMMAND_MESSAGE);
+      // force_reply замість інструкції: тап по «task» у меню команд Telegram
+      // відправляє команду одразу й дописати до неї текст не дає, тож без
+      // цього єдиним шляхом лишалось набрати «/задача …» руками цілком.
+      await sendTelegramMessage(chatId, EMPTY_TASK_COMMAND_MESSAGE, {
+        replyMarkup: {
+          force_reply: true,
+          input_field_placeholder: TASK_PROMPT_PLACEHOLDER,
+        },
+      });
       return;
     }
     await handleDevRequestCapture(adminClient, message, { text: args, forwarded: false });
