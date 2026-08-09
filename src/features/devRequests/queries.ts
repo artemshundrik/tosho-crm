@@ -4,6 +4,7 @@ import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isKnownModuleKey } from "@/lib/projectMap";
 import { toAuditEntries, type AuditEntry } from "./history";
+import type { ChecklistItem } from "./checklist";
 import {
   toDevRequest,
   type DevRequest,
@@ -192,6 +193,38 @@ export function useMoveDevRequest(teamId: string | null) {
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Немає прав рухати цю картку");
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
+    },
+  });
+}
+
+/**
+ * Пункти великої задачі — окрема мутація, а не частина правки картки.
+ *
+ * Відмічають їх на бігу, по одному, і гнати заради галочки повний UPDATE із
+ * назвою, описом та класифікацією означало б щоразу ризикувати затерти те, що
+ * поруч правив хтось інший. Тут пишеться рівно одна колонка.
+ *
+ * auto_classified НЕ гаситься навмисно: він про напрямок і пріоритет, а
+ * відмічений пункт про них нічого не каже.
+ */
+export function useUpdateChecklist(teamId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, checklist }: { id: string; checklist: ChecklistItem[] }) => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("dev_requests")
+        .update({ checklist })
+        .eq("id", id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      // Той самий привід, що й у переміщенні: 0 рядків від RLS приходить без
+      // помилки, і без перевірки «зберегли» показало б успіх на нічому.
+      if (!data) throw new Error("Немає прав змінювати цю картку");
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });

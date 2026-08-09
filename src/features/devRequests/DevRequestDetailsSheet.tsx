@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { FileText, History, Inbox, Layers, PencilLine, Sparkles, Tags, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { FileText, History, Inbox, Layers, ListChecks, PencilLine, Sparkles, Tags, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { MODULE_UNSET_LABEL, resolveAuthor } from "./cardModel";
 import { auditActionLabel, auditChangeLines } from "./history";
-import { useDevRequestHistory } from "./queries";
+import { useDevRequestHistory, useUpdateChecklist } from "./queries";
+import { ChecklistPanel } from "./ChecklistPanel";
 import { PriorityBars } from "./PriorityBars";
 import {
   KIND_ICONS,
@@ -123,6 +125,7 @@ export function DevRequestDetailsSheet({
     if (request) setShown(request);
   }, [request]);
 
+  const updateChecklist = useUpdateChecklist(shown?.teamId ?? null);
   const historyQuery = useDevRequestHistory(request, userId);
   // Немає прав або RPC відмовила — секції просто немає. Історія тут довідка,
   // а не суть: валити через неї дровер (і ховати обговорення) немає за що.
@@ -186,6 +189,33 @@ export function DevRequestDetailsSheet({
                   <p className="text-[13px] text-muted-foreground">опису немає</p>
                 )}
               </Section>
+
+              {/* Пункти — одразу після суті: це і є те, з чого складається
+                  робота. Класифікація нижче — довідка про картку, а не про
+                  роботу, тож вона поступається місцем. */}
+              {shown.checklist.length > 0 || canManage ? (
+                <Section title="Пункти" icon={ListChecks}>
+                  <ChecklistPanel
+                    items={shown.checklist}
+                    canManage={canManage}
+                    saving={updateChecklist.isPending}
+                    onChange={(next) => {
+                      // Малюємо одразу, не чекаючи мережі: галочки ставлять
+                      // пачкою, і пауза на кожній перетворила б це на муку.
+                      setShown((current) => (current ? { ...current, checklist: next } : current));
+                      updateChecklist.mutate(
+                        { id: shown.id, checklist: next },
+                        {
+                          onError: (error) =>
+                            toast.error(
+                              error instanceof Error ? error.message : "Не вдалося зберегти пункти"
+                            ),
+                        }
+                      );
+                    }}
+                  />
+                </Section>
+              ) : null}
 
               <Section title="Класифікація" icon={Tags}>
                 <DetailCard>
