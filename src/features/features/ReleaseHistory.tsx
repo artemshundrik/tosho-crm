@@ -102,12 +102,22 @@ function TipView({ tip }: { tip: TipState }) {
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">
         {tip.rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-3 whitespace-nowrap">
+          // Підпис переноситься, значення — ні: nowrap на всьому рядку
+          // виштовхував довгі підписи разом із числом за межу картки.
+          <div key={index} className="flex items-baseline gap-2">
             {row.color ? (
-              <span className={cn("h-2 w-2 shrink-0 rounded-sm", row.color)} aria-hidden />
+              <span
+                className={cn("mt-1 h-2 w-2 shrink-0 self-start rounded-sm", row.color)}
+                aria-hidden
+              />
             ) : null}
-            <span className="text-muted-foreground">{row.label}</span>
-            <span className={cn("ml-auto shrink-0 pl-3 tabular-nums", row.strong && "font-semibold")}>
+            <span className="min-w-0 flex-1 text-balance text-muted-foreground">{row.label}</span>
+            <span
+              className={cn(
+                "shrink-0 whitespace-nowrap tabular-nums",
+                row.strong && "font-semibold"
+              )}
+            >
               {row.value}
             </span>
           </div>
@@ -339,7 +349,7 @@ export function ReleaseHistory() {
                     },
                     { label: "Разом", value: `≈${fmtN(hoursSplit.total)} год`, strong: true },
                     {
-                      label: "Для звірки: коміти за той самий пізній період",
+                      label: "Звірка: коміти за той період",
                       value: `≈${fmtN(hoursSplit.commitsAfter)} год`,
                     },
                   ]
@@ -853,13 +863,30 @@ function DayView({
                 note: "Оцінка за ритмом комітів. Менша за роботу з Claude настільки, скільки часу пішло на те, що комітом не закінчилось.",
               }))}
             >
-              із них дійшло до комітів:{" "}
-              <b className="font-semibold text-foreground">≈{info.hours} год</b>
-              {work && work.hours > info.hours ? (
-                <span className="ml-1.5">
-                  · поза комітами ≈{(work.hours - info.hours).toFixed(1)} год
-                </span>
-              ) : null}
+              {/* «Із них» лише тоді, коли коміти справді ПІДМНОЖИНА роботи.
+                  Інакше рядок читався як абсурд: «≈1.7 год, із них дійшло до
+                  комітів ≈9.5 год». Два прилади міряють по-різному — оцінка за
+                  комітами додає до кожного блоку розігрів у 30 хв проти 5 хв у
+                  сесіях, — тож на дні з багатьма короткими блоками вона чесно
+                  виходить більшою. Це не помилка даних, і ховати різницю не
+                  можна: саме вона показує, коли години застаріли. */}
+              {work && work.hours >= info.hours ? (
+                <>
+                  із них дійшло до комітів:{" "}
+                  <b className="font-semibold text-foreground">≈{info.hours} год</b>
+                  {work.hours > info.hours ? (
+                    <span className="ml-1.5">
+                      · поза комітами ≈{(work.hours - info.hours).toFixed(1)} год
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  за ритмом комітів:{" "}
+                  <b className="font-semibold text-foreground">≈{info.hours} год</b>
+                  <span className="ml-1.5">· другий прилад, не доданок</span>
+                </>
+              )}
             </span>
           ) : null}
         </div>
