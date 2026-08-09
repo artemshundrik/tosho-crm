@@ -327,7 +327,7 @@ function renderTechMessage(
   return {
     tone,
     text: lines.join("\n"),
-    keyboard: [[{ text: "Відкрити Observability", url: `${APP_URL}/admin/observability` }]],
+    keyboard: [[{ text: "Відкрити Observability", url: `${APP_URL}/dev/health` }]],
   };
 }
 

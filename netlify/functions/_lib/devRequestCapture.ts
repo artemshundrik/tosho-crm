@@ -31,7 +31,7 @@ export const CAPTURE_TOKEN_HEADER = "x-capture-token";
 export const MIN_TEXT_CHARS = 3;
 
 /** Куди веде посилання у відповіді: дошка запитів. */
-export const CAPTURE_BOARD_PATH = "/dev-requests";
+export const CAPTURE_BOARD_PATH = "/dev/backlog";
 
 /**
  * Заголовок без огляду на регістр.

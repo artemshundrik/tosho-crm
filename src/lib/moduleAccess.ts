@@ -31,7 +31,8 @@ export type ModuleKey =
   | "team"
   | "members_access"
   | "nova_poshta"
-  | "pulse";
+  | "pulse"
+  | "dev";
 
 export type ModuleAccess = Record<ModuleKey, boolean>;
 
@@ -66,6 +67,16 @@ export type ModuleDefinition = {
    * Такий доступ мають усі, незалежно від ролі.
    */
   alwaysOn?: boolean;
+  /**
+   * Дзеркало `alwaysOn`: модуль неможливо ВВІМКНУТИ ролям поза цим предикатом.
+   *
+   * Навіщо. У решти модулів галочка = доступ. Але є розділи, дані яких ріже сама
+   * база (RLS), — там галочка лише показує пункт меню. Увімкнена такій ролі, вона
+   * привела б людину на порожній екран: не «немає доступу», а «зламана CRM».
+   * Тому збережене `true` для невповноваженої ролі ігнорується, а перемикач у
+   * «Ролях і доступах» показуємо заблокованим із поясненням.
+   */
+  restrictedTo?: (ctx: RoleContext) => boolean;
   /** Чи ввімкнений за замовчуванням, якщо в module_access нічого не записано. */
   defaultFor?: (ctx: RoleContext) => boolean;
   /**
@@ -121,8 +132,29 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     // зі старого ключа `team` нікого не позбавляє доступу.
     defaultFor: ownerOrSeo,
   },
-  { key: "nova_poshta", label: "Нова Пошта", group: "account", defaultFor: ownerOrSeo },
+  // Ключ лишається `nova_poshta` (він у базі), а підпис уже про весь розділ:
+  // за ним стоять усі зовнішні сервіси, а не одна служба доставки.
+  {
+    key: "nova_poshta",
+    label: "Інтеграції",
+    group: "account",
+    hint: "Нова Пошта; далі — Вчасно, Telegram, Dropbox",
+    defaultFor: ownerOrSeo,
+  },
   { key: "pulse", label: "Пульс команди", group: "account", hint: "Аналітика активності", defaultFor: ownerOrSeo },
+  {
+    key: "dev",
+    label: "Dev",
+    group: "account",
+    hint: "Беклог доробок, релізи, здоровʼя системи",
+    // Дефолт і обмеження — той самий предикат, що вже стоїть на «Складі» й
+    // «Маркетингу». Дефолтом, а не галочкою вручну: інакше про доступ для
+    // другого SEO згадають у найкращому разі через тиждень після найму.
+    defaultFor: ownerOrSeo,
+    // Дошку доробок і релізи база віддає лише власнику й SEO. Без цього
+    // обмеження увімкнена галочка привела б людину на порожній екран.
+    restrictedTo: ownerOrSeo,
+  },
 ];
 
 export const MODULE_KEYS = MODULE_DEFINITIONS.map((item) => item.key);
@@ -151,7 +183,15 @@ export const MODULE_GROUPS: Array<{ group: ModuleGroup; label: string; modules: 
 export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
   const result = {} as ModuleAccess;
   MODULE_DEFINITIONS.forEach((item) => {
-    result[item.key] = item.alwaysOn ? true : (item.defaultFor?.(ctx) ?? false);
+    if (item.alwaysOn) {
+      result[item.key] = true;
+      return;
+    }
+    if (item.restrictedTo && !item.restrictedTo(ctx)) {
+      result[item.key] = false;
+      return;
+    }
+    result[item.key] = item.defaultFor?.(ctx) ?? false;
   });
   return result;
 }
@@ -161,9 +201,10 @@ export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
  *
  * Порядок рішень для кожного модуля:
  *  1. `alwaysOn` — завжди true, збережене значення ігнорується;
- *  2. явно записаний boolean;
- *  3. значення ключа-попередника (`inheritsFrom`) для старих записів;
- *  4. дефолт за роллю.
+ *  2. `restrictedTo` не пускає роль — завжди false, збережене ігнорується;
+ *  3. явно записаний boolean;
+ *  4. значення ключа-попередника (`inheritsFrom`) для старих записів;
+ *  5. дефолт за роллю.
  */
 export function normalizeModuleAccess(
   value: unknown,
@@ -177,6 +218,11 @@ export function normalizeModuleAccess(
   MODULE_DEFINITIONS.forEach((item) => {
     if (item.alwaysOn) {
       result[item.key] = true;
+      return;
+    }
+    // Роль поза списком уповноважених — збережене значення не має значення.
+    if (item.restrictedTo && !item.restrictedTo(ctx)) {
+      result[item.key] = false;
       return;
     }
     const stored = input[item.key];
@@ -199,6 +245,16 @@ export function normalizeModuleAccess(
 
 /** true, якщо модуль дозволений. Незаписаний ключ трактуємо як «дозволено». */
 export function hasModuleAccess(access: Partial<ModuleAccess> | null | undefined, key: ModuleKey) {
-  if (DEFINITION_BY_KEY.get(key)?.alwaysOn) return true;
+  const definition = DEFINITION_BY_KEY.get(key);
+  if (definition?.alwaysOn) return true;
+  /**
+   * Для обмежених модулів правило перевернуте: потрібен ЯВНИЙ true.
+   *
+   * Саме через «незаписаний ключ = дозволено» приватні розділи досі гейтились
+   * повз реєстр, вручну: новий ключ відкрив би розділ усім, у кого в
+   * `module_access` лежить старий JSON без нього. Явний true ставить лише
+   * normalizeModuleAccess — і лише після перевірки `restrictedTo`.
+   */
+  if (definition?.restrictedTo) return access?.[key] === true;
   return access?.[key] !== false;
 }

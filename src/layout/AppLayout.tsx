@@ -7,12 +7,16 @@ import {
   BriefcaseBusiness,
   Building2,
   Calculator,
+  ChevronDown,
   Loader2,
   Factory,
   FolderKanban,
-  Inbox,
+  Activity,
+  GitCommitVertical,
+  GitPullRequestArrow,
   KeyRound,
   LayoutGrid,
+  Plug,
   Megaphone,
   Menu,
   Moon,
@@ -47,7 +51,10 @@ import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
+import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
+import { DEV_LABELS, DEV_PATHS, DEV_ROOT, resolveDevSurface } from "@/lib/devSection";
+import { readCollapsedGroups, writeCollapsedGroups } from "@/lib/sidebarGroupState";
+import { WHATS_NEW_FEATURES } from "@/components/app/WhatsNewTabs";
 
 import {
   disableRealtimeForSession,
@@ -104,7 +111,7 @@ type AppLayoutProps = {
   children?: ReactNode;
 };
 
-type SidebarGroupKey = "overview" | "orders" | "operations" | "account";
+type SidebarGroupKey = "dev" | "overview" | "orders" | "operations" | "account";
 
 type SidebarLink = {
   label: string;
@@ -432,15 +439,15 @@ const ROUTES = {
 
   workspaceSettings: "/workspace-settings",
   membersAccess: "/settings/members",
-  novaPoshta: "/settings/nova-poshta",
+  integrations: "/integrations",
   notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
   features: "/features",
   whatsNew: "/whats-new",
-  releases: "/releases",
-  devRequests: "/dev-requests",
-  observability: "/admin/observability",
+  // Розділ «Dev» — беклог, релізи, здоровʼя системи; шляхи в src/lib/devSection.ts.
+  // Старі адреси (/releases, /dev-requests, /admin/observability) лишились
+  // редиректами заради закладок і href у вже розісланих сповіщеннях.
 } as const;
 
 // --- Sidebar Config ---
@@ -484,29 +491,39 @@ const baseSidebarLinks: SidebarLink[] = [
     icon: Megaphone,
     moduleKey: "marketing",
   },
-  // moduleKey тут навмисно НЕМАЄ: hasModuleAccess вважає незаписаний ключ
-  // дозволеним, тож новий ключ відкрив би приватний розділ усім, у кого в
-  // module_access лежить старий JSON. Видимість задає явна гілка у
-  // visibleSidebarLinks — власник і СЕО.
-  { label: "Запити", to: ROUTES.devRequests, group: "operations", icon: Inbox },
-
   // Акаунт
   //
-  // ЧОМУ ТУТ ЛИШЕ «КОМАНДА». Заміри 2026-08-05: власник бачив 17 пунктів,
-  // SEO — 14, решта — 8. При висоті рядка 36 px меню власника вже не
-  // вміщалось у 13-дюймовий екран і скролилось. Прибрано:
+  // Заміри 2026-08-05: власник бачив 17 пунктів, SEO — 14, решта — 8. При
+  // висоті рядка 36 px меню власника вже не вміщалось у 13-дюймовий екран.
+  // Прибрано назавжди:
   //   • «Сповіщення» — дублікат: у дзвіночку в шапці вже є «Усі сповіщення»
   //     (NotificationsMenu). Пункт бачили всі шістнадцятеро.
   //   • «Логістика» — модуль вимкнений усім, крім власника, а точки доставки
   //     заповнені у 3 клієнтів зі 128 і в 0 лідів. Маршрут лишається.
-  //   • «Нова Пошта», «Observability» — це конфіг, а не робочі поверхні.
-  //     Переїхали в меню акаунта (UserMenu).
-  // «Ролі та доступи» лишились у меню поруч із «Командою»: це не конфіг
-  // системи, а щоденна робота з людьми — і дивитись їх ходять із того ж
-  // місця, що й склад команди.
-  // Маршрути ніде не чіпалися — прибрані лише пункти навігації.
+  // «Ролі та доступи» лишились поруч із «Командою»: це не конфіг системи, а
+  // щоденна робота з людьми — і ходять туди з того ж місця, що й до складу
+  // команди. Маршрути ніде не чіпалися — рухались лише пункти навігації.
   { label: "Команда", to: ROUTES.team, group: "account", icon: Users, moduleKey: "team" },
   { label: "Ролі та доступи", to: ROUTES.membersAccess, group: "account", icon: KeyRound, moduleKey: "members_access" },
+  // «Інтеграції» — окремий розділ, а не рядок у меню акаунта: зовнішніх
+  // сервісів уже кілька (Нова Пошта, Вчасно, Telegram, Dropbox), і кожен новий
+  // додавав би ще один рядок туди, де його ніхто не шукає. Поки що всередині
+  // самі налаштування Нової Пошти — решта інтеграцій чекає на своїй картці.
+  { label: "Інтеграції", to: ROUTES.integrations, group: "account", icon: Plug, moduleKey: "nova_poshta" },
+
+  /**
+   * Dev — найнижча група в меню.
+   *
+   * Її бачать двоє (власник і SEO), і це кухня самої CRM, а не робота компанії,
+   * тож вона стоїть під усім робочим. Три пункти замість трьох поверхонь у
+   * трьох різних місцях: беклог сидів у сайдбарі серед «Операцій», релізи й
+   * здоровʼя — рядками в меню акаунта.
+   */
+  { label: DEV_LABELS.backlog, to: DEV_PATHS.backlog, group: "dev", icon: GitPullRequestArrow, moduleKey: "dev" },
+  // Іконка комітів, а не «ракета» чи годинник: розділ буквально будується з
+  // комітів релізу (scripts/lib/releaseCommits.mjs), і це видно з першого разу.
+  { label: DEV_LABELS.releases, to: DEV_PATHS.releases, group: "dev", icon: GitCommitVertical, moduleKey: "dev" },
+  { label: DEV_LABELS.health, to: DEV_PATHS.health, group: "dev", icon: Activity, moduleKey: "dev" },
 ];
 
 const sidebarLinks: SidebarLink[] = baseSidebarLinks;
@@ -632,14 +649,23 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       // Сторінка малює власний UnifiedPageToolbar — типовий заголовок задвоївся б.
       showPageHeader: false,
     };
-  if (pathname.startsWith(ROUTES.observability))
+  // Три окремі пункти меню — отже три власні заголовки, а не один на розділ.
+  if (pathname.startsWith(DEV_ROOT)) {
+    const surface = resolveDevSurface(pathname);
+    const subtitle =
+      surface === "releases"
+        ? "Скільки роботи зроблено — по днях і за період."
+        : surface === "health"
+          ? "Щоденні snapshots по базі, storage і важких SQL-шляхах."
+          : "Що просить команда і що ми вирішили зробити.";
     return {
-      title: "Admin Observability",
-      subtitle: "Щоденні snapshots по базі, storage і важких SQL-шляхах.",
-      breadcrumbLabel: "Observability",
-      breadcrumbTo: ROUTES.observability,
+      title: DEV_LABELS[surface],
+      subtitle,
+      breadcrumbLabel: DEV_LABELS[surface],
+      breadcrumbTo: DEV_PATHS[surface],
       showPageHeader: false,
     };
+  }
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
       title: "Ролі та доступи",
@@ -650,12 +676,12 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   // Без власної гілки сторінка падала у fallback і показувала шапку «Огляд ·
   // Пульс команди», ще й із зайвим блоком заголовка, що зсував контент униз.
-  if (pathname.startsWith(ROUTES.novaPoshta))
+  if (pathname.startsWith(ROUTES.integrations))
     return {
-      title: "Нова Пошта",
-      subtitle: "Відправник, дефолти ТТН і власні розміри коробок.",
-      breadcrumbLabel: "Нова Пошта",
-      breadcrumbTo: ROUTES.novaPoshta,
+      title: "Інтеграції",
+      subtitle: "Зовнішні сервіси, підключені до CRM.",
+      breadcrumbLabel: "Інтеграції",
+      breadcrumbTo: ROUTES.integrations,
       showPageHeader: false,
     };
 if (pathname === ROUTES.profile)
@@ -666,38 +692,18 @@ if (pathname === ROUTES.profile)
       breadcrumbTo: ROUTES.profile,
       showPageHeader: false,
     };
-  if (pathname === ROUTES.features)
-    return {
-      title: "Можливості",
-      subtitle: "Що вміє CRM і що з цього ти ще не пробував.",
-      breadcrumbLabel: "Можливості",
-      breadcrumbTo: ROUTES.features,
-      showPageHeader: false,
-    };
-  if (pathname === ROUTES.whatsNew)
+  if (pathname.startsWith(ROUTES.whatsNew)) {
+    const onFeatures = pathname.startsWith(WHATS_NEW_FEATURES);
     return {
       title: "Що нового",
-      subtitle: "Історія змін у CRM.",
-      breadcrumbLabel: "Що нового",
+      subtitle: onFeatures
+        ? "Що вміє CRM і що з цього ти ще не пробував."
+        : "Історія змін у CRM.",
+      breadcrumbLabel: onFeatures ? "Можливості" : "Оновлення",
       breadcrumbTo: ROUTES.whatsNew,
       showPageHeader: false,
     };
-  if (pathname === ROUTES.releases)
-    return {
-      title: "Релізи",
-      subtitle: "Скільки роботи зроблено — по днях і за період.",
-      breadcrumbLabel: "Релізи",
-      breadcrumbTo: ROUTES.releases,
-      showPageHeader: false,
-    };
-  if (pathname === ROUTES.devRequests)
-    return {
-      title: "Запити на доробку",
-      subtitle: "Що просить команда і що ми вирішили зробити.",
-      breadcrumbLabel: "Запити",
-      breadcrumbTo: ROUTES.devRequests,
-      showPageHeader: false,
-    };
+  }
   // fallback
   return {
     title: "Огляд",
@@ -801,7 +807,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { userId, teamId, session, permissions, jobRole, viewUserId, moduleAccess } = useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
-  const isSeoJobRole = (jobRole ?? "").trim().toLowerCase() === "seo";
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
     teamId,
@@ -838,14 +843,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const visibleSidebarLinks = useMemo(
     () =>
       sidebarLinks.filter((link) => {
-        if (link.to === ROUTES.observability) {
-          return permissions.isSuperAdmin || permissions.isAdmin;
-        }
-        // Пункт без moduleKey фільтр нижче пропускає ВСІМ — тому «Запити»
-        // звужуємо тут явно, до тих самих власника й СЕО, що їх пускає RLS.
-        if (link.to === ROUTES.devRequests) {
-          return permissions.isSuperAdmin || isSeoJobRole;
-        }
         if (!link.moduleKey) return true;
         // Доступи ще вантажаться — краще не показати пункт, ніж блимнути ним.
         if (moduleAccess === undefined) return false;
@@ -862,6 +859,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
          */
         const hiddenExplicitly = moduleAccess[link.moduleKey] === false;
 
+        /**
+         * Обмежений модуль («Dev») — рішення лише за нормалізованим доступом.
+         *
+         * Гілку власника нижче тут проходити НЕ можна: вона повертає true для
+         * будь-якого ключа, і перший же модуль, до якого власника не пускає
+         * база, показав би пункт у меню повз власне обмеження. Роль уже
+         * врахована в normalizeModuleAccess, а hasModuleAccess для таких
+         * ключів вимагає явного true — знята галочка ховає пункт тим самим.
+         */
+        if (getModuleDefinition(link.moduleKey)?.restrictedTo) {
+          // «Здоровʼя» додатково закрите access_role — той самий гейт, що
+          // стояв на Observability. SEO має Dev, але не має цієї сторінки, і
+          // показувати пункт, який одразу викине, немає сенсу.
+          if (link.to === DEV_PATHS.health && !(permissions.isSuperAdmin || permissions.isAdmin)) {
+            return false;
+          }
+          return hasModuleAccess(moduleAccess, link.moduleKey);
+        }
+
         // Фінанси обмежені роллю в самій БД (RLS) — тримаємо UI у згоді з нею.
         if (link.moduleKey === "finance") {
           return (permissions.isSuperAdmin || isFinanceJobRole) && !hiddenExplicitly;
@@ -869,8 +885,24 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         if (permissions.isSuperAdmin) return !hiddenExplicitly;
         return hasModuleAccess(moduleAccess, link.moduleKey);
       }),
-    [moduleAccess, isFinanceJobRole, isSeoJobRole, permissions.isAdmin, permissions.isSuperAdmin]
+    [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
+  /**
+   * Згорнуті секції меню. Ключ — SidebarGroupKey, стан у localStorage.
+   * Читаємо в ініціалізаторі, щоб на першому кадрі меню вже було таким, яким
+   * людина його лишила, а не розгорталось на мить після монтування.
+   */
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() =>
+    readCollapsedGroups()
+  );
+  const toggleGroup = React.useCallback((key: SidebarGroupKey) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      writeCollapsedGroups(next);
+      return next;
+    });
+  }, []);
+
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
     return sidebarRoutes.some((route) => {
@@ -1755,6 +1787,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                groupCollapsed={collapsedGroups.orders}
+                onToggleGroup={() => toggleGroup("orders")}
               />
             </div>
             <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
@@ -1764,15 +1798,33 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                groupCollapsed={collapsedGroups.operations}
+                onToggleGroup={() => toggleGroup("operations")}
               />
             </div>
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5 pb-0" : "")}>
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Акаунт"
                 links={visibleSidebarLinks.filter((l) => l.group === "account")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                groupCollapsed={collapsedGroups.account}
+                onToggleGroup={() => toggleGroup("account")}
+              />
+            </div>
+            {/* «Dev» — найнижча група: це кухня самої CRM, а не робота
+                компанії, і бачать її двоє. SidebarGroup сам повертає null на
+                нуль посилань, тож у решти команди блок не займає й пікселя. */}
+            <div className={cn("relative", sidebarCollapsed ? "py-2.5 pb-0" : "")}>
+              <SidebarGroup
+                label="Dev"
+                links={visibleSidebarLinks.filter((l) => l.group === "dev")}
+                currentPath={location.pathname}
+                notificationsUnreadCount={unreadCount}
+                collapsed={sidebarCollapsed}
+                groupCollapsed={collapsedGroups.dev}
+                onToggleGroup={() => toggleGroup("dev")}
               />
             </div>
           </div>
@@ -1918,6 +1970,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             currentPath={location.pathname}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
+                            groupCollapsed={collapsedGroups.orders}
+                            onToggleGroup={() => toggleGroup("orders")}
                           />
                           <SidebarGroup
                             label="Операції"
@@ -1925,6 +1979,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             currentPath={location.pathname}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
+                            groupCollapsed={collapsedGroups.operations}
+                            onToggleGroup={() => toggleGroup("operations")}
                           />
                           <SidebarGroup
                             label="Акаунт"
@@ -1932,6 +1988,18 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             currentPath={location.pathname}
                             onNavigate={() => setMobileMenuOpen(false)}
                             notificationsUnreadCount={unreadCount}
+                            groupCollapsed={collapsedGroups.account}
+                            onToggleGroup={() => toggleGroup("account")}
+                          />
+                          {/* Найнижча група — як і в десктопному сайдбарі. */}
+                          <SidebarGroup
+                            label="Dev"
+                            links={visibleSidebarLinks.filter((l) => l.group === "dev")}
+                            currentPath={location.pathname}
+                            onNavigate={() => setMobileMenuOpen(false)}
+                            notificationsUnreadCount={unreadCount}
+                            groupCollapsed={collapsedGroups.dev}
+                            onToggleGroup={() => toggleGroup("dev")}
                           />
                         </div>
                         <div className="mt-6 border-t border-border/70 pt-4">
@@ -2330,6 +2398,8 @@ function SidebarGroup({
   notificationsUnreadCount = 0,
   collapsed = false,
   hideLabel = false,
+  groupCollapsed = false,
+  onToggleGroup,
 }: {
   label: string;
   links: SidebarLink[];
@@ -2338,25 +2408,79 @@ function SidebarGroup({
   notificationsUnreadCount?: number;
   collapsed?: boolean;
   hideLabel?: boolean;
+  /** Секцію згорнуто людиною. Діє лише там, де є заголовок. */
+  groupCollapsed?: boolean;
+  /** Без обробника заголовок лишається звичайним написом, як і був. */
+  onToggleGroup?: () => void;
 }) {
   if (links.length === 0) return null;
   const isMobileDrawer = !collapsed && Boolean(onNavigate);
+  // Згортати нема чого там, де немає заголовка: у вузькому сайдбарі (72px) і
+  // в групі «Головне», яка малюється без підпису.
+  const collapsible = Boolean(onToggleGroup) && !collapsed && !hideLabel;
+  const isCollapsed = collapsible && groupCollapsed;
+
+  /**
+   * Активний пункт видно навіть у згорнутій секції.
+   *
+   * Інакше людина, згорнувши «Збут», перестає розуміти, де вона: сторінка
+   * відкрита, а в меню жодної підсвітки. Slack так само лишає видимими канали
+   * з непрочитаними — згорнута секція ховає рутину, а не поточний контекст.
+   */
+  const shownLinks = isCollapsed ? links.filter((link) => isActivePath(currentPath, link.to)) : links;
 
   return (
     <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-2")}>
       {!collapsed && !hideLabel ? (
-        <h4
-          className={cn(
-            "px-3 text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
-            isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
-          )}
-        >
-          {label}
-        </h4>
+        collapsible ? (
+          <button
+            type="button"
+            onClick={onToggleGroup}
+            aria-expanded={!isCollapsed}
+            title={isCollapsed ? `Розгорнути «${label}»` : `Згорнути «${label}»`}
+            className={cn(
+              "group/grp flex w-full items-center gap-1 rounded-md py-0.5 text-3xs font-semibold uppercase tracking-wider",
+              "text-muted-foreground/65 transition-colors hover:text-foreground",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : "px-3"
+            )}
+          >
+            {/* Назва притиснута до лівого краю — на одній вертикалі з
+                підписами решти секцій і з текстом пунктів під нею. */}
+            <span>{label}</span>
+            {/* Шеврон збоку від назви, через відступ, а не впритул: приліплений
+                до тексту він читався б як частина слова. Місце за собою тримає
+                завжди (прозорість, не display) — інакше підпис смикався б
+                убік на кожному ховері. */}
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                "ml-1.5 h-3 w-3 shrink-0 transition-all duration-200",
+                isCollapsed ? "-rotate-90 opacity-100" : "rotate-0 opacity-0 group-hover/grp:opacity-100"
+              )}
+            />
+            {/* Скільки пунктів сховано — інакше згорнута секція виглядає як
+                порожня, а не як згорнута. */}
+            {isCollapsed ? (
+              <span className="ml-auto font-mono text-3xs tabular-nums text-muted-foreground/50">
+                {links.length}
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <h4
+            className={cn(
+              "px-3 text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
+              isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
+            )}
+          >
+            {label}
+          </h4>
+        )
       ) : null}
 
       <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-1")}>
-        {links.map((link) => {
+        {shownLinks.map((link) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;

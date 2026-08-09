@@ -3068,15 +3068,35 @@ export function TeamMembersPage() {
                                   editProfileMember?.access_role ?? null,
                                   editProfileMember?.job_role ?? null
                                 );
+                                /**
+                                 * Дзеркало forced: модуль, який цій ролі не
+                                 * можна ВВІМКНУТИ.
+                                 *
+                                 * У решти модулів галочка = доступ. У «Dev»
+                                 * дані ріже сама база, і галочка лише показує
+                                 * пункт меню — увімкнена не тій людині, вона
+                                 * привела б її на порожній екран, тобто на
+                                 * «зламану CRM», а не на «немає доступу».
+                                 */
+                                const restricted = Boolean(
+                                  module.restrictedTo &&
+                                    !module.restrictedTo({
+                                      accessRole: editProfileMember?.access_role ?? null,
+                                      jobRole: editProfileMember?.job_role ?? null,
+                                    })
+                                );
                                 return (
                                   <label
                                     key={module.key}
-                                    className="flex items-start gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2"
+                                    className={cn(
+                                      "flex items-start gap-3 rounded-[var(--radius)] border border-border bg-muted/20 px-3 py-2",
+                                      restricted && "opacity-60"
+                                    )}
                                   >
                                     <Checkbox
                                       className="mt-0.5"
-                                      checked={forced ? true : editProfileModuleAccess[module.key]}
-                                      disabled={!canManage || forced}
+                                      checked={restricted ? false : forced ? true : editProfileModuleAccess[module.key]}
+                                      disabled={!canManage || forced || restricted}
                                       onCheckedChange={(checked) =>
                                         setEditProfileModuleAccess((prev) => ({
                                           ...prev,
@@ -3086,7 +3106,11 @@ export function TeamMembersPage() {
                                     />
                                     <span className="min-w-0">
                                       <span className="block text-sm text-foreground">{module.label}</span>
-                                      {module.hint ? (
+                                      {restricted ? (
+                                        <span className="block text-2xs text-muted-foreground">
+                                          Недоступно для цієї ролі — розділ закритий у самій базі
+                                        </span>
+                                      ) : module.hint ? (
                                         <span className="block text-2xs text-muted-foreground">{module.hint}</span>
                                       ) : null}
                                     </span>
@@ -3570,6 +3594,7 @@ export function TeamMembersPage() {
         <SheetContent
           side="right"
           className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[640px]"
+          dismissible={true}
         >
           {pulsePeekUserId ? (() => {
             const peekPerson = resolvePulsePerson(pulsePeekUserId);

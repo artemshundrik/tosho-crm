@@ -102,7 +102,7 @@ export const handler = async (event: HttpEvent) => {
         if (warnings.length > 0) {
           lines.push("", `Заразом жовтим: ${escapeTelegramHtml(warnings.map((s) => s.text).join(" · "))}`);
         }
-        lines.push("", `${APP_URL}/admin/observability`);
+        lines.push("", `${APP_URL}/dev/health`);
         message = lines.join("\n");
       }
     } else if (previousPrint) {

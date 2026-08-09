@@ -66,6 +66,42 @@ describe("«Ролі та доступи» лишаються в тих сами
   });
 });
 
+/**
+ * «Dev» — перший обмежений модуль: галочка тут лише показує пункт меню, а дані
+ * ріже RLS. Тому найризикованіше — тихо дозволити його не тій ролі: людина
+ * потрапила б не на «немає доступу», а на порожній екран.
+ */
+describe("обмежені модулі (restrictedTo)", () => {
+  it("дефолтом дає доступ власнику й SEO", () => {
+    expect(defaultModuleAccess({ accessRole: "owner" }).dev).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "seo" }).dev).toBe(true);
+  });
+
+  it("не дає решті — навіть якщо в базі лежить явний true", () => {
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "designer" }).dev).toBe(false);
+    expect(normalizeModuleAccess({ dev: true }, "member", "designer").dev).toBe(false);
+    expect(normalizeModuleAccess({ dev: true }, "member", "chief_accountant").dev).toBe(false);
+  });
+
+  it("уповноважена роль може сховати пункт із очей", () => {
+    expect(normalizeModuleAccess({ dev: false }, "owner", null).dev).toBe(false);
+  });
+
+  it("hasModuleAccess вимагає ЯВНОГО true, а не мовчазного дозволу", () => {
+    // Саме через зворотне правило («незаписаний ключ = дозволено») приватні
+    // розділи гейтились повз реєстр: старий JSON відкрив би розділ усім.
+    expect(hasModuleAccess({}, "dev")).toBe(false);
+    expect(hasModuleAccess(null, "dev")).toBe(false);
+    expect(hasModuleAccess({ dev: true }, "dev")).toBe(true);
+  });
+
+  it("старий JSON без ключа dev нікому його не відкриває", () => {
+    const legacy = { overview: true, orders: true, design: true };
+    expect(normalizeModuleAccess(legacy, "member", "designer").dev).toBe(false);
+    expect(normalizeModuleAccess(legacy, "member", "manager").dev).toBe(false);
+  });
+});
+
 describe("цілісність реєстру", () => {
   it("ключі унікальні", () => {
     expect(new Set(MODULE_KEYS).size).toBe(MODULE_KEYS.length);

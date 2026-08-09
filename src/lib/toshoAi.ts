@@ -183,9 +183,15 @@ const ROUTE_RULES: ToShoAiRouteRule[] = [
     domainHint: "team",
   },
   {
-    test: (pathname) => pathname.startsWith("/admin/observability"),
-    title: "Admin Observability",
-    routeLabel: "Observability",
+    test: (pathname) => pathname.startsWith("/dev/health"),
+    title: "Dev · здоровʼя системи",
+    routeLabel: "Здоровʼя",
+    domainHint: "admin",
+  },
+  {
+    test: (pathname) => pathname.startsWith("/dev"),
+    title: "Dev · беклог і релізи",
+    routeLabel: "Dev",
     domainHint: "admin",
   },
   {

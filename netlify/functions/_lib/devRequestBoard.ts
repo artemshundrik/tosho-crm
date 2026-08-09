@@ -120,7 +120,8 @@ export const STATUS_EMOJI: Record<MovableStatus, string> = {
 };
 
 /** Куди веде посилання «відкрити в CRM». */
-export const BOARD_PATH = "/dev-requests";
+/** Дошка живе у вкладці «Беклог» розділу Dev; /dev-requests лишився редиректом. */
+export const BOARD_PATH = "/dev/backlog";
 
 /** Стеля вибірки. Довший список на телефоні все одно не читають. */
 export const BOARD_LIST_LIMIT = 50;

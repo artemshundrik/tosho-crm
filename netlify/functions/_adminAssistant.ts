@@ -294,7 +294,7 @@ async function answerWhatsBroken(params: {
     lines.push("", "<b>Варто глянути</b>");
     for (const s of warning) lines.push(`🟡 ${escapeTelegramHtml(s.text)}`);
   }
-  lines.push("", `💬 Не зрозуміло, що це — спитай «що це значить».`, `Деталі: ${APP_URL}/admin/observability`);
+  lines.push("", `💬 Не зрозуміло, що це — спитай «що це значить».`, `Деталі: ${APP_URL}/dev/health`);
   return lines.join("\n");
 }
 

@@ -1,27 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BarChart3,
-  Compass,
-  Eye,
-  History,
-  LogOut,
-  MoreVertical,
-  Newspaper,
-  Truck,
-  User,
-} from "lucide-react";
+import { Eye, LogOut, MoreVertical, Newspaper, User } from "lucide-react";
 
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { ViewAsDialog } from "@/components/app/ViewAsDialog";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
-import { AppDropdown } from "@/components/app/AppDropdown";
+import { AppDropdown, type AppDropdownItem } from "@/components/app/AppDropdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { ROLE_TEXT_CLASSES } from "@/lib/roleBadges";
-import { hasModuleAccess } from "@/lib/moduleAccess";
 import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
@@ -56,26 +45,9 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   const navigate = useNavigate();
   // Режим «Дивитись як» — лише для owner (canUseViewAs рахується від РЕАЛЬНИХ
   // прав, тож із увімкненого режиму його не можна «загубити»).
-  const { canUseViewAs, viewAs, moduleAccess, permissions, accessRole, jobRole } = useAuth();
+  const { canUseViewAs, viewAs } = useAuth();
   const [viewAsOpen, setViewAsOpen] = useState(false);
 
-  /**
-   * Конфіг-пункти, що переїхали сюди з сайдбару (чистка 2026-08-05): у меню
-   * власника їх було 17 і воно скролилось. Гейти повторюють ті, що діяли в
-   * сайдбарі, — доступ нікому не розширюється й не звужується.
-   */
-  const settingsItems = useMemo(() => {
-    const items: Array<{ icon: typeof Truck; label: string; to: string }> = [];
-    // «Ролі та доступи» свідомо НЕ тут — вони лишились у сайдбарі під
-    // «Командою»: це робота з людьми, а не налаштування системи.
-    if (hasModuleAccess(moduleAccess, "nova_poshta")) {
-      items.push({ icon: Truck, label: "Нова Пошта", to: "/settings/nova-poshta" });
-    }
-    if (permissions.isSuperAdmin || permissions.isAdmin) {
-      items.push({ icon: BarChart3, label: "Observability", to: "/admin/observability" });
-    }
-    return items;
-  }, [moduleAccess, permissions.isSuperAdmin, permissions.isAdmin]);
   const [loading, setLoading] = useState(!cachedUserData);
   const [userData, setUserData] = useState<UserState>(
     cachedUserData ?? {
@@ -87,19 +59,6 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
       roleKey: "viewer",
     }
   );
-
-  /**
-   * «Релізи» — обсяг зробленої роботи. Решті команди ці цифри нічого не дають:
-   * їм треба знати, ЩО змінилось, і для цього є «Що нового». Гейт дублює
-   * політику RLS на таблиці.
-   *
-   * ГОЧА: роль беремо з useAuth, а НЕ з userData — там лежать підписи для
-   * показу («Власник», «SEO-спеціаліст»), а не ключі ролей, і порівняння з
-   * "owner" мовчки давало false.
-   */
-  const canSeeReleases =
-    (accessRole ?? "").trim().toLowerCase() === "owner" ||
-    (jobRole ?? "").trim().toLowerCase() === "seo";
 
   useEffect(() => {
     async function getUserData() {
@@ -195,6 +154,70 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
     await supabase.auth.signOut();
     navigate("/login");
   };
+
+  /**
+   * Склад меню — один на обидві розкладки (згорнутий сайдбар і розгорнутий).
+   *
+   * Чистка 2026-08-09: із десяти пунктів лишилось чотири. «Релізи» й
+   * Observability переїхали в розділ «Dev», «Нова Пошта» — у розділ
+   * «Інтеграції», «Можливості» злились із «Що нового» (це одна сутність:
+   * розказати людині, що вміє CRM). Тут лишилось те, що справді про людину:
+   * її профіль, стрічка змін, режим перегляду за іншого й вихід.
+   */
+  const menuItems = useMemo<AppDropdownItem[]>(() => {
+    const items: AppDropdownItem[] = [
+      { type: "label", label: "Акаунт" },
+      { type: "separator" },
+      {
+        label: (
+          <>
+            <User className="mr-2 h-4 w-4" />
+            Мій профіль
+          </>
+        ),
+        onSelect: () => navigate("/profile"),
+      },
+      {
+        label: (
+          <>
+            <Newspaper className="mr-2 h-4 w-4" />
+            Що нового
+          </>
+        ),
+        onSelect: () => navigate("/whats-new"),
+      },
+    ];
+
+    if (canUseViewAs) {
+      items.push({ type: "separator" });
+      items.push({
+        label: (
+          <>
+            <Eye className="mr-2 h-4 w-4" />
+            {viewAs ? "Змінити перегляд" : "Дивитись як…"}
+          </>
+        ),
+        onSelect: () => setViewAsOpen(true),
+      });
+    }
+
+    items.push({ type: "separator" });
+    items.push({
+      label: (
+        <>
+          <LogOut className="mr-2 h-4 w-4" />
+          Вийти
+        </>
+      ),
+      onSelect: handleLogout,
+      destructive: true,
+    });
+
+    return items;
+    // handleLogout перестворюється щорендеру й у залежностях спричинив би
+    // нескінченне перебудовування меню — його поведінка від рендерів не залежить.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseViewAs, navigate, viewAs]);
 
   // === Мобільна версія ===
   if (mobile) {
@@ -314,89 +337,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
               />
             </Button>
           }
-          items={[
-            { type: "label", label: "Акаунт" },
-            { type: "separator" },
-            {
-              label: (
-                <>
-                  <User className="mr-2 h-4 w-4" />
-                  Мій профіль
-                </>
-              ),
-              onSelect: () => navigate("/profile"),
-            },
-            {
-              label: (
-                <>
-                  <Compass className="mr-2 h-4 w-4" />
-                  Можливості
-                </>
-              ),
-              onSelect: () => navigate("/features"),
-            },
-            {
-              label: (
-                <>
-                  <Newspaper className="mr-2 h-4 w-4" />
-                  Що нового
-                </>
-              ),
-              onSelect: () => navigate("/whats-new"),
-            },
-            ...(canSeeReleases
-              ? [
-                  {
-                    label: (
-                      <>
-                        <History className="mr-2 h-4 w-4" />
-                        Релізи
-                      </>
-                    ),
-                    onSelect: () => navigate("/releases"),
-                  },
-                ]
-              : []),
-            ...(settingsItems.length > 0
-              ? ([
-                  { type: "separator" as const },
-                  ...settingsItems.map((item) => ({
-                    label: (
-                      <>
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {item.label}
-                      </>
-                    ),
-                    onSelect: () => navigate(item.to),
-                  })),
-                ])
-              : []),
-            ...(canUseViewAs
-              ? ([
-                  { type: "separator" as const },
-                  {
-                        label: (
-                          <>
-                            <Eye className="mr-2 h-4 w-4" />
-                            {viewAs ? "Змінити перегляд" : "Дивитись як…"}
-                          </>
-                        ),
-                        onSelect: () => setViewAsOpen(true),
-                  },
-                ])
-              : []),
-            { type: "separator" },
-            {
-              label: (
-                <>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Вийти
-                </>
-              ),
-              onSelect: handleLogout,
-              destructive: true,
-            },
-          ]}
+          items={menuItems}
         />
       </div>
     );
@@ -455,89 +396,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           </div>
         </Button>
       }
-      items={[
-        { type: "label", label: "Акаунт" },
-        { type: "separator" },
-        {
-          label: (
-            <>
-              <User className="mr-2 h-4 w-4" />
-              Мій профіль
-            </>
-          ),
-          onSelect: () => navigate("/profile"),
-        },
-        {
-          label: (
-            <>
-              <Compass className="mr-2 h-4 w-4" />
-              Можливості
-            </>
-          ),
-          onSelect: () => navigate("/features"),
-        },
-        {
-          label: (
-            <>
-              <Newspaper className="mr-2 h-4 w-4" />
-              Що нового
-            </>
-          ),
-          onSelect: () => navigate("/whats-new"),
-        },
-        ...(canSeeReleases
-          ? [
-              {
-                label: (
-                  <>
-                    <History className="mr-2 h-4 w-4" />
-                    Релізи
-                  </>
-                ),
-                onSelect: () => navigate("/releases"),
-              },
-            ]
-          : []),
-        ...(settingsItems.length > 0
-          ? ([
-              { type: "separator" as const },
-              ...settingsItems.map((item) => ({
-                label: (
-                  <>
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                  </>
-                ),
-                onSelect: () => navigate(item.to),
-              })),
-            ])
-          : []),
-        ...(canUseViewAs
-          ? ([
-              { type: "separator" as const },
-              {
-                label: (
-                  <>
-                    <Eye className="mr-2 h-4 w-4" />
-                    {viewAs ? "Змінити перегляд" : "Дивитись як…"}
-                  </>
-                ),
-                onSelect: () => setViewAsOpen(true),
-              },
-            ])
-          : []),
-        { type: "separator" },
-        {
-          label: (
-            <>
-              <LogOut className="mr-2 h-4 w-4" />
-              Вийти
-            </>
-          ),
-          onSelect: handleLogout,
-          destructive: true,
-        },
-      ]}
+      items={menuItems}
     />
     <ViewAsDialog open={viewAsOpen} onOpenChange={setViewAsOpen} />
     </>

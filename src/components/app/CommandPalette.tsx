@@ -35,6 +35,7 @@ import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { supabase } from "@/lib/supabaseClient";
 import { listCustomersBySearch, listLeadsBySearch, listQuotes } from "@/lib/toshoApi";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { DEV_LABELS, DEV_PATHS, resolveDevSurface } from "@/lib/devSection";
 import { listWorkspaceMembersForDisplay, type WorkspaceMemberDisplayRow } from "@/lib/workspaceMemberDirectory";
 import { InlineLoading } from "@/components/app/loading-primitives";
 
@@ -150,7 +151,10 @@ function getKindBadgeClass(kindLabel: string) {
 
 function getPathSummary(path: string) {
   if (path.startsWith("/settings/members")) return "Налаштування доступів і ролей команди";
-  if (path.startsWith("/admin/observability")) return "Системний контроль, storage і технічні метрики";
+  if (path.startsWith("/integrations")) return "Зовнішні сервіси, підключені до CRM";
+  if (path.startsWith("/dev/health")) return "Системний контроль, storage і технічні метрики";
+  if (path.startsWith("/dev/releases")) return "Обсяг зробленої роботи по днях";
+  if (path.startsWith("/dev")) return "Черга доробок CRM";
   if (path.startsWith("/design/")) return "Конкретна дизайн-задача";
   if (path === "/design") return "Розділ дизайн-задач";
   if (path.startsWith("/orders/estimates/")) return "Конкретний прорахунок";
@@ -175,11 +179,17 @@ function getRoutePresentation(path: string) {
       kindLabel: "Налаштування",
     };
   }
-  if (path.startsWith("/admin/observability")) {
+  if (path.startsWith("/dev")) {
+    const tab = resolveDevSurface(path);
     return {
-      label: "Контроль системи",
-      description: "Observability, storage, orphan files і технічні метрики",
-      kindLabel: "Адмін",
+      label: `Dev · ${DEV_LABELS[tab].toLowerCase()}`,
+      description:
+        tab === "health"
+          ? "Observability, storage, orphan files і технічні метрики"
+          : tab === "releases"
+            ? "Скільки роботи зроблено — по днях і за період"
+            : "Черга доробок CRM: запити, ідеї, рішення",
+      kindLabel: "Dev",
     };
   }
   if (path.startsWith("/design/")) {
@@ -443,12 +453,30 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       ...(permissions.isSuperAdmin || permissions.isAdmin
         ? [
             {
-              key: "route-admin-observability",
-              label: "Контроль системи",
+              key: "route-dev-backlog",
+              label: "Dev · беклог",
+              description: "Черга доробок CRM: запити, ідеї, рішення",
+              kindLabel: "Dev",
+              keywords: ["dev", "беклог", "backlog", "запити", "доробки", "req", "ідеї"],
+              to: DEV_PATHS.backlog,
+              icon: Search,
+            },
+            {
+              key: "route-dev-releases",
+              label: "Dev · релізи",
+              description: "Скільки роботи зроблено — по днях і за період",
+              kindLabel: "Dev",
+              keywords: ["релізи", "releases", "деплой", "changelog", "історія змін"],
+              to: DEV_PATHS.releases,
+              icon: Search,
+            },
+            {
+              key: "route-dev-health",
+              label: "Dev · здоровʼя",
               description: "Observability, storage і технічні метрики",
-              kindLabel: "Адмін",
-              keywords: ["observability", "admin", "контроль", "панель", "адмін", "метрики", "storage", "orphan files"],
-              to: "/admin/observability",
+              kindLabel: "Dev",
+              keywords: ["observability", "здоровʼя", "контроль", "панель", "адмін", "метрики", "storage", "orphan files"],
+              to: DEV_PATHS.health,
               icon: Search,
             },
           ]

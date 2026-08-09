@@ -248,9 +248,12 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/activity", scope: "page", group: "account", test: (value) => value.startsWith("/activity") },
     { pattern: "/profile", scope: "page", group: "account", test: (value) => value === "/profile" },
     { pattern: "/settings/members", scope: "page", group: "account", test: (value) => value.startsWith("/settings/members") },
-    { pattern: "/settings/nova-poshta", scope: "page", group: "account", test: (value) => value.startsWith("/settings/nova-poshta") },
+    { pattern: "/integrations", scope: "page", group: "account", test: (value) => value.startsWith("/integrations") },
     { pattern: "/admin", scope: "page", group: "admin", test: (value) => value === "/admin" },
     { pattern: "/admin/observability", scope: "page", group: "admin", test: (value) => value.startsWith("/admin/observability") },
+    { pattern: "/dev/health", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/health") },
+    { pattern: "/dev/releases", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/releases") },
+    { pattern: "/dev/backlog", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/backlog") },
     { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
     { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
     { pattern: "/orders/estimates/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/estimates\/[^/]+$/.test(value) },
@@ -1042,8 +1045,11 @@ function AppRoutes() {
             </ModuleRouteGate>
           }
         />
+        {/* «Інтеграції» — окремий розділ під зовнішні сервіси. Поки всередині
+            самі налаштування Нової Пошти; сторінка-список із картками
+            («Нова Пошта — підключено», «Вчасно», «Dropbox») у беклозі. */}
         <Route
-          path="settings/nova-poshta"
+          path="integrations"
           element={
             <ModuleRouteGate moduleKey="nova_poshta">
               <RouteSuspense shell>
@@ -1052,6 +1058,8 @@ function AppRoutes() {
             </ModuleRouteGate>
           }
         />
+        {/* Стара адреса лишається робочою: на неї є закладки. */}
+        <Route path="settings/nova-poshta" element={<Navigate to="/integrations" replace />} />
         <Route
           path="profile"
           element={
@@ -1060,18 +1068,10 @@ function AppRoutes() {
             </RouteSuspense>
           }
         />
-        {/* Без ModuleRouteGate: сторінка доступна всім, а її вміст уже
-            відфільтрований visibleFeatures за доступами людини. */}
-        <Route
-          path="features"
-          element={
-            <RouteSuspense shell>
-              <FeaturesPage />
-            </RouteSuspense>
-          }
-        />
-        {/* Стрічка змін. Гейта немає: анонси звужуються за module_key
-            всередині сторінки, як і каталог. */}
+        {/* Стрічка змін і каталог можливостей — вкладки однієї сторінки: це
+            одна сутність, різниця лише в тому, чи це нове. Гейта немає ні там,
+            ні там: і анонси, і можливості звужуються за доступами людини
+            всередині самих сторінок. */}
         <Route
           path="whats-new"
           element={
@@ -1080,29 +1080,48 @@ function AppRoutes() {
             </RouteSuspense>
           }
         />
-        {/* Релізи. Гейт власник/SEO всередині сторінки — він лише дублює
-            політику RLS, база й так не віддасть таблицю решті команди. */}
         <Route
-          path="releases"
+          path="whats-new/features"
           element={
             <RouteSuspense shell>
-              <ReleasesPage />
+              <FeaturesPage />
             </RouteSuspense>
           }
         />
-        {/* Запити на доробку. Без ModuleRouteGate навмисно: ключ модуля для
-            приватного розділу — пастка (незаписаний ключ вважається
-            дозволеним), тож гейт власник/SEO живе в самій сторінці й у RLS. */}
+        {/* Стара адреса: на неї ведуть плашка в сайдбарі й закладки. */}
+        <Route path="features" element={<Navigate to="/whats-new/features" replace />} />
+        {/* Розділ «Dev»: беклог доробок, релізи, здоровʼя системи.
+            Три поверхні, які раніше жили в трьох різних місцях (сайдбар і два
+            рядки меню акаунта), зведені в одну групу меню — сценарій у них один.
+
+            ModuleRouteGate тут доречний, бо ключ `dev` позначений у реєстрі як
+            `restrictedTo`: для таких модулів hasModuleAccess вимагає ЯВНОГО
+            true, тож старий JSON без цього ключа розділ не відкриває. Саме
+            через зворотне правило («незаписаний ключ = дозволено») запити
+            досі гейтились повз реєстр, вручну. */}
+        <Route path="dev" element={<Navigate to="/dev/backlog" replace />} />
         <Route
-          path="dev-requests"
+          path="dev/backlog"
           element={
-            <RouteSuspense shell>
-              <DevRequestsPage />
-            </RouteSuspense>
+            <ModuleRouteGate moduleKey="dev">
+              <RouteSuspense shell>
+                <DevRequestsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
           }
         />
         <Route
-          path="admin/observability"
+          path="dev/releases"
+          element={
+            <ModuleRouteGate moduleKey="dev">
+              <RouteSuspense shell>
+                <ReleasesPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="dev/health"
           element={
             <PermissionGate
               allowed={permissions.isSuperAdmin || permissions.isAdmin}
@@ -1116,6 +1135,12 @@ function AppRoutes() {
             </PermissionGate>
           }
         />
+
+        {/* Старі адреси. Не прибрані, а перетворені на редиректи: на них
+            тримаються закладки й href у вже розісланих сповіщеннях. */}
+        <Route path="releases" element={<Navigate to="/dev/releases" replace />} />
+        <Route path="dev-requests" element={<Navigate to="/dev/backlog" replace />} />
+        <Route path="admin/observability" element={<Navigate to="/dev/health" replace />} />
       </Route>
 
       {/* Default */}
