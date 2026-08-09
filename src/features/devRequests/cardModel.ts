@@ -1,6 +1,6 @@
 import { pluralUk } from "@/lib/lastSeen";
 import { moduleKeyLabel } from "@/lib/projectMap";
-import { CARD_PRIORITY_LABELS, type DevRequest } from "./types";
+import { ZONE_LABELS, type DevRequest } from "./types";
 
 /**
  * Чиста логіка картки на дошці запитів.
@@ -64,7 +64,7 @@ export function shouldRestoreMenuFocus(source: MenuOpenSource): boolean {
  */
 export type ChipWeight = "quiet" | "normal" | "loud";
 
-export type CardMetaKey = "priority" | "module" | "author" | "asked" | "private";
+export type CardMetaKey = "zone" | "theme" | "module" | "author" | "asked" | "private";
 
 export type CardMeta = {
   key: CardMetaKey;
@@ -84,26 +84,38 @@ export type CardMeta = {
 export const MODULE_UNSET_LABEL = "напрямок не визначено";
 
 /**
- * Нижній рядок картки: пріоритет, напрямок, автор, «просили N», «закрита».
+ * Нижній рядок картки: тема, зона, напрямок, автор, «просили N», «закрита».
  *
- * Тип запиту сюди НЕ входить — він піднятий у верхній рядок, словом і тоном
- * (див. KIND_TONE/KIND_ICONS). Порядок сталий: спершу те, що змінює чергу
- * (пріоритет), потім те, що каже «куди» (напрямок), і аж потім «від кого».
+ * Ані типу, ані пріоритету тут немає — обидва підняті у верхній рядок: тип
+ * словом і тоном (KIND_TONE/KIND_ICONS), пріоритет стовпчиками (PriorityBars).
+ * Пріоритет пішов звідси 2026-08-09: чіп зі словом можна лише прочитати, а
+ * пріоритет сканують по колонці згори вниз, не читаючи.
  *
- * Пріоритет `high` голосний, `low` тихий, «звичайний» не підписується взагалі
- * — див. CARD_PRIORITY_LABELS. Підпис напрямку береться з реєстру модулів
- * через `moduleKeyLabel`, свого списку рядків тут немає.
+ * Порядок сталий і йде від загального до окремого: тема (яка це робота
+ * взагалі) → зона (що чіпаємо) → напрямок (де в CRM) → від кого → сигнали.
+ * Підпис напрямку береться з реєстру модулів через `moduleKeyLabel`, підпис
+ * зони — з ZONE_LABELS; своїх списків рядків тут немає.
  */
 export function buildCardMeta(request: DevRequest): CardMeta[] {
   const meta: CardMeta[] = [];
 
-  // Тільки два краї шкали. `normal` і непроставлений пріоритет — однаково
-  // порожній звук, і показувати їх нічим не краще за мовчання.
-  if (request.priority === "high" || request.priority === "low") {
+  // Тема — найширша мітка, тож стоїть першою: вона каже, що картка не сама по
+  // собі, а частина роботи, і решту рядка читають уже в цьому контексті.
+  if (request.theme) {
     meta.push({
-      key: "priority",
-      label: CARD_PRIORITY_LABELS[request.priority],
-      weight: request.priority === "high" ? "loud" : "quiet",
+      key: "theme",
+      label: request.theme,
+      weight: "normal",
+      hint: "Тема: інші картки цієї ж роботи",
+    });
+  }
+
+  if (request.zone) {
+    meta.push({
+      key: "zone",
+      label: ZONE_LABELS[request.zone],
+      weight: "normal",
+      hint: "Що чіпає ця робота",
     });
   }
 

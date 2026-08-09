@@ -10,10 +10,11 @@ import {
   type RequestKind,
   type RequestPriority,
   type RequestStatus,
+  type RequestZone,
 } from "./types";
 
 const SELECT_COLUMNS =
-  "id,number,team_id,title,body,kind,status,module_key,priority,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
+  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
 
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */
@@ -106,6 +107,10 @@ export type CreateDevRequestInput = {
   /** Напрямок CRM: ключ модуля або null, якщо не визначили. */
   moduleKey: string | null;
   priority: RequestPriority | null;
+  /** Що чіпає робота. null — ще не розбирали. */
+  zone: RequestZone | null;
+  /** Мітка-тема для групування карток однієї роботи. */
+  theme: string | null;
   /** Напрямок і пріоритет так і лишились такими, як їх поставив розбір. */
   autoClassified: boolean;
   isPrivate: boolean;
@@ -153,6 +158,8 @@ export function useCreateDevRequest() {
           // реєстрі немає, пишемо як «немає напрямку».
           module_key: isKnownModuleKey(input.moduleKey) ? input.moduleKey : null,
           priority: input.priority,
+          zone: input.zone,
+          theme: input.theme,
           auto_classified: input.autoClassified,
           is_private: input.isPrivate,
           author_user_id: input.authorUserId,
@@ -199,6 +206,8 @@ export type UpdateDevRequestInput = {
   kind: RequestKind;
   moduleKey: string | null;
   priority: RequestPriority | null;
+  zone: RequestZone | null;
+  theme: string | null;
   isPrivate: boolean;
 };
 
@@ -226,6 +235,8 @@ export function useUpdateDevRequest(teamId: string | null) {
           // констрейнта на module_key в базі немає, реєстр живе в коді.
           module_key: isKnownModuleKey(input.moduleKey) ? input.moduleKey : null,
           priority: input.priority,
+          zone: input.zone,
+          theme: input.theme,
           auto_classified: false,
           is_private: input.isPrivate,
         })

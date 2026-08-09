@@ -163,6 +163,7 @@ export const handler = async (event: HttpEvent) => {
       status: "triage",
       module_key: draft.moduleKey,
       priority: draft.priority,
+      zone: draft.zone,
       auto_classified: true,
       // Приватність — рішення, яке ухвалюють свідомо на дошці. З чату картка
       // завжди командна: людина в Telegram не бачить, кому вона буде видна.
@@ -203,7 +204,7 @@ export const handler = async (event: HttpEvent) => {
     {
       parseMode: "HTML",
       replyMarkup: {
-        inline_keyboard: [[{ text: "Відкрити в CRM", url: buildAppUrl("/dev-requests") }]],
+        inline_keyboard: [[{ text: "Відкрити в CRM", url: buildAppUrl("/dev/backlog") }]],
       },
     }
   );

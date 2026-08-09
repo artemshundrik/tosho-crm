@@ -1,17 +1,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import {
-  ChevronsUp,
-  FileText,
-  History,
-  Inbox,
-  PencilLine,
-  Sparkles,
-  Tags,
-  Trash2,
-} from "lucide-react";
+import { FileText, History, Inbox, Layers, PencilLine, Sparkles, Tags, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -21,24 +11,23 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import { moduleKeyLabel } from "@/lib/projectMap";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { MODULE_UNSET_LABEL, resolveAuthor } from "./cardModel";
 import { auditActionLabel, auditChangeLines } from "./history";
 import { useDevRequestHistory } from "./queries";
-import { KIND_ICONS, KIND_LABELS, KIND_TONE, PRIORITY_LABELS, type DevRequest } from "./types";
-
-/**
- * Подій activity_log у запитів немає — історію полів пише аудит-тригер, і вона
- * показана окремою секцією нижче. Порожній список означає «стрічка лише з
- * повідомлень», і панель тоді в activity_log не ходить взагалі.
- *
- * Стала на рівні модуля, а не літерал у JSX: інакше кожен рендер створював би
- * новий масив і панель перезапитувала б стрічку.
- */
-const NO_THREAD_EVENTS: string[] = [];
+import { PriorityBars } from "./PriorityBars";
+import {
+  KIND_ICONS,
+  KIND_LABELS,
+  KIND_TONE,
+  PRIORITY_LABELS,
+  ZONE_ICONS,
+  ZONE_LABELS,
+  ZONE_TONE,
+  type DevRequest,
+} from "./types";
 
 function formatWhen(iso: string): string {
   if (!iso) return "—";
@@ -141,6 +130,7 @@ export function DevRequestDetailsSheet({
 
   const author = shown ? resolveAuthor(shown) : null;
   const KindIcon = shown ? KIND_ICONS[shown.kind] : null;
+  const ZoneIcon = shown?.zone ? ZONE_ICONS[shown.zone] : Tags;
   const moduleLabel = shown ? moduleKeyLabel(shown.moduleKey) : null;
 
   return (
@@ -154,7 +144,7 @@ export function DevRequestDetailsSheet({
           немає. Без цього автозахист «незбережених змін» рахував би зміною
           будь-яке натискання (він ловить усі кнопки) — і питав би «закрити без
           збереження?» після кожного перегляду. */}
-      <SheetContent className="w-full gap-0 p-0 sm:max-w-[560px]" isDirty={false}>
+      <SheetContent className="w-full gap-0 p-0 sm:max-w-[560px]" isDirty={false} dismissible={true}>
         {shown ? (
           <>
             <div className="shrink-0 border-b bg-muted/20 px-5 py-4 pr-14">
@@ -215,22 +205,36 @@ export function DevRequestDetailsSheet({
                       <span className="text-muted-foreground">{MODULE_UNSET_LABEL}</span>
                     )}
                   </DetailRow>
-                  {/* На картці «звичайний» не підписується взагалі, а тут —
-                      підписується: це відповідь на пряме питання «який
-                      пріоритет», а не мітка в ряду, який сканують очима. */}
-                  <DetailRow label="Пріоритет">
-                    {shown.priority === "high" ? (
-                      <Badge tone="danger" className="h-5 gap-1 px-2 text-2xs">
-                        <ChevronsUp className="h-3 w-3" />
-                        {PRIORITY_LABELS.high}
-                      </Badge>
-                    ) : shown.priority ? (
-                      <span className={shown.priority === "normal" ? "text-muted-foreground" : ""}>
-                        {PRIORITY_LABELS[shown.priority]}
+                  {/* На картці зона — коротка мітка, тут вона підписана
+                      словом: дровер відповідає на пряме питання «що чіпає ця
+                      робота», а не сканується очима по колонці. */}
+                  <DetailRow label="Зона роботи">
+                    {shown.zone ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <ZoneIcon className={cn("h-3.5 w-3.5", toneTextClass[ZONE_TONE[shown.zone]])} />
+                        {ZONE_LABELS[shown.zone]}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">не проставлено</span>
+                      <span className="text-muted-foreground">не визначено</span>
                     )}
+                  </DetailRow>
+                  {shown.theme ? (
+                    <DetailRow label="Тема">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                        {shown.theme}
+                      </span>
+                    </DetailRow>
+                  ) : null}
+                  {/* Пріоритет тут словом, а на картці — стовпчиками: там його
+                      сканують по колонці не читаючи, тут читають прицільно. */}
+                  <DetailRow label="Пріоритет">
+                    <span className="inline-flex items-center gap-2">
+                      <PriorityBars priority={shown.priority} />
+                      <span className={shown.priority ? undefined : "text-muted-foreground"}>
+                        {shown.priority ? PRIORITY_LABELS[shown.priority] : "не проставлено"}
+                      </span>
+                    </span>
                   </DetailRow>
                 </DetailCard>
 
@@ -298,18 +302,13 @@ export function DevRequestDetailsSheet({
                 </Section>
               ) : null}
 
-              {/* Обговорення останнім: свій заголовок панель малює сама, тож
-                  секцію тут не обгортаємо. Висота задається зовні — сама
-                  панель тягнеться під батька (h-full flex-1), а всередині
-                  прокручується стрічка. */}
-              <div className="flex h-[420px] min-h-0 flex-col">
-                <TaskThreadRail
-                  threadKey={`dev-request:${shown.id}`}
-                  eventActions={NO_THREAD_EVENTS}
-                  quoteId={null}
-                  teamId={shown.teamId}
-                />
-              </div>
+              {/* Обговорення тут БУЛО і прибрано 2026-08-09.
+                  Панель займала 420px висоти дровера — більше за решту вмісту
+                  разом, — а розмова про доробку однаково йде там, де про неї
+                  згадали. Нитки `dev-request:*` у базі не чіпалися: якщо
+                  панель знадобиться назад, це один <TaskThreadRail/> і все
+                  написане повернеться. Для дизайн-задач і прорахунків чат
+                  лишається без змін. */}
             </SheetBody>
           </>
         ) : null}

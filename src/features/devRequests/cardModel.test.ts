@@ -23,6 +23,8 @@ function request(overrides: Partial<DevRequest> = {}): DevRequest {
     status: "triage",
     moduleKey: null,
     priority: null,
+    zone: null,
+    theme: null,
     autoClassified: false,
     isPrivate: false,
     authorUserId: null,
@@ -54,17 +56,29 @@ describe("нижній рядок картки", () => {
     expect(keys(request({ priority: null }))).not.toContain("priority");
   });
 
-  it("підписуються лише два краї шкали: «терміново» голосно, «не горить» тихо", () => {
-    expect(chip(request({ priority: "high" }), "priority")).toEqual({
-      key: "priority",
-      label: "Терміново",
-      weight: "loud",
+  /**
+   * Пріоритет пішов із нижнього ряду 2026-08-09 — його малює PriorityBars у
+   * верхньому. Тест лишається як сторож: чіп зі словом можна лише прочитати, а
+   * пріоритет сканують по колонці не читаючи, і повернути мітку назад «поки
+   * правив верстку» не має вийти непомітно.
+   */
+  it("пріоритет у нижній ряд не потрапляє — він живе стовпчиками у верхньому", () => {
+    expect(keys(request({ priority: "high" }))).not.toContain("priority");
+    expect(keys(request({ priority: "low" }))).not.toContain("priority");
+  });
+
+  it("зона підписана словом із реєстру", () => {
+    expect(chip(request({ zone: "access" }), "zone")).toEqual({
+      key: "zone",
+      label: "доступи",
+      weight: "normal",
+      hint: "Що чіпає ця робота",
     });
-    expect(chip(request({ priority: "low" }), "priority")).toEqual({
-      key: "priority",
-      label: "Не горить",
-      weight: "quiet",
-    });
+  });
+
+  it("тема показується як є, а порожньої немає взагалі", () => {
+    expect(chip(request({ theme: "навігація" }), "theme")?.label).toBe("навігація");
+    expect(keys(request({ theme: null }))).not.toContain("theme");
   });
 
   it("тип запиту в нижній ряд не потрапляє — він живе у верхньому рядку", () => {
@@ -106,24 +120,26 @@ describe("нижній рядок картки", () => {
     expect(keys(request({ askedByCount: 1 }))).not.toContain("asked");
   });
 
-  it("порядок сталий: пріоритет → напрямок → автор → просили → закрита", () => {
+  it("порядок сталий: тема → зона → напрямок → автор → просили → закрита", () => {
     expect(
       keys(
         request({
           priority: "high",
+          theme: "навігація",
+          zone: "polish",
           moduleKey: "design",
           displayName: "Олена Борщ",
           askedByCount: 2,
           isPrivate: true,
         })
       )
-    ).toEqual(["priority", "module", "author", "asked", "private"]);
+    ).toEqual(["theme", "zone", "module", "author", "asked", "private"]);
   });
 });
 
 /**
- * Підсвітка картки й слово «Терміново» вмикаються з однієї умови — інакше з
- * часом на дошці зʼявиться червона картка без пояснення.
+ * Підсвітка картки й повна шкала пріоритету вмикаються з однієї умови —
+ * інакше з часом на дошці зʼявиться червона картка без пояснення.
  */
 describe("підсвітка термінової картки", () => {
   it("горить лише на «терміново»", () => {
@@ -133,11 +149,12 @@ describe("підсвітка термінової картки", () => {
     expect(isUrgentCard(request({ priority: null }))).toBe(false);
   });
 
-  it("умова та сама, що й у гучної мітки", () => {
-    const urgent = request({ priority: "high" });
-    expect(isUrgentCard(urgent)).toBe(
-      buildCardMeta(urgent).some((item) => item.weight === "loud")
-    );
+  it("умова та сама, що й у трьох залитих стовпчиків", () => {
+    // Мітка «Терміново» з нижнього ряду пішла, тож звіряємось із джерелом
+    // самої шкали: підсвітка вмикається рівно на priority === "high".
+    expect(isUrgentCard(request({ priority: "high" }))).toBe(true);
+    expect(isUrgentCard(request({ priority: "normal" }))).toBe(false);
+    expect(isUrgentCard(request({ priority: null }))).toBe(false);
   });
 });
 

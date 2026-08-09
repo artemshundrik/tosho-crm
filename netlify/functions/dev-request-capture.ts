@@ -183,6 +183,7 @@ export const handler = async (event: HttpEvent) => {
       status: "triage",
       module_key: draft.moduleKey,
       priority: draft.priority,
+      zone: draft.zone,
       auto_classified: true,
       // Приватність — рішення, яке ухвалюють свідомо на дошці.
       is_private: false,

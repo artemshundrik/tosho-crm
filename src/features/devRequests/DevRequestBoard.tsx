@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { ChevronsUp, Lightbulb, Lock, Sparkles, Users } from "lucide-react";
+import { Layers, Lightbulb, Lock, Users } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
@@ -8,7 +8,7 @@ import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
 import { Badge } from "@/components/ui/badge";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { toneTextClass } from "@/lib/statusTones";
+import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
 import {
@@ -19,11 +19,14 @@ import {
   type CardMetaKey,
   type ChipWeight,
 } from "./cardModel";
+import { PriorityBars } from "./PriorityBars";
 import {
   BOARD_COLUMNS,
   KIND_ICONS,
   KIND_LABELS,
   KIND_TONE,
+  ZONE_ICONS,
+  ZONE_TONE,
   type DevRequest,
   type RequestStatus,
 } from "./types";
@@ -59,6 +62,7 @@ function chipClassName(weight: ChipWeight): string {
 const META_ICONS: Partial<Record<CardMetaKey, ComponentType<{ className?: string }>>> = {
   asked: Users,
   private: Lock,
+  theme: Layers,
 };
 
 export function DevRequestBoard({
@@ -219,13 +223,26 @@ export function DevRequestBoard({
                     draggingId === request.id && "opacity-50"
                   )}
                 >
-                  {/* ── Тип словом, номер і меню ── */}
+                  {/* ── Пріоритет, тип словом, номер і меню ── */}
                   <div className="flex items-center gap-2">
+                    <PriorityBars priority={request.priority} />
                     <span
                       className={cn(
                         "inline-flex shrink-0 items-center gap-1 text-2xs font-semibold",
-                        toneTextClass[KIND_TONE[request.kind]]
+                        toneTextClass[KIND_TONE[request.kind]],
+                        // Пунктир під тим, що припустив розбір, — замість
+                        // окремого рядка «✨ розбір» після автора. Той рядок
+                        // читався як ще одне метаполе картки, хоча насправді
+                        // це примітка про якість решти полів; і він не казав,
+                        // ЩО саме припустили. Мова коректорської правки:
+                        // підкреслено рівно те, що варто звірити.
+                        request.autoClassified && "border-b border-dashed border-current pb-px"
                       )}
+                      title={
+                        request.autoClassified
+                          ? "Тип поставив розбір — людина ще не звіряла"
+                          : undefined
+                      }
                     >
                       <KindIcon className="h-3.5 w-3.5" />
                       {KIND_LABELS[request.kind]}
@@ -267,17 +284,28 @@ export function DevRequestBoard({
                   {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     {meta.map((item) => {
-                      const MetaIcon = META_ICONS[item.key];
-                      return item.weight === "loud" ? (
-                        <Badge key={item.key} tone="danger" className="h-5 gap-1 px-2 text-2xs">
-                          <ChevronsUp className="h-3 w-3" />
-                          {item.label}
-                        </Badge>
-                      ) : (
+                      // Зона має власну іконку за значенням, решта — сталу.
+                      const MetaIcon =
+                        item.key === "zone" && request.zone
+                          ? ZONE_ICONS[request.zone]
+                          : META_ICONS[item.key];
+                      const isZone = item.key === "zone" && request.zone;
+                      return (
                         <Badge
                           key={item.key}
                           variant="outline"
-                          className={cn("gap-1", chipClassName(item.weight))}
+                          className={cn(
+                            "gap-1",
+                            chipClassName(item.weight),
+                            // Зона — заливена мітка в тоні зони, решта чіпів
+                            // лишається контурною: так мітка не читається як
+                            // другий тип, навіть коли тони збігаються.
+                            isZone && request.zone && toneSubtleClass[ZONE_TONE[request.zone]],
+                            isZone && "border-transparent",
+                            // Пунктир і тут — розбір міг припустити зону так
+                            // само, як і тип.
+                            isZone && request.autoClassified && "border border-dashed border-current"
+                          )}
                           title={item.hint}
                         >
                           {MetaIcon ? <MetaIcon className="h-3 w-3" /> : null}
@@ -285,18 +313,6 @@ export function DevRequestBoard({
                         </Badge>
                       );
                     })}
-                    {/* Підказка, а не помилка: класифікацію поставив розбір, і
-                        її ще ніхто не звіряв. Без плашки й без кольору — це
-                        привід глянути, а не привід хвилюватись. */}
-                    {request.autoClassified ? (
-                      <span
-                        className="inline-flex items-center gap-1 text-2xs text-muted-foreground/70"
-                        title="Тип, напрямок і пріоритет проставив розбір — людина ще не підтверджувала"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        розбір
-                      </span>
-                    ) : null}
                   </div>
                 </KanbanCard>
               );

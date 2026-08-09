@@ -6,6 +6,7 @@ import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
 import { MODULE_UNSET_LABEL, formatIdleAge } from "./cardModel";
+import { PriorityBars } from "./PriorityBars";
 import { KIND_ICONS, KIND_LABELS, KIND_TONE, type DevRequest, type RequestStatus } from "./types";
 
 type DevRequestListProps = {
@@ -91,6 +92,10 @@ export function DevRequestList({
               <p className="min-w-0 flex-1 truncate text-[13px] font-medium" title={request.title}>
                 {request.title}
               </p>
+
+              {/* Та сама шкала, що на дошці: списки «Ідеї» й «Не робимо» — це
+                  ті самі картки, і пріоритет у них має читатись однаково. */}
+              <PriorityBars priority={request.priority} className="hidden sm:inline-flex" />
 
               <span
                 className={cn(

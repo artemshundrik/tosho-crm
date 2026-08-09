@@ -23,6 +23,17 @@ export type DevRequestKind = (typeof DRAFT_KINDS)[number];
 export const DRAFT_PRIORITIES = ["low", "normal", "high"] as const;
 export type DevRequestPriority = (typeof DRAFT_PRIORITIES)[number];
 
+/**
+ * Зона роботи — друга вісь картки, поруч із `kind`.
+ *
+ * Дублікат переліку з src/features/devRequests/types.ts, і це свідомо: функції
+ * не імпортують із src (окремий бандл), а перелік із пʼяти значень міняється
+ * раз на рік. Розійдеться — модель поверне значення, якого фронт не знає, і
+ * asZone обнулить його; картка лишиться без зони, а не з вигаданою.
+ */
+export const DRAFT_ZONES = ["polish", "speed", "data", "access", "logic"] as const;
+export type DevRequestZone = (typeof DRAFT_ZONES)[number];
+
 export type DevRequestDraft = {
   title: string;
   body: string;
@@ -31,6 +42,8 @@ export type DevRequestDraft = {
   /** Ключ напрямку з реєстру модулів. Вигаданий моделлю — обнуляється. */
   moduleKey: string | null;
   priority: DevRequestPriority;
+  /** Що чіпає робота. null — модель не була впевнена. */
+  zone: DevRequestZone | null;
   /** «Схоже, це вже працює: …» — назва наявної можливості й де її шукати. */
   existingFeature: string | null;
 };
@@ -65,6 +78,7 @@ const SYSTEM_PROMPT = [
   '  "duplicateOf": "label наявної картки або null",',
   '  "moduleKey": "ключ напрямку з карти CRM нижче або null",',
   '  "priority": "low | normal | high",',
+  '  "zone": "polish | speed | data | access | logic або null",',
   '  "existingFeature": "коротко: назва наявної можливості й де її шукати, або null"',
   "}",
   "",
@@ -83,6 +97,7 @@ const SYSTEM_PROMPT = [
   '- "overview" — це КОНКРЕТНА головна сторінка зі зведенням, а не «загальне» й не «не знаю». Ніколи не став його як запасний варіант. Якщо жоден напрямок не підходить — null.',
   "- Сама дошка запитів на доробку (/dev-requests) у переліку напрямків відсутня навмисно. Запит про неї саму — це null, а не найближчий за змістом модуль.",
   '- priority: "high" — щось зламано й заважає працювати прямо зараз; "normal" — звичайна доробка; "low" — косметика й «колись було б добре». За замовчуванням "normal".',
+  '- zone — ЩО ЧІПАЄ робота, окремо від kind (той каже, що сталось). "polish" — вигляд: відступи, кольори, вирівнювання, іконка не та; "speed" — все працює, але повільно; "data" — разова правка записів у базі, інтерфейс не змінюється; "access" — хто що бачить і кому що можна; "logic" — поведінка й розрахунки. Не впевнений — null.',
   "- existingFeature заповнюй, лише якщо в списку «що CRM уже вміє» справді є те, що робить рівно це. Схожа назва — не привід. Список неповний, тож відсутність у ньому нічого не доводить: сумніваєшся — null.",
 ].join("\n");
 
@@ -96,7 +111,16 @@ const DEVELOPER_PROMPT = `${SYSTEM_PROMPT}\n\nКАРТА CRM\n${buildProjectMap(
 const DRAFT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["title", "body", "kind", "duplicateOf", "moduleKey", "priority", "existingFeature"],
+  required: [
+    "title",
+    "body",
+    "kind",
+    "duplicateOf",
+    "moduleKey",
+    "priority",
+    "zone",
+    "existingFeature",
+  ],
   properties: {
     title: { type: "string" },
     body: { type: "string" },
@@ -110,6 +134,7 @@ const DRAFT_SCHEMA = {
     // врятує від «схожого, але не того» ключа краще за реєстр.
     moduleKey: { type: ["string", "null"] },
     priority: { type: "string", enum: [...DRAFT_PRIORITIES] },
+    zone: { type: ["string", "null"], enum: [...DRAFT_ZONES, null] },
     existingFeature: { type: ["string", "null"] },
   },
 } as const;
@@ -155,6 +180,13 @@ function asPriority(value: unknown): DevRequestPriority {
     : "normal";
 }
 
+/** Вигадана зона обнуляється — так само, як вигаданий напрямок. */
+function asZone(value: unknown): DevRequestZone | null {
+  return typeof value === "string" && (DRAFT_ZONES as readonly string[]).includes(value)
+    ? (value as DevRequestZone)
+    : null;
+}
+
 /**
  * Спільна нормалізація — і для розібраної відповіді, і для аварійного варіанта.
  *
@@ -176,6 +208,7 @@ export function normalizeDraft(draft: Partial<DevRequestDraft>, rawText: string)
     // краще: людина побачить пусте поле й обере сама.
     moduleKey: isKnownModuleKey(draft.moduleKey) ? draft.moduleKey : null,
     priority: asPriority(draft.priority),
+    zone: asZone(draft.zone),
     existingFeature:
       normalizeText(draft.existingFeature).slice(0, MAX_EXISTING_FEATURE_CHARS) || null,
   };
@@ -192,6 +225,7 @@ export function fallbackDraft(rawText: string): DevRequestDraft {
       // Розбору не було — вигадувати напрямок і підказку нема з чого.
       moduleKey: null,
       priority: "normal",
+      zone: null,
       existingFeature: null,
     },
     rawText

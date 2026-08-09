@@ -31,8 +31,11 @@ import {
   PRIORITY_LABELS,
   REQUEST_KINDS,
   REQUEST_PRIORITIES,
+  REQUEST_ZONES,
+  ZONE_LABELS,
   type RequestKind,
   type RequestPriority,
+  type RequestZone,
 } from "./types";
 
 export type NewDevRequestInput = {
@@ -41,6 +44,9 @@ export type NewDevRequestInput = {
   kind: RequestKind;
   moduleKey: string | null;
   priority: RequestPriority;
+  zone: RequestZone | null;
+  /** Порожній рядок означає «теми немає» — нормалізується при збереженні. */
+  theme: string | null;
   /**
    * Напрямок і пріоритет лишились такими, як їх поставив розбір.
    *
@@ -62,6 +68,8 @@ export type EditableDevRequest = {
   kind: RequestKind;
   moduleKey: string | null;
   priority: RequestPriority | null;
+  zone: RequestZone | null;
+  theme: string | null;
   autoClassified: boolean;
   isPrivate: boolean;
 };
@@ -96,6 +104,7 @@ type DraftResponse = {
 
 /** Значення «немає напрямку»: Radix Select не приймає порожній рядок як value. */
 const NO_MODULE = "__none__";
+const NO_ZONE = "__none__";
 
 function asKind(value: unknown): RequestKind | null {
   return typeof value === "string" && (REQUEST_KINDS as readonly string[]).includes(value)
@@ -143,6 +152,8 @@ export function NewDevRequestDialog({
   const [kind, setKind] = useState<RequestKind>("friction");
   const [moduleKey, setModuleKey] = useState<string | null>(null);
   const [priority, setPriority] = useState<RequestPriority>("normal");
+  const [zone, setZone] = useState<RequestZone | null>(null);
+  const [theme, setTheme] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [duplicateOf, setDuplicateOf] = useState<string | null>(null);
@@ -266,6 +277,8 @@ export function NewDevRequestDialog({
     setKind(request?.kind ?? "friction");
     setModuleKey(request?.moduleKey ?? null);
     setPriority(request?.priority ?? "normal");
+    setZone(request?.zone ?? null);
+    setTheme(request?.theme ?? "");
     setIsPrivate(request?.isPrivate ?? false);
     setDuplicateOf(null);
     setExistingFeature(null);
@@ -298,6 +311,9 @@ export function NewDevRequestDialog({
       kind,
       moduleKey,
       priority,
+      zone,
+      // Тема з пробілами й тема порожня — те саме «теми немає».
+      theme: theme.trim() || null,
       autoClassified,
       isPrivate,
     });
@@ -478,6 +494,47 @@ export function NewDevRequestDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          {/* Друга вісь картки. Тип угорі каже, ЩО СТАЛОСЬ, і його знає той,
+              хто просить; зона каже, ЩО ЧІПАЄМО, і видно її лише після
+              розбору. Тема групує картки однієї роботи — замість дерева
+              підзадач, у якому статуси батька й дітей починають конфліктувати. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldId}-zone`}>Зона роботи</Label>
+              <Select
+                value={zone ?? NO_ZONE}
+                onValueChange={(value) => {
+                  classificationTouchedRef.current = true;
+                  setAutoClassified(false);
+                  setZone(value === NO_ZONE ? null : (value as RequestZone));
+                }}
+              >
+                <SelectTrigger id={`${fieldId}-zone`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_ZONE}>Не визначено</SelectItem>
+                  {REQUEST_ZONES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {ZONE_LABELS[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor={`${fieldId}-theme`}>Тема</Label>
+              <Input
+                id={`${fieldId}-theme`}
+                value={theme}
+                onChange={(event) => setTheme(event.target.value)}
+                placeholder="навігація"
+                maxLength={40}
+              />
             </div>
           </div>
 

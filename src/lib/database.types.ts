@@ -1453,6 +1453,7 @@ export type Database = {
           released_at: string | null
           status: string
           team_id: string
+          theme: string | null
           tg_chat_id: number | null
           tg_message_id: number | null
           tg_user_id: number | null
@@ -1460,6 +1461,7 @@ export type Database = {
           title: string
           updated_at: string
           workspace_id: string | null
+          zone: string | null
         }
         Insert: {
           asked_by_count?: number
@@ -1480,6 +1482,7 @@ export type Database = {
           released_at?: string | null
           status?: string
           team_id: string
+          theme?: string | null
           tg_chat_id?: number | null
           tg_message_id?: number | null
           tg_user_id?: number | null
@@ -1487,6 +1490,7 @@ export type Database = {
           title: string
           updated_at?: string
           workspace_id?: string | null
+          zone?: string | null
         }
         Update: {
           asked_by_count?: number
@@ -1507,6 +1511,7 @@ export type Database = {
           released_at?: string | null
           status?: string
           team_id?: string
+          theme?: string | null
           tg_chat_id?: number | null
           tg_message_id?: number | null
           tg_user_id?: number | null
@@ -1514,6 +1519,7 @@ export type Database = {
           title?: string
           updated_at?: string
           workspace_id?: string | null
+          zone?: string | null
         }
         Relationships: []
       }

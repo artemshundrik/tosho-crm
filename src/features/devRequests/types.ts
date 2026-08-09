@@ -1,5 +1,19 @@
 import type { ComponentType } from "react";
-import { Bug, Hammer, Inbox, Info, ListTodo, PackageCheck, Plus, Rocket } from "lucide-react";
+import {
+  Bug,
+  Database,
+  Gauge,
+  Hammer,
+  Inbox,
+  Info,
+  KeyRound,
+  ListTodo,
+  PackageCheck,
+  Plus,
+  Rocket,
+  SwatchBook,
+  Workflow,
+} from "lucide-react";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
 import { isKnownModuleKey } from "@/lib/projectMap";
@@ -27,6 +41,18 @@ export type RequestKind = (typeof REQUEST_KINDS)[number];
 export const REQUEST_PRIORITIES = ["low", "normal", "high"] as const;
 export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
 
+/**
+ * Зона роботи — друга вісь картки, поруч із `kind`.
+ *
+ * `kind` каже, ЩО СТАЛОСЬ, і це знає той, хто просить. Зона каже, ЩО ЧІПАЄМО,
+ * і це видно лише після розбору. Дві осі, бо вони не є підвидами одна одної:
+ * «бухгалтер бачить собівартість» — це одночасно `bug` і робота з доступами,
+ * і жодне зі значень не можна викинути. Спроба скласти їх в один список типів
+ * ламається на першому ж такому запиті.
+ */
+export const REQUEST_ZONES = ["polish", "speed", "data", "access", "logic"] as const;
+export type RequestZone = (typeof REQUEST_ZONES)[number];
+
 export type DevRequest = {
   id: string;
   number: number;
@@ -40,6 +66,10 @@ export type DevRequest = {
   /** Напрямок CRM — ключ модуля з реєстру. Невідомий ключ читаємо як «немає». */
   moduleKey: string | null;
   priority: RequestPriority | null;
+  /** Що чіпаємо. Порожньо — картку ще не розбирали. */
+  zone: RequestZone | null;
+  /** Вільна мітка-тема: групує картки однієї роботи замість дерева підзадач. */
+  theme: string | null;
   /** Напрямок і пріоритет проставив розбір, а не людина. */
   autoClassified: boolean;
   isPrivate: boolean;
@@ -181,6 +211,47 @@ export const KIND_ICONS: Record<RequestKind, ComponentType<{ className?: string 
   feature: Plus,
 };
 
+/** Підписи зони. Малою літерою: на картці це мітка, а не заголовок. */
+export const ZONE_LABELS: Record<RequestZone, string> = {
+  polish: "вигляд",
+  speed: "швидкість",
+  data: "дані",
+  access: "доступи",
+  logic: "логіка",
+};
+
+/**
+ * Тон зони — з того самого реєстру тонів, що й `KIND_TONE`.
+ *
+ * Тони між двома осями подекуди збігаються (`access` і `bug` обидва danger), і
+ * це навмисно: тон каже про характер ризику, а не про вісь. Плутанини немає,
+ * бо форми різні — тип малюється словом з іконкою в колір тону, зона —
+ * заливеною міткою. `access` саме danger: помилка в доступах показує чужі
+ * гроші, і мітка має про це кричати незалежно від того, який у картки тип.
+ */
+export const ZONE_TONE: Record<RequestZone, Tone> = {
+  polish: "info",
+  speed: "success",
+  data: "neutral",
+  access: "danger",
+  logic: "accent",
+};
+
+/**
+ * Іконка зони.
+ *
+ * «Вигляд» — саме `SwatchBook` (зразки кольорів), а НЕ палітра: палітра вже
+ * стоїть на розділі «Дизайн» у сайдбарі, і та сама іконка означала б дві різні
+ * речі — дизайн-задачі для клієнтів і косметику в самій CRM.
+ */
+export const ZONE_ICONS: Record<RequestZone, ComponentType<{ className?: string }>> = {
+  polish: SwatchBook,
+  speed: Gauge,
+  data: Database,
+  access: KeyRound,
+  logic: Workflow,
+};
+
 /**
  * Підписи пріоритету у ФОРМІ. Тут «Звичайний» потрібен: у списку вибору має
  * бути видно всі три значення, зокрема й те, що стоїть за замовчуванням.
@@ -192,20 +263,15 @@ export const PRIORITY_LABELS: Record<RequestPriority, string> = {
 };
 
 /**
- * Підписи пріоритету НА КАРТЦІ. «Звичайного» тут немає навмисно.
+ * Підписів пріоритету НА КАРТЦІ більше немає — там стоїть PriorityBars.
  *
- * Мітка «Звичайний» — порожнє слово: вона стоїть на більшості карток, нічого
- * не розрізняє і з'їдає місце в ряду, який сканують очима. Підписуємо лише
- * два краї шкали — «Терміново» і «Не горить».
- *
- * Це саме ТИП, а не домовленість у коментарі: `Exclude<…, "normal">` не дасть
- * дописати «звичайний» назад, не переписавши сигнатуру, — а переписати її
- * випадково, «поки правив верстку», уже не вийде.
+ * Був `CARD_PRIORITY_LABELS` без «звичайного»: мітка-слово на більшості карток
+ * нічого не розрізняла й з'їдала місце в ряду, який сканують очима. Але поки
+ * шкала була словами, «звичайний» доводилось ховати — і картка без мітки
+ * означала водночас і його, і «пріоритет ще не проставили». Стовпчики
+ * показують усі три стани одним розміром, тож підписи потрібні лише у формі
+ * (PRIORITY_LABELS вище) і в тултипі.
  */
-export const CARD_PRIORITY_LABELS: Record<Exclude<RequestPriority, "normal">, string> = {
-  low: PRIORITY_LABELS.low,
-  high: PRIORITY_LABELS.high,
-};
 
 /**
  * Людський підпис напрямку. Рядки НЕ дублюються — вони з того самого реєстру
@@ -230,6 +296,8 @@ type DevRequestRow = {
   status: string;
   module_key: string | null;
   priority: string | null;
+  zone: string | null;
+  theme: string | null;
   auto_classified: boolean | null;
   is_private: boolean;
   author_user_id: string | null;
@@ -255,6 +323,17 @@ function asPriority(raw: string | null): RequestPriority | null {
     : null;
 }
 
+/** Констрейнта на zone в базі немає — перелік звіряється тут, як і module_key. */
+function asZone(raw: string | null): RequestZone | null {
+  return raw && (REQUEST_ZONES as readonly string[]).includes(raw) ? (raw as RequestZone) : null;
+}
+
+/** Порожній рядок у темі — це «теми немає», а не тема з назвою «». */
+function asTheme(raw: string | null): string | null {
+  const trimmed = (raw ?? "").trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /**
  * Констрейнта на module_key в базі немає — напрямок звіряється застосунком.
  * Ключ, якого в реєстрі вже (чи ще) немає, читаємо як «напрямку немає»: пустий
@@ -276,6 +355,8 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     status: asStatus(row.status),
     moduleKey: asModuleKey(row.module_key),
     priority: asPriority(row.priority),
+    zone: asZone(row.zone),
+    theme: asTheme(row.theme),
     autoClassified: row.auto_classified ?? false,
     isPrivate: row.is_private,
     authorUserId: row.author_user_id,
