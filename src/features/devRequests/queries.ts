@@ -24,14 +24,34 @@ export const devRequestKeys = {
 };
 
 /**
- * refetchOnMount: "always" — дошку рухають кілька людей і мутації розкидані,
- * тож staleTime тут дав би стару картину після повернення на вкладку.
+ * Дошка сама тримається свіжою — три різні шляхи, бо сценаріїв теж три.
+ *
+ * `refetchOnMount: "always"` — прихід на розділ. Глобальні дефолти в main.tsx
+ * стоять на `false` зі staleTime 60 с, і без цього перемикання видів показувало
+ * б кеш.
+ *
+ * `refetchOnWindowFocus` — ГОЛОВНИЙ шлях, і саме його бракувало. Картки сюди
+ * прилітають ззовні: з Telegram-бота, з ендпоінта захоплення, від СЕО з іншої
+ * машини. Пішов у бот, надиктував задачу, повернувся у вкладку — вона вже тут.
+ * Глобально ця опція вимкнена свідомо (важкі сторінки), тож вмикаємо точково.
+ *
+ * `refetchInterval` — для того, хто просто лишив дошку відкритою. Хвилина, і
+ * лише коли вкладка видима: молотити у фоні означало б тримати з'єднання
+ * заради екрана, на який ніхто не дивиться.
+ *
+ * Realtime тут навмисно НЕМАЄ. Він дав би секунди замість хвилини, але вимагає
+ * додати таблицю в публікацію — а на дошці є приватні картки, і потік змін,
+ * який обходить RLS, був би найгіршим зі способів їх показати. Двом людям
+ * хвилини вистачає.
  */
 export function useDevRequestBoard(teamId: string | null) {
   return useQuery({
     queryKey: devRequestKeys.board(teamId),
     enabled: Boolean(teamId),
     refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<DevRequest[]> => {
       const { data, error } = await supabase
         .schema("tosho")
