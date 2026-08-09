@@ -17,6 +17,13 @@ import {
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
+import {
+  BoardFilters,
+  EMPTY_BOARD_FILTERS,
+  hasActiveFilters,
+  matchesBoardFilters,
+  type BoardFilterState,
+} from "@/features/devRequests/BoardFilters";
 import { DevRequestDetailsSheet } from "@/features/devRequests/DevRequestDetailsSheet";
 import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import {
@@ -74,6 +81,7 @@ export default function DevRequestsPage() {
   const [selected, setSelected] = useState<DevRequest | null>(null);
   const kanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const [kanbanViewportHeight, setKanbanViewportHeight] = useState<number | null>(null);
+  const [filters, setFilters] = useState<BoardFilterState>(EMPTY_BOARD_FILTERS);
 
   const canSee =
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
@@ -134,23 +142,32 @@ export default function DevRequestsPage() {
   }, [view]);
 
   /**
-   * Пошук діє всередині відкритого вигляду, а не поверх усього одразу: набране
-   * в полі слово має звужувати те, що зараз на екрані, а не підмішувати в дошку
-   * картки з «Ідей».
+   * Картки поточного вигляду ДО фільтрів. Саме з них рахуються лічильники на
+   * чіпах: інакше «вигляд · 3» перетворювався б на «вигляд · 3» щойно фільтр
+   * увімкнули, і зрозуміти, скільки чого є насправді, стало б неможливо.
    */
-  const requests = useMemo(() => {
+  const inView = useMemo(() => {
     const all = board.data ?? [];
-    const inView = all.filter((request) =>
+    return all.filter((request) =>
       view === "board" ? request.status !== "someday" && request.status !== "wont_do" : request.status === view
     );
+  }, [board.data, view]);
+
+  /**
+   * Пошук і фільтри діють усередині відкритого вигляду, а не поверх усього
+   * одразу: набране слово має звужувати те, що зараз на екрані, а не
+   * підмішувати в дошку картки з «Ідей».
+   */
+  const requests = useMemo(() => {
+    const filtered = inView.filter((request) => matchesBoardFilters(request, filters));
     const needle = search.trim().toLowerCase();
-    if (!needle) return inView;
-    return inView.filter(
+    if (!needle) return filtered;
+    return filtered.filter(
       (request) =>
         request.title.toLowerCase().includes(needle) ||
         request.label.toLowerCase().includes(needle)
     );
-  }, [board.data, search, view]);
+  }, [filters, inView, search]);
 
   /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
   const counts = useMemo(() => {
@@ -318,17 +335,25 @@ export default function DevRequestsPage() {
             placeholder="Пошук за назвою або REQ-номером..."
           />
         }
+        // Фільтри в нижньому ряду, поруч із пошуком: обидва звужують те саме —
+        // що зараз на екрані. Верхній ряд лишається за вибором вигляду.
+        filters={<BoardFilters requests={inView} state={filters} onChange={setFilters} />}
         meta={
           <ToolbarMeta
             count={requests.length}
-            onReset={() => setSearch("")}
-            showReset={search.trim().length > 0}
+            // Скидання чистить і пошук, і фільтри: у людини це одне бажання —
+            // «покажи все», а не два різні.
+            onReset={() => {
+              setSearch("");
+              setFilters(EMPTY_BOARD_FILTERS);
+            }}
+            showReset={search.trim().length > 0 || hasActiveFilters(filters)}
             loading={board.isFetching}
           />
         }
       />
     ),
-    [board.isFetching, counts, openCreate, requests.length, search, view]
+    [board.isFetching, counts, filters, inView, openCreate, requests.length, search, view]
   );
 
   // Хук стоїть ДО раннього return: інакше на редиректі порядок хуків
