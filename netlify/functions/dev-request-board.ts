@@ -3,19 +3,22 @@ import { createClient } from "@supabase/supabase-js";
 import { buildAppUrl } from "./_lib/appUrl";
 import {
   BOARD_PATH,
+  buildBoardCommitResponse,
   buildBoardListResponse,
   buildBoardMoveResponse,
   cardNotFoundMessage,
   fetchOpenBoardCards,
   moveBoardCard,
   parseBoardBody,
+  recordCommitOnCards,
   releasedCardMessage,
 } from "./_lib/devRequestBoard";
 import { CAPTURE_TOKEN_HEADER, isUuid, readHeader, tokenMatches } from "./_lib/devRequestCapture";
 
 // Черга запитів ззовні CRM: `POST { "action": "list" }` — подивитись, що
 // відкрито; `POST { "action": "move", "number": 3, "status": "in_progress" }` —
-// пересунути картку.
+// пересунути картку; `POST { "action": "commit", "numbers": [4], "sha": "…" }` —
+// зафіксувати коміт (кличе git-хук scripts/hooks/post-commit, не людина).
 //
 // НАВІЩО ОКРЕМА ФУНКЦІЯ, А НЕ РЕЖИМ У dev-request-capture. У захоплення рівно
 // одна відповідальність — прийняти сказане й записати картку. Воно платить за
@@ -103,6 +106,20 @@ export const handler = async (event: HttpEvent) => {
     if (parsed.action === "list") {
       const { cards, hasMore } = await fetchOpenBoardCards(admin, teamId);
       return json(200, buildBoardListResponse({ cards, hasMore, url }));
+    }
+
+    if (parsed.action === "commit") {
+      const outcomes = await recordCommitOnCards(admin, teamId, parsed.numbers, parsed.sha);
+      // Провалились геть усі записи — це вже не «часткова правда в message», а
+      // поламана база: хай хук побачить помилку й скаже про неї вголос.
+      if (outcomes.length > 0 && outcomes.every((outcome) => outcome.result === "failed")) {
+        console.error(
+          "dev-request-board commit failed:",
+          outcomes.map((outcome) => `${outcome.label}: ${outcome.message ?? ""}`).join("; ")
+        );
+        return json(500, { error: "Не зміг записати коміт у картки. Спробуй ще раз за хвилину." });
+      }
+      return json(200, buildBoardCommitResponse({ sha: parsed.sha, outcomes, url }));
     }
 
     const result = await moveBoardCard(admin, teamId, parsed.number, parsed.status);

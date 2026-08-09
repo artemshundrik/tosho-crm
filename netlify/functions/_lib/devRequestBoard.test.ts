@@ -3,17 +3,21 @@ import { describe, expect, it } from "vitest";
 
 import {
   BOARD_LIST_LIMIT,
+  buildBoardCommitResponse,
   buildBoardListResponse,
   buildBoardMoveResponse,
   boardCardMeta,
   cardNotFoundMessage,
+  COMMIT_NUMBERS_LIMIT,
   groupBoardCards,
   isMovableStatus,
   MOVABLE_STATUSES,
   moveBoardCard,
   OPEN_STATUSES,
   parseBoardBody,
+  recordCommitOnCards,
   releasedCardMessage,
+  shaMatches,
   sortBoardCards,
   toBoardCard,
   type BoardCard,
@@ -478,5 +482,284 @@ describe("moveBoardCard", () => {
     const message = releasedCardMessage(4);
     expect(message).toContain("REQ-4");
     expect(message).toContain("нову картку");
+  });
+});
+
+/* ------------------------------ Факт коміта ---------------------------- */
+
+describe("розбір дії commit", () => {
+  it("номери й sha", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: [4, 7], sha: "dfe481f" }))).toEqual({
+      ok: true,
+      action: "commit",
+      numbers: [4, 7],
+      sha: "dfe481f",
+    });
+  });
+
+  it("sha зводимо до нижнього регістру — інакше той самий коміт запишеться двічі", () => {
+    const result = parseBoardBody(JSON.stringify({ action: "commit", numbers: [4], sha: " DFE481F " }));
+    expect(result).toMatchObject({ ok: true, sha: "dfe481f" });
+  });
+
+  it("повторений номер у темі коміта — не помилка, просто шум", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: [4, 4, "7"], sha: "dfe481f" }))).toMatchObject({
+      numbers: [4, 7],
+    });
+  });
+
+  it("одиничний номер приймаємо в будь-якому з двох полів", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "commit", number: 4, sha: "dfe481f" }))).toMatchObject({
+      numbers: [4],
+    });
+    expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: 4, sha: "dfe481f" }))).toMatchObject({
+      numbers: [4],
+    });
+  });
+
+  it("без sha фіксувати нічого — 400", () => {
+    const result = parseBoardBody(JSON.stringify({ action: "commit", numbers: [4] }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
+
+  it("не-sha відхиляємо: статус має ставити перевіряний факт, а не будь-який рядок", () => {
+    for (const sha of ["готово", "abc", "zzzzzzz", "dfe481f!", "", 42]) {
+      const result = parseBoardBody(JSON.stringify({ action: "commit", numbers: [4], sha }));
+      expect(result.ok).toBe(false);
+    }
+  });
+
+  it("порожній список і забагато номерів — 400", () => {
+    expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: [], sha: "dfe481f" })).ok).toBe(false);
+    const many = Array.from({ length: COMMIT_NUMBERS_LIMIT + 1 }, (_, index) => index + 1);
+    expect(parseBoardBody(JSON.stringify({ action: "commit", numbers: many, sha: "dfe481f" })).ok).toBe(false);
+  });
+
+  /**
+   * Ключове: у дії commit НЕМАЄ параметра «статус». Тобто покликати її й
+   * попросити «Викочено» неможливо в принципі — не через перевірку, а через
+   * відсутність такої ручки. Заборона ставити статус рішенням людини лишається
+   * цілою: тут його ставить коміт.
+   */
+  it("статус у тілі ігнорується — його ставить факт коміта, а не той, хто просить", () => {
+    const result = parseBoardBody(
+      JSON.stringify({ action: "commit", numbers: [4], sha: "dfe481f", status: "released" })
+    );
+    expect(result).toEqual({ ok: true, action: "commit", numbers: [4], sha: "dfe481f" });
+  });
+});
+
+describe("shaMatches", () => {
+  it("короткий і повний sha того самого коміта — збіг", () => {
+    expect(shaMatches("dfe481f", "dfe481f2c9a4b6e8d0a1c3e5f7089abcdef01234")).toBe(true);
+    expect(shaMatches("DFE481F2", "dfe481f2c9a4")).toBe(true);
+  });
+
+  it("різні коміти — не збіг", () => {
+    expect(shaMatches("dfe481f", "aaa1234")).toBe(false);
+    expect(shaMatches("dfe481f", "dfe481a")).toBe(false);
+  });
+
+  it("огризки коротші за 7 символів не збігаються ні з чим", () => {
+    expect(shaMatches("dfe", "dfe481f")).toBe(false);
+    expect(shaMatches("", "dfe481f")).toBe(false);
+  });
+});
+
+type CommitChainStub = {
+  select: () => CommitChainStub;
+  eq: (column: string, value: unknown) => CommitChainStub;
+  in: (column: string, values: unknown[]) => CommitChainStub;
+  update: (patch: Record<string, unknown>) => CommitChainStub;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
+  then: (
+    resolve: (value: { data: Record<string, unknown>[] | null; error: { message: string } | null }) => unknown
+  ) => Promise<unknown>;
+};
+
+/**
+ * Заглушка під recordCommitOnCards: читання пачкою (`in`) і запис по одній
+ * картці. Веде журнал записів — саме він доводить, що ВИКОЧЕНУ картку ми не
+ * рухаємо, а не просто гарно про це відповідаємо.
+ */
+function fakeCommitAdmin(initial: Array<Record<string, unknown>>) {
+  const state = {
+    rows: initial.map((entry) => ({ ...entry })),
+    updates: [] as Array<{ number: number; patch: Record<string, unknown> }>,
+    updateFails: false,
+  };
+
+  function chain(): CommitChainStub {
+    let patch: Record<string, unknown> | null = null;
+    let wanted: number[] | null = null;
+    let target: number | null = null;
+
+    const run = () => {
+      if (patch) {
+        if (state.updateFails) return { data: null, error: { message: "запис не пройшов" } };
+        const found = state.rows.find((entry) => Number(entry.number) === target);
+        if (!found) return { data: null, error: null };
+        state.updates.push({ number: target as number, patch });
+        Object.assign(found, patch);
+        return { data: { ...found }, error: null };
+      }
+      const rows = state.rows.filter((entry) => !wanted || wanted.includes(Number(entry.number)));
+      return { data: rows.map((entry) => ({ ...entry })), error: null };
+    };
+
+    const stub: CommitChainStub = {
+      select: () => stub,
+      eq: (column, value) => {
+        if (column === "number") target = Number(value);
+        return stub;
+      },
+      in: (_column, values) => {
+        wanted = values.map(Number);
+        return stub;
+      },
+      update: (next) => {
+        patch = next;
+        return stub;
+      },
+      maybeSingle: async () => run() as { data: Record<string, unknown> | null; error: { message: string } | null },
+      then: (resolve) =>
+        Promise.resolve(
+          run() as { data: Record<string, unknown>[] | null; error: { message: string } | null }
+        ).then(resolve),
+    };
+    return stub;
+  }
+
+  const admin = { schema: () => ({ from: () => chain() }) } as unknown as SupabaseClient;
+  return { admin, state };
+}
+
+function commitRow(overrides: Record<string, unknown> = {}) {
+  return { ...row(), commit_shas: [], ...overrides };
+}
+
+describe("recordCommitOnCards", () => {
+  it("відкриту картку коміт переводить у «Готово локально» й дописує sha", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 4, status: "queued" })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ number: 4, result: "moved", previousStatus: "queued", status: "done_local" });
+    expect(state.updates).toEqual([{ number: 4, patch: { commit_shas: ["dfe481f"], status: "done_local" } }]);
+  });
+
+  it("кілька карток за один коміт — кожна отримує той самий sha", async () => {
+    const { admin, state } = fakeCommitAdmin([
+      commitRow({ number: 4, status: "triage" }),
+      commitRow({ number: 7, status: "in_progress" }),
+    ]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4, 7], "dfe481f");
+
+    expect(outcomes.map((outcome) => outcome.result)).toEqual(["moved", "moved"]);
+    expect(state.updates.map((entry) => entry.number)).toEqual([4, 7]);
+  });
+
+  /**
+   * Найважливіше правило переходу. Викочене назад не відкочують — той самий
+   * принцип, що в moveBoardCard (там 409). Коміт на вже викочену картку означає
+   * НОВУ роботу, а не скасування релізу: released_at лишається на місці.
+   */
+  it("ВИКОЧЕНУ картку не воскрешає: статус лишається, released_at не чіпаємо", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 4, status: "released" })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+
+    expect(outcomes[0]).toMatchObject({ result: "released", status: "released", previousStatus: "released" });
+    // Sha дописали (це факт), але статус у патчі не з'явився.
+    expect(state.updates).toEqual([{ number: 4, patch: { commit_shas: ["dfe481f"] } }]);
+    expect(state.rows[0].status).toBe("released");
+  });
+
+  it("«Не робимо» коміт НЕ воскрешає — але повертає ознаку, щоб це побачили", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 9, status: "wont_do" })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [9], "dfe481f");
+
+    expect(outcomes[0]).toMatchObject({ result: "wont_do", status: "wont_do" });
+    expect(state.updates).toEqual([{ number: 9, patch: { commit_shas: ["dfe481f"] } }]);
+    expect(state.rows[0].status).toBe("wont_do");
+  });
+
+  it("повторний прогін по тій самій картці нічого не пише", async () => {
+    const { admin, state } = fakeCommitAdmin([
+      commitRow({ number: 4, status: "done_local", commit_shas: ["dfe481f"] }),
+    ]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+
+    expect(outcomes[0]).toMatchObject({ result: "already", shaKnown: true });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("той самий коміт повним sha дублем не лягає", async () => {
+    const full = "dfe481f2c9a4b6e8d0a1c3e5f7089abcdef01234";
+    const { admin, state } = fakeCommitAdmin([
+      commitRow({ number: 4, status: "done_local", commit_shas: [full] }),
+    ]);
+    await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+    expect(state.updates).toEqual([]);
+    expect(state.rows[0].commit_shas).toEqual([full]);
+  });
+
+  it("картка вже «Готово локально», але коміт новий — дописуємо лише sha", async () => {
+    const { admin, state } = fakeCommitAdmin([
+      commitRow({ number: 4, status: "done_local", commit_shas: ["aaa1234"] }),
+    ]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+
+    expect(outcomes[0]).toMatchObject({ result: "already" });
+    expect(state.updates).toEqual([{ number: 4, patch: { commit_shas: ["aaa1234", "dfe481f"] } }]);
+  });
+
+  it("номера немає на дошці — це не помилка, а рядок «такої картки немає»", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 4 })]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [999], "dfe481f");
+
+    expect(outcomes[0]).toMatchObject({ number: 999, label: "REQ-999", result: "missing" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("зламаний запис не тягне за собою решту карток", async () => {
+    const { admin, state } = fakeCommitAdmin([commitRow({ number: 4 })]);
+    state.updateFails = true;
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4], "dfe481f");
+    expect(outcomes[0]).toMatchObject({ result: "failed", status: "triage" });
+  });
+});
+
+describe("buildBoardCommitResponse", () => {
+  const url = URL;
+
+  it("людський підсумок: що пересунуто, що пропущено й чому", async () => {
+    const { admin } = fakeCommitAdmin([
+      commitRow({ number: 4, status: "queued", title: "Дошка не оновлюється" }),
+      commitRow({ number: 7, status: "released" }),
+      commitRow({ number: 9, status: "wont_do" }),
+    ]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [4, 7, 9, 999], "dfe481f");
+    const response = buildBoardCommitResponse({ sha: "dfe481f", outcomes, url });
+
+    expect(response.moved).toEqual([4]);
+    expect(response.skipped.map((entry) => entry.result)).toEqual(["released", "wont_do", "missing"]);
+
+    expect(response.message).toContain("dfe481f");
+    expect(response.message).toContain("REQ-4 → Готово локально");
+    expect(response.message).toContain("Дошка не оновлюється");
+    expect(response.message).toContain("REQ-7 уже «Викочено»");
+    expect(response.message).toContain("REQ-9 у «Не робимо»");
+    expect(response.message).toContain("REQ-999");
+    expect(response.message).toContain(url);
+  });
+
+  it("жодної картки не зрушив — так і каже, а не вдає успіх", async () => {
+    const { admin } = fakeCommitAdmin([]);
+    const outcomes = await recordCommitOnCards(admin, "team-1", [999], "dfe481f");
+    const response = buildBoardCommitResponse({ sha: "dfe481f", outcomes, url });
+
+    expect(response.moved).toEqual([]);
+    expect(response.message).toContain("жодної картки не зрушив");
   });
 });

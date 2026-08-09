@@ -269,7 +269,20 @@ export function boardCardMeta(card: BoardCard): string {
 export type BoardRequest =
   | { ok: true; action: "list" }
   | { ok: true; action: "move"; number: number; status: MovableStatus }
+  | { ok: true; action: "commit"; numbers: number[]; sha: string }
   | { ok: false; status: number; error: string };
+
+/** Скільки карток одна дія `commit` бере за раз. Більше — це не коміт, а помилка розбору. */
+export const COMMIT_NUMBERS_LIMIT = 20;
+
+/** Короткий чи повний git-sha. Коротший за 7 символів git і сам не видає. */
+const SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
+
+function toCardNumber(value: unknown): number | null {
+  const raw = typeof value === "string" ? Number(value.trim()) : value;
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0) return null;
+  return raw;
+}
 
 /**
  * Перелік дозволених статусів людською мовою — рівно те, що бачить у відповіді
@@ -296,14 +309,70 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     return { ok: false, status: 400, error: "Очікую об'єкт виду { \"action\": \"list\" }." };
   }
 
-  const body = payload as { action?: unknown; number?: unknown; status?: unknown };
+  const body = payload as {
+    action?: unknown;
+    number?: unknown;
+    numbers?: unknown;
+    status?: unknown;
+    sha?: unknown;
+  };
   const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
 
   if (action === "list") return { ok: true, action: "list" };
 
+  if (action === "commit") {
+    const source = Array.isArray(body.numbers)
+      ? body.numbers
+      : body.numbers !== undefined
+        ? [body.numbers]
+        : body.number !== undefined
+          ? [body.number]
+          : [];
+    if (source.length === 0) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Потрібні номери карток: { \"numbers\": [4, 7] }.",
+      };
+    }
+    if (source.length > COMMIT_NUMBERS_LIMIT) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Забагато номерів (${source.length}). За раз беру не більше ${COMMIT_NUMBERS_LIMIT}.`,
+      };
+    }
+    const numbers: number[] = [];
+    for (const value of source) {
+      const number = toCardNumber(value);
+      if (number === null) {
+        return {
+          ok: false,
+          status: 400,
+          error: "Номер картки — ціле число більше нуля: { \"numbers\": [4, 7] }.",
+        };
+      }
+      // Дублі в одному коміті («REQ-4 і ще раз REQ-4») — не помилка, просто шум.
+      if (!numbers.includes(number)) numbers.push(number);
+    }
+
+    const sha = typeof body.sha === "string" ? body.sha.trim().toLowerCase() : "";
+    if (!SHA_PATTERN.test(sha)) {
+      return {
+        ok: false,
+        status: 400,
+        error: sha
+          ? `«${sha}» не схоже на sha коміта: потрібні 7–40 шістнадцяткових символів.`
+          : "Немає поля sha — без нього фіксувати нічого.",
+      };
+    }
+
+    return { ok: true, action: "commit", numbers, sha };
+  }
+
   if (action === "move") {
-    const rawNumber = typeof body.number === "string" ? Number(body.number.trim()) : body.number;
-    if (typeof rawNumber !== "number" || !Number.isInteger(rawNumber) || rawNumber <= 0) {
+    const rawNumber = toCardNumber(body.number);
+    if (rawNumber === null) {
       return { ok: false, status: 400, error: "Потрібен номер картки: { \"number\": 3 }." };
     }
     const status = typeof body.status === "string" ? body.status.trim() : "";
@@ -319,12 +388,12 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     return { ok: true, action: "move", number: rawNumber, status };
   }
 
+  const actions =
+    "list — показати чергу, move — пересунути картку, commit — зафіксувати коміт (кличе git-хук, не людина)";
   return {
     ok: false,
     status: 400,
-    error: action
-      ? `Невідома дія «${action}». Є дві: list — показати чергу, move — пересунути картку.`
-      : "Немає поля action. Є дві дії: list — показати чергу, move — пересунути картку.",
+    error: action ? `Невідома дія «${action}». Є три: ${actions}.` : `Немає поля action. Є три дії: ${actions}.`,
   };
 }
 
@@ -584,4 +653,262 @@ export async function moveBoardCard(
   if (!card) return { ok: false, reason: "failed", message: "оновлення не повернуло рядок" };
 
   return { ok: true, card, previousStatus: current.status };
+}
+
+/* ------------------------------ Факт коміта ---------------------------- */
+
+/**
+ * ЦЕ НЕ ОБХІД ЗАБОРОНИ СТАВИТИ «Готово локально» РУКАМИ — не «полагодьте» це.
+ *
+ * Заборонено ставити цей статус РІШЕННЯМ ЛЮДИНИ: «я вважаю, що готово» нічим не
+ * підкріплене, і дошка починає показувати бажане замість наявного. Тут статус
+ * ставить ФАКТ — коміт із номером картки в темі, у якого є sha, і цей sha
+ * лягає в картку поруч зі статусом. Перевірити можна за секунду: `git show`.
+ *
+ * Саме тому дія `commit` вимагає sha й не має параметра «статус»: покликати її
+ * й попросити щось інше, ніж «Готово локально», неможливо. Той, хто захоче
+ * збрехати дошці, мусить спершу зробити коміт — а тоді це вже не брехня.
+ *
+ * Пару замикає плагін релізів (plugins/record-release/index.mjs): він звіряє ці
+ * самі sha зі складом деплою й переводить збіги у «Викочено». Обидва кінці
+ * тримаються на sha, а не на словах, — див. §9 docs/DEV_REQUESTS_DESIGN.md.
+ */
+
+/** Коротший за 7 символів git і сам не показує — усе, що менше, вважаємо сміттям. */
+const SHA_MIN_LENGTH = 7;
+
+/**
+ * Один і той самий коміт, записаний по-різному.
+ *
+ * Порівнюємо ПРЕФІКСОМ, а не дослівно: хук шле короткий sha, плагін релізів
+ * ріже свої до 8 символів (scripts/lib/releaseCommits.mjs), а `git rev-parse`
+ * віддає всі 40. Дослівне порівняння означало б, що картка з повним sha ніколи
+ * не збіжиться зі своїм же релізом.
+ */
+export function shaMatches(a: string, b: string): boolean {
+  const left = a.trim().toLowerCase();
+  const right = b.trim().toLowerCase();
+  if (left.length < SHA_MIN_LENGTH || right.length < SHA_MIN_LENGTH) return false;
+  const length = Math.min(left.length, right.length);
+  return left.slice(0, length) === right.slice(0, length);
+}
+
+/**
+ * Статуси, з яких коміт картку НЕ зрушує.
+ *
+ * `released` — та сама причина, що в moveBoardCard: викочене назад не
+ * відкочують. `wont_do` — рішення людини «не робимо», і коміт його не
+ * скасовує; якщо на відхилену картку раптом є коміт, це привід подивитись
+ * очима, а не мовчки повернути її в роботу.
+ */
+export const COMMIT_LOCKED_STATUSES: readonly BoardStatus[] = ["released", "wont_do"];
+
+export type CommitOutcomeResult =
+  /** Була відкрита — поїхала в «Готово локально». */
+  | "moved"
+  /** Уже була «Готово локально» — дописали лише sha. */
+  | "already"
+  /** Уже викочено: статус не чіпали. */
+  | "released"
+  /** «Не робимо»: статус не чіпали, але сам факт коміта підозрілий. */
+  | "wont_do"
+  /** Картки з таким номером у команді немає. */
+  | "missing"
+  /** Запис не вдався — деталі в message. */
+  | "failed";
+
+export type CommitOutcome = {
+  number: number;
+  label: string;
+  title: string;
+  result: CommitOutcomeResult;
+  status: BoardStatus | null;
+  previousStatus: BoardStatus | null;
+  /** true — цей sha в картці вже був (повторний прогін хука, `--amend`). */
+  shaKnown: boolean;
+  /** Текст помилки бази для логів. Людині його не показуємо. */
+  message?: string;
+};
+
+/** true — картку варто подивитись очима: коміт є, а статус його не приймає. */
+export function isSuspiciousOutcome(outcome: CommitOutcome): boolean {
+  return outcome.result === "wont_do" || outcome.result === "released";
+}
+
+const COMMIT_SELECT_COLUMNS = `${SELECT_COLUMNS},commit_shas`;
+
+type CommitRow = BoardRow & { commit_shas?: string[] | null };
+
+function existingShas(row: CommitRow): string[] {
+  return Array.isArray(row.commit_shas)
+    ? row.commit_shas.filter((value): value is string => typeof value === "string" && value.trim() !== "")
+    : [];
+}
+
+/**
+ * Записати факт коміта на картки.
+ *
+ * Читання одним запитом, запис — по картці: масив `commit_shas` у кожної свій,
+ * і зібрати його однією командою не вийде. Читання-зміна-запис теоретично
+ * вразливе до гонки, практично — ні: хук викликається послідовно, один коміт за
+ * раз, з однієї машини.
+ *
+ * SHA дописуємо НАВІТЬ ТИМ КАРТКАМ, чий статус не чіпаємо: коміт — це факт, а
+ * статус — рішення. Якщо картку відхилили помилково, людина поверне її на дошку
+ * руками, і вже записаний sha дасть деплою перевести її у «Викочено» без
+ * повторного коміта.
+ */
+export async function recordCommitOnCards(
+  admin: SupabaseClient,
+  teamId: string,
+  numbers: number[],
+  sha: string
+): Promise<CommitOutcome[]> {
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .select(COMMIT_SELECT_COLUMNS)
+    .eq("team_id", teamId)
+    .in("number", numbers);
+  if (error) throw new Error(`dev_requests: ${error.message}`);
+
+  const rows = (data ?? []) as CommitRow[];
+  const outcomes: CommitOutcome[] = [];
+
+  for (const number of numbers) {
+    const row = rows.find((candidate) => Number(candidate.number) === number);
+    const card = row ? toBoardCard(row) : null;
+    if (!row || !card) {
+      outcomes.push({
+        number,
+        label: formatRequestNumber(number),
+        title: "",
+        result: "missing",
+        status: null,
+        previousStatus: null,
+        shaKnown: false,
+      });
+      continue;
+    }
+
+    const known = existingShas(row);
+    const shaKnown = known.some((value) => shaMatches(value, sha));
+    const locked = COMMIT_LOCKED_STATUSES.includes(card.status);
+    const movesToDone = !locked && card.status !== "done_local";
+
+    const base = {
+      number,
+      label: card.label,
+      title: card.title,
+      status: card.status,
+      previousStatus: card.status,
+      shaKnown,
+    };
+
+    if (shaKnown && !movesToDone) {
+      // Повторний прогін по тій самій картці: писати нічого.
+      outcomes.push({
+        ...base,
+        result: locked ? (card.status as "released" | "wont_do") : "already",
+      });
+      continue;
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (!shaKnown) patch.commit_shas = [...known, sha];
+    if (movesToDone) patch.status = "done_local";
+
+    const { data: updated, error: updateError } = await admin
+      .schema("tosho")
+      .from("dev_requests")
+      .update(patch)
+      .eq("team_id", teamId)
+      .eq("number", number)
+      .select(COMMIT_SELECT_COLUMNS)
+      .maybeSingle();
+
+    // `.select()` тут не для даних, а щоб побачити нуль оновлених рядків:
+    // без нього supabase-js мовчить, і «нічого не записалось» виглядає успіхом.
+    if (updateError || !updated) {
+      outcomes.push({
+        ...base,
+        result: "failed",
+        message: updateError?.message ?? "оновлення не повернуло рядок",
+      });
+      continue;
+    }
+
+    outcomes.push({
+      ...base,
+      status: movesToDone ? "done_local" : card.status,
+      result: locked ? (card.status as "released" | "wont_do") : movesToDone ? "moved" : "already",
+    });
+  }
+
+  return outcomes;
+}
+
+export type BoardCommitResponse = {
+  ok: true;
+  sha: string;
+  /** Номери карток, що поїхали в «Готово локально». */
+  moved: number[];
+  /** Картки, чий статус коміт свідомо не змінив, — і чому. */
+  skipped: Array<{ number: number; label: string; result: CommitOutcomeResult }>;
+  outcomes: CommitOutcome[];
+  url: string;
+  message: string;
+};
+
+function commitOutcomeLine(outcome: CommitOutcome): string {
+  const title = outcome.title ? ` · ${outcome.title}` : "";
+  switch (outcome.result) {
+    case "moved":
+      return `${outcome.label} → ${STATUS_LABELS.done_local}${title}`;
+    case "already":
+      return `${outcome.label} і так «${STATUS_LABELS.done_local}» — дописав коміт${title}`;
+    case "released":
+      return `⚠️ ${outcome.label} уже «${STATUS_LABELS.released}» — статус не чіпав. Якщо це нова робота, їй потрібна нова картка.`;
+    case "wont_do":
+      return `⚠️ ${outcome.label} у «${STATUS_LABELS.wont_do}» — статус не чіпав. Якщо картку таки робили, поверни її на дошку руками.`;
+    case "missing":
+      return `❓ ${outcome.label} — такої картки немає. Перевір номер у темі коміта.`;
+    case "failed":
+      return `⚠️ ${outcome.label} — запис не вдався, картка лишилась як була.`;
+  }
+}
+
+/**
+ * Відповідь на «зафіксуй коміт».
+ *
+ * `ok: true` навіть тоді, коли частина номерів не знайшлась: коміт уже існує, і
+ * подавати це як провал означало б лякати рядком помилки те, що насправді
+ * спрацювало наполовину. Правда — у `message` по рядку на картку.
+ */
+export function buildBoardCommitResponse(input: {
+  sha: string;
+  outcomes: CommitOutcome[];
+  url: string;
+}): BoardCommitResponse {
+  const { sha, outcomes } = input;
+  const moved = outcomes.filter((outcome) => outcome.result === "moved");
+  const touched = outcomes.some((outcome) => outcome.result === "moved" || outcome.result === "already");
+
+  const lines = [
+    touched ? `✅ Коміт ${sha} зафіксовано` : `⚠️ Коміт ${sha} — жодної картки не зрушив`,
+    ...outcomes.map(commitOutcomeLine),
+    input.url,
+  ];
+
+  return {
+    ok: true,
+    sha,
+    moved: moved.map((outcome) => outcome.number),
+    skipped: outcomes
+      .filter((outcome) => outcome.result !== "moved" && outcome.result !== "already")
+      .map((outcome) => ({ number: outcome.number, label: outcome.label, result: outcome.result })),
+    outcomes,
+    url: input.url,
+    message: lines.join("\n"),
+  };
 }
