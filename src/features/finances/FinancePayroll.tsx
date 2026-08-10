@@ -147,13 +147,54 @@ const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", penalty: "", ad
  * стабільно працює не в усіх рушіях. Непрозорий фон обов'язковий, інакше рядки
  * просвічують крізь заголовок.
  *
+ * Шари всередині таблиці мусять лишатись НИЖЧЕ за смугу місяця (вона на z-20),
+ * інакше рядки починають малюватись поверх неї. Тому весь порядок тісний:
+ * заморожена колонка 5 → заголовки 10 → кут шапки 15 → смуга місяця 20.
+ *
  * ВЛАСНОГО скрол-боксу в таблиці бути НЕ МОЖЕ: щойно на обгортці з'явиться
  * `overflow`, вона стане точкою відліку для sticky, і заголовки відірвуться від
  * сторінки. Це не наш винахід — про це прямо написано в `Table` біля пропа
  * `stickyHeader`. Пробували 2026-08-10, повернули назад.
  */
-const STICKY_HEAD =
-  "sticky top-12 z-10 border-b border-border/40 bg-background/95 backdrop-blur-sm lg:top-6";
+const STICKY_HEAD = "sticky top-0 z-10 border-b border-border/40 bg-background";
+
+/**
+ * Заморожена колонка «Співробітник».
+ *
+ * Коли таблиця не влазить, убік їде вся панель фінансів — вона й є тут
+ * скрол-контейнером (власного таблиця мати не може, див. STICKY_HEAD). Тому й
+ * точка відліку для `left` — панель, а не таблиця.
+ *
+ * Зсув НЕГАТИВНИЙ і дорівнює падінгу панелі (px-4, на lg p-6). Без нього
+ * колонка спинялась на межі падінга, а панель обрізає вміст на межі рамки — і
+ * ліворуч від замороженої колонки лишалась смужка в 16–24px, крізь яку
+ * проїжджали числа. З від'ємним зсувом колонка спиняється рівно там, де
+ * панель обрізає, і смужки немає. Стрибка при цьому не буде: sticky спиняє
+ * елемент саме на порозі, а не переставляє його.
+ *
+ * Фон суцільний — під колонку заїжджають рядки. Через це підсвітку рядка
+ * малюємо псевдоелементом ПОВЕРХ фону, інакше край не підсвічувався б разом
+ * з рештою рядка.
+ */
+const FROZEN_PERSON =
+  "sticky left-0 z-[5] bg-background " +
+  // Дівайдер по правому краю: щоб обрізана колонка читалась як «вміст заїхав
+  // під межу», а не як поламаний підпис. З'являється ЛИШЕ коли під колонку
+  // справді щось заїхало — доти ділити нема чого, і зайва лінія посеред
+  // таблиці тільки шумить. Стан вмикає data-scrolled-x на самому боксі.
+  //
+  // Малюємо псевдоелементом, а НЕ через `shadow-[…]`: Tailwind v4 читає слеш
+  // усередині hsl(var(--border)/0.35) як модифікатор прозорості, і правило
+  // тихо зникає — перевірено, у computed style лишався прозорий box-shadow.
+  "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border " +
+  "after:opacity-0 after:transition-opacity after:duration-150 " +
+  "group-data-[scrolled-x]/box:after:opacity-100 " +
+  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-muted/20";
+/**
+ * Кут шапки заморожений по обох осях, тож мусить лежати над заголовками — але
+ * все ще під смугою місяця (z-20), інакше перекриє її при прокрутці.
+ */
+const FROZEN_PERSON_HEAD = "z-[15] bg-background";
 
 /**
  * Опис колонок — один на таблицю і на її скелетон.
@@ -168,11 +209,23 @@ const STICKY_HEAD =
 const TABLE_MIN_WIDTH = "min-w-[1000px]";
 
 /**
- * Обгортка таблиці. БЕЗ `overflow` — навмисно: будь-який `overflow` тут зробив
- * би її скрол-контейнером і відірвав липкі заголовки від сторінки (див.
- * STICKY_HEAD). Коли таблиця не влазить, убік їде вся панель фінансів.
+ * Бокс таблиці: липкий сам, і прокручується всередині.
+ *
+ * Поки скролиш сторінку, бокс їде разом із нею — зведення над ним іде вгору,
+ * як і має. Щойно верх боксу впирається в смугу місяця, він спиняється, і далі
+ * прокручуються вже рядки всередині, під заморожену шапку.
+ *
+ * `overflow` тут ОБОВ'ЯЗКОВИЙ: без нього неможливі ні горизонтальна прокрутка,
+ * ні заморожена колонка — обидві живуть від скрол-контейнера. Плата за це в
+ * тому, що заголовки липнуть до боксу, а не до сторінки; інакше ніяк, і про це
+ * прямо написано в `Table` біля пропа `stickyHeader`.
+ *
+ * Висота обмежена вікном мінус шапка застосунку й смуга місяця — щоб у боксі
+ * завжди лишалось місце під рядки.
  */
-const TABLE_BOX = "rounded-xl border border-border/60";
+const TABLE_BOX =
+  "group/box sticky top-12 max-h-[calc(100dvh-10rem)] overflow-auto rounded-xl " +
+  "border border-border/60 lg:top-6";
 
 type PayrollColumn = {
   key: string;
@@ -332,6 +385,26 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     }));
     return [...real, ...manual];
   }, [members, entries]);
+
+  /**
+   * Позначка «бокс прокручено вбік» — щоб дівайдер замороженої колонки
+   * з'являвся лише тоді, коли під неї справді щось заїхало.
+   *
+   * Пишемо атрибут прямо в DOM, а не в стан: прокрутка стріляє десятками
+   * подій на жест, і кожна перемальовувала б таблицю з вісімнадцятьма рядками
+   * полів вводу. Атрибут міняє лише CSS.
+   */
+  const detachScrollSync = React.useRef<(() => void) | null>(null);
+  const scrollBoxRef = React.useCallback((node: HTMLDivElement | null) => {
+    detachScrollSync.current?.();
+    detachScrollSync.current = null;
+    if (!node) return;
+    const sync = () => node.toggleAttribute("data-scrolled-x", node.scrollLeft > 0);
+    sync();
+    node.addEventListener("scroll", sync, { passive: true });
+    detachScrollSync.current = () => node.removeEventListener("scroll", sync);
+  }, []);
+  React.useEffect(() => () => detachScrollSync.current?.(), []);
 
   const draftFor = (uid: string): Draft => drafts[uid] ?? EMPTY_DRAFT;
 
@@ -585,7 +658,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       {loading ? (
         <PayrollTableSkeleton />
       ) : (
-        <div className={TABLE_BOX}>
+        <div ref={scrollBoxRef} className={TABLE_BOX}>
           {/* table-fixed + % ширини: колонки тягнуться на всю ширину, а нижче
               TABLE_MIN_WIDTH перестають тиснутись і їдуть під прокрутку. */}
           <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
@@ -596,8 +669,16 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     краєм. Праворуч лишається тільки «До виплати» — там у
                     клітинці звичайне число, притиснуте вправо, і заголовок
                     тримається з ним в одній лінії. */}
-                {PAYROLL_COLUMNS.map((column) => (
-                  <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
+                {PAYROLL_COLUMNS.map((column, index) => (
+                  <TableHead
+                    key={column.key}
+                    className={cn(
+                      STICKY_HEAD,
+                      column.width,
+                      column.align,
+                      index === 0 && cn(FROZEN_PERSON, FROZEN_PERSON_HEAD)
+                    )}
+                  >
                     {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
                   </TableHead>
                 ))}
@@ -613,8 +694,8 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                   // при наведенні на весь рядок, а не лише на саму іконку: інакше
                   // її треба спершу знайти, а вона майже невидима.
                   <TableRow key={person.userId} className="group/row">
-                    <TableCell>
-                      <div className="flex min-w-0 items-center gap-2">
+                    <TableCell className={FROZEN_PERSON}>
+                      <div className="relative flex min-w-0 items-center gap-2">
                         <AvatarBase
                           src={person.avatarUrl}
                           name={person.name}
@@ -734,8 +815,16 @@ function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
       <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
         <TableHeader>
           <TableRow>
-            {PAYROLL_COLUMNS.map((column) => (
-              <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
+            {PAYROLL_COLUMNS.map((column, index) => (
+              <TableHead
+                key={column.key}
+                className={cn(
+                  STICKY_HEAD,
+                  column.width,
+                  column.align,
+                  index === 0 && cn(FROZEN_PERSON, FROZEN_PERSON_HEAD)
+                )}
+              >
                 {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
               </TableHead>
             ))}
