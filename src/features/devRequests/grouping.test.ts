@@ -76,10 +76,10 @@ describe("groupRequests", () => {
   });
 
   it("порожніх груп не буває", () => {
-    // Зон пʼять, картка одна — груп теж одна.
+    // Зон шість, картка одна — груп теж одна.
     const groups = groupRequests([request({ zone: "logic" })], "zone");
     expect(groups).toHaveLength(1);
-    expect(labels(groups)).toEqual(["логіка"]);
+    expect(labels(groups)).toEqual(["правила"]);
   });
 
   it("«без значення» завжди останнє, хай навіть його найбільше", () => {

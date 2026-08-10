@@ -121,6 +121,10 @@ export type CardMetaOptions = {
 export function buildCardMeta(request: DevRequest, options: CardMetaOptions = {}): CardMeta[] {
   const meta: CardMeta[] = [];
 
+  // Ховати найчастішу зону тут ми вже пробували 2026-08-09, коли `logic`
+  // стояла на 12 картках із 17 і мітка перестала щось означати. Дошка від
+  // цього не почала читатись — вона спорожніла. Лікували не той бік: вісь
+  // розрізали на шість зон (див. REQUEST_ZONES), і тепер підписані всі.
   if (request.zone) {
     meta.push({
       key: "zone",

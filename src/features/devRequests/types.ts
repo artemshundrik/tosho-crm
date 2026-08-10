@@ -11,6 +11,7 @@ import {
   Laptop,
   Lightbulb,
   ListTodo,
+  MousePointerClick,
   Plus,
   Rocket,
   SwatchBook,
@@ -53,7 +54,21 @@ export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
  * і жодне зі значень не можна викинути. Спроба скласти їх в один список типів
  * ламається на першому ж такому запиті.
  */
-export const REQUEST_ZONES = ["polish", "speed", "data", "access", "logic"] as const;
+/**
+ * ПОРЯДОК — за очікуваною частотою: саме в ньому зони стоять у фільтрі й у
+ * формі, і першими мають бути ті, які обирають щодня.
+ *
+ * `ux` доданий 2026-08-09, коли замір показав, що вісь не працює: 12 карток із
+ * 17 лежали в `logic`, бо в CRM майже все є «що система робить». Тепер `logic`
+ * ВУЗЬКИЙ — саме правила й розрахунки, — а «як людина цим користується» пішло
+ * в окрему зону. На тих самих 17 картках розклад став 5/6/4/2 замість 12.
+ *
+ * Ключі лишились старі (`polish` замість `ui`, `logic` замість `rules`) —
+ * навмисно: вони лежать у базі, і перейменування знецінило б зону на всіх
+ * наявних картках доти, доки не викотиться новий фронт. Підпис і ключ тут
+ * розходяться так само, як у модуля `nova_poshta` з підписом «Інтеграції».
+ */
+export const REQUEST_ZONES = ["polish", "ux", "logic", "data", "access", "speed"] as const;
 export type RequestZone = (typeof REQUEST_ZONES)[number];
 
 export type DevRequest = {
@@ -253,10 +268,14 @@ export const KIND_ICONS: Record<RequestKind, ComponentType<{ className?: string 
 /** Підписи зони. Малою літерою: на картці це мітка, а не заголовок. */
 export const ZONE_LABELS: Record<RequestZone, string> = {
   polish: "вигляд",
-  speed: "швидкість",
+  ux: "взаємодія",
+  // Було «логіка» — під цим словом опинялась будь-яка робота, бо «логіка» в
+  // коді є скрізь. «Правила» звужують до того, що справді розрізняє: умови,
+  // статуси, розрахунки.
+  logic: "правила",
   data: "дані",
   access: "доступи",
-  logic: "логіка",
+  speed: "швидкість",
 };
 
 /**
@@ -270,10 +289,18 @@ export const ZONE_LABELS: Record<RequestZone, string> = {
  */
 export const ZONE_TONE: Record<RequestZone, Tone> = {
   polish: "info",
-  speed: "success",
-  data: "neutral",
+  ux: "accent",
+  // Бірюзовий, а не амбер: жовта мітка на терміновій червоній картці читалась
+  // як другий сигнал тривоги поруч із типом «Не працює». Зелений теж не
+  // підходив — він каже «добре», а зона нічого не оцінює. `teal` доданий у
+  // реєстр тонів саме під цю потребу: помітний, але мовчазний.
+  logic: "teal",
+  // Не `neutral`: сірий збігався з контурними мітками теми й напрямку, і зона
+  // переставала бути якорем ряду — на дошці «дані» читались як ще один
+  // контур. `festive` (340°) досить далеко і від accent (262°), і від info.
+  data: "festive",
   access: "danger",
-  logic: "accent",
+  speed: "success",
 };
 
 /**
@@ -285,10 +312,13 @@ export const ZONE_TONE: Record<RequestZone, Tone> = {
  */
 export const ZONE_ICONS: Record<RequestZone, ComponentType<{ className?: string }>> = {
   polish: SwatchBook,
-  speed: Gauge,
+  // Курсор із кліком, а не «рука» чи «маршрут»: зона про те, що людина РОБИТЬ
+  // руками — тисне, підтверджує, сортує, — а не про подорож користувача.
+  ux: MousePointerClick,
+  logic: Workflow,
   data: Database,
   access: KeyRound,
-  logic: Workflow,
+  speed: Gauge,
 };
 
 /**

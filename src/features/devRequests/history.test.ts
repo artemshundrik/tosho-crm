@@ -189,7 +189,7 @@ describe("значення чекліста", () => {
   });
 
   it("зона перекладається тим самим словом, що й на картці", () => {
-    expect(auditValueLabel("zone", "logic")).toBe("логіка");
+    expect(auditValueLabel("zone", "logic")).toBe("правила");
     expect(auditValueLabel("zone", null)).toBe("порожньо");
   });
 });

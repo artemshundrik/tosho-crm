@@ -19,8 +19,22 @@
  * `festive` — святковий рожевий для днів народження й річниць. Раніше вони
  * ділили warning із лікарняним, і жовтий сидів одночасно на святі й на
  * хворобі — саме через це все й плуталось (рішення CEO 2026-08-02).
+ *
+ * `teal` — єдиний тон, названий за родиною кольору, а не за роллю, і це
+ * навмисно: він не означає нічого сам по собі. Доданий 2026-08-09, коли
+ * таксономії знадобився шостий колір і виявилось, що вільний лишився тільки
+ * сірий. Беріть його там, де потрібна ще одна помітна, але «мовчазна» мітка —
+ * саме тому, що ні «добре», ні «увага» він не каже.
  */
-export type Tone = "neutral" | "info" | "accent" | "success" | "warning" | "danger" | "festive";
+export type Tone =
+  | "neutral"
+  | "info"
+  | "accent"
+  | "success"
+  | "warning"
+  | "danger"
+  | "festive"
+  | "teal";
 
 /** Насичена заливка + межа + текст. Бейджі, статус-чипи. */
 export const toneBadgeClass: Record<Tone, string> = {
@@ -31,6 +45,7 @@ export const toneBadgeClass: Record<Tone, string> = {
   warning: "tone-warning",
   danger: "tone-danger",
   festive: "tone-festive",
+  teal: "tone-teal",
 };
 
 /** Приглушена заливка для ШИРОКИХ поверхонь — банерів, рядків, карток.
@@ -43,6 +58,7 @@ export const toneSubtleClass: Record<Tone, string> = {
   warning: "tone-warning-subtle",
   danger: "tone-danger-subtle",
   festive: "tone-festive-subtle",
+  teal: "tone-teal-subtle",
 };
 
 /** Тільки колір тексту/іконки. */
@@ -54,6 +70,7 @@ export const toneTextClass: Record<Tone, string> = {
   warning: "tone-text-warning",
   danger: "tone-text-danger",
   festive: "tone-text-festive",
+  teal: "tone-text-teal",
 };
 
 /** Крапка-індикатор (канбан-колонки, легенди). */
@@ -65,6 +82,7 @@ export const toneDotClass: Record<Tone, string> = {
   warning: "tone-dot-warning",
   danger: "tone-dot-danger",
   festive: "tone-dot-festive",
+  teal: "tone-dot-teal",
 };
 
 /** Квадратик під іконку: нейтральне тло + кольорові межа й іконка. */
@@ -76,6 +94,7 @@ export const toneIconBoxClass: Record<Tone, string> = {
   warning: "tone-icon-box-warning",
   danger: "tone-icon-box-danger",
   festive: "tone-icon-box-festive",
+  teal: "tone-icon-box-teal",
 };
 
 /** Лівий кант 3px — колір «на ручці» для широких рядів. */
@@ -87,6 +106,8 @@ export const toneFlagClass: Record<Tone, string> = {
   success: "flag-success",
   warning: "flag-warning",
   danger: "flag-danger",
+  // Канта немає: бірюзовий живе на мітках, а не на широких рядах.
+  teal: "",
 };
 
 /**

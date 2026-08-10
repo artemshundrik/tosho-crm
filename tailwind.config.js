@@ -99,6 +99,12 @@ export default {
             "soft-border": "hsl(var(--festive-soft-border))",
             foreground: "hsl(var(--festive-foreground))",
           },
+          teal: {
+            DEFAULT: "hsl(var(--teal-foreground))",
+            soft: "hsl(var(--teal-soft))",
+            "soft-border": "hsl(var(--teal-soft-border))",
+            foreground: "hsl(var(--teal-foreground))",
+          },
           "accent-tone": {
             DEFAULT: "hsl(var(--accent-tone-foreground))",
             soft: "hsl(var(--accent-tone-soft))",

@@ -50,6 +50,7 @@ const TONE_VAR: Record<Tone, string> = {
   warning: "--warning-foreground",
   danger: "--danger-foreground",
   festive: "--festive-foreground",
+  teal: "--teal-foreground",
 };
 
 /** Іконки типів — один словник на чип, планер і аватарку. */

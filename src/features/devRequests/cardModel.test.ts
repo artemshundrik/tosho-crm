@@ -9,7 +9,7 @@ import {
   shouldRestoreMenuFocus,
   type CardMetaOptions,
 } from "./cardModel";
-import type { DevRequest } from "./types";
+import { REQUEST_ZONES, type DevRequest } from "./types";
 
 function request(overrides: Partial<DevRequest> = {}): DevRequest {
   return {
@@ -76,6 +76,17 @@ describe("нижній рядок картки", () => {
       weight: "normal",
       hint: "Що чіпає ця робота",
     });
+  });
+
+  /**
+   * Сторож проти повернення до «сховати найчастішу зону»: так уже пробували
+   * 2026-08-09, і дошка від цього спорожніла. Кожна зона з реєстру має бути
+   * підписана — вісь тримається саме на тому, що мітка є в усіх.
+   */
+  it("мітку дає КОЖНА зона з реєстру — мовчазних немає", () => {
+    for (const zone of REQUEST_ZONES) {
+      expect(keys(request({ zone }))).toContain("zone");
+    }
   });
 
   it("тема показується як є, а порожньої немає взагалі", () => {
