@@ -138,7 +138,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     key: "nova_poshta",
     label: "Інтеграції",
     group: "account",
-    hint: "Нова Пошта; далі — Вчасно, Telegram, Dropbox",
+    // Підпис навмисно про НАЛАШТУВАННЯ, а не про самі служби: за старим
+    // «Нова Пошта; далі — Вчасно…» розбір карток тягнув сюди будь-який запит,
+    // де звучала Нова Пошта, — навіть створення ТТН, яке роблять із замовлення.
+    hint: "Ключі й підключення зовнішніх сервісів: Нова Пошта, Вчасно, Telegram, Dropbox",
     defaultFor: ownerOrSeo,
   },
   { key: "pulse", label: "Пульс команди", group: "account", hint: "Аналітика активності", defaultFor: ownerOrSeo },
