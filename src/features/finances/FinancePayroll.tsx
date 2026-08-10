@@ -1,6 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, StickyNote } from "lucide-react";
+import { FilePlus2, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FinanceBentoSummary, monthGenitive } from "./FinanceBentoSummary";
 import { FinanceMonthBar } from "./FinanceMonthBar";
@@ -124,17 +124,33 @@ type Person = {
   departed: boolean;
 };
 
-type Draft = { base: string; bonus: string; deduction: string; advance: string; advanceDate: string };
+type Draft = {
+  base: string;
+  bonus: string;
+  deduction: string;
+  /** Штраф. Окремо від `deduction` — там «Офіційна ЗП», і вона про інше. */
+  penalty: string;
+  advance: string;
+  advanceDate: string;
+};
 
-const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", advance: "", advanceDate: "" };
+const EMPTY_DRAFT: Draft = { base: "", bonus: "", deduction: "", penalty: "", advance: "", advanceDate: "" };
 
 /**
- * Рядок заголовків тримається верху при скролі, контент їде під ним.
+ * Рядок заголовків тримається верху СТОРІНКИ.
+ *
+ * Таблиця їде разом зі сторінкою, доки заголовки не впруться в липку смугу
+ * місяця, — і далі рядки прокручуються вже під ними. Зсув зверху саме під цю
+ * смугу (FinanceMonthBar: висота ~49px, на lg зміщений на -24px).
  *
  * Липкість вішаємо на самі <th>, а не на <thead>: у таблиць sticky на секції
- * стабільно працює не в усіх рушіях. Зсув зверху — під липкий бар місяця
- * (FinanceMonthBar: висота ~49px, а на lg він зміщений на -24px).
- * Непрозорий фон обов'язковий, інакше рядки просвічують крізь заголовок.
+ * стабільно працює не в усіх рушіях. Непрозорий фон обов'язковий, інакше рядки
+ * просвічують крізь заголовок.
+ *
+ * ВЛАСНОГО скрол-боксу в таблиці бути НЕ МОЖЕ: щойно на обгортці з'явиться
+ * `overflow`, вона стане точкою відліку для sticky, і заголовки відірвуться від
+ * сторінки. Це не наш винахід — про це прямо написано в `Table` біля пропа
+ * `stickyHeader`. Пробували 2026-08-10, повернули назад.
  */
 const STICKY_HEAD =
   "sticky top-12 z-10 border-b border-border/40 bg-background/95 backdrop-blur-sm lg:top-6";
@@ -149,16 +165,53 @@ const STICKY_HEAD =
  *
  * `cell` каже, чим заповнити клітинку в скелетоні: поле вводу, число, тощо.
  */
-const PAYROLL_COLUMNS = [
-  { key: "person", label: "Співробітник", width: "w-[21%]", align: "", cell: "person" },
-  { key: "base", label: "Ставка", width: "w-[11%]", align: "", cell: "input" },
-  { key: "bonus", label: "Бонус", width: "w-[10%]", align: "", cell: "input" },
-  { key: "official", label: "Офіційна ЗП", width: "w-[12%]", align: "", cell: "input" },
-  { key: "advance", label: "Аванс", width: "w-[12%]", align: "", cell: "input" },
-  { key: "total", label: "До виплати", width: "w-[13%]", align: "text-right", cell: "amount" },
-  { key: "note", label: "Нотатка", width: "w-[13%]", align: "", cell: "note" },
-  { key: "status", label: "Статус", width: "w-[8%]", align: "text-center", cell: "status" },
-] as const;
+const TABLE_MIN_WIDTH = "min-w-[1000px]";
+
+/**
+ * Обгортка таблиці. БЕЗ `overflow` — навмисно: будь-який `overflow` тут зробив
+ * би її скрол-контейнером і відірвав липкі заголовки від сторінки (див.
+ * STICKY_HEAD). Коли таблиця не влазить, убік їде вся панель фінансів.
+ */
+const TABLE_BOX = "rounded-xl border border-border/60";
+
+type PayrollColumn = {
+  key: string;
+  label: string;
+  width: string;
+  align: string;
+  cell: "person" | "input" | "amount" | "note" | "status";
+  /** Підпис лишається для читача з екрана, але в шапці не малюється. */
+  srOnly?: boolean;
+};
+
+const PAYROLL_COLUMNS: readonly PayrollColumn[] = [
+  // Відсотки мусять давати РІВНО 100: колонок дев'ять, і зайвий відсоток
+  // розповзається по всіх — заголовки починають обрізатись.
+  //
+  // «Співробітник» тримаємо на 15%: замір показав, що під текст треба ~160px
+  // (найдовше — «Начальник відділу логістики», 153px), а все понад те стояло
+  // порожнім стовпом повітря перед «Ставкою».
+  //
+  // «Нотатка» звузилась з 14,5% до 4% (не менше 42px) — це колонка-позначка.
+  // Причина в тому, ЩО там лежить: нотатка буває в однієї-двох людей із
+  // сімнадцяти, тобто 88% колонки — порожнеча. Текст усередині рядка все одно
+  // не читався (реальні нотатки тут — абзаци на 200–1400px), тож показуємо
+  // позначку, а текст даємо в попапі. Звільнені 10,5% пішли числам.
+  { key: "person", label: "Співробітник", width: "w-[15%]", align: "", cell: "person" },
+  { key: "base", label: "Ставка", width: "w-[13%]", align: "", cell: "input" },
+  { key: "bonus", label: "Бонус", width: "w-[11.5%]", align: "", cell: "input" },
+  // Штраф стоїть одразу за бонусом: це його дзеркало, і поруч їх видно парою.
+  { key: "penalty", label: "Штраф", width: "w-[11.5%]", align: "", cell: "input" },
+  { key: "official", label: "Офіційна ЗП", width: "w-[13.5%]", align: "", cell: "input" },
+  { key: "advance", label: "Аванс", width: "w-[13.5%]", align: "", cell: "input" },
+  { key: "total", label: "До виплати", width: "w-[11%]", align: "text-right", cell: "amount" },
+  { key: "note", label: "Нотатка", width: "w-[4%] min-w-[42px]", align: "text-center", cell: "note", srOnly: true },
+  // «Статус» — це перемикач на 26px. При 8,5% навколо нього стояло по 40px
+  // повітря з кожного боку, і колонка читалась як порожня. Нижче 7% не можна:
+  // на мінімальній ширині таблиці підпис «Статус» починає обрізатись, а це
+  // остання колонка — обрізаний заголовок у ній видно найкраще.
+  { key: "status", label: "Статус", width: "w-[7%]", align: "text-center", cell: "status" },
+];
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -234,6 +287,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         base: amountToInput(entry.baseAmount),
         bonus: amountToInput(entry.bonusAmount),
         deduction: amountToInput(entry.deductionAmount),
+        penalty: amountToInput(entry.penaltyAmount),
         advance: amountToInput(entry.advanceAmount),
         advanceDate: entry.advanceDate ?? "",
       };
@@ -313,6 +367,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
             baseAmount: data.rates.get(p.userId) as number,
             bonusAmount: stored?.bonusAmount ?? 0,
             deductionAmount: stored?.deductionAmount ?? 0,
+            penaltyAmount: stored?.penaltyAmount ?? 0,
             advanceAmount: stored?.advanceAmount ?? 0,
             advanceDate: stored?.advanceDate ?? null,
             note: stored?.note ?? null,
@@ -333,6 +388,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       parsePayrollAmount(d.base) +
       parsePayrollAmount(d.bonus) -
       parsePayrollAmount(d.deduction) -
+      parsePayrollAmount(d.penalty) -
       parsePayrollAmount(d.advance)
     );
   };
@@ -340,6 +396,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const totals = React.useMemo(() => {
     let base = 0;
     let bonus = 0;
+    let penalty = 0;
     let advance = 0;
     let total = 0;
     let paid = 0;
@@ -347,15 +404,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       const d = draftFor(person.userId);
       const b = parsePayrollAmount(d.base);
       const bo = parsePayrollAmount(d.bonus);
+      const pen = parsePayrollAmount(d.penalty);
       const adv = parsePayrollAmount(d.advance);
-      const t = b + bo - parsePayrollAmount(d.deduction) - adv;
+      const t = b + bo - parsePayrollAmount(d.deduction) - pen - adv;
       base += b;
       bonus += bo;
+      penalty += pen;
       advance += adv;
       total += t;
       if (meta.get(person.userId)?.status === "paid") paid += t;
     }
-    return { base, bonus, advance, total, paid };
+    return { base, bonus, penalty, advance, total, paid };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [people, drafts, entries, meta]);
 
@@ -376,6 +435,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
           baseAmount: parsePayrollAmount(d.base),
           bonusAmount: parsePayrollAmount(d.bonus),
           deductionAmount: parsePayrollAmount(d.deduction),
+          penaltyAmount: parsePayrollAmount(d.penalty),
           advanceAmount: parsePayrollAmount(d.advance),
           advanceDate: d.advanceDate || null,
           note: entry?.note ?? null,
@@ -393,6 +453,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
     const baseAmount = parsePayrollAmount(d.base);
     const bonusAmount = parsePayrollAmount(d.bonus);
     const deductionAmount = parsePayrollAmount(d.deduction);
+    const penaltyAmount = parsePayrollAmount(d.penalty);
     const advanceAmount = parsePayrollAmount(d.advance);
     const advanceDate = d.advanceDate || null;
     // Optimistic — keep the shared payroll_entries snapshot in sync so the cell
@@ -405,9 +466,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         baseAmount,
         bonusAmount,
         deductionAmount,
+        penaltyAmount,
         advanceAmount,
         advanceDate,
-        totalAmount: baseAmount + bonusAmount - deductionAmount - advanceAmount,
+        totalAmount: baseAmount + bonusAmount - deductionAmount - penaltyAmount - advanceAmount,
         note: nextNote,
       });
       return next;
@@ -418,7 +480,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
         userId: uid,
         period,
         updatedBy: userId,
-        values: { baseAmount, bonusAmount, deductionAmount, advanceAmount, advanceDate, note: nextNote },
+        values: { baseAmount, bonusAmount, deductionAmount, penaltyAmount, advanceAmount, advanceDate, note: nextNote },
       });
     } catch (error) {
       toast.error("Не вдалося зберегти нотатку", { description: getErrorMessage(error, "") });
@@ -499,6 +561,17 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
             <span>
               Бонуси: <span className="font-medium tabular-nums text-foreground/80">{formatUAH(totals.bonus)}</span>
             </span>
+            {/* Штрафи показуємо, лише коли вони є: нуль у підсумковій смузі
+                щомісяця — це рядок, який нічого не каже, а місце займає. Так
+                само поводиться «Видано авансом» нижче. */}
+            {totals.penalty > 0 ? (
+              <span>
+                Штрафи:{" "}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  −{formatUAH(totals.penalty)}
+                </span>
+              </span>
+            ) : null}
             {totals.advance > 0 ? (
               <span>
                 Видано авансом:{" "}
@@ -512,10 +585,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
       {loading ? (
         <PayrollTableSkeleton />
       ) : (
-        <div className="rounded-xl border border-border/60">
-          {/* table-fixed + % widths: columns stretch to fill the width and scale
-              down on narrower screens without a horizontal scrollbar. */}
-          <Table size="sm" stickyHeader className="table-fixed">
+        <div className={TABLE_BOX}>
+          {/* table-fixed + % ширини: колонки тягнуться на всю ширину, а нижче
+              TABLE_MIN_WIDTH перестають тиснутись і їдуть під прокрутку. */}
+          <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
             <TableHeader>
               <TableRow>
                 {/* Колонки з полями вводу вирівняні ліворуч: поле займає всю
@@ -525,7 +598,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                     тримається з ним в одній лінії. */}
                 {PAYROLL_COLUMNS.map((column) => (
                   <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
-                    {column.label}
+                    {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
                   </TableHead>
                 ))}
               </TableRow>
@@ -536,7 +609,10 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                 const m = meta.get(person.userId);
                 const isPaid = m?.status === "paid";
                 return (
-                  <TableRow key={person.userId}>
+                  // `group/row` — щоб бліда позначка «додати нотатку» прокидалась
+                  // при наведенні на весь рядок, а не лише на саму іконку: інакше
+                  // її треба спершу знайти, а вона майже невидима.
+                  <TableRow key={person.userId} className="group/row">
                     <TableCell>
                       <div className="flex min-w-0 items-center gap-2">
                         <AvatarBase
@@ -581,6 +657,13 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                         value={d.bonus}
                         onChange={(next) => queueSaveAmount(person.userId, { bonus: next })}
                         label="Бонус"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <AmountInput
+                        value={d.penalty}
+                        onChange={(next) => queueSaveAmount(person.userId, { penalty: next })}
+                        label="Штраф"
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -642,13 +725,18 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
  */
 function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="rounded-xl border border-border/60" role="status" aria-busy="true" aria-label="Завантаження виплат">
-      <Table size="sm" stickyHeader className="table-fixed">
+    <div
+      className={TABLE_BOX}
+      role="status"
+      aria-busy="true"
+      aria-label="Завантаження виплат"
+    >
+      <Table size="sm" stickyHeader className={cn("table-fixed", TABLE_MIN_WIDTH)}>
         <TableHeader>
           <TableRow>
             {PAYROLL_COLUMNS.map((column) => (
               <TableHead key={column.key} className={cn(STICKY_HEAD, column.width, column.align)}>
-                {column.label}
+                {column.srOnly ? <span className="sr-only">{column.label}</span> : column.label}
               </TableHead>
             ))}
           </TableRow>
@@ -657,7 +745,7 @@ function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
           {Array.from({ length: rows }).map((_, index) => (
             <TableRow key={index}>
               {PAYROLL_COLUMNS.map((column) => (
-                <TableCell key={column.key} className={column.align}>
+<TableCell key={column.key} className={column.align}>
                   {column.cell === "person" ? (
                     <div className="flex min-w-0 items-center gap-2">
                       <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
@@ -674,10 +762,7 @@ function PayrollTableSkeleton({ rows = 8 }: { rows?: number }) {
                   ) : column.cell === "amount" ? (
                     <Skeleton className="ml-auto h-3.5 w-16 rounded-full" />
                   ) : column.cell === "note" ? (
-                    <div className="flex items-center gap-1.5">
-                      <Skeleton className="h-3.5 w-3.5 shrink-0 rounded" />
-                      <Skeleton className="h-3 w-14 rounded-full opacity-70" />
-                    </div>
+                    <Skeleton className="mx-auto h-5 w-5 rounded-md" />
                   ) : (
                     <Skeleton className="mx-auto h-5 w-9 rounded-full" />
                   )}
@@ -877,17 +962,26 @@ function PayrollNoteCell({
           onMouseEnter={openHover}
           onMouseLeave={closeHover}
           onClick={startEdit}
+          aria-label={hasNote ? "Нотатка про виплату" : "Додати нотатку"}
+          title={hasNote ? undefined : "Додати нотатку"}
           className={cn(
-            // Fills the fixed-layout note column; content truncates with «…».
-            "flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
-            hasNote ? "text-foreground" : "text-muted-foreground/70"
+            // Клітинка-позначка: 22×22 по центру вузької колонки. Кнопка є в
+            // КОЖНОМУ рядку — інакше не було б куди натиснути, щоб завести
+            // нотатку там, де її ще нема.
+            "mx-auto grid h-[22px] w-[22px] place-items-center rounded-md transition-colors",
+            hasNote
+              ? "tone-teal-subtle tone-text-teal hover:brightness-110"
+              : // Порожня клітинка ледве проступає: 88% рядків — без нотатки, і
+                // сімнадцять яскравих плюсів були б тим самим шумом, від якого
+                // ми щойно позбулись, звузивши колонку. На наведенні рядком
+                // проявляється, на власному — стає повноцінною кнопкою.
+                "text-muted-foreground/25 hover:bg-muted/60 hover:text-foreground group-hover/row:text-muted-foreground/60"
           )}
         >
-          <StickyNote className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           {hasNote ? (
-            <span className="min-w-0 flex-1 truncate">{note}</span>
+            <StickyNote className="h-3.5 w-3.5" />
           ) : (
-            <span className="text-xs">Нотатка</span>
+            <FilePlus2 className="h-3.5 w-3.5" />
           )}
         </button>
       </PopoverAnchor>

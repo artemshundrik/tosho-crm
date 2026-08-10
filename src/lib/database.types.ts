@@ -3044,6 +3044,7 @@ export type Database = {
           created_at: string
           deduction_amount: number
           note: string | null
+          penalty_amount: number
           period: string
           total_amount: number | null
           updated_at: string
@@ -3059,6 +3060,7 @@ export type Database = {
           created_at?: string
           deduction_amount?: number
           note?: string | null
+          penalty_amount?: number
           period: string
           total_amount?: number | null
           updated_at?: string
@@ -3074,6 +3076,7 @@ export type Database = {
           created_at?: string
           deduction_amount?: number
           note?: string | null
+          penalty_amount?: number
           period?: string
           total_amount?: number | null
           updated_at?: string

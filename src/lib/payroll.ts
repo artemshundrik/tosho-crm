@@ -11,6 +11,8 @@ export type PayrollEntry = {
   baseAmount: number;
   bonusAmount: number;
   deductionAmount: number;
+  /** Штраф за місяць. Віднімається від totalAmount окремо від «Офіційної ЗП». */
+  penaltyAmount: number;
   /** Уже виданий аванс. Віднімається від totalAmount — у ньому лишається залишок. */
   advanceAmount: number;
   advanceDate: string | null; // YYYY-MM-DD
@@ -22,6 +24,7 @@ export type PayrollValues = {
   baseAmount: number;
   bonusAmount: number;
   deductionAmount: number;
+  penaltyAmount: number;
   advanceAmount: number;
   advanceDate: string | null;
   note: string | null;
@@ -33,6 +36,7 @@ type PayrollRow = {
   base_amount: number | string | null;
   bonus_amount: number | string | null;
   deduction_amount: number | string | null;
+  penalty_amount: number | string | null;
   advance_amount: number | string | null;
   advance_date: string | null;
   total_amount: number | string | null;
@@ -107,7 +111,7 @@ export async function loadPayrollEntries(
     .schema("tosho")
     .from("payroll_entries")
     .select(
-      "user_id, period, base_amount, bonus_amount, deduction_amount, advance_amount, advance_date, total_amount, note"
+      "user_id, period, base_amount, bonus_amount, deduction_amount, penalty_amount, advance_amount, advance_date, total_amount, note"
     )
     .eq("workspace_id", workspaceId)
     .eq("period", period);
@@ -122,6 +126,7 @@ export async function loadPayrollEntries(
       baseAmount: toNumber(row.base_amount),
       bonusAmount: toNumber(row.bonus_amount),
       deductionAmount: toNumber(row.deduction_amount),
+      penaltyAmount: toNumber(row.penalty_amount),
       advanceAmount: toNumber(row.advance_amount),
       advanceDate: row.advance_date,
       totalAmount: toNumber(row.total_amount),
@@ -193,6 +198,7 @@ export async function upsertPayrollEntry(params: {
         base_amount: values.baseAmount,
         bonus_amount: values.bonusAmount,
         deduction_amount: values.deductionAmount,
+        penalty_amount: values.penaltyAmount,
         advance_amount: values.advanceAmount,
         // Дата без суми заборонена перевіркою в БД — тримаємо це й тут.
         advance_date: values.advanceAmount > 0 ? values.advanceDate : null,
