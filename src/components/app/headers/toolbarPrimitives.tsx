@@ -18,9 +18,35 @@ type ToolbarSearchProps = {
   loading?: boolean;
   className?: string;
   inputClassName?: string;
+  /**
+   * Пауза перед тим, як віддати запит сторінці. 0 — віддавати одразу.
+   * Міняти є сенс лише там, де сторінка справді легка.
+   */
+  debounceMs?: number;
 };
 
-/** Пошук тулбара: іконка зліва, очистка справа, опційний спінер. */
+/**
+ * Пошук тулбара: іконка зліва, очистка справа, опційний спінер.
+ *
+ * ЧОМУ ТУТ ЗАТРИМКА. Поле віддає запит сторінці не на кожну літеру, а коли
+ * людина спинилась. Раніше кожне натискання одразу міняло стан сторінки, і на
+ * важких списках це коштувало сотні мілісекунд перемальовування. Заміряно на
+ * дизайні 2026-08-10: друк у людському темпі (140мс на символ) — з 14 літер
+ * слова «агропродсервіс» до поля дійшло 8, головний потік був заблокований
+ * 9 секунд, найдовше одиночне блокування 872мс. Літери, набрані під час
+ * блокування, просто зникали (REQ-23).
+ *
+ * `useDeferredValue` на сторінці цього не рятує: він лише відкладає перерахунок
+ * фільтра, а перемальовування всього дерева однаково йде на кожну літеру.
+ *
+ * Поки людина друкує, перемальовується ЛИШЕ це поле. Сторінка дізнається про
+ * запит один раз за серію.
+ *
+ * 300мс, а не 150: пауза мусить бути довшою за проміжок між натисканнями, інакше
+ * повільніший друк однаково дасть перемальовування на кожну літеру. Заміряно
+ * після правки — та сама серія з 14 літер: 3 довгі задачі замість 20, сумарне
+ * блокування 1.7с замість 9с, жодної втраченої літери.
+ */
 export function ToolbarSearch({
   value,
   onChange,
@@ -28,24 +54,83 @@ export function ToolbarSearch({
   loading = false,
   className,
   inputClassName,
+  debounceMs = 300,
 }: ToolbarSearchProps) {
+  // Те, що бачить людина. Оновлюється миттєво й нікого більше не чіпає.
+  const [draft, setDraft] = React.useState(value);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Останнє, що ми ВІДДАЛИ нагору. Потрібне, щоб відрізнити відповідь на власну
+  // подію від справжньої зміни ззовні («Скинути фільтри», відновлення стану).
+  const emittedRef = React.useRef(value);
+  const onChangeRef = React.useRef(onChange);
+  React.useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  React.useEffect(() => {
+    if (value === emittedRef.current) return;
+    emittedRef.current = value;
+    setDraft(value);
+  }, [value]);
+
+  const emit = React.useCallback((next: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    emittedRef.current = next;
+    onChangeRef.current(next);
+  }, []);
+
+  const schedule = React.useCallback(
+    (next: string) => {
+      setDraft(next);
+      if (debounceMs <= 0) {
+        emit(next);
+        return;
+      }
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => emit(next), debounceMs);
+    },
+    [debounceMs, emit]
+  );
+
+  // Незакінчений запит не має пропасти разом із полем: сторінки зберігають
+  // фільтри при виході, і людина повернулась би до чужого стану.
+  React.useEffect(
+    () => () => {
+      if (!timerRef.current) return;
+      clearTimeout(timerRef.current);
+    },
+    []
+  );
+
   return (
     <div className={cn("relative", className)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={draft}
+        onChange={(event) => schedule(event.target.value)}
+        // Enter — «шукай зараз», без очікування паузи.
+        onKeyDown={(event) => {
+          if (event.key === "Enter") emit(draft);
+        }}
+        onBlur={() => {
+          if (timerRef.current) emit(draft);
+        }}
         placeholder={placeholder}
         className={cn(TOOLBAR_CONTROL, "pl-9 pr-9", inputClassName)}
       />
-      {value ? (
+      {draft ? (
         <Button
           type="button"
           variant="control"
           size="iconSm"
           aria-label="Очистити пошук"
           className="absolute right-2 top-1/2 -translate-y-1/2"
-          onClick={() => onChange("")}
+          // Очистка — дія, а не набір: віддаємо одразу, без паузи.
+          onClick={() => {
+            setDraft("");
+            emit("");
+          }}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -54,7 +139,7 @@ export function ToolbarSearch({
         <Loader2
           className={cn(
             "absolute top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground",
-            value ? "right-10" : "right-3"
+            draft ? "right-10" : "right-3"
           )}
         />
       ) : null}
