@@ -15,7 +15,7 @@ import {
 } from "./types";
 
 const SELECT_COLUMNS =
-  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
+  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,released_at,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
 
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */

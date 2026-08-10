@@ -24,6 +24,7 @@ function request(overrides: Partial<DevRequest> = {}): DevRequest {
     moduleKey: null,
     priority: null,
     zone: null,
+    releasedAt: null,
     theme: null,
     checklist: [],
     autoClassified: false,

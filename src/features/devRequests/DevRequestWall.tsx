@@ -55,6 +55,7 @@ export function DevRequestWall({
   onMove,
   onEdit,
   onDelete,
+  onCopyCard,
   canManage,
 }: {
   requests: DevRequest[];
@@ -65,6 +66,8 @@ export function DevRequestWall({
   onMove: (id: string, status: RequestStatus) => void;
   onEdit: (request: DevRequest) => void;
   onDelete: (request: DevRequest) => void;
+  /** Показуємо пункт «Картка для чату» лише там, де картка вже викочена. */
+  onCopyCard?: (request: DevRequest) => void;
   canManage: boolean;
 }) {
   if (requests.length === 0) {
@@ -147,6 +150,9 @@ export function DevRequestWall({
                     }}
                     onEdit={() => onEdit(request)}
                     onDelete={() => onDelete(request)}
+                onCopyCard={
+                  onCopyCard && request.status === "released" ? () => onCopyCard(request) : undefined
+                }
                   />
                 </div>
               ) : null}

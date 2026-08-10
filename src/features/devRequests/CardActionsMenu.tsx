@@ -1,5 +1,5 @@
 import { useRef, type ComponentType } from "react";
-import { MoreVertical, PencilLine, Trash2 } from "lucide-react";
+import { ImageDown, MoreVertical, PencilLine, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,11 @@ type CardActionsMenuProps = {
   move?: CardMoveAction;
   onEdit: () => void;
   onDelete: () => void;
+  /**
+   * Зібрати картинку «виправлено» для чату. Передається лише для викочених
+   * карток — для решти пункту в меню просто немає, бо хвалитись ще нема чим.
+   */
+  onCopyCard?: () => void;
 };
 
 /**
@@ -38,7 +43,7 @@ type CardActionsMenuProps = {
  * на всю дошку означала б, що спосіб відкриття однієї картки вирішує поведінку
  * іншої. Хуки всередині map() класти не можна, тож компонент.
  */
-export function CardActionsMenu({ move, onEdit, onDelete }: CardActionsMenuProps) {
+export function CardActionsMenu({ move, onEdit, onDelete, onCopyCard }: CardActionsMenuProps) {
   // Ref, а не стан: значення читає обробник закриття в тому ж такті, і
   // перемальовувати картку через це нема потреби.
   const openedByRef = useRef<MenuOpenSource>("pointer");
@@ -87,6 +92,15 @@ export function CardActionsMenu({ move, onEdit, onDelete }: CardActionsMenuProps
             <DropdownMenuItem onClick={move.onSelect}>
               <MoveIcon />
               {move.label}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="-mx-1.5" />
+          </>
+        ) : null}
+        {onCopyCard ? (
+          <>
+            <DropdownMenuItem onClick={onCopyCard}>
+              <ImageDown />
+              Картка для чату
             </DropdownMenuItem>
             <DropdownMenuSeparator className="-mx-1.5" />
           </>

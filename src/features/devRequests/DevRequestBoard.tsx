@@ -37,6 +37,8 @@ type DevRequestBoardProps = {
   onSelect: (request: DevRequest) => void;
   onEdit: (request: DevRequest) => void;
   onDelete: (request: DevRequest) => void;
+  /** Показуємо пункт «Картка для чату» лише там, де картка вже викочена. */
+  onCopyCard?: (request: DevRequest) => void;
   /** Хто дивиться — щоб не підписувати автором власні картки. */
   viewerId: string | null;
   /**
@@ -55,6 +57,7 @@ export function DevRequestBoard({
   onSelect,
   onEdit,
   onDelete,
+  onCopyCard,
   viewerId,
   canManage,
   groupBy,
@@ -220,6 +223,9 @@ export function DevRequestBoard({
                 }}
                 onEdit={() => onEdit(request)}
                 onDelete={() => onDelete(request)}
+                onCopyCard={
+                  onCopyCard && request.status === "released" ? () => onCopyCard(request) : undefined
+                }
               />
             </div>
           ) : null}

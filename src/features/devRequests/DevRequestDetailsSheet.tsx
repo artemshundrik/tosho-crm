@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ChevronDown, CircleDashed, Layers, ListChecks, PencilLine, Trash2 } from "lucide-react";
+import { ChevronDown, CircleDashed, ImageDown, Layers, ListChecks, PencilLine, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,8 @@ type DevRequestDetailsSheetProps = {
   onClose: () => void;
   onEdit: (request: DevRequest) => void;
   onDelete: (request: DevRequest) => void;
+  /** Відкрити збирач картинки «виправлено». Вікно живе на сторінці. */
+  onCopyCard?: (request: DevRequest) => void;
   canManage: boolean;
 };
 
@@ -116,6 +118,7 @@ export function DevRequestDetailsSheet({
   onClose,
   onEdit,
   onDelete,
+  onCopyCard,
   canManage,
 }: DevRequestDetailsSheetProps) {
   const { userId } = useAuth();
@@ -407,6 +410,17 @@ export function DevRequestDetailsSheet({
               // діють. Обробники ті самі, що й у меню картки, — сторінка передає
               // свої; другої логіки правки й видалення тут немає навмисно.
               <SheetFooter className="justify-end gap-2 border-t bg-muted/20 px-5 py-3 sm:justify-end sm:space-x-0">
+                {shown.status === "released" && onCopyCard ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mr-auto"
+                    onClick={() => onCopyCard(shown)}
+                  >
+                    <ImageDown className="h-4 w-4" />
+                    Картка для чату
+                  </Button>
+                ) : null}
                 {/* Видалення тихе — рамка замість заливки. Дія незворотна, але
                     підтвердження стоїть на сторінці, тож кричати кольором на
                     кожному перегляді картки немає потреби.

@@ -29,6 +29,7 @@ import { DevRequestList } from "@/features/devRequests/DevRequestList";
 import { DevRequestWall } from "@/features/devRequests/DevRequestWall";
 import { GroupControl } from "@/features/devRequests/GroupControl";
 import { readGroupKey, writeGroupKey, type GroupKey } from "@/features/devRequests/grouping";
+import { ReleaseCardDialog } from "@/features/devRequests/ReleaseCardDialog";
 import {
   NewDevRequestDialog,
   type NewDevRequestInput,
@@ -80,6 +81,11 @@ export default function DevRequestsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   /** Картка, яку просять видалити. Без підтвердження не видаляємо. */
   const [pendingDelete, setPendingDelete] = useState<DevRequest | null>(null);
+  /**
+   * Картинка «виправлено» живе на рівні сторінки, а не в дровері: відкривати її
+   * можна і з меню картки на дошці, і з самої картки — вікно має бути одне.
+   */
+  const [releaseCardFor, setReleaseCardFor] = useState<DevRequest | null>(null);
   // Вибрана картка — під панель обговорення, яку додає наступна задача.
   const [selected, setSelected] = useState<DevRequest | null>(null);
   const kanbanViewportRef = useRef<HTMLDivElement | null>(null);
@@ -433,6 +439,7 @@ export default function DevRequestsPage() {
             onSelect={setSelected}
             onEdit={openEdit}
             onDelete={setPendingDelete}
+            onCopyCard={setReleaseCardFor}
             viewerId={userId}
             groupBy={groupBy}
             canManage={canSee}
@@ -456,6 +463,7 @@ export default function DevRequestsPage() {
             onMove={handleMove}
             onEdit={openEdit}
             onDelete={setPendingDelete}
+            onCopyCard={setReleaseCardFor}
             canManage={canSee}
           />
         ) : (
@@ -472,11 +480,22 @@ export default function DevRequestsPage() {
         </div>
       )}
 
+      {releaseCardFor ? (
+        <ReleaseCardDialog
+          request={releaseCardFor}
+          open={releaseCardFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setReleaseCardFor(null);
+          }}
+        />
+      ) : null}
+
       <DevRequestDetailsSheet
         request={selected}
         onClose={() => setSelected(null)}
         onEdit={openEdit}
         onDelete={setPendingDelete}
+        onCopyCard={setReleaseCardFor}
         canManage={canSee}
       />
 

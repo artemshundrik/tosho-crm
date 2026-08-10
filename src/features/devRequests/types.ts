@@ -86,6 +86,8 @@ export type DevRequest = {
   priority: RequestPriority | null;
   /** Що чіпаємо. Порожньо — картку ще не розбирали. */
   zone: RequestZone | null;
+  /** Коли поїхало в прод. Ставить плагін релізів; null — ще не викочено. */
+  releasedAt: string | null;
   /** Вільна мітка-тема: групує картки однієї роботи замість дерева підзадач. */
   theme: string | null;
   /** Пункти великої задачі. Порожній масив — звичайна картка. */
@@ -366,6 +368,7 @@ type DevRequestRow = {
   module_key: string | null;
   priority: string | null;
   zone: string | null;
+  released_at: string | null;
   theme: string | null;
   checklist: unknown;
   auto_classified: boolean | null;
@@ -426,6 +429,7 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     moduleKey: asModuleKey(row.module_key),
     priority: asPriority(row.priority),
     zone: asZone(row.zone),
+    releasedAt: row.released_at ?? null,
     theme: asTheme(row.theme),
     checklist: parseChecklist(row.checklist),
     autoClassified: row.auto_classified ?? false,
