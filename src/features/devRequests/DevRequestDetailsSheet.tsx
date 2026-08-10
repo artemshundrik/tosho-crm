@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Layers, ListChecks, PencilLine, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, CircleDashed, Layers, ListChecks, PencilLine, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -263,16 +263,24 @@ export function DevRequestDetailsSheet({
                     {PRIORITY_LABELS[shown.priority]}
                   </Chip>
                 ) : null}
-                {/* Примітка про розбір — не мітка, а застереження про якість
-                    решти міток. Тому без рамки: інакше читалася б як ще одне
-                    поле картки. */}
+                {/* Не мітка, а застереження про якість решти міток. Тому без
+                    рамки: інакше читалася б як ще одне поле картки.
+
+                    Підпис був «розбір» — і не працював: слово називало АВТОРА
+                    міток, а не те, що з ними робити. Читач думав, що це слід
+                    якоїсь дії над карткою, і перепитував. Тепер підпис каже
+                    стан: мітки поставила модель і їх ще ніхто не звіряв.
+                    Іконка теж змінилась: іскри означали «магія AI», а тут
+                    ідеться не про походження, а про непевність — пунктирне
+                    коло повторює той самий пунктир, яким на дошці підкреслено
+                    тип незвірених карток. */}
                 {shown.autoClassified ? (
                   <span
                     className="inline-flex items-center gap-1 text-2xs text-muted-foreground/70"
-                    title="Тип, напрямок і зону проставив розбір — людина ще не звіряла"
+                    title="Тип, напрямок, зону й пріоритет поставила модель під час запису. Людина їх ще не звіряла — щойно картку збережуть через «Редагувати», позначка зникне"
                   >
-                    <Sparkles className="h-3 w-3" />
-                    розбір
+                    <CircleDashed className="h-3 w-3" />
+                    не звірено
                   </span>
                 ) : null}
               </div>
@@ -398,14 +406,14 @@ export function DevRequestDetailsSheet({
               // рукою. Угорі їм не місце ще й тому, що там читають назву, а не
               // діють. Обробники ті самі, що й у меню картки, — сторінка передає
               // свої; другої логіки правки й видалення тут немає навмисно.
-              <SheetFooter className="justify-start gap-2 border-t bg-muted/20 px-5 py-3 sm:justify-start sm:space-x-0">
-                <Button variant="secondary" size="sm" onClick={() => onEdit(shown)}>
-                  <PencilLine className="h-4 w-4" />
-                  Редагувати
-                </Button>
+              <SheetFooter className="justify-end gap-2 border-t bg-muted/20 px-5 py-3 sm:justify-end sm:space-x-0">
                 {/* Видалення тихе — рамка замість заливки. Дія незворотна, але
                     підтвердження стоїть на сторінці, тож кричати кольором на
-                    кожному перегляді картки немає потреби. */}
+                    кожному перегляді картки немає потреби.
+
+                    Порядок перевернуто разом із вирівнюванням: у правому куті
+                    око зупиняється на ОСТАННІЙ кнопці, і там має стояти
+                    «Редагувати», а не незворотне видалення. */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -414,6 +422,10 @@ export function DevRequestDetailsSheet({
                 >
                   <Trash2 className="h-4 w-4" />
                   Видалити
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => onEdit(shown)}>
+                  <PencilLine className="h-4 w-4" />
+                  Редагувати
                 </Button>
               </SheetFooter>
             ) : null}
