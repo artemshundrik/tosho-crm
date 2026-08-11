@@ -73,6 +73,7 @@ declare
   dead_worst_table   text := null;
   cron_jobs_json     jsonb := '[]'::jsonb;
   http_failures      integer := null;
+  http_timeouts      integer := null;
   audit_trigger_ok   boolean := false;
 begin
   select pg_database_size(current_database()) into db_size_bytes;
@@ -177,15 +178,25 @@ begin
   -- net.http_post асинхронний: успішний запис у job_run_details ще не означає,
   -- що HTTP-виклик удався. Рахуємо невдалі відповіді окремо. У pg_net коротка
   -- ретенція відповідей, тож це «за той час, що вцілів», а не строго за добу.
+  --
+  -- ДВА РІЗНІ ЧИСЛА, і плутати їх не можна. Відповідь 4xx/5xx — це відмова:
+  -- виклик дійшов, і його не прийняли. Таймаут — це «ми не дочекались за 30 с»:
+  -- виклики fire-and-forget, функція після цього спокійно доробляє своє. Доти
+  -- вони рахувались разом, і два-три таймаути на кілька тисяч викликів щоранку
+  -- давали в звіті жовтий рядок «HTTP-помилок: 1», за яким не стояло нічого.
   begin
-    select count(*)::integer
-    into http_failures
+    select
+      count(*) filter (where status_code >= 400)::integer,
+      count(*) filter (
+        where coalesce(timed_out, false) or (status_code is null and error_msg is not null)
+      )::integer
+    into http_failures, http_timeouts
     from net._http_response
-    where created >= now() - interval '24 hours'
-      and (status_code is null or status_code >= 400 or error_msg is not null);
+    where created >= now() - interval '24 hours';
   exception
     when insufficient_privilege or undefined_table or invalid_schema_name then
       http_failures := null;
+      http_timeouts := null;
   end;
 
   -- Аудит статусів прорахунку тримає тригер. Перевіряємо його НАЯВНІСТЬ, а не
@@ -212,7 +223,8 @@ begin
     'dead_tuple_worst_rows', dead_rows_max,
     'dead_tuple_worst_table', dead_worst_table,
     'cron_jobs', cron_jobs_json,
-    'cron_http_failures_24h', http_failures
+    'cron_http_failures_24h', http_failures,
+    'cron_http_timeouts_24h', http_timeouts
   );
 end;
 $$;

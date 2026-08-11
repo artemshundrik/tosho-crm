@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // Тримати їх тут власною копією означало б, що сторінка, звіт і бот з часом
 // почнуть давати різні оцінки одному стану — а це вбиває довіру до всіх трьох.
 import {
+  CRON_HTTP_TIMEOUT_WARN,
   PRO_STORAGE_LIMIT_BYTES,
   classifyAiBudget,
   classifyAiCost,
@@ -110,12 +111,68 @@ function backupSignal(runs: BackupRunRow[], section: string, label: string, now:
 
 type CronJobRow = {
   jobname?: string | null;
+  schedule?: string | null;
   failures?: number | null;
   runs?: number | null;
   hours_since_last_run?: number | null;
 };
 
-function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] {
+/**
+ * Останній запуск шукається у вікні 7 днів (scripts/daily-digests.sql), тож для
+ * місячного джоба «немає запуску» — нормальний стан 24 дні з 30, а не поломка.
+ * Саме через це у звіт щоранку лізли finance-month-close-soft (25 числа) і
+ * -final (5 числа): обидва живі, просто їхній день ще не настав.
+ *
+ * Тому для рідкісних розкладів питаємо інше: чи МИНУВ у семиденному вікні день,
+ * коли джоб мав відпрацювати. Минув і запуску немає — це справжня новина.
+ * Не минув — мовчимо.
+ */
+/**
+ * Скільки годин після пропущеного дня про це варто казати.
+ *
+ * Не 7 днів (вікно пошуку останнього запуску): джоб, створений ПІСЛЯ свого
+ * числа, нічого не пропускав, а виглядав би винним ще тиждень — рівно так
+ * finance-month-close-final потрапив у звіт 11.08, хоча його 5-те число минуло
+ * ще до того, як його завели. 36 годин — це рівно один-два ранкові звіти
+ * одразу після пропуску, тобто тоді, коли з цим ще можна щось зробити.
+ */
+const MISSED_RUN_WINDOW_HOURS = 36;
+
+/** Розклад, який стріляє рідше за вікно пошуку останнього запуску: число в дні місяця. */
+export function isRareSchedule(schedule: string | null | undefined): boolean {
+  const fields = (schedule ?? "").trim().split(/\s+/);
+  if (fields.length < 5) return false;
+  return fields[2] !== "*" || fields[3] !== "*";
+}
+
+export function missedRareRun(schedule: string | null | undefined, now: Date): boolean {
+  const fields = (schedule ?? "").trim().split(/\s+/);
+  if (fields.length < 5) return false;
+  const [minuteField, hourField, domField, monthField] = fields;
+  // Розбираємо лише просту форму «хв год ЧИСЛО * *» — саме такі в нас місячні.
+  // Складніші вирази (списки, кроки) до цієї гілки не доходять: краще змовчати,
+  // ніж вигадати розклад.
+  if (monthField !== "*" || !/^\d+$/.test(domField)) return false;
+  const minute = Number(minuteField);
+  const hour = Number(hourField);
+  const day = Number(domField);
+  if (!Number.isFinite(minute) || !Number.isFinite(hour)) return false;
+
+  const previous = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), day, hour, minute);
+  const occurrence =
+    previous <= now.getTime()
+      ? previous
+      : Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, day, hour, minute);
+  const hoursSinceOccurrence = (now.getTime() - occurrence) / 3_600_000;
+  return hoursSinceOccurrence <= MISSED_RUN_WINDOW_HOURS;
+}
+
+export function cronSignals(
+  jobs: CronJobRow[],
+  httpFailures: number | null,
+  httpTimeouts: number | null,
+  now: Date
+): Signal[] {
   if (jobs.length === 0) return [{ tone: "neutral", text: "Cron: статус недоступний" }];
 
   const signals: Signal[] = [];
@@ -131,10 +188,22 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
       healthy += 1;
       continue;
     }
-    // Порожня історія ≠ поламаний джоб: щойно заплановане завдання ще не мало
-    // першого запуску.
+    // Порожня історія ≠ поламаний джоб: у місячного вона порожня майже завжди,
+    // бо вікно пошуку — тиждень. Питаємо, чи минув його день (див. missedRareRun).
     if (hoursSince === null) {
-      signals.push({ tone, code: "cron_never_ran", text: `Cron ${name}: ще жодного запуску` });
+      if (isRareSchedule(job.schedule)) {
+        if (!missedRareRun(job.schedule, now)) {
+          healthy += 1;
+          continue;
+        }
+        signals.push({
+          tone,
+          code: "cron_never_ran",
+          text: `Cron ${name}: день за розкладом минув, а запуску не було`,
+        });
+        continue;
+      }
+      signals.push({ tone, code: "cron_never_ran", text: `Cron ${name}: жодного запуску за 7 днів` });
       continue;
     }
     if (failures > 0) {
@@ -148,7 +217,23 @@ function cronSignals(jobs: CronJobRow[], httpFailures: number | null): Signal[] 
     signals.push({ tone: "good", code: "cron_ok", text: `Cron: ${healthy}/${jobs.length} джобів без збоїв за добу` });
   }
   if (httpFailures !== null && httpFailures > 0) {
-    signals.push({ tone: "warning", code: "cron_http_failures", text: `HTTP-помилок від cron-викликів: ${httpFailures}` });
+    signals.push({
+      tone: "warning",
+      code: "cron_http_failures",
+      text: `Cron-виклики з помилкою (4xx/5xx): ${httpFailures} за добу`,
+    });
+  }
+  // Таймаут pg_net — це «не дочекались відповіді за 30 с», а не «робота не
+  // виконалась»: виклики fire-and-forget, функція біжить далі сама. За добу їх
+  // буває 2-3 на кілька тисяч викликів, і щоразу це давало жовтий рядок «HTTP-
+  // помилок: 1», за яким не стояло нічого. Тепер кажемо лише про СИСТЕМНУ
+  // повільність, коли таймаути стають регулярними.
+  if (httpTimeouts !== null && httpTimeouts >= CRON_HTTP_TIMEOUT_WARN) {
+    signals.push({
+      tone: "warning",
+      code: "cron_http_timeouts",
+      text: `Cron-виклики не вкладаються у 30 с: ${httpTimeouts} за добу`,
+    });
   }
   return signals;
 }
@@ -274,7 +359,8 @@ export async function collectSystemSignals(
   // 4. Cron.
   const cronJobs = Array.isArray(metrics.cron_jobs) ? (metrics.cron_jobs as CronJobRow[]) : [];
   const httpFailures = metrics.cron_http_failures_24h == null ? null : num(metrics.cron_http_failures_24h);
-  signals.push(...cronSignals(cronJobs, httpFailures));
+  const httpTimeouts = metrics.cron_http_timeouts_24h == null ? null : num(metrics.cron_http_timeouts_24h);
+  signals.push(...cronSignals(cronJobs, httpFailures, httpTimeouts, now));
 
   // 5. AI-кости. Помилку запиту не ховаємо за «$0.00».
   if (aiResult.error) {
