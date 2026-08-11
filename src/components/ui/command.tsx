@@ -30,6 +30,11 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
       {/* ✅ ховаємо стандартний Close (правий X), щоб він не конфліктував з clear */}
       <DialogContent
         hideClose
+        // Палітра — навігація, а не форма: зберігати в ній нема чого. Без цього
+        // спрацьовував типовий захист від втрати введеного, і набраний пошук
+        // перетворював Esc (а з ним і вибір рядка) на питання «Закрити без
+        // збереження?» — там, де відповідь завжди «так».
+        dismissible
         className="!top-4 !translate-y-0 sm:!top-8 w-[calc(100vw-2rem)] max-w-[980px] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden border border-border/60 bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground"
       >
         <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>
