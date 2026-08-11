@@ -950,6 +950,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [toshoAiOpen, setToshoAiOpen] = useState(false);
   const [toshoAiRequestedThreadId, setToshoAiRequestedThreadId] = useState<string | null>(null);
+  /** Питання, набране в палітрі: консоль підставить його й відправить сама. */
+  const [toshoAiInitialQuestion, setToshoAiInitialQuestion] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -1329,6 +1331,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     setToshoAiOpen(open);
     if (!open) {
       setToshoAiRequestedThreadId(null);
+      // Інакше наступне відкриття шторки — з меню чи з палітри команд — знову
+      // відправило б старе питання й списало б за нього гроші.
+      setToshoAiInitialQuestion(null);
     }
   }, []);
 
@@ -2050,7 +2055,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 className="inline-flex h-10 w-[230px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground cursor-pointer"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
-                <span className="flex-1 text-left">Пошук...</span>
+                {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
+                    Перше слово лишили знайомим, щоб ніхто не гадав, куди подівся
+                    пошук. */}
+                <span className="flex-1 truncate text-left">Знайти або спитати</span>
                 <kbd className="inline-flex h-6 select-none items-center rounded-md border border-border bg-background/60 px-2 font-mono text-3xs font-medium opacity-80">
                   ⌘K
                 </kbd>
@@ -2296,6 +2304,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <SheetContent
           side="right"
           hideClose
+          // Розмова, а не форма: усе надіслане вже збережено на сервері, а
+          // ненадісланий рядок у полі — не робота, яку шкода втратити. Без цього
+          // спрацьовував типовий захист і питав «Закрити без збереження?» навіть
+          // із порожнім полем: позначку «щось міняли» ставить сам факт набору,
+          // і відправлене питання її не знімає.
+          dismissible
           className="inset-0 z-overlay h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-[620px]"
         >
           <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
@@ -2325,11 +2339,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 }
               >
                 <ToShoAiConsole
-                  key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}`}
+                  // Питання входить у ключ: інакше друге питання поспіль
+                  // потрапило б у вже змонтовану консоль і не відправилось.
+                  key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}:${toshoAiInitialQuestion ?? ""}`}
                   active={toshoAiOpen}
                   surface="sheet"
                   initialContext={toshoAiContext}
                   initialRequestId={toshoAiRequestedThreadId}
+                  initialQuestion={toshoAiInitialQuestion}
                 />
               </Suspense>
             </div>
@@ -2360,7 +2377,18 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           onClose={() => setDesignerTimerFloatingOpen(false)}
         />
       ) : null}
-      <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
+      <CommandPalette
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        onAskAi={(question) => {
+          // Питання з палітри веде в ту саму шторку, що й решта входів, — просто
+          // з уже набраним текстом. Нову розмову починаємо навмисно: людина
+          // питає про те, що бачить зараз, а не продовжує вчорашню гілку.
+          setToshoAiRequestedThreadId(null);
+          setToshoAiInitialQuestion(question);
+          setToshoAiOpen(true);
+        }}
+      />
       <TelegramPromoModal />
       </div>
     </WorkspacePresenceProvider>

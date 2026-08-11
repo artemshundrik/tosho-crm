@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import {
@@ -23,12 +23,21 @@ import {
   Package,
   Palette,
   Search,
+  Sparkles,
   Truck,
   User,
   Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { looksLikeQuestion } from "@/lib/toshoAiQuestion";
+import {
+  AI_BUCKET_LABELS,
+  countRemainingSuggestions,
+  resolveAiBucket,
+  resolveAiSuggestions,
+} from "@/lib/aiSuggestions";
 import { buildCompanySearchVariants, matchesCompanyNameSearch, scoreCompanyNameMatch } from "@/lib/companyNameSearch";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
@@ -323,11 +332,17 @@ function pushRecent(next: { label: string; to: string; description?: string; kin
 export type CommandPaletteProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Передати питання в ToSho AI. Без цього оброблювача рядок «Спитати» просто
+   * не показується — краще не пропонувати те, що нікуди не веде.
+   */
+  onAskAi?: (question: string) => void;
 };
 
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPaletteProps) {
   const navigate = useNavigate();
-  const { teamId, userId, permissions } = useAuth();
+  const location = useLocation();
+  const { teamId, userId, permissions, accessRole, jobRole } = useAuth();
 
   const [query, setQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1089,6 +1104,78 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   }, [hasActiveQuery, normalizedQuery, routes]);
   const showHomeState = !hasActiveQuery;
 
+  // Рядок «Спитати ToSho AI» присутній завжди, коли є що спитати, — міняється
+  // лише його місце: для питання він перший і підсвічений, для пошуку назви
+  // останній і тихий. Так пошук лишається пошуком, а не стає платним запитом
+  // на кожну одруківку.
+  const canAskAi = Boolean(onAskAi);
+  const askQuestion = activeSearchQuery;
+  const isQuestionQuery = canAskAi && hasActiveQuery && looksLikeQuestion(askQuestion);
+  // Тихий рядок — лише коли пошук уже відпрацював і в запиті є за що зачепитись:
+  // на двох літерах питання до AI все одно безглузде.
+  const showQuietAskAi =
+    canAskAi && hasActiveQuery && !isQuestionQuery && askQuestion.length >= 3 && !(shouldSearchCRM && searchLoading);
+  // Ключ дня, а не Date.now() у самій функції: так набір стабільний у межах
+  // доби й перевіряється тестом. Перераховуємо на кожне відкриття палітри —
+  // цього досить, щоб зранку набір був уже новий.
+  const dayKey = useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open]
+  );
+  const aiSuggestions = useMemo(
+    () =>
+      canAskAi
+        ? resolveAiSuggestions({ accessRole, jobRole, pathname: location.pathname, dayKey })
+        : [],
+    [accessRole, canAskAi, dayKey, jobRole, location.pathname]
+  );
+  const aiSuggestionsLeft = useMemo(
+    () => (canAskAi ? countRemainingSuggestions({ accessRole, jobRole }) : 0),
+    [accessRole, canAskAi, jobRole]
+  );
+  const aiBucketLabel = AI_BUCKET_LABELS[resolveAiBucket({ accessRole, jobRole })];
+
+  function askAi(question: string) {
+    const trimmed = question.trim();
+    if (!trimmed || !onAskAi) return;
+    setQuery("");
+    onOpenChange(false);
+    onAskAi(trimmed);
+  }
+
+  function renderAskAiItem(tone: "lead" | "quiet") {
+    return (
+      <CommandItem
+        // Значення містить сам запит — інакше вбудований фільтр cmdk сховав би
+        // цей рядок рівно тоді, коли він найпотрібніший: коли не знайдено нічого.
+        value={buildCommandSearchValue([askQuestion, "спитати tosho ai питання"])}
+        onSelect={() => askAi(askQuestion)}
+        className={tone === "lead" ? "bg-ai-accent/[0.07]" : undefined}
+      >
+        <span
+          className={cn(
+            "mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
+            tone === "lead"
+              ? "border-ai-accent/40 bg-ai-accent/10 text-ai-accent"
+              : "border-border/60 bg-muted/35 text-muted-foreground"
+          )}
+        >
+          <Sparkles className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate">
+            <span className={tone === "lead" ? "font-medium text-ai-accent" : undefined}>Спитати ToSho AI</span>
+            <span className="text-muted-foreground">: «{askQuestion}»</span>
+          </div>
+          <div className="truncate text-xs text-muted-foreground">
+            {tone === "lead" ? "Відповість по цій сторінці та даних CRM" : "Якщо серед результатів немає потрібного"}
+          </div>
+        </div>
+      </CommandItem>
+    );
+  }
+
   function renderResultItem(result: SearchResultItem) {
     const Icon = result.icon;
     return (
@@ -1153,7 +1240,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Пошук сторінок та дій…"
+        placeholder="Знайти або спитати…"
         leftIcon={<Search className="h-4 w-4" />}
         rightSlot={
           <div className="flex items-center gap-2">
@@ -1184,6 +1271,60 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
       <CommandList className="py-1">
         <CommandEmpty>Нічого не знайдено.</CommandEmpty>
+
+        {isQuestionQuery ? (
+          <>
+            <CommandGroup heading="Питання">{renderAskAiItem("lead")}</CommandGroup>
+            <CommandSeparator />
+          </>
+        ) : null}
+
+        {canAskAi && showHomeState && aiSuggestions.length > 0 ? (
+          <>
+            <CommandGroup
+              heading={
+                <span className="flex items-center justify-between gap-2">
+                  <span>Що можна спитати</span>
+                  {aiBucketLabel ? (
+                    <span className="normal-case tracking-normal text-ai-accent">{aiBucketLabel}</span>
+                  ) : null}
+                </span>
+              }
+              /* Дві колонки, але DOM іде ПО КОЛОНКАХ (grid-flow-col + три рядки):
+                 стрілка вниз має спускатись лівою колонкою, а не стрибати
+                 праворуч. На вузькому екрані колонка одна — там сітка зайва. */
+              className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:gap-1 [&_[cmdk-group-items]]:px-2 sm:[&_[cmdk-group-items]]:grid-flow-col sm:[&_[cmdk-group-items]]:grid-rows-3"
+            >
+              {aiSuggestions.map((suggestion) => {
+                const Icon = suggestion.icon;
+                return (
+                  <CommandItem
+                    key={suggestion.key}
+                    value={buildCommandSearchValue([suggestion.title, suggestion.question, "спитати tosho ai"])}
+                    onSelect={() => askAi(suggestion.question)}
+                    className="items-start rounded-[var(--radius-md)]"
+                  >
+                    <span className="mr-2 mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ai-accent/40 bg-ai-accent/10 text-ai-accent">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{suggestion.title}</div>
+                      {/* Повний текст сірим — саме він піде в AI, тож людина має
+                          бачити, що спитають, а не лише як це названо. */}
+                      <div className="truncate text-xs text-muted-foreground">{suggestion.question}</div>
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            {aiSuggestionsLeft > 0 ? (
+              <div className="px-4 pb-1 pt-0.5 text-2xs text-muted-foreground">
+                ще {aiSuggestionsLeft} · або просто напиши своє питання
+              </div>
+            ) : null}
+            <CommandSeparator />
+          </>
+        ) : null}
 
         {shouldSearchCRM && searchLoading ? (
           <>
@@ -1331,6 +1472,18 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             );
           })}
         </CommandGroup>
+        ) : null}
+
+        {/* Пошук назви: рядок лишається доступним, але не претендує на перше
+            місце — спершу людина має побачити те, що знайшлось у самій CRM.
+            І не показуємо його, поки пошук ще триває: доти він єдиний
+            доступний рядок, тобто підсвічений, і Enter одразу після набору
+            пішов би в платний запит замість того, щоб відкрити знайдене. */}
+        {canAskAi && showQuietAskAi ? (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Не те шукали?">{renderAskAiItem("quiet")}</CommandGroup>
+          </>
         ) : null}
       </CommandList>
     </CommandDialog>

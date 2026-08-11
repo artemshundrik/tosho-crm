@@ -81,6 +81,12 @@ type ToShoAiConsoleProps = {
   surface?: "page" | "sheet";
   initialContext?: ToShoAiRouteContext | null;
   initialRequestId?: string | null;
+  /**
+   * Питання, набране в палітрі команд. Консоль підставляє його в поле й
+   * відправляє САМА: людина вже натиснула Enter на рядку «Спитати ToSho AI», і
+   * змушувати її тиснути ще раз означало б не зрозуміти, чого вона хотіла.
+   */
+  initialQuestion?: string | null;
 };
 
 type KnowledgeDraft = {
@@ -1410,6 +1416,7 @@ export function ToShoAiConsole({
   surface = "page",
   initialContext,
   initialRequestId = null,
+  initialQuestion = null,
 }: ToShoAiConsoleProps) {
   const compact = surface === "sheet";
   const { teamId, userId, jobRole, permissions } = useAuth();
@@ -1948,6 +1955,24 @@ export function ToShoAiConsole({
     },
     [handleSend]
   );
+
+  // Питання, набране в палітрі команд. Веземо його тим самим шляхом, що й
+  // готові підказки в консолі: там уже скидається режим і очищається поле.
+  //
+  // Ref, а не стан: ефект перезапускається на кожну зміну loading/actionBusy, і
+  // без відмітки «це питання вже пішло» друге спрацювання відправило б його
+  // вдруге — тобто списало б гроші за ту саму відповідь.
+  const sentInitialQuestionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const question = initialQuestion?.trim();
+    if (!active || !question) return;
+    if (sentInitialQuestionRef.current === question) return;
+    // Чекаємо, поки консоль підтягне свій знімок: інакше відповідь прийде в
+    // гілку, яку за мить перезапишуть.
+    if (loading || isAiUnavailable || actionBusy === "send") return;
+    sentInitialQuestionRef.current = question;
+    handleSelectSuggestedAction(question);
+  }, [active, actionBusy, handleSelectSuggestedAction, initialQuestion, isAiUnavailable, loading]);
 
   const handleComposerKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
