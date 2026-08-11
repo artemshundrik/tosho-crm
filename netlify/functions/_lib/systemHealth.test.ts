@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cronSignals, isRareSchedule, missedRareRun } from "./_systemHealth";
+import { cronSignals, isRareSchedule, missedRareRun } from "../_systemHealth";
 
 /**
  * Ці сигнали щоранку йдуть власнику в Telegram. Помилка тут не падає — вона
