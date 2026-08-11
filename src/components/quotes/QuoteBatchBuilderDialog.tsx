@@ -8,6 +8,7 @@ import {
   MapPin,
   Package,
   Palette,
+  Paperclip,
   Plus,
   Printer,
   Shirt,
@@ -52,6 +53,7 @@ import {
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { cn } from "@/lib/utils";
+import { MAX_ATTACHMENTS } from "@/features/quotes/quotes-page/config";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole, isQuoteManagerJobRole, normalizeJobRole } from "@/lib/permissions";
 import { isInactiveEmployment } from "@/lib/employment";
@@ -145,6 +147,13 @@ export type QuoteBatchProductSubmitData = {
   runs: Array<{ id: string; quantity: number }>;
   printApplications: QuoteBatchPrintApplicationDraft[];
   managerNote: string;
+  /**
+   * Файли замовника для роботи над прорахунком. Живуть окремо від `files` і
+   * НЕ стають матеріалами дизайнера: зона доступна навіть тоді, коли друку
+   * немає й дизайн-блок схований.
+   */
+  projectFiles: File[];
+  /** Матеріали для дизайнера — лише те, що поклали в блок «ТЗ дизайнеру». */
   files: File[];
   createDesignTask: boolean;
   designTaskType: DesignTaskType | null;
@@ -301,6 +310,7 @@ const createProductDraft = (seed?: Partial<ProductDraft>): ProductDraft => ({
   runs: seed?.runs?.length ? seed.runs.map((run) => createRunDraft(run.quantity)) : [createRunDraft()],
   printApplications: seed?.printApplications?.map((app) => ({ ...app, id: crypto.randomUUID() })) ?? [],
   managerNote: seed?.managerNote ?? "",
+  projectFiles: seed?.projectFiles ?? [],
   files: seed?.files ?? [],
   createDesignTask: seed?.createDesignTask ?? false,
   designTaskType: seed?.designTaskType ?? null,
@@ -1326,16 +1336,50 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     });
   };
 
+  // Ліміт міряється в межах ОДНІЄЇ зони, тому обидва набори користуються
+  // спільним хелпером: інакше «додав 20 у прорахунок» мовчки з'їдало б місце
+  // під матеріали дизайнера, хоча це різні списки й різні адресати.
+  const appendWithinLimit = (current: File[], fileList: FileList | null) => {
+    if (!fileList) return null;
+    const room = Math.max(0, MAX_ATTACHMENTS - current.length);
+    if (room === 0) {
+      toast.error("Досягнуто ліміт файлів", {
+        description: `Можна додати не більше ${MAX_ATTACHMENTS} файлів у цю зону.`,
+      });
+      return null;
+    }
+    const incoming = Array.from(fileList);
+    if (incoming.length > room) {
+      toast.warning(`Додано ${room} із ${incoming.length} файлів`, {
+        description: `У цій зоні лишалось місце на ${room}.`,
+      });
+    }
+    return [...current, ...incoming.slice(0, room)];
+  };
+
   const addFiles = (fileList: FileList | null) => {
-    if (!activeProduct || !fileList) return;
-    const nextFiles = Array.from(fileList).slice(0, Math.max(0, 5 - activeProduct.files.length));
-    updateActiveProduct({ files: [...activeProduct.files, ...nextFiles].slice(0, 5) });
+    if (!activeProduct) return;
+    const next = appendWithinLimit(activeProduct.files, fileList);
+    if (next) updateActiveProduct({ files: next });
   };
 
   const removeFile = (fileIndex: number) => {
     if (!activeProduct) return;
     updateActiveProduct({
       files: activeProduct.files.filter((_, index) => index !== fileIndex),
+    });
+  };
+
+  const addProjectFiles = (fileList: FileList | null) => {
+    if (!activeProduct) return;
+    const next = appendWithinLimit(activeProduct.projectFiles, fileList);
+    if (next) updateActiveProduct({ projectFiles: next });
+  };
+
+  const removeProjectFile = (fileIndex: number) => {
+    if (!activeProduct) return;
+    updateActiveProduct({
+      projectFiles: activeProduct.projectFiles.filter((_, index) => index !== fileIndex),
     });
   };
 
@@ -1408,7 +1452,11 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
         printApplications: isPrintPackageProduct ? [] : product.printApplications,
         managerNote: hasDesignSurface ? product.managerNote.trim() : "",
         designBrief: hasDesignSurface ? product.designBrief.trim() : "",
+        // Дизайнерські матеріали зникають разом із дизайн-блоком — вони без
+        // нього безадресні. Файли прорахунку не чіпаємо: зона не залежить від
+        // нанесення, у цьому вся суть окремої зони.
         files: hasDesignSurface ? product.files : [],
+        projectFiles: product.projectFiles,
         createDesignTask: hasDesignSurface ? product.createDesignTask : false,
         designTaskType: hasDesignSurface ? product.designTaskType : null,
         designAssigneeId: hasDesignSurface ? product.designAssigneeId : null,
@@ -2287,6 +2335,53 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       )}
                   </section>
 
+                  {/* Зона «Файли» свідомо СТОЇТЬ ПОЗА гейтом дизайн-блока:
+                      файли замовника потрібні й тоді, коли нанесення немає
+                      і дизайн-задача не створюється. Саме тому вона окрема
+                      секція, а не ще одна дропзона всередині ТЗ. */}
+                  <section className="space-y-3 rounded-lg border border-border/60 bg-background p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <SectionTitle icon={<Paperclip />}>Файли</SectionTitle>
+                      <Button type="button" variant="outline" size="sm" className="relative gap-1.5">
+                        <Upload className="h-4 w-4" />
+                        Додати файли
+                        <input
+                          type="file"
+                          multiple
+                          aria-label="Додати файли прорахунку"
+                          className="absolute inset-0 cursor-pointer opacity-0"
+                          onChange={(event) => {
+                            addProjectFiles(event.target.files);
+                            event.target.value = "";
+                          }}
+                        />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
+                      Дизайнер їх не бачить — для нього файли додають у блоці «ТЗ дизайнеру».
+                      До {MAX_ATTACHMENTS} файлів, до 50 MB кожен.
+                    </p>
+                    {activeProduct.projectFiles.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {activeProduct.projectFiles.map((file, index) => (
+                          <Badge key={`${file.name}-${index}`} variant="outline" className="gap-1 rounded-full">
+                            <FileText className="h-3.5 w-3.5" />
+                            <span className="max-w-[180px] truncate">{file.name}</span>
+                            <button
+                              type="button"
+                              className="ml-1 rounded-full text-muted-foreground hover:text-destructive"
+                              onClick={() => removeProjectFile(index)}
+                              aria-label={`Видалити файл ${file.name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+
                   <section className={cn("space-y-3 rounded-lg border border-border/60 bg-background p-4", !activeHasDesignSurface && "hidden")}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <SectionTitle icon={<Wand2 />}>ТЗ дизайнеру</SectionTitle>
@@ -2384,10 +2479,11 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         <div className="flex flex-wrap items-center gap-2">
                           <Button type="button" variant="outline" size="sm" className="relative gap-1.5">
                             <Upload className="h-4 w-4" />
-                            Файли
+                            Файли для дизайнера
                             <input
                               type="file"
                               multiple
+                              aria-label="Додати файли для дизайнера"
                               className="absolute inset-0 cursor-pointer opacity-0"
                               onChange={(event) => {
                                 addFiles(event.target.files);
@@ -2395,7 +2491,9 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                               }}
                             />
                           </Button>
-                          <div className="text-xs text-muted-foreground">До 5 файлів на товар.</div>
+                          <div className="text-xs text-muted-foreground">
+                            Потрапляють у дизайн-задачу. До {MAX_ATTACHMENTS} на товар.
+                          </div>
                         </div>
                         {activeProduct.files.length > 0 ? (
                           <div className="flex flex-wrap gap-2">

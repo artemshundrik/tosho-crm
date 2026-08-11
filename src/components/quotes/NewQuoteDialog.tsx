@@ -30,6 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { CustomerLeadPicker, type CustomerLeadOption } from "@/components/customers";
 import { cn } from "@/lib/utils";
+import { MAX_ATTACHMENTS } from "@/features/quotes/quotes-page/config";
 import { normalizeUnitLabel } from "@/lib/units";
 import { isDesignerJobRole } from "@/lib/permissions";
 import { isInactiveEmployment } from "@/lib/employment";
@@ -538,7 +539,10 @@ export type NewQuoteFormData = {
   quantityUnit: string;
   printApplications: PrintApplication[];
   createDesignTask?: boolean;
+  /** Матеріали для дизайнера — лише з блоку «Дизайн». */
   files: File[];
+  /** Файли замовника для роботи над прорахунком, поза дизайн-блоком. */
+  projectFiles: File[];
 };
 
 /**
@@ -642,6 +646,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   const briefTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
   const [filesDragActive, setFilesDragActive] = React.useState(false);
+  const [projectFiles, setProjectFiles] = React.useState<File[]>([]);
+  const [projectFilesDragActive, setProjectFilesDragActive] = React.useState(false);
   const [quickModelName, setQuickModelName] = React.useState("");
   const [quickModelSku, setQuickModelSku] = React.useState("");
   const [quickModelPrice, setQuickModelPrice] = React.useState("");
@@ -902,6 +908,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       setDesignTaskType(initialValues?.designTaskType ?? null);
     }
     setFiles(initialValues?.files ?? []);
+    setProjectFiles(initialValues?.projectFiles ?? []);
 
     setStatusPopoverOpen(false);
     setCustomerPopoverOpen(false);
@@ -910,6 +917,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     setCurrencyPopoverOpen(false);
     setDeliveryPopoverOpen(false);
     setFilesDragActive(false);
+    setProjectFilesDragActive(false);
   }, [availableStatuses, currentUserId, initialValues, isEditMode, open]);
 
   // Draft persistence. On dialog open we apply any stored draft *after* the
@@ -1277,22 +1285,56 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     );
   };
 
+  // Ліміт діє в межах однієї зони: 20 файлів прорахунку і 20 матеріалів
+  // дизайнера — це різні списки з різними адресатами, спільної квоти в них
+  // немає.
+  const appendWithinLimit = (current: File[], incoming: File[]) => {
+    const room = Math.max(0, MAX_ATTACHMENTS - current.length);
+    if (room === 0) {
+      toast.error("Досягнуто ліміт файлів", {
+        description: `Можна додати не більше ${MAX_ATTACHMENTS} файлів у цю зону.`,
+      });
+      return null;
+    }
+    if (incoming.length > room) {
+      toast.warning(`Додано ${room} із ${incoming.length} файлів`, {
+        description: `У цій зоні лишалось місце на ${room}.`,
+      });
+    }
+    return [...current, ...incoming.slice(0, room)];
+  };
+
   // Handle file drop
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setFilesDragActive(false);
     if (printMode === "no_print" && !isPrintPackageMode) return;
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    setFiles([...files, ...droppedFiles].slice(0, 5));
+    const next = appendWithinLimit(files, Array.from(e.dataTransfer.files));
+    if (next) setFiles(next);
   };
 
   // Handle file select
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (printMode === "no_print" && !isPrintPackageMode) return;
     if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files);
-      setFiles([...files, ...selectedFiles].slice(0, 5));
+      const next = appendWithinLimit(files, Array.from(e.target.files));
+      if (next) setFiles(next);
     }
+  };
+
+  // Файли прорахунку: без гейта на друк — зона доступна завжди.
+  const handleProjectFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setProjectFilesDragActive(false);
+    const next = appendWithinLimit(projectFiles, Array.from(e.dataTransfer.files));
+    if (next) setProjectFiles(next);
+  };
+
+  const handleProjectFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const next = appendWithinLimit(projectFiles, Array.from(e.target.files));
+    if (next) setProjectFiles(next);
+    e.target.value = "";
   };
 
   const updateRunDraft = (runId: string, value: string) => {
@@ -1543,6 +1585,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
       printApplications: finalPrints,
       createDesignTask: shouldCreateDesignTask,
       files,
+      projectFiles,
     };
 
     await onSubmit?.(formData);
@@ -2301,7 +2344,8 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 
             {printApplications.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border/60 bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
-                Для цього прорахунку друк не потрібен. Дизайн-блок і файли теж будуть приховані.
+                Для цього прорахунку друк не потрібен — дизайн-блок буде прихований. Файли замовника
+                додаються нижче, у розділі «Файли».
               </div>
             ) : null}
             </div>
@@ -2331,6 +2375,81 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
+          </div>
+        </div>
+
+        {/* Files section. Свідомо ПОЗА умовою показу дизайн-блока нижче:
+            файли замовника потрібні й тоді, коли друку немає і дизайн-задача
+            не створюється. Раніше єдина дропзона жила всередині «Дизайну» —
+            і разом із ним зникала. */}
+        <div className="mt-8 space-y-4">
+          <SectionHeader>Файли</SectionHeader>
+          <div className="space-y-3 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+            <div className="text-sm text-muted-foreground">
+              Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
+              Дизайнер їх не бачить — для нього файли додають у блоці «Дизайн».
+            </div>
+            <div
+              onDrop={handleProjectFileDrop}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!projectFilesDragActive) setProjectFilesDragActive(true);
+              }}
+              onDragLeave={() => setProjectFilesDragActive(false)}
+              className={cn(
+                "relative flex min-h-[140px] cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-colors",
+                projectFilesDragActive
+                  ? "border-primary/70 bg-primary/10"
+                  : "border-border/40 hover:border-border/60"
+              )}
+            >
+              <input
+                type="file"
+                multiple
+                aria-label="Додати файли прорахунку"
+                onChange={handleProjectFileSelect}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                accept="*/*"
+              />
+              <div className="flex flex-col items-center gap-2">
+                <Paperclip
+                  className={cn("h-5 w-5", projectFilesDragActive ? "text-primary" : "text-muted-foreground")}
+                />
+                <div
+                  className={cn(
+                    "text-sm",
+                    projectFilesDragActive ? "font-medium text-primary" : "text-foreground"
+                  )}
+                >
+                  {projectFilesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  до {MAX_ATTACHMENTS} файлів, до 50 MB
+                </div>
+              </div>
+            </div>
+
+            {projectFiles.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {projectFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="flex items-center gap-2 rounded-full border border-border/30 bg-muted/20 px-3 py-1.5 text-sm"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span className="text-xs">{file.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Видалити файл ${file.name}`}
+                      onClick={() => setProjectFiles(projectFiles.filter((_, i) => i !== index))}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -2473,7 +2592,10 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Файли для дизайнера</div>
+                  <div className="text-sm text-muted-foreground">
+                    Файли для дизайнера
+                    <span className="ml-1.5 text-xs">— потраплять у дизайн-задачу</span>
+                  </div>
                   <div
                     onDrop={handleFileDrop}
                     onDragOver={(e) => {
@@ -2500,7 +2622,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       <div className={cn("text-sm", filesDragActive ? "font-medium text-primary" : "text-foreground")}>
                         {filesDragActive ? "Відпустіть файли тут" : "Перетягніть або клікніть для вибору"}
                       </div>
-                      <div className="text-xs text-muted-foreground">до 5 файлів, до 50MB</div>
+                      <div className="text-xs text-muted-foreground">до {MAX_ATTACHMENTS} файлів, до 50MB</div>
                     </div>
                   </div>
 
@@ -2542,10 +2664,15 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <div className="border-t border-border/40 px-6 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {files.length > 0 ? (
+                {files.length + projectFiles.length > 0 ? (
                   <>
                     <Paperclip className="h-3.5 w-3.5" />
-                    <span>{files.length} файлів</span>
+                    <span>
+                      {files.length + projectFiles.length} файлів
+                      {files.length > 0 && projectFiles.length > 0
+                        ? ` (${projectFiles.length} прорахунку, ${files.length} дизайнеру)`
+                        : null}
+                    </span>
                   </>
                 ) : null}
               </div>

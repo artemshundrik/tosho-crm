@@ -177,7 +177,12 @@ export const quoteTypeIcon = (value?: string | null) =>
 
 export const QUOTE_ATTACHMENTS_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
-export const MAX_ATTACHMENTS = 5;
+/**
+ * Ліміт рахується ОКРЕМО для кожної зони: до 20 файлів прорахунку і до 20
+ * матеріалів дизайнера. Було 5 на все разом, і цього перестало вистачати —
+ * у зону прорахунку кладуть листування й розміри від замовника пачкою.
+ */
+export const MAX_ATTACHMENTS = 20;
 export const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 
 export const getErrorMessage = (error: unknown, fallback: string) => {

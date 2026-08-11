@@ -3162,6 +3162,7 @@ export type Database = {
       }
       quote_attachments: {
         Row: {
+          audience: string
           created_at: string
           file_name: string
           file_size: number | null
@@ -3174,6 +3175,7 @@ export type Database = {
           uploaded_by: string
         }
         Insert: {
+          audience?: string
           created_at?: string
           file_name: string
           file_size?: number | null
@@ -3186,6 +3188,7 @@ export type Database = {
           uploaded_by: string
         }
         Update: {
+          audience?: string
           created_at?: string
           file_name?: string
           file_size?: number | null

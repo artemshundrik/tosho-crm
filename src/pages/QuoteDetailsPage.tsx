@@ -75,6 +75,10 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import {
+  normalizeQuoteAttachmentAudience,
+  type QuoteAttachmentAudience,
+} from "@/lib/quoteAttachmentAudience";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
@@ -399,6 +403,7 @@ type QuoteAttachment = {
   uploadedByLabel?: string;
   storageBucket?: string | null;
   storagePath?: string | null;
+  audience?: QuoteAttachmentAudience;
 };
 
 type DesignOutputMetaFile = {
@@ -3173,6 +3178,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     methodsCount?: number;
     designBrief?: string | null;
     designTaskType?: DesignTaskType | null;
+    /**
+     * Потрібен там, де файли щойно завантажили в тому самому оброблювачі:
+     * `attachments` — це стан, і в межах одного рендера він ще порожній, тож
+     * порахований із нього has_files збрехав би.
+     */
+    hasFiles?: boolean;
   }) => {
     if (!teamId) return;
     const nextDesignTaskType = override?.designTaskType ?? designTaskType;
@@ -3213,7 +3224,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           design_task_type: nextDesignTaskType,
           quote_type: quote?.quote_type ?? null,
           methods_count: methodsCount,
-          has_files: attachments.length > 0,
+          // Скріпка на дизайн-задачі має означати «є що подивитись ДИЗАЙНЕРУ».
+          // Файли прорахунку її не вмикають: інакше дизайнер відкриває задачу
+          // по скріпці й бачить договір, який його не стосується.
+          has_files: override?.hasFiles ?? attachments.some((file) => file.audience === "design"),
           design_deadline: designDeadline,
           deadline: designDeadline,
           design_brief:
@@ -3866,7 +3880,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         let query = supabase
           .schema("tosho")
           .from("quote_attachments")
-          .select("id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+          .select("id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience")
           .eq("quote_id", quoteId)
           .order("created_at", { ascending: false });
         if (withTeamFilter && teamId) {
@@ -3899,6 +3913,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           (row.uploaded_by ? "Невідомий користувач" : undefined),
         storageBucket: row.storage_bucket ?? null,
         storagePath: row.storage_path ?? null,
+        audience: normalizeQuoteAttachmentAudience(row.audience),
       } satisfies QuoteAttachment));
       const isDesignVisualization = (file: QuoteAttachment) =>
         (file.storagePath ?? "").includes("design-outputs/");
@@ -3913,7 +3928,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
   };
 
-  const uploadAttachments = async (files: FileList | null) => {
+  const uploadAttachments = async (
+    files: FileList | File[] | null,
+    audience: QuoteAttachmentAudience = "project"
+  ) => {
     if (!files || files.length === 0) return;
     if (attachmentsUploading) return;
     setAttachmentsUploadError(null);
@@ -3989,6 +4007,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             storage_bucket: ITEM_VISUAL_BUCKET,
             storage_path: storagePath,
             uploaded_by: uploadedBy,
+            // Панель «Файли» на картці прорахунку — це файли прорахунку, а не
+            // ТЗ дизайнеру. Матеріали для дизайнера додають у дизайн-блоці
+            // модалки або на самій дизайн-задачі — звідти сюди приходить
+            // явний audience.
+            audience,
           });
 
         if (insertError) {
@@ -4860,6 +4883,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       }
 
+      // Файли з модалки вантажимо ДО створення дизайн-задачі: вона читає
+      // `attachments`, щоб вирішити, ставити has_files чи ні, і на порожньому
+      // списку поставила б «файлів немає» попри щойно прикріплені матеріали.
+      if (data.projectFiles.length > 0) {
+        await uploadAttachments(data.projectFiles, "project");
+      }
+      if (data.files.length > 0) {
+        await uploadAttachments(data.files, "design");
+      }
+
       if (data.createDesignTask && !designTask) {
         await createDesignTask({
           assigneeUserId: data.designAssigneeId ?? null,
@@ -4868,6 +4901,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           modelName: model?.name ?? primaryItem?.title ?? "Позиція",
           methodsCount: methodsPayload?.length ?? 0,
           designBrief: data.comment?.trim() || data.deadlineNote?.trim() || null,
+          hasFiles: data.files.length > 0 || attachments.some((file) => file.audience === "design"),
         });
       }
 
@@ -8276,23 +8310,98 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               {attachments.map((file) => {
                                 const displayName = getAttachmentDisplayName(file);
                                 const extension = getFileExtension(displayName);
+                                // Та сама умова й той самий шлях до прев'ю, що
+                                // й у сітці візуалізацій нижче на цій сторінці:
+                                // мініатюра лежить у storage поруч з оригіналом
+                                // (uploadAttachmentWithVariants), і панель
+                                // вкладень просто нею не користувалась.
+                                const previewImage =
+                                  (canPreviewImage(extension) || canPreviewDocumentThumb(extension)) &&
+                                  Boolean(file.storageBucket && file.storagePath);
+                                const openPreview = () => {
+                                  if (!previewImage) return;
+                                  // Варіант «preview» існує не в кожного файлу:
+                                  // getAttachmentVariantCandidatePaths шукає лише
+                                  // __preview.webp/.png і НЕ відкочується до
+                                  // оригіналу. Без запасного шляху клік по файлу
+                                  // без згенерованого прев'ю просто нічого не
+                                  // робив би — найгірший вид поламаного.
+                                  void ensureAttachmentAccessUrl(file, { variant: "preview" })
+                                    .then((url) => url ?? ensureAttachmentAccessUrl(file, { variant: "original" }))
+                                    .then((url) => {
+                                      if (!url) {
+                                        toast.error("Не вдалося відкрити превʼю файлу");
+                                        return;
+                                      }
+                                      setVisualizationPreview({ ...file, url });
+                                    });
+                                };
                                 return (
                                   <div
                                     key={file.id}
                                     className="group flex items-center justify-between rounded-xl border border-border/30 p-3 transition-colors hover:bg-muted/10"
                                   >
                                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
-                                        <Paperclip className="h-5 w-5 text-primary" />
-                                      </div>
+                                      {previewImage ? (
+                                        /* Обгортка — div, а не button, хоча вона й
+                                           клікабельна: hoverPreview усередині
+                                           StorageObjectImage сам ставить tabIndex,
+                                           а фокусований елемент у <button> — це
+                                           вкладена інтерактивність, чого модель
+                                           вмісту кнопки не допускає. З клавіатури
+                                           прев'ю відкривається кнопкою на назві
+                                           файлу поруч. */
+                                        <div
+                                          onClick={openPreview}
+                                          className="h-11 w-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-muted/20 transition-transform hover:scale-[1.04]"
+                                        >
+                                          {/* object-cover саме через imageClassName:
+                                              className лягає на обгортку, і широка
+                                              мініатюра в квадраті 44×44 інакше
+                                              стискається в смужку. */}
+                                          <StorageObjectImage
+                                            bucket={file.storageBucket}
+                                            path={file.storagePath}
+                                            alt={displayName}
+                                            variant="thumb"
+                                            hoverPreview
+                                            className="h-full w-full"
+                                            imageClassName="object-cover"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-visible rounded-lg bg-primary/10">
+                                          <Paperclip className="h-5 w-5 text-primary" />
+                                        </div>
+                                      )}
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                          <div className="truncate text-sm font-semibold" title={displayName}>
-                                            {displayName}
-                                          </div>
+                                          {previewImage ? (
+                                            <button
+                                              type="button"
+                                              onClick={openPreview}
+                                              title={displayName}
+                                              className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                            >
+                                              {displayName}
+                                            </button>
+                                          ) : (
+                                            <div className="truncate text-sm font-semibold" title={displayName}>
+                                              {displayName}
+                                            </div>
+                                          )}
                                           {extension && (
                                             <Badge variant="secondary" className="text-3xs uppercase">
                                               {extension}
+                                            </Badge>
+                                          )}
+                                          {/* Позначаємо лише дизайнерські:
+                                              файли прорахунку тут більшість,
+                                              і бейдж на кожному рядку був би
+                                              шумом, а не інформацією. */}
+                                          {file.audience === "design" && (
+                                            <Badge variant="outline" className="shrink-0 text-3xs">
+                                              Для дизайнера
                                             </Badge>
                                           )}
                                         </div>

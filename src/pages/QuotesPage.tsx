@@ -29,6 +29,7 @@ import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborator
 import { hasOwnManagedWork } from "@/lib/managedWorkOwnership";
 import { isQuoteManagerJobRole, normalizeAccessRole, normalizeJobRole } from "@/lib/permissions";
 import { type DesignTaskType } from "@/lib/designTaskType";
+import { type QuoteAttachmentAudience } from "@/lib/quoteAttachmentAudience";
 import {
   formatPrintProductSummary,
   getPrintProductConfig,
@@ -2530,9 +2531,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           }
           if (runsError) throw runsError;
 
+          // Два незалежні набори з різними адресатами: файли прорахунку
+          // лишаються в межах прорахунку, дизайнерські вмикають has_files
+          // і показуються в дизайн-задачі.
+          if (product.projectFiles.length > 0) {
+            try {
+              await uploadFilesForQuote(created.id, product.projectFiles, "project");
+            } catch (attachmentError: unknown) {
+              attachmentWarnings.push(`${itemName}: ${getErrorMessage(attachmentError, "файли не завантажено")}`);
+            }
+          }
+
           if (product.files.length > 0) {
             try {
-              await uploadFilesForQuote(created.id, product.files);
+              await uploadFilesForQuote(created.id, product.files, "design");
             } catch (attachmentError: unknown) {
               attachmentWarnings.push(`${itemName}: ${getErrorMessage(attachmentError, "файли не завантажено")}`);
             }
@@ -2934,7 +2946,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
-  const uploadFilesForQuote = async (quoteId: string, files: File[]) => {
+  const uploadFilesForQuote = async (
+    quoteId: string,
+    files: File[],
+    audience: QuoteAttachmentAudience
+  ) => {
     if (!files || files.length === 0) return;
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -3022,6 +3038,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           storage_bucket: QUOTE_ATTACHMENTS_BUCKET,
           storage_path: storagePath,
           uploaded_by: uploadedBy,
+          audience,
         });
 
       if (insertError) {
@@ -4665,8 +4682,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         });
       }
 
+      if (data.projectFiles.length > 0) {
+        await uploadFilesForQuote(editTarget.id, data.projectFiles, "project");
+      }
+
       if (data.files.length > 0) {
-        await uploadFilesForQuote(editTarget.id, data.files);
+        await uploadFilesForQuote(editTarget.id, data.files, "design");
       }
 
       setRows((prev) =>

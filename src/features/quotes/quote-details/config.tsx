@@ -13,7 +13,7 @@ import { quoteStatusBadgeClass } from "@/lib/statusTones";
 export const ITEM_VISUAL_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 
-export const MAX_QUOTE_ATTACHMENTS = 5;
+export const MAX_QUOTE_ATTACHMENTS = 20;
 export const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 export const ATTACHMENTS_ACCEPT =
   ".pdf,.ai,.svg,.eps,.cdr,.png,.jpg,.jpeg,.psd,.tiff,.zip,.rar,.doc,.docx,.xls,.xlsx";

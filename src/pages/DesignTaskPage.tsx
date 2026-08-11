@@ -183,6 +183,10 @@ import {
   parseDesignTaskType,
   type DesignTaskType,
 } from "@/lib/designTaskType";
+import {
+  normalizeQuoteAttachmentAudience,
+  type QuoteAttachmentAudience,
+} from "@/lib/quoteAttachmentAudience";
 import { DesignTaskProductCard } from "@/components/design/DesignTaskProductCard";
 import { CreativePayControl } from "@/components/design/CreativePayControl";
 import { loadPayDefaults } from "@/lib/designerPayroll";
@@ -265,6 +269,7 @@ type AttachmentRow = {
   storage_path: string | null;
   signed_url?: string | null;
   uploaded_by?: string | null;
+  audience?: QuoteAttachmentAudience;
 };
 
 type DesignOutputFile = {
@@ -1415,7 +1420,11 @@ export default function DesignTaskPage() {
   const [createGroupError, setCreateGroupError] = useState<string | null>(null);
   const [uploadTargetGroup, setUploadTargetGroup] = useState("__none__");
   const [dropboxDetailsOpen, setDropboxDetailsOpen] = useState(false);
-  const [filesSourceFilter, setFilesSourceFilter] = useState<"all" | "quote" | "brief">("all");
+  // Стартуємо з дизайнерських матеріалів, а не з «Усі»: до дизайн-задачі
+  // тепер прив'язані й файли прорахунку (договори, розміри), які дизайнера
+  // не стосуються. Побачити їх можна одним кліком по чипу — приховані, але
+  // не заховані.
+  const [filesSourceFilter, setFilesSourceFilter] = useState<"all" | "quote" | "brief">("brief");
   const [uploadTargetKind, setUploadTargetKind] = useState<DesignOutputKind>("layout");
   const [activeDesignOutputTab, setActiveDesignOutputTab] = useState<DesignOutputKind>("visualization");
   const [activeDesignTab, setActiveDesignTab] = useState<DesignTaskPageTab>("brief");
@@ -2501,7 +2510,7 @@ export default function DesignTaskPage() {
       const { data, error } = await supabase
         .schema("tosho")
         .from("quote_attachments")
-        .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by")
+        .select("id,file_name,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience")
         .eq("quote_id", task.quoteId);
       if (error) throw error;
 
@@ -4156,6 +4165,9 @@ export default function DesignTaskPage() {
             storage_bucket: nextAttachment.storage_bucket as string,
             storage_path: nextAttachment.storage_path as string,
             uploaded_by: userId as string,
+            // Файл, доданий на самій дизайн-задачі, — дизайнерський матеріал
+            // за визначенням: його кладуть саме сюди, саме для цієї роботи.
+            audience: "design",
           });
           if (insertError) throw insertError;
         }
@@ -7379,13 +7391,14 @@ export default function DesignTaskPage() {
         })),
     ];
   }, [clientShareSelectionIds, designOutputFiles, designOutputLinks]);
-  // Джерело вкладення видно зі storage-шляху: файли прорахунку лежать у
-  // quote-attachments, файли до ТЗ — у design-brief-files. Окремого поля в даних
-  // немає, і заводити його заради фільтра не варто.
+  // Адресат вкладення береться з колонки `audience`, а не вгадується зі
+  // storage-шляху, як було раніше. Поки від ознаки залежав лише вигляд
+  // чипа-фільтра, здогадка по підрядку була прийнятною; тепер від неї
+  // залежить, ЩО дизайнер вважає своїм завданням, — а це вже не здогадка.
   const attachmentSourceById = useMemo(() => {
     const map = new Map<string, "quote" | "brief">();
     attachments.forEach((file) => {
-      map.set(file.id, (file.storage_path ?? "").includes("/quote-attachments/") ? "quote" : "brief");
+      map.set(file.id, normalizeQuoteAttachmentAudience(file.audience) === "project" ? "quote" : "brief");
     });
     return map;
   }, [attachments]);
@@ -7398,16 +7411,18 @@ export default function DesignTaskPage() {
     });
     return { quote, brief };
   }, [attachmentSourceById]);
-  // Чипи-фільтри показуються лише коли є обидва джерела. Якщо після
-  // довантаження їх стало одне, старий вибір фільтра мовчки сховав би всі
-  // файли без жодного способу це скинути — тому фільтр діє тільки разом із чипами.
-  const attachmentFilterAvailable = attachmentSourceCounts.quote > 0 && attachmentSourceCounts.brief > 0;
+  // Чипи показуються, щойно є бодай один файл, а не лише коли є обидва
+  // джерела. Причина змінилась разом із дефолтом: тепер список за
+  // замовчуванням звужений до дизайнерських матеріалів, тож якщо приховати
+  // чипи на однорідному наборі, файли прорахунку стали б недосяжними — без
+  // жодного натяку, що вони взагалі існують.
+  const attachmentFilterAvailable = attachments.length > 0;
   const visibleAttachments = useMemo(
     () =>
-      !attachmentFilterAvailable || filesSourceFilter === "all"
+      filesSourceFilter === "all"
         ? attachments
         : attachments.filter((file) => attachmentSourceById.get(file.id) === filesSourceFilter),
-    [attachmentFilterAvailable, attachments, attachmentSourceById, filesSourceFilter]
+    [attachments, attachmentSourceById, filesSourceFilter]
   );
   const mentionSuggestions = useMemo<MentionSuggestion[]>(
     () =>
@@ -10826,7 +10841,9 @@ export default function DesignTaskPage() {
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
                   <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                    Вкладення замовника або файли до ТЗ для роботи дизайнера.
+                    Матеріали для дизайну — те, що додали в дизайн-зону. Файли прорахунку
+                    (договори, розміри) лежать на сусідньому чипі: вони тут для довідки,
+                    а не як завдання.
                   </div>
                 </div>
               </div>
@@ -10837,9 +10854,9 @@ export default function DesignTaskPage() {
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(
                     [
+                      { value: "brief" as const, label: "Для дизайну", count: attachmentSourceCounts.brief },
+                      { value: "quote" as const, label: "Прорахунку", count: attachmentSourceCounts.quote },
                       { value: "all" as const, label: "Усі", count: attachments.length },
-                      { value: "quote" as const, label: "З прорахунку", count: attachmentSourceCounts.quote },
-                      { value: "brief" as const, label: "До ТЗ", count: attachmentSourceCounts.brief },
                     ]
                   ).map((chip) => (
                     <button
@@ -10971,7 +10988,7 @@ export default function DesignTaskPage() {
                                 : "border-border/60 bg-background/80 text-muted-foreground"
                             )}
                           >
-                            {attachmentSource === "quote" ? "З прорахунку" : "До ТЗ"}
+                            {attachmentSource === "quote" ? "Прорахунку" : "Для дизайну"}
                           </span>
                         </div>
                         <div className="space-y-1.5 p-2.5">
