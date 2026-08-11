@@ -44,6 +44,14 @@ begin
   where m.user_id = auth.uid()
   limit 1;
 
+  -- Якщо рядка немає взагалі, SELECT ... INTO лишає змінні NULL, і тоді КОЖНА
+  -- перевірка нижче дає NULL замість true — жоден raise не спрацьовує, і
+  -- правило мовчки пропускає запис. А такі люди є: у public.team_members (за
+  -- нею пускає RLS) знайшлось двоє користувачів без рядка в tosho.memberships.
+  -- Порожній рядок замість NULL робить усі v_can_* чесними false.
+  v_job := coalesce(v_job, '');
+  v_access := coalesce(v_access, '');
+
   if v_access = 'owner' or v_job = 'seo' then
     return new;
   end if;
