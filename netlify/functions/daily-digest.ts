@@ -8,6 +8,8 @@ import { ABSENCE_KIND_LABELS, formatAbsenceShort } from "./_lib/absenceSubmit";
 import {
   businessReleaseBullets,
   fetchDayChanges,
+  fetchWorkHours,
+  sumWorkHours,
   summarizeDay,
   summarizeWeek,
   techReleaseLine,
@@ -278,7 +280,11 @@ async function buildTechDigest(admin: AdminClient, now: Date, todayKey: string, 
   // Що вчора викотилось: цифри доречні — це звіт власнику про власну роботу.
   let releaseLine: string | null = null;
   try {
-    releaseLine = techReleaseLine(summarizeDay(await fetchDayChanges(admin, yesterdayKey)));
+    const [dayChanges, workHours] = await Promise.all([
+      fetchDayChanges(admin, yesterdayKey),
+      fetchWorkHours(admin, [yesterdayKey]),
+    ]);
+    releaseLine = techReleaseLine(summarizeDay(dayChanges), workHours.get(yesterdayKey) ?? null);
   } catch {
     // Релізи — прикраса тех-звіту, не його суть: без них звіт усе одно йде.
   }
@@ -1123,10 +1129,12 @@ async function buildBusinessEvening(admin: AdminClient, members: MemberRow[], no
     }
     const isFriday = new Date(`${todayKey}T12:00:00Z`).getUTCDay() === 5;
     if (isFriday) {
-      const week = await Promise.all(
-        Array.from({ length: 7 }, (_, i) => fetchDayChanges(admin, shiftDays(todayKey, -i)))
-      );
-      const weekLine = weeklyReleaseLine(summarizeWeek(week));
+      const weekKeys = Array.from({ length: 7 }, (_, i) => shiftDays(todayKey, -i));
+      const [week, workHours] = await Promise.all([
+        Promise.all(weekKeys.map((dayKey) => fetchDayChanges(admin, dayKey))),
+        fetchWorkHours(admin, weekKeys),
+      ]);
+      const weekLine = weeklyReleaseLine(summarizeWeek(week), sumWorkHours(workHours, weekKeys));
       if (weekLine) lines.push(escapeTelegramHtml(weekLine));
     }
   } catch {

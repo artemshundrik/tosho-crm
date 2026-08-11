@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   businessReleaseBullets,
+  sumWorkHours,
   summarizeDay,
   summarizeWeek,
   techReleaseLine,
@@ -35,15 +36,23 @@ describe("рядок у тех-звіт", () => {
         plain: "поля дати на спільній панелі",
       }),
     ]);
-    const line = techReleaseLine(summary);
+    // Години приходять ззовні — з tosho.work_sessions, того самого джерела, що
+    // й розділ «Релізи». Рахувати їх тут удруге означало б два числа про один день.
+    const line = techReleaseLine(summary, 5.87);
     expect(line).toContain("2 змін");
-    expect(line).toContain("≈");
+    expect(line).toContain("≈5.87 год");
     // Переказ важливіший за технічну тему.
     expect(summarizeDay([change({ plain: "людська назва" })]).topTitle).toBe("людська назва");
   });
 
   it("день без релізів — рядка немає взагалі, а не «0 змін»", () => {
-    expect(techReleaseLine(summarizeDay([]))).toBeNull();
+    expect(techReleaseLine(summarizeDay([]), 5.87)).toBeNull();
+  });
+
+  it("невиміряний день — рядок без годин, а не вигадане число", () => {
+    const line = techReleaseLine(summarizeDay([change({})]), null);
+    expect(line).toContain("1 змін");
+    expect(line).not.toContain("год");
   });
 });
 
@@ -77,10 +86,20 @@ describe("тижневий рядок", () => {
     ]);
     expect(summary.count).toBe(5);
     expect(summary.topScopes[0]).toBe("Команда");
-    expect(weeklyReleaseLine(summary)).toContain("5 змін");
+    expect(weeklyReleaseLine(summary, 18)).toContain("5 змін");
+    expect(weeklyReleaseLine(summary, 18)).toContain("≈18 год");
   });
 
   it("тиждень без релізів — рядка немає", () => {
-    expect(weeklyReleaseLine(summarizeWeek([[], []]))).toBeNull();
+    expect(weeklyReleaseLine(summarizeWeek([[], []]), 18)).toBeNull();
+  });
+
+  it("сума годин рахує лише виміряні дні", () => {
+    const measured = new Map([
+      ["2026-08-04", 9.63],
+      ["2026-08-05", 12.73],
+    ]);
+    expect(sumWorkHours(measured, ["2026-08-04", "2026-08-05", "2026-08-06"])).toBe(22);
+    expect(sumWorkHours(measured, ["2026-08-06"])).toBeNull();
   });
 });
