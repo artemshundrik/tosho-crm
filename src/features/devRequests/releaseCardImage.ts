@@ -124,8 +124,15 @@ export function suggestHowToCheck(moduleKey: string | null, body = ""): string {
  * зайвий крок. Пишемо PNG у буфер обміну, далі Ctrl+V.
  */
 
-/** Малюємо у подвійному масштабі: на екранах з високою щільністю інакше мило. */
-const SCALE = 2;
+/**
+ * Потрійний масштаб, а не подвійний.
+ *
+ * У чаті картинку показують дрібно, і двох вистачало. Але Telegram по кліку
+ * розгортає її на весь екран — на звичайному ноуті це під 2000px, тобто вдвічі
+ * більше за рідні 1120. Картинка розтягувалась і мала м'які краї. Тепер рідна
+ * ширина 1680: у розгорнутому вигляді чітко, у стрічці — так само, як було.
+ */
+const SCALE = 3;
 const W = 560;
 const PAD = 26;
 
@@ -315,7 +322,7 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
   const bodyFont = `400 14px ${FONT}`;
 
   const titleLines = measure(titleFont, input.title, inner, 3);
-  const LABEL_W = 84;
+  const LABEL_W = 76;
   const summaryLines = input.summary.trim() ? measure(bodyFont, input.summary, inner - LABEL_W, 3) : [];
   const beforeLines = input.before.trim() ? measure(bodyFont, input.before, inner - LABEL_W, 2) : [];
   const checkLines = input.howToCheck.trim() ? measure(bodyFont, input.howToCheck, inner - LABEL_W, 2) : [];
@@ -436,6 +443,17 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
     const logoWidth = (logo.width / logo.height) * logoHeight;
     ctx.drawImage(logo, PAD, y, logoWidth, logoHeight);
   }
+
+  // Адреса в правому куті. Не прикраса: картинку пересилають далі по чатах, і
+  // людина, яка бачить її без контексту, має розуміти, звідки вона. Заодно
+  // підвал перестає бути напівпорожнім — на весь екран це помітно найбільше.
+  ctx.font = `500 12px ${FONT}`;
+  ctx.fillStyle = COLORS.faint;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText("tosho.pro", W - PAD, y + 9);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
 
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), "image/png"));
 }
