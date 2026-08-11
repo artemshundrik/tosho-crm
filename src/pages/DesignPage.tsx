@@ -44,6 +44,7 @@ import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from
 import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
   DESIGN_TASK_TIMER_UPDATED_EVENT,
+  createEmptyTimerSummary,
   formatElapsedSeconds,
   getDesignTasksTimerSummaryMap,
   getTimerElapsedSeconds,
@@ -1271,12 +1272,7 @@ export default function DesignPage() {
 
   const getTaskTimerSummary = useCallback((taskId: string): DesignTaskTimerSummary => {
     return (
-      timerSummaryByTaskId[taskId] ?? {
-        totalSeconds: 0,
-        activeSessionId: null,
-        activeStartedAt: null,
-        activeUserId: null,
-      }
+      timerSummaryByTaskId[taskId] ?? createEmptyTimerSummary()
     );
   }, [timerSummaryByTaskId]);
 
@@ -3506,13 +3502,7 @@ export default function DesignPage() {
         const nextSummary = timerSummaryMap.get(task.id);
         setTimerSummaryByTaskId((prev) => ({
           ...prev,
-          [task.id]:
-            nextSummary ?? {
-              totalSeconds: 0,
-              activeSessionId: null,
-              activeStartedAt: null,
-              activeUserId: null,
-            },
+          [task.id]: nextSummary ?? createEmptyTimerSummary(),
         }));
       } catch (timerError) {
         console.warn("Failed to refresh timer summary after status change", timerError);
@@ -3691,13 +3681,7 @@ export default function DesignPage() {
         const nextSummary = timerSummaryMap.get(task.id);
         setTimerSummaryByTaskId((prev) => ({
           ...prev,
-          [task.id]:
-            nextSummary ?? {
-              totalSeconds: 0,
-              activeSessionId: null,
-              activeStartedAt: null,
-              activeUserId: null,
-            },
+          [task.id]: nextSummary ?? createEmptyTimerSummary(),
         }));
       } catch (timerError) {
         console.warn("Failed to refresh timer summary after assignee change", timerError);

@@ -147,6 +147,7 @@ import {
 } from "@/lib/workflowNotifications";
 import {
   DESIGN_TASK_TIMER_UPDATED_EVENT,
+  createEmptyTimerSummary,
   formatElapsedSeconds,
   getDesignTaskTimerSummary,
   getDesignTaskTimerBreakdown,
@@ -1516,12 +1517,7 @@ export default function DesignTaskPage() {
     description: string;
     confirm: (() => void) | null;
   }>({ open: false, label: "", description: "", confirm: null });
-  const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>({
-    totalSeconds: 0,
-    activeSessionId: null,
-    activeStartedAt: null,
-    activeUserId: null,
-  });
+  const [timerSummary, setTimerSummary] = useState<DesignTaskTimerSummary>(createEmptyTimerSummary);
   const [timerBusy, setTimerBusy] = useState<"start" | "pause" | null>(null);
   const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   // Per-change-request timer breakdown (null until loaded / if migration pending).
@@ -1848,12 +1844,7 @@ export default function DesignTaskPage() {
     } catch (e) {
       console.warn("Failed to load timer summary", e);
       setTimerNowMs(Date.now());
-      setTimerSummary({
-        totalSeconds: 0,
-        activeSessionId: null,
-        activeStartedAt: null,
-        activeUserId: null,
-      });
+      setTimerSummary(createEmptyTimerSummary());
     }
     // Per-change-request breakdown — requires the migration; degrade silently if absent.
     try {
@@ -3133,6 +3124,12 @@ export default function DesignTaskPage() {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.metadata]);
   const isTimerRunning = !!timerSummary.activeSessionId && !!timerSummary.activeStartedAt;
+  // Свій таймер і «чийсь таймер» — різні речі, і плутати їх не можна: задачу
+  // ведуть двоє, а сесія в кожного власна.
+  const isOwnTimerRunning = !!userId && timerSummary.activeSessions.some((session) => session.userId === userId);
+  const foreignTimerUserId =
+    timerSummary.activeSessions.find((session) => session.userId !== userId)?.userId ?? null;
+  const foreignTimerLabel = foreignTimerUserId ? getMemberLabel(foreignTimerUserId) : null;
   const timerElapsedSeconds = getTimerElapsedSeconds(timerSummary, timerNowMs);
   const isTimerPaused = !isTimerRunning && timerElapsedSeconds > 0;
   const timerElapsedLabel = formatElapsedSeconds(timerElapsedSeconds);
@@ -3141,7 +3138,11 @@ export default function DesignTaskPage() {
     !!userId &&
     // Старт таймера дозволений і з «стартових» статусів — він сам переведе у «В роботі».
     (task.status === "in_progress" || task.status === "new" || task.status === "changes") &&
-    !isTimerRunning &&
+    // Заважає тільки ВЛАСНИЙ активний таймер. Раніше тут стояло «жоден таймер
+    // не йде», і забутий таймер колеги замикав задачу для другої людини: свій
+    // запустити не можна, чужий зупинити не можна. У базі паралельні сесії
+    // двох людей дозволені навмисно — інтерфейс просто про це не знав.
+    !isOwnTimerRunning &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
   // Per-change-request timer: same gate as the general timer, minus the !isTimerRunning
@@ -3152,9 +3153,12 @@ export default function DesignTaskPage() {
     task.status === "in_progress" &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
+  // Пауза зупиняє СВІЙ таймер (так задумано: чужий рахунок часу не чіпаємо).
+  // Тож і кнопка має з'являтись тільки тоді, коли є що зупиняти. Доти вона
+  // світилась і для чужої сесії, натискалась — і мовчки не робила нічого.
   const canPauseTimer =
     !!task &&
-    isTimerRunning &&
+    isOwnTimerRunning &&
     !!userId &&
     !!task.assigneeUserId &&
     (task.assigneeUserId === userId || isCollaboratorOnTask || canManageAssignments);
@@ -3162,8 +3166,10 @@ export default function DesignTaskPage() {
     ? "Задача не завантажена"
     : !userId
       ? "Потрібна авторизація"
-      : !isTimerRunning
-        ? "Таймер не запущено"
+      : !isOwnTimerRunning
+        ? foreignTimerLabel
+          ? `Це таймер ${foreignTimerLabel}. Зупинити його можна зміною статусу задачі — свій таймер запускай кнопкою «Старт»`
+          : "Таймер не запущено"
         : !task.assigneeUserId
           ? "Виконавець не вказаний"
           : task.assigneeUserId !== userId && !isCollaboratorOnTask && !canManageAssignments
@@ -5154,6 +5160,16 @@ export default function DesignTaskPage() {
       await loadTimerSummary(task.id);
       if (wasPaused && !options?.silent) {
         toast.success("Таймер на паузі");
+      }
+      // Мовчазна кнопка — найгірше, що може бути: людина тисне «Пауза», нічого
+      // не відбувається, і вона не розуміє, це збій чи так задумано. Зупиняти
+      // чужу сесію ми навмисно не даємо, тож принаймні скажемо це вголос.
+      if (!wasPaused && !options?.silent) {
+        toast.error("Твій таймер на цій задачі не запущено", {
+          description: foreignTimerLabel
+            ? `Зараз іде таймер, який запустив(ла) ${foreignTimerLabel}. Чужий зупиняється лише зміною статусу задачі.`
+            : undefined,
+        });
       }
       return wasPaused;
     } catch (e: unknown) {
@@ -7510,7 +7526,7 @@ export default function DesignTaskPage() {
         void updateTaskStatus(action.id.next);
         break;
       case "timer":
-        if (isTimerRunning) void handlePauseTimer();
+        if (isOwnTimerRunning) void handlePauseTimer();
         else void handleStartTimer();
         break;
       case "change_request":
@@ -7541,7 +7557,7 @@ export default function DesignTaskPage() {
     return null;
   };
 
-  const timerActionLabel = isTimerRunning ? "Пауза" : "Старт";
+  const timerActionLabel = isOwnTimerRunning ? "Пауза" : "Старт";
 
   /** Переходи, які вже показані кнопками — щоб не дублювати їх у меню «⋮». */
   const surfacedStatusActions = new Set<DesignStatus>(
@@ -11749,6 +11765,13 @@ export default function DesignTaskPage() {
                   на паузі
                 </span>
               ) : null}
+              {/* Чий саме таймер іде. Без цього рядка «іде» на спільній задачі
+                  читається як «мій», і людина не розуміє, чому пауза мовчить. */}
+              {!isOwnTimerRunning && foreignTimerLabel ? (
+                <span className="min-w-0 truncate text-3xs text-muted-foreground" title={`Таймер запустив(ла) ${foreignTimerLabel}`}>
+                  {foreignTimerLabel}
+                </span>
+              ) : null}
             </div>
             <div className="flex items-center gap-3 px-3 pb-3">
               <span className="flex flex-col gap-0.5">
@@ -11762,7 +11785,7 @@ export default function DesignTaskPage() {
                 </span>
                 <span className="text-3xs text-muted-foreground">усього по задачі</span>
               </span>
-              {isTimerRunning ? (
+              {isOwnTimerRunning ? (
                 <Button
                   type="button"
                   variant="outline"

@@ -30,6 +30,17 @@ export type DesignTaskTimerSummary = {
   activeSessionId: string | null;
   activeStartedAt: string | null;
   activeUserId: string | null;
+  /**
+   * УСІ активні сесії задачі, а не лише найновіша.
+   *
+   * Одну задачу можуть вести двоє (виконавець і співвиконавець), і кожен має
+   * власну сесію. Доти назовні віддавалась тільки найновіша — і сторінка не
+   * могла відрізнити «мій таймер іде» від «іде чийсь». Наслідок був живий: поки
+   * колега забув зупинити свій таймер, друга людина не могла ні запустити свій
+   * (кнопка «Старт» ховалась), ні зупинити чужий (пауза шукає сесію за своїм
+   * user_id і мовчки не робила нічого).
+   */
+  activeSessions: Array<{ id: string; userId: string; startedAt: string }>;
 };
 
 export type DesignerTimerTaskOverview = {
@@ -48,6 +59,20 @@ export type DesignerTimerTaskOverview = {
 
 export const DESIGN_TASK_TIMER_UPDATED_EVENT = "design-task-timer:updated";
 
+/**
+ * Порожня зведенка: «сесій немає / ще не читали». Фабрика, а не спільна
+ * константа, щоб випадково не роздати всім сторінкам один і той самий об'єкт.
+ */
+export function createEmptyTimerSummary(): DesignTaskTimerSummary {
+  return {
+    totalSeconds: 0,
+    activeSessionId: null,
+    activeStartedAt: null,
+    activeUserId: null,
+    activeSessions: [],
+  };
+}
+
 const toUnixMs = (value?: string | null) => {
   if (!value) return NaN;
   return new Date(value).getTime();
@@ -63,12 +88,14 @@ const secondsBetween = (from?: string | null, toMs?: number) => {
 function summarizeSessions(sessions: DesignTaskTimerSessionRow[]): DesignTaskTimerSummary {
   let totalSeconds = 0;
   let active: DesignTaskTimerSessionRow | null = null;
+  const activeSessions: DesignTaskTimerSummary["activeSessions"] = [];
 
   sessions.forEach((session) => {
     if (session.paused_at) {
       totalSeconds += secondsBetween(session.started_at, toUnixMs(session.paused_at));
     }
     if (!session.paused_at) {
+      activeSessions.push({ id: session.id, userId: session.user_id, startedAt: session.started_at });
       if (!active) {
         active = session;
       } else {
@@ -87,6 +114,7 @@ function summarizeSessions(sessions: DesignTaskTimerSessionRow[]): DesignTaskTim
     activeSessionId: activeSession?.id ?? null,
     activeStartedAt: activeSession?.started_at ?? null,
     activeUserId: activeSession?.user_id ?? null,
+    activeSessions,
   };
 }
 
@@ -128,12 +156,14 @@ export function formatElapsedSeconds(totalSeconds: number) {
 }
 
 export function getTimerElapsedSeconds(summary: DesignTaskTimerSummary, nowMs = Date.now()) {
-  return (
-    summary.totalSeconds +
-    (summary.activeStartedAt
-      ? Math.max(0, Math.floor((nowMs - new Date(summary.activeStartedAt).getTime()) / 1000))
-      : 0)
+  // «Витрачено» під цим числом — людино-години, тож тікати мають УСІ активні
+  // сесії. Доти рахувалась лише найновіша: коли задачу вели двоє, час другої
+  // людини не з'являвся, поки вона не поставить паузу.
+  const runningSeconds = summary.activeSessions.reduce(
+    (acc, session) => acc + Math.max(0, Math.floor((nowMs - new Date(session.startedAt).getTime()) / 1000)),
+    0
   );
+  return summary.totalSeconds + runningSeconds;
 }
 
 export async function getDesignTaskTimerSummary(

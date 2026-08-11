@@ -46,6 +46,8 @@ type DesignerTimerController = {
   startTask: (task: DesignerTimerTaskOverview) => Promise<void>;
   pauseTask: (task: DesignerTimerTaskOverview) => Promise<void>;
   canStartTask: (task: DesignerTimerTaskOverview) => boolean;
+  /** Чи йде на задачі МІЙ таймер (а не колеги-співвиконавця). */
+  isOwnTaskRunning: (task: DesignerTimerTaskOverview) => boolean;
 };
 
 const TIMER_FLOATING_POSITION_KEY = "designer-timer-floating-position";
@@ -67,6 +69,14 @@ function getTaskTitle(task: DesignerTimerTaskOverview) {
 
 function isTaskRunning(task: DesignerTimerTaskOverview) {
   return Boolean(task.summary.activeSessionId && task.summary.activeStartedAt);
+}
+
+/**
+ * Чи йде на задачі саме МІЙ таймер. Спільну задачу ведуть двоє, і сесія в
+ * кожного власна: «на задачі щось тікає» ще не означає «тікає в мене».
+ */
+function hasOwnActiveSession(task: DesignerTimerTaskOverview, userId: string | null | undefined) {
+  return Boolean(userId) && task.summary.activeSessions.some((session) => session.userId === userId);
 }
 
 function hasTimerProgress(task: DesignerTimerTaskOverview) {
@@ -172,10 +182,15 @@ export function useDesignerTimerController({
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "pause" | null>(null);
 
+  // «Поточна» задача віджета — та, де тікає МІЙ таймер. Чужа активна сесія на
+  // спільній задачі не робить її моєю поточною.
   const activeTask = useMemo(
-    () => tasks.find((task) => isTaskRunning(task)) ?? null,
-    [tasks]
+    () => tasks.find((task) => hasOwnActiveSession(task, userId)) ?? null,
+    [tasks, userId]
   );
+  // Секунди перемальовуємо, поки тікає будь-чий таймер: у сумі «витрачено»
+  // враховані всі активні сесії, тож завмерлий лічильник виглядав би збоєм.
+  const hasRunningTask = useMemo(() => tasks.some((task) => isTaskRunning(task)), [tasks]);
 
   const refresh = useCallback(async () => {
     if (!enabled || !teamId || !userId) {
@@ -198,13 +213,20 @@ export function useDesignerTimerController({
     }
   }, [enabled, teamId, userId]);
 
+  const isOwnTaskRunning = useCallback(
+    (task: DesignerTimerTaskOverview) => hasOwnActiveSession(task, userId),
+    [userId]
+  );
+
   const canStartTask = useCallback(
     (task: DesignerTimerTaskOverview) =>
       task.status === "in_progress" &&
       Boolean(userId) &&
       (task.assigneeUserId === userId || task.collaboratorUserIds.includes(userId ?? "")) &&
-      !isTaskRunning(task),
-    [userId]
+      // Заважає лише власний активний таймер: таймер колеги на спільній задачі
+      // не має замикати мені старт (у базі паралельні сесії дозволені).
+      !isOwnTaskRunning(task),
+    [isOwnTaskRunning, userId]
   );
 
   const pauseTask = useCallback(
@@ -278,10 +300,10 @@ export function useDesignerTimerController({
   }, [enabled, refresh, teamId]);
 
   useEffect(() => {
-    if (!activeTask) return;
+    if (!hasRunningTask) return;
     const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
-  }, [activeTask]);
+  }, [hasRunningTask]);
 
   return {
     enabled,
@@ -296,6 +318,7 @@ export function useDesignerTimerController({
     startTask,
     pauseTask,
     canStartTask,
+    isOwnTaskRunning,
   };
 }
 
@@ -309,6 +332,9 @@ function TimerTaskRow({
   compact?: boolean;
 }) {
   const running = isTaskRunning(task);
+  // Кнопку вибираємо за СВОЇМ таймером: пауза зупиняє лише власну сесію, тож
+  // на чужій вона б лише вдавала роботу.
+  const ownRunning = controller.isOwnTaskRunning(task);
   const paused = isTaskPaused(task);
   const busy = controller.busyTaskId === task.taskId;
   const elapsedLabel = formatElapsedSeconds(getTimerElapsedSeconds(task.summary, controller.nowMs));
@@ -360,7 +386,7 @@ function TimerTaskRow({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {running ? (
+          {ownRunning ? (
             <Button
               type="button"
               size="iconSm"
