@@ -120,8 +120,10 @@ import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
   isDesignerJobRole,
+  isLogisticsJobRole,
   isQuoteManagerJobRole,
   normalizeJobRole,
+  resolveQuoteRunPriceFieldAccess,
 } from "@/lib/permissions";
 import {
   createOrderFromApprovedQuote,
@@ -2115,6 +2117,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ),
     [canEditQuoteContent, currentStatus]
   );
+
+  // Кількість тиражу, додавання й видалення лишаються на спільному canEditRuns,
+  // а чотири поля ціни розходяться по посадах. Статусний гейт зверху: у
+  // закритому прорахунку не редагує ніхто, хоч би яка була посада.
+  const runPriceFieldAccess = useMemo(() => {
+    const byRole = resolveQuoteRunPriceFieldAccess({ viewerJobRole, permissions });
+    return {
+      unit_price_model: canEditRuns && byRole.unit_price_model,
+      unit_price_print: canEditRuns && byRole.unit_price_print,
+      logistics_cost: canEditRuns && byRole.logistics_cost,
+      desired_manager_income: canEditRuns && byRole.desired_manager_income,
+    };
+  }, [canEditRuns, permissions, viewerJobRole]);
+
+  const runFieldLockHint = (allowed: boolean, who: string) =>
+    canEditRuns && !allowed ? `Це поле заповнює ${who}` : undefined;
 
   const openStatusDialog = () => {
     if (quoteRequirements.length > 0) {
@@ -5862,7 +5880,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    disabled={!quote || (!canEditQuoteContent && viewerJobRole !== "logistics")}
+                    disabled={!quote || (!canEditQuoteContent && !isLogisticsJobRole(viewerJobRole))}
                     onSelect={(event) => {
                       event.preventDefault();
                       openEditQuote();
@@ -6503,7 +6521,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               <Input
                                                 type="number"
                                                 value={activeItemRun.unit_price_model ?? ""}
-                                                disabled={!canEditRuns}
+                                                disabled={!runPriceFieldAccess.unit_price_model}
+                                                title={runFieldLockHint(runPriceFieldAccess.unit_price_model, "менеджер")}
                                                 onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_model", e.target.value)}
                                                 onFocus={(e) => {
                                                   if (activeItemRun.unit_price_model === 0) e.target.select();
@@ -6525,7 +6544,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               <Input
                                                 type="number"
                                                 value={activeItemRun.unit_price_print ?? ""}
-                                                disabled={!canEditRuns}
+                                                disabled={!runPriceFieldAccess.unit_price_print}
+                                                title={runFieldLockHint(runPriceFieldAccess.unit_price_print, "проєктний менеджер")}
                                                 onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_print", e.target.value)}
                                                 onFocus={(e) => {
                                                   if (activeItemRun.unit_price_print === 0) e.target.select();
@@ -6547,7 +6567,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               <Input
                                                 type="number"
                                                 value={activeItemRun.logistics_cost ?? ""}
-                                                disabled={!canEditRuns}
+                                                disabled={!runPriceFieldAccess.logistics_cost}
+                                                title={runFieldLockHint(runPriceFieldAccess.logistics_cost, "проєктний менеджер або логіст")}
                                                 onChange={(e) => updateRunRaw(activeItemRunIndex, "logistics_cost", e.target.value)}
                                                 onFocus={(e) => {
                                                   if (!activeItemRun.logistics_cost || Number(activeItemRun.logistics_cost) === 0) e.target.select();
@@ -6568,7 +6589,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             <Input
                                               type="number"
                                               value={activeItemRun.desired_manager_income ?? ""}
-                                              disabled={!canEditRuns}
+                                              disabled={!runPriceFieldAccess.desired_manager_income}
+                                              title={runFieldLockHint(runPriceFieldAccess.desired_manager_income, "менеджер")}
                                               onChange={(e) => updateRunRaw(activeItemRunIndex, "desired_manager_income", e.target.value)}
                                               onFocus={(e) => {
                                                 if ((Number(activeItemRun.desired_manager_income) || 0) === 0) e.target.select();
