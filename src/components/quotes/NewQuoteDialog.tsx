@@ -482,6 +482,15 @@ export interface NewQuoteDialogProps {
   submitError?: string | null;
   customerLabel?: string | null;
   quoteLabel?: string | null;
+  /**
+   * Позиції прорахунку для режиму редагування. Діалог сам собою односхемний —
+   * він показує ОДНУ позицію, — і раніше це завжди була перша, тож у
+   * прорахунку з кількох товарів решта була недосяжна. Тепер позицію обирає
+   * людина, а сторінка пересіює форму під обрану.
+   */
+  items?: Array<{ id: string; label: string }>;
+  selectedItemId?: string | null;
+  onSelectItem?: (itemId: string) => void;
   customers?: Customer[];
   customersLoading?: boolean;
   onCustomerSearch?: (search: string) => void;
@@ -561,6 +570,9 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
   submitError = null,
   customerLabel = null,
   quoteLabel = null,
+  items = [],
+  selectedItemId = null,
+  onSelectItem,
   customers = [],
   customersLoading = false,
   onCustomerSearch,
@@ -1692,9 +1704,31 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <div className="min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-4">
 
             {isEditMode ? (
-              <div className="rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
-                {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                <span className="min-w-0">
+                  {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
+                  {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
+                </span>
+                {items.length > 1 ? (
+                  <span className="flex items-center gap-2">
+                    <span className="whitespace-nowrap">Позиція</span>
+                    <Select
+                      value={selectedItemId ?? items[0]?.id ?? ""}
+                      onValueChange={(value) => onSelectItem?.(value)}
+                    >
+                      <SelectTrigger className="h-8 w-[min(20rem,60vw)] bg-background text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {items.map((item, index) => (
+                          <SelectItem key={item.id} value={item.id} className="text-xs">
+                            {index + 1}. {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </span>
+                ) : null}
               </div>
             ) : null}
 

@@ -152,6 +152,9 @@ import {
   statusLabels,
   type PrintConfig,
 } from "@/features/quotes/quotes-page/config";
+import { groupProductsForQuotes } from "@/features/quotes/quoteBatchGrouping";
+import { resolveQuoteEditItemRuns } from "@/features/quotes/quoteEditItemRuns";
+import { pluralUk } from "@/lib/lastSeen";
 import { useQuotesPageViewState } from "@/features/quotes/quotes-page/useQuotesPageViewState";
 import {
   SEGMENTED_GROUP,
@@ -267,6 +270,7 @@ type CatalogKind = {
   printPositions: CatalogPrintPosition[];
 };
 type CatalogType = { id: string; name: string; quote_type?: string | null; kinds: CatalogKind[] };
+type QuoteEditItemRow = Awaited<ReturnType<typeof listQuoteItemsForQuotes>>[number];
 void DELIVERY_TYPE_OPTIONS;
 
 const sanitizeCatalogFileName = (value: string) => value.replace(/[^\w.-]+/g, "_");
@@ -536,7 +540,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  // editPrimaryItemId — це ОБРАНА позиція, а не «перша». Діалог редагування
+  // показує один товар, тож у прорахунку з кількох позицій решта була
+  // недосяжна: openEdit брав itemRows.find(...) і на цьому все закінчувалось.
   const [editPrimaryItemId, setEditPrimaryItemId] = useState<string | null>(null);
+  const [editItems, setEditItems] = useState<QuoteEditItemRow[]>([]);
+  const [editItemRuns, setEditItemRuns] = useState<QuoteRun[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -2186,26 +2195,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         throw new Error("Додайте хоча б один товар.");
       }
 
-      const productGroups = [
-        {
-          key: "merch",
-          quoteType: "merch",
-          products: data.products.filter((product) => product.quoteType === "merch"),
-        },
-        {
-          key: "print",
-          quoteType: "print",
-          products: data.products.filter((product) => product.quoteType === "print"),
-        },
-        ...data.products
-          .filter((product) => product.quoteType === "other")
-          .map((product, index) => ({
-            key: `other-${product.id || index}`,
-            quoteType: "other",
-            products: [product],
-          })),
-      ].filter((group) => group.products.length > 0);
+      // Спільне правило з білдером — features/quotes/quoteBatchGrouping.
+      // Друга копія цього коду тут розсипала кожну позицію «Інше» в окремий
+      // прорахунок, і білдер на кнопці рахував так само.
+      const productGroups = groupProductsForQuotes(data.products);
 
+      // Білдер блокує цей випадок ще до збереження, але правило лишається й
+      // тут: сторінка не має покладатись на те, що вікно все перевірило.
       if (productGroups.length > 1 && data.customerType !== "customer") {
         throw new Error("КП з кількох прорахунків зараз можна створити тільки для замовника, не ліда.");
       }
@@ -2596,7 +2592,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
 
       let createdSetId: string | null = null;
-      if (createdQuoteIds.length > 1) {
+      if (createdQuoteIds.length > 1 && data.combineIntoSet) {
         const createdSet = await createQuoteSet({
           teamId,
           quoteIds: createdQuoteIds,
@@ -2615,8 +2611,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       if (createdSetId) {
         setContentView("sets");
         toast.success("КП створено", {
-          description: `${createdQuoteIds.length} прорахунки · ${customerName}`,
+          description: `${pluralUk(createdQuoteIds.length, "прорахунок", "прорахунки", "прорахунків")} · ${customerName}`,
         });
+      } else if (createdQuoteIds.length > 1) {
+        // Кілька прорахунків без КП: у картку першого не провалюємось, бо так
+        // решта просто зникне з очей. Лишаємось на дошці, де видно всі.
+        toast.success(
+          `Створено ${pluralUk(createdQuoteIds.length, "прорахунок", "прорахунки", "прорахунків")}`,
+          { description: `${customerName} · без обʼєднання в КП` }
+        );
       } else {
         const quoteId = createdQuoteIds[0];
         toast.success("Прорахунок створено", {
@@ -4470,24 +4473,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         getQuoteRuns(row.id, teamId),
       ]);
       setEditTarget((prev) => ({ ...(prev ?? row), ...fresh }));
-      const primaryItem = itemRows.find((item) => item.quote_id === row.id) ?? null;
+      const quoteItems = itemRows.filter((item) => item.quote_id === row.id);
+      setEditItems(quoteItems);
+      setEditItemRuns(runRows);
+      const primaryItem = quoteItems[0] ?? null;
       const primaryItemMetadata =
         primaryItem?.metadata && typeof primaryItem.metadata === "object"
           ? (primaryItem.metadata as QuoteItemMetadata)
           : null;
-      const itemRuns = runRows.filter((run) => run.quote_item_id === (primaryItem?.id ?? null));
-      const fallbackRuns =
-        itemRuns.length > 0
-          ? itemRuns
-          : primaryItem && Number(primaryItem.qty ?? 0) > 0
-            ? [
-                {
-                  id: undefined,
-                  quantity: Number(primaryItem.qty ?? 0),
-                },
-              ]
-            : [];
-      setEditOriginalRuns(itemRuns);
+      const primaryRuns = resolveQuoteEditItemRuns(primaryItem, runRows);
+      setEditOriginalRuns(primaryRuns.originalRuns as QuoteRun[]);
       setEditPrimaryItemId(primaryItem?.id ?? null);
       const freshDeadline =
         fresh.deadline_at && !Number.isNaN(new Date(fresh.deadline_at).getTime())
@@ -4516,13 +4511,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         modelId: primaryItem?.catalog_model_id ?? "",
         productConfiguratorPreset: primaryItemMetadata?.configuratorPreset ?? null,
         printPackageConfig: getPrintProductConfig(primaryItemMetadata) ?? undefined,
-        quantity:
-          Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0) > 0
-            ? Number(fallbackRuns[0]?.quantity ?? primaryItem?.qty ?? 0)
-            : undefined,
-        runs: fallbackRuns
-          .map((run) => ({ id: run.id, quantity: Number(run.quantity) || 0 }))
-          .filter((run) => run.quantity > 0),
+        quantity: primaryRuns.primaryQuantity,
+        runs: primaryRuns.formRuns,
         quantityUnit: normalizeUnitLabel(primaryItem?.unit ?? "шт."),
         printApplications: toPrintApplications(primaryItem?.methods ?? null),
         createDesignTask: false,
@@ -4533,6 +4523,42 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setEditLoading(false);
     }
   };
+
+  /**
+   * Перемикання позиції в діалозі редагування. Поля рівня прорахунку
+   * (замовник, статус, дедлайн) лишаються, змінюються тільки товарні — і разом
+   * з ними editPrimaryItemId, за яким handleEditSubmit пише зміни.
+   */
+  const selectEditItem = (itemId: string) => {
+    const item = editItems.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const metadata =
+      item.metadata && typeof item.metadata === "object" ? (item.metadata as QuoteItemMetadata) : null;
+    const itemRuns = resolveQuoteEditItemRuns(item, editItemRuns);
+    setEditPrimaryItemId(item.id);
+    setEditOriginalRuns(itemRuns.originalRuns as QuoteRun[]);
+    setEditInitialValues((prev) => ({
+      ...(prev ?? {}),
+      categoryId: item.catalog_type_id ?? "",
+      kindId: item.catalog_kind_id ?? "",
+      modelId: item.catalog_model_id ?? "",
+      productConfiguratorPreset: metadata?.configuratorPreset ?? null,
+      printPackageConfig: getPrintProductConfig(metadata) ?? undefined,
+      quantity: itemRuns.primaryQuantity,
+      runs: itemRuns.formRuns,
+      quantityUnit: normalizeUnitLabel(item.unit ?? "шт."),
+      printApplications: toPrintApplications(item.methods ?? null),
+    }));
+  };
+
+  const editItemOptions = useMemo(
+    () =>
+      editItems.map((item, index) => ({
+        id: item.id,
+        label: (item.name ?? "").trim() || `Позиція ${index + 1}`,
+      })),
+    [editItems]
+  );
 
   const formatDeadlineValue = (date?: Date) => {
     if (!date) return null;
@@ -7835,6 +7861,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             setEditError(null);
             setEditLoading(false);
             setEditPrimaryItemId(null);
+            setEditItems([]);
+            setEditItemRuns([]);
             setCustomerSearch("");
           }
         }}
@@ -7844,6 +7872,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         submitError={editError}
         quoteLabel={editTarget?.number ? `#${editTarget.number}` : editTarget?.id ?? null}
         customerLabel={editTarget?.customer_name ?? null}
+        items={editItemOptions}
+        selectedItemId={editPrimaryItemId}
+        onSelectItem={selectEditItem}
         initialValues={editInitialValues ?? undefined}
         teamId={teamId}
         customers={customers}

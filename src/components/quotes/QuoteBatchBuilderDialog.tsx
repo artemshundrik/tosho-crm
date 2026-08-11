@@ -53,8 +53,14 @@ import {
   type CustomerDeliveryPoint,
 } from "@/lib/customerDeliveryPoints";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_ATTACHMENTS } from "@/features/quotes/quotes-page/config";
+import {
+  describeQuoteBatchGroups,
+  groupProductsForQuotes,
+} from "@/features/quotes/quoteBatchGrouping";
 import { normalizeUnitLabel } from "@/lib/units";
+import { pluralUk } from "@/lib/lastSeen";
 import { isDesignerJobRole, isQuoteManagerJobRole, normalizeJobRole } from "@/lib/permissions";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
@@ -172,6 +178,12 @@ export type QuoteBatchBuilderFormData = {
   comment: string;
   notes: string;
   products: QuoteBatchProductSubmitData[];
+  /**
+   * Чи зшивати створені прорахунки в КП. Раніше це вирішувалось саме по собі —
+   * більше одного прорахунку означало КП, — і людина дізнавалась про це вже з
+   * тосту. Тепер вибір явний, а при одному прорахунку прапорець завжди false.
+   */
+  combineIntoSet: boolean;
 };
 
 type ProductDraft = Omit<QuoteBatchProductSubmitData, "runs"> & {
@@ -798,6 +810,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
   const [activeProductId, setActiveProductId] = React.useState(products[0]?.id ?? "");
   const [localError, setLocalError] = React.useState<string | null>(null);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = React.useState(false);
+  // Раніше КП створювалось саме, щойно товари розходились більш ніж в один
+  // прорахунок, — людину ніхто не питав. Тепер це її вибір; за замовчуванням
+  // лишаємо звичну поведінку, щоб нікому не довелось перевчатись.
+  const [combineIntoSet, setCombineIntoSet] = React.useState(true);
   const [quickModelName, setQuickModelName] = React.useState("");
   const [quickModelSku, setQuickModelSku] = React.useState("");
   const [quickModelImageUrl, setQuickModelImageUrl] = React.useState("");
@@ -1573,14 +1589,30 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
       comment: "",
       notes: notes.trim(),
       products: normalizedProducts,
+      combineIntoSet: splitsIntoManyQuotes && combineIntoSet,
     });
   };
 
-  const merchCount = products.filter((product) => product.quoteType === "merch").length;
-  const printCount = products.filter((product) => product.quoteType === "print").length;
-  const otherCount = products.filter((product) => product.quoteType === "other").length;
-  const quoteGroupCount = (merchCount > 0 ? 1 : 0) + (printCount > 0 ? 1 : 0) + otherCount;
-  const resultLabel = quoteGroupCount === 1 ? "1 прорахунок" : `КП · ${quoteGroupCount} прорахунки`;
+  // Одне правило групування на діалог і на збереження — див.
+  // features/quotes/quoteBatchGrouping. Раніше тут була друга копія, у якій
+  // кожна позиція «Інше» рахувалась окремим прорахунком.
+  const quoteGroups = React.useMemo(() => groupProductsForQuotes(products), [products]);
+  const quoteGroupCount = quoteGroups.length;
+  const quoteGroupSummary = React.useMemo(
+    () => describeQuoteBatchGroups(quoteGroups),
+    [quoteGroups]
+  );
+  const splitsIntoManyQuotes = quoteGroupCount > 1;
+  const leadBlocksSplit = splitsIntoManyQuotes && customerType !== "customer";
+  const willCreateSet = splitsIntoManyQuotes && combineIntoSet;
+  const resultLabel = !splitsIntoManyQuotes
+    ? "1 прорахунок"
+    : `${willCreateSet ? "КП · " : ""}${pluralUk(quoteGroupCount, "прорахунок", "прорахунки", "прорахунків")}`;
+  const submitLabel = !splitsIntoManyQuotes
+    ? "прорахунок"
+    : willCreateSet
+      ? "КП"
+      : pluralUk(quoteGroupCount, "прорахунок", "прорахунки", "прорахунків");
   const allIssues = products.flatMap((product) =>
     getProductIssues(product).map((issue) => `${getProductLabel(catalogTypes, product)}: ${issue}`)
   );
@@ -2702,14 +2734,53 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
             </main>
           </div>
 
-          <DialogFooter className="border-t border-border/60 px-4 py-3">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-              Скасувати
-            </Button>
-            <Button type="button" onClick={() => void handleSubmit()} disabled={submitting} className="gap-2">
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Створити {quoteGroupCount === 1 ? "прорахунок" : "КП"}
-            </Button>
+          <DialogFooter className="flex-col items-stretch gap-3 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Розклад по прорахунках показуємо ДО збереження: раніше про те,
+                що товари розійшлись, людина дізнавалась із тосту постфактум. */}
+            <div className="flex min-w-0 flex-col gap-1.5">
+              {splitsIntoManyQuotes ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Буде створено:</span>
+                    {quoteGroupSummary.map((line) => (
+                      <Badge key={line} variant="outline" className="rounded-full font-normal">
+                        {line}
+                      </Badge>
+                    ))}
+                  </div>
+                  <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-foreground">
+                    <Checkbox
+                      checked={combineIntoSet}
+                      onCheckedChange={(value) => setCombineIntoSet(value === true)}
+                      disabled={submitting || leadBlocksSplit}
+                    />
+                    Обʼєднати ці прорахунки в КП
+                  </label>
+                  {leadBlocksSplit ? (
+                    <p className="text-xs font-medium text-destructive">
+                      Для ліда так не вийде: кілька прорахунків створюються тільки для замовника.
+                      Лишіть товари одного типу або оберіть замовника.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">Буде створено 1 прорахунок</span>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Скасувати
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={submitting || leadBlocksSplit}
+                className="gap-2"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Створити {submitLabel}
+              </Button>
+            </div>
           </DialogFooter>
           </>
           ) : (
