@@ -10,6 +10,8 @@ import {
   fetchOpenBoardCards,
   moveBoardCard,
   parseBoardBody,
+  updateBoardCard,
+  buildBoardUpdateResponse,
   recordCommitOnCards,
   releasedCardMessage,
 } from "./_lib/devRequestBoard";
@@ -17,8 +19,9 @@ import { CAPTURE_TOKEN_HEADER, isUuid, readHeader, tokenMatches } from "./_lib/d
 
 // Черга запитів ззовні CRM: `POST { "action": "list" }` — подивитись, що
 // відкрито; `POST { "action": "move", "number": 3, "status": "in_progress" }` —
-// пересунути картку; `POST { "action": "commit", "numbers": [4], "sha": "…" }` —
-// зафіксувати коміт (кличе git-хук scripts/hooks/post-commit, не людина).
+// пересунути картку; `POST { "action": "update", "number": 3, "body": "…" }` —
+// виправити текст картки; `POST { "action": "commit", "numbers": [4], "sha": "…" }`
+// — зафіксувати коміт (кличе git-хук scripts/hooks/post-commit, не людина).
 //
 // НАВІЩО ОКРЕМА ФУНКЦІЯ, А НЕ РЕЖИМ У dev-request-capture. У захоплення рівно
 // одна відповідальність — прийняти сказане й записати картку. Воно платить за
@@ -120,6 +123,21 @@ export const handler = async (event: HttpEvent) => {
         return json(500, { error: "Не зміг записати коміт у картки. Спробуй ще раз за хвилину." });
       }
       return json(200, buildBoardCommitResponse({ sha: parsed.sha, outcomes, url }));
+    }
+
+    if (parsed.action === "update") {
+      const updated = await updateBoardCard(admin, teamId, parsed.number, parsed.patch);
+      if (!updated.ok) {
+        if (updated.reason === "not_found") {
+          return json(404, { error: cardNotFoundMessage(parsed.number) });
+        }
+        if (updated.reason === "released") {
+          return json(409, { error: releasedCardMessage(parsed.number) });
+        }
+        console.error("dev-request-board update failed:", updated.message);
+        return json(500, { error: "Не зміг оновити картку. Спробуй ще раз за хвилину." });
+      }
+      return json(200, buildBoardUpdateResponse({ card: updated.card, changed: updated.changed, url }));
     }
 
     const result = await moveBoardCard(admin, teamId, parsed.number, parsed.status);

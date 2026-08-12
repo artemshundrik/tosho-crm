@@ -20,6 +20,9 @@ import {
   shaMatches,
   sortBoardCards,
   toBoardCard,
+  TITLE_MAX_LENGTH,
+  updateBoardCard,
+  buildBoardUpdateResponse,
   type BoardCard,
 } from "./devRequestBoard";
 
@@ -761,5 +764,120 @@ describe("buildBoardCommitResponse", () => {
 
     expect(response.moved).toEqual([]);
     expect(response.message).toContain("жодної картки не зрушив");
+  });
+});
+
+/**
+ * Правка тексту картки ззовні. Помилка тут не падає — вона тихо переписує чужу
+ * задачу або, гірше, пускає до статусу повз правила, на яких тримається вся
+ * конструкція з sha.
+ */
+describe("parseBoardBody: update", () => {
+  it("бере тільки дозволені поля", () => {
+    const parsed = parseBoardBody(
+      JSON.stringify({ action: "update", number: 35, title: " Нова тема ", body: "Опис", private: true })
+    );
+    expect(parsed).toEqual({
+      ok: true,
+      action: "update",
+      number: 35,
+      patch: { title: "Нова тема", body: "Опис", isPrivate: true },
+    });
+  });
+
+  it("статус через update не проходить — на це є move", () => {
+    const parsed = parseBoardBody(JSON.stringify({ action: "update", number: 35, status: "released" }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.status).toBe(400);
+      expect(parsed.error).toContain("move");
+    }
+  });
+
+  it("порожня тема — відмова, порожній опис — можна", () => {
+    const empty = parseBoardBody(JSON.stringify({ action: "update", number: 1, title: "   " }));
+    expect(empty.ok).toBe(false);
+
+    const cleared = parseBoardBody(JSON.stringify({ action: "update", number: 1, body: "" }));
+    expect(cleared).toEqual({ ok: true, action: "update", number: 1, patch: { body: "" } });
+  });
+
+  it("задовга тема не пролазить", () => {
+    const parsed = parseBoardBody(
+      JSON.stringify({ action: "update", number: 1, title: "я".repeat(TITLE_MAX_LENGTH + 1) })
+    );
+    expect(parsed.ok).toBe(false);
+  });
+
+  it("вигаданий тип чи пріоритет — відмова з переліком дозволених", () => {
+    const parsed = parseBoardBody(JSON.stringify({ action: "update", number: 1, kind: "щось" }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.error).toContain("Дозволені");
+  });
+
+  it("виклик без жодного поля — не мовчазний успіх", () => {
+    const parsed = parseBoardBody(JSON.stringify({ action: "update", number: 1 }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.error).toContain("Нічого міняти");
+  });
+});
+
+describe("updateBoardCard", () => {
+  it("пише лише змінені поля й перелічує, що саме змінив", async () => {
+    const { admin, state } = fakeAdmin(row({ number: 35, title: "Стара тема", body: "Старий опис" }));
+    const result = await updateBoardCard(admin, "team-1", 35, { title: "Нова тема", body: "Новий опис" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.changed).toEqual(["тему", "опис"]);
+    expect(state.updates).toEqual([{ title: "Нова тема", body: "Новий опис" }]);
+  });
+
+  it("те саме значення — у базу не лізе", async () => {
+    const { admin, state } = fakeAdmin(row({ number: 35, title: "Стара тема" }));
+    const result = await updateBoardCard(admin, "team-1", 35, { title: "Стара тема" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.changed).toEqual([]);
+    expect(state.updates).toEqual([]);
+  });
+
+  it("викочену картку не переписуємо — вона вже в звіті", async () => {
+    const { admin, state } = fakeAdmin(row({ number: 35, status: "released" }));
+    const result = await updateBoardCard(admin, "team-1", 35, { body: "інше" });
+
+    expect(result).toEqual({ ok: false, reason: "released" });
+    expect(state.updates).toEqual([]);
+  });
+
+  it("немає такої картки — так і кажемо", async () => {
+    const { admin } = fakeAdmin(null);
+    const result = await updateBoardCard(admin, "team-1", 999, { body: "інше" });
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+  });
+});
+
+describe("buildBoardUpdateResponse", () => {
+  const card = toBoardCard({
+    number: 35,
+    title: "Переробити вхід ToSho AI",
+    kind: "bug",
+    status: "in_progress",
+    module_key: null,
+    priority: "normal",
+    is_private: false,
+    created_at: "2026-08-11T09:00:00.000Z",
+  });
+
+  it("каже, що саме змінив", () => {
+    const response = buildBoardUpdateResponse({ card, changed: ["тему", "опис"], url: "https://tosho.pro/dev/backlog" });
+    expect(response.unchanged).toBe(false);
+    expect(response.message).toContain("оновив тему, опис");
+    expect(response.message).toContain("REQ-35");
+  });
+
+  it("нічого не змінилось — не вдає роботу", () => {
+    const response = buildBoardUpdateResponse({ card, changed: [], url: "https://tosho.pro/dev/backlog" });
+    expect(response.unchanged).toBe(true);
+    expect(response.message).toContain("нічого не змінив");
   });
 });

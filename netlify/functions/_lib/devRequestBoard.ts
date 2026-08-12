@@ -267,11 +267,25 @@ export function boardCardMeta(card: BoardCard): string {
 
 /* ------------------------------ Тіло запиту ---------------------------- */
 
+/** Поля картки, які дозволено міняти ззовні. Статусу тут немає навмисно. */
+export type BoardCardPatch = {
+  title?: string;
+  body?: string;
+  kind?: DevRequestKind;
+  priority?: DevRequestPriority;
+  moduleKey?: string | null;
+  isPrivate?: boolean;
+};
+
 export type BoardRequest =
   | { ok: true; action: "list" }
   | { ok: true; action: "move"; number: number; status: MovableStatus }
   | { ok: true; action: "commit"; numbers: number[]; sha: string }
+  | { ok: true; action: "update"; number: number; patch: BoardCardPatch }
   | { ok: false; status: number; error: string };
+
+/** Довші теми на дошці не читаються — вони стають рядком у звіті керівництву. */
+export const TITLE_MAX_LENGTH = 120;
 
 /** Скільки карток одна дія `commit` бере за раз. Більше — це не коміт, а помилка розбору. */
 export const COMMIT_NUMBERS_LIMIT = 20;
@@ -316,6 +330,12 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     numbers?: unknown;
     status?: unknown;
     sha?: unknown;
+    title?: unknown;
+    body?: unknown;
+    kind?: unknown;
+    priority?: unknown;
+    module?: unknown;
+    private?: unknown;
   };
   const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
 
@@ -389,12 +409,100 @@ export function parseBoardBody(raw: string | null | undefined): BoardRequest {
     return { ok: true, action: "move", number: rawNumber, status };
   }
 
+  if (action === "update") {
+    const rawNumber = toCardNumber(body.number);
+    if (rawNumber === null) {
+      return { ok: false, status: 400, error: "Потрібен номер картки: { \"number\": 3 }." };
+    }
+
+    // Статус має власну дію з власними правилами: «Готово локально» й «Викочено»
+    // ставлять факти (коміт і деплой), і пролізти до них через update не можна.
+    if (body.status !== undefined) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Статус через update не міняється — для цього є дія move. ${movableStatusHint()}`,
+      };
+    }
+
+    const patch: BoardCardPatch = {};
+
+    if (body.title !== undefined) {
+      const title = typeof body.title === "string" ? body.title.trim() : "";
+      if (!title) return { ok: false, status: 400, error: "Тема картки не може бути порожньою." };
+      if (title.length > TITLE_MAX_LENGTH) {
+        return {
+          ok: false,
+          status: 400,
+          error: `Тема довша за ${TITLE_MAX_LENGTH} символів — на дошці її ніхто не прочитає.`,
+        };
+      }
+      patch.title = title;
+    }
+
+    // Порожній опис дозволений: іноді картку саме й треба спорожнити.
+    if (body.body !== undefined) {
+      if (typeof body.body !== "string") {
+        return { ok: false, status: 400, error: "Опис має бути рядком." };
+      }
+      patch.body = body.body.trim();
+    }
+
+    if (body.kind !== undefined) {
+      const kind = typeof body.kind === "string" ? body.kind.trim() : "";
+      if (!(DRAFT_KINDS as readonly string[]).includes(kind)) {
+        return {
+          ok: false,
+          status: 400,
+          error: `Тип «${kind}» не існує. Дозволені: ${DRAFT_KINDS.join(", ")}.`,
+        };
+      }
+      patch.kind = kind as DevRequestKind;
+    }
+
+    if (body.priority !== undefined) {
+      const priority = typeof body.priority === "string" ? body.priority.trim() : "";
+      if (!(DRAFT_PRIORITIES as readonly string[]).includes(priority)) {
+        return {
+          ok: false,
+          status: 400,
+          error: `Пріоритет «${priority}» не існує. Дозволені: ${DRAFT_PRIORITIES.join(", ")}.`,
+        };
+      }
+      patch.priority = priority as DevRequestPriority;
+    }
+
+    // null — свідоме «зняти напрямок», а не помилка виклику.
+    if (body.module !== undefined) {
+      if (body.module === null) patch.moduleKey = null;
+      else if (typeof body.module === "string") patch.moduleKey = body.module.trim() || null;
+      else return { ok: false, status: 400, error: "Напрямок — рядок або null." };
+    }
+
+    if (body.private !== undefined) {
+      if (typeof body.private !== "boolean") {
+        return { ok: false, status: 400, error: "Поле private — true або false." };
+      }
+      patch.isPrivate = body.private;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Нічого міняти: передай title, body, kind, priority, module або private.",
+      };
+    }
+
+    return { ok: true, action: "update", number: rawNumber, patch };
+  }
+
   const actions =
-    "list — показати чергу, move — пересунути картку, commit — зафіксувати коміт (кличе git-хук, не людина)";
+    "list — показати чергу, move — пересунути картку, update — змінити текст картки, commit — зафіксувати коміт (кличе git-хук, не людина)";
   return {
     ok: false,
     status: 400,
-    error: action ? `Невідома дія «${action}». Є три: ${actions}.` : `Немає поля action. Є три дії: ${actions}.`,
+    error: action ? `Невідома дія «${action}». Є чотири: ${actions}.` : `Немає поля action. Є чотири дії: ${actions}.`,
   };
 }
 
@@ -654,6 +762,118 @@ export async function moveBoardCard(
   if (!card) return { ok: false, reason: "failed", message: "оновлення не повернуло рядок" };
 
   return { ok: true, card, previousStatus: current.status };
+}
+
+export type BoardUpdateResult =
+  | { ok: true; card: BoardCard; changed: string[] }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "released" }
+  | { ok: false; reason: "failed"; message: string };
+
+/**
+ * Змінити текст картки ззовні CRM.
+ *
+ * НАВІЩО. Дошка вміла приймати нові картки й рухати статуси, а виправити те, що
+ * в картці написано, можна було лише руками у вебі. На практиці це означало, що
+ * опис задачі лишався таким, яким його склали на початку, — навіть коли робота
+ * пішла зовсім інакше, і картка починала брехати про саму себе.
+ *
+ * ЧОГО ТУТ НЕМАЄ. Статусу: він має власну дію `move` з власними правилами, і
+ * «Готово локально» з «Викочено» ставлять факти — коміт і деплой. Якби статус
+ * можна було підсунути сюди, вся конструкція з sha втратила б сенс.
+ *
+ * Викочену картку не чіпаємо з тієї ж причини, що й у `move`: те, що вже в
+ * проді, описане в розділі «Релізи», і переписувати його заднім числом означає
+ * розійтися зі звітом.
+ *
+ * ІСТОРІЯ ЗМІН пишеться сама: на таблиці висить тригер trg_dev_requests_audit
+ * (scripts/dev-requests-schema.sql), тож кожна правка звідси лягає в журнал
+ * картки нарівні з правками з інтерфейсу.
+ */
+export async function updateBoardCard(
+  admin: SupabaseClient,
+  teamId: string,
+  number: number,
+  patch: BoardCardPatch
+): Promise<BoardUpdateResult> {
+  const current = await fetchBoardCard(admin, teamId, number);
+  if (!current) return { ok: false, reason: "not_found" };
+  if (current.status === "released") return { ok: false, reason: "released" };
+
+  const payload: Record<string, unknown> = {};
+  const changed: string[] = [];
+
+  if (patch.title !== undefined && patch.title !== current.title) {
+    payload.title = patch.title;
+    changed.push("тему");
+  }
+  if (patch.body !== undefined) {
+    payload.body = patch.body;
+    changed.push("опис");
+  }
+  if (patch.kind !== undefined && patch.kind !== current.kind) {
+    payload.kind = patch.kind;
+    changed.push("тип");
+  }
+  if (patch.priority !== undefined && patch.priority !== current.priority) {
+    payload.priority = patch.priority;
+    changed.push("пріоритет");
+  }
+  if (patch.moduleKey !== undefined && patch.moduleKey !== current.moduleKey) {
+    payload.module_key = patch.moduleKey;
+    changed.push("напрямок");
+  }
+  if (patch.isPrivate !== undefined && patch.isPrivate !== current.isPrivate) {
+    payload.is_private = patch.isPrivate;
+    changed.push(patch.isPrivate ? "закрив картку" : "відкрив картку");
+  }
+
+  // Нічого не змінилось — не пишемо в базу й не смітимо в історії змін.
+  if (Object.keys(payload).length === 0) {
+    return { ok: true, card: current, changed: [] };
+  }
+
+  const { data, error } = await admin
+    .schema("tosho")
+    .from("dev_requests")
+    .update(payload)
+    .eq("team_id", teamId)
+    .eq("number", number)
+    .select(SELECT_COLUMNS)
+    .maybeSingle();
+
+  if (error) return { ok: false, reason: "failed", message: error.message };
+  const card = data ? toBoardCard(data as BoardRow) : null;
+  if (!card) return { ok: false, reason: "failed", message: "оновлення не повернуло рядок" };
+
+  return { ok: true, card, changed };
+}
+
+export type BoardUpdateResponse = {
+  ok: true;
+  card: ReturnType<typeof toCardJson>;
+  changed: string[];
+  unchanged: boolean;
+  url: string;
+  message: string;
+};
+
+export function buildBoardUpdateResponse(input: { card: BoardCard; changed: string[]; url: string }): BoardUpdateResponse {
+  const { card, changed } = input;
+  const unchanged = changed.length === 0;
+  const lines = unchanged
+    ? [`✏️ ${card.label} — усе вже так, нічого не змінив.`, card.title]
+    : [`✏️ ${card.label} — оновив ${changed.join(", ")}`, card.title];
+  lines.push(input.url);
+
+  return {
+    ok: true,
+    card: toCardJson(card),
+    changed,
+    unchanged,
+    url: input.url,
+    message: lines.join("\n"),
+  };
 }
 
 /* ------------------------------ Факт коміта ---------------------------- */
