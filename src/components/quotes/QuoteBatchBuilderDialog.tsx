@@ -2225,17 +2225,13 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             placeholder="Оберіть модель"
                             popoverClassName="w-[420px]"
                           />
-                          {activeProduct.quoteType === "print" ? (
-                            // У поліграфії товар нашвидку не створюємо: набір полів
-                            // виробу живе в коді, і модель, заведена звідси, покаже
-                            // в прорахунку нуль налаштувань. Саме так у каталозі
-                            // з'явились плакат, посібник і вкладиш — картки, які
-                            // ніколи не працювали, і які довелось прибирати руками.
-                            <p className="text-xs text-muted-foreground">
-                              Новий вид поліграфії заводить розробник: у нього свій набір полів, і без нього товар
-                              не покаже жодного налаштування.
-                            </p>
-                          ) : activeProduct.kindId && onCreateCatalogModel ? (
+                          {/* У поліграфії товар нашвидку не створюємо: набір полів
+                              виробу живе в коді, і модель, заведена звідси, покаже
+                              в прорахунку нуль налаштувань. Саме так у каталозі
+                              з'явились плакат, посібник і вкладиш — картки, які
+                              ніколи не працювали. Без напису: менеджеру нема що з
+                              цим робити, а зайвий рядок у формі тільки шумить. */}
+                          {activeProduct.quoteType === "print" ? null : activeProduct.kindId && onCreateCatalogModel ? (
                             <Popover open={quickModelPopoverOpen} onOpenChange={setQuickModelPopoverOpen}>
                               <PopoverTrigger asChild>
                                 <Button

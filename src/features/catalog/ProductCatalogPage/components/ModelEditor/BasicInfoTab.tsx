@@ -16,13 +16,27 @@ import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, 
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
 import { PRINT_SPEC_PRESETS } from "@/lib/printSpec";
 
-/** Чотири пресети старого механізму (`lib/printPackage.ts`) — пишуться в інший ключ. */
+/**
+ * Пресети старого механізму (`lib/printPackage.ts`) — пишуться в інший ключ.
+ *
+ * `print_certificates` тут лишається, щоб уже призначений старий сертифікат
+ * читався, але у виборі його БІЛЬШЕ НЕ ПОКАЗУЄМО: сертифікат перенесений на опис
+ * полями (`print_certificate` у printSpec.ts), і два однакові рядки в списку
+ * означали б, що людина навмання вибирає між робочим і застарілим.
+ */
 const LEGACY_CONFIGURATOR_PRESETS = [
   "print_package",
   "print_notebook",
   "print_note_blocks",
   "print_certificates",
 ] as const;
+
+/** Старі пресети, які ще можна вибрати руками. Сертифікат звідси свідомо прибраний. */
+const SELECTABLE_LEGACY_PRESETS: Array<{ value: string; label: string }> = [
+  { value: "print_package", label: "Паперовий пакет" },
+  { value: "print_notebook", label: "Блокнот" },
+  { value: "print_note_blocks", label: "Блоки для записів" },
+];
 
 interface BasicInfoTabProps {
   catalog: CatalogType[];
@@ -460,10 +474,11 @@ export function BasicInfoTab({
                       {preset.label}
                     </SelectItem>
                   ))}
-                  <SelectItem value="print_package">Паперовий пакет</SelectItem>
-                  <SelectItem value="print_notebook">Блокнот</SelectItem>
-                  <SelectItem value="print_note_blocks">Блоки для записів</SelectItem>
-                  <SelectItem value="print_certificates">Сертифікат</SelectItem>
+                  {SELECTABLE_LEGACY_PRESETS.map((preset) => (
+                    <SelectItem key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

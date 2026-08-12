@@ -745,6 +745,217 @@ export const PRINT_SPEC_FLYER: PrintSpecPreset = {
   ],
 };
 
+// ---------------------------------------------------------------------------
+// Сертифікат
+// ---------------------------------------------------------------------------
+
+/**
+ * Перенесення старого пресета `print_certificates` на опис полями.
+ *
+ * Значення й підписи взяті один-в-один із `printPackage.ts` і
+ * `PrintPackageConfigurator.tsx` — нічого не вигадано. Сенс переносу: старий
+ * механізм заповнюється ОДИН раз, при створенні прорахунку, і на картці лише
+ * читається. Той, хто рахує, не міг ні дозаповнити, ні виправити — а саме він і
+ * заповнює параметри. Опис дає сертифікату те саме, що календарям: поля у вікні
+ * створення і правки на картці.
+ *
+ * Перенести було безпечно: за весь час сертифікатом не скористались ані разу
+ * (0 позицій), тож збереженого формату, який треба тягнути, просто немає.
+ *
+ * Дві свідомі спрощення проти старого:
+ * — кольоровість одним списком із восьми схем замість двох списків, залежних від
+ *   методу друку: умова показу тут однорівнева, а ділити список означало б
+ *   ховати від людини те, що вона може захотіти;
+ * — «вибірковий лак / фольгування / висічка / біговка» стали одним полем із
+ *   галочками замість чотирьох «так/ні»: у старому вигляді це чотири рядки,
+ *   у яких три завжди «ні».
+ */
+export const PRINT_SPEC_CERTIFICATE: PrintSpecPreset = {
+  key: "print_certificate",
+  label: "Сертифікат",
+  sections: ["Формат", "Матеріал", "Друк", "Оздоблення"],
+  fields: [
+    {
+      id: "formatType",
+      label: "Формат",
+      type: "single",
+      section: "Формат",
+      options: [
+        { value: "standard", label: "Стандартний" },
+        { value: "custom", label: "Нестандартний" },
+      ],
+    },
+    {
+      id: "standardFormat",
+      label: "Стандартний формат",
+      type: "single",
+      section: "Формат",
+      options: [
+        { value: "a4", label: "A4" },
+        { value: "a5", label: "A5" },
+        { value: "a6", label: "A6" },
+      ],
+      allowCustom: true,
+      showIf: { field: "formatType", equals: "standard" },
+    },
+    {
+      id: "customSize",
+      label: "Розмір",
+      type: "sizeRows",
+      section: "Формат",
+      rows: ["Сертифікат"],
+      unit: "мм",
+      showIf: { field: "formatType", equals: "custom" },
+    },
+    {
+      id: "material",
+      label: "Матеріал",
+      type: "single",
+      section: "Матеріал",
+      options: [
+        { value: "coated_paper", label: "Крейдований папір" },
+        { value: "cardboard", label: "Картон" },
+        { value: "designer_cardboard", label: "Дизайнерський картон" },
+      ],
+      allowCustom: true,
+    },
+    {
+      id: "coatedDensity",
+      label: "Щільність",
+      type: "single",
+      section: "Матеріал",
+      options: [
+        { value: "300", label: "300 г/м²" },
+        { value: "350", label: "350 г/м²" },
+      ],
+      allowCustom: true,
+      showIf: { field: "material", equals: "coated_paper" },
+    },
+    {
+      id: "cardboardDensity",
+      label: "Щільність картону",
+      type: "number",
+      section: "Матеріал",
+      unit: "г/м²",
+      showIf: { field: "material", equals: "cardboard" },
+    },
+    {
+      id: "designerName",
+      label: "Назва картону",
+      type: "text",
+      section: "Матеріал",
+      showIf: { field: "material", equals: "designer_cardboard" },
+    },
+    {
+      id: "designerDensity",
+      label: "Щільність картону",
+      type: "number",
+      section: "Матеріал",
+      unit: "г/м²",
+      showIf: { field: "material", equals: "designer_cardboard" },
+    },
+    {
+      id: "printMethod",
+      label: "Метод друку",
+      type: "single",
+      section: "Друк",
+      options: [
+        { value: "digital", label: "Цифровий (CMYK)" },
+        { value: "uv", label: "УФ друк" },
+        { value: "screen", label: "Шовкодрук" },
+      ],
+      allowCustom: true,
+    },
+    {
+      id: "printScheme",
+      label: "Кольоровість",
+      type: "single",
+      section: "Друк",
+      options: [
+        { value: "1_0", label: "1+0" },
+        { value: "1_1", label: "1+1" },
+        { value: "2_0", label: "2+0" },
+        { value: "2_2", label: "2+2" },
+        { value: "3_0", label: "3+0" },
+        { value: "3_3", label: "3+3" },
+        { value: "4_0", label: "4+0" },
+        { value: "4_4", label: "4+4" },
+      ],
+      allowCustom: true,
+      hint: "У цифрі зазвичай 4+0 або 4+4",
+    },
+    {
+      id: "embossing",
+      label: "Тиснення",
+      type: "single",
+      section: "Оздоблення",
+      options: [
+        { value: "none", label: "Немає" },
+        { value: "blind", label: "Сліпе тиснення" },
+        { value: "foil", label: "Тиснення фольгою" },
+      ],
+    },
+    {
+      id: "embossingFoilColor",
+      label: "Колір фольги",
+      type: "text",
+      section: "Оздоблення",
+      showIf: { field: "embossing", equals: "foil" },
+    },
+    {
+      id: "embossingSize",
+      label: "Розмір тиснення",
+      type: "sizeRows",
+      section: "Оздоблення",
+      rows: ["Тиснення"],
+      unit: "мм",
+      hint: "Якщо тиснення є",
+    },
+    {
+      id: "finishing",
+      label: "Додаткове оздоблення",
+      type: "multi",
+      section: "Оздоблення",
+      options: [
+        { value: "spot_uv", label: "Вибірковий лак" },
+        { value: "foiling", label: "Фольгування" },
+        { value: "die_cutting", label: "Висічка" },
+        { value: "creasing", label: "Біговка" },
+      ],
+      hint: "Можна кілька разом",
+    },
+    {
+      id: "foilingColor",
+      label: "Колір фольгування",
+      type: "text",
+      section: "Оздоблення",
+      showIf: { field: "finishing", includes: "foiling" },
+    },
+    {
+      id: "coverageSides",
+      label: "Схема покриття",
+      type: "single",
+      section: "Оздоблення",
+      options: [
+        { value: "1_0", label: "1+0" },
+        { value: "1_1", label: "1+1" },
+      ],
+      hint: "Для лаку чи фольгування",
+    },
+    {
+      id: "coveragePercent",
+      label: "Площа покриття",
+      type: "single",
+      section: "Оздоблення",
+      options: [
+        { value: "20", label: "До 20%" },
+        { value: "40", label: "До 40%" },
+      ],
+      allowCustom: true,
+    },
+  ],
+};
+
 /** Реєстр описових пресетів. Новий вид додається сюди одним рядком. */
 export const PRINT_SPEC_PRESETS: PrintSpecPreset[] = [
   PRINT_SPEC_CALENDAR_QUARTERLY,
@@ -752,6 +963,7 @@ export const PRINT_SPEC_PRESETS: PrintSpecPreset[] = [
   PRINT_SPEC_CALENDAR_HOUSE,
   PRINT_SPEC_BROCHURE,
   PRINT_SPEC_FLYER,
+  PRINT_SPEC_CERTIFICATE,
 ];
 
 export const getPrintSpecPreset = (key: string | null | undefined): PrintSpecPreset | null =>
