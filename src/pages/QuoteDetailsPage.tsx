@@ -67,6 +67,8 @@ import {
   isPrintPackageMetadata,
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
+import { parsePrintSpecMetadata } from "@/lib/printSpec";
+import { PrintSpecPanel } from "@/components/quotes/PrintSpecPanel";
 import { normalizeUnitLabel } from "@/lib/units";
 import {
   DESIGN_TASK_TYPE_ICONS,
@@ -222,6 +224,7 @@ import {
   getMethodLabel,
   getMethodPrice,
   getModelImage,
+  getModelSpecPreset,
   getModelLabel,
   getModelPrice,
   getPrintPositionLabel,
@@ -616,7 +619,13 @@ const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
     }
   }
 
-  return metadata.sku || metadata.catalogVariant ? metadata : null;
+  // Параметри описових видів. Без цього рядка вони тихо зникали б на читанні:
+  // парсер вище перебирає БІЛИЙ СПИСОК ключів, а не копіює обʼєкт, тож «просто
+  // дописати новий ключ у metadata» недостатньо — його ще треба тут пропустити.
+  const printSpec = parsePrintSpecMetadata(record.printSpec);
+  if (printSpec) metadata.printSpec = printSpec;
+
+  return metadata.sku || metadata.catalogVariant || metadata.printSpec ? metadata : null;
 };
 
 function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCachePayload | null {
@@ -2131,6 +2140,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [canEditRuns, permissions, viewerJobRole]);
 
+  // Параметри виробу редагує той самий, хто редагує тиражі: право на вміст
+  // прорахунку плюс незакритий статус. Окремого гейта свідомо не заводимо — друге
+  // правило про те саме рано чи пізно розійдеться з першим.
+  const canEditPrintSpec = canEditRuns;
+
   const runFieldLockHint = (allowed: boolean, who: string) =>
     canEditRuns && !allowed ? `Це поле заповнює ${who}` : undefined;
 
@@ -2551,7 +2565,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             .schema("tosho")
             .from("catalog_models")
             .select(
-              "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
+              "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,specPreset:metadata->>specPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
             )
             .eq("team_id", teamId)
             .order("name", { ascending: true }),
@@ -2580,6 +2594,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             price?: number | null;
             image_url?: string | null;
             configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+            specPreset?: string | null;
             supplierUrl?: string | null;
             avantprintUrl?: string | null;
           }>).forEach((row) => {
@@ -2590,9 +2605,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               price: row.price ?? undefined,
               imageUrl: row.image_url ?? undefined,
               metadata:
-                row.configuratorPreset || row.supplierUrl || row.avantprintUrl
+                row.configuratorPreset || row.specPreset || row.supplierUrl || row.avantprintUrl
                   ? {
                       configuratorPreset: row.configuratorPreset ?? undefined,
+                      specPreset: row.specPreset ?? null,
                       supplierUrl: row.supplierUrl ?? null,
                       avantprintUrl: row.avantprintUrl ?? null,
                     }
@@ -6091,6 +6107,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           zoomUrl: variantImageUrl ?? catalogZoomImage ?? attachmentImage ?? catalogImage ?? "",
                         }
                       : null;
+                    const modelSpecPreset = getModelSpecPreset(
+                      catalogTypes,
+                      resolvedTypeId,
+                      resolvedKindId,
+                      resolvedModelId
+                    );
                     const printProductConfig = getPrintProductConfig(item.metadata);
                     const packageSummary = printProductConfig ? formatPrintProductSummary(printProductConfig) : [];
                     const packageSections = printProductConfig ? getPrintProductDetailSections(printProductConfig) : [];
@@ -6401,6 +6423,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 ))}
                               </div>
                             ) : null}
+
+                            <PrintSpecPanel
+                              quoteItemId={item.id}
+                              presetKey={modelSpecPreset}
+                              saved={item.metadata?.printSpec ?? null}
+                              canEdit={canEditPrintSpec}
+                              onSaved={() => void loadItems()}
+                            />
 
                             {shouldShowDescription ? (
                               <div className="mt-5">

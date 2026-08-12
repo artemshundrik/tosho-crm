@@ -10,6 +10,13 @@ export type CatalogModel = {
   imageUrl?: string;
   metadata?: {
     configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+    /**
+     * Пресет описового виду (`lib/printSpec.ts`). Свідомо ОКРЕМИЙ ключ, а не ще
+     * одне значення в `configuratorPreset`: та union звужується десятком
+     * функцій старого механізму, і нове значення в ній зламало б їх усі перед
+     * деплоєм. Ключі зіллються, коли старі пресети перейдуть на опис полями.
+     */
+    specPreset?: string | null;
     supplierUrl?: string | null;
     avantprintUrl?: string | null;
   };
@@ -46,6 +53,18 @@ export function getModelLabel(
   const type = catalog.find((item) => item.id === typeId);
   const kind = type?.kinds.find((item) => item.id === kindId);
   return kind?.models.find((model) => model.id === modelId)?.name;
+}
+
+/** Пресет описового виду в моделі каталогу — те, що вирішує, чи є в позиції параметри виробу. */
+export function getModelSpecPreset(
+  catalog: CatalogType[],
+  typeId?: string,
+  kindId?: string,
+  modelId?: string
+) {
+  const type = catalog.find((item) => item.id === typeId);
+  const kind = type?.kinds.find((item) => item.id === kindId);
+  return kind?.models.find((model) => model.id === modelId)?.metadata?.specPreset ?? null;
 }
 
 export function getModelImage(
