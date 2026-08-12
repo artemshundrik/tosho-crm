@@ -54,6 +54,13 @@ export type CatalogModelMetadata = {
   baseVariantName?: string | null;
   variants?: CatalogModelVariant[];
   configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+  /**
+   * Пресет описового виду (`lib/printSpec.ts`). Окремий ключ від
+   * `configuratorPreset`: ту union звужує десяток функцій старого механізму, і
+   * нове значення в ній зламало б їх усі. Зіллються, коли старі пресети перейдуть
+   * на опис полями.
+   */
+  specPreset?: string | null;
   imageAsset?: CatalogImageAsset | null;
   source?: {
     vendor?: string | null;

@@ -1,3 +1,5 @@
+import type { PrintSpecMetadata } from "@/lib/printSpec";
+
 export type PrintConfiguratorPreset =
   | "print_package"
   | "print_notebook"
@@ -88,6 +90,12 @@ export type PrintPackageConfig = PrintProductConfig;
 
 export type QuoteItemMetadata = {
   sku?: string | null;
+  /**
+   * Описові види поліграфії (`lib/printSpec.ts`). Окремий ключ від
+   * `printProduct`/`printPackage`: чотири пресети цього файлу пишуть у свої, і
+   * читач старого формату не мусить розрізняти два.
+   */
+  printSpec?: PrintSpecMetadata | null;
   catalogVariant?: {
     id: string;
     name: string;

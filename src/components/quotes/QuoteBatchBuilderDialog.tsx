@@ -87,6 +87,12 @@ import {
   PRINT_PACKAGE_PRINT_TYPES,
   type ConfiguratorProductOption,
 } from "@/components/quotes/PrintPackageConfigurator";
+import { PrintSpecFields } from "@/components/quotes/PrintSpecFields";
+import {
+  createEmptyPrintSpecValues,
+  getPrintSpecPreset,
+  type PrintSpecValues,
+} from "@/lib/printSpec";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import type { CatalogModel, CatalogModelVariant, CatalogType } from "@/types/catalog";
@@ -147,6 +153,8 @@ export type QuoteBatchProductSubmitData = {
   catalogVariant?: Pick<CatalogModelVariant, "id" | "name" | "sku" | "imageUrl"> | null;
   productConfiguratorPreset?: PrintConfiguratorPreset | null;
   printPackageConfig?: PrintPackageConfig;
+  /** Значення полів описового виду (`lib/printSpec.ts`) — новий механізм. */
+  printSpecValues?: PrintSpecValues | null;
   deliveryType: string | null;
   deliveryDetails: DeliveryDetails | null;
   quantityUnit: string;
@@ -1707,7 +1715,41 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     },
     [activeProduct, catalogTypes]
   );
-  const showPrintConfigurator = activeProduct?.quoteType === "print" && configuratorProductOptions.length > 0;
+  /**
+   * Конфігуратор старих пресетів показуємо, лише коли вибрана модель справді його
+   * має — а не «щойно в каталозі є хоч один такий товар».
+   *
+   * Раніше умовою було `configuratorProductOptions.length > 0`, тобто для будь-якого
+   * прорахунку поліграфії каскад «Категорія / Вид / Модель» підмінявся вибором
+   * «ВИД ПРОДУКЦІЇ» з конфігуратора. А той список будується лише з моделей із
+   * `configuratorPreset`, тож товар поліграфії БЕЗ старого пресета вибрати було
+   * неможливо взагалі: у списку його немає, а каскад сховано. Саме на цьому
+   * спіймався новий квартальний календар — модель у каталозі є, а дійти до неї ніяк.
+   *
+   * Тепер умова така сама, як у `NewQuoteDialog` (isPrintPackageMode): це не нова
+   * поведінка, а вирівнювання двох вікон, які й мають працювати однаково.
+   */
+  const showPrintConfigurator = isPrintPackageMode;
+
+  /**
+   * Описовий вид (квартальний календар і далі) — поля показуються ТУТ, у вікні
+   * створення, поруч із каскадом, а не лише на картці прорахунку. Так само, як у
+   * пакета: вибрав вид — і всі налаштування перед очима.
+   *
+   * На картці прорахунку та сама форма лишається доступною для правки: заповнює
+   * зазвичай той, хто рахує, і йому потрібно виправляти вже після створення.
+   */
+  const activeSpecPreset = React.useMemo(
+    () => getPrintSpecPreset(activeRefs.model?.metadata?.specPreset ?? null),
+    [activeRefs.model?.metadata?.specPreset]
+  );
+  const activeSpecValues = React.useMemo(
+    () =>
+      activeSpecPreset
+        ? { ...createEmptyPrintSpecValues(activeSpecPreset), ...(activeProduct?.printSpecValues ?? {}) }
+        : {},
+    [activeProduct?.printSpecValues, activeSpecPreset]
+  );
   const activeHasDesignSurface = activeProduct ? productHasDesignSurface(activeProduct) : false;
   const selectableManagerMembers = React.useMemo(
     () =>
@@ -2296,6 +2338,16 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         </div>
                       </div>
                     )}
+
+                    {activeSpecPreset ? (
+                      <div className="mt-4 border-t border-border/40 pt-4">
+                        <PrintSpecFields
+                          preset={activeSpecPreset}
+                          values={activeSpecValues}
+                          onChange={(next) => updateActiveProduct({ printSpecValues: next })}
+                        />
+                      </div>
+                    ) : null}
                   </section>
 
                   <section className={cn("space-y-3 rounded-lg border border-border/60 bg-background p-4", showPrintConfigurator && "hidden")}>

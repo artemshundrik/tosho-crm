@@ -37,6 +37,12 @@ import {
   type QuoteItemMetadata,
 } from "@/lib/printPackage";
 import {
+  formatPrintSpecSummary,
+  getPrintSpecPreset,
+  isPrintSpecFilled,
+  parsePrintSpecValues,
+} from "@/lib/printSpec";
+import {
   listQuotes,
   listQuoteSets,
   listQuoteSetItems,
@@ -231,6 +237,8 @@ type CatalogModel = {
       active?: boolean;
     }>;
     configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+    /** Пресет описового виду — див. `lib/printSpec.ts`. */
+    specPreset?: string | null;
     imageAsset?: {
       bucket: string;
       path: string;
@@ -2407,8 +2415,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   },
                 }
               : null;
+          // Описовий вид: значення полів кладемо під власний ключ, щоб читач
+          // старого формату їх не розбирав, а сам вид лишався звʼязаним із моделлю.
+          const specPreset = getPrintSpecPreset(model?.metadata?.specPreset ?? null);
+          const specValues =
+            specPreset && product.printSpecValues
+              ? parsePrintSpecValues(specPreset, product.printSpecValues)
+              : null;
+          const specItemMetadata =
+            specPreset && specValues && isPrintSpecFilled(specPreset, specValues)
+              ? { printSpec: { presetKey: specPreset.key, values: specValues } }
+              : null;
+          const specItemDescription =
+            specPreset && specValues && isPrintSpecFilled(specPreset, specValues)
+              ? formatPrintSpecSummary(specPreset, specValues).join(" • ")
+              : null;
+
           const itemMetadata = {
             ...(packageItemMetadata ?? {}),
+            ...(specItemMetadata ?? {}),
             ...(product.deliveryType
               ? {
                   delivery: {
@@ -2445,7 +2470,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             quote_id: created.id,
             position: groupProductIndex + 1,
             name: itemName,
-            description: packageItemDescription,
+            description: packageItemDescription ?? specItemDescription,
             qty: primaryRunQuantity,
             unit_price: basePrice,
             line_total: primaryRunQuantity * basePrice,
