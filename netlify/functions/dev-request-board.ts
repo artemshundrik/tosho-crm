@@ -131,9 +131,6 @@ export const handler = async (event: HttpEvent) => {
         if (updated.reason === "not_found") {
           return json(404, { error: cardNotFoundMessage(parsed.number) });
         }
-        if (updated.reason === "released") {
-          return json(409, { error: releasedCardMessage(parsed.number) });
-        }
         console.error("dev-request-board update failed:", updated.message);
         return json(500, { error: "Не зміг оновити картку. Спробуй ще раз за хвилину." });
       }

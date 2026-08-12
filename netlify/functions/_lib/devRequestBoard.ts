@@ -767,7 +767,6 @@ export async function moveBoardCard(
 export type BoardUpdateResult =
   | { ok: true; card: BoardCard; changed: string[] }
   | { ok: false; reason: "not_found" }
-  | { ok: false; reason: "released" }
   | { ok: false; reason: "failed"; message: string };
 
 /**
@@ -782,9 +781,15 @@ export type BoardUpdateResult =
  * «Готово локально» з «Викочено» ставлять факти — коміт і деплой. Якби статус
  * можна було підсунути сюди, вся конструкція з sha втратила б сенс.
  *
- * Викочену картку не чіпаємо з тієї ж причини, що й у `move`: те, що вже в
- * проді, описане в розділі «Релізи», і переписувати його заднім числом означає
- * розійтися зі звітом.
+ * ВИКОЧЕНУ КАРТКУ ПРАВИТИ МОЖНА — і це свідома відмінність від `move`. Спершу
+ * тут стояла та сама заборона, «щоб не розійтися з розділом Релізи». Перевірка
+ * показала, що обґрунтування хибне: «Релізи» будуються з ТЕМ КОМІТІВ
+ * (plugins/record-release), а не з тексту картки, тож правка опису не може ні з
+ * чим розійтися. Заборона ж ламала головний сценарій: опис задачі майже завжди
+ * уточнюють ПІСЛЯ того, як роботу зробили й викотили.
+ *
+ * Статус — інша річ: він і далі лише через `move`, і `move` викочену картку не
+ * чіпає. Статус описує факт деплою, а текст — намір людини.
  *
  * ІСТОРІЯ ЗМІН пишеться сама: на таблиці висить тригер trg_dev_requests_audit
  * (scripts/dev-requests-schema.sql), тож кожна правка звідси лягає в журнал
@@ -798,7 +803,6 @@ export async function updateBoardCard(
 ): Promise<BoardUpdateResult> {
   const current = await fetchBoardCard(admin, teamId, number);
   if (!current) return { ok: false, reason: "not_found" };
-  if (current.status === "released") return { ok: false, reason: "released" };
 
   const payload: Record<string, unknown> = {};
   const changed: string[] = [];

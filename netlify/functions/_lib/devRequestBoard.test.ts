@@ -841,12 +841,12 @@ describe("updateBoardCard", () => {
     expect(state.updates).toEqual([]);
   });
 
-  it("викочену картку не переписуємо — вона вже в звіті", async () => {
+  it("викочену картку правити МОЖНА: опис уточнюють саме після роботи", async () => {
     const { admin, state } = fakeAdmin(row({ number: 35, status: "released" }));
-    const result = await updateBoardCard(admin, "team-1", 35, { body: "інше" });
+    const result = await updateBoardCard(admin, "team-1", 35, { body: "що зробили насправді" });
 
-    expect(result).toEqual({ ok: false, reason: "released" });
-    expect(state.updates).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(state.updates).toEqual([{ body: "що зробили насправді" }]);
   });
 
   it("немає такої картки — так і кажемо", async () => {
