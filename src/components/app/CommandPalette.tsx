@@ -22,8 +22,9 @@ import {
   Megaphone,
   Package,
   Palette,
+  Loader2,
+  Mic,
   Search,
-  Sparkles,
   Truck,
   User,
   Users,
@@ -32,6 +33,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { looksLikeQuestion } from "@/lib/toshoAiQuestion";
+import { useDictation } from "@/lib/useDictation";
+import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import {
   AI_BUCKET_LABELS,
   countRemainingSuggestions,
@@ -91,6 +94,26 @@ type SearchResultItem = {
   managerAvatarUrl?: string | null;
   metaLabel?: string | null;
 };
+
+/**
+ * Смужки еквалайзера на екрані «Слухаю». Ті самі висоти й затримки, що в
+ * диктовці чату (ThreadComposer): це вже впізнаваний знак «запис іде», і
+ * вигадувати другий не варто.
+ */
+const LISTEN_WAVE_BARS = [
+  { height: 10, delay: "0ms" },
+  { height: 18, delay: "120ms" },
+  { height: 13, delay: "240ms" },
+  { height: 22, delay: "80ms" },
+  { height: 11, delay: "300ms" },
+  { height: 17, delay: "180ms" },
+  { height: 9, delay: "60ms" },
+];
+
+function formatDictationElapsed(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, "0")}`;
+}
 
 const RECENTS_KEY = "fayna_cmdk_recents_v1";
 const MAX_RECENTS = 8;
@@ -1136,6 +1159,15 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
   );
   const aiBucketLabel = AI_BUCKET_LABELS[resolveAiBucket({ accessRole, jobRole })];
 
+  // Диктовка просто кладе розпізнане в поле — і далі все як із набраним
+  // текстом: питання підіймає рядок AI, назва лишає його внизу. Автоматично
+  // нічого не надсилаємо: людина має побачити, що саме розпізналось.
+  const dictation = useDictation({
+    context: "comment",
+    onResult: (text) => setQuery(text),
+  });
+  const isListening = dictation.state === "recording" || dictation.state === "transcribing";
+
   function askAi(question: string) {
     const trimmed = question.trim();
     if (!trimmed || !onAskAi) return;
@@ -1161,7 +1193,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               : "border-border/60 bg-muted/35 text-muted-foreground"
           )}
         >
-          <Sparkles className="h-4 w-4" />
+          <ToShoAiMark className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="truncate">
@@ -1260,7 +1292,31 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               </Button>
             )}
 
-            <kbd className="inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
+            {/* Мікрофон — головна кнопка поля на телефоні: там, де склад і
+                логістика, друкувати незручно, а руки часто зайняті. */}
+            {dictation.isSupported ? (
+              <Button
+                type="button"
+                variant="control"
+                size="iconSm"
+                aria-label="Диктувати голосом"
+                title="Диктувати голосом"
+                /* У капсулі на телефоні кнопки круглі 30×30 — рівно як скріпка
+                   й «надіслати» в обговоренні справи. */
+                className="max-sm:h-[30px] max-sm:w-[30px] max-sm:rounded-full"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={() => void dictation.start()}
+              >
+                <Mic className="h-4 w-4" />
+              </Button>
+            ) : null}
+
+            {/* Підказка клавіш лише там, де є клавіатура: на телефоні вона
+                нічого не пояснює, а місце в полі забирає. */}
+            <kbd className="hidden sm:inline-flex h-7 select-none items-center gap-1 rounded-[var(--radius-md)] border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
               <span className="text-2xs">⌘</span>K
               <span className="opacity-60">/</span>
               <span>Shift+K</span>
@@ -1268,6 +1324,52 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
           </div>
         }
       />
+
+      {/* Екран «Слухаю»: поки йде запис, палітра поступається місцем одному
+          великому й однозначному стану. Знак ToSho AI дихає, навколо
+          розходяться кільця (.tosho-listen-orb в index.css), під ним той самий
+          еквалайзер, що в диктовці чату. */}
+      {isListening ? (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-card/95 px-6 text-center backdrop-blur-sm">
+          <span className="tosho-listen-orb flex h-24 w-24 items-center justify-center rounded-full bg-ai-accent/10 text-ai-accent ring-1 ring-ai-accent/20">
+            <ToShoAiMark className="h-9 w-9" />
+          </span>
+
+          <div className="text-base font-semibold">
+            {dictation.state === "recording" ? "Слухаю…" : "Розпізнаю…"}
+          </div>
+
+          {dictation.state === "recording" ? (
+            <>
+              <span className="flex items-center gap-[3px]" aria-hidden="true">
+                {LISTEN_WAVE_BARS.map((bar, index) => (
+                  <span
+                    key={index}
+                    className="w-[3px] rounded-full bg-ai-accent/50 motion-safe:animate-[thread-wave_1.1s_ease-in-out_infinite]"
+                    style={{ height: bar.height, animationDelay: bar.delay }}
+                  />
+                ))}
+              </span>
+              <div className="font-mono text-xs tabular-nums text-muted-foreground">
+                {formatDictationElapsed(dictation.elapsedMs)}
+              </div>
+              <div className="flex items-center gap-3">
+                <Button type="button" size="lg" className="rounded-full px-6" onClick={() => dictation.stop()}>
+                  Готово
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => dictation.cancel()}>
+                  Скасувати
+                </Button>
+              </div>
+              <p className="max-w-[280px] text-xs text-muted-foreground">
+                Скажіть, що знайти або про що спитати — текст з'явиться в полі
+              </p>
+            </>
+          ) : (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          )}
+        </div>
+      ) : null}
 
       <CommandList className="py-1">
         <CommandEmpty>Нічого не знайдено.</CommandEmpty>
@@ -1292,8 +1394,14 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               }
               /* Дві колонки, але DOM іде ПО КОЛОНКАХ (grid-flow-col + три рядки):
                  стрілка вниз має спускатись лівою колонкою, а не стрибати
-                 праворуч. На вузькому екрані колонка одна — там сітка зайва. */
-              className="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:gap-1 [&_[cmdk-group-items]]:px-2 sm:[&_[cmdk-group-items]]:grid-flow-col sm:[&_[cmdk-group-items]]:grid-rows-3"
+                 праворуч.
+
+                 На телефоні сітки немає ЗОВСІМ — ні grid, ні власних відступів.
+                 Доти тут стояли gap-1 і px-2, і підказки жили за іншим ритмом,
+                 ніж «Швидкі дії» поруч: різний лівий край і різна відстань між
+                 рядками в сусідніх групах одного вікна. Тепер рядок підказки —
+                 такий самий рядок, як усі. */
+              className="sm:[&_[cmdk-group-items]]:grid sm:[&_[cmdk-group-items]]:gap-1 sm:[&_[cmdk-group-items]]:px-2 sm:[&_[cmdk-group-items]]:grid-flow-col sm:[&_[cmdk-group-items]]:grid-rows-3"
             >
               {aiSuggestions.map((suggestion) => {
                 const Icon = suggestion.icon;
@@ -1302,7 +1410,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                     key={suggestion.key}
                     value={buildCommandSearchValue([suggestion.title, suggestion.question, "спитати tosho ai"])}
                     onSelect={() => askAi(suggestion.question)}
-                    className="items-start rounded-[var(--radius-md)]"
+                    className="items-start"
                   >
                     <span className="mr-2 mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ai-accent/40 bg-ai-accent/10 text-ai-accent">
                       <Icon className="h-4 w-4" />
@@ -1318,7 +1426,11 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               })}
             </CommandGroup>
             {aiSuggestionsLeft > 0 ? (
-              <div className="px-4 pb-1 pt-0.5 text-2xs text-muted-foreground">
+              <div
+                /* 18px = відступ групи (6) + відступ рядка (12): підпис має
+                   починатись рівно під текстом підказок, а не жити своїм життям. */
+                className="px-[18px] pb-1 pt-0.5 text-2xs text-muted-foreground"
+              >
                 ще {aiSuggestionsLeft} · або просто напиши своє питання
               </div>
             ) : null}

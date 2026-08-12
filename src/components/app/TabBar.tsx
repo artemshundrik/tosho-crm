@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Calculator, Palette, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import { createPortal } from "react-dom";
 import { preloadRoute } from "@/routes/routePreload";
 
@@ -33,7 +34,7 @@ const TAB_ITEMS: TabItem[] = [
   },
 ];
 
-export function TabBar({ hidden = false }: { hidden?: boolean }) {
+export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: () => void }) {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
 
@@ -65,7 +66,14 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
       >
         <nav
           aria-label="Primary"
-          className="mx-auto flex max-w-[420px] items-center justify-between gap-[var(--tabbar-gap)] pointer-events-auto"
+          className={cn(
+            "mx-auto flex max-w-[420px] items-center justify-between gap-[var(--tabbar-gap)]",
+            // Прихована смуга мусить і кліки пропускати крізь себе. Доти вона
+            // ставала прозорою, але лишалась «pointer-events: auto» — і поверх
+            // відкритої палітри ловила дотики замість поля вводу й мікрофона:
+            // видно її не було, а натиснути нічого не вдавалось.
+            hidden ? "pointer-events-none" : "pointer-events-auto"
+          )}
           style={{
             height: "var(--tabbar-height)",
             borderRadius: "var(--tabbar-radius)",
@@ -125,6 +133,30 @@ export function TabBar({ hidden = false }: { hidden?: boolean }) {
               </Link>
             );
           })}
+
+          {/* Четверта вкладка — дія, а не розділ: відкриває ту саму палітру, що
+              ⌘K на комп'ютері, тобто «спитати АБО подивитись» одним дотиком.
+              На телефоні поля пошуку немає взагалі (воно під hidden md:flex), і
+              для складу з логістикою це був єдиний екран без жодного входу.
+
+              Кнопка, а не Link: нікуди не веде. Виглядає як решта вкладок —
+              іконка й підпис, без кружечка й заливки; від сусідів її відрізняє
+              лише колір підбренду AI. */}
+          {onAsk ? (
+            <button
+              type="button"
+              onClick={onAsk}
+              aria-label="Знайти або спитати ToSho AI"
+              className={cn(
+                "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-2xs font-medium",
+                "border border-transparent text-ai-accent",
+                "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[var(--tabbar-transition)] ease-out"
+              )}
+            >
+              <ToShoAiMark className="relative z-base h-5 w-5" />
+              <span className="relative z-base h-4 leading-4">Спитати</span>
+            </button>
+          ) : null}
         </nav>
       </div>
     </div>

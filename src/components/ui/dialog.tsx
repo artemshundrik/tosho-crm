@@ -50,12 +50,18 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
    * сама — див. `useUnsavedGuard`.
    */
   isDirty?: boolean;
+  /**
+   * Класи для затемнення під модалкою. Потрібні там, де тло має розмиватись
+   * сильніше за типове — наприклад, у палітрі на телефоні, де аркуш займає
+   * пів екрана й решта має відійти на задній план.
+   */
+  overlayClassName?: string;
 };
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideClose = false, dismissible = false, isDirty, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
+>(({ className, children, hideClose = false, dismissible = false, isDirty, overlayClassName, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
   const guard = useUnsavedGuard({ enabled: !dismissible, isDirty });
   // Прихований Close, щоб закрити модалку з-під вікна підтвердження: покласти
   // `DialogClose` всередину AlertDialog не можна — там він підхопить контекст
@@ -64,7 +70,7 @@ const DialogContent = React.forwardRef<
 
   return (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
 
     <DialogPrimitive.Content
       ref={ref}

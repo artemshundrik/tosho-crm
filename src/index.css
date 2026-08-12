@@ -2164,6 +2164,45 @@
   50% { transform: scaleY(1); }
 }
 
+/* Екран «Слухаю» в палітрі: знак ToSho AI дихає, а навколо розходяться кільця.
+   Дві окремі анімації, а не одна складна: кільця живуть у ::before/::after і
+   стартують зі зсувом, тож пульс не виглядає механічним. */
+@keyframes tosho-listen-orb {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@keyframes tosho-listen-ring {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.tosho-listen-orb {
+  position: relative;
+  isolation: isolate;
+}
+.tosho-listen-orb::before,
+.tosho-listen-orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--ai-accent) / 0.35);
+  z-index: -1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tosho-listen-orb {
+    animation: tosho-listen-orb 2.4s ease-in-out infinite;
+  }
+  .tosho-listen-orb::before {
+    animation: tosho-listen-ring 2.4s ease-out infinite;
+  }
+  .tosho-listen-orb::after {
+    animation: tosho-listen-ring 2.4s ease-out infinite;
+    animation-delay: 1.2s;
+  }
+}
+
 /* Виділення тексту у своєму (синьому) бабблі: стандартне синє на синьому
    зливається й тексту не видно. Робимо світлу підкладку з темним текстом. */
 .thread-bubble-own ::selection,
