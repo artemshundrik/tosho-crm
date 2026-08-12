@@ -92,8 +92,9 @@ import {
   DesignerHeaderTimerWidget,
   useDesignerTimerController,
 } from "@/components/app/DesignerTimerWidget";
+import { resolveAiSuggestions } from "@/lib/aiSuggestions";
 import { toast } from "sonner";
-import { ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiWordmark";
+import { ToShoAiMark, ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiWordmark";
 
 // Консоль ToSho AI (110+ KB) — lazy: SheetContent демонтується в закритому
 // стані (без forceMount), тож чанк їде лише при першому відкритті шторки.
@@ -805,7 +806,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session, permissions, jobRole, viewUserId, moduleAccess } = useAuth();
+  const { userId, teamId, session, permissions, accessRole, jobRole, viewUserId, moduleAccess } = useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
@@ -952,6 +953,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const [toshoAiRequestedThreadId, setToshoAiRequestedThreadId] = useState<string | null>(null);
   /** Питання, набране в палітрі: консоль підставить його й відправить сама. */
   const [toshoAiInitialQuestion, setToshoAiInitialQuestion] = useState<string | null>(null);
+
+  /**
+   * Приклад питання під полем пошуку. Беремо найкоротший із трьох перших
+   * підказок для цієї посади й сторінки: підказка має прочитатись за мить,
+   * тож довге питання тут гірше за коротке, хай і менш влучне.
+   */
+  const searchHintExample = useMemo(() => {
+    const suggestions = resolveAiSuggestions({
+      accessRole,
+      jobRole,
+      pathname: location.pathname,
+      dayKey: new Date().toISOString().slice(0, 10),
+      limit: 3,
+    });
+    if (suggestions.length === 0) return null;
+    return suggestions.reduce((shortest, item) =>
+      item.question.length < shortest.question.length ? item : shortest
+    ).question;
+  }, [accessRole, jobRole, location.pathname]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -2047,22 +2067,50 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 поле забирало в них місце. Сама середня колонка сітки центрована
                 по вікну, тож ширина назви сторінки ліворуч на неї не впливає —
                 кнопка не стрибає між сторінками. */}
-            <div className="hidden md:flex min-w-0 items-center justify-center">
+            <div className="group relative hidden md:flex min-w-0 items-center justify-center">
               <button
                 type="button"
                 onClick={() => setCmdkOpen(true)}
-                aria-label="Пошук"
-                className="inline-flex h-10 w-[230px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1.5 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground cursor-pointer"
+                aria-label="Знайти або спитати ToSho AI"
+                // pr-1 (4px), а не pr-1.5: пігулка всередині має відступ 4px
+                // зверху й знизу (h-8 у полі h-10), тож праворуч мусить бути
+                // рівно стільки ж — інакше вона висить не по центру рамки.
+                className="inline-flex h-10 w-[320px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-200 hover:border-ai-accent/30 hover:bg-muted/60 hover:text-foreground cursor-pointer"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
                     Перше слово лишили знайомим, щоб ніхто не гадав, куди подівся
                     пошук. */}
                 <span className="flex-1 truncate text-left">Знайти або спитати</span>
-                <kbd className="inline-flex h-6 select-none items-center rounded-md border border-border bg-background/60 px-2 font-mono text-3xs font-medium opacity-80">
-                  ⌘K
-                </kbd>
+                {/* Пігулка НЕ окрема кнопка: обидві половини поля відкривають те
+                    саме вікно, а режим вибирає набраний текст (див.
+                    looksLikeQuestion). Тому вона декоративна — pointer-events-none,
+                    без власного hover — інакше виглядала б як кнопка, що нічого
+                    не робить. Кнопку в кнопку вкласти й не можна: браузер такого
+                    не приймає, а з клавіатури до внутрішньої не дійти.
+
+                    Радіус ВКЛАДЕНИЙ, а не такий самий: зовні rounded-xl (12px),
+                    усередині rounded-lg (8px) — 12 мінус відступ 4px. Однаковий
+                    радіус на вкладених прямокутниках читається як помилка, а
+                    капсула всередині прямокутника — тим паче. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-200 group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
+                >
+                  <ToShoAiMark className="h-3.5 w-3.5" />
+                  ToSho AI
+                </span>
               </button>
+
+              {/* Підштовхування: живий приклад питання під полем. Абсолютний, щоб
+                  шапка не смикалась, і pointer-events-none, щоб не перехоплював
+                  клік по самому полю. Приклад береться з того самого реєстру, що
+                  й підказки в палітрі, — тобто залежить від посади й сторінки. */}
+              {searchHintExample ? (
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover px-2.5 py-1 text-xs text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                  наприклад: {searchHintExample}
+                </span>
+              ) : null}
             </div>
 
             {/* RIGHT ACTIONS */}
@@ -2299,7 +2347,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </div>
       </div>
 
-      <TabBar hidden={mobileMenuOpen || toshoAiOpen} />
+      {/* cmdkOpen теж ховає смугу: на телефоні палітра — аркуш знизу, і смуга
+          лягала просто поверх її поля вводу. */}
+      <TabBar hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen} onAsk={() => setCmdkOpen(true)} />
       <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent
           side="right"
