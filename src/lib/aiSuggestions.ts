@@ -1,25 +1,15 @@
 import {
-  AlertTriangle,
   BarChart3,
-  Banknote,
   Building2,
-  CalendarDays,
   CheckCircle2,
   Clock,
-  Factory,
   Image,
   ListChecks,
   Mail,
-  Package,
   Palette,
-  Receipt,
-  Send,
   Target,
-  Timer,
   TrendingUp,
-  Truck,
   Users,
-  Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -101,84 +91,83 @@ export function resolveAiBucket(params: {
   return BUCKET_BY_JOB_ROLE[job] ?? "general";
 }
 
+/**
+ * ПРАВИЛО НАБОРУ: пропонуємо ЛИШЕ те, на що помічник уміє відповідати.
+ *
+ * Його вміння перелічені списком у netlify/functions/tosho-ai.ts
+ * (SUPPORTED_ANALYTICS_INTENTS): прорахунки й КП, замовники та ліди, дизайн-
+ * задачі, склад команди за ролями, гігієна логотипів, стан системи, особистий
+ * фокус — і синтез поверх цих даних (скласти лист, пояснити, порівняти).
+ *
+ * Чого він НЕ вміє сьогодні: відсутності й лікарняні, фінанси й платежі,
+ * виробництво, склад, ТТН, маркетинг і галерею. Замовлення та логістика
+ * позначені в самій функції як «limited» — тобто відповідь буде про обмеження
+ * модуля, а не про справу.
+ *
+ * Перша версія цього реєстру про це не знала: у ній були і платежі, і склад, і
+ * «хто сьогодні на лікарняному». Останнє й спіймали — питання про відсутності
+ * збіглося зі словом «сьогодні» в правилі особистого фокуса, і помічник видав
+ * «Фокус менеджера» замість відповіді. Пропонувати те, чого система не вміє,
+ * дорожче, ніж не пропонувати нічого: одна порожня відповідь коштує довіри
+ * більше, ніж десять непоказаних підказок.
+ *
+ * Розширювати набір можна рівно тоді, коли в помічника з'явиться відповідне
+ * вміння — див. картку про навчання ToSho AI новим темам.
+ */
+
 const SALES: AiSuggestion[] = [
-  { key: "sales-silent", title: "Хто не відповів", question: "Які мої прорахунки висять без відповіді понад тиждень?", icon: Clock, paths: ["/orders/estimates"] },
-  { key: "sales-deadlines", title: "Мої дедлайни", question: "Що в мене горить сьогодні й завтра?", icon: CalendarDays },
-  { key: "sales-month", title: "Мій місяць", question: "Скільки прорахунків я закрив цього місяця і на яку суму?", icon: BarChart3, paths: ["/orders/estimates"] },
-  { key: "sales-customers", title: "Мої замовники", question: "У кого із замовників найбільше зараз у роботі?", icon: Building2, paths: ["/orders/customers"] },
-  { key: "sales-design-stuck", title: "Застрягло в дизайні", question: "Які мої прорахунки чекають на дизайн довше за три дні?", icon: Palette, paths: ["/design"] },
+  { key: "sales-focus", title: "Що робити далі", question: "Що мені робити далі за моїми прорахунками?", icon: Target, paths: ["/orders/estimates"] },
+  { key: "sales-silent", title: "Хто не відповів", question: "Які прорахунки висять без відповіді понад тиждень?", icon: Clock, paths: ["/orders/estimates"] },
+  { key: "sales-month", title: "Мій місяць", question: "Скільки прорахунків я закрив цього місяця і на яку суму?", icon: BarChart3 },
+  { key: "sales-customers", title: "Мої замовники", question: "У кого із замовників найбільше прорахунків?", icon: Building2, paths: ["/orders/customers"] },
+  { key: "sales-managers", title: "По менеджерах", question: "Скільки прорахунків у кожного менеджера?", icon: Users },
   { key: "sales-letter", title: "Написати замовнику", question: "Склади лист-нагадування по прорахунку, який висить найдовше", icon: Mail },
-  { key: "sales-orders", title: "Мої замовлення", question: "Які мої замовлення зараз у виробництві?", icon: Factory, paths: ["/orders/production"] },
-  { key: "sales-unpaid", title: "Неоплачене", question: "Хто з моїх замовників ще не оплатив?", icon: Wallet },
-  { key: "sales-week", title: "Тиждень", question: "Що я зробив за цей тиждень?", icon: TrendingUp },
+  { key: "sales-logos", title: "Без логотипів", question: "У яких замовників і лідів немає логотипа?", icon: Image, paths: ["/orders/customers"] },
 ];
 
 const DESIGN: AiSuggestion[] = [
   { key: "design-now", title: "Що в мене зараз", question: "Які дизайн-задачі в мене в роботі просто зараз?", icon: Palette, paths: ["/design"] },
-  { key: "design-week", title: "Мій тиждень", question: "Скільки візуалів і макетів я здав цього тижня?", icon: BarChart3 },
-  { key: "design-overdue", title: "Прострочене", question: "Які мої дизайн-задачі вже прострочені?", icon: AlertTriangle, paths: ["/design"] },
-  { key: "design-timer", title: "Мій таймер", question: "Скільки годин у таймері за цей тиждень?", icon: Timer },
-  { key: "design-changes", title: "Черга правок", question: "Які правки чекають на мене й від кого?", icon: ListChecks, paths: ["/design"] },
-  { key: "design-norm", title: "Норма на сьогодні", question: "Скільки мені лишилось до денної норми?", icon: Target },
-  { key: "design-next", title: "Що брати далі", question: "Яка з моїх задач найближча за дедлайном?", icon: CalendarDays },
-  { key: "design-month", title: "Мій місяць", question: "Скільки задач я закрив цього місяця і яких типів?", icon: TrendingUp },
-];
-
-const PRODUCTION: AiSuggestion[] = [
-  { key: "prod-now", title: "У виробництві", question: "Що у виробництві просто зараз і на якому етапі?", icon: Factory, paths: ["/orders/production"] },
-  { key: "prod-ship", title: "Відвантаження", question: "Що має поїхати сьогодні й завтра?", icon: Truck, paths: ["/orders/production"] },
-  { key: "prod-no-ttn", title: "Без ТТН", question: "Які замовлення готові, але без накладної?", icon: Receipt },
-  { key: "prod-stock", title: "Склад під тиждень", question: "Чого не вистачає на складі під замовлення цього тижня?", icon: Package, paths: ["/stock/samples"] },
-  { key: "prod-late", title: "Прострочене", question: "Які замовлення вибиваються з термінів виробництва?", icon: AlertTriangle },
-  { key: "prod-contractors", title: "Підрядники", question: "Хто з підрядників зараз щось для нас робить?", icon: Users, paths: ["/contractors"] },
-  { key: "prod-week", title: "Тиждень попереду", question: "Скільки замовлень треба зробити цього тижня?", icon: CalendarDays },
-];
-
-const FINANCE: AiSuggestion[] = [
-  { key: "fin-payments", title: "Платежі тижня", question: "Які платежі треба зробити цього тижня?", icon: CalendarDays, paths: ["/finances"] },
-  { key: "fin-costs", title: "Витрати місяця", question: "Скільки витрат цього місяця й за якими статтями?", icon: BarChart3, paths: ["/finances"] },
-  { key: "fin-unpaid", title: "Неоплачене", question: "Хто із замовників ще не оплатив і на скільки?", icon: Wallet },
-  { key: "fin-close", title: "Закриття місяця", question: "Що лишилось внести до закриття місяця?", icon: CheckCircle2, paths: ["/finances"] },
-  { key: "fin-payroll", title: "Виплати команді", question: "Скільки виходить виплат команді цього місяця?", icon: Banknote, paths: ["/finances"] },
-  { key: "fin-compare", title: "Порівняти місяці", question: "Порівняй витрати цього місяця з минулим", icon: TrendingUp },
-  { key: "fin-subscriptions", title: "Підписки", question: "Скільки ми платимо за підписки щомісяця?", icon: Receipt },
+  { key: "design-month", title: "Мій місяць", question: "Скільки дизайн-задач я закрив за останні 30 днів?", icon: BarChart3, paths: ["/design"] },
+  { key: "design-ranking", title: "Хто скільки закрив", question: "Хто з дизайнерів закрив найбільше задач за місяць?", icon: TrendingUp },
+  { key: "design-load", title: "Завантаження", question: "Хто з дизайнерів перевантажений, а хто вільний?", icon: Users, paths: ["/design"] },
+  { key: "design-team", title: "Хто в дизайні", question: "Хто в нас дизайнери?", icon: ListChecks },
+  { key: "design-focus", title: "Що робити далі", question: "Що мені робити далі за моїми задачами?", icon: Target },
 ];
 
 const CHIEF: AiSuggestion[] = [
   { key: "chief-month", title: "Місяць у цифрах", question: "Скільки прорахунків прийняли цього місяця й на яку суму?", icon: BarChart3, paths: ["/orders/estimates"] },
-  { key: "chief-load", title: "Завантаження", question: "Хто з дизайнерів перевантажений, а хто вільний?", icon: Users, paths: ["/design"] },
-  { key: "chief-stuck", title: "Що зависло", question: "Що стоїть без руху довше за тиждень?", icon: Clock },
-  { key: "chief-week", title: "Тиждень до тижня", question: "Як цей тиждень порівняно з минулим?", icon: TrendingUp },
-  { key: "chief-absent", title: "Хто відсутній", question: "Хто сьогодні у відпустці чи на лікарняному?", icon: CalendarDays, paths: ["/team"] },
-  { key: "chief-money", title: "Куди йдуть гроші", question: "Скільки витрат цього місяця й на що найбільше?", icon: Wallet, paths: ["/finances"] },
-  { key: "chief-managers", title: "По менеджерах", question: "Скільки в роботі в кожного менеджера?", icon: Building2 },
-  { key: "chief-production", title: "Виробництво", question: "Що зараз у виробництві й чи все встигаємо?", icon: Factory, paths: ["/orders/production"] },
+  { key: "chief-managers", title: "По менеджерах", question: "Скільки прорахунків у кожного менеджера?", icon: Users, paths: ["/orders/estimates"] },
+  { key: "chief-load", title: "Завантаження дизайну", question: "Хто з дизайнерів перевантажений, а хто вільний?", icon: Palette, paths: ["/design"] },
+  { key: "chief-design-month", title: "Дизайн за місяць", question: "Скільки дизайн-задач завершили за останні 30 днів?", icon: TrendingUp, paths: ["/design"] },
+  { key: "chief-customers", title: "Найактивніші замовники", question: "У кого із замовників найбільше прорахунків?", icon: Building2, paths: ["/orders/customers"] },
+  { key: "chief-team", title: "Хто в команді", question: "Хто в нас менеджери, а хто дизайнери?", icon: ListChecks, paths: ["/team"] },
+  { key: "chief-health", title: "Стан системи", question: "Як почувається система: бекапи, помилки, місце?", icon: CheckCircle2, paths: ["/dev"] },
+  { key: "chief-logos", title: "Без логотипів", question: "У яких замовників і лідів немає логотипа?", icon: Image },
 ];
 
-const MARKETING: AiSuggestion[] = [
-  { key: "mkt-gallery", title: "Нове в галереї", question: "Які візуали додали цього тижня?", icon: Image, paths: ["/marketing"] },
-  { key: "mkt-portfolio", title: "Для портфоліо", question: "Що з робіт цього місяця можна показати в портфоліо?", icon: Send, paths: ["/marketing"] },
-  { key: "mkt-sleeping", title: "Сплячі замовники", question: "Хто давно не замовляв, хоча раніше замовляв часто?", icon: Building2, paths: ["/orders/customers"] },
-  { key: "mkt-creative", title: "Хто робив креатив", question: "Хто з дизайнерів робив креатив цього місяця?", icon: Palette, paths: ["/design"] },
-  { key: "mkt-industry", title: "Приклади під галузь", question: "Підбери наші роботи для агросектору", icon: ListChecks },
-  { key: "mkt-volume", title: "Обсяг за місяць", question: "Скільки робіт зробили цього місяця і яких типів?", icon: BarChart3 },
-];
-
+/**
+ * Набір для всіх, кому окремого ще немає: виробництво, склад, логістика,
+ * бухгалтерія, маркетинг. Питання їхніх доменів помічник поки не тягне, тож
+ * пропонуємо те, що працює для будь-якої посади.
+ */
 const GENERAL: AiSuggestion[] = [
-  { key: "gen-work", title: "Що в роботі", question: "Скільки прорахунків і замовлень зараз у роботі?", icon: BarChart3 },
-  { key: "gen-absent", title: "Хто відсутній", question: "Хто сьогодні у відпустці чи на лікарняному?", icon: CalendarDays, paths: ["/team"] },
-  { key: "gen-deadlines", title: "Дедлайни тижня", question: "Що має бути готове цього тижня?", icon: Clock },
-  { key: "gen-design", title: "Черга дизайну", question: "Скільки дизайн-задач зараз у роботі?", icon: Palette, paths: ["/design"] },
-  { key: "gen-week", title: "Тиждень у CRM", question: "Що змінилось у CRM за цей тиждень?", icon: TrendingUp },
+  { key: "gen-focus", title: "Що робити далі", question: "Що мені робити далі?", icon: Target },
+  { key: "gen-quotes", title: "Прорахунки в роботі", question: "Скільки прорахунків зараз у роботі й на яку суму?", icon: BarChart3, paths: ["/orders/estimates"] },
+  { key: "gen-design", title: "Черга дизайну", question: "Скільки дизайн-задач завершили за останні 30 днів?", icon: Palette, paths: ["/design"] },
+  { key: "gen-team", title: "Хто в команді", question: "Хто в нас дизайнери, менеджери й логісти?", icon: ListChecks, paths: ["/team"] },
+  { key: "gen-customers", title: "Активні замовники", question: "У кого із замовників найбільше прорахунків?", icon: Building2, paths: ["/orders/customers"] },
 ];
 
 const BY_BUCKET: Record<AiSuggestionBucket, AiSuggestion[]> = {
   sales: SALES,
   design: DESIGN,
-  production: PRODUCTION,
-  finance: FINANCE,
+  // Виробництво, фінанси й маркетинг поки беруть загальний набір: власних
+  // питань у них досить, але помічник на них не відповідає (див. правило
+  // набору вище). Щойно навчиться — тут з'являться свої масиви.
+  production: GENERAL,
+  finance: GENERAL,
   chief: CHIEF,
-  marketing: MARKETING,
+  marketing: GENERAL,
   general: GENERAL,
 };
 

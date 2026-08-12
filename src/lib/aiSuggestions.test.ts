@@ -71,3 +71,53 @@ describe("лічильник решти", () => {
     expect(countRemainingSuggestions({ jobRole: "manager" })).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Сторож на майбутнє. Помічник (netlify/functions/tosho-ai.ts) не вміє
+ * відповідати про відсутності, гроші, склад і виробництво — а підказки в
+ * порожньому полі читаються як обіцянка. Одного разу ми вже пообіцяли «хто
+ * сьогодні на лікарняному» й отримали замість відповіді «Фокус менеджера».
+ */
+describe("не обіцяємо того, чого помічник не вміє", () => {
+  const FORBIDDEN = [
+    "лікарнян",
+    "відпуст",
+    "відсутн",
+    "платеж",
+    "оплат",
+    "витрат",
+    // Не голий корінь «склад»: під нього підпадає «склади лист». Беремо саме
+    // ті форми, якими питають про склад як місце.
+    "на складі",
+    "зі складу",
+    "накладн",
+    "ттн",
+    "виробництв",
+    "відвантаж",
+    "портфоліо",
+  ];
+
+  const BUCKETS = ["sales", "design", "production", "finance", "chief", "marketing", "general"] as const;
+  const ROLE_BY_BUCKET: Record<(typeof BUCKETS)[number], string> = {
+    sales: "manager",
+    design: "designer",
+    production: "logistics",
+    finance: "accountant",
+    chief: "seo",
+    marketing: "marketer",
+    general: "office_manager",
+  };
+
+  it.each(BUCKETS)("набір «%s» не згадує недоступних тем", (bucket) => {
+    const list = resolveAiSuggestions({
+      jobRole: ROLE_BY_BUCKET[bucket],
+      pathname: "/overview",
+      dayKey: "2026-08-12",
+      limit: 20,
+    });
+    const text = list.map((item) => `${item.title} ${item.question}`).join(" ").toLowerCase();
+    for (const word of FORBIDDEN) {
+      expect(text).not.toContain(word);
+    }
+  });
+});
