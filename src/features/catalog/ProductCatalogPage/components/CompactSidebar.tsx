@@ -168,15 +168,19 @@ export function CompactSidebar({
                         {types.length}
                       </Badge>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onAddType(group.key)}
-                      className={cn("p-1 text-primary", TREE_ICON_BUTTON)}
-                      aria-label={`Додати категорію в "${group.label}"`}
-                      title={`Додати категорію в "${group.label}"`}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+                    {/* У поліграфії категорію з інтерфейсу не заводимо — див.
+                        коментар біля «Додати вид» нижче. */}
+                    {group.key === "print" ? null : (
+                      <button
+                        type="button"
+                        onClick={() => onAddType(group.key)}
+                        className={cn("p-1 text-primary", TREE_ICON_BUTTON)}
+                        aria-label={`Додати категорію в "${group.label}"`}
+                        title={`Додати категорію в "${group.label}"`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -310,8 +314,12 @@ export function CompactSidebar({
                               </div>
                             )}
 
-                            {/* Add Kind Button */}
-                            {isExpanded && (
+                            {/* Add Kind Button — крім поліграфії: там набір полів
+                                виробу живе в коді, і вид, заведений з інтерфейсу,
+                                покаже в прорахунку нуль налаштувань. Так у каталозі
+                                й з'явились плакат, посібник і вкладиш у монетницю —
+                                картки, які ніколи не працювали. */}
+                            {isExpanded && normalizeQuoteType(type.quote_type) !== "print" && (
                               <button
                                 type="button"
                                 onClick={() => onAddKind(type.id)}

@@ -14,6 +14,15 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, ChevronDown, ExternalLink, FileText, Image as ImageIcon, Link2, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import type { CatalogModelMetadata, CatalogModelVariant, CatalogType, ImageUploadMode } from "@/types/catalog";
+import { PRINT_SPEC_PRESETS } from "@/lib/printSpec";
+
+/** Чотири пресети старого механізму (`lib/printPackage.ts`) — пишуться в інший ключ. */
+const LEGACY_CONFIGURATOR_PRESETS = [
+  "print_package",
+  "print_notebook",
+  "print_note_blocks",
+  "print_certificates",
+] as const;
 
 interface BasicInfoTabProps {
   catalog: CatalogType[];
@@ -421,34 +430,46 @@ export function BasicInfoTab({
           </div>
           {showConfiguratorPreset ? (
             <div className="space-y-2 lg:col-span-2">
-              <Label className="text-sm font-medium">Preset конфігуратора</Label>
+              <Label className="text-sm font-medium">Набір полів виробу</Label>
               <Select
-                value={draftMetadata.configuratorPreset ?? "none"}
-                onValueChange={(value) =>
+                value={draftMetadata.specPreset ?? draftMetadata.configuratorPreset ?? "none"}
+                onValueChange={(value) => {
+                  // Два ключі, бо два механізми: описові види живуть у
+                  // `lib/printSpec.ts` і пишуться в specPreset, чотири старі —
+                  // у printPackage.ts і пишуться в configuratorPreset. Вибір
+                  // ОДИН, тому протилежний ключ завжди гасимо: інакше в моделі
+                  // лежали б два набори полів, і який із них покажеться,
+                  // залежало б від того, хто перший прочитає.
+                  const isLegacy = (LEGACY_CONFIGURATOR_PRESETS as readonly string[]).includes(value);
                   onMetadataChange({
                     ...draftMetadata,
-                    configuratorPreset:
-                      value === "none"
-                        ? null
-                        : (value as
-                            | "print_package"
-                            | "print_notebook"
-                            | "print_note_blocks"
-                            | "print_certificates"),
-                  })
-                }
+                    configuratorPreset: isLegacy
+                      ? (value as (typeof LEGACY_CONFIGURATOR_PRESETS)[number])
+                      : null,
+                    specPreset: isLegacy || value === "none" ? null : value,
+                  });
+                }}
               >
                 <SelectTrigger className="bg-background/60">
-                  <SelectValue placeholder="Без додаткового конфігуратора" />
+                  <SelectValue placeholder="Без набору полів" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Без додаткового конфігуратора</SelectItem>
+                  <SelectItem value="none">Без набору полів</SelectItem>
+                  {PRINT_SPEC_PRESETS.map((preset) => (
+                    <SelectItem key={preset.key} value={preset.key}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
                   <SelectItem value="print_package">Паперовий пакет</SelectItem>
                   <SelectItem value="print_notebook">Блокнот</SelectItem>
                   <SelectItem value="print_note_blocks">Блоки для записів</SelectItem>
                   <SelectItem value="print_certificates">Сертифікат</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Поля виробу описані в коді. Тут лише вибір, на який набір указує ця модель — без нього товар
+                поліграфії не покаже в прорахунку жодного налаштування.
+              </p>
             </div>
           ) : null}
         </div>

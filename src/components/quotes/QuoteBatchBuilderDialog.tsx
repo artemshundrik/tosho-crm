@@ -1131,26 +1131,53 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     });
   };
 
+  /**
+   * Єдиний варіант підставляється сам.
+   *
+   * У поліграфії рівень «вид» реально використовують лише календарі — там три
+   * різновиди. У решти типів вид рівно один і називається так само, як тип
+   * (Брошури / Брошури, Блокноти / Блокноти), тож два кліки з трьох були
+   * ритуалом: вибору немає, а натиснути треба.
+   *
+   * Свідомо НЕ прибираємо сам рівень: календарям він потрібен, і як тільки в
+   * брошур зʼявиться другий різновид — знадобиться і їм.
+   */
   const setProductCategory = (categoryId: string) => {
+    const kinds = catalogTypes.find((type) => type.id === categoryId)?.kinds ?? [];
+    const onlyKind = kinds.length === 1 ? kinds[0] : null;
+    const onlyModel = onlyKind?.models.length === 1 ? onlyKind.models[0] : null;
+    const preset = onlyModel
+      ? getConfiguratorPresetForSelection(categoryId, onlyKind?.id ?? "", onlyModel.id)
+      : null;
+
     updateActiveProduct({
       categoryId,
-      kindId: "",
-      modelId: "",
-      variantId: null,
-      productConfiguratorPreset: null,
-      printPackageConfig: normalizeProductPrintPackageConfig({}, null),
+      kindId: onlyKind?.id ?? "",
+      modelId: onlyModel?.id ?? "",
+      variantId: onlyModel ? getVisibleCatalogVariants(onlyModel)[0]?.id ?? null : null,
+      productConfiguratorPreset: preset,
+      printPackageConfig: normalizeProductPrintPackageConfig({}, preset),
       printApplications: [],
     });
   };
 
   const setProductKind = (kindId: string) => {
     if (!activeProduct) return;
+    const models =
+      catalogTypes
+        .find((type) => type.id === activeProduct.categoryId)
+        ?.kinds.find((kind) => kind.id === kindId)?.models ?? [];
+    const onlyModel = models.length === 1 ? models[0] : null;
+    const preset = onlyModel
+      ? getConfiguratorPresetForSelection(activeProduct.categoryId, kindId, onlyModel.id)
+      : null;
+
     updateActiveProduct({
       kindId,
-      modelId: "",
-      variantId: null,
-      productConfiguratorPreset: null,
-      printPackageConfig: normalizeProductPrintPackageConfig({}, null),
+      modelId: onlyModel?.id ?? "",
+      variantId: onlyModel ? getVisibleCatalogVariants(onlyModel)[0]?.id ?? null : null,
+      productConfiguratorPreset: preset,
+      printPackageConfig: normalizeProductPrintPackageConfig({}, preset),
       printApplications: [],
     });
   };
@@ -2198,7 +2225,17 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             placeholder="Оберіть модель"
                             popoverClassName="w-[420px]"
                           />
-                          {activeProduct.kindId && onCreateCatalogModel ? (
+                          {activeProduct.quoteType === "print" ? (
+                            // У поліграфії товар нашвидку не створюємо: набір полів
+                            // виробу живе в коді, і модель, заведена звідси, покаже
+                            // в прорахунку нуль налаштувань. Саме так у каталозі
+                            // з'явились плакат, посібник і вкладиш — картки, які
+                            // ніколи не працювали, і які довелось прибирати руками.
+                            <p className="text-xs text-muted-foreground">
+                              Новий вид поліграфії заводить розробник: у нього свій набір полів, і без нього товар
+                              не покаже жодного налаштування.
+                            </p>
+                          ) : activeProduct.kindId && onCreateCatalogModel ? (
                             <Popover open={quickModelPopoverOpen} onOpenChange={setQuickModelPopoverOpen}>
                               <PopoverTrigger asChild>
                                 <Button
