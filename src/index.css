@@ -284,7 +284,10 @@
     --tabbar-height: 56px;
     /* Вужчі поля з боків — щоб плашка з чотирма розділами була ширшою. */
     --tabbar-inset-x: 10px;
-    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
+    /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
+       впритул до краю. Значення додається до системної безпечної зони,
+       тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
+    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
     --tabbar-gap: 6px;
     --tabbar-transition: 140ms;
 
@@ -544,7 +547,10 @@
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
     --tabbar-inset-x: 10px;
-    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
+    /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
+       впритул до краю. Значення додається до системної безпечної зони,
+       тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
+    --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
     --tabbar-gap: 6px;
     --tabbar-transition: 140ms;
 
