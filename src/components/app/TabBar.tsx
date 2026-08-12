@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Calculator, Palette, Users } from "lucide-react";
+import { Calculator, Factory, Palette, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import { createPortal } from "react-dom";
@@ -25,6 +25,12 @@ const TAB_ITEMS: TabItem[] = [
     to: "/orders/customers",
     icon: Users,
     isActive: (pathname) => pathname.startsWith("/orders/customers"),
+  },
+  {
+    label: "Замовлення",
+    to: "/orders/production",
+    icon: Factory,
+    isActive: (pathname) => pathname.startsWith("/orders/production"),
   },
   {
     label: "Дизайн",
@@ -57,7 +63,10 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
       aria-hidden={hidden}
     >
       <div
-        className="w-full"
+        // Плашка з розділами і кружечок AI — сусіди в одному рядку, а не одна
+        // смуга: AI це дія, а не розділ, і ставити її поруч із навігацією
+        // означало питати «куди піти?» там, де відповідь «нікуди».
+        className="flex w-full items-center justify-center gap-2"
         style={{
           paddingLeft: "var(--tabbar-inset-x)",
           paddingRight: "var(--tabbar-inset-x)",
@@ -67,7 +76,7 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
         <nav
           aria-label="Primary"
           className={cn(
-            "mx-auto flex max-w-[420px] items-center justify-between gap-[var(--tabbar-gap)]",
+            "flex min-w-0 flex-1 max-w-[420px] items-center justify-between gap-[var(--tabbar-gap)]",
             // Прихована смуга мусить і кліки пропускати крізь себе. Доти вона
             // ставала прозорою, але лишалась «pointer-events: auto» — і поверх
             // відкритої палітри ловила дотики замість поля вводу й мікрофона:
@@ -77,12 +86,15 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
           style={{
             height: "var(--tabbar-height)",
             borderRadius: "var(--tabbar-radius)",
-            backgroundColor: "hsl(var(--tabbar-bg) / 0.72)",
+            backgroundColor: "hsl(var(--tabbar-bg) / var(--tabbar-bg-alpha))",
             border: "1px solid hsl(var(--tabbar-border) / 0.35)",
             boxShadow: "var(--tabbar-shadow)",
             backdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
             WebkitBackdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
-            padding: "0 8px",
+            // 6px = (висота смуги 56 − висота вкладки 44) / 2. Тоді активна
+            // пігулка стоїть на однаковій відстані і зверху, і знизу, і від
+            // лівого краю, коли вона перша.
+            padding: "0 6px",
           }}
         >
           {TAB_ITEMS.map((tab) => {
@@ -104,9 +116,6 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
                     ? "border border-[hsl(var(--tabbar-active-border)/var(--tabbar-active-border-alpha))] bg-[hsl(var(--tabbar-active-bg)/var(--tabbar-active-bg-alpha))] text-[hsl(var(--tabbar-label-active))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_8px_24px_hsl(0_0%_0%/0.12)] backdrop-blur-xl"
                     : "border border-transparent text-muted-foreground/60"
                 )}
-                style={{
-                  transform: active ? "scale(var(--tabbar-active-scale))" : "scale(1)",
-                }}
               >
                 {active ? (
                   <span
@@ -134,30 +143,45 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
             );
           })}
 
-          {/* Четверта вкладка — дія, а не розділ: відкриває ту саму палітру, що
-              ⌘K на комп'ютері, тобто «спитати АБО подивитись» одним дотиком.
-              На телефоні поля пошуку немає взагалі (воно під hidden md:flex), і
-              для складу з логістикою це був єдиний екран без жодного входу.
-
-              Кнопка, а не Link: нікуди не веде. Виглядає як решта вкладок —
-              іконка й підпис, без кружечка й заливки; від сусідів її відрізняє
-              лише колір підбренду AI. */}
-          {onAsk ? (
-            <button
-              type="button"
-              onClick={onAsk}
-              aria-label="Знайти або спитати ToSho AI"
-              className={cn(
-                "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-2xs font-medium",
-                "border border-transparent text-ai-accent",
-                "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[var(--tabbar-transition)] ease-out"
-              )}
-            >
-              <ToShoAiMark className="relative z-base h-5 w-5" />
-              <span className="relative z-base h-4 leading-4">Спитати</span>
-            </button>
-          ) : null}
         </nav>
+
+        {/* Кружечок AI: та сама висота й та сама поверхня, що в плашки, але
+            окремо від неї. Причина не косметична — це ДІЯ, а не розділ: вона
+            нікуди не веде, а відкриває палітру. Поки вона стояла п'ятою
+            вкладкою, чотири підписи тіснились, і сама вона читалась як ще один
+            розділ. Підпису немає навмисно: він є в самій палітрі. */}
+        {onAsk ? (
+          <button
+            type="button"
+            onClick={onAsk}
+            aria-label="Знайти або спитати ToSho AI"
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded-full text-white",
+              // Схована смуга не має ловити дотики — те саме, що й у навігації.
+              hidden ? "pointer-events-none" : "pointer-events-auto",
+              "transition-[background-color,border-color,color,box-shadow,transform] duration-[var(--tabbar-transition)] ease-out",
+              "active:scale-95"
+            )}
+            style={{
+              height: "var(--tabbar-height)",
+              width: "var(--tabbar-height)",
+              // Рідке скло, підфарбоване кольором підбренду: напівпрозора
+              // заливка поверх розмиття, світлий відблиск згори й тонке біле
+              // кільце. Суцільний колір читався як плаский стікер поруч зі
+              // скляною плашкою.
+              backgroundColor: "hsl(var(--ai-accent) / 0.9)",
+              backgroundImage:
+                "linear-gradient(180deg, hsl(0 0% 100% / 0.3), hsl(0 0% 100% / 0) 58%)",
+              border: "1px solid hsl(0 0% 100% / 0.35)",
+              boxShadow:
+                "inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 10px 26px -10px hsl(var(--ai-accent) / 0.7)",
+              backdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
+              WebkitBackdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
+            }}
+          >
+            <ToShoAiMark className="h-[22px] w-[22px]" />
+          </button>
+        ) : null}
       </div>
     </div>
   );

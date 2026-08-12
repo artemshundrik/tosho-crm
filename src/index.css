@@ -261,25 +261,31 @@
     --entity-avatar-6-fallback: 188 78% 74%;
 
     /* --- TAB BAR TOKENS (LIGHT) --- */
-    --tabbar-bg: var(--background);
+    /* Нижня смуга в стилі матового скла: сильне розмиття, підвищена
+       насиченість і напівпрозоре тло, крізь яке видно контент під смугою.
+       Активна вкладка — світла «піднята» пігулка з майже чорним написом:
+       доти й іконка, і підпис були БІЛИМИ на світлому тлі, тобто активний
+       розділ читався гірше за неактивні. */
+    --tabbar-bg: var(--card);
+    --tabbar-bg-alpha: 0.62;
     --tabbar-border: var(--border);
-    --tabbar-shadow: none;
+    --tabbar-shadow: 0 10px 30px -14px hsl(0 0% 0% / 0.3);
     --tabbar-icon: var(--muted-foreground);
-    --tabbar-icon-active: 0 0% 100%;
+    --tabbar-icon-active: var(--foreground);
     --tabbar-label: var(--muted-foreground);
-    --tabbar-label-active: 0 0% 100%;
-    --tabbar-active-bg: 0 0% 0%;
-    --tabbar-active-bg-alpha: 0.18;
-    --tabbar-active-border: 0 0% 100%;
-    --tabbar-active-border-alpha: 0.24;
-    --tabbar-backdrop-blur: 22px;
-    --tabbar-backdrop-saturate: 1.2;
+    --tabbar-label-active: var(--foreground);
+    --tabbar-active-bg: 0 0% 100%;
+    --tabbar-active-bg-alpha: 0.92;
+    --tabbar-active-border: 0 0% 0%;
+    --tabbar-active-border-alpha: 0.06;
+    --tabbar-backdrop-blur: 30px;
+    --tabbar-backdrop-saturate: 1.8;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 22px;
+    /* Вужчі поля з боків — щоб плашка з чотирма розділами була ширшою. */
+    --tabbar-inset-x: 10px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
-    --tabbar-active-scale: 1.06;
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (LIGHT) --- */
@@ -519,9 +525,12 @@
     --entity-avatar-6-fallback: 188 30% 34%;
 
     /* --- TAB BAR TOKENS (DARK) --- */
+    /* Те саме матове скло, але темне: активна вкладка — біла іконка й білий
+       підпис на ледь світлішій підкладці. */
     --tabbar-bg: var(--card);
+    --tabbar-bg-alpha: 0.55;
     --tabbar-border: var(--border);
-    --tabbar-shadow: none;
+    --tabbar-shadow: 0 12px 34px -14px hsl(0 0% 0% / 0.7);
     --tabbar-icon: var(--muted-foreground);
     --tabbar-icon-active: 0 0% 100%;
     --tabbar-label: var(--muted-foreground);
@@ -530,14 +539,13 @@
     --tabbar-active-bg-alpha: 0.16;
     --tabbar-active-border: 0 0% 100%;
     --tabbar-active-border-alpha: 0.18;
-    --tabbar-backdrop-blur: 22px;
-    --tabbar-backdrop-saturate: 1.2;
+    --tabbar-backdrop-blur: 30px;
+    --tabbar-backdrop-saturate: 1.8;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 22px;
+    --tabbar-inset-x: 10px;
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 10px);
     --tabbar-gap: 6px;
-    --tabbar-active-scale: 1.06;
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (DARK) --- */
