@@ -12356,7 +12356,15 @@ export default function DesignTaskPage() {
           if (!open) setFilePreview(null);
         }}
       >
-      <DialogContent className="w-fit max-h-[94vh] max-w-[calc(100vw-1.5rem)] overflow-hidden sm:max-w-[calc(100vw-3rem)]">
+      <DialogContent
+        // Перегляд файлу — не форма: зберігати тут нема чого, а типовий захист
+        // від втрати введеного питав «Закрити без збереження?» на закритті.
+        // Позначку «щось міняли» ставить КЛІК ПО БУДЬ-ЯКІЙ КНОПЦІ всередині
+        // вікна, тож достатньо було натиснути «Відкрити окремо» чи
+        // «Завантажити» — і вихід починав питати про збереження неіснуючих змін.
+        dismissible
+        className="w-fit max-h-[94vh] max-w-[calc(100vw-1.5rem)] overflow-hidden sm:max-w-[calc(100vw-3rem)]"
+      >
         <DialogHeader>
           <DialogTitle className="max-w-[calc(100vw-6rem)] truncate pr-8 sm:max-w-[min(72vw,960px)]">
             {filePreview?.name ?? "Перегляд файлу"}
