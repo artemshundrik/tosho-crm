@@ -53,6 +53,7 @@
     "dev-request-capture.ts",
     "dev-request-draft.ts",
     "finance-payment-reminders.ts",
+    "quote-comments.ts",
     "system-alerts.ts",
     "telegram-assistant-background.ts",
     "telegram-dev-request-background.ts",

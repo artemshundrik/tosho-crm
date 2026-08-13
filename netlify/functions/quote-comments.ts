@@ -255,7 +255,7 @@ export const handler = async (event: HttpEvent) => {
       title: `${actorLabel} згадав(ла) вас у коментарі`,
       body: bodyText,
       href: `/orders/estimates/${quoteId}`,
-      type: "info",
+      type: "info" as const,
     }));
 
     const result = await deliverNotifications(adminClient, rows, { category: "quote_comment" });
@@ -362,7 +362,7 @@ export const handler = async (event: HttpEvent) => {
       // Префікс «/design/» — це ще й те, за чим notify-users розпізнає
       // дизайн-категорію, тож він тут не лише для переходу.
       href: `/design/${taskRow.id}`,
-      type: "info",
+      type: "info" as const,
     }));
 
     const result = await deliverNotifications(adminClient, rows, { category: "design" });
@@ -390,6 +390,14 @@ export const handler = async (event: HttpEvent) => {
         error: error instanceof Error ? error.message : "Failed to send notifications",
       });
     }
+  }
+
+  // Далі — лише режими прорахунку, і кожен із них читає `quoteData`. Нитка
+  // задачі відповіла вище, тож сюди вона не доходить; але інваріант має бути
+  // записаний, а не матись на увазі: без цього наступний режим, доданий над
+  // цим рядком, тихо отримає null там, де код очікує прорахунок.
+  if (!quoteData || !quoteId) {
+    return jsonResponse(400, { error: "Missing quoteId" });
   }
 
   if (payload.mode === "add") {
