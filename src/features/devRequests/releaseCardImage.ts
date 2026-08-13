@@ -62,6 +62,9 @@ async function loadZoneIcon(zone: RequestZone, color: string): Promise<HTMLImage
   });
 }
 
+/** Підписи трьох рядків картки. Звідси ж рахується ширина колонки під них. */
+const ROW_LABELS = ["Було", "Тепер", "Перевірити"] as const;
+
 /**
  * Витягає розділ зі структурованого тіла картки.
  *
@@ -320,9 +323,21 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
   const inner = W - PAD * 2;
   const titleFont = `620 21px ${FONT}`;
   const bodyFont = `400 14px ${FONT}`;
+  const labelFont = `600 12.5px ${FONT}`;
 
   const titleLines = measure(titleFont, input.title, inner, 3);
-  const LABEL_W = 76;
+  /**
+   * Колонка тексту — від найширшого підпису, а не від на око взятого числа.
+   *
+   * Було 76 px на всі три рядки, і «Перевірити» цим кеглем займає майже рівно
+   * стільки: підпис упирався в текст, і «Перевірити Операції → Дизайн»
+   * читалось як одне речення. Рахуємо по факту й додаємо зазор — тоді
+   * перейменування підпису не ламає верстку мовчки.
+   */
+  const LABEL_GAP = 14;
+  ctx.font = labelFont;
+  const LABEL_W =
+    Math.max(...ROW_LABELS.map((label) => ctx.measureText(label).width)) + LABEL_GAP;
   const summaryLines = input.summary.trim() ? measure(bodyFont, input.summary, inner - LABEL_W, 3) : [];
   const beforeLines = input.before.trim() ? measure(bodyFont, input.before, inner - LABEL_W, 2) : [];
   const checkLines = input.howToCheck.trim() ? measure(bodyFont, input.howToCheck, inner - LABEL_W, 2) : [];
@@ -406,7 +421,7 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
   const labelledRow = (label: string, lines: string[], startY: number): number => {
     if (!lines.length) return startY;
     let rowY = startY + 10;
-    ctx.font = `600 12.5px ${FONT}`;
+    ctx.font = labelFont;
     ctx.fillStyle = COLORS.faint;
     ctx.fillText(label, PAD, rowY + 15);
     ctx.font = bodyFont;
@@ -422,9 +437,9 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
   // Три однакові рядки — «Було → Тепер → Перевірити». Раніше «тепер» висів
   // окремим абзацом без підпису, і картка читалась як опис проблеми з двома
   // примітками, а не як розповідь про зміну.
-  y = labelledRow("Було", beforeLines, y);
-  y = labelledRow("Тепер", summaryLines, y);
-  y = labelledRow("Перевірити", checkLines, y);
+  y = labelledRow(ROW_LABELS[0], beforeLines, y);
+  y = labelledRow(ROW_LABELS[1], summaryLines, y);
+  y = labelledRow(ROW_LABELS[2], checkLines, y);
 
   // Підвал: лінія й логотип.
   y += 20;

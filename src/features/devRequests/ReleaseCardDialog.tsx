@@ -37,7 +37,16 @@ export function ReleaseCardDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [before, setBefore] = React.useState(() => suggestBefore(request.body));
-  const [summary, setSummary] = React.useState(() => suggestAfter(request.body) || request.title);
+  /**
+   * БЕЗ запасного варіанта на назву картки.
+   *
+   * Назва тут завжди формулює ПРОБЛЕМУ («Дизайнеру не приходять сповіщення»),
+   * бо такою її складає розбір заявки. Підставлена в «Тепер», вона давала
+   * картку, де до і після написано одне й те саме: «Було: не приходить
+   * сповіщення» → «Тепер: не приходять сповіщення». Краще порожньо і видима
+   * вимога дописати, ніж готовий текст, який заперечує сам себе.
+   */
+  const [summary, setSummary] = React.useState(() => suggestAfter(request.body));
   const [howToCheck, setHowToCheck] = React.useState(() =>
     suggestHowToCheck(request.moduleKey, request.body)
   );
@@ -50,7 +59,7 @@ export function ReleaseCardDialog({
   React.useEffect(() => {
     if (!open) return;
     setBefore(suggestBefore(request.body));
-    setSummary(suggestAfter(request.body) || request.title);
+    setSummary(suggestAfter(request.body));
     setHowToCheck(suggestHowToCheck(request.moduleKey, request.body));
   }, [open, request.number, request.title, request.body, request.moduleKey]);
 
@@ -137,8 +146,19 @@ export function ReleaseCardDialog({
               value={summary}
               onChange={(event) => setSummary(event.target.value)}
               rows={2}
+              placeholder="Одним реченням, з погляду того, хто користується: «сповіщення про повідомлення в чаті тепер приходять усім учасникам задачі»"
               className="resize-none text-sm"
             />
+            {/*
+             * Це головний рядок картки: без нього вона повідомляє проблему й
+             * мовчить про зміну. Тому не підказка, а умова — кнопка нижче
+             * лишається вимкненою, поки тут порожньо.
+             */}
+            {!summary.trim() ? (
+              <p className="text-2xs tone-text-warning">
+                Без цього рядка картка розповість лише про проблему — напишіть, що змінилось.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
@@ -168,7 +188,7 @@ export function ReleaseCardDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Скасувати
           </Button>
-          <Button onClick={() => void copy()} disabled={!blob || busy}>
+          <Button onClick={() => void copy()} disabled={!blob || busy || !summary.trim()}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             Скопіювати картинку
           </Button>
