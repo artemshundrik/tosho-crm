@@ -34,7 +34,10 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       CONTROL_BASE,
-      "flex w-full min-w-0 items-center justify-between whitespace-nowrap leading-[20px] shadow-sm",
+      // Тінь прибрано з тієї ж причини, що і в `Input`: `shadow-sm` — дефолт
+      // Tailwind повз наші токени. Тримати обидва контроли однаково важливо,
+      // бо вони стоять поруч у кожній формі.
+      "flex w-full min-w-0 items-center justify-between whitespace-nowrap leading-[20px]",
       SELECT_TRIGGER_SIZE[controlSize],
       "ring-offset-background data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:line-clamp-1",
       className
