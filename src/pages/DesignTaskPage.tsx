@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
-import { DateTimePicker } from "@/components/ui/picker-input";
+import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-input";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -1446,7 +1446,6 @@ export default function DesignTaskPage() {
   const [estimateInput, setEstimateInput] = useState("2");
   const [estimateUnit, setEstimateUnit] = useState<"minutes" | "hours" | "days">("hours");
   const [estimateError, setEstimateError] = useState<string | null>(null);
-  const [deadlinePopoverOpen, setDeadlinePopoverOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [headerTypePopoverOpen, setHeaderTypePopoverOpen] = useState(false);
   // Умови оплати креативу — щоб показати менеджеру, скільки отримає дизайнер.
@@ -1498,6 +1497,29 @@ export default function DesignTaskPage() {
   const [changeRequestDraft, setChangeRequestDraft] = useState("");
   const [changeRequestSaving, setChangeRequestSaving] = useState(false);
   const [changeRequestOpen, setChangeRequestOpen] = useState(false);
+  /**
+   * Режим внесення правки: контекст навколо форми згортається.
+   *
+   * ТЗ буває на два екрани, і форма правки, відкрита під ним, губилась —
+   * натиснув «Правка», а на екрані не змінилось нічого. Тому на час набору
+   * документ і попередні правки згортаються в компактні блоки: контекст видно,
+   * але він більше не конкурує з тим, що зараз пишуть. Розгортається вручну і
+   * лишається розгорнутим, доки форму не закриють.
+   */
+  const [changeRequestContextExpanded, setChangeRequestContextExpanded] = useState(false);
+  /**
+   * Лічильник запитів на фокус, а не булеве «треба сфокусувати».
+   *
+   * Скролити й фокусувати можна ЛИШЕ на явну дію людини. Форма відкривається ще
+   * й сама — коли зі сховища піднімається незбережена чернетка, — і робити при
+   * завантаженні сторінки ривок до низу було б грубо. Кнопки смикають лічильник,
+   * відновлення чернетки — ні.
+   */
+  const [changeRequestFocusTick, setChangeRequestFocusTick] = useState(0);
+  const changeRequestComposerRef = useRef<HTMLDivElement | null>(null);
+  const changeRequestTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  /** Кнопка-тригер дедлайну в шапці: до неї прокручують гейти, що її відкривають. */
+  const deadlineTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [changeRequestEditingId, setChangeRequestEditingId] = useState<string | null>(null);
   const [changeRequestEditDraft, setChangeRequestEditDraft] = useState("");
   const [changeRequestEditSavingId, setChangeRequestEditSavingId] = useState<string | null>(null);
@@ -3096,7 +3118,7 @@ export default function DesignTaskPage() {
   }, [timerSummary.activeStartedAt]);
 
   useEffect(() => {
-    if (!headerDeadlinePopoverOpen && !deadlinePopoverOpen) return;
+    if (!headerDeadlinePopoverOpen) return;
     setDeadlineDraftDate(toLocalDate(task?.designDeadline));
     const match = (task?.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
     if (!match) {
@@ -3105,7 +3127,44 @@ export default function DesignTaskPage() {
     }
     const parsed = `${match[1]}:${match[2]}`;
     setDeadlineTime(isValidDeadlineTime(parsed) ? parsed : "12:00");
-  }, [headerDeadlinePopoverOpen, deadlinePopoverOpen, task?.designDeadline]);
+  }, [headerDeadlinePopoverOpen, task?.designDeadline]);
+
+  /** Форма правки відкрита, а контекст навколо неї ще не розгорнули руками. */
+  const changeRequestContextCollapsed = changeRequestOpen && !changeRequestContextExpanded;
+  /** ТЗ згортаємо лише поки його не редагують — інакше сховали б власний набір. */
+  const briefCollapsedForComposer = changeRequestContextCollapsed && !briefInlineEditing && !briefDirty;
+
+  /** Єдиний вхід у режим правки — усі кнопки «Правка» ведуть сюди. */
+  const openChangeRequestComposer = useCallback(() => {
+    setChangeRequestOpen(true);
+    setChangeRequestContextExpanded(false);
+    setChangeRequestFocusTick((tick) => tick + 1);
+  }, []);
+
+  /**
+   * Гейт дедлайну відкриває пікер — і сам довозить до нього.
+   *
+   * Пікер живе в шапці, а всі три гейти спрацьовують унизу сторінки: біля форми
+   * правки або біля «Записати документ». Без прокрутки виходило те саме, на що
+   * скаржаться в самій формі — тост є, а панель відкрилась за межами екрана.
+   */
+  const openDeadlinePickerForGate = useCallback(() => {
+    setHeaderDeadlinePopoverOpen(true);
+    window.requestAnimationFrame(() => {
+      deadlineTriggerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!changeRequestFocusTick) return;
+    // Кадр очікування: форма щойно змонтувалась цим же рендером, і скролити до
+    // вузла, якого ще немає в лейауті, нема куди.
+    const frame = window.requestAnimationFrame(() => {
+      changeRequestComposerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      changeRequestTextareaRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [changeRequestFocusTick]);
 
   const deadlineLabel = useMemo(() => {
     if (!task?.designDeadline) return { label: "Без дедлайну", className: "text-muted-foreground" };
@@ -5256,7 +5315,7 @@ export default function DesignTaskPage() {
       setDeadlineDraftDate(toLocalDate(task.designDeadline));
       const match = (task.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
       setDeadlineTime(match ? `${match[1]}:${match[2]}` : "12:00");
-      setDeadlinePopoverOpen(true);
+      openDeadlinePickerForGate();
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн.");
       return;
     }
@@ -5565,7 +5624,6 @@ export default function DesignTaskPage() {
       toast.error(message);
     } finally {
       setDeadlineSaving(false);
-      setDeadlinePopoverOpen(false);
       setHeaderDeadlinePopoverOpen(false);
     }
   };
@@ -5716,7 +5774,11 @@ export default function DesignTaskPage() {
         setDeadlineDraftDate(toLocalDate(task.designDeadline));
         const match = (task.designDeadline ?? null)?.match(/t(\d{2}):(\d{2})/i);
         setDeadlineTime(match ? `${match[1]}:${match[2]}` : "12:00");
-        setDeadlinePopoverOpen(true);
+        // Пікер дедлайну на сторінці рівно один — у шапці. Раніше тут
+        // відкривався окремий `deadlinePopoverOpen`, якого немає в розмітці:
+        // тост про дедлайн з'являвся, а панель — ні, і людину відправляли
+        // шукати її самотужки.
+        openDeadlinePickerForGate();
       }
       toast.error(`Заповніть обовʼязкові поля: ${documentBlockers.join(", ")}.`);
       return;
@@ -5864,6 +5926,25 @@ export default function DesignTaskPage() {
       return;
     }
 
+    // Правка відкриває НОВИЙ раунд роботи, а раунд «на вчора» не буває: до цього
+    // прострочений дедлайн лише горів червоним у шапці й нічого не блокував, тож
+    // правки заводили поверх мертвої дати. Тепер він зупиняє надсилання і одразу
+    // відкриває пікер — той самий прийом, що вже стоїть на «Записати документ».
+    // Критерій навмисно той самий, що й у мітки шапки (`deadlineUrgencyTone`):
+    // блокує рівно те, що людина бачить червоним, без другої, невидимої межі.
+    const deadlineDate = task.designDeadline ? new Date(task.designDeadline) : null;
+    const deadlineUnusable =
+      !deadlineDate || Number.isNaN(deadlineDate.getTime()) || deadlineUrgencyTone(deadlineDate) === "danger";
+    if (deadlineUnusable) {
+      openDeadlinePickerForGate();
+      toast.error(
+        task.designDeadline
+          ? "Дедлайн прострочено — оновіть його, і правка надішлеться"
+          : "Спочатку поставте дедлайн для цієї правки"
+      );
+      return;
+    }
+
     const actorLabel = userId ? getMemberLabel(userId) : "System";
     const nowIso = new Date().toISOString();
 
@@ -5897,6 +5978,11 @@ export default function DesignTaskPage() {
     const nextMetadata: Record<string, unknown> = {
       ...(task.metadata ?? {}),
       design_brief_change_requests: nextRequests,
+      // Дедлайн щойно пройшов перевірку вище, тож раунд стартує із ЗАБЕЗПЕЧЕНИМ
+      // дедлайном. Без цієї позначки `deadlineStaleForRound` одразу після
+      // надсилання вважав би його застарілим (оновлений РАНІШЕ за правку) і
+      // вимагав би поставити дедлайн удруге поспіль — за секунду після першого.
+      deadline_updated_at: nowIso,
       ...(shouldAutoMoveToChanges
         ? {
             status: "changes",
@@ -5938,6 +6024,7 @@ export default function DesignTaskPage() {
       setChangeRequestDraft("");
       setChangeRequestDraftAttachments([]);
       setChangeRequestOpen(false);
+      setChangeRequestContextExpanded(false);
 
       try {
         await logDesignTaskActivity({
@@ -7546,7 +7633,7 @@ export default function DesignTaskPage() {
         break;
       case "change_request":
         setActiveDesignTab("brief");
-        setChangeRequestOpen(true);
+        openChangeRequestComposer();
         break;
     }
   };
@@ -9699,6 +9786,7 @@ export default function DesignTaskPage() {
               saving={deadlineSaving}
               trigger={
                 <Button
+                  ref={deadlineTriggerRef}
                   type="button"
                   variant="outline"
                   size="sm"
@@ -9906,7 +9994,7 @@ export default function DesignTaskPage() {
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    setChangeRequestOpen(true);
+                    openChangeRequestComposer();
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -9963,28 +10051,62 @@ export default function DesignTaskPage() {
                       className={cn(BRIEF_TEXTAREA_CLASS, "min-h-[44px] overflow-hidden")}
                     />
                   ) : (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={cn(BRIEF_SURFACE_FRAME_CLASS, "cursor-text px-4 py-4")}
-                      aria-readonly="true"
-                      onClick={() => setBriefInlineEditing(true)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setBriefInlineEditing(true);
-                        }
-                      }}
-                    >
-                      {briefDraft.trim() ? (
-                        <div className={cn(BRIEF_SURFACE_TEXT_CLASS, "whitespace-pre-wrap break-words")}>
-                          {renderInlineRichText(briefDraft)}
+                    <div className="space-y-2">
+                      <div className={cn("relative", briefCollapsedForComposer && "max-h-32 overflow-hidden")}>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className={cn(
+                            BRIEF_SURFACE_FRAME_CLASS,
+                            "px-4 py-4",
+                            briefCollapsedForComposer ? "cursor-pointer" : "cursor-text"
+                          )}
+                          aria-readonly="true"
+                          // Поки триває набір правки, клік по згорнутому ТЗ РОЗГОРТАЄ
+                          // його, а не вмикає редагування: людина зараз пише правку,
+                          // і провалитись у редактор чужого документа з одного кліку —
+                          // це не те, чого вона хотіла.
+                          onClick={() =>
+                            briefCollapsedForComposer
+                              ? setChangeRequestContextExpanded(true)
+                              : setBriefInlineEditing(true)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              if (briefCollapsedForComposer) setChangeRequestContextExpanded(true);
+                              else setBriefInlineEditing(true);
+                            }
+                          }}
+                        >
+                          {briefDraft.trim() ? (
+                            <div className={cn(BRIEF_SURFACE_TEXT_CLASS, "whitespace-pre-wrap break-words")}>
+                              {renderInlineRichText(briefDraft)}
+                            </div>
+                          ) : (
+                            <div className="text-sm italic leading-7 text-muted-foreground">
+                              ТЗ ще не заповнено. Клікніть, щоб написати.
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="text-sm italic leading-7 text-muted-foreground">
-                          ТЗ ще не заповнено. Клікніть, щоб написати.
-                        </div>
-                      )}
+                        {briefCollapsedForComposer ? (
+                          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card to-transparent" />
+                        ) : null}
+                      </div>
+                      {changeRequestContextCollapsed || (changeRequestOpen && changeRequestContextExpanded) ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
+                          onClick={() => setChangeRequestContextExpanded((prev) => !prev)}
+                        >
+                          <ChevronDown
+                            className={cn("h-3.5 w-3.5 transition-transform", changeRequestContextExpanded && "rotate-180")}
+                          />
+                          {changeRequestContextExpanded ? "Згорнути ТЗ" : "Показати ТЗ повністю"}
+                        </Button>
+                      ) : null}
                     </div>
                   )}
 
@@ -10047,7 +10169,7 @@ export default function DesignTaskPage() {
                         variant="outline"
                         className="h-8 gap-1.5"
                         disabled={changeRequestSaving || designTaskLockedByOther}
-                        onClick={() => setChangeRequestOpen(true)}
+                        onClick={openChangeRequestComposer}
                       >
                         <Plus className="h-3.5 w-3.5" />
                         Додати правку
@@ -10057,15 +10179,26 @@ export default function DesignTaskPage() {
 
                   {changeRequestOpen ? (
                     <div
+                      ref={changeRequestComposerRef}
+                      // Акцент рамкою + кільцем: форма стоїть у стосі однакових
+                      // сірих карток, і без власного тону її поява не читалась як
+                      // «CRM перейшла в режим внесення правки».
                       className={cn(
-                        "space-y-3 rounded-lg border border-border/50 bg-muted/5 p-3 transition-colors",
-                        changeRequestDragActive && "border-primary/60 bg-primary/5"
+                        "space-y-3 rounded-lg border p-3 transition-colors",
+                        changeRequestDragActive
+                          ? "border-primary/60 bg-primary/5"
+                          : "border-primary/50 bg-primary/[0.03] ring-1 ring-primary/20"
                       )}
                       onDrop={handleChangeRequestDrop}
                       onDragOver={handleChangeRequestDragOver}
                       onDragLeave={handleChangeRequestDragLeave}
                     >
+                      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-primary">
+                        <Plus className="h-3.5 w-3.5" />
+                        Нова правка
+                      </div>
                       <Textarea
+                        ref={changeRequestTextareaRef}
                         value={changeRequestDraft}
                         onChange={(event) => setChangeRequestDraft(event.target.value)}
                         placeholder="Опишіть правку. Що змінити, як саме, з посиланнями. Можна прикріпити приклади або скріни."
@@ -10178,6 +10311,7 @@ export default function DesignTaskPage() {
                                 setChangeRequestDraft("");
                                 setChangeRequestDraftAttachments([]);
                                 setChangeRequestOpen(false);
+                                setChangeRequestContextExpanded(false);
                                 await Promise.allSettled(
                                   attachmentsCopy.map((entry) =>
                                     removeAttachmentWithVariants(entry.storage_bucket, entry.storage_path)
@@ -10223,7 +10357,25 @@ export default function DesignTaskPage() {
                     </div>
                   ) : null}
 
-                  {briefChangeRequests.length > 0 ? (
+                  {/*
+                   * Поки пишуть нову правку, стос попередніх згортається в один
+                   * рядок. Інакше форма тонула між ними: попередні правки — це
+                   * така сама «стіна тексту», як і саме ТЗ.
+                   */}
+                  {changeRequestContextCollapsed && briefChangeRequests.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-full justify-start gap-1.5 px-2 text-2xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setChangeRequestContextExpanded(true)}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      Показати попередні правки ({briefChangeRequests.length})
+                    </Button>
+                  ) : null}
+
+                  {briefChangeRequests.length > 0 && !changeRequestContextCollapsed ? (
                     <div className="space-y-2">
                       {briefChangeRequests.map((request) => {
                         const isEditingChangeRequest = changeRequestEditingId === request.id;
