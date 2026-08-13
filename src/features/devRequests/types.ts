@@ -238,6 +238,36 @@ export function isOpenRequestStatus(status: RequestStatus): boolean {
   return OPEN_STATUSES.includes(status);
 }
 
+/**
+ * Через скільки днів викочене йде з дошки в архів.
+ *
+ * Місяць — це приблизно та відстань, на якій «щойно поїхало» перестає бути
+ * новиною: результат своєї заявки людина встигає побачити, а колонка не
+ * перетворюється на стрічку за всю історію.
+ */
+export const ARCHIVE_AFTER_DAYS = 30;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Архів — ПРАВИЛО НА ЧИТАННІ, а не колонка зі станом.
+ *
+ * Свідомо без `archived_at` і без крона: дата викочення вже лежить у картці,
+ * тож архівність — це питання до даних, а не ще одне поле, яке хтось має
+ * вчасно проставити. Крон, який тихо не спрацював, у нас уже був — і поки він
+ * мовчав, дошка показувала б неправду з виглядом правди.
+ *
+ * Стосується лише «Викочено»: це єдиний стан, який росте нескінченно і має
+ * надійну дату. «Ідеї» не архівуються взагалі — вони не завершені, а
+ * відкладені.
+ */
+export function isArchivedRequest(request: Pick<DevRequest, "status" | "releasedAt">, now: Date): boolean {
+  if (request.status !== "released" || !request.releasedAt) return false;
+  const releasedMs = new Date(request.releasedAt).getTime();
+  if (Number.isNaN(releasedMs)) return false;
+  return now.getTime() - releasedMs > ARCHIVE_AFTER_DAYS * DAY_MS;
+}
+
 export const KIND_LABELS: Record<RequestKind, string> = {
   bug: "Не працює",
   friction: "Незручно",

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
+import { Archive, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -42,6 +42,8 @@ import {
   useUpdateDevRequest,
 } from "@/features/devRequests/queries";
 import {
+  ARCHIVE_AFTER_DAYS,
+  isArchivedRequest,
   isOpenRequestStatus,
   type DevRequest,
   type RequestStatus,
@@ -55,7 +57,7 @@ const OPEN_TITLES_LIMIT = 50;
  * фільтри дошки й не шоста колонка: чому так, розгорнуто над BOARD_COLUMNS у
  * src/features/devRequests/types.ts.
  */
-type BoardView = "board" | "someday" | "wont_do";
+type BoardView = "board" | "someday" | "wont_do" | "archive";
 
 /**
  * «Запити на доробку» — окремий розділ без ключа модуля, за прецедентом
@@ -166,8 +168,14 @@ export default function DevRequestsPage() {
    */
   const inView = useMemo(() => {
     const all = board.data ?? [];
+    // Час беремо один раз на перерахунок: межа архіву — місяць, і посекундна
+    // точність тут нічого не міняє, а Date у кожній ітерації міняла б.
+    const now = new Date();
+    if (view === "archive") return all.filter((request) => isArchivedRequest(request, now));
     return all.filter((request) =>
-      view === "board" ? request.status !== "someday" && request.status !== "wont_do" : request.status === view
+      view === "board"
+        ? request.status !== "someday" && request.status !== "wont_do" && !isArchivedRequest(request, now)
+        : request.status === view
     );
   }, [board.data, view]);
 
@@ -190,10 +198,14 @@ export default function DevRequestsPage() {
   /** Лічильники на перемикачі — по всій дошці, а не по знайденому. */
   const counts = useMemo(() => {
     const all = board.data ?? [];
+    const now = new Date();
     return {
-      board: all.filter((r) => r.status !== "someday" && r.status !== "wont_do").length,
+      board: all.filter(
+        (r) => r.status !== "someday" && r.status !== "wont_do" && !isArchivedRequest(r, now)
+      ).length,
       someday: all.filter((r) => r.status === "someday").length,
       wont_do: all.filter((r) => r.status === "wont_do").length,
+      archive: all.filter((r) => isArchivedRequest(r, now)).length,
     };
   }, [board.data]);
 
@@ -335,6 +347,24 @@ export default function DevRequestsPage() {
               Не робимо
               <CountBadge value={counts.wont_do} />
             </Button>
+            {/*
+             * Архів показуємо кнопкою лише коли в ньому щось є: порожній
+             * перемикач на молодій дошці — це обіцянка розділу, у який нема
+             * чого відкривати.
+             */}
+            {counts.archive > 0 ? (
+              <Button
+                variant="segmented"
+                size="xs"
+                aria-pressed={view === "archive"}
+                onClick={() => setView("archive")}
+                className={cn(SEGMENTED_TRIGGER, "gap-2")}
+              >
+                <Archive className="h-4 w-4" />
+                Архів
+                <CountBadge value={counts.archive} />
+              </Button>
+            ) : null}
           </SegmentedGroup>
         }
         topRight={
@@ -469,7 +499,11 @@ export default function DevRequestsPage() {
         ) : (
           <DevRequestList
             requests={requests}
-            emptyText="Відхилених карток немає."
+            emptyText={
+              view === "archive"
+                ? `В архіві порожньо. Сюди картки йдуть самі — через ${ARCHIVE_AFTER_DAYS} днів після викочення.`
+                : "Відхилених карток немає."
+            }
             onSelect={setSelected}
             onMove={handleMove}
             onEdit={openEdit}

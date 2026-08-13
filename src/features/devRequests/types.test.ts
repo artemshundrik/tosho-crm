@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARCHIVE_AFTER_DAYS,
   BOARD_COLUMNS,
   MODULE_LABELS,
   OFF_BOARD_STATUSES,
   OPEN_STATUSES,
   STATUS_LABELS,
   formatRequestNumber,
+  isArchivedRequest,
   isOpenRequestStatus,
   toDevRequest,
 } from "./types";
@@ -214,5 +216,38 @@ describe("підписи станів", () => {
   it("«Ідеї» — саме так, як на перемикачі", () => {
     expect(STATUS_LABELS.someday).toBe("Ідеї");
     expect(STATUS_LABELS.wont_do).toBe("Не робимо");
+  });
+});
+
+describe("автоархів", () => {
+  const NOW = new Date("2026-09-20T12:00:00Z");
+  const daysAgo = (days: number) =>
+    new Date(NOW.getTime() - days * 86_400_000).toISOString();
+
+  it("викочене місяць тому йде в архів, свіже лишається на дошці", () => {
+    expect(isArchivedRequest({ status: "released", releasedAt: daysAgo(31) }, NOW)).toBe(true);
+    expect(isArchivedRequest({ status: "released", releasedAt: daysAgo(29) }, NOW)).toBe(false);
+  });
+
+  it("рівно на межі ще не архів — день має пройти повністю", () => {
+    expect(
+      isArchivedRequest({ status: "released", releasedAt: daysAgo(ARCHIVE_AFTER_DAYS) }, NOW)
+    ).toBe(false);
+  });
+
+  /**
+   * «Ідеї» — не завершене, а відкладене: архівувати їх означало б ховати те,
+   * до чого свідомо збираються повернутись. Решта відкритих станів не має
+   * released_at узагалі.
+   */
+  it("нічого, крім викоченого, не архівується — навіть якщо картка давня", () => {
+    for (const status of ["someday", "wont_do", "queued", "triage", "in_progress", "done_local"] as const) {
+      expect(isArchivedRequest({ status, releasedAt: daysAgo(400) }, NOW)).toBe(false);
+    }
+  });
+
+  it("викочене без дати релізу лишається видимим, а не зникає мовчки", () => {
+    expect(isArchivedRequest({ status: "released", releasedAt: null }, NOW)).toBe(false);
+    expect(isArchivedRequest({ status: "released", releasedAt: "не дата" }, NOW)).toBe(false);
   });
 });
