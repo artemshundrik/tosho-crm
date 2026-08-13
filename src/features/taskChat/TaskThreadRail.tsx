@@ -154,22 +154,31 @@ export function TaskThreadRail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, messages.length, threadKey]);
 
-  const notifyMentions = React.useCallback(
+  /**
+   * Сповіщення про нове повідомлення — усім, хто задіяний у задачі.
+   *
+   * Раніше умовою було `body.includes("@")`, тобто дзвеніли лише згадки, а
+   * звичайна репліка не доходила ні до дизайнера, ні до менеджера. Тепер
+   * запит іде на кожне повідомлення, а кому саме слати (і чи слати окремо
+   * згаданим) вирішує сервер, який бачить склад задачі.
+   */
+  const notifyThread = React.useCallback(
     async (body: string) => {
-      if (!quoteId || !body.includes("@")) return;
       const token = session?.access_token;
       if (!token) return;
       try {
         await fetch("/.netlify/functions/quote-comments", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ mode: "notify_mentions", quoteId, body }),
+          // Саме threadKey, а не quoteId: у самостійних задач quoteId порожній,
+          // а таких задач більшість — на них сповіщення й мовчали.
+          body: JSON.stringify({ mode: "notify_thread", threadKey, body }),
         });
       } catch {
-        // Сповіщення про згадку — не критичний шлях: повідомлення вже збережено.
+        // Сповіщення — не критичний шлях: повідомлення вже збережено.
       }
     },
-    [quoteId, session?.access_token]
+    [threadKey, session?.access_token]
   );
 
   const handleSend = async (body: string) => {
@@ -187,7 +196,7 @@ export function TaskThreadRail({
 
     sendMutation.mutate(
       { body, visibility: "team", teamId, quoteId, userId, attachments, replyTo: replyTo?.id ?? null },
-      { onSuccess: () => void notifyMentions(body) }
+      { onSuccess: () => void notifyThread(body) }
     );
     setReplyTo(null);
   };

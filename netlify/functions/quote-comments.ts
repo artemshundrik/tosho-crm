@@ -1,9 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
+import { isDeliverable } from "./_lib/teamMembers";
+import { quoteRefFromThreadKey } from "../../src/lib/taskThread";
 
 type RequestBody = {
-  mode?: "list" | "add" | "notify_mentions";
+  mode?: "list" | "add" | "notify_mentions" | "notify_thread";
   quoteId?: string;
+  /** Ключ нитки виду `quote:<ref>`; для самостійних задач ref = `standalone-<uuid>`. */
+  threadKey?: string;
   body?: string;
   mentionedUserIds?: string[];
 };
@@ -103,8 +107,18 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const quoteId = payload.quoteId?.trim();
-  if (!quoteId) {
-    return jsonResponse(400, { error: "Missing quoteId" });
+  /**
+   * Нитка чату адресується `threadKey`, а не прорахунком.
+   *
+   * У самостійних дизайн-задач `quote_id` має вигляд `standalone-<uuid>`, і
+   * `quoteIdFromRef` віддає для них null — таких задач на дошці більшість. Якби
+   * сповіщення чату трималось на quoteId, воно мовчало б саме там, де більшість
+   * розмов і відбувається.
+   */
+  const threadRef = typeof payload.threadKey === "string" ? quoteRefFromThreadKey(payload.threadKey) : null;
+  const isThreadMode = payload.mode === "notify_thread";
+  if (!quoteId && !(isThreadMode && threadRef)) {
+    return jsonResponse(400, { error: isThreadMode ? "Missing threadKey" : "Missing quoteId" });
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -122,21 +136,30 @@ export const handler = async (event: HttpEvent) => {
   }
 
   // Permission check via user-scoped client (RLS): user must be able to see this quote.
-  const { data: quoteData, error: quoteError } = await userClient
-    .schema("tosho")
-    .from("quotes")
-    .select("id,team_id,number")
-    .eq("id", quoteId)
-    .maybeSingle<{ id: string; team_id?: string | null; number?: string | null }>();
+  // Режим нитки сюди не заходить: у самостійних задач прорахунку не існує, і
+  // право писати в неї дає членство в команді задачі (перевіряється нижче).
+  let quoteData: { id: string; team_id?: string | null; number?: string | null } | null = null;
+  if (!isThreadMode) {
+    const { data, error: quoteError } = await userClient
+      .schema("tosho")
+      .from("quotes")
+      .select("id,team_id,number")
+      .eq("id", quoteId)
+      .maybeSingle<{ id: string; team_id?: string | null; number?: string | null }>();
 
-  if (quoteError) {
-    return jsonResponse(500, { error: quoteError.message });
-  }
-  if (!quoteData?.id) {
-    return jsonResponse(403, { error: "Forbidden" });
+    if (quoteError) {
+      return jsonResponse(500, { error: quoteError.message });
+    }
+    if (!data?.id) {
+      return jsonResponse(403, { error: "Forbidden" });
+    }
+    quoteData = data;
   }
 
   const sendMentionNotifications = async (mentionedUserIdsRaw: unknown, bodyRaw: unknown) => {
+    // Згадки живуть у прорахунку: і перевірка доступу, і посилання в сповіщенні
+    // спираються на нього. Нитка задачі має власний шлях нижче.
+    if (!quoteData || !quoteId) return { delivered: 0 };
     const explicitMentionedUserIds = Array.from(
       new Set(
         (Array.isArray(mentionedUserIdsRaw) ? mentionedUserIdsRaw : [])
@@ -239,9 +262,128 @@ export const handler = async (event: HttpEvent) => {
     return { delivered: result.delivered };
   };
 
+  /**
+   * Сповіщення про нове повідомлення в чаті дизайн-задачі.
+   *
+   * Дзвонили лише згадки через «@» — тобто звичайна репліка не доходила ні до
+   * дизайнера, ні до менеджера, і людина писала «затвердили варіант, прикріпи
+   * макет» у порожнечу, доки хтось випадково не відкриє задачу. Тепер отримують
+   * усі, хто в задачі задіяний, без жодних тегів.
+   */
+  const sendThreadNotifications = async (bodyRaw: unknown) => {
+    const text = typeof bodyRaw === "string" ? bodyRaw.trim() : "";
+    if (!text || !threadRef) return { delivered: 0, allowed: true };
+
+    // Авторизація КОРИСТУВАЦЬКИМ клієнтом: політика `activity_log_read_team`
+    // пускає лише члена команди задачі, тож видимість рядка тут і є правом
+    // писати в цю нитку. Для самостійних задач прорахунку немає взагалі, і
+    // перевіряти доступ через `tosho.quotes` було б і неможливо, і не тим.
+    const { data: taskRow, error: taskError } = await userClient
+      .from("activity_log")
+      .select("id,title,metadata,created_at")
+      .eq("action", "design_task")
+      .eq("metadata->>quote_id", threadRef)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string; title?: string | null; metadata?: Record<string, unknown> | null }>();
+
+    if (taskError) throw new Error(taskError.message);
+    // Рядка не видно — або задачі немає, або RLS не пускає. Розрізняти ці два
+    // випадки у відповіді не варто: це підказувало б, що така задача існує.
+    if (!taskRow?.id) return { delivered: 0, allowed: false };
+
+    const metadata = taskRow.metadata ?? {};
+    const recipientIds = new Set<string>();
+    const addRecipient = (value: unknown) => {
+      if (typeof value !== "string") return;
+      const id = value.trim();
+      // Автор сам собі не дзвонить.
+      if (id && id !== userData.user.id) recipientIds.add(id);
+    };
+
+    addRecipient(metadata.assignee_user_id);
+    addRecipient(metadata.manager_user_id);
+    const collaborators = metadata.collaborator_user_ids;
+    if (Array.isArray(collaborators)) collaborators.forEach(addRecipient);
+
+    // Плюс ті, хто вже писав у цій нитці: розмову часто веде хтось, кого в
+    // картці немає — СЕО чи інший менеджер, — і лишати його без відповіді
+    // означало б обірвати саме ту переписку, заради якої це й робиться.
+    const { data: participants } = await adminClient
+      .schema("tosho")
+      .from("quote_comments")
+      .select("created_by")
+      .eq("thread_key", payload.threadKey ?? "")
+      .limit(200);
+    for (const row of participants ?? []) {
+      addRecipient((row as { created_by?: string | null }).created_by);
+    }
+
+    if (recipientIds.size === 0) return { delivered: 0, allowed: true };
+
+    // Звільнених не турбуємо. Предикат спільний з рештою розсилок — інакше
+    // «кому можна слати» розповзається по функціях і починає розходитись.
+    const ids = Array.from(recipientIds);
+    const { data: profiles } = await adminClient
+      .schema("tosho")
+      .from("team_member_profiles")
+      .select("user_id,employment_status")
+      .in("user_id", ids);
+    const statusByUser = new Map(
+      (profiles ?? []).map((row) => {
+        const typed = row as { user_id?: string | null; employment_status?: string | null };
+        return [typed.user_id ?? "", typed.employment_status ?? null];
+      })
+    );
+    const deliverableIds = ids.filter((id) =>
+      isDeliverable({
+        userId: id,
+        workspaceId: null,
+        teamId: null,
+        accessRole: null,
+        jobRole: null,
+        employmentStatus: statusByUser.get(id) ?? null,
+        fullName: null,
+      })
+    );
+    if (deliverableIds.length === 0) return { delivered: 0, allowed: true };
+
+    const actorLabel =
+      (userData.user.user_metadata?.full_name as string | undefined)?.trim() ||
+      userData.user.email?.split("@")[0]?.trim() ||
+      "Користувач";
+    const taskLabel = (taskRow.title ?? "").trim() || "дизайн-задача";
+    const trimmedBody = text.length > 220 ? `${text.slice(0, 217)}...` : text;
+
+    const rows = deliverableIds.map((recipientId) => ({
+      user_id: recipientId,
+      title: `${actorLabel} написав(ла) в чаті задачі`,
+      body: `${taskLabel}: ${trimmedBody}`,
+      // Префікс «/design/» — це ще й те, за чим notify-users розпізнає
+      // дизайн-категорію, тож він тут не лише для переходу.
+      href: `/design/${taskRow.id}`,
+      type: "info",
+    }));
+
+    const result = await deliverNotifications(adminClient, rows, { category: "design" });
+    return { delivered: result.delivered, allowed: true };
+  };
+
   if (payload.mode === "notify_mentions") {
     try {
       const { delivered } = await sendMentionNotifications(payload.mentionedUserIds, payload.body);
+      return jsonResponse(200, { success: true, delivered });
+    } catch (error: unknown) {
+      return jsonResponse(500, {
+        error: error instanceof Error ? error.message : "Failed to send notifications",
+      });
+    }
+  }
+
+  if (isThreadMode) {
+    try {
+      const { delivered, allowed } = await sendThreadNotifications(payload.body);
+      if (!allowed) return jsonResponse(403, { error: "Forbidden" });
       return jsonResponse(200, { success: true, delivered });
     } catch (error: unknown) {
       return jsonResponse(500, {
