@@ -82,12 +82,22 @@ export const canChangeDesignStatus = (
 ) => getAllowedDesignStatusTransitions(input).includes(input.nextStatus);
 
 /**
- * Гейт «Передати замовнику»: без погодженого результату задачу не можна віддати
- * клієнту. Правило живе тут, бо його перевіряють ДВА місця — картка задачі й
- * канбан (там перехід робиться перетягуванням). Раніше воно було тільки в
- * картці, і через канбан гейт обходився.
+ * Гейт «Позначити як затверджено»: не можна закрити задачу, не сказавши, ЯКИЙ
+ * саме варіант замовник обрав.
+ *
+ * ЧОМУ САМЕ ТУТ, А НЕ НА «ПЕРЕДАТИ ЗАМОВНИКУ». Спершу правило стояло на
+ * переході «Дизайн готовий» → «На погодженні» — і вимагало погоджений візуал
+ * ДО того, як роботу взагалі показали замовнику. Позначка ж називається
+ * «погоджене замовником», тож виходила вимога результату до початку процесу:
+ * менеджер не міг віддати роботу на погодження, поки не відмітить, що її вже
+ * погодили. Тепер порядок природний: віддали → замовник обрав → позначили →
+ * затвердили.
+ *
+ * Правило живе тут, бо його перевіряють ДВА місця — картка задачі й канбан (там
+ * перехід робиться перетягуванням). Раніше воно було тільки в картці, і через
+ * канбан гейт обходився.
  */
-export type ClientReviewGateInput = {
+export type ApprovalGateInput = {
   designTaskType: DesignTaskType | null;
   approvedVisualizationCount: number;
   approvedLayoutCount: number;
@@ -95,12 +105,12 @@ export type ClientReviewGateInput = {
   hasLayoutOutputs: boolean;
 };
 
-export const getClientReviewBlockers = ({
+export const getApprovalBlockers = ({
   designTaskType,
   approvedVisualizationCount,
   approvedLayoutCount,
   hasLayoutOutputs,
-}: ClientReviewGateInput): string[] => {
+}: ApprovalGateInput): string[] => {
   const requiresVisualization = designTaskType === "visualization";
   const requiresLayout =
     designTaskType === "layout" ||

@@ -132,7 +132,7 @@ import {
   canChangeDesignStatus,
   DESIGN_ALL_STATUSES,
   DESIGN_STATUS_LABELS,
-  getClientReviewBlockers,
+  getApprovalBlockers,
   getDesignStatusActionLabel,
   resolveDesignTaskActions,
   type DesignStatus,
@@ -5324,8 +5324,8 @@ export default function DesignTaskPage() {
       requestEstimateDialog({ mode: "status", nextStatus });
       return;
     }
-    if (nextStatus === "client_review" && clientReviewBlockers.length > 0) {
-      toast.error(`Щоб передати дизайн замовнику, закрийте блокери: ${clientReviewBlockers.join(", ")}.`);
+    if (nextStatus === "approved" && approvalBlockers.length > 0) {
+      toast.error(`Щоб затвердити дизайн, закрийте блокери: ${approvalBlockers.join(", ")}.`);
       return;
     }
     const previousStatus = task.status;
@@ -7137,9 +7137,9 @@ export default function DesignTaskPage() {
     task?.designTaskType === "layout" ||
     task?.designTaskType === "layout_adaptation" ||
     (task?.designTaskType === "visualization" && hasLayoutOutputs);
-  const clientReviewBlockers = useMemo(
+  const approvalBlockers = useMemo(
     () =>
-      getClientReviewBlockers({
+      getApprovalBlockers({
         designTaskType: task?.designTaskType ?? null,
         approvedVisualizationCount: selectedVisualizationOutputFileIds.length,
         approvedLayoutCount: selectedLayoutOutputFileIds.length,
@@ -7650,8 +7650,8 @@ export default function DesignTaskPage() {
   // тостом після кліку. Саму кнопку не гасимо — клік веде туди, де це виправляють.
   const actionBlockReason = (action: DesignTaskAction | null): string | null => {
     if (!action || action.id.kind !== "status") return null;
-    if (action.id.next === "client_review" && clientReviewBlockers.length > 0) {
-      return clientReviewBlockers.join(", ");
+    if (action.id.next === "approved" && approvalBlockers.length > 0) {
+      return approvalBlockers.join(", ");
     }
     if (action.id.next === "changes" && !deadlineUpdatedAfterStatus) {
       return "Спочатку оновіть дедлайн";

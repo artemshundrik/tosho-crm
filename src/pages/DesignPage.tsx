@@ -34,7 +34,7 @@ import { PartyHoverCard } from "@/components/app/PartyHoverCard";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import {
   canChangeDesignStatus,
-  getClientReviewBlockers,
+  getApprovalBlockers,
   getDesignStatusActionLabel,
   DESIGN_STATUS_LABELS,
   type DesignStatus,
@@ -326,8 +326,8 @@ const buildDerivedDesignTaskNumberMap = (tasks: Array<{ id: string; createdAt?: 
 };
 
 /**
- * Читачі metadata для гейта «Передати замовнику». Саме правило (який тип задачі
- * що вимагає) живе в getClientReviewBlockers — тут лише дістаємо числа.
+ * Читачі metadata для гейта «Позначити як затверджено». Саме правило (який тип
+ * задачі що вимагає) живе в getApprovalBlockers — тут лише дістаємо числа.
  */
 const readStringIds = (value: unknown) =>
   Array.isArray(value)
@@ -3347,17 +3347,17 @@ export default function DesignPage() {
       toast.error("Щоб повернути задачу в «Правки», спочатку оновіть дедлайн у самій дизайн-задачі.");
       return;
     }
-    if (next === "client_review") {
+    if (next === "approved") {
       // Той самий гейт, що й у картці задачі. Без нього задачу можна було
-      // перетягнути в «На погодженні» без жодного погодженого матеріалу.
-      const blockers = getClientReviewBlockers({
+      // перетягнути в «Затверджено», не сказавши, який варіант обрав замовник.
+      const blockers = getApprovalBlockers({
         designTaskType: task.designTaskType ?? null,
         approvedVisualizationCount: readApprovedOutputCount(currentMetadata, "visualization", task.designTaskType),
         approvedLayoutCount: readApprovedOutputCount(currentMetadata, "layout", task.designTaskType),
         hasLayoutOutputs: readHasLayoutOutputs(currentMetadata, task.designTaskType),
       });
       if (blockers.length > 0) {
-        toast.error(`Щоб передати дизайн замовнику, закрийте блокери: ${blockers.join(", ")}.`);
+        toast.error(`Щоб затвердити дизайн, закрийте блокери: ${blockers.join(", ")}.`);
         return;
       }
     }
