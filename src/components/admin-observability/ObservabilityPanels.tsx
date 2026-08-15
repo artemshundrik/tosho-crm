@@ -200,7 +200,7 @@ function RangeSegmented({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-[16px] border border-border/70 bg-muted/35 p-1">
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-border/70 bg-muted/35 p-1">
       {options.map((option) => (
         <Button
           key={option.value}
@@ -209,7 +209,7 @@ function RangeSegmented({
           size="xs"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className="h-8 rounded-[12px] px-3 text-xs"
+          className="h-8 rounded-xl px-3 text-xs"
         >
           {option.label}
         </Button>
@@ -349,7 +349,7 @@ function TrendCard({
           {trailing}
         </div>
       </div>
-      <div className="mt-5 h-64 rounded-[20px] border border-border/50 bg-[linear-gradient(180deg,hsl(var(--background)/0.4),transparent)] p-3">
+      <div className="mt-5 h-64 rounded-3xl border border-border/50 bg-[linear-gradient(180deg,hsl(var(--background)/0.4),transparent)] p-3">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 12, right: 12, left: 8, bottom: 6 }}>
             <defs>

@@ -207,7 +207,7 @@ function Meter({
       label={<BalanceBreakdown kind={kind} bucket={bucket} entries={entries} year={year} />}
       side="top"
       className="block min-w-0"
-      contentClassName="max-w-none rounded-[14px] p-3"
+      contentClassName="max-w-none rounded-xl p-3"
     >
       {body}
     </HoverTip>

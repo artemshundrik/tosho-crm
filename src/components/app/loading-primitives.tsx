@@ -84,7 +84,7 @@ export function SurfaceSkeleton({
               <Skeleton className={cn("h-6 rounded-full", index % 2 === 0 ? "w-24" : "w-20")} />
               <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[74%]" : "w-[58%]")} />
               <div className="flex justify-end">
-                <Skeleton className="h-8 w-8 rounded-[10px]" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
               </div>
             </div>
           ))}
@@ -118,7 +118,7 @@ export function SurfaceSkeleton({
             key={index}
             className={cn(
               "flex items-center gap-3 rounded-2xl border border-border/40 bg-background/60 px-3 py-3",
-              compact && "rounded-[16px] py-2.5"
+              compact && "rounded-2xl py-2.5"
             )}
           >
             <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />

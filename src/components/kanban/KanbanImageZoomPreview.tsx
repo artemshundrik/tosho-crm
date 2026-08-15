@@ -170,12 +170,12 @@ export function KanbanImageZoomPreview({
       onBlur={() => setIsOpen(false)}
       onPointerDown={() => setShouldLoad(true)}
       className={cn(
-        "relative h-14 w-14 shrink-0 overflow-visible rounded-[10px] border border-border/60 bg-secondary",
+        "relative h-14 w-14 shrink-0 overflow-visible rounded-lg border border-border/60 bg-secondary",
         className
       )}
       tabIndex={0}
     >
-      <div className="h-full w-full overflow-hidden rounded-[10px]">
+      <div className="h-full w-full overflow-hidden rounded-lg">
         {shouldRenderImage ? (
           <img
             src={imageUrl}

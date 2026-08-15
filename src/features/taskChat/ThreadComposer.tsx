@@ -201,7 +201,7 @@ export function ThreadComposer({
             // ближче до центру, ніж скріпка й надсилання.
             // Рамка й тло — рівно як у звичайного поля вводу: сама капсула не
             // має «червоніти», червоними лишаються тільки крапка, час і пульсація.
-            "flex min-h-[38px] items-center gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5"
+            "flex min-h-[38px] items-center gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5"
           )}
         >
           {isRecording ? (
@@ -249,7 +249,7 @@ export function ThreadComposer({
           )}
         </div>
       ) : (
-      <div className="flex min-h-[38px] items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
         <input
           ref={fileInputRef}
           type="file"

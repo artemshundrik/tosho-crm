@@ -225,7 +225,7 @@ export function ModelEditor({
             <Button
               onClick={onSave}
               disabled={!draftName.trim() || !draftKindId || savingModel}
-              className="transition-all disabled:opacity-50"
+              className="transition-all"
             >
               {savingModel
                 ? "Збереження..."

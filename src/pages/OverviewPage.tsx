@@ -676,7 +676,7 @@ function OverviewQueueRow({
   return (
     <Link
       to={to}
-      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
+      className="group flex min-w-0 max-w-full items-start gap-3 rounded-4xl border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
     >
       <EntityAvatar
         src={entityLogoUrl ?? null}
@@ -1429,7 +1429,7 @@ export function OverviewPage() {
                     <Link
                       key={row.id}
                       to={destination}
-                      className="group flex min-w-0 max-w-full items-start gap-3 rounded-[22px] border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
+                      className="group flex min-w-0 max-w-full items-start gap-3 rounded-4xl border border-border/60 bg-background/70 px-4 py-3 transition-all hover:border-border hover:bg-background/90 hover:shadow-elevated-sm"
                     >
                       <AvatarBase
                         src={row.avatar_url ?? null}

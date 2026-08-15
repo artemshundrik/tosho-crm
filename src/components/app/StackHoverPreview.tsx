@@ -132,7 +132,9 @@ export function StackHoverPreview({
                 decoding="async"
                 className={cn(
                   "pointer-events-none absolute inset-0 h-full w-full object-cover",
-                  "transition-opacity duration-500 ease-out",
+                  // ease-smooth, не ease-out: глобальний ease-out тепер пружний
+                  // (REQ-48) і на 500ms кросфейді читався б як «ляск».
+                  "transition-opacity duration-500 ease-smooth",
                   isActive ? "opacity-100" : "opacity-0",
                   imageClassName
                 )}

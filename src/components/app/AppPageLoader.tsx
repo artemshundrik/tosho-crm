@@ -24,14 +24,14 @@ export function AppPageLoader({
         </div>
 
         <div className="mt-6 space-y-3">
-          <div className="flex items-center gap-3 rounded-[20px] border border-border/40 bg-background/60 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-3xl border border-border/40 bg-background/60 px-4 py-3">
             <Skeleton className="h-10 w-10 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-3.5 w-[42%] rounded-full" />
               <Skeleton className="h-3 w-[68%] rounded-full opacity-80" />
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-[20px] border border-border/40 bg-background/60 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-3xl border border-border/40 bg-background/60 px-4 py-3">
             <Skeleton className="h-10 w-10 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-3.5 w-[56%] rounded-full" />

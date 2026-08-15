@@ -143,7 +143,7 @@ function StatusBlock({ absence, pending }: { absence?: AvatarAbsence | null; pen
   const returnDate = absence ? formatReturnDate(absence) : "";
 
   return (
-    <div className={cn("mt-2.5 rounded-[10px] border px-2.5 py-2", toneBadgeClass[tone])}>
+    <div className={cn("mt-2.5 rounded-lg border px-2.5 py-2", toneBadgeClass[tone])}>
       <div className="flex items-center gap-1.5 text-2xs font-semibold">
         <Icon className="h-3 w-3 shrink-0" aria-hidden />
         {absence ? formatAbsenceLabel(absence) : `просить ${formatAbsenceLabel(target)}`}
@@ -208,7 +208,7 @@ export function PersonHoverCard({
       </div>
 
       {person.inactive ? (
-        <div className="mt-2.5 rounded-[10px] border px-2.5 py-2 text-2xs font-semibold tone-neutral">
+        <div className="mt-2.5 rounded-lg border px-2.5 py-2 text-2xs font-semibold tone-neutral">
           Співпрацю завершено
         </div>
       ) : (
@@ -216,7 +216,7 @@ export function PersonHoverCard({
       )}
 
       {person.birthdayToday ? (
-        <div className={cn("mt-2 rounded-[10px] border px-2.5 py-1.5 text-2xs font-semibold", toneBadgeClass.festive)}>
+        <div className={cn("mt-2 rounded-lg border px-2.5 py-1.5 text-2xs font-semibold", toneBadgeClass.festive)}>
           Сьогодні день народження
         </div>
       ) : null}
@@ -260,7 +260,7 @@ export function PersonHoverCard({
   );
 
   return (
-    <HoverTip label={card} side={side} contentClassName="max-w-none rounded-[14px] p-3" ready={ready}>
+    <HoverTip label={card} side={side} contentClassName="max-w-none rounded-xl p-3" ready={ready}>
       {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так
           картка відкривається вже ПОВНОЮ (HoverTip чекає ready). */}
       <span className="inline-flex" onMouseEnter={handleEnter} onFocusCapture={handleEnter}>

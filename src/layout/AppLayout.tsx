@@ -1750,8 +1750,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               onFocus={() => preloadRoute(ROUTES.overview)}
               onTouchStart={() => preloadRoute(ROUTES.overview)}
               className={cn(
-                "inline-flex items-center justify-center overflow-hidden rounded-[10px] transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                "inline-flex items-center justify-center overflow-hidden rounded-lg transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 sidebarCollapsed
                   ? "h-0 w-0 opacity-0 -translate-x-2 pointer-events-none"
                   : "h-9 w-auto px-1 opacity-100 translate-x-0 translate-y-[2px]"
@@ -1768,7 +1768,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               size="icon"
               className={cn(
                 "h-8 w-8 rounded-[var(--radius-lg)] text-muted-foreground hover:text-foreground transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
-                sidebarCollapsed ? "rounded-[12px] bg-background/35" : ""
+                sidebarCollapsed ? "rounded-xl bg-background/35" : ""
               )}
               onClick={() => setSidebarCollapsed((prev) => !prev)}
               aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
@@ -1931,7 +1931,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               <Link
                                 to={ROUTES.overview}
                                 onClick={() => setMobileMenuOpen(false)}
-                                className="inline-flex items-center justify-center rounded-[10px] px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                className="inline-flex items-center justify-center rounded-lg px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
                                 aria-label="ToSho CRM"
                               >
                                 <img src={agencyLogo || workspaceLogo || ""} alt="ToSho CRM" className="h-[24px] w-auto" />
@@ -1971,12 +1971,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               className={cn(
                                 "h-10 rounded-[var(--radius-lg)] border border-input bg-background/75 pl-10 pr-16",
                                 "cursor-pointer",
-                                "focus-visible:ring-2 focus-visible:ring-primary/30"
+                                "focus-visible:ring-2 focus-visible:ring-foreground/20"
                               )}
                               onClick={() => setCmdkOpen(true)}
                             />
                             <div className="absolute inset-y-0 right-2 flex items-center">
-                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-[6px] border border-border bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
+                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
                                 <span className="text-2xs">⌘</span>K
                               </kbd>
                             </div>
@@ -2524,7 +2524,7 @@ function SidebarGroup({
             className={cn(
               "group/grp flex w-full items-center gap-1 rounded-md py-0.5 text-3xs font-semibold uppercase tracking-wider",
               "text-muted-foreground/65 transition-colors hover:text-foreground",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
               isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : "px-3"
             )}
           >
@@ -2585,12 +2585,12 @@ function SidebarGroup({
                 // видно взагалі. bg-background світліший за сайдбар в обох
                 // темах, тож ефект однаковий і там, і там.
                 "transition-colors duration-150 ease-linear",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 collapsed
                   ? "mx-auto h-10 w-10 justify-center gap-0 rounded-xl px-0 py-0"
                   : isMobileDrawer
-                    ? "min-h-11 rounded-[16px] px-4 py-2.5"
-                    : "h-9 rounded-[10px]",
+                    ? "min-h-11 rounded-2xl px-4 py-2.5"
+                    : "h-9 rounded-lg",
                 active
                   ? collapsed
                     ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"

@@ -100,7 +100,7 @@ function Cell({
   return (
     <HoverTip
       side="top"
-      contentClassName="max-w-none rounded-[14px] p-3"
+      contentClassName="max-w-none rounded-xl p-3"
       label={
         <div className="w-[230px]">
           <div className="flex items-baseline justify-between gap-2">

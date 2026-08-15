@@ -612,7 +612,7 @@ function DictationDemo() {
 
       {/* Смуга запису — той самий вигляд, що в композері чату. */}
       {recording || transcribing ? (
-        <div className="flex min-h-[38px] items-center gap-1.5 rounded-[20px] border border-destructive/40 bg-card p-1 pl-2.5">
+        <div className="flex min-h-[38px] items-center gap-1.5 rounded-3xl border border-destructive/40 bg-card p-1 pl-2.5">
           {recording ? (
             <>
               <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
@@ -645,7 +645,7 @@ function DictationDemo() {
           )}
         </div>
       ) : (
-        <div className="flex min-h-[38px] items-center gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5">
+        <div className="flex min-h-[38px] items-center gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5">
           <button
             type="button"
             aria-label="Продиктувати голосом"
@@ -797,7 +797,7 @@ function TaskChatDemo() {
       </div>
 
       <div className="border-t border-border/40 bg-card p-2.5">
-        <div className="flex min-h-[38px] items-end gap-1 rounded-[20px] border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+        <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
           <textarea
             value={draft}
             rows={1}

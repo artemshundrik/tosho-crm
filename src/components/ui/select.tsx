@@ -5,7 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { CONTROL_BASE } from "@/components/ui/controlStyles"
+import { CONTROL_BASE, TOOLBAR_CONTROL_ACTIVE } from "@/components/ui/controlStyles"
 
 const Select = SelectPrimitive.Root
 
@@ -28,10 +28,20 @@ export type SelectTriggerSize = keyof typeof SELECT_TRIGGER_SIZE
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & { controlSize?: SelectTriggerSize }
->(({ className, children, controlSize = "lg", ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
+    controlSize?: SelectTriggerSize
+    /**
+     * Селект-фільтр щось відсіює (значення ≠ «всі»). Підсвічує тригер так само,
+     * як кнопку-фільтр у тулбарі: інакше увімкнений фільтр не відрізнити від
+     * вимкненого, хоча він ховає частину списку. Для селектів у ФОРМАХ не
+     * вживається — там вибране значення це дані, а не фільтр.
+     */
+    active?: boolean
+  }
+>(({ className, children, controlSize = "lg", active = false, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
+    data-active={active ? "true" : undefined}
     className={cn(
       CONTROL_BASE,
       // Тінь прибрано з тієї ж причини, що і в `Input`: `shadow-sm` — дефолт
@@ -40,13 +50,23 @@ const SelectTrigger = React.forwardRef<
       "flex w-full min-w-0 items-center justify-between whitespace-nowrap leading-[20px]",
       SELECT_TRIGGER_SIZE[controlSize],
       "ring-offset-background data-[placeholder]:text-muted-foreground [&>span]:min-w-0 [&>span]:line-clamp-1",
-      className
+      className,
+      // ПІСЛЯ className навмисно: сторінки передають TOOLBAR_CONTROL саме туди,
+      // і його bg-muted/40 перебивав би підсвітку через tailwind-merge.
+      active && TOOLBAR_CONTROL_ACTIVE
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      {/* У спокої стрілка тиха (підказка, не зміст), а на увімкненому фільтрі
+          успадковує його колір — інакше синій підпис із сірою стрілкою. */}
+      <ChevronDown
+        className={cn(
+          "h-4 w-4 shrink-0",
+          active ? "opacity-70" : "text-muted-foreground opacity-80"
+        )}
+      />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))

@@ -217,7 +217,7 @@ const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string }
   label,
   value,
 }) => (
-  <div className="rounded-[16px] border border-border/50 bg-muted/20 px-3 py-2.5">
+  <div className="rounded-2xl border border-border/50 bg-muted/20 px-3 py-2.5">
     <div className="flex items-center gap-2 text-2xs uppercase tracking-caps text-muted-foreground">
       {icon}
       <span>{label}</span>
@@ -328,7 +328,7 @@ const ChipDropdown: React.FC<{
           disabled={disabled}
           className={cn(
             "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
               : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70",
@@ -397,7 +397,7 @@ const MultiChipDropdown: React.FC<{
           disabled={disabled}
           className={cn(
             "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selectedOptions.length > 0
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
               : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70",
@@ -2081,7 +2081,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       }}
                     />
 
-                    <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+                    <div className="rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
                       <RunsEditor
                         runs={runs}
                         quantityUnit={quantityUnit}
@@ -2095,7 +2095,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+                  <div className="mt-4 rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
                     <div
                       className={cn(
                         "grid gap-3 md:grid-cols-3",
@@ -2167,7 +2167,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                             </div>
                           ) : null}
                           {kindId && onCreateCatalogModel ? (
-                            <div className="mt-2 rounded-[16px] border border-dashed border-border/60 bg-background/35 p-3">
+                            <div className="mt-2 rounded-2xl border border-dashed border-border/60 bg-background/35 p-3">
                               <div className="grid gap-2">
                                 <Input
                                   value={quickModelName}
@@ -2302,7 +2302,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             {printApplications.map((app) => (
               <div
                 key={app.id}
-                className="rounded-[20px] border border-border/40 bg-background/45 p-4"
+                className="rounded-3xl border border-border/40 bg-background/45 p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2390,7 +2390,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {/* Addendum / notes section */}
         <div className="mt-8 space-y-4">
           <SectionHeader>Доповнення</SectionHeader>
-          <div className="space-y-2 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+          <div className="space-y-2 rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm text-muted-foreground">
                 Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
@@ -2418,7 +2418,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             і разом із ним зникала. */}
         <div className="mt-8 space-y-4">
           <SectionHeader>Файли</SectionHeader>
-          <div className="space-y-3 rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+          <div className="space-y-3 rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
             <div className="text-sm text-muted-foreground">
               Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
               Дизайнер їх не бачить — для нього файли додають у блоці «Дизайн».
@@ -2491,7 +2491,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {(isPrintPackageMode || printMode !== "no_print") ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
-          <div className="rounded-[20px] border border-border/40 bg-background/35 p-4 md:p-5">
+          <div className="rounded-3xl border border-border/40 bg-background/35 p-4 md:p-5">
             <div className="grid gap-5">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">

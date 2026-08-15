@@ -706,7 +706,7 @@ export function DesignerFloatingTimerWidget({
         </Button>
       </div>
       <div className="px-3.5 pb-3.5 pt-2.5">
-        <div className="rounded-[20px] border border-background/15 bg-background/[0.055] px-5 py-4">
+        <div className="rounded-3xl border border-background/15 bg-background/[0.055] px-5 py-4">
           <div className="grid grid-cols-[minmax(0,1fr)_136px] items-center gap-5">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-normal text-background/60">
@@ -731,10 +731,13 @@ export function DesignerFloatingTimerWidget({
                 size="sm"
                 variant="outline"
                 className={cn(
-                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all disabled:opacity-100 [&_svg]:size-4",
+                  // Інвертований (темний) віджет: базовий disabled-стан кнопки
+                  // тут недоречний — світла плашка на темному склі. Кожна гілка
+                  // тримає власні disabled-кольори, що повторюють її спокій.
+                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   startableTask && !currentRunning
-                    ? "border-transparent bg-success-foreground text-white shadow-success-glow hover:border-transparent hover:bg-success-foreground/90 hover:text-white"
-                    : "border-background/20 bg-background/[0.08] text-background/40 shadow-inner hover:bg-background/[0.08] hover:text-background/40"
+                    ? "border-transparent bg-success-foreground text-white shadow-success-glow hover:border-transparent hover:bg-success-foreground/90 hover:text-white disabled:border-transparent disabled:bg-success-foreground disabled:text-white disabled:shadow-success-glow"
+                    : "border-background/20 bg-background/[0.08] text-background/40 shadow-inner hover:bg-background/[0.08] hover:text-background/40 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/40 disabled:shadow-inner"
                 )}
                 disabled={!startableTask || currentRunning || startBusy}
                 onClick={() => {
@@ -756,10 +759,10 @@ export function DesignerFloatingTimerWidget({
                 size="sm"
                 variant="outline"
                 className={cn(
-                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all disabled:opacity-100 [&_svg]:size-4",
+                  "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   currentRunning
-                    ? "border-transparent bg-warning-foreground text-background shadow-warning-glow hover:border-transparent hover:bg-warning-foreground/80 hover:text-background"
-                    : "border-background/20 bg-background/[0.08] text-background/50 shadow-inner hover:bg-background/[0.08] hover:text-background/50"
+                    ? "border-transparent bg-warning-foreground text-background shadow-warning-glow hover:border-transparent hover:bg-warning-foreground/80 hover:text-background disabled:border-transparent disabled:bg-warning-foreground disabled:text-background disabled:shadow-warning-glow"
+                    : "border-background/20 bg-background/[0.08] text-background/50 shadow-inner hover:bg-background/[0.08] hover:text-background/50 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/50 disabled:shadow-inner"
                 )}
                 disabled={!currentRunning || !currentTask || controller.busyTaskId === currentTask.taskId}
                 onClick={() => {

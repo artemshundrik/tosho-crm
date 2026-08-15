@@ -75,7 +75,7 @@ function CardBody({ target, info, loading }: { target: PartyHoverTarget; info: P
       ) : null}
 
       {target.managerLabel ? (
-        <div className="mt-2.5 flex items-center gap-2 rounded-[10px] border border-border/50 bg-muted/30 px-2.5 py-1.5">
+        <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1.5">
           <AvatarBase
             src={target.managerAvatarUrl ?? null}
             name={target.managerLabel}
@@ -151,7 +151,7 @@ export function PartyHoverCard({
     <HoverTip
       label={<CardBody target={target} info={info} loading={loading} />}
       side={side}
-      contentClassName="max-w-none rounded-[14px] p-3"
+      contentClassName="max-w-none rounded-xl p-3"
       ready={settled}
     >
       {/* Запит стартує на вході курсора, а не на відкритті бульбашки: так

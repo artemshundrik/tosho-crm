@@ -317,7 +317,7 @@ const ChipPicker: React.FC<{
           type="button"
           className={cn(
             "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
               : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
@@ -525,7 +525,7 @@ export function PrintProductConfigurator({
   const hasSelectedProduct = Boolean(selectedConfiguratorProduct && productKind);
 
   return (
-    <div className="space-y-6 rounded-[22px] border border-border/40 bg-background/30 p-4 md:p-5">
+    <div className="space-y-6 rounded-4xl border border-border/40 bg-background/30 p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-2 text-base font-semibold text-foreground">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border/50 bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
