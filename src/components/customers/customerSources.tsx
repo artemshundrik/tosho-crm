@@ -30,17 +30,27 @@ export function SourceSelect({
   onChange,
   id,
   className,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   value: string;
   onChange: (next: string) => void;
   id?: string;
   className?: string;
+  /** Приходять з `FormField`, щоб селект підсвічувався так само, як поля. */
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 }) {
   const trimmed = value.trim();
   const isKnown = CUSTOMER_LEAD_SOURCES.some((opt) => opt.value === trimmed);
   return (
     <Select value={trimmed || undefined} onValueChange={onChange}>
-      <SelectTrigger id={id} className={className ?? "h-9"}>
+      <SelectTrigger
+        id={id}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        className={className ?? "h-9"}
+      >
         <SelectValue placeholder="Оберіть джерело" />
       </SelectTrigger>
       <SelectContent>

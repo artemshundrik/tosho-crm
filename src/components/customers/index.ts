@@ -1,4 +1,5 @@
 export { CustomerDialog } from "./CustomerDialog";
+export { validateCustomerForm, hasCustomerFieldErrors, type CustomerFieldErrors } from "./customerValidation";
 export { LeadDialog } from "./LeadDialog";
 export { CustomerLeadQuickViewDialog } from "./CustomerLeadQuickViewDialog";
 export { CustomerLeadPicker } from "./CustomerLeadPicker";

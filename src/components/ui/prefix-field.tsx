@@ -9,17 +9,25 @@ import { cn } from "@/lib/utils";
 export function PrefixField({
   prefix,
   className,
+  invalid,
   children,
 }: {
   prefix: React.ReactNode;
   className?: string;
+  /**
+   * Стан помилки малює саме обгортка: рамка й фон живуть тут, а внутрішній
+   * `input` прозорий — підсвічувати його було б нічим.
+   */
+  invalid?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
+      data-invalid={invalid ? "true" : undefined}
       className={cn(
         "flex h-9 w-full items-center overflow-hidden rounded-xl border border-border/50 bg-muted/40 text-sm shadow-inner transition-all duration-200 ease-out",
         "focus-within:bg-background focus-within:shadow-elevated-sm focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
+        "data-[invalid=true]:border-destructive/60 data-[invalid=true]:bg-danger-soft/30",
         className
       )}
     >

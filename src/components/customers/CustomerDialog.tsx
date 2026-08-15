@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { DateInput, TimeInput } from "@/components/ui/picker-input";
 import { FormField } from "@/components/ui/form-field";
 import { Label } from "@/components/ui/label";
+import type { CustomerFieldErrors } from "./customerValidation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -148,6 +149,12 @@ export type CustomerDialogProps = {
   }>;
   saving?: boolean;
   error?: string | null;
+  /**
+   * Помилки полів після спроби зберегти. Свідомо приходять ззовні: правила
+   * живуть поруч зі збереженням (`validateCustomerForm`), а діалог лише
+   * показує їх під потрібними полями.
+   */
+  fieldErrors?: CustomerFieldErrors;
   title?: string;
   description?: string;
   submitLabel?: string;
@@ -257,6 +264,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   teamMembers = [],
   saving = false,
   error,
+  fieldErrors,
   title = "Новий замовник",
   description = "Додайте всі дані замовника, щоб одразу підхопити їх у прорахунку.",
   submitLabel = "Створити замовника",
@@ -867,17 +875,19 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <div className="space-y-5">
               <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
+                  <FormField
+                    label={isFopOwnership ? "ПІБ" : "Назва компанії"}
+                    required
+                    error={fieldErrors?.name}
+                  >
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
                       className="h-9"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "Instagram" : "Сайт"}</Label>
+                  </FormField>
+                  <FormField label={isFopOwnership ? "Instagram" : "Сайт"}>
                     <Input
                       value={form.website}
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
@@ -885,14 +895,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
                       className="h-9"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Джерело <span className="text-destructive">*</span></Label>
-                    <SourceSelect
-                      value={form.source}
-                      onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
-                    />
-                  </div>
+                  </FormField>
+                  <FormField label="Джерело" required error={fieldErrors?.source}>
+                    {({ fieldProps }) => (
+                      <SourceSelect
+                        id={fieldProps.id}
+                        aria-invalid={fieldProps["aria-invalid"]}
+                        aria-describedby={fieldProps["aria-describedby"]}
+                        value={form.source}
+                        onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
+                      />
+                    )}
+                  </FormField>
                 </div>
               </SectionCard>
 
@@ -907,28 +921,26 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       className="h-9"
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <Label>Телефон <span className="text-destructive">*</span></Label>
+                  <FormField label="Телефон" required error={fieldErrors?.contactPhone}>
                     <PhoneInput
                       value={form.contacts[0]?.phone ?? ""}
                       onChange={(phone) => updateContact(0, { phone })}
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>
-                      Email{" "}
-                      {form.paymentType === "invoice" ? (
-                        <span className="text-destructive">*</span>
-                      ) : (
-                        <span className="text-3xs font-normal text-muted-foreground">необовʼязково</span>
-                      )}
-                    </Label>
+                  </FormField>
+                  <FormField
+                    label="Email"
+                    required={form.paymentType === "invoice"}
+                    error={fieldErrors?.contactEmail}
+                    hint={
+                      form.paymentType === "invoice" ? undefined : "необовʼязково"
+                    }
+                  >
                     <EmailInput
                       value={form.contacts[0]?.email ?? ""}
                       onChange={(email) => updateContact(0, { email })}
                       placeholder="name@company.com"
                     />
-                  </div>
+                  </FormField>
                   {!isFopOwnership ? (
                     <div className="grid gap-2">
                       <Label>Посада</Label>
@@ -988,17 +1000,19 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <TabsContent value="basic" className="space-y-4 mt-3">
               <SectionCard title="Компанія">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "ПІБ" : "Назва компанії"} <span className="text-destructive">*</span></Label>
+                  <FormField
+                    label={isFopOwnership ? "ПІБ" : "Назва компанії"}
+                    required
+                    error={fieldErrors?.name}
+                  >
                     <Input
                       value={form.name}
                       onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder={isFopOwnership ? "Напр. Іваненко Іван Іванович" : "Напр. Кока-Кола"}
                       className="h-9"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>{isFopOwnership ? "Instagram" : "Сайт"}</Label>
+                  </FormField>
+                  <FormField label={isFopOwnership ? "Instagram" : "Сайт"}>
                     <Input
                       value={form.website}
                       onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
@@ -1006,14 +1020,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       placeholder={isFopOwnership ? "@username або https://instagram.com/username" : "https://"}
                       className="h-9"
                     />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Джерело <span className="text-destructive">*</span></Label>
-                    <SourceSelect
-                      value={form.source}
-                      onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
-                    />
-                  </div>
+                  </FormField>
+                  <FormField label="Джерело" required error={fieldErrors?.source}>
+                    {({ fieldProps }) => (
+                      <SourceSelect
+                        id={fieldProps.id}
+                        aria-invalid={fieldProps["aria-invalid"]}
+                        aria-describedby={fieldProps["aria-describedby"]}
+                        value={form.source}
+                        onChange={(value) => setForm((prev) => ({ ...prev, source: value }))}
+                      />
+                    )}
+                  </FormField>
                 </div>
               </SectionCard>
 

@@ -13,7 +13,15 @@ import {
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
+import {
+  CustomerDialog,
+  LeadDialog,
+  hasCustomerFieldErrors,
+  validateCustomerForm,
+  type CustomerContact,
+  type CustomerFormState,
+  type LeadFormState,
+} from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -593,11 +601,24 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  /**
+   * Помилки полів показуємо лише після першої спроби зберегти. Інакше форма
+   * починає червоніти, поки людина ще друкує перше слово.
+   */
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerFormState>(() => createInitialCustomerFormState());
+  /**
+   * Перераховується на кожну зміну форми, тож помилка зникає в ту мить, коли
+   * поле виправили, — не треба тиснути «Зберегти» ще раз, щоб це побачити.
+   */
+  const customerFieldErrors = useMemo(
+    () => validateCustomerForm(form, { isNew: !editingId }),
+    [form, editingId]
+  );
 
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [leadEditingId, setLeadEditingId] = useState<string | null>(null);
@@ -1400,6 +1421,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLinkedQuotes([]);
     setLinkedQuotesLoading(false);
     setFormError(null);
+    setSubmitAttempted(false);
   }, [currentManagerLabel, defaultManagerName, userId]);
 
   const resetLeadForm = useCallback(() => {
@@ -1732,6 +1754,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
       accountantEdrpou: row.accountant_edrpou ?? "",
     });
     setFormError(null);
+    // Чужа картка відкривається чистою: помилки показуємо лише після того, як
+    // людина сама спробувала зберегти саме цю форму.
+    setSubmitAttempted(false);
     setDialogOpen(true);
     void loadCustomerLinkedEntities({ id: row.id, name: row.name, legal_name: row.legal_name });
   }, [loadCustomerLinkedEntities, resolveManagerLabel]);
@@ -2552,16 +2577,15 @@ function CustomersPage({ teamId }: { teamId: string }) {
   }, [location.pathname]);
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      setFormError("Вкажіть назву компанії.");
+    // Спершу перевіряємо форму ЦІЛКОМ: людина має побачити всі проблеми за
+    // один раз, а не дізнаватись про них по черзі після кожного натискання.
+    setSubmitAttempted(true);
+    if (hasCustomerFieldErrors(customerFieldErrors)) {
+      setFormError(null);
       return;
     }
 
     const normalizedLogoUrl = normalizeCustomerLogoUrl(form.logoUrl);
-    if (form.logoUploadMode === "url" && form.logoUrl.trim() && !normalizedLogoUrl) {
-      setFormError("Вкажіть звичайний URL логотипа. `data:image/...;base64,...` більше не підтримується.");
-      return;
-    }
 
     setSaving(true);
     setFormError(null);
@@ -2582,24 +2606,6 @@ function CustomersPage({ teamId }: { teamId: string }) {
         telegram: normalizeTelegramUsername(contact.telegram),
       }))
       .filter((contact) => Object.values(contact).some(Boolean));
-
-    if (!editingId && !contacts.some((contact) => contact.phone)) {
-      setSaving(false);
-      setFormError("Для замовника обовʼязково вкажіть мобільний номер телефону.");
-      return;
-    }
-
-    if (!editingId && !contacts.some((contact) => contact.email)) {
-      setSaving(false);
-      setFormError("Для замовника обовʼязково вкажіть email.");
-      return;
-    }
-
-    if (!form.source.trim()) {
-      setSaving(false);
-      setFormError("Вкажіть, звідки прийшов замовник.");
-      return;
-    }
 
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
@@ -4013,6 +4019,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         teamMembers={managerDialogMembers}
         saving={saving}
         error={formError}
+        fieldErrors={submitAttempted ? customerFieldErrors : undefined}
         title={editingId ? "Редагувати замовника" : "Новий замовник"}
         description={
           editingId

@@ -41,14 +41,27 @@ type PhoneInputProps = {
   className?: string;
   id?: string;
   placeholder?: string;
+  /** Приходить з `FormField`. */
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
 };
 
-export function PhoneInput({ value, onChange, className, id, placeholder = "67 123 45 67" }: PhoneInputProps) {
+export function PhoneInput({
+  value,
+  onChange,
+  className,
+  id,
+  placeholder = "67 123 45 67",
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+}: PhoneInputProps) {
   const digits = toLocalDigits(value);
   return (
-    <PrefixField prefix="+380" className={className}>
+    <PrefixField prefix="+380" className={className} invalid={ariaInvalid}>
       <input
         id={id}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         value={formatLocal(digits)}
         onChange={(event) => {
           const next = toLocalDigits(event.target.value);
