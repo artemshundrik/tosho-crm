@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { TEXTAREA_BASE } from "@/components/ui/controlStyles";
 
 type AutoTextareaProps = React.ComponentProps<"textarea"> & {
   /**
@@ -82,11 +83,9 @@ const AutoTextarea = React.forwardRef<HTMLTextAreaElement, AutoTextareaProps>(
         rows={rows ?? minRows}
         value={value}
         className={cn(
-          "flex w-full resize-none appearance-none overflow-hidden rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-base placeholder:text-muted-foreground",
-          "transition-colors duration-150",
-          "hover:border-foreground/30 hover:bg-muted/20",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 focus-visible:border-primary/60",
-          "disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          TEXTAREA_BASE,
+          // Висоту рахує сам компонент — прокрутки й ручки розтягування немає.
+          "resize-none overflow-hidden",
           className
         )}
         {...props}
