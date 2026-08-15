@@ -6,7 +6,7 @@ import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
@@ -19,10 +19,8 @@ import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
-  TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { CreateManualOrderDialog } from "@/components/orders/CreateManualOrderDialog";
@@ -744,32 +742,27 @@ export default function OrdersProductionPage() {
       }
       filters={
         <>
-          <Select value={headerFilter} onValueChange={(value) => setHeaderFilter(value as HeaderFilter)}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {HEADER_FILTER_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ToolbarFilterSelect
+            value={headerFilter}
+            onValueChange={(value) => setHeaderFilter(value as HeaderFilter)}
+            neutralValue="all"
+            className="sm:w-[210px]"
+            options={HEADER_FILTER_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+          />
 
-          <Select value={managerFilter} onValueChange={setManagerFilter}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
-              <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
-              {managerFilterOptions.map((manager) => (
-                <SelectItem key={manager.id} value={manager.id}>
-                  {renderManagerFilterValue(manager.id)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ToolbarFilterSelect
+            value={managerFilter}
+            onValueChange={setManagerFilter}
+            neutralValue={ALL_MANAGERS_FILTER}
+            className="sm:w-[210px]"
+            options={[
+              { value: ALL_MANAGERS_FILTER, label: renderManagerFilterValue(ALL_MANAGERS_FILTER) },
+              ...managerFilterOptions.map((manager) => ({
+                value: manager.id,
+                label: renderManagerFilterValue(manager.id),
+              })),
+            ]}
+          />
 
           <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
         </>

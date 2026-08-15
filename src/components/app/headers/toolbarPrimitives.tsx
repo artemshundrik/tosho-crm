@@ -1,8 +1,14 @@
 import * as React from "react";
-import { FilterX, Loader2, Search, X } from "lucide-react";
+import { Check, ChevronDown, FilterX, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
+import { TOOLBAR_CONTROL, TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 
 // Примітиви тулбара списків. Кожна сторінка збирала пошук/бейдж/мету руками —
@@ -144,6 +150,110 @@ export function ToolbarSearch({
         />
       ) : null}
     </div>
+  );
+}
+
+export type ToolbarFilterOption = {
+  value: string;
+  /** Підпис у списку й у тригері. Може бути вузлом (аватарка + імʼя). */
+  label: React.ReactNode;
+  /** Іконка пункту — статуси беруть ту саму, що на канбан-дошці. */
+  icon?: React.ComponentType<{ className?: string }>;
+  disabled?: boolean;
+};
+
+type ToolbarFilterSelectProps = {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: ToolbarFilterOption[];
+  /**
+   * Значення, яке НЕ фільтрує («all», «Всі менеджери»). Коли вибрано інше,
+   * контрол підсвічується як увімкнений. Без цього пропа підсвітки немає —
+   * саме так лишаються сортування, які нічого не ховають і не бувають
+   * «вимкненими», тож постійна підсвітка на них нічого б не означала.
+   */
+  neutralValue?: string;
+  /** Запасний підпис, коли значення немає серед опцій. */
+  placeholder?: string;
+  /** Ширина й інші правки розкладки: "sm:w-[180px]". */
+  className?: string;
+  contentClassName?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+};
+
+/**
+ * Фільтр-випадайко тулбара — ОДИН компонент на всі сторінки.
+ *
+ * ЧОМУ КНОПКА З МЕНЮ, А НЕ `Select`. Спершу тулбарні фільтри були `Select`
+ * (Radix Select), і за однакових стилів вони поводились інакше за кнопки-фільтри
+ * дошки запитів: натиск спрацьовував через раз і смикався. Причина не в стилях —
+ * Radix Select це окремий примітив зі своєю механікою відкриття: він захоплює
+ * вказівник і позиціонує список по вибраному пункту, тож `:active` на тригері
+ * гасне ще до першого кадру.
+ *
+ * Тому тут узято рівно ту саму зв’язку, що на дошці запитів і в контролі
+ * групування: `Button` + `DropdownMenu`. Не «схожа на неї» — та сама, тож
+ * натиск, поява меню й таймінги збігаються за побудовою, а не за домовленістю.
+ */
+export function ToolbarFilterSelect({
+  value,
+  onValueChange,
+  options,
+  neutralValue,
+  placeholder,
+  className,
+  contentClassName,
+  ariaLabel,
+  disabled,
+}: ToolbarFilterSelectProps) {
+  const selected = options.find((option) => option.value === value);
+  const SelectedIcon = selected?.icon;
+  const active = neutralValue !== undefined && value !== neutralValue;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          aria-label={ariaLabel}
+          className={cn(TOOLBAR_FILTER, "min-w-0 justify-between", className, active && TOOLBAR_CONTROL_ACTIVE)}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            {SelectedIcon ? <SelectedIcon className="h-4 w-4 shrink-0 opacity-70" /> : null}
+            <span className="truncate">{selected?.label ?? placeholder}</span>
+          </span>
+          {/* Без власного кольору: стрілка тонується разом зі станом кнопки. */}
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      {/* slide={false} — як у тулбарі дошки: меню падає рівно під тригером, і
+          типові 8 px переїзду читаються не як рух, а як промах позиціонування. */}
+      <DropdownMenuContent
+        align="start"
+        slide={false}
+        className={cn("max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px]", contentClassName)}
+      >
+        {options.map((option) => {
+          const OptionIcon = option.icon;
+          return (
+            <DropdownMenuItem
+              key={option.value}
+              disabled={option.disabled}
+              onSelect={() => onValueChange(option.value)}
+              className="gap-2 rounded-lg text-[13px]"
+            >
+              {/* Галочка займає місце завжди (opacity-0), інакше рядки стрибають. */}
+              <Check className={cn("h-3.5 w-3.5 shrink-0", option.value === value ? "opacity-100" : "opacity-0")} />
+              {OptionIcon ? <OptionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

@@ -6,13 +6,12 @@ import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Button } from "@/components/ui/button";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
-  TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import {
   DropdownMenu,
@@ -959,19 +958,16 @@ export default function ContractorsPage() {
         />
       }
       filters={
-        <Select value={serviceFilter} onValueChange={setServiceFilter}>
-          <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-            <SelectValue placeholder="Всі послуги" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_SERVICES_FILTER}>Всі послуги</SelectItem>
-            {serviceOptions.map((service) => (
-              <SelectItem key={service} value={service}>
-                {service}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ToolbarFilterSelect
+          value={serviceFilter}
+          onValueChange={setServiceFilter}
+          neutralValue={ALL_SERVICES_FILTER}
+          className="sm:w-[220px]"
+          options={[
+            { value: ALL_SERVICES_FILTER, label: "Всі послуги" },
+            ...serviceOptions.map((service) => ({ value: service, label: service })),
+          ]}
+        />
       }
       meta={
         <ToolbarMeta

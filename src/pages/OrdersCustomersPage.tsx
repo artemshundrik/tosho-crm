@@ -13,11 +13,10 @@ import {
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { CustomerDialog, LeadDialog, type CustomerContact, type CustomerFormState, type LeadFormState } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
@@ -3227,27 +3226,22 @@ function CustomersPage({ teamId }: { teamId: string }) {
             <span className="truncate">{currentManagerLabel || defaultManagerName || "Менеджер"}</span>
           </div>
         ) : (
-          <Select
+          <ToolbarFilterSelect
             value={activeTab === "customers" ? customerManagerFilter : leadManagerFilter}
             onValueChange={(value) => {
               if (activeTab === "customers") setCustomerManagerFilter(value);
               else setLeadManagerFilter(value);
             }}
-          >
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-              <div className="min-w-0 flex items-center">
-                {renderManagerFilterValue(activeTab === "customers" ? customerManagerFilter : leadManagerFilter)}
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_MANAGERS_FILTER}>Всі менеджери</SelectItem>
-              {(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => (
-                <SelectItem key={manager} value={manager}>
-                  {renderManagerFilterValue(manager)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            neutralValue={ALL_MANAGERS_FILTER}
+            className="sm:w-[220px]"
+            options={[
+              { value: ALL_MANAGERS_FILTER, label: "Всі менеджери" },
+              ...(activeTab === "customers" ? customerManagerOptions : leadManagerOptions).map((manager) => ({
+                value: manager,
+                label: renderManagerFilterValue(manager),
+              })),
+            ]}
+          />
         )}
         </>
       }

@@ -66,7 +66,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import {
@@ -126,7 +126,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, Clock3, ExternalLink, Gauge, LayoutGrid, Layers3, PencilLine, Target, Users } from "lucide-react";
+import { AlertTriangle, CalendarRange, Clock3, ExternalLink, Gauge, LayoutGrid, Layers3, ListFilter, PencilLine, Target, Users } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type DesignTask = {
@@ -4955,7 +4955,7 @@ export default function DesignPage() {
                   loadStrategy="visible"
                 />
               ) : (
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-muted/25">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/25">
                   <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                     <Package className="h-4 w-4" />
                   </div>
@@ -5150,35 +5150,36 @@ export default function DesignPage() {
         }
         filters={
           <>
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
-                <SelectValue placeholder="Статус" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Всі статуси</SelectItem>
-                {DESIGN_COLUMNS.map((column) => (
-                  <SelectItem key={column.id} value={column.id}>
-                    {column.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ToolbarFilterSelect
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
+              neutralValue="all"
+              className="sm:w-[180px]"
+              options={[
+                { value: "all", label: "Всі статуси", icon: ListFilter },
+                ...DESIGN_COLUMNS.map((column) => ({
+                  value: column.id,
+                  label: column.label,
+                  icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
+                })),
+              ]}
+            />
 
             {viewMode !== "assignee" ? (
-              <Select value={designerFilter} onValueChange={setDesignerFilter}>
-                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-                  <div className="flex min-w-0 items-center">{renderDesignerFilterValue(designerFilter)}</div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_DESIGNERS_FILTER}>{renderDesignerFilterValue(ALL_DESIGNERS_FILTER)}</SelectItem>
-                  <SelectItem value={NO_DESIGNER_FILTER}>{renderDesignerFilterValue(NO_DESIGNER_FILTER)}</SelectItem>
-                  {designerFilterOptions.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {renderDesignerFilterValue(member.id)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ToolbarFilterSelect
+                value={designerFilter}
+                onValueChange={setDesignerFilter}
+                neutralValue={ALL_DESIGNERS_FILTER}
+                className="sm:w-[220px]"
+                options={[
+                  { value: ALL_DESIGNERS_FILTER, label: renderDesignerFilterValue(ALL_DESIGNERS_FILTER) },
+                  { value: NO_DESIGNER_FILTER, label: renderDesignerFilterValue(NO_DESIGNER_FILTER) },
+                  ...designerFilterOptions.map((member) => ({
+                    value: member.id,
+                    label: renderDesignerFilterValue(member.id),
+                  })),
+                ]}
+              />
             ) : null}
 
             {isManagerUser ? (
@@ -5205,19 +5206,19 @@ export default function DesignPage() {
                 </div>
               </div>
             ) : (
-              <Select value={managerFilter} onValueChange={setManagerFilter}>
-                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[220px]")}>
-                  <div className="flex min-w-0 items-center">{renderManagerFilterValue(managerFilter)}</div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_MANAGERS_FILTER}>{renderManagerFilterValue(ALL_MANAGERS_FILTER)}</SelectItem>
-                  {managerFilterOptions.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {renderManagerFilterValue(member.id)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ToolbarFilterSelect
+                value={managerFilter}
+                onValueChange={setManagerFilter}
+                neutralValue={ALL_MANAGERS_FILTER}
+                className="sm:w-[220px]"
+                options={[
+                  { value: ALL_MANAGERS_FILTER, label: renderManagerFilterValue(ALL_MANAGERS_FILTER) },
+                  ...managerFilterOptions.map((member) => ({
+                    value: member.id,
+                    label: renderManagerFilterValue(member.id),
+                  })),
+                ]}
+              />
             )}
 
             <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />

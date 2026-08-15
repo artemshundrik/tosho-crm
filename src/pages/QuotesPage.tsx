@@ -121,6 +121,7 @@ import {
   XCircle,
   Pencil,
   Eye,
+  ListFilter,
   Package,
   Printer,
   Download,
@@ -136,7 +137,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import {
@@ -5387,19 +5388,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           <>
             {contentView !== "sets" ? (
               <>
-                <Select value={status} onValueChange={setStatusFilter}>
-                  <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[170px]")}>
-                    <SelectValue placeholder="Статус" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Всі статуси</SelectItem>
-                    {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {formatStatusLabel(s)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ToolbarFilterSelect
+                  value={status}
+                  onValueChange={setStatusFilter}
+                  neutralValue="all"
+                  className="sm:w-[170px]"
+                  options={[
+                    { value: "all", label: "Всі статуси", icon: ListFilter },
+                    ...STATUS_OPTIONS.map((s) => ({
+                      value: s,
+                      label: formatStatusLabel(s),
+                      icon: statusIcons[s],
+                    })),
+                  ]}
+                />
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -5425,21 +5427,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </div>
                   </div>
                 ) : (
-                  <Select value={managerFilter} onValueChange={setManagerFilter}>
-                    <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[210px]")}>
-                      <div className="min-w-0 flex items-center">{renderManagerFilterValue(managerFilter)}</div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL_MANAGERS_FILTER}>
-                        {renderManagerFilterValue(ALL_MANAGERS_FILTER)}
-                      </SelectItem>
-                      {managerFilterOptions.map((manager) => (
-                        <SelectItem key={manager.id} value={manager.id}>
-                          {renderManagerFilterValue(manager.id)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ToolbarFilterSelect
+                    value={managerFilter}
+                    onValueChange={setManagerFilter}
+                    neutralValue={ALL_MANAGERS_FILTER}
+                    className="sm:w-[210px]"
+                    options={[
+                      { value: ALL_MANAGERS_FILTER, label: renderManagerFilterValue(ALL_MANAGERS_FILTER) },
+                      ...managerFilterOptions.map((manager) => ({
+                        value: manager.id,
+                        label: renderManagerFilterValue(manager.id),
+                      })),
+                    ]}
+                  />
                 )}
                 {viewMode === "table" ? (
                   <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
@@ -6859,7 +6859,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                                 }
                                               />
                                             ) : (
-                                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[10px] border border-border/60 bg-secondary">
+                                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
                                                 <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                                                   {kanbanPreviewsLoading ? (
                                                     <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />

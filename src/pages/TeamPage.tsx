@@ -31,18 +31,17 @@ import { formatJobRole } from "@/lib/jobRoles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
-  TOOLBAR_CONTROL,
+
 } from "@/components/ui/controlStyles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { usePageData } from "@/hooks/usePageData";
 import { cn } from "@/lib/utils";
@@ -1259,40 +1258,40 @@ export function TeamPage() {
         filters={
           tab === "people" ? (
             <>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[190px]")}>
-                  <SelectValue placeholder="Роль" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Усі ролі</SelectItem>
-                  {roleOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={peopleFilter} onValueChange={(next) => setPeopleFilter(next as PeopleFilter)}>
-                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[170px]")}>
-                  <SelectValue placeholder="Статус" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Усі статуси</SelectItem>
-                  <SelectItem value="present">На місці</SelectItem>
-                  <SelectItem value="away">Відсутні</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sortMode} onValueChange={(next) => setSortMode(next as SortMode)}>
-                <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[190px]")}>
-                  <SelectValue placeholder="Сортування" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="presence">За присутністю</SelectItem>
-                  <SelectItem value="name">За іменем</SelectItem>
-                  <SelectItem value="tenure">За стажем</SelectItem>
-                  <SelectItem value="birthday">За днем народження</SelectItem>
-                </SelectContent>
-              </Select>
+              <ToolbarFilterSelect
+                value={roleFilter}
+                onValueChange={setRoleFilter}
+                neutralValue="all"
+                className="sm:w-[190px]"
+                options={[
+                  { value: "all", label: "Усі ролі" },
+                  ...roleOptions.map((option) => ({ value: option.value, label: option.label })),
+                ]}
+              />
+              <ToolbarFilterSelect
+                value={peopleFilter}
+                onValueChange={(next) => setPeopleFilter(next as PeopleFilter)}
+                neutralValue="all"
+                className="sm:w-[170px]"
+                options={[
+                  { value: "all", label: "Усі статуси" },
+                  { value: "present", label: "На місці" },
+                  { value: "away", label: "Відсутні" },
+                ]}
+              />
+              {/* Сортування — без neutralValue: воно нічого не ховає і не буває
+                  вимкненим, тож постійна підсвітка нічого б не означала. */}
+              <ToolbarFilterSelect
+                value={sortMode}
+                onValueChange={(next) => setSortMode(next as SortMode)}
+                className="sm:w-[190px]"
+                options={[
+                  { value: "presence", label: "За присутністю" },
+                  { value: "name", label: "За іменем" },
+                  { value: "tenure", label: "За стажем" },
+                  { value: "birthday", label: "За днем народження" },
+                ]}
+              />
             </>
           ) : undefined
         }

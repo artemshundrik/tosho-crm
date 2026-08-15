@@ -5,13 +5,12 @@ import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   TOOLBAR_ACTION_BUTTON,
-  TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
 import {
   DropdownMenu,
@@ -462,44 +461,36 @@ export default function SampleStockPage() {
       }
       filters={
         <div className="grid w-full gap-2 sm:flex sm:w-auto">
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StockStatusFilter)}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[170px]")}>
-              <SelectValue placeholder="Статус" />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(STATUS_LABELS) as StockStatusFilter[]).map((status) => (
-                <SelectItem key={status} value={status}>
-                  {STATUS_LABELS[status]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[190px]")}>
-              <SelectValue placeholder="Категорія" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_CATEGORIES_FILTER}>Всі категорії</SelectItem>
-              {categoryOptions.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")}>
-              <SelectValue placeholder="Місце" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_LOCATIONS_FILTER}>Всі місця</SelectItem>
-              {locationOptions.map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ToolbarFilterSelect
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as StockStatusFilter)}
+            neutralValue="all"
+            className="sm:w-[170px]"
+            options={(Object.keys(STATUS_LABELS) as StockStatusFilter[]).map((status) => ({
+              value: status,
+              label: STATUS_LABELS[status],
+            }))}
+          />
+          <ToolbarFilterSelect
+            value={categoryFilter}
+            onValueChange={setCategoryFilter}
+            neutralValue={ALL_CATEGORIES_FILTER}
+            className="sm:w-[190px]"
+            options={[
+              { value: ALL_CATEGORIES_FILTER, label: "Всі категорії" },
+              ...categoryOptions.map((category) => ({ value: category, label: category })),
+            ]}
+          />
+          <ToolbarFilterSelect
+            value={locationFilter}
+            onValueChange={setLocationFilter}
+            neutralValue={ALL_LOCATIONS_FILTER}
+            className="sm:w-[180px]"
+            options={[
+              { value: ALL_LOCATIONS_FILTER, label: "Всі місця" },
+              ...locationOptions.map((location) => ({ value: location, label: location })),
+            ]}
+          />
         </div>
       }
       meta={

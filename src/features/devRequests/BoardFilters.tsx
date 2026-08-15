@@ -3,14 +3,12 @@ import { Check, ListFilter, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
-import { toneSubtleClass, toneTextClass } from "@/lib/statusTones";
+import { TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
 import {
   REQUEST_ZONES,
   ZONE_ICONS,
   ZONE_LABELS,
-  ZONE_TONE,
   type DevRequest,
   type RequestZone,
 } from "./types";
@@ -70,6 +68,12 @@ function toggle<T>(set: Set<T>, value: T): Set<T> {
   return next;
 }
 
+/** Чіп вибраного фільтра в тулбарі — один стиль на зони й теми (REQ-48):
+ *  нейтральний навмисно, бо тони зон у ряду ставали веселкою; який це фільтр —
+ *  у чіпі написано словом. ZONE_TONE на картках живе своїм життям. */
+const SELECTED_FILTER_CHIP =
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-muted/70 pl-2.5 pr-2 text-2xs font-medium text-foreground transition-opacity hover:opacity-80";
+
 /** Рядок у панелі: галочка, іконка, назва, кількість. */
 function FilterRow({
   selected,
@@ -95,14 +99,16 @@ function FilterRow({
       onClick={onSelect}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-[var(--radius)] px-2 py-1.5 text-left text-[13px] transition-colors",
-        selected ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/60",
+        // Вибране темнішає, а не синіє — тим самим правилом, що й тригери
+        // тулбара: у ряду не має бути двох різних мов «увімкнено».
+        selected ? "bg-muted/70 font-medium text-foreground" : "text-foreground hover:bg-muted/60",
         disabled && "cursor-default opacity-40 hover:bg-transparent"
       )}
     >
       <span
         className={cn(
-          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-          selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border transition-colors",
+          selected ? "border-foreground bg-foreground text-background" : "border-border"
         )}
       >
         {selected ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}
@@ -156,15 +162,15 @@ export function BoardFilters({
             type="button"
             variant="outline"
             className={cn(
-              TOOLBAR_CONTROL,
-              "shrink-0 gap-2 px-3.5 text-sm font-normal",
-              active > 0 && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+              TOOLBAR_FILTER,
+              "shrink-0 px-3.5",
+              active > 0 && TOOLBAR_CONTROL_ACTIVE
             )}
           >
             <ListFilter className="h-4 w-4" />
             Фільтр
             {active > 0 ? (
-              <span className="rounded-full bg-primary/20 px-1.5 font-mono text-2xs tabular-nums">
+              <span className="rounded-full bg-foreground/10 px-1.5 font-mono text-2xs tabular-nums">
                 {active}
               </span>
             ) : null}
@@ -230,11 +236,7 @@ export function BoardFilters({
             type="button"
             onClick={() => onChange({ ...state, zones: toggle(state.zones, zone) })}
             title={`Прибрати фільтр «${ZONE_LABELS[zone]}»`}
-            className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-transparent pl-2.5 pr-2 text-2xs font-medium transition-opacity hover:opacity-80",
-              toneSubtleClass[ZONE_TONE[zone]],
-              toneTextClass[ZONE_TONE[zone]]
-            )}
+            className={SELECTED_FILTER_CHIP}
           >
             <Icon className="h-3 w-3" />
             {ZONE_LABELS[zone]}
@@ -248,7 +250,7 @@ export function BoardFilters({
           type="button"
           onClick={() => onChange({ ...state, themes: toggle(state.themes, theme) })}
           title={`Прибрати фільтр «${theme}»`}
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-primary/12 pl-2.5 pr-2 text-2xs font-medium text-primary transition-opacity hover:opacity-80"
+          className={SELECTED_FILTER_CHIP}
         >
           {theme}
           <X className="h-3 w-3 opacity-70" />

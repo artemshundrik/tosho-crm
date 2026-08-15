@@ -48,7 +48,7 @@ import {
 } from "@/lib/attachmentPreview";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StackHoverPreview } from "@/components/app/StackHoverPreview";
@@ -60,16 +60,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
 
 // =======================
 // Types
@@ -997,7 +989,7 @@ export default function MarketingPage() {
             "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
             "shadow-surface transition-[border-color,box-shadow] duration-200 ease-out",
             "hover:border-border hover:shadow-elevated-sm",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             record.isHidden && "opacity-70",
             options?.className
           )}
@@ -1170,48 +1162,56 @@ export default function MarketingPage() {
         }
         filters={
           <>
-            <Select value={designerFilter} onValueChange={setDesignerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")} aria-label="Автор дизайну">
-                <SelectValue placeholder="Всі дизайнери" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Всі дизайнери</SelectItem>
-                {designerOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
+            <ToolbarFilterSelect
+              value={designerFilter}
+              onValueChange={setDesignerFilter}
+              neutralValue="all"
+              ariaLabel="Автор дизайну"
+              className="sm:w-[180px]"
+              options={[
+                { value: "all", label: "Всі дизайнери" },
+                ...designerOptions.map((option) => ({
+                  value: option.id,
+                  label: (
                     <span className="flex min-w-0 items-center gap-2">
                       <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
                       <span className="truncate">{option.label}</span>
                     </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={managerFilter} onValueChange={setManagerFilter}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[180px]")} aria-label="Менеджер">
-                <SelectValue placeholder="Всі менеджери" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Всі менеджери</SelectItem>
-                {managerOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
+                  ),
+                })),
+              ]}
+            />
+            <ToolbarFilterSelect
+              value={managerFilter}
+              onValueChange={setManagerFilter}
+              neutralValue="all"
+              ariaLabel="Менеджер"
+              className="sm:w-[180px]"
+              options={[
+                { value: "all", label: "Всі менеджери" },
+                ...managerOptions.map((option) => ({
+                  value: option.id,
+                  label: (
                     <span className="flex min-w-0 items-center gap-2">
                       <AvatarBase src={option.avatarUrl ?? null} name={option.label} size={18} shape="circle" />
                       <span className="truncate">{option.label}</span>
                     </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-              <SelectTrigger className={cn(TOOLBAR_CONTROL, "w-full sm:w-[160px]")} aria-label="Сортування">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Спочатку нові</SelectItem>
-                <SelectItem value="oldest">Спочатку давні</SelectItem>
-                <SelectItem value="customer">За замовником</SelectItem>
-              </SelectContent>
-            </Select>
+                  ),
+                })),
+              ]}
+            />
+            {/* Сортування — без neutralValue: воно нічого не ховає. */}
+            <ToolbarFilterSelect
+              value={sortMode}
+              onValueChange={(value) => setSortMode(value as SortMode)}
+              ariaLabel="Сортування"
+              className="sm:w-[160px]"
+              options={[
+                { value: "newest", label: "Спочатку нові" },
+                { value: "oldest", label: "Спочатку давні" },
+                { value: "customer", label: "За замовником" },
+              ]}
+            />
           </>
         }
         meta={<ToolbarMeta count={groups.length} countLabel="візуалів" loading={loading} />}
@@ -1433,7 +1433,7 @@ export default function MarketingPage() {
                           onClick={() => selectSibling(item)}
                           className={cn(
                             "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-150",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                             isActive
                               ? "border-primary shadow-elevated-sm"
                               : "border-transparent opacity-60 hover:opacity-100"
@@ -1478,7 +1478,7 @@ export default function MarketingPage() {
                     <button
                       type="button"
                       aria-label={selectedRecord.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-                      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
                       onClick={() => handleToggleFavorite(selected)}
                     >
                       <Star

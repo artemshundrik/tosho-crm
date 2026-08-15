@@ -1,7 +1,7 @@
 import { Check, ChevronDown, Rows3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { TOOLBAR_CONTROL } from "@/components/ui/controlStyles";
+import { TOOLBAR_CONTROL_ACTIVE, TOOLBAR_FILTER } from "@/components/ui/controlStyles";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,14 +36,17 @@ export function GroupControl({
           type="button"
           variant="outline"
           className={cn(
-            TOOLBAR_CONTROL,
-            "shrink-0 gap-2 px-3.5 text-sm font-normal",
-            value !== "none" && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+            // TOOLBAR_FILTER, а не TOOLBAR_CONTROL: кнопка й селект-фільтр на
+            // інших сторінках мусять мати однакові типографіку й натиск.
+            TOOLBAR_FILTER,
+            "shrink-0 px-3.5",
+            value !== "none" && TOOLBAR_CONTROL_ACTIVE
           )}
         >
           <Rows3 className="h-4 w-4" />
           {GROUP_LABELS[value]}
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+          {/* Без власного кольору: стрілка тонується разом зі станом кнопки. */}
+          <ChevronDown className="h-3.5 w-3.5 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" slide={false} className="w-[190px]">
