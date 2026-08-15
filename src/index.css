@@ -45,8 +45,11 @@
     --radius: 0.5rem;
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
-    --radius-section: 12px;
-    --radius-inner: 12px;
+    /* Секції та вкладені блоки — на тій самій ручці (зараз 12px, як було).
+       Прибиті числа тут означали б, що при наступній зміні радіуса секції
+       лишаться самі по собі, а картки поїдуть. */
+    --radius-section: calc(var(--radius) + 4px);
+    --radius-inner: calc(var(--radius) + 4px);
     --btn-radius: 10px;
 
     /* --- SKELETON LOADING (UPDATED - LIGHT) --- */
@@ -392,8 +395,8 @@
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
-    --radius-section: 12px;
-    --radius-inner: 12px;
+    --radius-section: calc(var(--radius) + 4px);
+    --radius-inner: calc(var(--radius) + 4px);
     --btn-radius: 10px;
 
     /* --- СТАНИ КОНТРОЛІВ (REQ-48, темна) --- */

@@ -32,7 +32,9 @@ const buttonVariants = cva(
     CONTROL_DISABLED_STATE,
     // Shape / spacing
     "rounded-xl",
-    "will-change-transform",
+    // will-change тут НЕ ставимо: він тримає окремий композиторський шар на
+    // кожній кнопці, а на дошці й у таблицях їх сотні. Натиск і так анімується
+    // властивістю scale, яку браузер піднімає на шар лише на час переходу.
     "bg-clip-padding",
   ].join(" "),
   {
@@ -192,8 +194,6 @@ const buttonVariants = cva(
         sm: "h-8 rounded-md px-3 text-xs gap-1.5 [&_svg]:size-3.5",
         md: "h-9 rounded-lg px-3.5 text-sm gap-1.5 [&_svg]:size-4",
         lg: "h-10 px-4 text-base gap-2 [&_svg]:size-4",
-        /** @deprecated 0 вживань; дублює xs за висотою. Видалення — за Артемом. */
-        compact: "h-7 rounded-md px-3 text-xs gap-1.5 [&_svg]:size-3.5",
         iconXs: "h-7 w-7 rounded-md px-0 [&_svg]:size-3.5",
         iconSm: "h-8 w-8 rounded-md px-0 [&_svg]:size-3.5",
         iconMd: "h-9 w-9 rounded-lg px-0 [&_svg]:size-4",
@@ -239,14 +239,19 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   /**
-   * Зайнята кнопка: спінер стає на місце провідної іконки, підпис видимий.
-   * На час loading спінер — єдина іконка кнопки (хвостові теж ховаються);
-   * ширина не змінюється лише в кнопки з провідною іконкою, суто текстова
-   * на час завантаження ширшає на спінер. Активація глушиться повністю
-   * (клік, Enter/Space, сабміт форми), але свідомо НЕ атрибутом disabled —
-   * заблокована і зайнята кнопки мають різний вигляд і різний зміст для
-   * читача з екрана. При asChild спінер не рендериться (Slot вимагає рівно
-   * одного child-елемента) — лишаються aria-стан, глушіння і пригашення.
+   * Зайнята кнопка: спінер по центру, вміст лишається на місці, але невидимий.
+   *
+   * ЧОМУ САМЕ ТАК. Ширина кнопки не змінюється ані на піксель — прихований
+   * підпис і далі тримає розмір. Підміна підпису на «Збереження…» міняла
+   * ширину й посувала сусідню кнопку, а спінер, доданий ПОРУЧ із підписом,
+   * робив те саме в кнопок без іконки. У футері діалогу це особливо помітно:
+   * «Скасувати» стрибає вбік у момент кліку.
+   *
+   * Активація глушиться повністю (клік, Enter/Space, сабміт форми), але
+   * свідомо НЕ атрибутом disabled — заблокована і зайнята кнопки мають різний
+   * вигляд і різний зміст для читача з екрана. При asChild спінера немає
+   * (Slot вимагає рівно одного child-елемента) — лишаються aria-стан,
+   * глушіння і пригашення.
    */
   loading?: boolean;
 }
@@ -263,10 +268,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           buttonVariants({ variant, size }),
-          loading && "pointer-events-none",
+          // relative — щоб спінер ліг рівно по центру кнопки, не змінюючи її
+          // розмір; на кнопки без loading це не впливає.
+          loading && "pointer-events-none relative",
           // asChild не має спінера, тож хоч пригашенням показуємо «зайнято».
           loading && asChild && "opacity-85",
-          showSpinner && "[&_svg:not([data-btn-spinner])]:hidden",
           className
         )}
         // pointer-events-none глушить лише мишу; Enter/Space на сфокусованій
@@ -278,10 +284,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {showSpinner ? (
           <>
-            <ButtonSpinner />
-            {/* Колір кнопки зберігається, гасне лише вміст; gap успадковується,
-                щоб внутрішні відстані не зʼїхали. */}
-            <span className="inline-flex items-center gap-[inherit] opacity-85">{children}</span>
+            {/* Вміст лишається в потоці й тримає ширину, але не видимий —
+                інакше кнопка змінила б розмір і посунула сусідні. */}
+            <span className="invisible inline-flex items-center gap-[inherit]" aria-hidden="true">
+              {children}
+            </span>
+            <span className="absolute inset-0 flex items-center justify-center">
+              <ButtonSpinner />
+            </span>
           </>
         ) : (
           children
