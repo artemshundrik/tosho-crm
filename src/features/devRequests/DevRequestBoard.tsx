@@ -21,6 +21,7 @@ import {
   type GroupKey,
 } from "./grouping";
 import { PriorityBars } from "./PriorityBars";
+import { columnDateLabel, sortColumn } from "./columnDate";
 import {
   BOARD_COLUMNS,
   KIND_ICONS,
@@ -97,6 +98,13 @@ export function DevRequestBoard({
       const bucket = map.get(request.status);
       if (bucket) bucket.push(request);
     }
+    // Запит тягне все одним списком за датою СТВОРЕННЯ, і для «Викочено» це
+    // неправильна вісь: картка, заведена тиждень тому й викочена сьогодні,
+    // падала в кінець списку. Тому кожна колонка перекладається на свою дату
+    // вже тут (див. columnDate.ts).
+    for (const column of BOARD_COLUMNS) {
+      map.set(column.status, sortColumn(map.get(column.status) ?? [], column.status));
+    }
     return map;
   }, [requests]);
 
@@ -152,6 +160,7 @@ export function DevRequestBoard({
   // варто: розійдуться вони на першій же правці.
   const renderCard = (request: DevRequest) => {
     const meta = buildCardMeta(request, { viewerId });
+    const dateLabel = columnDateLabel(request, request.status);
     const KindIcon = KIND_ICONS[request.kind];
     const urgent = isUrgentCard(request);
     return (
@@ -251,6 +260,12 @@ export function DevRequestBoard({
               autoClassified={request.autoClassified}
             />
           ))}
+          {/* Дата — не чип, а тихий підпис праворуч: це не властивість картки,
+              а відповідь на питання колонки («скільки висить» / «коли поїхало»).
+              Там, де чесної дати немає, не малюємо нічого. */}
+          {dateLabel ? (
+            <span className="ml-auto shrink-0 text-3xs text-muted-foreground/70">{dateLabel}</span>
+          ) : null}
         </div>
       </KanbanCard>
     );
@@ -305,7 +320,7 @@ export function DevRequestBoard({
           >
             {groupBy === "none"
               ? items.map(renderCard)
-              : groupRequests(items, groupBy).map((group) => {
+              : groupRequests(items, groupBy, column.status).map((group) => {
                   const key = collapsedKey(groupBy, group.id);
                   const isCollapsed = collapsed.has(key);
                   return (
