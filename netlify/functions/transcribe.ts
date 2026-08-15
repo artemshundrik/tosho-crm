@@ -87,7 +87,11 @@ async function transcribeAudio(
   audio: Buffer,
   mimeType: string
 ): Promise<{ text: string; model: string }> {
-  const model = normalizeText(process.env.OPENAI_TRANSCRIBE_MODEL) || "gpt-4o-transcribe";
+  // gpt-transcribe — наступник gpt-4o-transcribe: OpenAI позиціює його як
+  // «high-accuracy» саме для файлів (а не для живого ефіру) і бере $0.0045 за
+  // хвилину замість $0.006. Для диктування ТЗ українською різниця в розшифровці
+  // важить більше за різницю в ціні.
+  const model = normalizeText(process.env.OPENAI_TRANSCRIBE_MODEL) || "gpt-transcribe";
   const form = new FormData();
   // Wrap in a fresh Uint8Array so the Blob part is ArrayBuffer-backed (Buffer's
   // ArrayBufferLike is not a valid BlobPart under DOM typings).
@@ -131,7 +135,7 @@ async function cleanupTranscript(
   transcript: string,
   context: DictationContext
 ): Promise<CleanupResult> {
-  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {

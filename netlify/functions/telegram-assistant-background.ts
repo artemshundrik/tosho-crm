@@ -321,7 +321,7 @@ export const handler = async (event: HttpEvent) => {
   if (!supabaseUrl || !serviceRoleKey) return json(500, { error: "Missing Supabase env vars" });
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-  const model = (process.env.OPENAI_MODEL || "").trim() || "gpt-5.4";
+  const model = (process.env.OPENAI_MODEL || "").trim() || "gpt-5.6-luna";
 
   const now = new Date();
 

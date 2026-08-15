@@ -92,7 +92,7 @@ export const handler = async (event: HttpEvent) => {
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-  const model = trimmed(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const model = trimmed(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
 
   // Список відкритих карток боту не передаємо: у чаті людина не бачить дошки, і
   // підказка «схоже на REQ-17» без можливості туди глянути тільки заплутує.

@@ -22,7 +22,7 @@ type OpenAiResponseShape = {
   error?: { message?: string };
 };
 
-const DEFAULT_MODEL = process.env.OPENAI_NAME_DECLENSION_MODEL || "gpt-4o-mini";
+const DEFAULT_MODEL = process.env.OPENAI_NAME_DECLENSION_MODEL || "gpt-5.6-luna";
 const SUPPORTED_CASES = new Set(["genitive"]); // extend later if needed (dative, etc.)
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {

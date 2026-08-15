@@ -122,7 +122,7 @@ export const handler = async (event: HttpEvent) => {
       .filter(Boolean)
       .join(" ") || null;
 
-  const model = trimmed(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const model = trimmed(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
 
   // Список відкритих карток не передаємо — з тієї ж причини, що й у боті: у
   // Cowork людина не бачить дошки, і підказка «схоже на REQ-17» без можливості

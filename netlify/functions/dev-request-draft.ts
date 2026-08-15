@@ -120,7 +120,7 @@ export const handler = async (event: HttpEvent) => {
     normalizeText(user.email) ||
     user.id;
 
-  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
+  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
 
   const result = await draftDevRequest({
     text: rawText,
