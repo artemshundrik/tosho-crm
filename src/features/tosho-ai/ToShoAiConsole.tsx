@@ -26,6 +26,7 @@ import {
   Layers3,
   Loader2,
   MessageSquare,
+  Mic,
   Paperclip,
   PanelsTopLeft,
   Palette,
@@ -43,6 +44,8 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { EntityAvatar, PlayerAvatar } from "@/components/app/avatar-kit";
+import { DictationCapsule, isDictationActive } from "@/components/ui/dictation-capsule";
+import { useDictation } from "@/lib/useDictation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1450,6 +1453,22 @@ export function ToShoAiConsole({
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [composerIntent, setComposerIntent] = useState<ToShoAiComposerIntent>("auto");
   const [composerValue, setComposerValue] = useState("");
+
+  /**
+   * Диктування в палеті. Надиктоване ДОПИСУЄТЬСЯ до вже набраного, а не
+   * затирає його: людина часто починає друкувати, а доказувати їй зручніше
+   * голосом. Контекст "brief" — той самий, що для ТЗ: там чистка тексту
+   * агресивніша, ніж у коментарях, і питанню до помічника це пасує.
+   */
+  const dictation = useDictation({
+    context: "brief",
+    onResult: (text) => {
+      const clean = text.trim();
+      if (!clean) return;
+      setComposerValue((previous) => (previous ? `${previous.trimEnd()} ${clean}` : clean));
+      requestAnimationFrame(() => composerInputRef.current?.focus());
+    },
+  });
   const [pendingMagicMessage, setPendingMagicMessage] = useState("");
   const [activeMention, setActiveMention] = useState<ActiveMention | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<ToShoAiMentionSuggestion[]>([]);
@@ -2380,6 +2399,12 @@ export function ToShoAiConsole({
               />
             ) : null}
 
+            {/* Під час запису капсула стає НА МІСЦЕ всього рядка вводу, а не
+                поруч із ним: інакше лишається спокуса друкувати, і надиктоване
+                потім затре набране. */}
+            {isDictationActive(dictation) ? (
+              <DictationCapsule dictation={dictation} className="min-h-[44px] sm:min-h-[48px]" />
+            ) : (
             <div className="flex min-w-0 max-w-full items-end gap-2 overflow-hidden px-0">
               <Button
                 type="button"
@@ -2391,6 +2416,21 @@ export function ToShoAiConsole({
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
+              {/* Мікрофон у стилі сусідньої скріпки, а не 30-піксельний, як у
+                  чаті: у палеті керування великі, і дрібний кружечок поруч
+                  виглядав би випадковим. */}
+              {dictation.isSupported ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void dictation.start()}
+                  className="h-11 w-11 shrink-0 rounded-full p-0 sm:h-12 sm:w-12"
+                  aria-label="Продиктувати голосом"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              ) : null}
               <Textarea
                 ref={composerInputRef}
                 value={composerValue}
@@ -2417,6 +2457,7 @@ export function ToShoAiConsole({
                 {actionBusy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
+            )}
           </div>
         </div>
       </div>
