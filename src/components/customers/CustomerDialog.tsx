@@ -12,6 +12,7 @@ import { DropboxIcon } from "@/components/icons/DropboxIcon";
 import { POSITION_OPTIONS } from "@/components/customers/positionOptions";
 import { Input } from "@/components/ui/input";
 import { DateInput, TimeInput } from "@/components/ui/picker-input";
+import { FormField } from "@/components/ui/form-field";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -635,12 +636,20 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     </Button>
                   </div>
                   {form.logoUploadMode === "url" ? (
-                    <Input
-                      value={form.logoUrl}
-                      onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value, logoFile: null }))}
-                      placeholder="Посилання на логотип"
-                      className="h-9"
-                    />
+                    <FormField
+                      error={
+                        hasInvalidLogoUrl
+                          ? "Вкажіть звичайний URL. `data:image/...;base64,...` більше не підтримується."
+                          : null
+                      }
+                    >
+                      <Input
+                        value={form.logoUrl}
+                        onChange={(e) => setForm((prev) => ({ ...prev, logoUrl: e.target.value, logoFile: null }))}
+                        placeholder="Посилання на логотип"
+                        className="h-9"
+                      />
+                    </FormField>
                   ) : (
                     <div className="relative">
                       <input
@@ -660,11 +669,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                   )}
                 </div>
               </div>
-              {hasInvalidLogoUrl ? (
-                <div className="mt-2 text-xs text-destructive">
-                  Вкажіть звичайний URL. `data:image/...;base64,...` більше не підтримується.
-                </div>
-              ) : null}
               {form.logoUploadMode === "url" && normalizedLogoUrl ? (
                 <div className="mt-2 text-xs text-muted-foreground">
                   При збереженні CRM спробує завантажити картинку, конвертує її у WebP `128x128` і збереже у storage.
