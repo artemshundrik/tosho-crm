@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 import { logAiUsage } from "./_aiUsageLog";
 import { chatCostUsd } from "./_aiPricing";
+// Той самий реєстр, що будує меню застосунку. Прецедент такого імпорту з
+// функції вже є (_systemHealth.ts тягне systemHealthThresholds.ts).
+import { buildProjectMap } from "../../src/lib/projectMap";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -2860,6 +2863,13 @@ const SUPPORTED_ANALYTICS_INTENTS: Array<{ intent: SupportedAnalyticsIntent; lab
   { intent: "quote_summary", label: "quote/estimate totals and quote/customer summaries" },
 ];
 
+/**
+ * Статуси, після яких людина більше не працює. Той самий перелік, що в
+ * netlify/functions/_lib/teamMembers.ts — інакше бот і помічник почали б
+ * називати різний склад команди.
+ */
+const DEPARTED_EMPLOYMENT_STATUSES = new Set(["inactive", "rejected"]);
+
 const CRM_CAPABILITY_BOUNDARIES = [
   "Reliable CRM modules today: design tasks, estimates/quotes, customers/leads, contractors/suppliers, catalog, admin health.",
   "Orders, production, logistics, and shipping are incomplete. Treat them as limited technical/status signals, not authoritative business performance.",
@@ -3841,7 +3851,7 @@ async function listRoutingCandidates(
       adminClient
         .schema("tosho")
         .from("team_member_profiles")
-        .select("workspace_id,user_id,full_name,avatar_url,avatar_path,module_access")
+        .select("workspace_id,user_id,full_name,avatar_url,avatar_path,module_access,employment_status")
         .eq("workspace_id", workspaceId),
     ]);
 
@@ -3855,6 +3865,7 @@ async function listRoutingCandidates(
       avatar_url?: string | null;
       avatar_path?: string | null;
       module_access?: unknown;
+      employment_status?: string | null;
     }>).map((profile) => {
       const moduleAccessInput = (profile.module_access ?? {}) as Record<string, unknown>;
       return [
@@ -3867,6 +3878,7 @@ async function listRoutingCandidates(
           moduleAccess: Object.fromEntries(
             Object.entries(moduleAccessInput).filter(([, raw]) => typeof raw === "boolean")
           ) as Record<string, boolean>,
+          employmentStatus: normalizeText(profile.employment_status).toLowerCase(),
         },
       ];
     })
@@ -3883,10 +3895,22 @@ async function listRoutingCandidates(
       if (!userId) return null;
       const profile = profiles.get(userId);
       const email = normalizeText(row.email);
-      const label =
+      /**
+       * Звільнених НЕ викидаємо, а позначаємо.
+       *
+       * memberships_view тримає всіх, хто колись був у команді, і помічник
+       * через це називав людей, яких давно немає. Але просте викидання ламає
+       * історію: у рейтингу «хто скільки закрив за місяць» задачі звільненої
+       * лишались, а рядок ставав безіменним — «— 1 задача». Позначка чесна для
+       * обох випадків: у складі команди видно, що людина пішла, а статистика
+       * сходиться з підсумком.
+       */
+      const isDeparted = DEPARTED_EMPLOYMENT_STATUSES.has(profile?.employmentStatus ?? "");
+      const baseLabel =
         profile?.fullName ||
         (email.includes("@") ? email.split("@")[0] : email) ||
         userId.slice(0, 8);
+      const label = isDeparted ? `${baseLabel} (звільнено)` : baseLabel;
       return {
         userId,
         label,
@@ -6747,7 +6771,12 @@ async function callOpenAiDecision(params: {
   const apiKey = normalizeText(process.env.OPENAI_API_KEY);
   if (!apiKey) return null;
 
-  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4";
+  // Модель задає змінна OPENAI_MODEL; тут лише запасне значення. Luna — це
+  // GPT-5.6 у найдешевшому класі: ті самі інструменти й контекст 1.05M, що в
+  // Sol/Terra, але на порядок дешевша. Помічник ходить по даних CRM через
+  // tool calling — найважча з наших задач, тож якщо він почне плутатись,
+  // піднімати треба саме його: OPENAI_MODEL=gpt-5.6-terra.
+  const model = normalizeText(process.env.OPENAI_MODEL) || "gpt-5.6-luna";
   const startedAt = Date.now();
   const previousResponseId = extractPreviousOpenAiResponseId(params.recentMessages);
   const crmToolContext = params.analyticsContext
@@ -6826,6 +6855,13 @@ async function callOpenAiDecision(params: {
     "Reply in Ukrainian.",
     "Tone: calm, premium, operational, slightly playful, never clownish, never cheesy.",
     "Only rely on the provided CRM context, recent runtime signals, and curated knowledge snippets.",
+    // Без цієї карти помічник не знав, з чого складається сам застосунок: на
+    // питання «які в нас інтеграції» відповідав, що такого розділу немає.
+    // Карта збирається з реєстру модулів, тож новий розділ зʼявляється в ній
+    // сам — другого місця, яке треба не забути оновити, тут немає.
+    // Беремо ЛИШЕ напрямки (без переліку можливостей): 842 символи проти 1963,
+    // а карта їде в кожен запит.
+    `CRM structure — these sections exist, do not claim otherwise:\n${buildProjectMap({ includeFeatures: false })}`,
     `CRM capability boundaries:\n${CRM_CAPABILITY_BOUNDARIES.map((item) => `- ${item}`).join("\n")}`,
     `Supported CRM analytics intents:\n${analyticsIntentPromptList()}`,
     "For simple informational how-to questions, answer directly first.",
@@ -7438,7 +7474,7 @@ async function handleSend(params: {
       openAiDiagnostics = (error as Error & { diagnostics?: OpenAiDiagnostics })?.diagnostics ?? {
         attempted: true,
         ok: false,
-        model: normalizeText(process.env.OPENAI_MODEL) || "gpt-5.4",
+        model: normalizeText(process.env.OPENAI_MODEL) || "gpt-5.6-luna",
         responseId: null,
         previousResponseId: null,
         latencyMs: null,
@@ -7468,7 +7504,7 @@ async function handleSend(params: {
       openAiDiagnostics = {
         attempted: apiKeyConfigured,
         ok: false,
-        model: normalizeText(process.env.OPENAI_MODEL) || (apiKeyConfigured ? "gpt-5.4" : null),
+        model: normalizeText(process.env.OPENAI_MODEL) || (apiKeyConfigured ? "gpt-5.6-luna" : null),
         responseId: null,
         previousResponseId: null,
         latencyMs: null,
