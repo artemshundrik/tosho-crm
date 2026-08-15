@@ -164,8 +164,8 @@ export function PrintSpecPanel({ quoteItemId, presetKey, saved, canEdit, onSaved
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
               Скасувати
             </Button>
-            <Button onClick={() => void save()} disabled={saving}>
-              {saving ? "Збереження..." : "Зберегти"}
+            <Button onClick={() => void save()} loading={saving}>
+              Зберегти
             </Button>
           </DialogFooter>
         </DialogContent>

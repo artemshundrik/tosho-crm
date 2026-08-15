@@ -1767,8 +1767,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Скасувати
             </Button>
-            <Button onClick={onSubmit} disabled={saving}>
-              {saving ? "Збереження..." : submitLabel}
+            {/* loading, а не підміна підпису: кнопка лишається на місці й не
+                змінює ширину, а спінер стає всередині неї. */}
+            <Button onClick={onSubmit} loading={saving}>
+              {submitLabel}
             </Button>
           </SheetFooter>
         </div>

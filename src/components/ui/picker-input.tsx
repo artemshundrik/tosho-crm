@@ -1,7 +1,7 @@
 import * as React from "react";
 import { format, parse, isValid } from "date-fns";
 import { uk } from "date-fns/locale";
-import { CalendarDays, Clock, Loader2 } from "lucide-react";
+import { CalendarDays, Clock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -282,9 +282,8 @@ function PickerPanel({
           <Button type="button" variant="outline" size="sm" className="h-[34px]" disabled={saving} onClick={onDraftCancel}>
             Скасувати
           </Button>
-          <Button type="button" size="sm" className="h-[34px] gap-1.5" disabled={saving} onClick={() => void onDraftCommit?.()}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-            {saving ? "Зберігаємо" : "Зберегти"}
+          <Button type="button" size="sm" className="h-[34px]" loading={saving} onClick={() => void onDraftCommit?.()}>
+            Зберегти
           </Button>
         </div>
       ) : null}

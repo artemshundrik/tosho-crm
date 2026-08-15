@@ -1166,12 +1166,12 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
               Скасувати
             </Button>
             {onSecondarySubmit && secondarySubmitLabel ? (
-              <Button variant="secondary" onClick={onSecondarySubmit} disabled={saving}>
-                {saving ? "Збереження..." : secondarySubmitLabel}
+              <Button variant="secondary" onClick={onSecondarySubmit} loading={saving}>
+                {secondarySubmitLabel}
               </Button>
             ) : null}
-            <Button onClick={onSubmit} disabled={saving}>
-              {saving ? "Збереження..." : submitLabel}
+            <Button onClick={onSubmit} loading={saving}>
+              {submitLabel}
             </Button>
           </SheetFooter>
         </div>
