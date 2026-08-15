@@ -108,6 +108,7 @@ import {
   waitForSignedAttachmentUrl,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
+import { ATTACHMENT_DELETE_DENIED, canDeleteOwnAttachment } from "@/lib/quoteAttachmentAccess";
 import {
   parseStoredDesignOutputFiles,
   recoverDesignOutputFilesFromHistory,
@@ -1696,15 +1697,14 @@ export default function DesignTaskPage() {
   const isAssignedToMe =
     !!userId && ((!!task?.assigneeUserId && task.assigneeUserId === userId) || isCollaboratorOnTask);
 
+  /**
+   * Своє вкладення прибирає той, хто його завантажив (REQ-33). Умови «і я
+   * менеджер цієї задачі» тут більше немає: вона робила помилково прикріплений
+   * файл невидалимим для всіх — див. src/lib/quoteAttachmentAccess.ts.
+   */
   const canDeleteTaskBriefAttachment = useCallback(
-    (attachment: AttachmentRow) => {
-      const managerUserId =
-        typeof task?.metadata?.manager_user_id === "string" && task.metadata.manager_user_id
-          ? (task.metadata.manager_user_id as string)
-          : task?.quoteManagerUserId ?? null;
-      return Boolean(managerUserId && userId && managerUserId === userId && attachment.uploaded_by === userId);
-    },
-    [task, userId]
+    (attachment: AttachmentRow) => canDeleteOwnAttachment(attachment.uploaded_by, userId),
+    [userId]
   );
 
   const getTaskDisplayNumber = (value: DesignTask | null) => {
@@ -4311,27 +4311,28 @@ export default function DesignTaskPage() {
     const target = attachments.find((file) => file.id === attachmentId);
     if (!target) return;
     if (!canDeleteTaskBriefAttachment(target)) {
-      toast.error("Недостатньо прав", {
-        description: "Видаляти ці файли може лише менеджер задачі, який їх завантажив.",
-      });
+      toast.error("Недостатньо прав", { description: ATTACHMENT_DELETE_DENIED });
       return;
     }
 
     setAttachmentDeletingId(attachmentId);
     try {
-      if (target.storage_bucket && target.storage_path) {
-        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
-      }
-
+      // Порядок навмисний: спершу запис, потім файл. Політика на сховищі ширша
+      // за політику на таблиці, тож при зворотному порядку відмова RLS
+      // наставала б після того, як файл уже знищено.
       if (isUuid(task.quoteId)) {
-        const { error: deleteError } = await supabase
+        const { data: deletedRows, error: deleteError } = await supabase
           .schema("tosho")
           .from("quote_attachments")
           .delete()
           .eq("quote_id", task.quoteId)
           .eq("storage_bucket", target.storage_bucket as string)
-          .eq("storage_path", target.storage_path as string);
+          .eq("storage_path", target.storage_path as string)
+          .select("id");
         if (deleteError) throw deleteError;
+        // Відмова RLS не помилка, а нуль змінених рядків: без цієї перевірки
+        // вона показалась би як «Файл видалено».
+        if ((deletedRows ?? []).length === 0) throw new Error(ATTACHMENT_DELETE_DENIED);
       } else {
         const currentFiles = Array.isArray(task.metadata?.standalone_brief_files)
           ? (task.metadata.standalone_brief_files as Array<Record<string, unknown>>)
@@ -4349,13 +4350,19 @@ export default function DesignTaskPage() {
           ...(task.metadata ?? {}),
           standalone_brief_files: nextFiles,
         };
-        const { error: updateError } = await supabase
+        const { data: updatedRows, error: updateError } = await supabase
           .from("activity_log")
           .update({ metadata: nextMetadata as Json })
           .eq("id", task.id)
-          .eq("team_id", effectiveTeamId);
+          .eq("team_id", effectiveTeamId)
+          .select("id");
         if (updateError) throw updateError;
+        if ((updatedRows ?? []).length === 0) throw new Error(ATTACHMENT_DELETE_DENIED);
         setTask((prev) => (prev ? { ...prev, metadata: nextMetadata } : prev));
+      }
+
+      if (target.storage_bucket && target.storage_path) {
+        await removeAttachmentWithVariants(target.storage_bucket, target.storage_path);
       }
 
       setAttachments((prev) => prev.filter((file) => file.id !== attachmentId));
