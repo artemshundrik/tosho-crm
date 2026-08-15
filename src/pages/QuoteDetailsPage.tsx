@@ -46,7 +46,6 @@ import {
   uploadAttachmentWithVariants,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
-import { ATTACHMENT_DELETE_DENIED, canDeleteOwnAttachment } from "@/lib/quoteAttachmentAccess";
 import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import { convertWebpBlobForSharing, isWebpBlob, swapFilenameExtension } from "@/lib/imageConversion";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
@@ -1113,23 +1112,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     ((permissions.isAdmin || permissions.isManagerJob || isQuoteManagerJobRole(viewerJobRole)) &&
       userId !== null &&
       (quoteManagerUserId === userId || quoteCreatedByUserId === userId));
-  /**
-   * Своє вкладення видаляє той, хто його завантажив, — чий би це не був
-   * прорахунок (REQ-33).
-   *
-   * Раніше тут стояла ще й умова «і я менеджер цього прорахунку», через що файл,
-   * помилково прикріплений до чужого прорахунку, не міг прибрати ніхто: у
-   * менеджера прорахунку не збігався автор, в автора — менеджер. Кнопка просто
-   * зникала, без жодного пояснення.
-   *
-   * Дзеркало цього правила живе в RLS (scripts/quote-attachments-author-delete.sql):
-   * автор АБО менеджер команди. Інтерфейс лишається вужчим — показує кнопку
-   * тільки авторові, — бо «менеджер прибирає за іншими» це прибирання, а не
-   * щоденна дія, і на видному місці їй не місце.
-   */
+  const canManagerDeleteOwnDesignerBriefFiles = quoteManagerUserId === userId;
   const canDeleteDesignerBriefAttachment = useCallback(
-    (attachment: QuoteAttachment) => canDeleteOwnAttachment(attachment.uploadedBy, userId),
-    [userId]
+    (attachment: QuoteAttachment) =>
+      canManagerDeleteOwnDesignerBriefFiles &&
+      Boolean(userId) &&
+      (attachment.uploadedBy ?? null) === userId,
+    [canManagerDeleteOwnDesignerBriefFiles, userId]
   );
 
   const loadCurrentManagerRate = useCallback(async () => {
@@ -4095,34 +4084,27 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!deleteAttachmentTarget || attachmentsDeletingId) return;
     const attachment = deleteAttachmentTarget;
     if (!canDeleteDesignerBriefAttachment(attachment)) {
-      setAttachmentsDeleteError(ATTACHMENT_DELETE_DENIED);
+      setAttachmentsDeleteError("Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.");
       setDeleteAttachmentOpen(false);
       setDeleteAttachmentTarget(null);
-      toast.error("Недостатньо прав", { description: ATTACHMENT_DELETE_DENIED });
+      toast.error("Недостатньо прав", {
+        description: "Видаляти ці файли може лише менеджер прорахунку, який їх завантажив.",
+      });
       return;
     }
     setAttachmentsDeletingId(attachment.id);
     setAttachmentsDeleteError(null);
     try {
-      // Спершу рядок у базі, потім файл у сховищі — саме в такому порядку.
-      // Політика на сховищі ширша за політику на таблиці, тож при зворотному
-      // порядку відмова RLS наставала б ПІСЛЯ того, як файл уже знищено: у
-      // прорахунку лишався б рядок, що вказує в нікуди.
-      const { data: deletedRows, error } = await supabase
-        .schema("tosho")
-        .from("quote_attachments")
-        .delete()
-        .eq("id", attachment.id)
-        .select("id");
-      if (error) throw error;
-      // RLS не помиляється — вона просто не бачить рядка, і delete повертає
-      // успіх із нулем змін. Без цієї перевірки відмова виглядала б як
-      // «Файл видалено», а файл лишався б на місці.
-      if ((deletedRows ?? []).length === 0) throw new Error(ATTACHMENT_DELETE_DENIED);
-
       if (attachment.storageBucket && attachment.storagePath) {
         await removeAttachmentWithVariants(attachment.storageBucket, attachment.storagePath);
       }
+
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .delete()
+        .eq("id", attachment.id);
+      if (error) throw error;
 
       if (quoteId && attachment.storageBucket && attachment.storagePath) {
         const { data: linkedTasks, error: linkedTasksError } = await supabase
