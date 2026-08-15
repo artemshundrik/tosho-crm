@@ -49,7 +49,7 @@ const ChipPicker: React.FC<{
           disabled={disabled}
           className={cn(
             "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm transition-all duration-150",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             "disabled:cursor-not-allowed disabled:opacity-60",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"

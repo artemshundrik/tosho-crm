@@ -49,10 +49,10 @@ export function DateQuickActions({
           size="sm"
           variant="ghost"
           className={cn(
-            "h-[30px] w-full justify-center rounded-[9px] border px-1.5 text-xs font-medium",
+            "h-[30px] w-full justify-center rounded-lg border px-1.5 text-xs font-medium",
             action.muted
               ? "border-transparent text-muted-foreground hover:text-foreground"
-              : "border-border/60 hover:border-primary hover:text-primary"
+              : "border-border/60 hover:border-foreground/30 hover:text-foreground"
           )}
           onClick={() => void onSelect(action.value)}
         >

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { TOOLBAR_CONTROL_ACTIVE } from "@/components/ui/controlStyles";
 
 /**
  * Linear-style Chip component
@@ -32,12 +33,13 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
           "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full",
           "border border-border/30 bg-muted/10 text-foreground",
           "transition-all duration-150",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-1",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
           "disabled:pointer-events-none disabled:opacity-50",
           // Hover state
           "hover:bg-muted/20 hover:border-border/40 hover:cursor-pointer",
-          // Active state
-          active && "bg-primary/10 border-primary/30 text-primary hover:bg-primary/15",
+          // Активний стан — той самий нейтральний рецепт, що в тулбарних
+          // фільтрах: увімкнене просто темнішає, а не синіє.
+          active && TOOLBAR_CONTROL_ACTIVE,
           // Size variants
           size === "sm" && "h-8 px-3 text-xs",
           size === "md" && "h-9 px-3.5 text-sm",

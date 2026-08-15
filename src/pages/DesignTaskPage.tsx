@@ -9901,7 +9901,7 @@ export default function DesignTaskPage() {
                 type="button"
                 onClick={() => setActiveDesignTab(tab.value)}
                 className={cn(
-                  "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                  "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                   isActive
                     ? "border-primary/35 bg-primary/10 text-primary"
                     : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground"

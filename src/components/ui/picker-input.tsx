@@ -234,10 +234,10 @@ function PickerPanel({
                     size="sm"
                     variant="ghost"
                     className={cn(
-                      "h-[30px] w-full justify-center rounded-[9px] border px-1 text-xs font-medium tabular-nums",
+                      "h-[30px] w-full justify-center rounded-lg border px-1 text-xs font-medium tabular-nums",
                       preset === timeValue
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border/60 hover:border-primary hover:text-primary"
+                        ? "border-control-active-border bg-control-active text-foreground"
+                        : "border-border/60 hover:border-foreground/30 hover:text-foreground"
                     )}
                     onClick={() => onPickTime?.(preset)}
                   >

@@ -1,5 +1,5 @@
 export const BRIEF_SURFACE_FRAME_CLASS =
-  "w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  "w-full rounded-[var(--radius-lg)] border border-border/40 bg-muted/[0.03] text-left transition-colors hover:border-foreground/30 hover:bg-muted/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
 
 export const BRIEF_SURFACE_TEXT_CLASS = "text-sm leading-7 text-foreground";
 

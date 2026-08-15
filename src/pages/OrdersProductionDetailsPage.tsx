@@ -1834,7 +1834,7 @@ export default function OrdersProductionDetailsPage() {
               <button
                 type="button"
                 onClick={() => void openCustomerEditor(record.customerId!)}
-                className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-80"
+                className="shrink-0 rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 hover:opacity-80"
                 aria-label="Редагувати замовника"
                 title="Редагувати замовника"
               >

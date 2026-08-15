@@ -203,7 +203,7 @@ const CommandItem = React.forwardRef<
       // не натискав. Тому на вузьких екранах підсвітку прибираємо, а замість неї
       // даємо чесний стан натискання під пальцем.
       "max-sm:aria-selected:bg-transparent max-sm:aria-selected:text-foreground max-sm:active:bg-muted",
-      "focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+      "focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
       "data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50",
       className
     )}

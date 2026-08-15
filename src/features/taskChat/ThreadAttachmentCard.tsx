@@ -53,7 +53,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
       <button
         type="button"
         onClick={() => setPreviewOpen(true)}
-        className="block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="block w-full overflow-hidden rounded-2xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       >
         {url ? (
           <img

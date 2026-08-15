@@ -66,7 +66,7 @@ export function DeliveryPointsSection({
           <button
             type="button"
             onClick={onAdd}
-            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-background/30 px-4 py-6 text-center transition-colors hover:border-border hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-background/30 px-4 py-6 text-center transition-colors hover:border-border hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             <MapPin className="h-5 w-5 text-muted-foreground/70" />
             <span className="text-sm text-muted-foreground">

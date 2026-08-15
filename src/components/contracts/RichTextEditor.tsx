@@ -36,7 +36,7 @@ export const RichTextEditor = ({ value, onChange, disabled, className, ariaLabel
     editorProps: {
       attributes: {
         class: cn(
-          "min-h-[120px] rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40",
+          "min-h-[120px] rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20",
           "prose prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0",
           disabled && "cursor-not-allowed opacity-60"
         ),

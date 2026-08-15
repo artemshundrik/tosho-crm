@@ -576,7 +576,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
               <button
                 type="button"
                 title="Змінити лого"
-                className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="group relative shrink-0 rounded-full ring-offset-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
                 {displayedLogoUrl || form.logoUrl.trim() ? (
                   <EntityAvatar

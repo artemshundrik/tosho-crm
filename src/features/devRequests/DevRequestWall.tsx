@@ -112,7 +112,7 @@ export function DevRequestWall({
             className={cn(
               "flex h-full flex-col rounded-2xl border border-border/60 bg-card p-3 text-left",
               "cursor-pointer transition-colors hover:border-foreground/25",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             )}
           >
             {/* Порядок той самий, що на дошці: пріоритет → тип словом → номер

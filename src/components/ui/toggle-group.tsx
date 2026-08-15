@@ -115,7 +115,7 @@ const toggleGroupItemVariants = cva(
   [
     "inline-flex items-center justify-center whitespace-nowrap rounded-[var(--radius-md)]",
     "text-sm font-medium transition-all",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
     "data-[state=on]:bg-muted data-[state=on]:text-foreground data-[state=on]:shadow-sm",
   ].join(" "),

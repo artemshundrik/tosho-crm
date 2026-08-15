@@ -140,7 +140,7 @@ const DialogContent = React.forwardRef<
           }}
           className={cn(
             "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           )}
         >
           <X className="h-4 w-4" />

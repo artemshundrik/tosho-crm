@@ -30,7 +30,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
             className={cn(
               "inline-flex h-8 w-8 items-center justify-center rounded-full",
               "text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/40",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
               isDisabled && "pointer-events-none opacity-50"
             )}
             aria-label={visible ? "Сховати пароль" : "Показати пароль"}

@@ -332,7 +332,7 @@ function AbsencePlannerImpl({
                   <button
                     key={day.dateKey}
                     type="button"
-                    className={cn(cellClass, "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50")}
+                    className={cn(cellClass, "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-foreground/20")}
                     style={style}
                     title={`Додати відсутність — ${person.name}, ${day.dateKey}`}
                     aria-label={`Додати відсутність: ${person.name}, ${day.dateKey}`}

@@ -5947,7 +5947,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     type="button"
                     onClick={() => setActiveQuoteTab(tab.value)}
                     className={cn(
-                      "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      "relative inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       isActive
                         ? "border-primary/35 bg-primary/10 text-primary"
                         : "border-border/45 bg-background text-muted-foreground hover:border-border hover:bg-muted/30 hover:text-foreground",
@@ -6227,7 +6227,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         key={item.id}
                         className={cn(
-                          "overflow-hidden rounded-[22px] border border-border/60 bg-background shadow-sm",
+                          "overflow-hidden rounded-4xl border border-border/60 bg-background shadow-sm",
                           itemIndex > 0 && "mt-4"
                         )}
                       >
@@ -6475,7 +6475,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             type="button"
                                             onClick={() => selectRunForItem(run, item.id)}
                                             className={cn(
-                                              "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                                              "inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                                               isSelected
                                                 ? "border-primary bg-primary text-primary-foreground"
                                                 : "border-border/60 bg-background hover:bg-muted/40"
@@ -7720,7 +7720,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           <div key={file.id} className="group rounded-xl border border-border/40 p-3 transition-colors hover:bg-muted/10">
                             <button
                               type="button"
-                              className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:hover:scale-100"
+                              className="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:hover:scale-100"
                               onClick={() => {
                                 if (!previewImage) return;
                                 void ensureAttachmentAccessUrl(file, { variant: "preview" }).then((url) => {
@@ -8288,7 +8288,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         role="button"
                         tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         onClick={() => setFilesCustomerOpen((v) => !v)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
@@ -8433,7 +8433,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               type="button"
                                               onClick={openPreview}
                                               title={displayName}
-                                              className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                              className="min-w-0 truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
                                             >
                                               {displayName}
                                             </button>
@@ -8518,7 +8518,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         role="button"
                         tabIndex={0}
-                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        className="flex w-full cursor-pointer items-center justify-between rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         onClick={() => setFilesDocsOpen((v) => !v)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {

@@ -170,7 +170,7 @@ function SimpleModelCardBase({
       tabIndex={0}
       className={cn(
         "group relative flex cursor-pointer flex-col rounded-xl border bg-card transition-all duration-200",
-        "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+        "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         !validation.isValid
           ? "border-warning-soft-border hover:border-warning-foreground/50"
           : "border-border/60 hover:border-primary/30"

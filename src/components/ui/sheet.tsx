@@ -166,7 +166,7 @@ const SheetContent = React.forwardRef<
               guard.ask()
             }
           }}
-          className="absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none data-[state=open]:bg-secondary"
+          className="absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:pointer-events-none data-[state=open]:bg-secondary"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>

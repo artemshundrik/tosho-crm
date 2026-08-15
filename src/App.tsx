@@ -659,7 +659,7 @@ function LoginPage() {
           <div>
             <label className="text-sm font-medium text-foreground">Email</label>
             <input
-              className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@gmail.com"
@@ -672,7 +672,7 @@ function LoginPage() {
               <label className="text-sm font-medium text-foreground">Пароль</label>
               <PasswordInput
                 wrapperClassName="mt-1.5"
-                inputClassName="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                inputClassName="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
