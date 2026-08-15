@@ -675,6 +675,16 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbTo: ROUTES.membersAccess,
       showPageHeader: false,
     };
+  // Налаштування конкретного сервісу — перед загальною гілкою, інакше
+  // startsWith нижче забере підмаршрут собі й крихта загубить, де ми є.
+  if (pathname.startsWith(`${ROUTES.integrations}/nova-poshta`))
+    return {
+      title: "Нова Пошта",
+      subtitle: "Відправник, дефолти ТТН і власні розміри коробок.",
+      breadcrumbLabel: "Нова Пошта",
+      breadcrumbTo: `${ROUTES.integrations}/nova-poshta`,
+      showPageHeader: false,
+    };
   // Без власної гілки сторінка падала у fallback і показувала шапку «Огляд ·
   // Пульс команди», ще й із зайвим блоком заголовка, що зсував контент униз.
   if (pathname.startsWith(ROUTES.integrations))
@@ -2075,7 +2085,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 // pr-1 (4px), а не pr-1.5: пігулка всередині має відступ 4px
                 // зверху й знизу (h-8 у полі h-10), тож праворуч мусить бути
                 // рівно стільки ж — інакше вона висить не по центру рамки.
-                className="inline-flex h-10 w-[320px] items-center gap-2 rounded-xl border border-border/50 bg-muted/40 shadow-inner pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-200 hover:border-ai-accent/30 hover:bg-muted/60 hover:text-foreground cursor-pointer"
+                // Наведення нейтральне, як у решти полів: світлішає фон, рамка
+                // лишається своя. Рожевий обідок робив із поля рекламу модуля —
+                // сам колір бренду живе в пігулці праворуч, і цього досить.
+                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground shadow-inner transition-all duration-200 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2095,10 +2108,25 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     капсула всередині прямокутника — тим паче. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-200 group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
+                  className="pointer-events-none relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg border border-ai-accent/25 bg-ai-accent/[0.08] px-2.5 text-2xs font-medium text-ai-accent transition-colors duration-200 group-hover:border-ai-accent/45 group-hover:bg-ai-accent/15"
                 >
-                  <ToShoAiMark className="h-3.5 w-3.5" />
-                  ToSho AI
+                  {/* Блиск сам пробігає раз на сім із половиною секунд — щоб про
+                      можливість спитати згадували й ті, хто сюди не наводить.
+
+                      Маска гасить смугу біля лівого й правого країв: без неї
+                      блиск виринає й зникає об рамку різким зрізом, і рух
+                      читається як дешевий банер. Позицію веде ТІЛЬКИ анімація —
+                      статичний -translate-x-full тут ставити не можна: у
+                      Tailwind v4 translate і transform різні властивості, вони
+                      склались би й зсунули всю траєкторію. */}
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] motion-reduce:hidden"
+                  >
+                    <span className="absolute inset-y-0 left-0 w-full animate-ai-shimmer bg-[linear-gradient(100deg,transparent_0%,hsl(var(--ai-accent)/0.10)_35%,hsl(var(--ai-accent)/0.42)_50%,hsl(var(--ai-accent)/0.10)_65%,transparent_100%)] blur-[1px]" />
+                  </span>
+                  <ToShoAiMark className="relative h-3.5 w-3.5 [&>path:last-child]:animate-ai-spark motion-reduce:[&>path:last-child]:animate-none" />
+                  <span className="relative">ToSho AI</span>
                 </span>
               </button>
 
