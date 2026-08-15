@@ -912,15 +912,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
 
               <SectionCard title="Контакт">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>Імʼя контакту <span className="text-destructive">*</span></Label>
+                  <FormField label="Імʼя контакту" required>
                     <Input
                       value={form.contacts[0]?.name ?? ""}
                       onChange={(e) => updateContact(0, { name: e.target.value })}
                       placeholder="Імʼя та прізвище"
                       className="h-9"
                     />
-                  </div>
+                  </FormField>
                   <FormField label="Телефон" required error={fieldErrors?.contactPhone}>
                     <PhoneInput
                       value={form.contacts[0]?.phone ?? ""}
@@ -942,32 +941,32 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     />
                   </FormField>
                   {!isFopOwnership ? (
-                    <div className="grid gap-2">
-                      <Label>Посада</Label>
-                      <Select
-                        value={form.contacts[0]?.position ?? ""}
-                        onValueChange={(value) => updateContact(0, { position: value })}
-                      >
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Оберіть посаду" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {POSITION_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <FormField label="Посада">
+                      {({ fieldProps }) => (
+                        <Select
+                          value={form.contacts[0]?.position ?? ""}
+                          onValueChange={(value) => updateContact(0, { position: value })}
+                        >
+                          <SelectTrigger id={fieldProps.id} className="h-9">
+                            <SelectValue placeholder="Оберіть посаду" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {POSITION_OPTIONS.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </FormField>
                   ) : null}
-                  <div className="grid gap-2">
-                    <Label>Telegram</Label>
+                  <FormField label="Telegram">
                     <TelegramInput
                       value={form.contacts[0]?.telegram ?? ""}
                       onChange={(telegram) => updateContact(0, { telegram })}
                     />
-                  </div>
+                  </FormField>
                 </div>
               </SectionCard>
               <Button type="button" variant="outline" className="h-8 text-xs" onClick={() => setQuickMode(false)}>
@@ -1101,21 +1100,28 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label>Номер телефону</Label>
+                      {/* Вимога «потрібен телефон» стосується картки в цілому, а
+                          не конкретного рядка, тож показуємо її біля першого
+                          контакту — того, який заповнюють насамперед. */}
+                      <FormField
+                        label="Номер телефону"
+                        error={index === 0 ? fieldErrors?.contactPhone : undefined}
+                      >
                         <PhoneInput
                           value={contact.phone}
                           onChange={(phone) => updateContact(index, { phone })}
                         />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Email</Label>
+                      </FormField>
+                      <FormField
+                        label="Email"
+                        error={index === 0 ? fieldErrors?.contactEmail : undefined}
+                      >
                         <EmailInput
                           value={contact.email}
                           onChange={(email) => updateContact(index, { email })}
                           placeholder="name@company.com"
                         />
-                      </div>
+                      </FormField>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div className="grid gap-2">

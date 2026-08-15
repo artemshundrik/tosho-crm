@@ -68,7 +68,10 @@ export function FormField({
   };
 
   return (
-    <div className={cn("grid gap-2", className)}>
+    // content-start обовʼязково: у сітці форм комірки тягнуться під найвищу, і
+    // якщо в сусідній зʼявився рядок помилки, тут між підписом і полем виникає
+    // порожнеча — поля в одному ряду перестають стояти на спільній лінії.
+    <div className={cn("grid content-start gap-2", className)}>
       {label ? (
         <Label htmlFor={id}>
           {label}
