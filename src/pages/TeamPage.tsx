@@ -63,6 +63,7 @@ import {
   deleteTeamAbsence,
   isPresenceKind,
   isQuotaAbsenceKind,
+  listPendingTeamAbsences,
   listTeamAbsencesInRange,
   loadAbsenceDecisionComments,
   updateTeamAbsence,
@@ -72,6 +73,11 @@ import {
   type TeamAbsence,
   type TeamAbsenceKind,
 } from "@/lib/teamAbsences";
+import {
+  absenceWaitingDays,
+  formatAbsenceSubmittedAgo,
+  sortAbsencesByNewest,
+} from "@/lib/teamAbsenceQueue";
 import {
   ABSENCE_QUOTA_UNIT,
   ABSENCE_QUOTA_UNIT_LABEL,
@@ -349,6 +355,11 @@ export function TeamPage() {
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [absences, setAbsences] = useState<TeamAbsence[] | null>(null);
+  /**
+   * Черга погоджень окремо від журналу року: непогоджена заявка може бути на
+   * будь-який рік, а журнал — завжди про один (REQ-22).
+   */
+  const [pendingAll, setPendingAll] = useState<TeamAbsence[] | null>(null);
   const [absencesLoading, setAbsencesLoading] = useState(false);
   const [balances, setBalances] = useState<Map<string, AbsenceBalance>>(new Map());
   const [exceptions, setExceptions] = useState<Map<string, boolean>>(new Map());
@@ -373,6 +384,7 @@ export function TeamPage() {
   const todayKey = useMemo(() => toDateKey(new Date()), []);
   const selectedMonth = useMemo(() => addMonths(startOfMonth(new Date()), monthOffset), [monthOffset]);
   const year = selectedMonth.getFullYear();
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
 
   const { data, showSkeleton } = usePageData({
     cacheKey: `team-page:${userId ?? "none"}`,
@@ -413,7 +425,7 @@ export function TeamPage() {
     try {
       const from = `${year}-01-01`;
       const to = `${year + 1}-01-01`;
-      const [rows, calendar] = await Promise.all([
+      const [rows, calendar, pendingRows] = await Promise.all([
         listTeamAbsencesInRange({
           workspaceId,
           from,
@@ -421,8 +433,13 @@ export function TeamPage() {
           statuses: ["approved", "pending", "declined", "cancelled"],
         }),
         loadWorkdayExceptions({ workspaceId, from, to }),
+        // Черга погоджень свій рік не має — заявка на січень наступного року
+        // мусить бути видна вже в грудні (REQ-22). Помилку тут НЕ ковтаємо:
+        // тихо порожня черга погоджень — рівно та біда, від якої ця картка.
+        listPendingTeamAbsences({ workspaceId }),
       ]);
       setAbsences(rows);
+      setPendingAll(pendingRows);
       setExceptions(calendar.exceptions);
       setHolidayNames(calendar.holidayNames);
       const [balanceMap, comments] = await Promise.all([
@@ -441,6 +458,7 @@ export function TeamPage() {
       console.error("[team] absences load failed", error);
       toast.error("Не вдалося завантажити відсутності");
       setAbsences([]);
+      setPendingAll([]);
     } finally {
       setAbsencesLoading(false);
     }
@@ -538,13 +556,26 @@ export function TeamPage() {
     return map;
   }, [absences]);
 
-  const pendingRequests = useMemo(
-    () =>
-      (absences ?? [])
-        .filter((absence) => absence.status === "pending")
-        .sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    [absences]
-  );
+  /**
+   * Черга погоджень — з окремого запиту без року, свіжіші вгорі.
+   *
+   * До REQ-22 список брався з журналу поточного року й сортувався за ПОЧАТКОМ
+   * відсутності за зростанням: заявка, подана сьогодні на грудень, падала в
+   * самий кінець, а заявка на наступний рік не показувалась узагалі.
+   */
+  const pendingRequests = useMemo(() => sortAbsencesByNewest(pendingAll ?? []), [pendingAll]);
+
+  /**
+   * Журнал року + заявки поза ним, без дублів. Потрібен там, де питання не про
+   * рік, а про перетини: заявка на січень має бачити сусідні січневі.
+   */
+  const absencesWithPending = useMemo(() => {
+    const byId = new Map((absences ?? []).map((absence) => [absence.id, absence]));
+    for (const request of pendingAll ?? []) {
+      if (!byId.has(request.id)) byId.set(request.id, request);
+    }
+    return Array.from(byId.values());
+  }, [absences, pendingAll]);
 
   /**
    * Контекст рішення: скільки активних дизайн-задач у заявника і чи є серед
@@ -601,7 +632,9 @@ export function TeamPage() {
   const decideContextFor = useCallback(
     (request: TeamAbsence): AbsenceDecideContext | null => {
       if (!canManageAbsences) return null;
-      const overlaps = (absences ?? [])
+      // Перетини шукаємо і серед заявок поза роком: рішення по січневій заявці
+      // має бачити інші січневі, навіть якщо вкладка показує грудень.
+      const overlaps = absencesWithPending
         .filter(
           (other) =>
             other.id !== request.id &&
@@ -635,15 +668,25 @@ export function TeamPage() {
         dueInPeriod: isDesigner ? dueInPeriod : 0,
       };
     },
-    [absences, canManageAbsences, memberById, requesterTasks]
+    [absencesWithPending, canManageAbsences, memberById, requesterTasks]
   );
 
+  /**
+   * Свої записи — той самий напрямок, що й у черзі погоджень: свіже зверху.
+   * Разом із чергою це одна вкладка з одним правилом, а не два протилежні.
+   */
   const myAbsences = useMemo(
+    () => sortAbsencesByNewest(absencesWithPending.filter((absence) => absence.userId === userId)),
+    [absencesWithPending, userId]
+  );
+
+  /** Скільки моїх заявок на розгляді припадає не на показаний рік. */
+  const myPendingOutsideYear = useMemo(
     () =>
-      (absences ?? [])
-        .filter((absence) => absence.userId === userId)
-        .sort((a, b) => b.startDate.localeCompare(a.startDate)),
-    [absences, userId]
+      myAbsences.filter(
+        (absence) => absence.status === "pending" && Number(absence.startDate.slice(0, 4)) !== year
+      ).length,
+    [myAbsences, year]
   );
 
   const myBalance = useMemo(
@@ -984,12 +1027,14 @@ export function TeamPage() {
   // діалог знає лише «видали те, що зараз редагую». Після успіху закривається,
   // бо редагувати вже нічого.
   const handleAbsenceDeleteFromDialog = useCallback(async () => {
-    const target = (absences ?? []).find((absence) => absence.id === absenceEditingId);
+    // Шукаємо і серед заявок поза роком: у чергу погоджень тепер потрапляють
+    // заявки на наступний рік, і в журналі поточного їх немає (REQ-22).
+    const target = absencesWithPending.find((absence) => absence.id === absenceEditingId);
     if (!target) return;
     await handleAbsenceDelete(target);
     setAbsenceDialogOpen(false);
     setAbsenceEditingId(null);
-  }, [absences, absenceEditingId, handleAbsenceDelete]);
+  }, [absencesWithPending, absenceEditingId, handleAbsenceDelete]);
 
   const handleCancelRequest = useCallback(
     async (absence: TeamAbsence) => {
@@ -1746,12 +1791,39 @@ export function TeamPage() {
 
       {tab === "requests" ? (
         <div className="space-y-4">
+          {/* Рік цієї вкладки задається стрілками у «Календарі» — з самої
+              вкладки цього не видно ніяк. Поки він поточний, мовчимо; щойно
+              з'їхав — кажемо прямо й даємо чим повернутись (REQ-22). */}
+          {year !== currentYear ? (
+            <div
+              className={cn(
+                "flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-2xs",
+                toneBadgeClass.warning
+              )}
+            >
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                Записи нижче — за {year} рік: його вибрано стрілками у вкладці «Календар».
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-2xs"
+                onClick={() => setMonthOffset(0)}
+              >
+                Повернутись до {currentYear}
+              </Button>
+            </div>
+          ) : null}
           {canManageAbsences ? (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <CalendarRange className="h-4 w-4 text-primary" aria-hidden />
                   На погодженні
+                  {/* Роком не обмежено навмисно — на відміну від двох карток
+                      нижче. Підпис це проговорює, бо вкладка загалом річна. */}
+                  <span className="text-2xs font-normal text-muted-foreground">за всі роки</span>
                   <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
                     {pendingRequests.length}
                   </span>
@@ -1814,6 +1886,14 @@ export function TeamPage() {
               <CardTitle className="flex items-center gap-2 text-sm">
                 <CalendarDays className="h-4 w-4 text-primary" aria-hidden />
                 Мої відсутності — {year}
+                {/* Власні заявки на розгляді показуємо за будь-який рік: інакше
+                    людина не бачила б і не могла скасувати те, що подала на
+                    січень, поки вкладка стоїть на грудні. */}
+                {myPendingOutsideYear > 0 ? (
+                  <span className="text-2xs font-normal text-muted-foreground">
+                    + {myPendingOutsideYear} на розгляді поза роком
+                  </span>
+                ) : null}
                 <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">
                   {myAbsences.length}
                 </span>
@@ -2072,10 +2152,22 @@ function AbsenceRow({
   // «Інше» і «з дому» квоти не мають — рахуємо робочими днями, щоб показати
   // обсяг («3 роб. дн.»), але рядка «залишиться N із M» для них не буде.
   const quotaKind = isQuotaAbsenceKind(absence.kind) ? absence.kind : "day_off";
-  const chargedDays = countQuotaDaysInYear(quotaKind, absence, year, exceptions);
+  // Рік беремо з самої відсутності, а не з курсора вкладки: у черзі погоджень
+  // тепер бувають заявки на наступний рік, і з чужим роком вони показували б
+  // «0 днів · квота не списується» (REQ-22).
+  const rowYear = Number(absence.startDate.slice(0, 4)) || year;
+  const chargedDays = countQuotaDaysInYear(quotaKind, absence, rowYear, exceptions);
   const unitLabel = ABSENCE_QUOTA_UNIT_LABEL[ABSENCE_QUOTA_UNIT[quotaKind]];
   const restOnly = chargedDays === 0;
-  const bucket = balance && isQuotaAbsenceKind(absence.kind) ? balance[absence.kind] : null;
+  // Баланс порахований для завантаженого року. Для заявки на інший рік він
+  // просто не про неї — мовчати чесніше, ніж показати чуже число.
+  const bucket =
+    balance && rowYear === year && isQuotaAbsenceKind(absence.kind) ? balance[absence.kind] : null;
+  const submittedLabel = formatAbsenceSubmittedAgo(absence.createdAt);
+  const waitingDays = absence.status === "pending" ? absenceWaitingDays(absence.createdAt) : null;
+  // Три доби — та межа, після якої заявка вже не «щойно прилетіла». Свіжіші
+  // вгорі, тож без цієї позначки задавнена мовчки з'їжджала б у хвіст.
+  const waitingTooLong = waitingDays !== null && waitingDays >= 3;
 
   return (
     <div className="group flex items-center gap-3 py-2.5">
@@ -2096,6 +2188,13 @@ function AbsenceRow({
           <span className="text-muted-foreground">
             {restOnly ? "квота не списується" : `${chargedDays} ${pluralDays(chargedDays)} · ${unitLabel}`}
           </span>
+          {/* Дата подання — те, за чим список і впорядкований. Без неї порядок
+              «свіжі вгорі» виглядав би випадковим. */}
+          {submittedLabel ? (
+            <span className={cn("text-muted-foreground", waitingTooLong && toneTextClass.warning)}>
+              · {submittedLabel}
+            </span>
+          ) : null}
         </div>
         {bucket && absence.status === "pending" ? (
           <div className="mt-0.5 text-2xs text-muted-foreground">

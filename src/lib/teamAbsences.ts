@@ -37,6 +37,14 @@ export type TeamAbsence = {
   requestedBy: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
+  /**
+   * Коли заявку ПОДАЛИ — не плутати з датою початку відсутності.
+   *
+   * Черга погоджень сортувалась за початком відсутності, тож заявка, подана
+   * сьогодні на грудень, опинялась у самому низу (REQ-22). Колонка в базі була
+   * завжди, але в select не потрапляла, і на клієнт просто не приїжджала.
+   */
+  createdAt: string | null;
   // Причини рішення тут НЕМАЄ навмисно: колонку знято з табличного select,
   // бо журнал читає вся команда. Беремо її окремо — loadAbsenceDecisionComments().
 };
@@ -141,12 +149,15 @@ type TeamAbsenceRow = {
   requested_by: string | null;
   decided_by: string | null;
   decided_at: string | null;
+  created_at?: string | null;
 };
 
 const ABSENCE_COLUMNS =
   // decision_comment свідомо відсутній: грант на цю колонку відкликано
   // (scripts/team-absences-selfservice.sql), і запит із нею впаде.
-  "id, user_id, start_date, end_date, kind, status, comment, requested_by, decided_by, decided_at";
+  // created_at, навпаки, читати можна — і без нього черга погоджень не знає,
+  // коли заявку подали (REQ-22).
+  "id, user_id, start_date, end_date, kind, status, comment, requested_by, decided_by, decided_at, created_at";
 
 /** Статуси, які взагалі мають потрапляти на планер і в списки за замовчуванням. */
 export const LIVE_ABSENCE_STATUSES: TeamAbsenceStatus[] = ["approved", "pending"];
@@ -163,6 +174,7 @@ function mapAbsenceRow(row: TeamAbsenceRow): TeamAbsence {
     requestedBy: row.requested_by,
     decidedBy: row.decided_by,
     decidedAt: row.decided_at,
+    createdAt: row.created_at ?? null,
   };
 }
 
@@ -212,6 +224,35 @@ export async function listTeamAbsencesForMonth(
 ): Promise<TeamAbsence[]> {
   const { from, to } = monthRangeKeys(year, month);
   return listTeamAbsencesInRange({ workspaceId, from, to, statuses });
+}
+
+/**
+ * Черга погоджень — УСІ непогоджені заявки воркспейсу, без обмеження роком.
+ *
+ * Рік тут був дірою (REQ-22): решта вкладки «Запити» живе в межах одного року,
+ * і рік цей береться з курсора вкладки «Календар». Тобто заявка на січень
+ * наступного року існувала, чекала рішення — і не була видна нікому, поки
+ * хтось випадково не погортає календар уперед. Непогоджена заявка — це справа,
+ * а не архів, тож у неї свій запит без року.
+ *
+ * Свіжіші вгорі: черга відповідає на питання «що прилетіло нового». Скільки
+ * заявка вже чекає, видно з підпису в рядку — див. formatAbsenceSubmittedAgo.
+ */
+export async function listPendingTeamAbsences(params: {
+  workspaceId: string;
+}): Promise<TeamAbsence[]> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("team_absences")
+    .select(ABSENCE_COLUMNS)
+    .eq("workspace_id", params.workspaceId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .order("start_date", { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as TeamAbsenceRow[]).map(mapAbsenceRow);
 }
 
 /** Усі записи однієї людини за рік — для вкладки «Запити». */
