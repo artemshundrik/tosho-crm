@@ -5,6 +5,7 @@ import { chatCostUsd } from "./_aiPricing";
 // Той самий реєстр, що будує меню застосунку. Прецедент такого імпорту з
 // функції вже є (_systemHealth.ts тягне systemHealthThresholds.ts).
 import { buildProjectMap } from "../../src/lib/projectMap";
+import { buildCrmKnowledge } from "../../src/lib/crmKnowledge";
 
 type HttpEvent = {
   httpMethod?: string;
@@ -6862,6 +6863,9 @@ async function callOpenAiDecision(params: {
     // Беремо ЛИШЕ напрямки (без переліку можливостей): 842 символи проти 1963,
     // а карта їде в кожен запит.
     `CRM structure — these sections exist, do not claim otherwise:\n${buildProjectMap({ includeFeatures: false })}`,
+    // Домовленості, яких з реєстрів не видно. Саме на них помічник раніше
+    // вигадував: чому КЕП підписують руками, звідки береться ціна продажу.
+    `How this company actually works — treat these as facts, not suggestions:\n${buildCrmKnowledge()}`,
     `CRM capability boundaries:\n${CRM_CAPABILITY_BOUNDARIES.map((item) => `- ${item}`).join("\n")}`,
     `Supported CRM analytics intents:\n${analyticsIntentPromptList()}`,
     "For simple informational how-to questions, answer directly first.",
