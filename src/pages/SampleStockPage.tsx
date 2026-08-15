@@ -35,6 +35,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import {
+  DEFAULT_STOCK_KIND,
+  STOCK_KINDS,
+  STOCK_KIND_HINTS,
+  STOCK_KIND_LABELS,
+  groupByStockKind,
+  normalizeStockKind,
+  type StockKind,
+} from "@/lib/sampleStockKind";
+import {
   Archive,
   ArrowDown,
   ArrowUp,
@@ -62,6 +71,7 @@ type SampleStockItemRow = {
   currency?: "UAH" | "USD" | "EUR" | string | null;
   location?: string | null;
   comments?: string | null;
+  stock_kind?: string | null;
   is_archived?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -79,10 +89,13 @@ type SampleStockFormState = {
   unitPrice: string;
   location: string;
   comments: string;
+  stockKind: StockKind;
   isArchived: boolean;
 };
 
 type StockStatusFilter = "all" | "in_stock" | "reserved" | "low_stock" | "out_of_stock" | "archived";
+/** «Всі підрозділи» або один конкретний. */
+type StockKindFilter = "all" | StockKind;
 type StockMovementType = "incoming" | "outgoing" | "reserve" | "release" | "adjustment";
 
 type StockMovementState = {
@@ -110,10 +123,16 @@ const SAMPLE_STOCK_COLUMNS = [
   "currency",
   "location",
   "comments",
+  "stock_kind",
   "is_archived",
   "created_at",
   "updated_at",
 ].join(",");
+
+/** Той самий перелік без stock_kind — запасний захід, поки міграцію не застосовано. */
+const SAMPLE_STOCK_COLUMNS_LEGACY = SAMPLE_STOCK_COLUMNS.split(",")
+  .filter((column) => column !== "stock_kind")
+  .join(",");
 
 const EMPTY_FORM: SampleStockFormState = {
   name: "",
@@ -127,6 +146,7 @@ const EMPTY_FORM: SampleStockFormState = {
   unitPrice: "0",
   location: "",
   comments: "",
+  stockKind: DEFAULT_STOCK_KIND,
   isArchived: false,
 };
 
@@ -244,6 +264,7 @@ function normalizeFormFromRow(row?: SampleStockItemRow | null): SampleStockFormS
     unitPrice: String(toNumber(row.unit_price)),
     location: normalizeText(row.location),
     comments: normalizeText(row.comments),
+    stockKind: normalizeStockKind(row.stock_kind),
     isArchived: row.is_archived === true,
   };
 }
@@ -284,6 +305,196 @@ function QuantityCell({ row }: { row: SampleStockItemRow }) {
   );
 }
 
+type StockRowHandlers = {
+  onEdit: (row: SampleStockItemRow) => void;
+  onMovement: (row: SampleStockItemRow, type: StockMovementType) => void;
+  onDelete: (row: SampleStockItemRow) => void;
+};
+
+/**
+ * Меню рядка — одне на обидві розкладки.
+ *
+ * Раніше мобільна й десктопна копії розійшлись: на телефоні бракувало
+ * «Виставити залишок». Розкладка складу на підрозділи множила б це розходження
+ * ще на два, тож меню тепер спільне.
+ */
+function StockRowActions({ row, handlers }: { row: SampleStockItemRow; handlers: StockRowHandlers }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => handlers.onEdit(row)}>Редагувати</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => handlers.onMovement(row, "incoming")}>
+          <ArrowUp className="mr-2 h-4 w-4" />
+          Поповнити
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handlers.onMovement(row, "outgoing")}>
+          <ArrowDown className="mr-2 h-4 w-4" />
+          Списати
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handlers.onMovement(row, "reserve")}>
+          <Lock className="mr-2 h-4 w-4" />
+          Зарезервувати
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handlers.onMovement(row, "release")}>
+          <Unlock className="mr-2 h-4 w-4" />
+          Зняти резерв
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handlers.onMovement(row, "adjustment")}>
+          <Archive className="mr-2 h-4 w-4" />
+          Виставити залишок
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => handlers.onDelete(row)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Видалити
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function StockCardsMobile({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: StockRowHandlers }) {
+  return (
+    <div className="space-y-3 md:hidden">
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          className="rounded-inner border border-border bg-card p-4"
+          onClick={() => handlers.onEdit(row)}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <ProductIdentity row={row} />
+            <div onClick={(event) => event.stopPropagation()}>
+              <StockRowActions row={row} handlers={handlers} />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Залишок</div>
+              <QuantityCell row={row} />
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Ціна / сума</div>
+              <div className="font-medium">{formatMoney(toNumber(row.unit_price))}</div>
+              <div className="text-xs text-muted-foreground">{formatMoney(getTotalValue(row))}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Колір</div>
+              <div>{row.color?.trim() || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Місце</div>
+              <div>{row.location?.trim() || "—"}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: StockRowHandlers }) {
+  return (
+    <div className="hidden md:block">
+      <Table variant="list" size="md">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[34%] pl-6">Товар</TableHead>
+            <TableHead className="w-[15%]">Колір</TableHead>
+            <TableHead className="w-[16%]">Залишок</TableHead>
+            <TableHead className="w-[12%]">Ціна</TableHead>
+            <TableHead className="w-[12%]">Сума</TableHead>
+            <TableHead className="w-[14%]">Місце</TableHead>
+            <TableHead className="w-12" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              key={row.id}
+              className="group cursor-pointer hover:bg-muted/10"
+              onClick={() => handlers.onEdit(row)}
+            >
+              <TableCell className="pl-6 align-top">
+                <ProductIdentity row={row} />
+              </TableCell>
+              <TableCell className="align-top">
+                <div className="font-medium">{row.color?.trim() || "—"}</div>
+                {row.category?.trim() ? <div className="text-xs text-muted-foreground">{row.category}</div> : null}
+              </TableCell>
+              <TableCell className="align-top">
+                <QuantityCell row={row} />
+              </TableCell>
+              <TableCell className="align-top tabular-nums">{formatMoney(toNumber(row.unit_price))}</TableCell>
+              <TableCell className="align-top tabular-nums font-medium">{formatMoney(getTotalValue(row))}</TableCell>
+              <TableCell className="align-top">{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
+              <TableCell
+                className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <StockRowActions row={row} handlers={handlers} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Підрозділ складу: заголовок, лічильник, сумарна вартість — і той самий
+ * список під ним.
+ *
+ * Сума в заголовку не прикраса: питання «скільки грошей лежить у витратних
+ * матеріалах» тепер має відповідь, якої на плоскому списку не було взагалі.
+ */
+function StockSection({
+  kind,
+  rows,
+  handlers,
+}: {
+  kind: StockKind;
+  rows: SampleStockItemRow[];
+  handlers: StockRowHandlers;
+}) {
+  const totalValue = rows.reduce((sum, row) => sum + getTotalValue(row), 0);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
+        <h2 className="text-base font-semibold text-foreground">{STOCK_KIND_LABELS[kind]}</h2>
+        <span className="text-sm tabular-nums text-muted-foreground">
+          {rows.length} {rows.length === 1 ? "позиція" : "позицій"}
+        </span>
+        {rows.length > 0 ? (
+          <span className="text-sm tabular-nums text-muted-foreground">· {formatMoney(totalValue)}</span>
+        ) : null}
+        <span className="w-full text-xs text-muted-foreground sm:w-auto">{STOCK_KIND_HINTS[kind]}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="rounded-inner border border-dashed border-border bg-card/40 px-4 py-5 text-sm text-muted-foreground">
+          У цьому підрозділі поки порожньо.
+        </div>
+      ) : (
+        <>
+          <StockCardsMobile rows={rows} handlers={handlers} />
+          <StockTable rows={rows} handlers={handlers} />
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function SampleStockPage() {
   const { teamId, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<SampleStockItemRow[]>([]);
@@ -295,6 +506,7 @@ export default function SampleStockPage() {
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES_FILTER);
   const [locationFilter, setLocationFilter] = useState(ALL_LOCATIONS_FILTER);
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
+  const [kindFilter, setKindFilter] = useState<StockKindFilter>("all");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<SampleStockItemRow | null>(null);
@@ -324,15 +536,27 @@ export default function SampleStockPage() {
     setError(null);
     setSchemaMissing(false);
 
-    try {
-      const { data, error: queryError } = await supabase
+    const fetchItems = (columns: string) =>
+      supabase
         .schema("tosho")
         .from("sample_stock_items")
-        .select(SAMPLE_STOCK_COLUMNS)
+        .select(columns)
         .eq("team_id", teamId)
         .order("is_archived", { ascending: true })
         .order("name", { ascending: true, nullsFirst: false })
         .order("color", { ascending: true, nullsFirst: false });
+
+    try {
+      let { data, error: queryError } = await fetchItems(SAMPLE_STOCK_COLUMNS);
+
+      // Колонка stock_kind їде окремою міграцією (scripts/sample-stock-kind.sql),
+      // і деплой може випередити її застосування. Без цього запасного заходу
+      // невідома колонка вбивала б УСЮ сторінку складу, а не лише поділ на
+      // підрозділи — тож на такій помилці перечитуємо без неї, і весь склад
+      // просто показується як «Взірці», поки міграцію не застосують.
+      if (queryError && /stock_kind/i.test(queryError.message ?? "")) {
+        ({ data, error: queryError } = await fetchItems(SAMPLE_STOCK_COLUMNS_LEGACY));
+      }
 
       if (queryError) throw queryError;
       setRows((((data ?? []) as unknown) as SampleStockItemRow[]) ?? []);
@@ -396,17 +620,38 @@ export default function SampleStockPage() {
     });
   }, [categoryFilter, locationFilter, rows, search, statusFilter]);
 
+  /**
+   * Підрозділи для показу. Порожній підрозділ теж лишається на сторінці —
+   * заголовок «Залишки на складі · 0» каже «тут нічого немає», а зниклий
+   * заголовок сказав би «такого підрозділу не існує» (REQ-38).
+   *
+   * Виняток — коли фільтр звужено до одного підрозділу: тоді другий не
+   * показуємо, бо його щойно свідомо відсіяли.
+   */
+  const sections = useMemo(() => {
+    const grouped = groupByStockKind(filteredRows, (row) => row.stock_kind);
+    return kindFilter === "all" ? grouped : grouped.filter((section) => section.kind === kindFilter);
+  }, [filteredRows, kindFilter]);
+
+  /** Скільки позицій реально показано — з урахуванням фільтра підрозділу. */
+  const visibleCount = useMemo(
+    () => sections.reduce((total, section) => total + section.items.length, 0),
+    [sections]
+  );
+
   const hasActiveFilters =
     Boolean(search.trim()) ||
     categoryFilter !== ALL_CATEGORIES_FILTER ||
     locationFilter !== ALL_LOCATIONS_FILTER ||
-    statusFilter !== "all";
+    statusFilter !== "all" ||
+    kindFilter !== "all";
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setCategoryFilter(ALL_CATEGORIES_FILTER);
     setLocationFilter(ALL_LOCATIONS_FILTER);
     setStatusFilter("all");
+    setKindFilter("all");
   }, []);
 
   const openCreate = useCallback(() => {
@@ -432,6 +677,11 @@ export default function SampleStockPage() {
     });
     setMovementError(null);
   }, []);
+
+  const rowHandlers = useMemo<StockRowHandlers>(
+    () => ({ onEdit: openEdit, onMovement: openMovement, onDelete: setDeleteTarget }),
+    [openEdit, openMovement]
+  );
 
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
@@ -461,6 +711,16 @@ export default function SampleStockPage() {
       }
       filters={
         <div className="grid w-full gap-2 sm:flex sm:w-auto">
+          <ToolbarFilterSelect
+            value={kindFilter}
+            onValueChange={(value) => setKindFilter(value as StockKindFilter)}
+            neutralValue="all"
+            className="sm:w-[190px]"
+            options={[
+              { value: "all", label: "Всі підрозділи" },
+              ...STOCK_KINDS.map((kind) => ({ value: kind, label: STOCK_KIND_LABELS[kind] })),
+            ]}
+          />
           <ToolbarFilterSelect
             value={statusFilter}
             onValueChange={(value) => setStatusFilter(value as StockStatusFilter)}
@@ -495,7 +755,7 @@ export default function SampleStockPage() {
       }
       meta={
         <ToolbarMeta
-          count={filteredRows.length}
+          count={visibleCount}
           onReset={clearFilters}
           showReset={hasActiveFilters}
           loading={refreshing}
@@ -507,8 +767,8 @@ export default function SampleStockPage() {
     categoryFilter,
     categoryOptions,
     clearFilters,
-    filteredRows.length,
     hasActiveFilters,
+    kindFilter,
     locationFilter,
     locationOptions,
     openCreate,
@@ -516,6 +776,7 @@ export default function SampleStockPage() {
     schemaMissing,
     search,
     statusFilter,
+    visibleCount,
   ]);
 
   usePageHeaderActions(headerActions, [headerActions]);
@@ -554,27 +815,31 @@ export default function SampleStockPage() {
       currency: "UAH",
       location: form.location.trim() || null,
       comments: form.comments.trim() || null,
+      stock_kind: form.stockKind,
       is_archived: form.isArchived,
     };
 
+    // Та сама причина, що й у loadItems: поки міграцію не застосовано, поле
+    // stock_kind не має куди лягти, і без цього запасного заходу зламалось би
+    // збереження БУДЬ-ЯКОГО товару, а не лише вибір підрозділу.
+    const { stock_kind: _omitted, ...payloadWithoutKind } = payload;
+    const savePayload = async (body: typeof payload | typeof payloadWithoutKind) =>
+      editingRow?.id
+        ? supabase
+            .schema("tosho")
+            .from("sample_stock_items")
+            .update(body)
+            .eq("id", editingRow.id)
+            .eq("team_id", teamId)
+        : supabase.schema("tosho").from("sample_stock_items").insert(body);
+
     try {
-      if (editingRow?.id) {
-        const { error: updateError } = await supabase
-          .schema("tosho")
-          .from("sample_stock_items")
-          .update(payload)
-          .eq("id", editingRow.id)
-          .eq("team_id", teamId);
-        if (updateError) throw updateError;
-        toast.success("Товар оновлено");
-      } else {
-        const { error: insertError } = await supabase
-          .schema("tosho")
-          .from("sample_stock_items")
-          .insert(payload);
-        if (insertError) throw insertError;
-        toast.success("Товар додано");
+      let { error: saveError } = await savePayload(payload);
+      if (saveError && /stock_kind/i.test(saveError.message ?? "")) {
+        ({ error: saveError } = await savePayload(payloadWithoutKind));
       }
+      if (saveError) throw saveError;
+      toast.success(editingRow?.id ? "Товар оновлено" : "Товар додано");
 
       setDialogOpen(false);
       setEditingRow(null);
@@ -664,165 +929,21 @@ export default function SampleStockPage() {
             <span className="font-medium text-foreground">scripts/sample-stock-schema.sql</span>, а стартові дані лежать у{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-seed-from-numbers.sql</span>.
           </div>
-        ) : filteredRows.length === 0 ? (
+        ) : visibleCount === 0 ? (
           <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
             {rows.length === 0 ? "Склад ще порожній. Додайте перший товар або застосуйте seed із таблиці." : "За цими фільтрами нічого не знайдено."}
           </div>
         ) : (
-          <>
-            <div className="space-y-3 md:hidden">
-              {filteredRows.map((row) => (
-                <div
-                  key={row.id}
-                  className="rounded-inner border border-border bg-card p-4"
-                  onClick={() => openEdit(row)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <ProductIdentity row={row} />
-                    <div onClick={(event) => event.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openMovement(row, "incoming")}>
-                            <ArrowUp className="mr-2 h-4 w-4" />
-                            Поповнити
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openMovement(row, "outgoing")}>
-                            <ArrowDown className="mr-2 h-4 w-4" />
-                            Списати
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openMovement(row, "reserve")}>
-                            <Lock className="mr-2 h-4 w-4" />
-                            Зарезервувати
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openMovement(row, "release")}>
-                            <Unlock className="mr-2 h-4 w-4" />
-                            Зняти резерв
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setDeleteTarget(row)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Видалити
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Залишок</div>
-                      <QuantityCell row={row} />
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Ціна / сума</div>
-                      <div className="font-medium">{formatMoney(toNumber(row.unit_price))}</div>
-                      <div className="text-xs text-muted-foreground">{formatMoney(getTotalValue(row))}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Колір</div>
-                      <div>{row.color?.trim() || "—"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-caps-tight text-muted-foreground">Місце</div>
-                      <div>{row.location?.trim() || "—"}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="hidden md:block">
-              <Table variant="list" size="md">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[34%] pl-6">Товар</TableHead>
-                    <TableHead className="w-[15%]">Колір</TableHead>
-                    <TableHead className="w-[16%]">Залишок</TableHead>
-                    <TableHead className="w-[12%]">Ціна</TableHead>
-                    <TableHead className="w-[12%]">Сума</TableHead>
-                    <TableHead className="w-[14%]">Місце</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="group cursor-pointer hover:bg-muted/10"
-                      onClick={() => openEdit(row)}
-                    >
-                      <TableCell className="pl-6 align-top">
-                        <ProductIdentity row={row} />
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="font-medium">{row.color?.trim() || "—"}</div>
-                        {row.category?.trim() ? <div className="text-xs text-muted-foreground">{row.category}</div> : null}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <QuantityCell row={row} />
-                      </TableCell>
-                      <TableCell className="align-top tabular-nums">{formatMoney(toNumber(row.unit_price))}</TableCell>
-                      <TableCell className="align-top tabular-nums font-medium">{formatMoney(getTotalValue(row))}</TableCell>
-                      <TableCell className="align-top">{row.location?.trim() || <span className="text-muted-foreground">—</span>}</TableCell>
-                      <TableCell
-                        className="pr-4 text-right align-top opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(row)}>Редагувати</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openMovement(row, "incoming")}>
-                              <ArrowUp className="mr-2 h-4 w-4" />
-                              Поповнити
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openMovement(row, "outgoing")}>
-                              <ArrowDown className="mr-2 h-4 w-4" />
-                              Списати
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openMovement(row, "reserve")}>
-                              <Lock className="mr-2 h-4 w-4" />
-                              Зарезервувати
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openMovement(row, "release")}>
-                              <Unlock className="mr-2 h-4 w-4" />
-                              Зняти резерв
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openMovement(row, "adjustment")}>
-                              <Archive className="mr-2 h-4 w-4" />
-                              Виставити залишок
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => setDeleteTarget(row)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Видалити
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </>
+          <div className="space-y-8">
+            {sections.map((section) => (
+              <StockSection
+                key={section.kind}
+                kind={section.kind}
+                rows={section.items}
+                handlers={rowHandlers}
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -876,6 +997,26 @@ export default function SampleStockPage() {
                   onChange={(event) => setForm((current) => ({ ...current, visualRef: event.target.value }))}
                   placeholder="Наприклад, Wookie"
                 />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-sm font-medium text-foreground">Підрозділ складу</label>
+                <Select
+                  value={form.stockKind}
+                  onValueChange={(value) => setForm((current) => ({ ...current, stockKind: value as StockKind }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STOCK_KINDS.map((kind) => (
+                      <SelectItem key={kind} value={kind}>
+                        {STOCK_KIND_LABELS[kind]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{STOCK_KIND_HINTS[form.stockKind]}</p>
               </div>
 
               <div className="space-y-2">
