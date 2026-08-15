@@ -13,8 +13,15 @@
 
 export type StockKind = "sample" | "supply";
 
-/** Порядок підрозділів на сторінці. Взірці першими: їх більшість і саме з ними працюють щодня. */
-export const STOCK_KINDS: StockKind[] = ["sample", "supply"];
+/**
+ * Порядок підрозділів — вкладки вгорі сторінки й список у картці товару.
+ *
+ * Секцій із заголовками в таблиці НЕМАЄ: склад лишається однією таблицею, а
+ * підрозділ перемикається вкладками в тулбарі — тим самим сегментованим
+ * перемикачем, що «Замовники / Ліди». Порядок заданий Артемом: спершу залишки,
+ * потім взірці.
+ */
+export const STOCK_KINDS: StockKind[] = ["supply", "sample"];
 
 export const STOCK_KIND_LABELS: Record<StockKind, string> = {
   sample: "Взірці",
@@ -40,22 +47,4 @@ export const DEFAULT_STOCK_KIND: StockKind = "sample";
 export function normalizeStockKind(value: string | null | undefined): StockKind {
   const normalized = value?.trim().toLowerCase();
   return normalized === "supply" ? "supply" : DEFAULT_STOCK_KIND;
-}
-
-/**
- * Розкласти позиції по підрозділах, зберігши вхідний порядок усередині кожного.
- *
- * Повертає ВСІ підрозділи, навіть порожні: підрозділ — це постійна структура
- * сторінки, а не наслідок того, що сьогодні щось завезли. Порожній заголовок
- * каже «тут нічого немає», а відсутній заголовок — «такого підрозділу немає».
- */
-export function groupByStockKind<T>(
-  items: T[],
-  getKind: (item: T) => string | null | undefined
-): Array<{ kind: StockKind; items: T[] }> {
-  const buckets = new Map<StockKind, T[]>(STOCK_KINDS.map((kind) => [kind, []]));
-  for (const item of items) {
-    buckets.get(normalizeStockKind(getKind(item)))?.push(item);
-  }
-  return STOCK_KINDS.map((kind) => ({ kind, items: buckets.get(kind) ?? [] }));
 }

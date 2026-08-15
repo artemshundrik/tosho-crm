@@ -40,6 +40,12 @@ export function EmptyStateCard({
     <div
       className={cn(
         "rounded-inner border border-dashed border-border bg-card/40",
+        // Компактна коробка по центру, а не смуга на всю ширину сторінки.
+        // Всередині все й так вирівняно по центру, тож на широкому екрані
+        // виходив довжелезний блок із крихітним текстом посередині — рамка
+        // ліворуч, рамка за метр праворуч, а між ними порожнеча.
+        // Хто справді хоче на всю ширину — перебиває через className.
+        "mx-auto w-full max-w-md",
         padding,
         "text-center",
         "shadow-surface",
