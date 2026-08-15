@@ -312,6 +312,20 @@
     --tabbar-backdrop-saturate: 1.8;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
+    /*
+     * Висота фіксованої шапки застосунку.
+     *
+     * Потрібна липким шапкам таблиць: вони мають зупинятись ПІД нею, а не
+     * заповзати під сподом. Саме через це в «Підрядниках» липка шапка була
+     * непомітна — `sticky top-0` рахує від верху вікна, а верх вікна тут
+     * перекритий шапкою.
+     *
+     * 57px — це ЗАМІРЯНА висота <header> у проді, однакова на 1440 і на 375.
+     * Не плутати з `pt-[76px]` на <main>: там падінг із запасом, а не висота
+     * шапки. Перша спроба взяла саме 76 — і між шапкою застосунку й шапкою
+     * таблиці лишалась смуга в 19px, крізь яку проїжджали рядки.
+     */
+    --app-header-height: 57px;
     /* Вужчі поля з боків — щоб плашка з чотирма розділами була ширшою. */
     --tabbar-inset-x: 10px;
     /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
@@ -647,7 +661,20 @@
     background-color: hsl(var(--page-underlay-bg));
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    /*
+     * clip, а не hidden — від цього залежать липкі шапки таблиць у всьому
+     * застосунку.
+     *
+     * `overflow-x: hidden` за специфікацією тягне другу вісь у `auto`, тобто
+     * #root стає контейнером скролу. Далі будь-який `position: sticky`
+     * всередині рахується від #root — а #root не скролиться (заміряно в проді:
+     * scrollHeight 3902 = clientHeight 3902, скролиться вікно). Тому липкі
+     * заголовки просто їхали геть разом із рядками.
+     *
+     * `clip` ріже горизонтальний виліт так само, але контейнером скролу не
+     * стає. Те саме зроблено на <main> в AppLayout і на обгортках сторінок.
+     */
+    overflow-x: clip;
   }
   html {
     scrollbar-gutter: stable;
@@ -1177,8 +1204,13 @@
     background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));
   }
 
+  /*
+   * clip, а не hidden — інакше ці обгортки стають контейнерами скролу й гасять
+   * липкі шапки таблиць усередині (той самий механізм, що на #root і <main>).
+   * Ріжуть вони так само.
+   */
   .quote-page-canvas {
-    @apply w-full pb-0 overflow-hidden;
+    @apply w-full pb-0 overflow-x-clip;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -1287,15 +1319,20 @@
   }
 
   .page-canvas-header {
-    @apply overflow-hidden;
+    @apply overflow-x-clip;
     border: none;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
   }
 
+  /*
+   * clip, а не hidden — інакше ці обгортки стають контейнерами скролу й гасять
+   * липкі шапки таблиць усередині (той самий механізм, що на #root і <main>).
+   * Ріжуть вони так само.
+   */
   .page-canvas-body {
-    @apply overflow-hidden;
+    @apply overflow-x-clip;
     border: none;
     border-radius: 0;
     background: transparent;

@@ -511,7 +511,10 @@ function ContractorsTable({
           // перебиваємо його теж із рівня таблиці, через data-атрибут.
           className="[&_td[data-slot=detail]]:pt-0 [&_td[data-slot=detail]]:pb-4"
         >
-          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md">
+          {/* Липкість і непрозорий фон дає проп stickyHeader на <Table>. Тут
+              руками нічого: попередній набір класів був напівпрозорий і програвав
+              варіанту за специфічністю, тож крізь заголовок просвічували рядки. */}
+          <TableHeader>
             <TableRow>
               <TableHead className="w-[46%]">{title}</TableHead>
               <TableHead className="w-[26%]">Послуги</TableHead>
@@ -1091,7 +1094,10 @@ export default function ContractorsPage() {
     <div className="w-full pb-20 md:pb-0 space-y-6">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "contractors" | "suppliers")}>
         <TabsContent value="contractors" className="mt-0 pt-0">
-          <div className="overflow-hidden">
+          {/* clip, а не hidden: `overflow: hidden` робить цей div контейнером
+              скролу, і липка шапка таблиці всередині рахується від нього — тобто
+              не липне взагалі. `clip` ріже так само, але контейнером не стає. */}
+          <div className="overflow-x-clip">
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
@@ -1123,7 +1129,7 @@ export default function ContractorsPage() {
           </div>
         </TabsContent>
         <TabsContent value="suppliers" className="mt-0 pt-0">
-          <div className="overflow-hidden">
+          <div className="overflow-x-clip">
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (

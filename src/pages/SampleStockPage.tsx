@@ -5,11 +5,14 @@ import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
-import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
+import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import {
+  SEGMENTED_GROUP,
+  SEGMENTED_TRIGGER,
   TOOLBAR_ACTION_BUTTON,
 } from "@/components/ui/controlStyles";
 import {
@@ -30,6 +33,7 @@ import {
   SheetBody,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -39,7 +43,6 @@ import {
   STOCK_KINDS,
   STOCK_KIND_HINTS,
   STOCK_KIND_LABELS,
-  groupByStockKind,
   normalizeStockKind,
   type StockKind,
 } from "@/lib/sampleStockKind";
@@ -47,6 +50,7 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
+  Boxes,
   Loader2,
   Lock,
   MoreHorizontal,
@@ -94,8 +98,6 @@ type SampleStockFormState = {
 };
 
 type StockStatusFilter = "all" | "in_stock" | "reserved" | "low_stock" | "out_of_stock" | "archived";
-/** «Всі підрозділи» або один конкретний. */
-type StockKindFilter = "all" | StockKind;
 type StockMovementType = "incoming" | "outgoing" | "reserve" | "release" | "adjustment";
 
 type StockMovementState = {
@@ -236,6 +238,23 @@ function getStatusBadge(row: SampleStockItemRow) {
   if (status === "reserved") return <Badge tone="warning" size="sm">Резерв</Badge>;
   if (status === "low_stock") return <Badge tone="warning" size="sm">Мало</Badge>;
   return <Badge tone="success" size="sm">В наявності</Badge>;
+}
+
+/** Поля, по яких шукає рядок пошуку. Один рецепт на список і на лічильники вкладок. */
+function buildStockHaystack(row: SampleStockItemRow) {
+  return [
+    row.name,
+    row.visual_ref,
+    row.sku,
+    row.category,
+    row.color,
+    row.specifications,
+    row.location,
+    row.comments,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function formatQuantity(value: number) {
@@ -405,7 +424,9 @@ function StockCardsMobile({ rows, handlers }: { rows: SampleStockItemRow[]; hand
 function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: StockRowHandlers }) {
   return (
     <div className="hidden md:block">
-      <Table variant="list" size="md">
+      {/* Колонки у відсотках, горизонтальний скрол не потрібен — умова для
+          stickyHeader виконана. */}
+      <Table variant="list" size="md" stickyHeader>
         <TableHeader>
           <TableRow>
             <TableHead className="w-[34%] pl-6">Товар</TableHead>
@@ -451,50 +472,6 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
   );
 }
 
-/**
- * Підрозділ складу: заголовок, лічильник, сумарна вартість — і той самий
- * список під ним.
- *
- * Сума в заголовку не прикраса: питання «скільки грошей лежить у витратних
- * матеріалах» тепер має відповідь, якої на плоскому списку не було взагалі.
- */
-function StockSection({
-  kind,
-  rows,
-  handlers,
-}: {
-  kind: StockKind;
-  rows: SampleStockItemRow[];
-  handlers: StockRowHandlers;
-}) {
-  const totalValue = rows.reduce((sum, row) => sum + getTotalValue(row), 0);
-
-  return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
-        <h2 className="text-base font-semibold text-foreground">{STOCK_KIND_LABELS[kind]}</h2>
-        <span className="text-sm tabular-nums text-muted-foreground">
-          {rows.length} {rows.length === 1 ? "позиція" : "позицій"}
-        </span>
-        {rows.length > 0 ? (
-          <span className="text-sm tabular-nums text-muted-foreground">· {formatMoney(totalValue)}</span>
-        ) : null}
-        <span className="w-full text-xs text-muted-foreground sm:w-auto">{STOCK_KIND_HINTS[kind]}</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="rounded-inner border border-dashed border-border bg-card/40 px-4 py-5 text-sm text-muted-foreground">
-          У цьому підрозділі поки порожньо.
-        </div>
-      ) : (
-        <>
-          <StockCardsMobile rows={rows} handlers={handlers} />
-          <StockTable rows={rows} handlers={handlers} />
-        </>
-      )}
-    </section>
-  );
-}
-
 export default function SampleStockPage() {
   const { teamId, loading: authLoading } = useAuth();
   const [rows, setRows] = useState<SampleStockItemRow[]>([]);
@@ -506,7 +483,12 @@ export default function SampleStockPage() {
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES_FILTER);
   const [locationFilter, setLocationFilter] = useState(ALL_LOCATIONS_FILTER);
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>("all");
-  const [kindFilter, setKindFilter] = useState<StockKindFilter>("all");
+  /**
+   * Активний підрозділ. Не фільтр, а вкладка: склад — це два різні склади, і
+   * дивляться в один із них, а не в обидва одразу. Тому «Всіх підрозділів»
+   * тут немає, і скидання фільтрів вкладку не чіпає.
+   */
+  const [activeKind, setActiveKind] = useState<StockKind>(STOCK_KINDS[0]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<SampleStockItemRow | null>(null);
@@ -596,62 +578,54 @@ export default function SampleStockPage() {
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
+    // Порядок рядків не чіпаємо — його вже задав запит (архівні вниз, далі за
+    // назвою й кольором). Сортувати ще й за підрозділом тепер нема сенсу:
+    // у списку завжди рівно один підрозділ, той, чия вкладка відкрита.
     return rows.filter((row) => {
+      if (normalizeStockKind(row.stock_kind) !== activeKind) return false;
       if (categoryFilter !== ALL_CATEGORIES_FILTER && (row.category?.trim() ?? "") !== categoryFilter) return false;
       if (locationFilter !== ALL_LOCATIONS_FILTER && (row.location?.trim() ?? "") !== locationFilter) return false;
       if (statusFilter !== "all" && getStockStatus(row) !== statusFilter) return false;
       if (!query) return true;
-
-      const haystack = [
-        row.name,
-        row.visual_ref,
-        row.sku,
-        row.category,
-        row.color,
-        row.specifications,
-        row.location,
-        row.comments,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(query);
+      return buildStockHaystack(row).includes(query);
     });
-  }, [categoryFilter, locationFilter, rows, search, statusFilter]);
+  }, [activeKind, categoryFilter, locationFilter, rows, search, statusFilter]);
 
   /**
-   * Підрозділи для показу. Порожній підрозділ теж лишається на сторінці —
-   * заголовок «Залишки на складі · 0» каже «тут нічого немає», а зниклий
-   * заголовок сказав би «такого підрозділу не існує» (REQ-38).
-   *
-   * Виняток — коли фільтр звужено до одного підрозділу: тоді другий не
-   * показуємо, бо його щойно свідомо відсіяли.
+   * Скільки позицій у кожній вкладці — з урахуванням пошуку й решти фільтрів,
+   * але НЕ самої вкладки. Інакше лічильник на неактивній вкладці показував би
+   * повний склад і суперечив тому, що там насправді знайдеться.
    */
-  const sections = useMemo(() => {
-    const grouped = groupByStockKind(filteredRows, (row) => row.stock_kind);
-    return kindFilter === "all" ? grouped : grouped.filter((section) => section.kind === kindFilter);
-  }, [filteredRows, kindFilter]);
+  const countByKind = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const counts: Record<StockKind, number> = { sample: 0, supply: 0 };
+    for (const row of rows) {
+      if (categoryFilter !== ALL_CATEGORIES_FILTER && (row.category?.trim() ?? "") !== categoryFilter) continue;
+      if (locationFilter !== ALL_LOCATIONS_FILTER && (row.location?.trim() ?? "") !== locationFilter) continue;
+      if (statusFilter !== "all" && getStockStatus(row) !== statusFilter) continue;
+      if (query && !buildStockHaystack(row).includes(query)) continue;
+      counts[normalizeStockKind(row.stock_kind)] += 1;
+    }
+    return counts;
+  }, [categoryFilter, locationFilter, rows, search, statusFilter]);
 
-  /** Скільки позицій реально показано — з урахуванням фільтра підрозділу. */
-  const visibleCount = useMemo(
-    () => sections.reduce((total, section) => total + section.items.length, 0),
-    [sections]
-  );
-
-  const hasActiveFilters =
+  /** Усе, крім підрозділу: підрозділ — це «де шукаємо», решта — «що шукаємо». */
+  const hasOtherFilters =
     Boolean(search.trim()) ||
     categoryFilter !== ALL_CATEGORIES_FILTER ||
     locationFilter !== ALL_LOCATIONS_FILTER ||
-    statusFilter !== "all" ||
-    kindFilter !== "all";
+    statusFilter !== "all";
+
+  // Вкладка сюди не входить: «скинути фільтри» не має перекидати людину
+  // в інший склад.
+  const hasActiveFilters = hasOtherFilters;
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setCategoryFilter(ALL_CATEGORIES_FILTER);
     setLocationFilter(ALL_LOCATIONS_FILTER);
     setStatusFilter("all");
-    setKindFilter("all");
+    // Вкладку не чіпаємо навмисно — див. hasActiveFilters вище.
   }, []);
 
   const openCreate = useCallback(() => {
@@ -678,6 +652,48 @@ export default function SampleStockPage() {
     setMovementError(null);
   }, []);
 
+  /**
+   * Порожній екран — той самий EmptyStateCard, що й на інших сторінках, а не
+   * власний сірий прямокутник.
+   *
+   * Три різні причини порожнечі — три різні тексти: склад ще не заповнювали,
+   * підрозділ обрано, але він порожній, або фільтри звузили все до нуля. Одне
+   * «нічого не знайдено» на всі випадки не каже, що робити далі.
+   */
+  const emptyState = useMemo(() => {
+    if (rows.length === 0) {
+      return (
+        <EmptyStateCard
+          badgeLabel="Склад"
+          title="Склад ще порожній"
+          description="Додайте перший товар — або застосуйте seed із таблиці scripts/sample-stock-seed-from-numbers.sql."
+          actionLabel="Новий товар"
+          onAction={openCreate}
+        />
+      );
+    }
+    if (!hasOtherFilters) {
+      return (
+        <EmptyStateCard
+          badgeLabel={STOCK_KIND_LABELS[activeKind]}
+          title={`У підрозділі «${STOCK_KIND_LABELS[activeKind]}» поки нічого немає`}
+          description={`${STOCK_KIND_HINTS[activeKind]}. Додайте позицію або перекладіть наявні в цей підрозділ у картці товару.`}
+          actionLabel="Новий товар"
+          onAction={openCreate}
+        />
+      );
+    }
+    return (
+      <EmptyStateCard
+        badgeLabel="Пошук"
+        title="За цими фільтрами нічого не знайдено"
+        description="Спробуйте прибрати частину умов або очистити фільтри."
+        actionLabel="Скинути фільтри"
+        onAction={clearFilters}
+      />
+    );
+  }, [activeKind, clearFilters, hasOtherFilters, openCreate, rows.length]);
+
   const rowHandlers = useMemo<StockRowHandlers>(
     () => ({ onEdit: openEdit, onMovement: openMovement, onDelete: setDeleteTarget }),
     [openEdit, openMovement]
@@ -686,15 +702,26 @@ export default function SampleStockPage() {
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
-            <Package className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-foreground">Склад</div>
-            <div className="text-sm text-muted-foreground">Залишки товарів, резерви та складські рухи.</div>
-          </div>
-        </div>
+        /* Той самий сегментований перемикач, що «Замовники / Ліди», і на тому
+           самому місці — замість заголовка сторінки. Назва «Склад» і так стоїть
+           у шапці застосунку, тож дублювати її тут нема потреби. */
+        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
+          {STOCK_KINDS.map((kind) => (
+            <Button
+              key={kind}
+              type="button"
+              variant="segmented"
+              size="xs"
+              aria-pressed={activeKind === kind}
+              onClick={() => setActiveKind(kind)}
+              className={cn(SEGMENTED_TRIGGER, "gap-2 px-5")}
+            >
+              {kind === "supply" ? <Boxes className="h-4 w-4" /> : <Package className="h-4 w-4" />}
+              {STOCK_KIND_LABELS[kind]}
+              <CountBadge value={countByKind[kind]} className="ml-1.5" />
+            </Button>
+          ))}
+        </SegmentedGroup>
       }
       topRight={
         <Button
@@ -711,16 +738,6 @@ export default function SampleStockPage() {
       }
       filters={
         <div className="grid w-full gap-2 sm:flex sm:w-auto">
-          <ToolbarFilterSelect
-            value={kindFilter}
-            onValueChange={(value) => setKindFilter(value as StockKindFilter)}
-            neutralValue="all"
-            className="sm:w-[190px]"
-            options={[
-              { value: "all", label: "Всі підрозділи" },
-              ...STOCK_KINDS.map((kind) => ({ value: kind, label: STOCK_KIND_LABELS[kind] })),
-            ]}
-          />
           <ToolbarFilterSelect
             value={statusFilter}
             onValueChange={(value) => setStatusFilter(value as StockStatusFilter)}
@@ -755,7 +772,7 @@ export default function SampleStockPage() {
       }
       meta={
         <ToolbarMeta
-          count={visibleCount}
+          count={filteredRows.length}
           onReset={clearFilters}
           showReset={hasActiveFilters}
           loading={refreshing}
@@ -764,11 +781,12 @@ export default function SampleStockPage() {
       searchClassName="xl:max-w-[420px]"
     />
   ), [
+    activeKind,
     categoryFilter,
     categoryOptions,
     clearFilters,
+    countByKind,
     hasActiveFilters,
-    kindFilter,
     locationFilter,
     locationOptions,
     openCreate,
@@ -776,7 +794,7 @@ export default function SampleStockPage() {
     schemaMissing,
     search,
     statusFilter,
-    visibleCount,
+    filteredRows.length,
   ]);
 
   usePageHeaderActions(headerActions, [headerActions]);
@@ -920,7 +938,9 @@ export default function SampleStockPage() {
 
   return (
     <div className="w-full space-y-5 pb-20 md:pb-0">
-      <div className="overflow-hidden">
+      {/* clip, а не hidden — інакше цей div стає контейнером скролу й гасить
+          липку шапку таблиці всередині (див. AppLayout і проп stickyHeader). */}
+      <div className="overflow-x-clip">
         {error ? (
           <div className="rounded-inner border border-destructive/20 bg-destructive/5 p-6 text-sm text-destructive">{error}</div>
         ) : schemaMissing ? (
@@ -929,21 +949,13 @@ export default function SampleStockPage() {
             <span className="font-medium text-foreground">scripts/sample-stock-schema.sql</span>, а стартові дані лежать у{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-seed-from-numbers.sql</span>.
           </div>
-        ) : visibleCount === 0 ? (
-          <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
-            {rows.length === 0 ? "Склад ще порожній. Додайте перший товар або застосуйте seed із таблиці." : "За цими фільтрами нічого не знайдено."}
-          </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="py-10">{emptyState}</div>
         ) : (
-          <div className="space-y-8">
-            {sections.map((section) => (
-              <StockSection
-                key={section.kind}
-                kind={section.kind}
-                rows={section.items}
-                handlers={rowHandlers}
-              />
-            ))}
-          </div>
+          <>
+            <StockCardsMobile rows={filteredRows} handlers={rowHandlers} />
+            <StockTable rows={filteredRows} handlers={rowHandlers} />
+          </>
         )}
       </div>
 

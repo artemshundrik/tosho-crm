@@ -2313,9 +2313,24 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         </header>
 
         {/* CONTENT */}
+        {/*
+          overflow-x-CLIP, а не hidden — від цього залежать липкі шапки таблиць
+          на всіх сторінках.
+
+          `overflow-x: hidden` за специфікацією робить елемент контейнером
+          скролу (друга вісь стає `auto`), і будь-який `position: sticky`
+          всередині починає рахуватись від <main>. А <main> сам не скролиться —
+          скролиться вікно, — тож липкий заголовок просто їде геть разом із
+          вмістом. Заміряно на пробній сторінці 2026-08-15: під `hidden`
+          заголовок опинявся на top:-1677px, під `clip` — рівно на top:76px,
+          тобто під шапкою застосунку.
+
+          `clip` ріже горизонтальний виліт так само, але контейнером скролу НЕ
+          стає, тож sticky всередині працює.
+        */}
         <main
           className={cn(
-            "w-full overflow-x-hidden pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-0",
+            "w-full overflow-x-clip pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-0",
             isCanvasMode ? "px-0 pt-14 md:px-0 lg:px-0" : "pt-[76px]"
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}

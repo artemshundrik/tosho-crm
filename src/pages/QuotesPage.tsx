@@ -5781,8 +5781,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </div>
             ))}
           </div>
-          <div className="hidden md:block overflow-x-auto">
-            <Table variant="list" size="md" className="[&_th]:px-5 [&_td]:px-5">
+          {/* overflow-x-auto знято: саме він був контейнером скролу й гасив
+              липку шапку. Колонки без min-width, тож стискаються самі. */}
+          <div className="hidden md:block">
+            <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[12px]"></TableHead>
@@ -6212,8 +6214,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 );
               })}
             </div>
-            <div className="hidden md:block overflow-x-auto">
-              <Table variant="list" size="md" className="[&_th]:px-5 [&_td]:px-5">
+            {/* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */}
+            <div className="hidden md:block">
+              <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[44px]">

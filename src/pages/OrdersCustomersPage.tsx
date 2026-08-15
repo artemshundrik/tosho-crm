@@ -3211,6 +3211,28 @@ function CustomersPage({ teamId }: { teamId: string }) {
       }
       filters={
         <>
+        {/* Сегмент — між пошуком і менеджером, як просив Артем: спершу «кого
+            саме» за поведінкою, потім «чий». Показуємо лише коли є дані LTV:
+            без них усі 100% замовників були б «Без замовлень». */}
+        {activeTab === "customers" && hasAnyLtv ? (
+          <ToolbarFilterSelect
+            value={segmentFilter}
+            onValueChange={(value) => setSegmentFilter(value as RfmSegment | "all")}
+            neutralValue="all"
+            className="sm:w-[190px]"
+            options={[
+              { value: "all", label: `Усі сегменти (${segmentCounts.all})` },
+              ...(["champion", "loyal", "new", "at_risk", "dormant", "none"] as const)
+                // Порожній сегмент у списку — це вибір, який гарантовано дає
+                // порожню таблицю. Ховаємо, як ховала й смуга пігулок.
+                .filter((segment) => segmentCounts[segment] > 0)
+                .map((segment) => ({
+                  value: segment,
+                  label: `${RFM_SEGMENT_LABELS[segment]} (${segmentCounts[segment]})`,
+                })),
+            ]}
+          />
+        ) : null}
         {isManagerUser ? (
           <div
             className={cn(
@@ -3267,6 +3289,9 @@ function CustomersPage({ teamId }: { teamId: string }) {
     />
   ), [
     activeTab,
+    hasAnyLtv,
+    segmentCounts,
+    segmentFilter,
     customerManagerFilter,
     customerManagerOptions,
     currentManagerLabel,
@@ -3338,54 +3363,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
           </div>
         ) : null}
         <TabsContent value="customers" className="mt-0 pt-0">
-            <div className="overflow-hidden">
-              {/* LTV (MVP): RFM segment filter pills */}
-              {hasAnyLtv ? (
-                <div className="flex flex-wrap items-center gap-1.5 px-4 pt-4 pb-3 md:px-6">
-                  {ltvNeedsFullFetch && (customersRefreshing || customersHasMore) ? (
-                    <span className="mr-1 text-2xs text-muted-foreground" title="Для коректного сорту/сегментації треба всі замовники, не тільки перші 50">
-                      Завантажую всіх клієнтів…
-                    </span>
-                  ) : null}
-                  {(["all", "champion", "loyal", "new", "at_risk", "dormant", "none"] as const).map((seg) => {
-                    const count = segmentCounts[seg];
-                    if (seg !== "all" && count === 0) return null;
-                    const active = segmentFilter === seg;
-                    const label = seg === "all" ? "Усі" : RFM_SEGMENT_LABELS[seg];
-                    const tone = seg === "all" ? "neutral" : RFM_SEGMENT_TONE[seg];
-                    return (
-                      <Badge
-                        key={seg}
-                        tone={tone}
-                        variant={active ? "default" : "outline"}
-                        className={cn(
-                          "cursor-pointer select-none rounded-full px-2.5 py-0.5 text-2xs font-medium normal-case tracking-normal",
-                          active ? "ring-1 ring-foreground/20" : "hover:bg-muted/40"
-                        )}
-                        onClick={() => setSegmentFilter(seg)}
-                        title={
-                          seg === "champion"
-                            ? "Top-20% за оборотом, активні (< 90 днів), 3+ замовлень"
-                            : seg === "loyal"
-                            ? "3+ замовлень, активні (< 180 днів)"
-                            : seg === "at_risk"
-                            ? "2+ замовлень, тиша 180–365 днів — час нагадати"
-                            : seg === "dormant"
-                            ? "Не замовляли > 365 днів"
-                            : seg === "new"
-                            ? "Перше замовлення < 90 днів тому"
-                            : seg === "none"
-                            ? "Без замовлень / немає даних"
-                            : "Усі замовники"
-                        }
-                      >
-                        {label}
-                        <span className="ml-1 opacity-70">{count}</span>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              ) : null}
+            {/* clip, а не hidden: hidden робить цей div контейнером скролу й
+                гасить липку шапку таблиці всередині (див. проп stickyHeader). */}
+            <div className="overflow-x-clip">
+              {/* Смуга пігулок сегментів переїхала в тулбар — фільтром між пошуком
+                  і «Всі менеджери». Вона займала окремий рядок над таблицею й
+                  розповзалась на сім бейджів, хоч питання те саме, що в решти
+                  фільтрів: «кого показувати». */}
               {customersLoading ? (
               <AppSectionLoader label="Готуємо список замовників..." variant="table" />
               ) : customersError ? (
@@ -3559,8 +3543,12 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md" className="min-w-[980px] table-fixed [&_td]:px-4 [&_th]:px-4">
-                    <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
+                  {/* Горизонтальний скрол знято свідомо (рішення Артема):
+                      колонки стискаються на вузькому екрані, зате шапка
+                      липне — без цього обгортка з overflow-auto лишалась би
+                      контейнером скролу й гасила липкість. */}
+                  <Table variant="list" size="md" stickyHeader className="table-fixed [&_td]:px-4 [&_th]:px-4">
+                    <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="w-[24%] pl-6">Компанія</TableHead>
                         <TableHead className="w-[76px] px-2">Тип</TableHead>
@@ -3795,7 +3783,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         </TabsContent>
 
         <TabsContent value="leads" className="mt-0 pt-0">
-          <div className="overflow-hidden">
+          <div className="overflow-x-clip">
             {leadsLoading ? (
               <AppSectionLoader label="Готуємо список лідів..." variant="table" />
             ) : leadsError ? (
@@ -3871,8 +3859,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   ))}
                 </div>
                 <div className="hidden md:block">
-                  <Table variant="list" size="md" className="min-w-[960px] table-fixed [&_td]:px-4 [&_th]:px-4">
-                    <TableHeader className="sticky top-0 z-10 bg-muted/55 backdrop-blur-md">
+                  <Table variant="list" size="md" stickyHeader className="table-fixed [&_td]:px-4 [&_th]:px-4">
+                    <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="w-[20%] pl-6">Компанія</TableHead>
                         <TableHead className="w-[12%]">Контакт</TableHead>

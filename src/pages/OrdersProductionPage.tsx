@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { AppPageLoader } from "@/components/app/AppPageLoader";
@@ -427,7 +427,9 @@ export default function OrdersProductionPage() {
     setSelectedSpecificationIds(nextRecords.map((entry) => entry.id));
   };
 
-  const openGroupedSpecification = async () => {
+  // useCallback, бо вузол шапки мемоїзований: без стабільної функції мемо
+  // розсипався б щорендеру й повертав би цикл, який щойно полагодили.
+  const openGroupedSpecification = useCallback(async () => {
     if (!teamId) return;
     const selectedRecords = records.filter((record) => selectedSpecificationIds.includes(record.id));
     const blocker = getSpecificationGroupBlocker(selectedRecords);
@@ -497,7 +499,7 @@ export default function OrdersProductionPage() {
     } catch (markError: unknown) {
       setError(markError instanceof Error ? markError.message : "СП відкрито, але не вдалося зберегти позначку створення.");
     }
-  };
+  }, [records, selectedSpecificationIds, teamId]);
 
   useEffect(() => {
     if (!teamId) return;
@@ -544,7 +546,7 @@ export default function OrdersProductionPage() {
     [records]
   );
 
-  const renderManagerFilterValue = (value: string) => {
+  const renderManagerFilterValue = useCallback((value: string) => {
     if (value === ALL_MANAGERS_FILTER) return <span>Всі менеджери</span>;
     const option = managerFilterOptions.find((entry) => entry.id === value) ?? null;
     const label = option?.label ?? value;
@@ -561,7 +563,7 @@ export default function OrdersProductionPage() {
         <span className="truncate">{label}</span>
       </span>
     );
-  };
+  }, [managerFilterOptions]);
 
   const filteredRecords = useMemo(() => {
     const query = normalizeText(search);
@@ -671,7 +673,9 @@ export default function OrdersProductionPage() {
     };
   }, [filteredRecords.length, viewTab]);
 
-  const headerActions = (
+  // useMemo обов'язковий: без нього це новий вузол на кожен рендер, і шапка
+  // сторінки перезаписується по колу (див. usePageHeaderActions).
+  const headerActions = useMemo(() => (
     <UnifiedPageToolbar
       topLeft={
         <div className="flex items-center gap-3">
@@ -769,17 +773,14 @@ export default function OrdersProductionPage() {
       }
       meta={<ToolbarMeta count={filteredRecords.length} countLabel="знайдено" />}
     />
-  );
-
-  usePageHeaderActions(headerActions, [
+  ), [
+    openGroupedSpecification,
+    renderManagerFilterValue,
     filteredRecords.length,
     headerFilter,
     loading,
-    records.length,
     refreshing,
     search,
-    teamId,
-    userId,
     viewTab,
     managerFilter,
     managerFilterOptions,
@@ -787,6 +788,8 @@ export default function OrdersProductionPage() {
     selectedSpecificationIds,
     workspacePresence.activeHereEntries,
   ]);
+
+  usePageHeaderActions(headerActions, [headerActions]);
 
   if (authLoading) {
     return <AppPageLoader title="Завантаження" subtitle="Підтягуємо затверджені прорахунки та чергу замовлень." />;
@@ -881,8 +884,9 @@ export default function OrdersProductionPage() {
                   </Card>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table variant="list" size="md" className="table-fixed">
+                // overflow-x-auto знято: він гасив липку шапку таблиці.
+                <div>
+                  <Table variant="list" size="md" stickyHeader className="table-fixed">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[58px] pl-6 whitespace-nowrap">СП</TableHead>
