@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Compass, Newspaper } from "lucide-react";
+import { BookOpen, Compass, Newspaper } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export const WHATS_NEW_ROOT = "/whats-new";
 export const WHATS_NEW_FEATURES = "/whats-new/features";
+export const WHATS_NEW_HANDBOOK = "/whats-new/handbook";
 
 /**
  * «Оновлення» й «Можливості» — вкладки однієї сторінки.
@@ -20,13 +21,14 @@ export function WhatsNewTabs({ className }: { className?: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const onFeatures = location.pathname.startsWith(WHATS_NEW_FEATURES);
+  const onHandbook = location.pathname.startsWith(WHATS_NEW_HANDBOOK);
 
   return (
     <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto", className)}>
       <Button
         variant="segmented"
         size="xs"
-        aria-pressed={!onFeatures}
+        aria-pressed={!onFeatures && !onHandbook}
         onClick={() => navigate(WHATS_NEW_ROOT)}
         className={cn(SEGMENTED_TRIGGER, "gap-2")}
       >
@@ -42,6 +44,16 @@ export function WhatsNewTabs({ className }: { className?: string }) {
       >
         <Compass className="h-4 w-4" />
         Можливості
+      </Button>
+      <Button
+        variant="segmented"
+        size="xs"
+        aria-pressed={onHandbook}
+        onClick={() => navigate(WHATS_NEW_HANDBOOK)}
+        className={cn(SEGMENTED_TRIGGER, "gap-2")}
+      >
+        <BookOpen className="h-4 w-4" />
+        Як ми працюємо
       </Button>
     </SegmentedGroup>
   );

@@ -57,6 +57,7 @@ const TeamMembersPage = lazyWithRetry(() =>
 );
 const NovaPoshtaSettingsPage = lazyWithRetry(() => import("./pages/NovaPoshtaSettingsPage"));
 const IntegrationsPage = lazyWithRetry(() => import("./pages/IntegrationsPage"));
+const HandbookPage = lazyWithRetry(() => import("./pages/HandbookPage"));
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
@@ -1101,6 +1102,14 @@ function AppRoutes() {
           }
         />
         {/* Стара адреса: на неї ведуть плашка в сайдбарі й закладки. */}
+        <Route
+          path="whats-new/handbook"
+          element={
+            <RouteSuspense shell>
+              <HandbookPage />
+            </RouteSuspense>
+          }
+        />
         <Route path="features" element={<Navigate to="/whats-new/features" replace />} />
         {/* Розділ «Dev»: беклог доробок, релізи, здоровʼя системи.
             Три поверхні, які раніше жили в трьох різних місцях (сайдбар і два

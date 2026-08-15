@@ -705,12 +705,15 @@ if (pathname === ROUTES.profile)
     };
   if (pathname.startsWith(ROUTES.whatsNew)) {
     const onFeatures = pathname.startsWith(WHATS_NEW_FEATURES);
+    const onHandbook = pathname.startsWith(`${ROUTES.whatsNew}/handbook`);
     return {
       title: "Що нового",
-      subtitle: onFeatures
-        ? "Що вміє CRM і що з цього ти ще не пробував."
-        : "Історія змін у CRM.",
-      breadcrumbLabel: onFeatures ? "Можливості" : "Оновлення",
+      subtitle: onHandbook
+        ? "Домовленості, яких не видно з інтерфейсу."
+        : onFeatures
+          ? "Що вміє CRM і що з цього ти ще не пробував."
+          : "Історія змін у CRM.",
+      breadcrumbLabel: onHandbook ? "Як ми працюємо" : onFeatures ? "Можливості" : "Оновлення",
       breadcrumbTo: ROUTES.whatsNew,
       showPageHeader: false,
     };
