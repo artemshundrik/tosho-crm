@@ -2349,6 +2349,10 @@ function formatDesignTaskTypeLabel(value: string) {
 
 function isDesignPayrollAnalyticsQuery(message: string) {
   const normalized = normalizeText(message).toLowerCase();
+  // «Яка ставка в дизайнера» — питання про порядок оплати, а не прохання
+  // порахувати зарплату. Це другий вхід в аналітику, тож перевірку треба
+  // повторити й тут: інакше довідкове питання все одно піде в розрахунок.
+  if (isHowThingsWorkQuestion(message)) return false;
   return (
     /(зарплат|зп|виплат|оплат|нарахув|payroll|salary|компенсац|гонорар|винагород|зароб|заробіт|заплат|платити|отрима|отримат|ставк|відсот|процент|15\s*%)/u.test(normalized) &&
     /(дизайнер|дизайн|таск|тасок|задач)/u.test(normalized)
@@ -2883,11 +2887,69 @@ function analyticsIntentPromptList() {
   return SUPPORTED_ANALYTICS_INTENTS.map((item) => `- ${item.intent}: ${item.label}`).join("\n");
 }
 
+/**
+ * Питання про ПОРЯДОК РОБОТИ, а не про дані.
+ *
+ * «Яка денна норма в дизайнера» і «хто погоджує відпустку» — це довідка: на них
+ * відповідають правила компанії, а не запит у базу. Без цієї перевірки вони
+ * потрапляли в аналітику, бо містять «яка» й «дизайнер», і людина отримувала
+ * «не знайшов такого співробітника» замість відповіді, яка лежала поруч.
+ *
+ * Перевіряється ПЕРШОЮ: краще зайвий раз відповісти текстом, ніж піти шукати
+ * неіснуючу людину на ім'я «Яка денна норма в дизайнера».
+ */
+function isHowThingsWorkQuestion(message: string) {
+  const normalized = normalizeText(message).toLowerCase().trim();
+
+  // Пряме прохання дати числа переважає: «скільки задач закрив» — це дані,
+  // навіть якщо речення починається з питального слова.
+  if (/(скільки|рейтинг|топ|список|перелік|покажи|порах|статист|звіт)/u.test(normalized)) return false;
+
+  return (
+    /^(як|чому|навіщо|звідки|де)\b/u.test(normalized) ||
+    /(чи можна|чи є|чи треба|чи потрібно|що означає|у чому різниця|чим відрізня)/u.test(normalized) ||
+    // «що далі ПО ПРОЦЕСУ» — питання про порядок кроків, а не про особисті
+    // задачі. Без цього до правильної відповіді причіплялась картка «Фокус
+    // менеджера» з нулями: «що далі» саме по собі тягне особисту аналітику.
+    /(по\s+процесу|за\s+процесом|порядок\s+дій|яка\s+послідовн|який\s+порядок|по\s+етап)/u.test(normalized) ||
+    // «хто погоджує / хто відповідає / хто має право» — це про правило, а не
+    // про перелік людей: відповідь однакова незалежно від складу команди.
+    /хто\s+(погоджу|затвердж|відповіда|має\s+право|вирішу|підпису)/u.test(normalized) ||
+    // «яка норма / який строк / які умови» — параметри порядку роботи.
+    /(яка|який|які|яке)\s+\S*\s*(норма|ставка|строк|термін|умов|правил|порядок|обмеж)/u.test(normalized)
+  );
+}
+
+/**
+ * «Хто в нас менеджери, а хто дизайнери» — питання про СКЛАД команди.
+ *
+ * Умова була написана двічі: у виборі наміру й у гілці виконання. Через це
+ * виправлення в одному місці нічого не міняло — друга копія стояла шостою за
+ * порядком, після загальної аналітики дизайну, і питання про людей стабільно
+ * перетворювалось на таблицю закритих задач.
+ *
+ * Слова про роботу (задачі, закрив, прорахунки) виключають: «скільки задач
+ * закрили дизайнери» — це вже дані, а не список людей.
+ */
+function isTeamRosterQuery(normalized: string) {
+  return (
+    /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
+      normalized
+    ) &&
+    !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized)
+  );
+}
+
 function isDesignerRankingAnalyticsQuery(message: string) {
   const normalized = normalizeText(message).toLowerCase();
+  if (isHowThingsWorkQuestion(message)) return false;
   return (
     /(дизайнер|дизайнери|дизайнерів)/u.test(normalized) &&
-    /(рейтинг|топ|найбільш|найменш|хто|порівн|кільк|скільки|закрит|закрив|заверш|виконан|approved)/u.test(normalized)
+    // «хто» саме РАЗОМ із дією. Голе «хто» ловило «хто в нас менеджери, а хто
+    // дизайнери» — питання про склад команди, а не про рейтинг, — і замість
+    // списку людей приходила таблиця закритих задач.
+    (/(рейтинг|топ|найбільш|найменш|порівн|кільк|скільки)/u.test(normalized) ||
+      /(хто|який|яка)\b[^.?!]*\b(закрит|закрив|заверш|виконан|зроб|approved|перевантаж|вільн)/u.test(normalized))
   );
 }
 
@@ -2947,18 +3009,23 @@ function detectSupportedAnalyticsIntent(message: string): SupportedAnalyticsInte
   const hasEmployeeTerm = hasEmployeeAnalyticsTerm(normalized);
   const hasCustomerTerm = hasCustomerAnalyticsTerm(normalized);
   const stripped = stripAnalyticsQueryTerms(message);
-  const asksForPeopleList =
-    /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
-      normalized
-    ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
+  const asksForPeopleList = isTeamRosterQuery(normalized);
+
+  // Довідкове питання — не аналітика. Перевіряємо ПЕРШИМ: інакше «яка денна
+  // норма в дизайнера» піде шукати співробітника з таким іменем.
+  if (isHowThingsWorkQuestion(message)) return null;
 
   if (hasAdminTerm) return "admin_health";
   if (hasPersonalActionPlanTerm(normalized)) return "personal_focus";
+  // Склад команди — ПЕРЕД рейтингом дизайнерів. «Хто в нас менеджери, а хто
+  // дизайнери» містить і «хто», і «дизайнери», тож рейтинг забирав це питання
+  // собі й відповідав таблицею закритих задач замість списку людей.
+  if (asksForPeopleList) return "team_role_list";
   if (isDesignerRankingAnalyticsQuery(message)) return "designer_ranking";
   if (!hasAnalyticsVerb && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasManagerTerm && !hasLogisticsTerm) {
     return null;
   }
-  if (asksForPeopleList || (hasEmployeeTerm && hasAnalyticsVerb)) return "team_role_list";
+  if (hasEmployeeTerm && hasAnalyticsVerb) return "team_role_list";
   if (hasLogisticsTerm && !hasQuoteTerm && !hasDesignTerm && !hasPartyTerm && !hasManagerTerm) return "logistics_limited";
   if (hasDesignTerm) return "design_completion";
   if (hasCustomerTerm) {
@@ -6309,10 +6376,7 @@ async function buildAnalyticsDecision(params: {
     /по\s+(яким\s+|яких\s+)?(замовник|клієнт|контрагент)|у\s+якого\s+(замовник|клієнт|контрагент)|найбільш|більше\s+всього|топ/u.test(
       normalized
     );
-  const asksForPeopleList =
-    /(хто|скільки|покажи|список|перелік).*(дизайнер|менеджер|логіст|співробіт|користувач|команд|працівник)/u.test(
-      normalized
-    ) && !/(прорах|quote|коштор|кп|замовл|order|таск|тасок|задач|зроб|закрит|approved|відвантаж|доставк)/u.test(normalized);
+  const asksForPeopleList = isTeamRosterQuery(normalized);
 
   if (supportedIntent === "admin_health" && hasAdminTerm && !hasDesignTerm && !hasQuoteTerm && !hasOrderTerm && !hasPartyTerm && !hasManagerTerm) {
     const adminDecision = await buildAdminObservabilityAnalytics(params);
@@ -6333,6 +6397,13 @@ async function buildAnalyticsDecision(params: {
     return toAnalyticsDecision(await buildLogoHygieneAnalytics(params));
   }
 
+  // Склад команди — ПЕРЕД будь-якою аналітикою дизайну. Питання «хто в нас
+  // менеджери» не має перетворюватись на рейтинг закритих задач.
+  if (asksForPeopleList) {
+    const rosterDecision = await buildTeamRoleAnalytics(params);
+    if (rosterDecision) return toAnalyticsDecision(rosterDecision);
+  }
+
   if (supportedIntent === "designer_ranking" || asksForDesignerRanking) {
     return toAnalyticsDecision(await buildDesignCompletionAnalytics(params));
   }
@@ -6348,11 +6419,6 @@ async function buildAnalyticsDecision(params: {
 
   const personDecision = await buildPersonAnalyticsDecision(params);
   if (personDecision) return personDecision;
-
-  if (asksForPeopleList) {
-    const teamDecision = await buildTeamRoleAnalytics(params);
-    if (teamDecision) return toAnalyticsDecision(teamDecision);
-  }
 
   if (hasLogisticsTerm && !hasQuoteTerm && !hasDesignTerm && !hasPartyTerm && !hasManagerTerm) {
     return toAnalyticsDecision(await buildLogisticsDeliveryAnalytics(params));
