@@ -25,6 +25,7 @@ import {
 import {
   loadNovaPoshtaSettings,
   saveNovaPoshtaSettings,
+  missingNovaPoshtaFields,
   EMPTY_NOVA_POSHTA_SETTINGS,
   type NovaPoshtaSettings,
   type NovaPoshtaBoxSize,
@@ -217,13 +218,7 @@ export default function NovaPoshtaSettingsPage() {
     }
   };
 
-  const missingRequired = [
-    !settings.senderRef && "контрагент-відправник",
-    !settings.senderContactRef && "контактна особа",
-    !settings.senderPhone && "телефон відправника",
-    !settings.senderCityRef && "місто відправлення",
-    !settings.senderWarehouseRef && "відділення відправлення",
-  ].filter(Boolean) as string[];
+  const missingRequired = missingNovaPoshtaFields(settings);
 
   const isDirty = JSON.stringify({ settings, weightText }) !== baseline;
 

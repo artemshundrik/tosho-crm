@@ -396,6 +396,61 @@ export default defineConfig(({ command, mode }) => {
           },
         }
       : undefined,
+    command === "serve"
+      ? {
+          // Статистика прив'язок Telegram: без неї картка «Інтеграції» на
+          // localhost завжди показувала порожньо там, де в проді стоїть
+          // «підключено N з M», і виглядало це як поламана фіча. Функція
+          // читає під service-role і сама перевіряє права з токена — тож
+          // підключення її в дев-сервер нічого не відкриває зайвого.
+          name: "dev-dropbox-manage",
+          configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+              if (req.url?.split("?")[0] !== "/.netlify/functions/dropbox-manage") return next();
+
+              try {
+                const { handler } = await import("./netlify/functions/dropbox-manage");
+                const response = await handler({
+                  httpMethod: req.method,
+                  headers: normalizeRequestHeaders(req.headers),
+                  body: req.method === "GET" || req.method === "HEAD" ? null : await readRawBody(req),
+                });
+
+                sendJson(res, response.statusCode, JSON.parse(response.body || "{}") as Record<string, unknown>);
+              } catch (error) {
+                sendJson(res, 500, {
+                  error: error instanceof Error ? error.message : "Dropbox request failed",
+                });
+              }
+            });
+          },
+        }
+      : undefined,
+    command === "serve"
+      ? {
+          name: "dev-telegram-admin-stats",
+          configureServer(server) {
+            server.middlewares.use(async (req, res, next) => {
+              if (req.url?.split("?")[0] !== "/.netlify/functions/telegram-admin-stats") return next();
+
+              try {
+                const { handler } = await import("./netlify/functions/telegram-admin-stats");
+                const response = await handler({
+                  httpMethod: req.method,
+                  headers: normalizeRequestHeaders(req.headers),
+                  body: req.method === "GET" || req.method === "HEAD" ? null : await readRawBody(req),
+                });
+
+                sendJson(res, response.statusCode, JSON.parse(response.body || "{}") as Record<string, unknown>);
+              } catch (error) {
+                sendJson(res, 500, {
+                  error: error instanceof Error ? error.message : "Telegram stats request failed",
+                });
+              }
+            });
+          },
+        }
+      : undefined,
   ].filter(Boolean),
   build: {
     rollupOptions: {

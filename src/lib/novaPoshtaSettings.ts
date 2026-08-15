@@ -58,6 +58,24 @@ export const EMPTY_NOVA_POSHTA_SETTINGS: NovaPoshtaSettings = {
   boxSizes: [],
 };
 
+/**
+ * Чого бракує, щоб НП узагалі дала створити ТТН.
+ *
+ * Один список на дві поверхні: підвал сторінки налаштувань і картку в
+ * «Інтеграціях». Копія в кожному місці неминуче розійшлась би — і тоді картка
+ * казала б «Готово», поки форма ТТН відмовляється друкувати накладну.
+ */
+export function missingNovaPoshtaFields(settings: NovaPoshtaSettings | null): string[] {
+  const value = settings ?? EMPTY_NOVA_POSHTA_SETTINGS;
+  return [
+    !value.senderRef && "контрагент-відправник",
+    !value.senderContactRef && "контактна особа",
+    !value.senderPhone && "телефон відправника",
+    !value.senderCityRef && "місто відправлення",
+    !value.senderWarehouseRef && "відділення відправлення",
+  ].filter((item): item is string => typeof item === "string");
+}
+
 const parseBoxSizes = (value: unknown): NovaPoshtaBoxSize[] => {
   if (!Array.isArray(value)) return [];
   return value

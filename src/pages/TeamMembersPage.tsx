@@ -116,6 +116,7 @@ import {
 import {
   defaultModuleAccess,
   getModuleDefinition,
+  hasDefaultFinanceAccess,
   MODULE_GROUPS,
   normalizeModuleAccess,
   type ModuleAccess,
@@ -322,17 +323,6 @@ function supportsManagerRate(role: string | null) {
 function hasDefaultStockAccess(accessRole?: string | null, jobRole?: string | null) {
   return (accessRole ?? "").trim().toLowerCase() === "owner" || (jobRole ?? "").trim().toLowerCase() === "seo";
 }
-
-function hasDefaultFinanceAccess(accessRole?: string | null, jobRole?: string | null) {
-  const role = (jobRole ?? "").trim().toLowerCase();
-  return (
-    (accessRole ?? "").trim().toLowerCase() === "owner" ||
-    role === "seo" ||
-    role === "accountant" ||
-    role === "chief_accountant"
-  );
-}
-
 
 function isForcedModuleAccess(key: ModuleKey, accessRole?: string | null, jobRole?: string | null) {
   // Модуль, позначений alwaysOn у реєстрі (наприклад «Команда»), вимкнути не можна.

@@ -56,6 +56,7 @@ const TeamMembersPage = lazyWithRetry(() =>
   import("./pages/TeamMembersPage").then((module) => ({ default: module.TeamMembersPage }))
 );
 const NovaPoshtaSettingsPage = lazyWithRetry(() => import("./pages/NovaPoshtaSettingsPage"));
+const IntegrationsPage = lazyWithRetry(() => import("./pages/IntegrationsPage"));
 const TeamPage = lazyWithRetry(() =>
   import("./pages/TeamPage").then((module) => ({ default: module.TeamPage }))
 );
@@ -1045,11 +1046,21 @@ function AppRoutes() {
             </ModuleRouteGate>
           }
         />
-        {/* «Інтеграції» — окремий розділ під зовнішні сервіси. Поки всередині
-            самі налаштування Нової Пошти; сторінка-список із картками
-            («Нова Пошта — підключено», «Вчасно», «Dropbox») у беклозі. */}
+        {/* «Інтеграції» — список карток зі станом кожного зовнішнього сервісу.
+            Налаштування конкретного сервісу живуть підмаршрутом: аркуш НП надто
+            великий, щоб тулити його в шторку деталей (REQ-9). */}
         <Route
           path="integrations"
+          element={
+            <ModuleRouteGate moduleKey="nova_poshta">
+              <RouteSuspense shell>
+                <IntegrationsPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        <Route
+          path="integrations/nova-poshta"
           element={
             <ModuleRouteGate moduleKey="nova_poshta">
               <RouteSuspense shell>
@@ -1058,8 +1069,9 @@ function AppRoutes() {
             </ModuleRouteGate>
           }
         />
-        {/* Стара адреса лишається робочою: на неї є закладки. */}
-        <Route path="settings/nova-poshta" element={<Navigate to="/integrations" replace />} />
+        {/* Стара адреса лишається робочою: на неї є закладки — і веде вона саме
+            в налаштування НП, а не в загальний список. */}
+        <Route path="settings/nova-poshta" element={<Navigate to="/integrations/nova-poshta" replace />} />
         <Route
           path="profile"
           element={

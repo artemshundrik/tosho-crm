@@ -111,6 +111,17 @@ export const handler = async (event: HttpEvent) => {
       return jsonResponse(200, { ok: true, action, health });
     }
 
+    /**
+     * Скільки місця зайнято й скільки оплачено. Свідомо БЕЗ owner-гейта і без
+     * службового ключа: це квота спільного акаунта компанії, а не чиїсь дані,
+     * і один HTTP-запит до Dropbox — не та вартість, заради якої варто ще раз
+     * ходити в базу по роль.
+     */
+    if (action === "space") {
+      const space = await dropboxService.getSpaceUsage();
+      return jsonResponse(200, { ok: true, action, space });
+    }
+
     if (action === "create-client") {
       const clientName = payload.clientName?.trim();
       if (!clientName) return jsonResponse(400, { error: "clientName is required" });

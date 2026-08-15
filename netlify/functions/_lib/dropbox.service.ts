@@ -453,10 +453,48 @@ async function deleteFile(dropboxPath: string) {
   });
 }
 
+/**
+ * Скільки місця в Dropbox зайнято і скільки оплачено.
+ *
+ * Дешевий виклик (один HTTP-запит без обходу тек), тому його можна дозволити
+ * на завантаженні сторінки — на відміну від `collectDropboxHealth`, яка ходить
+ * по всіх теках.
+ *
+ * Відповідь має дві форми: у персонального акаунта квота лежить у
+ * `allocation.allocated`, у командного — у `allocation.team.allocated` (там же
+ * рахується спожите всією командою). Розбираємо обидві, бо перехід на Team
+ * інакше мовчки перетворив би квоту на нуль.
+ */
+async function getSpaceUsage(): Promise<{ usedBytes: number; allocatedBytes: number | null; isTeam: boolean }> {
+  const payload = await dropboxApiRequest<{
+    used?: number;
+    allocation?: {
+      [".tag"]?: string;
+      allocated?: number;
+      used?: number;
+      team?: { allocated?: number; used?: number };
+    };
+  }>("/users/get_space_usage", null);
+
+  const allocation = payload.allocation ?? {};
+  const isTeam = allocation[".tag"] === "team";
+  const allocated = isTeam ? allocation.team?.allocated ?? allocation.allocated : allocation.allocated;
+  // У командному акаунті «used» верхнього рівня — це спожите ЦИМ користувачем,
+  // а не всією командою; для квоти команди беремо командне значення.
+  const used = isTeam ? allocation.team?.used ?? payload.used : payload.used;
+
+  return {
+    usedBytes: Number(used ?? 0),
+    allocatedBytes: Number.isFinite(Number(allocated)) && Number(allocated) > 0 ? Number(allocated) : null,
+    isTeam,
+  };
+}
+
 export const dropboxService = {
   connectAccount: getCurrentAccount,
   refreshAccessToken,
   getCurrentAccount,
+  getSpaceUsage,
   createFolder,
   createClientFolder,
   createProjectFolder,
