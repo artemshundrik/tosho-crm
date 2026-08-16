@@ -19,12 +19,10 @@ import {
   Plug,
   Megaphone,
   Menu,
-  Moon,
   Palette,
   X as CloseIcon,
   Search,
   ShieldAlert,
-  Sun,
   Truck,
   Users,
   X,
@@ -38,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserMenu } from "@/components/app/UserMenu";
+import { ThemeSwitcher } from "@/components/app/ThemeSwitcher";
 import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
 
 /** Плаваюча кнопка AI-помічника: приховано візуально, функціонал лишається. */
@@ -67,6 +66,7 @@ import { notifyUsers } from "@/lib/designTaskActivity";
 import { useAuth } from "@/auth/AuthProvider";
 import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useTheme } from "@/hooks/useTheme";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
 import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
@@ -732,29 +732,6 @@ function isActivePath(currentPath: string, to: string) {
   return currentPath === to || currentPath.startsWith(to + "/");
 }
 
-type ThemeMode = "light" | "dark";
-
-function getInitialTheme(): ThemeMode {
-  try {
-    const stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") return stored;
-    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
-    return prefersDark ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
-
-function applyTheme(mode: ThemeMode) {
-  const root = document.documentElement;
-  root.classList.toggle("dark", mode === "dark");
-  try {
-    localStorage.setItem("theme", mode);
-  } catch {
-    // ignore
-  }
-}
-
 function normalizeIdentity(value?: string | null) {
   return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -996,7 +973,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [usdRateOpen, setUsdRateOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+  // Тема живе у своєму хуку: він же тримає в злагоді обидва перемикачі (шапка
+  // й мобільне меню) і стежить за налаштуванням ОС. Тут потрібне лише те, що
+  // намальовано зараз, — від нього залежить логотип і перемальовування шапки.
+  const { resolved: theme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [realtimeDisabled, setRealtimeDisabled] = useState(() => isRealtimeDisabledForSession());
@@ -1202,10 +1182,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, []);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
-
-  useEffect(() => {
     try {
       const raw = localStorage.getItem(FX_RATES_STORAGE_KEY);
       if (!raw) return;
@@ -1262,10 +1238,6 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     };
   }, [loadUsdUahRate, showDesignerTimerWidget]);
 
-
-  const toggleTheme = () => {
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
-  };
 
   const loadActivityUnread = React.useCallback(async () => {
     if (!teamId || !userId) return;
@@ -1951,15 +1923,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               </Link>
                             </SheetTitle>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <Button
-                                variant="control"
-                                size="iconMd"
-                                onClick={toggleTheme}
-                                aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
-                                title={theme === "dark" ? "Світла тема" : "Темна тема"}
-                              >
-                                {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-                              </Button>
+                              <ThemeSwitcher align="start" triggerId="theme-switcher-mobile" />
                               <SheetClose asChild>
                                 <Button
                                   variant="control"
@@ -2281,16 +2245,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               />
 
               {/* Theme toggle */}
-              <Button
-                variant="control"
-                size="iconMd"
-                className="hidden md:inline-flex"
-                onClick={toggleTheme}
-                aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
-                title={theme === "dark" ? "Світла тема" : "Темна тема"}
-              >
-                {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-              </Button>
+              <ThemeSwitcher className="hidden md:inline-flex" />
 
               <NotificationsMenu
                 open={notificationsOpen}
