@@ -9093,7 +9093,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     />
 
     <Dialog open={attachDesignTaskDialogOpen} onOpenChange={setAttachDesignTaskDialogOpen}>
-      <DialogContent className="sm:max-w-[720px]">
+      <DialogContent
+        // Список із дією, а не форма: «Привʼязати» виконується одразу, чернетки
+        // тут нема. Без опт-ауту перший же клік по кнопці в списку вмикав
+        // питання «Закрити без збереження?».
+        dismissible
+        className="sm:max-w-[720px]"
+      >
         <DialogHeader>
           <DialogTitle>Привʼязати існуючу дизайн-задачу</DialogTitle>
         </DialogHeader>
@@ -9183,7 +9189,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (!open) setVisualizationPreview(null);
       }}
     >
-      <DialogContent className="w-fit max-h-[94vh] max-w-[calc(100vw-1.5rem)] overflow-hidden sm:max-w-[calc(100vw-3rem)]">
+      <DialogContent
+        // Перегляд картинки — не форма: єдина кнопка тут «Завантажити», і саме
+        // вона вмикала типовий захист від втрати введеного (позначку ставить
+        // клік по будь-якій кнопці), після чого вихід питав «Закрити без
+        // збереження?».
+        dismissible
+        className="w-fit max-h-[94vh] max-w-[calc(100vw-1.5rem)] overflow-hidden sm:max-w-[calc(100vw-3rem)]"
+      >
         <DialogHeader>
           <DialogTitle className="truncate pr-8">
             <span className="block max-w-[calc(100vw-6rem)] truncate sm:max-w-[min(72vw,960px)]">

@@ -1349,6 +1349,13 @@ export default function MarketingPage() {
         }}
       >
         <DialogContent
+          // Тут нема чого зберігати: статус, теги, чек-лист і обране пишуться в
+          // базу одразу (updateRecord → persistRecord), а нотатки дописує
+          // closeDetail на виході. Типовий захист від втрати введеного ставить
+          // позначку «щось міняли» на КЛІК ПО БУДЬ-ЯКІЙ КНОПЦІ — досить було
+          // перегорнути візуал стрілкою чи мініатюрою, і закриття питало
+          // «Закрити без збереження?» про зміни, яких давно нема.
+          dismissible
           className="flex max-h-[92dvh] w-[calc(100vw-24px)] max-w-5xl flex-col gap-0 overflow-hidden rounded-2xl p-0 md:grid md:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]"
           onKeyDown={(event) => {
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;

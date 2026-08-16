@@ -12635,7 +12635,13 @@ export default function DesignTaskPage() {
       </Dialog>
 
       <Dialog open={attachQuoteDialogOpen} onOpenChange={setAttachQuoteDialogOpen}>
-        <DialogContent className="sm:max-w-[760px]">
+        <DialogContent
+          // Список із дією, а не форма: «Привʼязати» виконується одразу, чернетки
+          // тут нема. Без опт-ауту клік по кнопці в списку (або по номеру, який
+          // копіюється) вмикав питання «Закрити без збереження?».
+          dismissible
+          className="sm:max-w-[760px]"
+        >
           <DialogHeader>
             <DialogTitle>Привʼязати до прорахунку</DialogTitle>
           </DialogHeader>

@@ -7444,6 +7444,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           // Без автофокусу: інакше Radix фокусує першу мініатюру, а її onFocus
           // одразу розкриває zoom-прев'ю (велике фото) ще до наведення курсора.
           onOpenAutoFocus={(event) => event.preventDefault()}
+          // Прев'ю на читання: зберігати нема чого, а типовий захист від втрати
+          // введеного ставив позначку на клік по мініатюрі й питав «Закрити без
+          // збереження?».
+          dismissible
           className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0"
         >
           <DialogHeader className="shrink-0 border-b border-border/60 bg-muted/10 px-6 py-5 pr-14">
@@ -7850,7 +7854,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">
+        {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 overflow-hidden">
           <DialogHeader className="p-4 border-b border-border/60 bg-muted/10">
             <DialogTitle className="text-lg">Видалити прорахунок?</DialogTitle>
             <DialogDescription>Це видалить прорахунок і пов’язані дані. Дію не можна скасувати.</DialogDescription>

@@ -90,7 +90,10 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[460px]">
+      {/* Вибір людини, а не форма: клік по рядку вмикає режим і закриває вікно,
+          зберігати нема чого. Без опт-ауту набране в пошуку рахувалось «змінами»
+          і вихід питав «Закрити без збереження?». */}
+      <DialogContent dismissible className="max-w-[460px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-4 w-4 text-primary" />

@@ -3817,7 +3817,8 @@ export function TeamMembersPage() {
 
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
+        {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -3848,7 +3849,8 @@ export function TeamMembersPage() {
       </Dialog>
 
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
+        {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-inner">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />

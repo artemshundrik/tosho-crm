@@ -4144,7 +4144,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
+        <DialogContent dismissible className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Видалити замовника?</DialogTitle>
           </DialogHeader>
@@ -4168,7 +4169,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
       </Dialog>
 
       <Dialog open={leadDeleteDialogOpen} onOpenChange={setLeadDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
+        <DialogContent dismissible className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Видалити ліда?</DialogTitle>
           </DialogHeader>
