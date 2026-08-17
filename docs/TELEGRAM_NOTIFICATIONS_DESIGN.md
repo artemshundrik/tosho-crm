@@ -138,7 +138,7 @@ create table tosho.telegram_link_tokens (
 | `customer_followup` | Нагадування зв'язатись із клієнтом/лідом | `customer-lead-reminders.ts` |
 | `quote_deadline` | Наближається дедлайн КП | `quote-deadline-reminders.ts` |
 | `contractor` | Події по контрагентах/постачальниках | `contractor-reminders.ts` |
-| `team_birthday` | Дні народження / річниці / відпустки команди | `team-events-reminders.ts` |
+| `team_birthday` | Дні народження / річниці / відпустки команди | `team-events-reminders-background.ts` |
 | `design_task_*` | Воркфлоу дизайну (правки, статуси, призначення) | DesignPage/функції |
 | `quote_status` | Зміна статусу КП | Quotes |
 | `mention` | Згадка/призначення на тебе | різні |

@@ -135,10 +135,68 @@ function normalizeEmploymentStatus(value?: string | null) {
   return normalized || "active";
 }
 
+/**
+ * Чи можна слати цій людині.
+ *
+ * ПАСТКА: `undefined` означає «профілю немає взагалі» (людину щойно додали, і
+ * картку співробітника ще не завели) — таких виключати не можна, інакше новачок
+ * мовчки випадає з розсилки. Але передавати сюди результат пошуку по мапі, з
+ * якої звільнених уже прибрали, — значить перетворити цю поблажку на діру.
+ * Мапа має будуватись з ПОВНОГО списку профілів.
+ */
 function isDeliverableMember(profile?: TeamProfileRow) {
   if (!profile) return true;
   const employmentStatus = normalizeEmploymentStatus(profile.employment_status);
   return employmentStatus !== "inactive" && employmentStatus !== "rejected";
+}
+
+/**
+ * Кому взагалі шлемо і хто вирішує заявки.
+ *
+ * `knownProfiles` — ПОВНИЙ список профілів, разом зі звільненими. Саме тому це
+ * окрема функція: коли мапа будувалась із відфільтрованого списку, звільнений
+ * у ній був відсутній, «профілю немає» читалось як «людину не знаємо, краще
+ * надішлемо», і сповіщення роками летіли колишнім співробітникам.
+ */
+export function resolveAudience(memberships: MembershipRow[], knownProfiles: TeamProfileRow[]) {
+  const profileByUserKey = new Map(
+    knownProfiles.map((profile) => [`${profile.workspace_id}:${profile.user_id}`, profile])
+  );
+  const recipientIdsByWorkspace = new Map<string, string[]>();
+  /** owner/SEO — адресати ескалацій по завислих заявках. */
+  const approverIdsByWorkspace = new Map<string, string[]>();
+  const ownerIdsByWorkspace = new Map<string, string[]>();
+  /** Хто сам є SEO/owner — їхні заявки вирішує лише власник. */
+  const privilegedByKey = new Set<string>();
+
+  for (const membership of memberships) {
+    const workspaceId = membership.workspace_id?.trim();
+    const userId = membership.user_id?.trim();
+    if (!workspaceId || !userId) continue;
+
+    const recipientProfile = profileByUserKey.get(`${workspaceId}:${userId}`);
+    if (!isDeliverableMember(recipientProfile)) continue;
+
+    const list = recipientIdsByWorkspace.get(workspaceId) ?? [];
+    list.push(userId);
+    recipientIdsByWorkspace.set(workspaceId, list);
+
+    const accessRole = (membership.access_role ?? "").trim().toLowerCase();
+    const jobRole = (membership.job_role ?? "").trim().toLowerCase();
+    if (accessRole === "owner" || jobRole === "seo") {
+      const approvers = approverIdsByWorkspace.get(workspaceId) ?? [];
+      approvers.push(userId);
+      approverIdsByWorkspace.set(workspaceId, approvers);
+      privilegedByKey.add(`${workspaceId}:${userId}`);
+    }
+    if (accessRole === "owner") {
+      const owners = ownerIdsByWorkspace.get(workspaceId) ?? [];
+      owners.push(userId);
+      ownerIdsByWorkspace.set(workspaceId, owners);
+    }
+  }
+
+  return { recipientIdsByWorkspace, approverIdsByWorkspace, ownerIdsByWorkspace, privilegedByKey, profileByUserKey };
 }
 
 function getBirthdayAgeTurningToday(birthDate?: string | null, todayKey?: string) {
@@ -247,9 +305,23 @@ function buildEventNotification(
   };
 }
 
-export const config = {
-  schedule: "5 * * * *",
-};
+// ФОНОВА функція (суфікс -background) — і це не косметика.
+//
+// Прогін розсилає подію всій команді: на 20 людей це ~40 записів у базу
+// (заміряно 7 секунд) плюс під сотню послідовних викликів до web-push і
+// Telegram. Синхронна функція Netlify має на все 10 секунд, тож 17.08.2026
+// прогін гарантовано не встигав. Найгірше не те, що обривався, а що рядки
+// в notifications на той момент УЖЕ були записані: наступна година бачила їх
+// у дедуплікації, вважала справу зробленою й нічого не досилала. Звідси
+// «прийшло не всім» — тихо й назавжди.
+//
+// Фонова функція має 15 хвилин і повертає 202 одразу. Розплата: тіло
+// відповіді більше не потрапляє в net._http_response, тож «скільки розіслано»
+// дивимось не там, а в tosho.notification_deliveries.
+//
+// config.schedule тут НЕМАЄ навмисно: Netlify не дозволяє фонову функцію
+// ставити на розклад, та й планувальник Netlify у цьому проєкті мертвий —
+// усі нагадування веде pg_cron (scripts/reminders-cron.sql).
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod && !["GET", "POST"].includes(event.httpMethod)) {
@@ -331,10 +403,22 @@ export const handler = async (event: HttpEvent) => {
       else absencesByUser.set(row.user_id, [row]);
     });
 
-    const profileRows = ((profiles ?? []) as TeamProfileRow[]).filter((profile) => {
-      if (!profile.workspace_id || !profile.user_id) return false;
-      return isDeliverableMember(profile);
-    });
+    // УВАГА: два різні списки, і плутати їх не можна.
+    //
+    // knownProfiles — УСІ профілі, разом зі звільненими. Саме за ним нижче
+    // будується profileByUserKey, бо перевірка отримувача має бачити справжній
+    // employment_status. Коли мапу будували з уже відфільтрованого списку,
+    // звільнений у ній просто був відсутній, isDeliverableMember(undefined)
+    // повертав true («людини не знаємо — краще надішлемо»), і сповіщення
+    // роками летіли людям, яких у компанії немає. Доказ у проді 17.08.2026:
+    // дві звільнені отримали ранкові сповіщення про відпустки команди.
+    const knownProfiles = ((profiles ?? []) as TeamProfileRow[]).filter(
+      (profile) => Boolean(profile.workspace_id) && Boolean(profile.user_id)
+    );
+
+    // profileRows — лише чинні співробітники. Це СУБ'ЄКТИ подій: у звільненого
+    // не буває «сьогодні починається відпустка».
+    const profileRows = knownProfiles.filter(isDeliverableMember);
 
     if (profileRows.length === 0) {
       return jsonResponse(200, { success: true, scanned: 0, events: 0, delivered: 0 });
@@ -362,40 +446,8 @@ export const handler = async (event: HttpEvent) => {
 
     const memberships = (membershipsResult.data ?? []) as MembershipRow[];
     const existingNotifications = (existingNotificationsResult.data ?? []) as NotificationRow[];
-    const profileByUserKey = new Map(profileRows.map((profile) => [`${profile.workspace_id}:${profile.user_id}`, profile]));
-    const recipientIdsByWorkspace = new Map<string, string[]>();
-    /** owner/SEO — адресати ескалацій по завислих заявках. */
-    const approverIdsByWorkspace = new Map<string, string[]>();
-    const ownerIdsByWorkspace = new Map<string, string[]>();
-    /** Хто сам є SEO/owner — їхні заявки вирішує лише власник. */
-    const privilegedByKey = new Set<string>();
-
-    for (const membership of memberships) {
-      const workspaceId = membership.workspace_id?.trim();
-      const userId = membership.user_id?.trim();
-      if (!workspaceId || !userId) continue;
-
-      const recipientProfile = profileByUserKey.get(`${workspaceId}:${userId}`);
-      if (!isDeliverableMember(recipientProfile)) continue;
-
-      const list = recipientIdsByWorkspace.get(workspaceId) ?? [];
-      list.push(userId);
-      recipientIdsByWorkspace.set(workspaceId, list);
-
-      const accessRole = (membership.access_role ?? "").trim().toLowerCase();
-      const jobRole = (membership.job_role ?? "").trim().toLowerCase();
-      if (accessRole === "owner" || jobRole === "seo") {
-        const approvers = approverIdsByWorkspace.get(workspaceId) ?? [];
-        approvers.push(userId);
-        approverIdsByWorkspace.set(workspaceId, approvers);
-        privilegedByKey.add(`${workspaceId}:${userId}`);
-      }
-      if (accessRole === "owner") {
-        const owners = ownerIdsByWorkspace.get(workspaceId) ?? [];
-        owners.push(userId);
-        ownerIdsByWorkspace.set(workspaceId, owners);
-      }
-    }
+    const { recipientIdsByWorkspace, approverIdsByWorkspace, ownerIdsByWorkspace, privilegedByKey, profileByUserKey } =
+      resolveAudience(memberships, knownProfiles);
 
     const existingKeys = new Set(
       existingNotifications

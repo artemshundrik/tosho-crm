@@ -60,13 +60,18 @@ select cron.schedule(
 );
 
 -- Team events: birthdays / work anniversaries / vacation start+end.
--- Hourly at :05 (matches the function's original schedule). The function resolves
--- "today" in Europe/Kiev internally, so any hour-of-day trigger is correct.
+-- Hourly at :00. The function resolves "today" in Europe/Kiev internally, so any
+-- hour-of-day trigger is correct; the minute matters only because quiet hours
+-- open at 08:00 and the team asked for the notification AT 08:00, not 08:05.
+--
+-- URL має суфікс -background: функція фонова (див. коментар у самому файлі).
+-- Відповідь тепер завжди 202 з порожнім тілом — діагностика переїхала
+-- в tosho.notification_deliveries.
 select cron.schedule(
   'reminders-team-events',
-  '5 * * * *',
+  '0 * * * *',
   $$ select net.http_post(
-       url := 'https://tosho.pro/.netlify/functions/team-events-reminders',
+       url := 'https://tosho.pro/.netlify/functions/team-events-reminders-background',
        headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
        timeout_milliseconds := 20000) $$
 );

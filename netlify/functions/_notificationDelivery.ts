@@ -98,6 +98,57 @@ type DeliveryResult = {
   telegramFailed: number;
 };
 
+/** Рядок, який уже лежить у notifications: id потрібен для журналу доставки. */
+type InsertedRow = NotificationInsertRow & { id: string | null };
+
+/**
+ * Запис у журнал доставки (tosho.notification_deliveries).
+ *
+ * `skipped` не менш цінний за `failed`: найчастіша відповідь на «чому не
+ * прийшло» — «бота не прив'язано», і без запису вона невідрізненна від збою.
+ */
+type DeliveryAttempt = {
+  notification_id: string;
+  user_id: string;
+  channel: "push" | "telegram";
+  status: "sent" | "failed" | "skipped";
+  reason: string | null;
+  category: string | null;
+};
+
+/** Рядок журналу. Без id сповіщення прив'язати запис нема до чого — пропускаємо. */
+function noteAttempt(
+  attempts: DeliveryAttempt[],
+  row: InsertedRow,
+  channel: DeliveryAttempt["channel"],
+  status: DeliveryAttempt["status"],
+  reason: string | null,
+  category?: string
+) {
+  if (!row.id) return;
+  attempts.push({
+    notification_id: row.id,
+    user_id: row.user_id,
+    channel,
+    status,
+    reason,
+    category: category ?? null,
+  });
+}
+
+/**
+ * Журнал не має права зашкодити доставці: якщо таблиці ще немає або запис не
+ * вдався — мовчки йдемо далі. Сповіщення важливіше за свій слід.
+ */
+async function recordDeliveryAttempts(adminClient: AdminClient, attempts: DeliveryAttempt[]) {
+  if (attempts.length === 0) return;
+  try {
+    await adminClient.schema("tosho").from("notification_deliveries").insert(attempts);
+  } catch {
+    // навмисно тихо
+  }
+}
+
 function isDuplicateNotificationError(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   return error.code === "23505" || /duplicate key/i.test(error.message ?? "");
@@ -108,20 +159,35 @@ async function insertNotificationRows(
   rows: NotificationInsertRow[],
   options?: DeliverNotificationsOptions
 ) {
+  // .select(...) — щоб було чим прив'язати запис журналу доставки до сповіщення.
+  // Зіставляємо за (user_id, href), а НЕ за порядком: порядок RETURNING ніде не
+  // обіцяний, а переплутаний id перетворив би журнал зі свідка на брехуна.
   if (!options?.dedupeByHref) {
-    const { error } = await adminClient.from("notifications").insert(rows.map(toDbRow));
+    const { data, error } = await adminClient
+      .from("notifications")
+      .insert(rows.map(toDbRow))
+      .select("id,user_id,href");
     if (error) throw new Error(error.message);
-    return rows;
+
+    const idsByKey = new Map<string, string[]>();
+    for (const returned of (data ?? []) as Array<{ id: string; user_id: string; href: string | null }>) {
+      const key = `${returned.user_id}::${returned.href ?? ""}`;
+      const queue = idsByKey.get(key) ?? [];
+      queue.push(returned.id);
+      idsByKey.set(key, queue);
+    }
+
+    return rows.map((row) => ({ ...row, id: idsByKey.get(`${row.user_id}::${row.href ?? ""}`)?.shift() ?? null }));
   }
 
-  const insertedRows: NotificationInsertRow[] = [];
+  const insertedRows: InsertedRow[] = [];
   for (const row of rows) {
-    const { error } = await adminClient.from("notifications").insert([toDbRow(row)]);
+    const { data, error } = await adminClient.from("notifications").insert([toDbRow(row)]).select("id");
     if (error) {
       if (isDuplicateNotificationError(error)) continue;
       throw new Error(error.message);
     }
-    insertedRows.push(row);
+    insertedRows.push({ ...row, id: ((data ?? []) as Array<{ id: string }>)[0]?.id ?? null });
   }
   return insertedRows;
 }
@@ -142,8 +208,9 @@ async function loadUserSettings(adminClient: AdminClient, userIds: string[]) {
 
 async function deliverPush(
   adminClient: AdminClient,
-  insertedRows: NotificationInsertRow[],
+  insertedRows: InsertedRow[],
   settings: Map<string, UserSettingsRow>,
+  attempts: DeliveryAttempt[],
   category?: string
 ) {
   const vapidPublicKey = process.env.WEB_PUSH_VAPID_PUBLIC_KEY;
@@ -179,7 +246,10 @@ async function deliverPush(
 
   for (const row of insertedRows) {
     // Гейтинг за налаштуваннями користувача (дефолт — увімкнено).
-    if (!isChannelEnabled(settings.get(row.user_id)?.channel_prefs, category, "push")) continue;
+    if (!isChannelEnabled(settings.get(row.user_id)?.channel_prefs, category, "push")) {
+      noteAttempt(attempts, row, "push", "skipped", "channel_off", category);
+      continue;
+    }
 
     const userSubscriptions = subscriptionsByUserId.get(row.user_id) ?? [];
     const dedupedSubscriptions = Array.from(
@@ -190,6 +260,14 @@ async function deliverPush(
         ])
       ).values()
     );
+    if (dedupedSubscriptions.length === 0) {
+      noteAttempt(attempts, row, "push", "skipped", "no_subscription", category);
+      continue;
+    }
+
+    let sentToDevice = 0;
+    let lastFailureReason: string | null = null;
+
     for (const subscription of dedupedSubscriptions) {
       try {
         await webpush.sendNotification(
@@ -208,6 +286,7 @@ async function deliverPush(
           })
         );
         pushDelivered += 1;
+        sentToDevice += 1;
       } catch (pushError) {
         pushFailed += 1;
         const statusCode =
@@ -217,6 +296,7 @@ async function deliverPush(
           typeof (pushError as { statusCode?: unknown }).statusCode === "number"
             ? Number((pushError as { statusCode?: unknown }).statusCode)
             : null;
+        lastFailureReason = statusCode ? `http_${statusCode}` : "send_error";
         if (statusCode === 404 || statusCode === 410) {
           await adminClient
             .from("push_subscriptions")
@@ -224,6 +304,14 @@ async function deliverPush(
             .eq("endpoint", subscription.endpoint);
         }
       }
+    }
+
+    // Пристроїв може бути кілька: якщо хоч один прийняв — людина побачила.
+    if (sentToDevice > 0) {
+      const partial = dedupedSubscriptions.length - sentToDevice;
+      noteAttempt(attempts, row, "push", "sent", partial > 0 ? `partial_${partial}` : null, category);
+    } else {
+      noteAttempt(attempts, row, "push", "failed", lastFailureReason, category);
     }
   }
 
@@ -242,8 +330,9 @@ function buildTelegramUrl(href: string | null) {
 
 async function deliverTelegram(
   adminClient: AdminClient,
-  insertedRows: NotificationInsertRow[],
+  insertedRows: InsertedRow[],
   settings: Map<string, UserSettingsRow>,
+  attempts: DeliveryAttempt[],
   category?: string
 ) {
   if (!getTelegramBotToken()) return { telegramDelivered: 0, telegramFailed: 0 };
@@ -253,9 +342,19 @@ async function deliverTelegram(
 
   for (const row of insertedRows) {
     const setting = settings.get(row.user_id);
-    if (!setting || setting.telegram_chat_id == null) continue; // не підключено
-    if (setting.telegram_enabled === false) continue; // глобальний тумблер вимкнено
-    if (!isChannelEnabled(setting.channel_prefs, category, "telegram")) continue; // категорію вимкнено
+    if (!setting || setting.telegram_chat_id == null) {
+      // Найчастіша причина «не прийшло в бот» — бота просто не прив'язали.
+      noteAttempt(attempts, row, "telegram", "skipped", "not_linked", category);
+      continue;
+    }
+    if (setting.telegram_enabled === false) {
+      noteAttempt(attempts, row, "telegram", "skipped", "telegram_off", category);
+      continue;
+    }
+    if (!isChannelEnabled(setting.channel_prefs, category, "telegram")) {
+      noteAttempt(attempts, row, "telegram", "skipped", "channel_off", category);
+      continue;
+    }
 
     const chatId = setting.telegram_chat_id;
     const text = `<b>${escapeTelegramHtml(row.title)}</b>${row.body ? `\n${escapeTelegramHtml(row.body)}` : ""}`;
@@ -266,9 +365,11 @@ async function deliverTelegram(
 
     if (result.ok) {
       telegramDelivered += 1;
+      noteAttempt(attempts, row, "telegram", "sent", null, category);
       continue;
     }
     telegramFailed += 1;
+    noteAttempt(attempts, row, "telegram", "failed", `http_${result.status ?? result.errorCode ?? "unknown"}`, category);
     // 403 = бот заблокований користувачем → тиха відв'язка.
     if (result.status === 403 || result.errorCode === 403) {
       await adminClient
@@ -309,8 +410,10 @@ export async function deliverNotifications(
   const userIds = Array.from(new Set(insertedRows.map((row) => row.user_id)));
   const settings = await loadUserSettings(adminClient, userIds);
 
-  const push = await deliverPush(adminClient, insertedRows, settings, options?.category);
-  const telegram = await deliverTelegram(adminClient, insertedRows, settings, options?.category);
+  const attempts: DeliveryAttempt[] = [];
+  const push = await deliverPush(adminClient, insertedRows, settings, attempts, options?.category);
+  const telegram = await deliverTelegram(adminClient, insertedRows, settings, attempts, options?.category);
+  await recordDeliveryAttempts(adminClient, attempts);
 
   return {
     delivered: insertedRows.length,

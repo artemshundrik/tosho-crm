@@ -32,7 +32,7 @@ self-service запити з погодженням, спільний кален
 2. **Немає self-service**: запис у журнал — лише owner/SEO (клієнт `TeamPage.tsx:533`,
    RLS `scripts/team-absences.sql:91-155`). Жодного запиту/погодження у кодовій базі.
 3. **Квот немає взагалі.**
-4. **Відсутності не породжують сповіщень.** Cron `team-events-reminders.ts` дивиться лише на availability.
+4. **Відсутності не породжують сповіщень.** Cron `team-events-reminders-background.ts` дивиться лише на availability.
 5. **Календар — інлайн-діалог** у TeamPage (`:1340-1502`), місячна сітка не компонент.
 6. `team_absences` відсутня в `docs/DB_MAP.md`; `docs/modules/team-hr.md` застарілий (рядки/гейти).
 7. **Зв'язка з зарплатами**: усі 4 `kind` однаково ріжуть норму дизайнерів

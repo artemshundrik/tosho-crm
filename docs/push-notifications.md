@@ -12,7 +12,7 @@
   - `netlify/functions/quote-deadline-reminders.ts`
   - `netlify/functions/customer-lead-reminders.ts`
   - `netlify/functions/contractor-reminders.ts`
-  - `netlify/functions/team-events-reminders.ts`
+  - `netlify/functions/team-events-reminders-background.ts`
 
 ## Local/frontend env
 
@@ -65,7 +65,7 @@ Copy:
 
 ## Scheduled team reminders
 
-- `netlify/functions/team-events-reminders.ts` runs hourly
+- `netlify/functions/team-events-reminders-background.ts` runs hourly
 - sends team-wide reminders for:
   - birthdays happening today
   - work anniversaries happening today
