@@ -4,7 +4,7 @@
  * Header for content area with breadcrumb, description, chips for places/methods
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -20,7 +20,8 @@ import {
   Shirt,
   Sparkles,
 } from "lucide-react";
-import type { CatalogType, CatalogKind } from "@/types/catalog";
+import type { CatalogType, CatalogKind, MethodDirectoryEntry } from "@/types/catalog";
+import { findSimilarMethods, normalizeMethodName } from "@/lib/catalogMethodName";
 
 interface ContentHeaderProps {
   selectedType: CatalogType | undefined;
@@ -32,7 +33,8 @@ interface ContentHeaderProps {
   onUpdatePrintPosition: (kindId: string, positionId: string, label: string) => Promise<boolean>;
   methodSaving: boolean;
   methodError?: string | null;
-  onAddMethod: (kindId: string, name?: string) => void;
+  methodDirectory: MethodDirectoryEntry[];
+  onAddMethod: (kindId: string, name?: string, directoryId?: string | null) => void;
   onUpdateMethod: (kindId: string, methodId: string, name: string) => Promise<boolean>;
   onDeleteMethod: (kindId: string, methodId: string) => void;
   onCountMethodUsage: (methodId: string) => Promise<number>;
@@ -49,6 +51,7 @@ export function ContentHeader({
   onUpdatePrintPosition,
   methodSaving,
   methodError,
+  methodDirectory,
   onAddMethod,
   onUpdateMethod,
   onDeleteMethod,
@@ -58,7 +61,9 @@ export function ContentHeader({
   const quoteType = selectedType?.quote_type === "merch" || selectedType?.quote_type === "print" ? selectedType.quote_type : "other";
   const quoteTypeLabel = quoteType === "merch" ? "мерч" : quoteType === "print" ? "поліграфія" : "інше";
   const QuoteTypeIcon = quoteType === "merch" ? Shirt : quoteType === "print" ? Printer : Package;
-  const availableMethods = selectedKind?.methods || [];
+  // useMemo, а не `?? []`: новий літерал масиву на кожен рендер зробив би
+  // залежності підказок нестабільними (і eslint правий, що свариться).
+  const availableMethods = useMemo(() => selectedKind?.methods ?? [], [selectedKind]);
   const printPositions = selectedKind?.printPositions || [];
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [positionModalOpen, setPositionModalOpen] = useState(false);
@@ -75,6 +80,43 @@ export function ContentHeader({
   // block deleting a place/method that is referenced by existing quotes.
   const [positionUsage, setPositionUsage] = useState<number | null>(null);
   const [methodUsage, setMethodUsage] = useState<number | null>(null);
+
+  // Підказки для вікна методу: що вже є в цьому виді і що є в довіднику CRM.
+  // Без них у виді й з'являлись «УФ друк» поруч з «Уф- друк».
+  const methodQuery = methodModalValue.trim();
+  const methodQueryKey = normalizeMethodName(methodQuery);
+
+  const methodAlreadyHere = useMemo(
+    () =>
+      methodModalMode === "add" && methodQueryKey
+        ? availableMethods.find((method) => normalizeMethodName(method.name) === methodQueryKey)
+        : undefined,
+    [availableMethods, methodModalMode, methodQueryKey]
+  );
+
+  const methodSuggestions = useMemo(() => {
+    if (methodModalMode !== "add" || !methodQueryKey) return [];
+    const hereKeys = new Set(availableMethods.map((method) => normalizeMethodName(method.name)));
+    return findSimilarMethods(
+      methodQuery,
+      methodDirectory.filter(
+        (entry) => entry.active && !hereKeys.has(normalizeMethodName(entry.name))
+      ),
+      4
+    );
+  }, [availableMethods, methodDirectory, methodModalMode, methodQuery, methodQueryKey]);
+
+  const methodExactInDirectory = methodSuggestions.find(
+    (entry) => normalizeMethodName(entry.name) === methodQueryKey
+  );
+
+  // Скільки видів товару зачепить перейменування: назва спільна для всієї CRM.
+  const editedMethodKindCount = useMemo(() => {
+    if (methodModalMode !== "edit" || !methodModalId) return 0;
+    const directoryId = availableMethods.find((method) => method.id === methodModalId)?.directoryId;
+    if (!directoryId) return 0;
+    return methodDirectory.find((entry) => entry.id === directoryId)?.kindCount ?? 0;
+  }, [availableMethods, methodDirectory, methodModalId, methodModalMode]);
 
   const openAddPositionModal = () => {
     setPositionModalMode("add");
@@ -335,8 +377,8 @@ export function ContentHeader({
             </DialogTitle>
             <DialogDescription>
               {methodModalMode === "add"
-                ? "Вкажіть назву методу нанесення."
-                : "Оновіть назву методу нанесення."}
+                ? "Спершу подивіться, чи такого методу ще немає — назви спільні для всієї CRM."
+                : "Назва зміниться в усіх видах товару, де є цей метод."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -347,6 +389,46 @@ export function ContentHeader({
               className="h-11"
               autoFocus
             />
+
+            {methodAlreadyHere ? (
+              <div className="text-xs text-warning-foreground">
+                «{methodAlreadyHere.name}» уже є в цьому виді товару
+              </div>
+            ) : null}
+
+            {methodSuggestions.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {methodExactInDirectory ? "Такий метод уже є в CRM:" : "Схоже на вже наявні:"}
+                </p>
+                {methodSuggestions.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    disabled={methodSaving}
+                    onClick={() => {
+                      if (!selectedKind) return;
+                      onAddMethod(selectedKind.id, entry.name, entry.id);
+                      setMethodModalOpen(false);
+                      setMethodModalValue("");
+                    }}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                  >
+                    <span className="min-w-0 truncate text-sm font-medium">{entry.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {entry.kindCount > 0 ? `у ${entry.kindCount} видах · додати` : "додати"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {methodModalMode === "edit" && editedMethodKindCount > 1 ? (
+              <div className="text-xs text-warning-foreground">
+                Перейменування торкнеться {editedMethodKindCount} видів товару
+              </div>
+            ) : null}
+
             {methodError && <div className="text-xs text-destructive">{methodError}</div>}
           </div>
           <DialogFooter className="gap-2 sm:justify-between">
@@ -382,7 +464,13 @@ export function ContentHeader({
                 onClick={async () => {
                   if (!methodModalValue.trim()) return;
                   if (methodModalMode === "add") {
-                    onAddMethod(selectedKind.id, methodModalValue);
+                    // Точний збіг у довіднику — беремо готовий запис, а не
+                    // створюємо ще одне написання тієї самої назви.
+                    onAddMethod(
+                      selectedKind.id,
+                      methodExactInDirectory?.name ?? methodModalValue,
+                      methodExactInDirectory?.id ?? null
+                    );
                     setMethodModalOpen(false);
                     setMethodModalValue("");
                     return;
@@ -398,9 +486,13 @@ export function ContentHeader({
                     }
                   }
                 }}
-                disabled={!methodModalValue.trim() || methodSaving}
+                disabled={!methodModalValue.trim() || methodSaving || Boolean(methodAlreadyHere)}
               >
-                {methodModalMode === "add" ? "Додати" : "Зберегти"}
+                {methodModalMode === "edit"
+                  ? "Зберегти"
+                  : methodExactInDirectory
+                    ? "Додати до виду"
+                    : "Створити"}
               </Button>
             </div>
           </DialogFooter>

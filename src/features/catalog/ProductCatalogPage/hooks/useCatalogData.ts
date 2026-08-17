@@ -15,9 +15,44 @@ import type {
   CatalogMethod,
   CatalogPrintPosition,
   CatalogPriceTier,
+  MethodDirectoryEntry,
 } from "@/types/catalog";
 import { INITIAL_CATALOG } from "@/constants/catalog";
 import { usePageCache } from "@/hooks/usePageCache";
+import { normalizeMethodName } from "@/lib/catalogMethodName";
+
+type MethodRow = {
+  id: string;
+  kind_id: string;
+  name: string;
+  price: number | null;
+  directory_id?: string | null;
+};
+
+/**
+ * Довідник методів, зібраний із самих методів видів. Запасний шлях на випадок,
+ * коли tosho.method_directory ще не приїхав у це середовище: підказки «такий
+ * метод уже є» мають працювати й без нього, просто без спільних id.
+ */
+const deriveDirectoryFromMethods = (rows: MethodRow[]): MethodDirectoryEntry[] => {
+  const byKey = new Map<string, MethodDirectoryEntry>();
+  rows.forEach((row) => {
+    const key = normalizeMethodName(row.name);
+    if (!key) return;
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.kindCount += 1;
+      return;
+    }
+    byKey.set(key, {
+      id: row.directory_id ?? `derived:${key}`,
+      name: row.name,
+      active: true,
+      kindCount: 1,
+    });
+  });
+  return Array.from(byKey.values());
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
@@ -49,6 +84,7 @@ export function useCatalogData(teamId: string | null) {
   const [catalogLoading, setCatalogLoading] = useState(!cached);
   const [catalogModelsLoading, setCatalogModelsLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [methodDirectory, setMethodDirectory] = useState<MethodDirectoryEntry[]>([]);
   const loadedKindIdsRef = useRef<Set<string>>(new Set());
   const allModelsLoadedRef = useRef(false);
 
@@ -263,6 +299,44 @@ export function useCatalogData(teamId: string | null) {
       }
       setCatalogError(null);
       
+      // Методи тягнемо окремою функцією: у середовищі, куди ще не приїхала
+      // міграція довідника, колонки directory_id немає — тоді читаємо без неї,
+      // замість того щоб завалити завантаження всього каталогу.
+      const loadMethods = async () => {
+        const withDirectory = await supabase
+          .schema("tosho")
+          .from("catalog_methods")
+          .select("id,kind_id,name,price,directory_id")
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
+        if (!withDirectory.error) {
+          return { data: (withDirectory.data ?? []) as MethodRow[], error: null };
+        }
+        if (!/directory_id/i.test(withDirectory.error.message ?? "")) {
+          return { data: [] as MethodRow[], error: withDirectory.error };
+        }
+        const legacy = await supabase
+          .schema("tosho")
+          .from("catalog_methods")
+          .select("id,kind_id,name,price")
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
+        return { data: (legacy.data ?? []) as MethodRow[], error: legacy.error };
+      };
+
+      // Довідник — не критичний для показу каталогу: якщо його немає, зберемо
+      // список із самих методів.
+      const loadDirectory = async () => {
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("method_directory")
+          .select("id,name,active")
+          .eq("team_id", teamId)
+          .order("name", { ascending: true });
+        if (error) return null;
+        return (data ?? []) as Array<{ id: string; name: string; active: boolean }>;
+      };
+
       try {
         // Load all data in parallel
         const [
@@ -271,6 +345,7 @@ export function useCatalogData(teamId: string | null) {
           { data: modelRows, error: modelError },
           { data: methodRows, error: methodError },
           { data: printRows, error: printError },
+          directoryRows,
         ] = await Promise.all([
           supabase
             .schema("tosho")
@@ -291,18 +366,14 @@ export function useCatalogData(teamId: string | null) {
             .from("catalog_models")
             .select("id,kind_id")
             .eq("team_id", teamId),
-          supabase
-            .schema("tosho")
-            .from("catalog_methods")
-            .select("id,kind_id,name,price")
-            .eq("team_id", teamId)
-            .order("name", { ascending: true }),
+          loadMethods(),
           supabase
             .schema("tosho")
             .from("catalog_print_positions")
             .select("id,kind_id,label,sort_order")
             .order("sort_order", { ascending: true })
             .order("label", { ascending: true }),
+          loadDirectory(),
         ]);
 
         if (typeError) throw typeError;
@@ -319,9 +390,32 @@ export function useCatalogData(teamId: string | null) {
         const methodsByKind = new Map<string, CatalogMethod[]>();
         (methodRows ?? []).forEach((row) => {
           const list = methodsByKind.get(row.kind_id) ?? [];
-          list.push({ id: row.id, name: row.name, price: row.price ?? undefined });
+          list.push({
+            id: row.id,
+            name: row.name,
+            price: row.price ?? undefined,
+            directoryId: row.directory_id ?? null,
+          });
           methodsByKind.set(row.kind_id, list);
         });
+
+        const kindCountByDirectoryId = new Map<string, number>();
+        (methodRows ?? []).forEach((row) => {
+          if (!row.directory_id) return;
+          kindCountByDirectoryId.set(
+            row.directory_id,
+            (kindCountByDirectoryId.get(row.directory_id) ?? 0) + 1
+          );
+        });
+
+        const nextDirectory: MethodDirectoryEntry[] = directoryRows
+          ? directoryRows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              active: row.active !== false,
+              kindCount: kindCountByDirectoryId.get(row.id) ?? 0,
+            }))
+          : deriveDirectoryFromMethods(methodRows ?? []);
 
         const printPositionsByKind = new Map<string, CatalogPrintPosition[]>();
         (printRows ?? []).forEach((row) => {
@@ -354,6 +448,7 @@ export function useCatalogData(teamId: string | null) {
         if (!cancelled) {
           setCatalog(nextCatalog);
           setCache(nextCatalog);
+          setMethodDirectory(nextDirectory);
           loadedKindIdsRef.current = new Set();
           allModelsLoadedRef.current = false;
         }
@@ -384,6 +479,8 @@ export function useCatalogData(teamId: string | null) {
     catalogLoading,
     catalogModelsLoading,
     catalogError,
+    methodDirectory,
+    setMethodDirectory,
     ensureKindModelsLoaded,
     ensureAllModelsLoaded,
   };

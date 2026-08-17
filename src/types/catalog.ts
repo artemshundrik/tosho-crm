@@ -12,6 +12,24 @@ export type CatalogMethod = {
   id: string;
   name: string;
   price?: number;
+  /**
+   * Запис у спільному довіднику методів. Рядок `catalog_methods` — це «метод
+   * доступний цьому виду», а назва живе в довіднику: перейменування одне на всю
+   * CRM. `name` вище — її дзеркало, яке підтримує тригер у базі.
+   */
+  directoryId?: string | null;
+};
+
+/**
+ * Метод нанесення в спільному довіднику компанії (`tosho.method_directory`).
+ * Один запис на метод, скільки б видів товару його не використовували.
+ */
+export type MethodDirectoryEntry = {
+  id: string;
+  name: string;
+  active: boolean;
+  /** У скількох видах товару цей метод уже увімкнено — рахується на клієнті. */
+  kindCount: number;
 };
 
 /**

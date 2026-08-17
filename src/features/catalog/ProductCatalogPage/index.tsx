@@ -78,6 +78,8 @@ export default function ProductCatalogPage() {
     catalogLoading,
     catalogModelsLoading,
     catalogError,
+    methodDirectory,
+    setMethodDirectory,
     ensureAllModelsLoaded,
   } = useCatalogData(teamId);
 
@@ -119,6 +121,8 @@ export default function ProductCatalogPage() {
     selectedTypeId: filters.selectedTypeId,
     selectedKindId: filters.selectedKindId,
     allModelsWithContext: filters.allModelsWithContext,
+    methodDirectory,
+    setMethodDirectory,
   });
 
   // Get available methods for draft kind
@@ -411,6 +415,7 @@ export default function ProductCatalogPage() {
               onUpdatePrintPosition={modelEditor.handleUpdatePrintPosition}
               methodSaving={modelEditor.methodSaving}
               methodError={modelEditor.methodError}
+              methodDirectory={methodDirectory}
               onAddMethod={modelEditor.handleAddMethod}
               onUpdateMethod={modelEditor.handleUpdateMethod}
               onDeleteMethod={modelEditor.handleDeleteMethod}
@@ -517,6 +522,7 @@ export default function ProductCatalogPage() {
         avanprintImportError={modelEditor.avanprintImportError}
         avanprintImportSummary={modelEditor.avanprintImportSummary}
         availableMethods={availableMethodsForDraft}
+        methodDirectory={methodDirectory}
         newMethodName={modelEditor.newMethodName}
         newMethodPrice={modelEditor.newMethodPrice}
         methodSaving={modelEditor.methodSaving}

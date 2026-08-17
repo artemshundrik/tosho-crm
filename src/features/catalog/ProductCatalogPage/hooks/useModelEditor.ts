@@ -20,12 +20,18 @@ import type {
   CatalogModelVariant,
   CatalogPriceTier,
   CatalogType,
+  MethodDirectoryEntry,
   PriceMode,
   ImageUploadMode,
   ModelWithContext,
 } from "@/types/catalog";
 import { createLocalId, createNextTier, readImageFile } from "@/utils/catalogUtils";
 import { DEFAULT_PRICE } from "@/constants/catalog";
+import {
+  cleanMethodName,
+  methodLookupKeys,
+  normalizeMethodName,
+} from "@/lib/catalogMethodName";
 
 const CATALOG_IMAGE_BUCKET = "public-assets";
 
@@ -72,7 +78,15 @@ interface UseModelEditorProps {
   selectedTypeId: string;
   selectedKindId: string;
   allModelsWithContext: ModelWithContext[];
+  methodDirectory: MethodDirectoryEntry[];
+  setMethodDirectory: React.Dispatch<React.SetStateAction<MethodDirectoryEntry[]>>;
 }
+
+/** Порушення унікальності в Postgres — єдиний код, який нас тут цікавить. */
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  (error as { code?: unknown }).code === "23505";
 
 // Чисті рядкові хелпери (лише аргумент, без стану/пропсів) — на рівні модуля,
 // щоб бути стабільними й не потрапляти в deps мемо-колбеків усередині хука.
@@ -85,27 +99,9 @@ const normalizeCatalogLookup = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const getMethodLookupKeys = (name: string) => {
-  const normalized = normalizeCatalogLookup(name);
-  const keys = new Set([normalized]);
-  if (normalized.includes("термодрук") || normalized.includes("термоперенос") || normalized.includes("термотрансфер")) {
-    keys.add("термодрук");
-    keys.add("термоперенос");
-    keys.add("термотрансфер");
-    keys.add(normalizeCatalogLookup("FLEX плівка"));
-  }
-  if (normalized.includes("шовкодрук") || normalized.includes("шовкограф")) {
-    keys.add("шовкодрук");
-    keys.add("шовкографія");
-  }
-  if (normalized.includes("вишив")) {
-    keys.add("вишивка");
-  }
-  if (normalized.includes("dtf")) {
-    keys.add("dtf");
-  }
-  return keys;
-};
+// Ключі порівняння назв методів переїхали в @/lib/catalogMethodName — щоб форма
+// й імпорт судили про «це те саме» за одним правилом, і те саме правило стояло
+// в базі (tosho.normalize_method_name).
 
 export function useModelEditor({
   teamId,
@@ -114,6 +110,8 @@ export function useModelEditor({
   selectedTypeId,
   selectedKindId,
   allModelsWithContext,
+  methodDirectory,
+  setMethodDirectory,
 }: UseModelEditorProps) {
   const isInlineImageDataUrl = (value?: string | null) =>
     typeof value === "string" && value.trim().toLowerCase().startsWith("data:");
@@ -349,35 +347,47 @@ export function useModelEditor({
       const targetKind = catalog.flatMap((type) => type.kinds).find((kind) => kind.id === kindId);
       const existingMethods = targetKind?.methods ?? [];
       const selectedIds = new Set<string>();
-      const missingNames: string[] = [];
+      const missing = new Map<string, { name: string; directoryId: string | null }>();
 
       for (const methodName of normalizedNames) {
-        const importKeys = getMethodLookupKeys(methodName);
+        const importKeys = methodLookupKeys(methodName);
         const existing = existingMethods.find((method) => {
-          const methodKeys = getMethodLookupKeys(method.name);
-          return Array.from(importKeys).some((key) => methodKeys.has(key));
+          const keys = methodLookupKeys(method.name);
+          return Array.from(importKeys).some((key) => keys.has(key));
         });
         if (existing) {
           selectedIds.add(existing.id);
-        } else {
-          missingNames.push(methodName);
+          continue;
         }
+        // Ключ дедуплікації всередині самої пачки: чужий сайт легко віддає і
+        // «УФ друк», і «УФ-друк» — до бази має піти один рядок, інакше
+        // унікальність відхилить усю вставку.
+        const key = normalizeMethodName(methodName);
+        if (!key || missing.has(key)) continue;
+        const fromDirectory = methodDirectory.find(
+          (entry) => normalizeMethodName(entry.name) === key && !entry.id.startsWith("derived:")
+        );
+        missing.set(key, {
+          name: fromDirectory?.name ?? cleanMethodName(methodName),
+          directoryId: fromDirectory?.id ?? null,
+        });
       }
 
-      if (missingNames.length === 0) return Array.from(selectedIds);
+      if (missing.size === 0) return Array.from(selectedIds);
 
       const { data, error } = await supabase
         .schema("tosho")
         .from("catalog_methods")
         .insert(
-          missingNames.map((name) => ({
+          Array.from(missing.values()).map((entry) => ({
             team_id: teamId,
             kind_id: kindId,
-            name,
+            name: entry.name,
             price: null,
+            ...(entry.directoryId ? { directory_id: entry.directoryId } : {}),
           }))
         )
-        .select("id,name,price,kind_id");
+        .select("id,name,price,kind_id,directory_id");
 
       if (error) throw error;
 
@@ -385,6 +395,7 @@ export function useModelEditor({
         id: method.id as string,
         name: method.name as string,
         price: method.price ?? undefined,
+        directoryId: (method.directory_id as string | null) ?? null,
       }));
 
       createdMethods.forEach((method) => selectedIds.add(method.id));
@@ -406,7 +417,7 @@ export function useModelEditor({
 
       return Array.from(selectedIds);
     },
-    [catalog, teamId, setCatalog]
+    [catalog, teamId, setCatalog, methodDirectory]
   );
 
   const getCatalogAssetPayload = useCallback((storagePath: string) => {
@@ -703,20 +714,51 @@ export function useModelEditor({
   };
 
   /**
-   * Adds a new method to the current kind
+   * Вмикає метод для виду товару.
+   *
+   * `directoryIdOverride` приходить, коли людина обрала готовий метод зі
+   * спільного довідника — тоді назву дає довідник, а не набране в полі. Без
+   * нього база сама знайде метод за нормалізованою назвою або заведе новий:
+   * тригер catalog_methods_bind_directory тримає цю інваріанту під усіма
+   * шляхами запису, тож «уф друк» не породить ще одне написання «УФ-друк».
    */
-  const handleAddMethod = async (kindIdOverride?: string, nameOverride?: string) => {
+  const handleAddMethod = async (
+    kindIdOverride?: string,
+    nameOverride?: string,
+    directoryIdOverride?: string | null
+  ) => {
     const rawKindId = kindIdOverride ?? draftKindId;
     const targetKindId = typeof rawKindId === "string" ? rawKindId.trim() : "";
     if (!teamId || !targetKindId || methodSaving) return;
 
     const rawName = nameOverride ?? newMethodName;
-    const name = typeof rawName === "string" ? rawName.trim() : "";
+    const name = cleanMethodName(typeof rawName === "string" ? rawName : "");
     if (!name) return;
-    
+
+    // Локальний перехват дубля: база однаково не пропустить, але людині краще
+    // побачити «такий метод тут уже є», ніж текст помилки Postgres.
+    const targetKind = catalog.flatMap((type) => type.kinds).find((kind) => kind.id === targetKindId);
+    const nameKey = normalizeMethodName(name);
+    const alreadyHere = (targetKind?.methods ?? []).find((method) =>
+      directoryIdOverride
+        ? method.directoryId === directoryIdOverride
+        : normalizeMethodName(method.name) === nameKey
+    );
+    if (alreadyHere) {
+      setMethodError(`«${alreadyHere.name}» уже є в цьому виді товару`);
+      return;
+    }
+
     setMethodSaving(true);
     setMethodError(null);
     try {
+      // Довідник міг не приїхати в це середовище — тоді id локальний
+      // («derived:…»), і посилатись на нього не можна.
+      const directoryId =
+        directoryIdOverride && !directoryIdOverride.startsWith("derived:")
+          ? directoryIdOverride
+          : null;
+
       const { data, error } = await supabase
         .schema("tosho")
         .from("catalog_methods")
@@ -725,28 +767,54 @@ export function useModelEditor({
           kind_id: targetKindId,
           name,
           price: null,
+          ...(directoryId ? { directory_id: directoryId } : {}),
         })
-        .select("id,name,price,kind_id")
+        .select("id,name,price,kind_id,directory_id")
         .single();
 
       if (error || !data) {
-        setMethodError(error?.message ?? "Не вдалося додати метод");
+        setMethodError(
+          isUniqueViolation(error)
+            ? `«${name}» уже є в цьому виді товару`
+            : error?.message ?? "Не вдалося додати метод"
+        );
         return;
       }
+
+      // Назву повертає база: якщо метод уже був у довіднику, вона канонічна, а
+      // не та, яку набрали в полі.
+      const created = {
+        id: data.id as string,
+        name: data.name as string,
+        price: (data.price as number | null) ?? undefined,
+        directoryId: (data.directory_id as string | null) ?? null,
+      };
 
       setCatalog((prev) =>
         prev.map((type) => ({
           ...type,
           kinds: type.kinds.map((kind) => {
             if (kind.id !== targetKindId) return kind;
-            const nextMethods = [
-              ...(kind.methods ?? []),
-              { id: data.id, name: data.name, price: data.price ?? undefined },
-            ];
-            return { ...kind, methods: nextMethods };
+            return { ...kind, methods: [...(kind.methods ?? []), created] };
           }),
         }))
       );
+
+      if (created.directoryId) {
+        const newDirectoryId = created.directoryId;
+        setMethodDirectory((prev) => {
+          const existing = prev.find((entry) => entry.id === newDirectoryId);
+          if (existing) {
+            return prev.map((entry) =>
+              entry.id === newDirectoryId ? { ...entry, kindCount: entry.kindCount + 1 } : entry
+            );
+          }
+          return [
+            ...prev.filter((entry) => normalizeMethodName(entry.name) !== normalizeMethodName(created.name)),
+            { id: newDirectoryId, name: created.name, active: true, kindCount: 1 },
+          ];
+        });
+      }
 
       setNewMethodName("");
       setNewMethodPrice("");
@@ -758,7 +826,12 @@ export function useModelEditor({
   };
 
   /**
-   * Updates an existing method
+   * Перейменовує метод.
+   *
+   * Назва живе в спільному довіднику, тож правка глобальна: «УФ-друк» стає
+   * «УФ друк» одразу в усіх видах товару, де він увімкнений. Так і задумано —
+   * саме через перейменування «на місці» в базі й накопичилось вісім написань
+   * одного методу. Форма попереджає про це числом видів перед збереженням.
    */
   const handleUpdateMethod = async (
     kindId: string,
@@ -767,24 +840,52 @@ export function useModelEditor({
   ): Promise<boolean> => {
     if (!teamId || !kindId || !methodId || methodSaving) return false;
 
-    const name = nextName.trim();
+    const name = cleanMethodName(nextName);
     if (!name) {
       setMethodError("Вкажіть назву методу");
+      return false;
+    }
+
+    const currentMethod = catalog
+      .flatMap((type) => type.kinds)
+      .flatMap((kind) => kind.methods ?? [])
+      .find((method) => method.id === methodId);
+    const directoryId =
+      currentMethod?.directoryId && !currentMethod.directoryId.startsWith("derived:")
+        ? currentMethod.directoryId
+        : null;
+
+    // Не даємо злити два різні методи довідника в один через перейменування:
+    // база відповіла б 23505, але з підказкою зрозуміліше.
+    const clash = methodDirectory.find(
+      (entry) => entry.id !== directoryId && normalizeMethodName(entry.name) === normalizeMethodName(name)
+    );
+    if (clash) {
+      setMethodError(`Метод «${clash.name}» уже є в довіднику`);
       return false;
     }
 
     setMethodSaving(true);
     setMethodError(null);
 
-    const { error } = await supabase
-      .schema("tosho")
-      .from("catalog_methods")
-      .update({ name })
-      .eq("id", methodId)
-      .eq("kind_id", kindId);
+    const { error } = directoryId
+      ? await supabase
+          .schema("tosho")
+          .from("method_directory")
+          .update({ name })
+          .eq("id", directoryId)
+          .eq("team_id", teamId)
+      : await supabase
+          .schema("tosho")
+          .from("catalog_methods")
+          .update({ name })
+          .eq("id", methodId)
+          .eq("kind_id", kindId);
 
     if (error) {
-      setMethodError(error.message);
+      setMethodError(
+        isUniqueViolation(error) ? `Метод «${name}» уже є в довіднику` : error.message
+      );
       setMethodSaving(false);
       return false;
     }
@@ -792,17 +893,23 @@ export function useModelEditor({
     setCatalog((prev) =>
       prev.map((type) => ({
         ...type,
-        kinds: type.kinds.map((kind) => {
-          if (kind.id !== kindId) return kind;
-          return {
-            ...kind,
-            methods: kind.methods.map((method) =>
-              method.id === methodId ? { ...method, name } : method
-            ),
-          };
-        }),
+        kinds: type.kinds.map((kind) => ({
+          ...kind,
+          methods: (kind.methods ?? []).map((method) => {
+            const isTarget = directoryId
+              ? method.directoryId === directoryId
+              : method.id === methodId && kind.id === kindId;
+            return isTarget ? { ...method, name } : method;
+          }),
+        })),
       }))
     );
+
+    if (directoryId) {
+      setMethodDirectory((prev) =>
+        prev.map((entry) => (entry.id === directoryId ? { ...entry, name } : entry))
+      );
+    }
 
     setMethodSaving(false);
     return true;

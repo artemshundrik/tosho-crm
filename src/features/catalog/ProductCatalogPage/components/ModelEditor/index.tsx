@@ -17,7 +17,7 @@ import { Trash2 } from "lucide-react";
 import { BasicInfoTab } from "./BasicInfoTab";
 import { PricingSection } from "./PricingSection";
 import { MethodsSection } from "./MethodsSection";
-import type { CatalogType, CatalogMethod, CatalogModelMetadata, CatalogPriceTier, PriceMode, ImageUploadMode } from "@/types/catalog";
+import type { CatalogType, CatalogMethod, CatalogModelMetadata, CatalogPriceTier, MethodDirectoryEntry, PriceMode, ImageUploadMode } from "@/types/catalog";
 
 interface ModelEditorProps {
   open: boolean;
@@ -44,6 +44,7 @@ interface ModelEditorProps {
   
   // Methods
   availableMethods: CatalogMethod[];
+  methodDirectory: MethodDirectoryEntry[];
   newMethodName: string;
   newMethodPrice: string;
   methodSaving: boolean;
@@ -62,7 +63,7 @@ interface ModelEditorProps {
   onMethodToggle: (methodId: string) => void;
   onMethodNameChange: (value: string) => void;
   onMethodPriceChange: (value: string) => void;
-  onAddMethod: () => void;
+  onAddMethod: (kindId?: string, name?: string, directoryId?: string | null) => void;
   onImageUrlChange: (value: string) => void;
   onImageUploadModeChange: (mode: ImageUploadMode) => void;
   onImageFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -95,6 +96,7 @@ export function ModelEditor({
   avanprintImportError,
   avanprintImportSummary,
   availableMethods,
+  methodDirectory,
   newMethodName,
   newMethodPrice,
   methodSaving,
@@ -173,6 +175,7 @@ export function ModelEditor({
                   draftKindId={draftKindId}
                   draftKindName={draftKind?.name}
                   availableMethods={availableMethods}
+                  methodDirectory={methodDirectory}
                   selectedMethodIds={draftMethodIds}
                   newMethodName={newMethodName}
                   newMethodPrice={newMethodPrice}

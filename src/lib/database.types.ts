@@ -890,6 +890,7 @@ export type Database = {
       catalog_methods: {
         Row: {
           created_at: string
+          directory_id: string
           id: string
           kind_id: string
           name: string
@@ -899,6 +900,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          directory_id?: string
           id?: string
           kind_id: string
           name: string
@@ -908,6 +910,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          directory_id?: string
           id?: string
           kind_id?: string
           name?: string
@@ -923,7 +926,84 @@ export type Database = {
             referencedRelation: "catalog_kinds"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "catalog_methods_directory_id_fkey"
+            columns: ["directory_id"]
+            isOneToOne: false
+            referencedRelation: "method_directory"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      catalog_method_merges: {
+        Row: {
+          id: string
+          team_id: string | null
+          kind_id: string | null
+          loser_id: string
+          loser_name: string
+          winner_id: string
+          winner_name: string
+          moved_model_links: number
+          moved_quote_items: number
+          moved_order_items: number
+          merged_at: string
+        }
+        Insert: {
+          id?: string
+          team_id?: string | null
+          kind_id?: string | null
+          loser_id: string
+          loser_name: string
+          winner_id: string
+          winner_name: string
+          moved_model_links?: number
+          moved_quote_items?: number
+          moved_order_items?: number
+          merged_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string | null
+          kind_id?: string | null
+          loser_id?: string
+          loser_name?: string
+          winner_id?: string
+          winner_name?: string
+          moved_model_links?: number
+          moved_quote_items?: number
+          moved_order_items?: number
+          merged_at?: string
+        }
+        Relationships: []
+      }
+      method_directory: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string | null
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       catalog_model_methods: {
         Row: {
