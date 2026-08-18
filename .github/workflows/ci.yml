@@ -40,9 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Версія МАЄ збігатися з NODE_VERSION у netlify.toml: інакше перевірки
+      # міряють не те, на чому насправді збирається прод, і зелений CI нічого
+      # не гарантує. Міняєш там — міняй і тут.
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: npm
 
       - name: Залежності

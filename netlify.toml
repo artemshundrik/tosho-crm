@@ -5,9 +5,16 @@ publish = "dist"
 # Пропустити білд, якщо пуш зачепив тільки те, що не потрапляє в зібраний сайт.
 # Exit 0 = пропустити, exit 1 = білдити. Кожен білд коштує ~15 кредитів — див. docs/DEPLOY_POLICY.md.
 # Немає кешованого коміта (перший білд) — білдимо, щоб не пропустити реальні зміни.
+# Будь-який контекст, крім продакшену (deploy-preview від PR, branch-deploy),
+# коштує ті самі ~15 кредитів, а користі не дає: PR-ів тут не було жодного за
+# останні 100 деплоїв, усі 100 — production. Робот оновлення залежностей
+# (.github/dependabot.yml) відкриватиме PR-и, і без цього рядка кожен із них
+# перетворювався б на платну збірку. Перевірку PR-ів робить GitHub Actions, він
+# безкоштовний. Порожній CONTEXT не чіпаємо — падаємо у звичайну логіку нижче.
 ignore = '''
+[ -n "$CONTEXT" ] && [ "$CONTEXT" != "production" ] && exit 0
 [ -z "$CACHED_COMMIT_REF" ] && exit 1
-git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exclude)ops' ':(exclude)*.md' ':(exclude)scripts/*.sql'
+git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . ':(exclude)docs' ':(exclude)ops' ':(exclude)*.md' ':(exclude)scripts/*.sql' ':(exclude).github'
 '''
 
 [build.environment]
