@@ -583,6 +583,10 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       type: "number",
       section: "Формат",
       unit: "стор",
+      // Підказка, а не заборона: правило виробниче, і хто рахує — той його знає.
+      // Жорстку перевірку сюди не ставимо з тієї ж причини, що й правило за
+      // тиражем: рахують люди, і виняток буває раніше, ніж ми його передбачимо.
+      hint: "Термобіндер, пур клей, пружина — кратно 2. Нитка — кратно 2 або 4. Дві скоби — тільки кратно 4. Обкладинка — це ще 4 стор.",
     },
     {
       id: "coverPaper",
@@ -590,13 +594,13 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       type: "single",
       section: "Папір",
       options: [
-        { value: "coated_170", label: "Крейда 170" },
-        { value: "coated_200", label: "Крейда 200" },
-        { value: "coated_250", label: "Крейда 250" },
-        { value: "coated_300", label: "Крейда 300" },
-        { value: "coated_350", label: "Крейда 350" },
+        { value: "coated_200", label: "Крейда 200 г/м²" },
+        { value: "coated_250", label: "Крейда 250 г/м²" },
+        { value: "coated_300", label: "Крейда 300 г/м²" },
+        { value: "coated_350", label: "Крейда 350 г/м²" },
       ],
       allowCustom: true,
+      hint: "Дизайнерський картон — «Інше» і вписати назву та щільність",
     },
     {
       id: "blockPaper",
@@ -604,17 +608,19 @@ export const PRINT_SPEC_BROCHURE: PrintSpecPreset = {
       type: "single",
       section: "Папір",
       options: [
-        { value: "offset_80", label: "Офсет 80" },
-        { value: "offset_90", label: "Офсет 90" },
-        { value: "offset_100", label: "Офсет 100" },
-        { value: "offset_110", label: "Офсет 110" },
-        { value: "coated_90", label: "Крейда 90" },
-        { value: "coated_115", label: "Крейда 115" },
-        { value: "coated_130", label: "Крейда 130" },
-        { value: "coated_150", label: "Крейда 150" },
-        { value: "coated_170", label: "Крейда 170" },
+        { value: "coated_90", label: "Крейда 90 г/м²" },
+        { value: "coated_115", label: "Крейда 115 г/м²" },
+        { value: "coated_130", label: "Крейда 130 г/м²" },
+        { value: "coated_150", label: "Крейда 150 г/м²" },
+        { value: "coated_170", label: "Крейда 170 г/м²" },
+        { value: "coated_200", label: "Крейда 200 г/м²" },
+        { value: "offset_80", label: "Офсет 80 г/м²" },
+        { value: "offset_90", label: "Офсет 90 г/м²" },
+        { value: "offset_100", label: "Офсет 100 г/м²" },
+        { value: "offset_110", label: "Офсет 110 г/м²" },
       ],
       allowCustom: true,
+      hint: "Дизайнерський папір — «Інше» і вписати назву та щільність",
     },
     {
       id: "coverPrint",
