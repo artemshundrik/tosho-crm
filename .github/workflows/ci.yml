@@ -1,0 +1,72 @@
+# Перевірки перед злиттям і після пушу.
+#
+# НАВІЩО. До 2026-08-19 у проєкті не було жодної автоматичної перевірки: tsc,
+# lint і 46 тестів запускались лише тоді, коли про них згадували руками. Уже
+# на першому запуску це виявило, що `typecheck:functions` зламаний на main і
+# ніхто про це не знав.
+#
+# ЩО ЦЕЙ ФАЙЛ НЕ РОБИТЬ. Він НЕ зупиняє деплой. Netlify збирає з пушу
+# паралельно й на результат Actions не дивиться. Реальний запобіжник перед
+# витратою кредитів — гак scripts/hooks/pre-push, який ганяє те саме локально
+# ще до того, як пуш пішов. Actions тут — мережа безпеки (коли гак обійшли
+# через --no-verify або пуш стався з іншої машини) і обов'язкова умова для
+# автооновлень залежностей: робот відкриває PR, а перевірки кажуть, чи він
+# безпечний.
+#
+# ЧОМУ ВСІ КРОКИ ХОДЯТЬ ДО КІНЦЯ. `if: !cancelled()` не дає зупинитись на
+# першій червоній перевірці: краще побачити всі поламані місця за один запуск,
+# ніж лагодити їх по черзі, щоразу чекаючи новий.
+
+name: Перевірки
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Кілька пушів поспіль — рахуємо лише останній.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Типи, лінт, тести
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Залежності
+        run: npm ci
+
+      - name: Типи застосунку
+        run: npx tsc --noEmit
+
+      - name: Лінт
+        if: ${{ !cancelled() }}
+        run: npm run lint
+
+      - name: Тести
+        if: ${{ !cancelled() }}
+        run: npm run test
+
+      - name: Типи Netlify-функцій
+        if: ${{ !cancelled() }}
+        run: npm run typecheck:functions
+
+      - name: Реєстр Netlify-функцій
+        if: ${{ !cancelled() }}
+        run: npm run check:functions
+
+      - name: Ключі фіч
+        if: ${{ !cancelled() }}
+        run: npm run check:feature-keys

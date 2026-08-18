@@ -866,7 +866,7 @@ describe("buildBoardUpdateResponse", () => {
     priority: "normal",
     is_private: false,
     created_at: "2026-08-11T09:00:00.000Z",
-  });
+  })!;
 
   it("каже, що саме змінив", () => {
     const response = buildBoardUpdateResponse({ card, changed: ["тему", "опис"], url: "https://tosho.pro/dev/backlog" });

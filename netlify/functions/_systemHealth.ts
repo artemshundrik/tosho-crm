@@ -39,6 +39,7 @@ export type SignalCode =
   | "cron_stale"
   | "cron_failures"
   | "cron_http_failures"
+  | "cron_http_timeouts"
   | "cron_ok"
   | "ai_cost"
   | "attachments"
