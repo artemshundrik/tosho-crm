@@ -8,6 +8,7 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -1259,7 +1260,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
   void updateRun;
 
-  const updateRunRaw = (
+  /**
+   * Розбір рядка переїхав у <NumberInput>: сюди приходить уже число (або null,
+   * якщо поле лишили порожнім). Раніше тут стояло `Number(raw)` над сирим
+   * значенням нативного number-поля — а воно на «1.» віддає порожній рядок,
+   * тож набране число зникало просто під час набору.
+   */
+  const updateRunValue = (
     index: number,
     field:
       | "quantity"
@@ -1270,12 +1277,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       | "manager_rate"
       | "fixed_cost_rate"
       | "vat_rate",
-    raw: string
+    value: number | null
   ) => {
     if (index < 0) return;
-    const parsed = raw === "" ? null : Number(raw);
     setRuns((prev) =>
-      prev.map((run, i) => (i === index ? { ...run, [field]: parsed } : run))
+      prev.map((run, i) => (i === index ? { ...run, [field]: value } : run))
     );
   };
 
@@ -6512,15 +6518,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             <span className="text-sm font-semibold text-foreground">Активний тираж</span>
                                             <span className="text-sm text-muted-foreground">·</span>
                                             <div className="relative h-8 w-32">
-                                              <Input
-                                                type="number"
-                                                value={activeItemRun.quantity ?? ""}
+                                              <NumberInput
+                                                value={activeItemRun.quantity}
                                                 disabled={!canEditRuns}
-                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "quantity", e.target.value)}
-                                                onFocus={(e) => {
-                                                  if (activeItemRun.quantity === 0) e.target.select();
-                                                }}
+                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "quantity", next)}
                                                 min={1}
+                                                emptyValue={1}
                                                 className="h-8 w-full rounded-lg bg-background pl-3 pr-12 text-left font-mono text-sm font-semibold tabular-nums"
                                                 aria-label="Кількість активного тиражу"
                                               />
@@ -6548,15 +6551,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               Собівартість / од.
                                             </Label>
                                             <div className="relative">
-                                              <Input
-                                                type="number"
-                                                value={activeItemRun.unit_price_model ?? ""}
+                                              <NumberInput
+                                                value={activeItemRun.unit_price_model}
                                                 disabled={!runPriceFieldAccess.unit_price_model}
                                                 title={runFieldLockHint(runPriceFieldAccess.unit_price_model, "менеджер")}
-                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_model", e.target.value)}
-                                                onFocus={(e) => {
-                                                  if (activeItemRun.unit_price_model === 0) e.target.select();
-                                                }}
+                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_model", next)}
                                                 min={0}
                                                 className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
                                                 aria-label="Собівартість за одиницю"
@@ -6571,15 +6570,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               В-ть нанесення
                                             </Label>
                                             <div className="relative">
-                                              <Input
-                                                type="number"
-                                                value={activeItemRun.unit_price_print ?? ""}
+                                              <NumberInput
+                                                value={activeItemRun.unit_price_print}
                                                 disabled={!runPriceFieldAccess.unit_price_print}
                                                 title={runFieldLockHint(runPriceFieldAccess.unit_price_print, "проєктний менеджер")}
-                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "unit_price_print", e.target.value)}
-                                                onFocus={(e) => {
-                                                  if (activeItemRun.unit_price_print === 0) e.target.select();
-                                                }}
+                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_print", next)}
                                                 min={0}
                                                 className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
                                                 aria-label="Вартість нанесення"
@@ -6594,15 +6589,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               Логістика
                                             </Label>
                                             <div className="relative">
-                                              <Input
-                                                type="number"
-                                                value={activeItemRun.logistics_cost ?? ""}
+                                              <NumberInput
+                                                value={activeItemRun.logistics_cost}
                                                 disabled={!runPriceFieldAccess.logistics_cost}
                                                 title={runFieldLockHint(runPriceFieldAccess.logistics_cost, "проєктний менеджер або логіст")}
-                                                onChange={(e) => updateRunRaw(activeItemRunIndex, "logistics_cost", e.target.value)}
-                                                onFocus={(e) => {
-                                                  if (!activeItemRun.logistics_cost || Number(activeItemRun.logistics_cost) === 0) e.target.select();
-                                                }}
+                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "logistics_cost", next)}
                                                 min={0}
                                                 className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
                                                 aria-label="Логістика"
@@ -6616,18 +6607,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                             <Label className="block text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               Бажаний особистий заробіток
                                             </Label>
-                                            <Input
-                                              type="number"
-                                              value={activeItemRun.desired_manager_income ?? ""}
+                                            <NumberInput
+                                              value={activeItemRun.desired_manager_income}
                                               disabled={!runPriceFieldAccess.desired_manager_income}
                                               title={runFieldLockHint(runPriceFieldAccess.desired_manager_income, "менеджер")}
-                                              onChange={(e) => updateRunRaw(activeItemRunIndex, "desired_manager_income", e.target.value)}
-                                              onFocus={(e) => {
-                                                if ((Number(activeItemRun.desired_manager_income) || 0) === 0) e.target.select();
-                                              }}
+                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "desired_manager_income", next)}
                                               className="h-11 rounded-xl bg-background font-mono text-lg tabular-nums"
                                               placeholder="0"
-                                              min="0"
+                                              min={0}
                                             />
                                           </div>
                                         </div>
@@ -6901,61 +6888,46 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             <div className="grid grid-cols-2 gap-3">
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
-                                  value={run.quantity ?? ""}
+                                  value={run.quantity}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
-                                  onFocus={(e) => {
-                                    if (run.quantity === 0) e.target.select();
-                                  }}
+                                  onValueChange={(next) => updateRunValue(idx, "quantity", next)}
                                   min={1}
+                                  emptyValue={1}
                                 />
                               </div>
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
-                                  value={run.unit_price_model ?? ""}
+                                  value={run.unit_price_model}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
-                                  onFocus={(e) => {
-                                    if (run.unit_price_model === 0) e.target.select();
-                                  }}
+                                  onValueChange={(next) => updateRunValue(idx, "unit_price_model", next)}
                                   min={0}
                                 />
                               </div>
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background"
-                                  value={run.unit_price_print ?? ""}
+                                  value={run.unit_price_print}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
-                                  onFocus={(e) => {
-                                    if (run.unit_price_print === 0) e.target.select();
-                                  }}
+                                  onValueChange={(next) => updateRunValue(idx, "unit_price_print", next)}
                                   min={0}
                                 />
                               </div>
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="h-10 cursor-text border-transparent bg-muted/15 px-3 font-mono text-base hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
-                                  value={run.logistics_cost ?? ""}
+                                  value={run.logistics_cost}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
-                                  onFocus={(e) => {
-                                    if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
-                                  }}
+                                  onValueChange={(next) => updateRunValue(idx, "logistics_cost", next)}
                                   placeholder="—"
                                   min={0}
                                 />
@@ -7004,64 +6976,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                   </div>
                                 </div>
                                 <div className="space-y-1">
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     controlSize="sm"
                                     className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                    value={run.quantity ?? ""}
+                                    value={run.quantity}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => updateRunRaw(idx, "quantity", e.target.value)}
-                                    onFocus={(e) => {
-                                      if (run.quantity === 0) e.target.select();
-                                    }}
+                                    onValueChange={(next) => updateRunValue(idx, "quantity", next)}
                                     min={1}
+                                    emptyValue={1}
                                   />
                                 </div>
 
                                 <div className="space-y-1">
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     controlSize="sm"
                                     className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                    value={run.unit_price_model ?? ""}
+                                    value={run.unit_price_model}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => updateRunRaw(idx, "unit_price_model", e.target.value)}
-                                    onFocus={(e) => {
-                                      if (run.unit_price_model === 0) e.target.select();
-                                    }}
+                                    onValueChange={(next) => updateRunValue(idx, "unit_price_model", next)}
                                     min={0}
                                   />
                                 </div>
 
                                 <div className="space-y-1">
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     controlSize="sm"
                                     className="cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background"
-                                    value={run.unit_price_print ?? ""}
+                                    value={run.unit_price_print}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => updateRunRaw(idx, "unit_price_print", e.target.value)}
-                                    onFocus={(e) => {
-                                      if (run.unit_price_print === 0) e.target.select();
-                                    }}
+                                    onValueChange={(next) => updateRunValue(idx, "unit_price_print", next)}
                                     min={0}
                                   />
                                 </div>
 
                                 <div className="space-y-1">
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     className="h-8 cursor-text border-transparent bg-muted/15 px-2 font-mono text-sm hover:border-border focus:border-border focus:bg-background placeholder:text-muted-foreground/40"
-                                    value={run.logistics_cost ?? ""}
+                                    value={run.logistics_cost}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => updateRunRaw(idx, "logistics_cost", e.target.value)}
-                                    onFocus={(e) => {
-                                      if (!run.logistics_cost || Number(run.logistics_cost) === 0) e.target.select();
-                                    }}
+                                    onValueChange={(next) => updateRunValue(idx, "logistics_cost", next)}
                                     placeholder="—"
                                     min={0}
                                   />
@@ -9635,11 +9592,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-2">
                     <Label>Кількість</Label>
-                    <Input
-                      type="number"
-                      value={itemQty}
-                      onChange={(e) => setItemQty(e.target.value)}
-                      min="1"
+                    <NumberInput
+                      value={itemQty === "" ? null : Number(itemQty)}
+                      onValueChange={(next) => setItemQty(next === null ? "" : String(next))}
+                      min={1}
+                      emptyValue={1}
                     />
                   </div>
                   <div className="space-y-2">
@@ -9658,12 +9615,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </div>
                   <div className="space-y-2">
                     <Label>Ціна за од.</Label>
-                    <Input
-                      type="number"
-                      value={itemPrice}
-                      onChange={(e) => setItemPrice(e.target.value)}
+                    <NumberInput
+                      value={itemPrice === "" ? null : Number(itemPrice)}
+                      onValueChange={(next) => setItemPrice(next === null ? "" : String(next))}
                       placeholder="0"
-                      min="0"
+                      min={0}
                     />
                   </div>
                 </div>
@@ -9859,11 +9815,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Кількість</Label>
-                      <Input
-                        type="number"
-                        value={itemQty}
-                        onChange={(e) => setItemQty(e.target.value)}
-                        min="1"
+                      <NumberInput
+                        value={itemQty === "" ? null : Number(itemQty)}
+                        onValueChange={(next) => setItemQty(next === null ? "" : String(next))}
+                        min={1}
+                        emptyValue={1}
                       />
                     </div>
                     <div className="space-y-2">

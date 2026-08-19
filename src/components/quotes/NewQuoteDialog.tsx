@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
@@ -269,12 +270,12 @@ const RunsEditor: React.FC<{
               </span>
             </div>
             <div className="flex h-9 items-center gap-1.5 rounded-full border border-border/50 bg-background/55 px-2">
-              <Input
-                type="number"
+              <NumberInput
                 min={1}
+                emptyValue={null}
                 placeholder="Тираж"
-                value={run.quantity}
-                onChange={(e) => onRunChange(run.id, e.target.value)}
+                value={run.quantity === "" ? null : Number(run.quantity)}
+                onValueChange={(next) => onRunChange(run.id, next === null ? "" : String(next))}
                 className={cn(
                   "h-9 border-0 bg-transparent px-2 shadow-none",
                   compact ? "w-28" : "w-32"
@@ -2353,21 +2354,21 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   <div className="space-y-1.5">
                     <div className="text-xs text-muted-foreground">Розмір, мм</div>
                     <div className="grid grid-cols-[minmax(110px,1fr)_auto_minmax(110px,1fr)] items-center gap-2">
-                      <Input
-                        type="number"
+                      <NumberInput
                         aria-label="Ширина нанесення, мм"
                         placeholder="Ширина"
-                        value={app.width}
-                        onChange={(e) => handleUpdatePrintApplication(app.id, "width", e.target.value)}
+                        emptyValue={null}
+                        value={app.width === "" ? null : Number(app.width)}
+                        onValueChange={(next) => handleUpdatePrintApplication(app.id, "width", next === null ? "" : String(next))}
                         className="h-9 bg-background/70"
                       />
                       <span className="text-sm text-muted-foreground">×</span>
-                      <Input
-                        type="number"
+                      <NumberInput
                         aria-label="Висота нанесення, мм"
                         placeholder="Висота"
-                        value={app.height}
-                        onChange={(e) => handleUpdatePrintApplication(app.id, "height", e.target.value)}
+                        emptyValue={null}
+                        value={app.height === "" ? null : Number(app.height)}
+                        onValueChange={(next) => handleUpdatePrintApplication(app.id, "height", next === null ? "" : String(next))}
                         className="h-9 bg-background/70"
                       />
                     </div>

@@ -29,6 +29,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { DateTimePicker } from "@/components/ui/picker-input";
 import { Textarea } from "@/components/ui/textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
@@ -2729,11 +2730,11 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         <div key={run.id} className="space-y-1.5">
                           <div className="text-xs text-muted-foreground">Тираж {index + 1}</div>
                           <div className="flex h-9 items-center gap-1.5 rounded-full border border-border/50 bg-background/55 px-2">
-                            <Input
-                              type="number"
+                            <NumberInput
                               min={1}
-                              value={run.quantity}
-                              onChange={(event) => updateRun(run.id, event.target.value)}
+                              emptyValue={null}
+                              value={run.quantity === "" ? null : Number(run.quantity)}
+                              onValueChange={(next) => updateRun(run.id, next === null ? "" : String(next))}
                               className="h-8 w-28 border-0 bg-transparent px-2 shadow-none"
                               placeholder="К-сть"
                             />
