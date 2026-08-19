@@ -100,6 +100,11 @@ export type DevRequest = {
   /** Ім'я автора з Telegram: username там необов'язковий. */
   displayName: string | null;
   askedByCount: number;
+  /**
+   * Короткі sha комітів, якими картку закрили (7 символів, як у гаку).
+   * У `tosho.commits` вони по 8 — звіряти доводиться початком рядка.
+   */
+  commitShas: string[];
   createdAt: string;
 };
 
@@ -407,6 +412,11 @@ type DevRequestRow = {
   tg_username: string | null;
   display_name: string | null;
   asked_by_count: number;
+  /**
+   * Коміти, якими картку закрили. Поле необов'язкове: старіші виклики
+   * `toDevRequest` (і тести) обходяться без нього, а мапер усе одно звіряє тип.
+   */
+  commit_shas?: string[] | null;
   created_at: string;
 };
 
@@ -468,6 +478,7 @@ export function toDevRequest(row: DevRequestRow): DevRequest {
     tgUsername: row.tg_username,
     displayName: row.display_name,
     askedByCount: row.asked_by_count,
+    commitShas: Array.isArray(row.commit_shas) ? row.commit_shas : [],
     createdAt: row.created_at,
   };
 }

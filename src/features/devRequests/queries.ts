@@ -15,12 +15,13 @@ import {
 } from "./types";
 
 const SELECT_COLUMNS =
-  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,released_at,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,created_at";
+  "id,number,team_id,title,body,kind,status,module_key,priority,zone,theme,checklist,released_at,auto_classified,is_private,author_user_id,tg_username,display_name,asked_by_count,commit_shas,created_at";
 
 export const devRequestKeys = {
   /** teamId у ключі обов'язково — інакше кеш протікає між тенантами. */
   board: (teamId: string | null) => ["devRequests", teamId, "board"] as const,
   history: (id: string | null) => ["devRequests", id, "history"] as const,
+  commitSummary: (shas: string[]) => ["devRequests", "commitSummary", shas.join(",")] as const,
 };
 
 /**
@@ -328,6 +329,44 @@ export function useDeleteDevRequest(teamId: string | null) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
+    },
+  });
+}
+
+/**
+ * Тема релізного коміта — готова відповідь на «що тепер працює».
+ *
+ * НАВІЩО. У картці лежить опис ПРОБЛЕМИ, і поле «Тепер» у вікні картки для
+ * чату лишалось порожнім, поки хтось не перепише опис руками. А тема коміта за
+ * домовленістю (CLAUDE.md) пишеться саме як результат з погляду людини —
+ * «різні тиражі показуються окремими рядками» — тобто це той самий рядок.
+ * Раніше туди підставляли НАЗВУ картки, і виходило «Було: X → Тепер: X»;
+ * тема коміта, на відміну від назви, у найгіршому разі неповна, але ніколи не
+ * описує проблему замість результату.
+ *
+ * Беремо НАЙСВІЖІШИЙ коміт: у картки їх буває до дюжини, і останній описує
+ * стан, який поїхав у прод.
+ *
+ * Звіряємо початком рядка: гак кладе в картку 7 символів sha, а `commits`
+ * зберігає 8. Фільтр збираємо лише з шістнадцяткових — чужого в `or()` не
+ * буде за побудовою.
+ */
+export function useReleaseCommitSummary(shas: string[], enabled: boolean) {
+  const clean = shas.filter((sha) => /^[0-9a-f]{6,40}$/i.test(sha));
+  return useQuery({
+    queryKey: devRequestKeys.commitSummary(clean),
+    enabled: enabled && clean.length > 0,
+    staleTime: 60 * 60_000,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .schema("tosho")
+        .from("commits")
+        .select("sha,subject,committed_at")
+        .or(clean.map((sha) => `sha.like.${sha}*`).join(","))
+        .order("committed_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return (data?.[0]?.subject ?? "").trim() || null;
     },
   });
 }

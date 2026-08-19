@@ -41,6 +41,7 @@ describe("мапер рядка", () => {
       tg_username: "vasya",
       display_name: null,
       asked_by_count: 3,
+      commit_shas: ["e098ca1"],
       created_at: "2026-08-08T10:00:00Z",
     };
 
@@ -65,6 +66,7 @@ describe("мапер рядка", () => {
       tgUsername: "vasya",
       displayName: null,
       askedByCount: 3,
+      commitShas: ["e098ca1"],
       createdAt: "2026-08-08T10:00:00Z",
     });
   });

@@ -33,6 +33,7 @@ function request(overrides: Partial<DevRequest> = {}): DevRequest {
     tgUsername: null,
     displayName: null,
     askedByCount: 1,
+    commitShas: [],
     createdAt: "2026-08-08T10:00:00Z",
     ...overrides,
   };

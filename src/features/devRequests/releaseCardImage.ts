@@ -66,6 +66,29 @@ async function loadZoneIcon(zone: RequestZone, color: string): Promise<HTMLImage
 const ROW_LABELS = ["Було", "Тепер", "Перевірити"] as const;
 
 /**
+ * Скільки рядків тексту вміщає кожен рядок картки, не розтягуючи її.
+ *
+ * ЧОМУ МЕЖА, А НЕ ТРИКРАПКА. Раніше тут стояло жорстке 2/3/2 з обрізанням:
+ * довший опис мовчки перетворювався на «…», і в чат летіла картка з
+ * половиною думки — саме на цьому спіймали REQ-57. Тепер число — це межа, під
+ * яку чернетка ріжеться ПО РЕЧЕННЯХ (див. `fitToRow`), а не по літерах, тож
+ * підставлений текст завжди закінчений. Дописали більше — вікно скаже, на
+ * скільки, а картка просто стане вища: висота рахується по факту.
+ */
+export const CARD_ROW_LINES = { before: 3, summary: 4, howToCheck: 3 } as const;
+
+export type CardRow = keyof typeof CARD_ROW_LINES;
+
+/**
+ * Стеля, за якою текст усе-таки ріжеться.
+ *
+ * Без неї одне поле, куди вставили абзац з опису, дає картку заввишки в екран
+ * — таку в чаті не читають. Вікно попереджає задовго до цієї межі, тож дійти
+ * сюди можна лише навмисне.
+ */
+export const CARD_ROW_HARD_MAX = 7;
+
+/**
  * Витягає розділ зі структурованого тіла картки.
  *
  * Розбір складає опис за сталою формою — «Що не так: … Де видно: … Як має
@@ -84,9 +107,14 @@ function firstParagraph(body: string): string {
   return (first ?? "").replace(/\s+/g, " ").trim();
 }
 
-/** Що було не так. Беремо з розділу розбору, інакше — перший абзац опису. */
+/**
+ * Що було не так. Беремо з розділу розбору, інакше — перший абзац опису.
+ *
+ * Обрізаємо по реченнях під межу рядка: у розділі часто три-чотири речення, і
+ * без цього в поле лягав абзац, який на картинці ставав «…».
+ */
 export function suggestBefore(body: string): string {
-  return pickSection(body, "Що не так") || firstParagraph(body);
+  return fitToRow("before", pickSection(body, "Що не так") || firstParagraph(body));
 }
 
 /**
@@ -95,14 +123,14 @@ export function suggestBefore(body: string): string {
  * вигадувати за людину, що саме тепер працює, не можна.
  */
 export function suggestAfter(body: string): string {
-  return pickSection(body, "Як має бути");
+  return fitToRow("summary", pickSection(body, "Як має бути"));
 }
 
 export function suggestHowToCheck(moduleKey: string | null, body = ""): string {
   // «Де видно» з розбору конкретніше за шлях у меню: там названо саме те місце,
   // де людина це побачила.
   const seen = pickSection(body, "Де видно");
-  if (seen) return seen;
+  if (seen) return fitToRow("howToCheck", seen);
   const label = moduleKeyLabel(moduleKey);
   if (!label) return "";
   const definition = MODULE_DEFINITIONS.find((item) => item.key === moduleKey);
@@ -198,8 +226,8 @@ function formatDate(iso: string | null): string {
   return Number.isNaN(parsed.getTime()) ? DATE_FMT.format(new Date()) : DATE_FMT.format(parsed);
 }
 
-/** Розбиває текст на рядки по ширині. Повертає рівно `maxLines`, останній з «…». */
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+/** Розкладає текст по ширині. НІЧОГО не ріже: скільки рядків вийшло, стільки й віддає. */
+function layout(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
@@ -212,24 +240,133 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, max
     }
     lines.push(current);
     current = word;
-    if (lines.length === maxLines) break;
   }
-  if (lines.length < maxLines && current) lines.push(current);
-
-  if (lines.length === maxLines) {
-    // Обрізаємо ОСТАННІЙ рядок, поки трикрапка не влізе: інакше вона з'їжджає
-    // за межу картки й обрізається сама.
-    const rest = words.join(" ");
-    const shown = lines.join(" ");
-    if (shown.length < rest.length) {
-      let last = lines[maxLines - 1];
-      while (last && ctx.measureText(`${last}…`).width > maxWidth) {
-        last = last.slice(0, -1).trimEnd();
-      }
-      lines[maxLines - 1] = `${last}…`;
-    }
-  }
+  if (current) lines.push(current);
   return lines;
+}
+
+/** Розкладка з обмеженням: зайве ріжеться, в останній рядок дописується «…». */
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+  const lines = layout(ctx, text, maxWidth);
+  if (lines.length <= maxLines) return lines;
+
+  const kept = lines.slice(0, maxLines);
+  // Обрізаємо ОСТАННІЙ рядок, поки трикрапка не влізе: інакше вона з'їжджає
+  // за межу картки й обрізається сама.
+  let last = kept[maxLines - 1];
+  while (last && ctx.measureText(`${last}…`).width > maxWidth) {
+    last = last.slice(0, -1).trimEnd();
+  }
+  kept[maxLines - 1] = `${last}…`;
+  return kept;
+}
+
+/** Шрифти рядків. Один набір і для малювання, і для замірів у вікні. */
+const BODY_FONT = `400 14px ${FONT}`;
+const LABEL_FONT = `600 12.5px ${FONT}`;
+const TITLE_FONT = `620 21px ${FONT}`;
+
+/**
+ * Ширина колонки тексту — від найширшого підпису, а не від на око взятого числа.
+ *
+ * Було 76 px на всі три рядки, і «Перевірити» цим кеглем займає майже рівно
+ * стільки: підпис упирався в текст, і «Перевірити Операції → Дизайн» читалось
+ * як одне речення. Рахуємо по факту й додаємо зазор — тоді перейменування
+ * підпису не ламає верстку мовчки.
+ */
+const LABEL_GAP = 14;
+function textColumnWidth(ctx: CanvasRenderingContext2D): number {
+  ctx.font = LABEL_FONT;
+  const labelWidth = Math.max(...ROW_LABELS.map((label) => ctx.measureText(label).width)) + LABEL_GAP;
+  return W - PAD * 2 - labelWidth;
+}
+
+/**
+ * Контекст лише для замірів: вікно рахує ТИМ САМИМ шрифтом і тією ж шириною,
+ * що й малювання, тож «влізе / не влізе» — факт, а не здогад.
+ *
+ * Поза браузером (тести, вузол) canvas немає. Тоді null, і всі, хто питає,
+ * мовчки лишають текст як є: краще не міряти, ніж міряти навмання.
+ */
+let metricsCtx: CanvasRenderingContext2D | null | undefined;
+function measureContext(): CanvasRenderingContext2D | null {
+  if (metricsCtx === undefined) {
+    metricsCtx =
+      typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  }
+  return metricsCtx;
+}
+
+export type CardRowFit = {
+  /** Скільки рядків текст займе на картці. */
+  lines: number;
+  /** Скільки їх вміщається, не розтягуючи картку. */
+  limit: number;
+  /** Скільки символів прибрати, щоб влізло. 0 — усе гаразд. */
+  overflow: number;
+  /** Текст таки обріжеться: рядків більше за стелю. */
+  cropped: boolean;
+};
+
+/**
+ * Чи влізе рядок у картку — і на скільки промахнулись.
+ *
+ * Кількість зайвих символів шукаємо двійковим пошуком по справжній розкладці:
+ * «приблизно 130 символів на два рядки» бреше на кожному другому тексті, бо
+ * «ілі» і «ЖМШ» мають різну ширину.
+ */
+export function measureCardRow(row: CardRow, text: string): CardRowFit | null {
+  const ctx = measureContext();
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!ctx || !clean) return null;
+
+  const width = textColumnWidth(ctx);
+  ctx.font = BODY_FONT;
+  const limit = CARD_ROW_LINES[row];
+  const lines = layout(ctx, clean, width).length;
+  if (lines <= limit) return { lines, limit, overflow: 0, cropped: false };
+
+  let low = 0;
+  let high = clean.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (layout(ctx, clean.slice(0, mid), width).length <= limit) low = mid;
+    else high = mid - 1;
+  }
+  return { lines, limit, overflow: clean.length - low, cropped: lines > CARD_ROW_HARD_MAX };
+}
+
+/**
+ * Межа речення: крапка й пробіл перед великою літерою або лапками.
+ *
+ * Просте /[.!?]\s/ рвало б «100 шт. × 233,51» і скорочення посеред фрази, а
+ * саме такі числа й стоять у наших описах.
+ */
+const SENTENCE_BREAK = /(?<=[.!?…])\s+(?=[«"'(A-ZА-ЯЄІЇҐ])/;
+
+/**
+ * Ріже чернетку під межу рядка — ПО РЕЧЕННЯХ, а не по літерах.
+ *
+ * Сенс правила: у поле має лягти стільки закінчених речень, скільки видно на
+ * картці. Тоді «…» не з'являється взагалі, бо різати вже нічого. Якщо навіть
+ * перше речення довше за межу — лишаємо його цілим: обірвати думку гірше, ніж
+ * розтягнути картку, а вікно про це попередить.
+ */
+export function fitToRow(row: CardRow, text: string): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+  const measured = measureCardRow(row, clean);
+  if (!measured || measured.overflow === 0) return clean;
+
+  let kept = "";
+  for (const sentence of clean.split(SENTENCE_BREAK)) {
+    const next = kept ? `${kept} ${sentence}` : sentence;
+    const fit = measureCardRow(row, next);
+    if (kept && fit && fit.overflow > 0) break;
+    kept = next;
+    if (fit && fit.overflow > 0) break;
+  }
+  return kept;
 }
 
 /** Галочка в позначці: маленька, у два штрихи, тим самим кольором що й текст. */
@@ -321,26 +458,25 @@ export async function renderReleaseCard(input: ReleaseCardInput): Promise<Blob |
   };
 
   const inner = W - PAD * 2;
-  const titleFont = `620 21px ${FONT}`;
-  const bodyFont = `400 14px ${FONT}`;
-  const labelFont = `600 12.5px ${FONT}`;
+  const titleFont = TITLE_FONT;
+  const bodyFont = BODY_FONT;
+  const labelFont = LABEL_FONT;
 
   const titleLines = measure(titleFont, input.title, inner, 3);
+  const rowWidth = textColumnWidth(ctx);
+  const LABEL_W = inner - rowWidth;
   /**
-   * Колонка тексту — від найширшого підпису, а не від на око взятого числа.
+   * Рядки ростуть до стелі, а не ріжуться на «гарній» межі.
    *
-   * Було 76 px на всі три рядки, і «Перевірити» цим кеглем займає майже рівно
-   * стільки: підпис упирався в текст, і «Перевірити Операції → Дизайн»
-   * читалось як одне речення. Рахуємо по факту й додаємо зазор — тоді
-   * перейменування підпису не ламає верстку мовчки.
+   * Межа з CARD_ROW_LINES — це те, під що підганяється чернетка у вікні;
+   * малювання ж бере стелю, щоб дописаний людиною рядок став видимим цілком, а
+   * не перетворився на «…». Висота картки й так рахується по факту.
    */
-  const LABEL_GAP = 14;
-  ctx.font = labelFont;
-  const LABEL_W =
-    Math.max(...ROW_LABELS.map((label) => ctx.measureText(label).width)) + LABEL_GAP;
-  const summaryLines = input.summary.trim() ? measure(bodyFont, input.summary, inner - LABEL_W, 3) : [];
-  const beforeLines = input.before.trim() ? measure(bodyFont, input.before, inner - LABEL_W, 2) : [];
-  const checkLines = input.howToCheck.trim() ? measure(bodyFont, input.howToCheck, inner - LABEL_W, 2) : [];
+  const rowLines = (text: string) =>
+    text.trim() ? measure(bodyFont, text, rowWidth, CARD_ROW_HARD_MAX) : [];
+  const summaryLines = rowLines(input.summary);
+  const beforeLines = rowLines(input.before);
+  const checkLines = rowLines(input.howToCheck);
 
   const titleBlock = titleLines.length * 28;
   const summaryBlock = summaryLines.length ? summaryLines.length * 21 + 10 : 0;

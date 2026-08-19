@@ -6,14 +6,41 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { pluralUk } from "@/lib/lastSeen";
 import {
   copyImageToClipboard,
+  fitToRow,
+  measureCardRow,
   renderReleaseCard,
   suggestAfter,
   suggestBefore,
   suggestHowToCheck,
+  type CardRow,
 } from "./releaseCardImage";
+import { useReleaseCommitSummary } from "./queries";
 import type { DevRequest } from "./types";
+
+/**
+ * Чи влізе рядок у картку — і скільки символів зайві.
+ *
+ * ПРАВИЛО ТУТ ТАКЕ: межа не забороняє писати довше, картка росте й показує
+ * дописане цілим. Але «Було» на шість рядків перетворює картку для чату на
+ * стіну тексту, тож вікно каже рівно, скільки прибрати. Рахує це той самий
+ * canvas тим самим шрифтом, що й малює, — тому число точне, а не «десь
+ * стільки». Мовчить, поки все гаразд: підказка, яка світиться завжди, за
+ * тиждень перестає читатись.
+ */
+function RowFitHint({ row, text }: { row: CardRow; text: string }) {
+  const fit = React.useMemo(() => measureCardRow(row, text), [row, text]);
+  if (!fit || fit.overflow === 0) return null;
+  return (
+    <p className="text-2xs tone-text-warning">
+      {fit.cropped
+        ? `Стільки не влізе — текст обріжеться на «…». Прибери ≈${fit.overflow} символів.`
+        : `На картці стане ${pluralUk(fit.lines, "рядок", "рядки", "рядків")} замість ${fit.limit} — вона розтягнеться. Прибери ≈${fit.overflow} символів.`}
+    </p>
+  );
+}
 
 /**
  * Збирає картинку «виправлено», щоб кинути її в чат тому, хто просив.
@@ -36,6 +63,17 @@ export function ReleaseCardDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  /**
+   * Розбір опису рахуємо один раз на картку: усередині заміри по canvas, і
+   * гнати їх щорендеру заради того самого рядка немає навіщо.
+   */
+  const parsedSummary = React.useMemo(() => suggestAfter(request.body), [request.body]);
+  /**
+   * Опис без розділу «Як має бути» — питаємо тему релізного коміта. Саме там
+   * лежить результат людськими словами, бо цього вимагає домовленість про
+   * теми комітів. Не питаємо, коли розділ є: свій текст завжди точніший.
+   */
+  const commitSummary = useReleaseCommitSummary(request.commitShas, open && !parsedSummary);
   const [before, setBefore] = React.useState(() => suggestBefore(request.body));
   /**
    * БЕЗ запасного варіанта на назву картки.
@@ -46,7 +84,7 @@ export function ReleaseCardDialog({
    * сповіщення» → «Тепер: не приходять сповіщення». Краще порожньо і видима
    * вимога дописати, ніж готовий текст, який заперечує сам себе.
    */
-  const [summary, setSummary] = React.useState(() => suggestAfter(request.body));
+  const [summary, setSummary] = React.useState(parsedSummary);
   const [howToCheck, setHowToCheck] = React.useState(() =>
     suggestHowToCheck(request.moduleKey, request.body)
   );
@@ -59,9 +97,21 @@ export function ReleaseCardDialog({
   React.useEffect(() => {
     if (!open) return;
     setBefore(suggestBefore(request.body));
-    setSummary(suggestAfter(request.body));
+    setSummary(parsedSummary);
     setHowToCheck(suggestHowToCheck(request.moduleKey, request.body));
-  }, [open, request.number, request.title, request.body, request.moduleKey]);
+  }, [open, request.number, request.title, request.body, request.moduleKey, parsedSummary]);
+
+  /**
+   * Тема коміта приходить пізніше за відкриття вікна, тож підставляємо її
+   * окремо — і ТІЛЬКИ в порожнє поле. Якщо людина вже щось написала (або
+   * свідомо стерла й пише своє), чернетка з бази не має цього збивати.
+   */
+  React.useEffect(() => {
+    const subject = commitSummary.data;
+    if (!open || !subject) return;
+    const draft = fitToRow("summary", subject.charAt(0).toUpperCase() + subject.slice(1));
+    setSummary((prev) => (prev.trim() ? prev : draft));
+  }, [open, commitSummary.data]);
 
   // Перемальовуємо з паузою: інакше кожна літера в полі — це новий PNG.
   React.useEffect(() => {
@@ -137,6 +187,7 @@ export function ReleaseCardDialog({
               rows={2}
               className="resize-none text-sm"
             />
+            <RowFitHint row="before" text={before} />
           </div>
 
           <div className="space-y-1.5">
@@ -158,7 +209,9 @@ export function ReleaseCardDialog({
               <p className="text-2xs tone-text-warning">
                 Без цього рядка картка розповість лише про проблему — напишіть, що змінилось.
               </p>
-            ) : null}
+            ) : (
+              <RowFitHint row="summary" text={summary} />
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -171,6 +224,7 @@ export function ReleaseCardDialog({
               placeholder="Наприклад: Фінанси → Виплати команді → колонка «Штраф»"
               className="resize-none text-sm"
             />
+            <RowFitHint row="howToCheck" text={howToCheck} />
           </div>
 
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
