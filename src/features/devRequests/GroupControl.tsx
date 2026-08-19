@@ -49,7 +49,7 @@ export function GroupControl({
           <ChevronDown className="h-3.5 w-3.5 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" slide={false} className="w-[190px]">
+      <DropdownMenuContent align="start" className="w-[190px]">
         {GROUP_KEYS.map((key) => (
           <DropdownMenuItem
             key={key}

@@ -48,7 +48,9 @@ const DropdownMenuSubContent = React.forwardRef<
     <DropdownMenuPrimitive.SubContent
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl origin-[--radix-dropdown-menu-content-transform-origin]",
+        // Підменю грає за тим самим правилом, що й головне (див. нижче).
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-fast ease-out motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -60,28 +62,30 @@ DropdownMenuSubContent.displayName =
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
-    /**
-     * Чи «доїжджає» меню на 8 px при відкритті.
-     *
-     * За замовчуванням так — це рух shadcn, який доречний, коли меню виринає
-     * з іконки чи картки. Але коли тригер стоїть у тулбарі й меню падає рівно
-     * під ним, ті самі 8 px читаються не як рух, а як промах позиціонування:
-     * панель ніби спершу стала не туди, а потім поправилась. Там ставимо
-     * `slide={false}` — лишається проявлення без переїзду.
-     */
-    slide?: boolean;
-  }
->(({ className, sideOffset = 4, slide = true, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
         "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 origin-[--radix-dropdown-menu-content-transform-origin]",
-        slide &&
-          "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "origin-[--radix-dropdown-menu-content-transform-origin]",
+  // ВІДКРИТТЯ БЕЗ РУХУ — свідоме рішення (REQ-26), не забутий стиль.
+  //
+  // Меню прив'язане до свого тригера, і будь-який рух рве цей зв'язок: 8 px
+  // зсуву читаються не як анімація, а як промах позиціонування — панель ніби
+  // спершу стала не туди, а потім поправилась. Те саме робив zoom-in-95:
+  // заміряно на панелі фільтра шириною 247 px — це 12 px приросту, тобто кожен
+  // край їде приблизно на 6 px, і око ловить хвіст цього руху.
+  //
+  // Тому тут лише проявлення. Зовсім без анімації теж не можна — панель
+  // з'являлась би різко.
+  //
+  // ЧОМУ В МОДАЛОК ІНАКШЕ. Там навпаки додано і масштаб, і підйом. Це не
+  // суперечність: модалка — великий об'єкт, що приходить у центр екрана, їй рух
+  // личить. Меню — маленька панель під кнопкою, їй потрібна прив'язка, а не рух.
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-fast ease-out motion-reduce:animate-none",
         className
       )}
       {...props}

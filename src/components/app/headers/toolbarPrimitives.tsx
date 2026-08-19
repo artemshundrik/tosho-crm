@@ -229,11 +229,8 @@ export function ToolbarFilterSelect({
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
-      {/* slide={false} — як у тулбарі дошки: меню падає рівно під тригером, і
-          типові 8 px переїзду читаються не як рух, а як промах позиціонування. */}
       <DropdownMenuContent
         align="start"
-        slide={false}
         className={cn("max-h-[320px] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px]", contentClassName)}
       >
         {options.map((option) => {

@@ -185,7 +185,6 @@ export function ThemeSwitcher({
 
       <DropdownMenuContent
         align={align}
-        slide={false}
         className="w-[196px] p-1.5"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
