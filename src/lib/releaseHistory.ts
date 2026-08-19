@@ -252,12 +252,43 @@ export function scopeBreakdown(releases: Release[]): ScopeBucket[] {
 }
 
 /**
- * Скільки різних днів було роботи. Не дорівнює кількості релізів: відновлена
- * історія має один запис на день, а нові релізи пишуться на кожен пуш, тож в
- * один день їх може бути кілька.
+ * Коли зміна СПРАВДІ сталась.
+ *
+ * Це час коміта, а не мить деплою. Різниця не теоретична: пуш після трьох днів
+ * роботи привозить коміти за всі три дні одним записом, і якщо рахувати за
+ * `releasedAt`, попередні дні стають порожніми — виглядає, ніби людина не
+ * працювала, хоча в тих самих днях є години в `work_sessions`.
+ *
+ * `at` немає лише в записах, зроблених до того, як recorder почав його
+ * зберігати; там іншого джерела просто не існує, і час релізу — найкраще
+ * наближення.
+ */
+export function changeMoment(change: ReleaseChange, release: Release): string {
+  return change.at ?? release.releasedAt;
+}
+
+/** Усі дні (YYYY-MM-DD), у які щось справді комітилось. */
+function changeDays(releases: Release[]): Set<string> {
+  const days = new Set<string>();
+  for (const release of releases) {
+    if (release.changes.length === 0) {
+      days.add(release.releasedAt.slice(0, 10));
+      continue;
+    }
+    for (const change of release.changes) {
+      days.add(changeMoment(change, release).slice(0, 10));
+    }
+  }
+  return days;
+}
+
+/**
+ * Скільки різних днів було роботи. Рахується за днями КОМІТІВ, а не пушів:
+ * інакше три дні роботи, викочені одним пушем, рахувались би як один день і
+ * завищували «змін за день» утричі.
  */
 export function workingDays(releases: Release[]): number {
-  return new Set(releases.map((release) => release.releasedAt.slice(0, 10))).size;
+  return changeDays(releases).size;
 }
 
 /**
@@ -300,13 +331,17 @@ export type DayGroup = {
 export function groupByDay(releases: Release[]): DayGroup[] {
   const map = new Map<string, ScopedChange[]>();
 
+  // Ключ — день САМОЇ зміни. Раніше ключем був день релізу, і пачка з кількох
+  // днів роботи осідала цілком у день пушу: теплокарта показувала один
+  // навантажений день і кілька порожніх, хоч працювали в усі.
   for (const release of releases) {
-    const day = release.releasedAt.slice(0, 10);
-    const list = map.get(day) ?? [];
     for (const change of release.changes) {
-      list.push({ ...change, releasedAt: change.at ?? release.releasedAt });
+      const at = changeMoment(change, release);
+      const day = at.slice(0, 10);
+      const list = map.get(day) ?? [];
+      list.push({ ...change, releasedAt: at });
+      map.set(day, list);
     }
-    map.set(day, list);
   }
 
   return Array.from(map.entries())
@@ -575,7 +610,7 @@ export function monthTotals(groups: Array<{ key: string; releases: Release[] }>)
   return groups.map((group) => {
     const days = workingDays(group.releases);
     const changes = group.releases.reduce((sum, release) => sum + release.changes.length, 0);
-    const dates = group.releases.map((release) => release.releasedAt.slice(0, 10)).sort();
+    const dates = Array.from(changeDays(group.releases)).sort();
     return {
       key: group.key,
       changes,
@@ -668,12 +703,34 @@ export function monthOf(key: string): string {
 /** Групування за місяцем — саме в такому масштабі питають «скільки зроблено». */
 export function groupByMonth(releases: Release[]): Array<{ key: string; releases: Release[] }> {
   const map = new Map<string, Release[]>();
+
+  // Реліз розкладається за місяцями СВОЇХ змін, а не за місяцем пушу. Пуш
+  // 1 вересня з серпневими комітами інакше цілком осів би у вересні й зіпсував
+  // обидва місяці одразу: серпню бракувало б роботи, вересню — приписалась чужа.
   for (const release of releases) {
-    const key = release.releasedAt.slice(0, 7);
-    const list = map.get(key) ?? [];
-    list.push(release);
-    map.set(key, list);
+    if (release.changes.length === 0) {
+      const key = release.releasedAt.slice(0, 7);
+      map.set(key, [...(map.get(key) ?? []), release]);
+      continue;
+    }
+
+    const byMonth = new Map<string, ReleaseChange[]>();
+    for (const change of release.changes) {
+      const key = changeMoment(change, release).slice(0, 7);
+      byMonth.set(key, [...(byMonth.get(key) ?? []), change]);
+    }
+
+    for (const [key, changes] of byMonth) {
+      // Час релізу підмінюємо найранішим комітом цього місяця — щоб «перший
+      // день місяця у вибірці» рахувався по роботі, а не по деплою.
+      const earliest = changes
+        .map((change) => changeMoment(change, release))
+        .sort()[0];
+      const slice: Release = { ...release, releasedAt: earliest, changes };
+      map.set(key, [...(map.get(key) ?? []), slice]);
+    }
   }
+
   return Array.from(map.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([key, list]) => ({ key, releases: list }));
