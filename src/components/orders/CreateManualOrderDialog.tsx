@@ -600,7 +600,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+                <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
                   <Command shouldFilter={false}>
                     <CommandInput placeholder="Пошук за назвою…" leftIcon={<Search className="h-4 w-4" />} value={customerSearch} onValueChange={setCustomerSearch} />
                     <CommandList className="max-h-64">

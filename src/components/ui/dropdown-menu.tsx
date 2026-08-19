@@ -48,9 +48,11 @@ const DropdownMenuSubContent = React.forwardRef<
     <DropdownMenuPrimitive.SubContent
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl origin-[--radix-dropdown-menu-content-transform-origin]",
-        // Підменю грає за тим самим правилом, що й головне (див. нижче).
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-fast ease-out motion-reduce:animate-none",
+        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl",
+        // Підменю грає за тим самим правилом, що й головне (див. нижче):
+        // росте з точки прив'язки, зсувів не має.
+        "data-[side=bottom]:origin-top data-[side=top]:origin-bottom data-[side=left]:origin-right data-[side=right]:origin-left data-[side=bottom]:data-[align=start]:origin-top-left data-[side=bottom]:data-[align=end]:origin-top-right data-[side=top]:data-[align=start]:origin-bottom-left data-[side=top]:data-[align=end]:origin-bottom-right",
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.97] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:duration-base data-[state=closed]:duration-fast ease-out motion-reduce:animate-none",
         className
       )}
       {...props}
@@ -70,22 +72,36 @@ const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-border/50 bg-popover/95 p-1.5 text-popover-foreground shadow-menu backdrop-blur-xl",
-        "origin-[--radix-dropdown-menu-content-transform-origin]",
-  // ВІДКРИТТЯ БЕЗ РУХУ — свідоме рішення (REQ-26), не забутий стиль.
+        "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
+  // ПАНЕЛЬ РОЗКРИВАЄТЬСЯ З ТОЧКИ ТРИГЕРА (REQ-26).
   //
-  // Меню прив'язане до свого тригера, і будь-який рух рве цей зв'язок: 8 px
-  // зсуву читаються не як анімація, а як промах позиціонування — панель ніби
-  // спершу стала не туди, а потім поправилась. Те саме робив zoom-in-95:
-  // заміряно на панелі фільтра шириною 247 px — це 12 px приросту, тобто кожен
-  // край їде приблизно на 6 px, і око ловить хвіст цього руху.
+  // Ключове тут — рядок data-[side=*]:origin-* вище. Він задає точку, ВІД якої
+  // росте масштаб: край, яким панель торкається кнопки, стоїть на місці.
   //
-  // Тому тут лише проявлення. Зовсім без анімації теж не можна — панель
-  // з'являлась би різко.
+  // ЧОМУ НЕ ЗМІННА RADIX. У Radix є --radix-*-content-transform-origin, і це
+  // точніше — вона враховує ще й вирівнювання. Але вона проставляється ЗАПІЗНО:
+  // заміряно, origin іде "130px 235px → 0px 0px" вже посеред анімації, бо Radix
+  // спершу мусить виміряти позицію. Тому перші кадри йшли з ЦЕНТРУ, і панель
+  // роз'їжджалась на всі боки. Атрибут data-side є одразу — тому беремо його.
+  // заякорений край стоїть на місці, рухається лише протилежний. Панель ніби
+  // розгортається з кнопки, а не наповзає збоку.
   //
-  // ЧОМУ В МОДАЛОК ІНАКШЕ. Там навпаки додано і масштаб, і підйом. Це не
-  // суперечність: модалка — великий об'єкт, що приходить у центр екрана, їй рух
-  // личить. Меню — маленька панель під кнопкою, їй потрібна прив'язка, а не рух.
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-fast ease-out motion-reduce:animate-none",
+  // Саме тому зсуви (slide-in-from-*) сюди НЕ ПОВЕРТАТИ. Вони рухають панель
+  // цілком, разом із заякореним краєм, — і ті 8 px читаються не як анімація, а
+  // як промах позиціонування: панель ніби спершу стала не туди, а потім
+  // поправилась. Це була вихідна скарга в REQ-26.
+  //
+  // Масштаб 0.97, а не 0.95 із рецепта shadcn: на панелі шириною 260 px 5%
+  // давали 13 px приросту, і рух читався вже як переїзд. 3% дають близько 8 px
+  // на весь протилежний край — це вже подих, а не поїздка. Заміряно.
+  //
+  // Закриття коротше (fast) і майже без масштабу: іти має швидко.
+  //
+  // ЧОМУ В МОДАЛОК ІНАКШЕ. Там і масштаб більший, і є підйом: модалка — великий
+  // об'єкт, що приходить у центр екрана, їй рух личить. Меню прив'язане до
+  // кнопки, тож уся його анімація мусить рахуватись із цією прив'язкою.
+        "data-[side=bottom]:origin-top data-[side=top]:origin-bottom data-[side=left]:origin-right data-[side=right]:origin-left data-[side=bottom]:data-[align=start]:origin-top-left data-[side=bottom]:data-[align=end]:origin-top-right data-[side=top]:data-[align=start]:origin-bottom-left data-[side=top]:data-[align=end]:origin-bottom-right",
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.97] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:duration-base data-[state=closed]:duration-fast ease-out motion-reduce:animate-none",
         className
       )}
       {...props}
