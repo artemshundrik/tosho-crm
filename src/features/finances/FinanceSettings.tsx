@@ -41,6 +41,7 @@ import {
   type CompanyPricingRateChange,
 } from "@/lib/companyPricingRates";
 import { listWorkspaceMemberDirectory } from "@/lib/workspaceMemberDirectory";
+import { loadManagerRateHistory, type ManagerRateChange } from "@/lib/managerRateHistory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   createAccount,
@@ -955,14 +956,17 @@ function PricingRatesPanel() {
   const [vat, setVat] = React.useState("20");
   const [history, setHistory] = React.useState<CompanyPricingRateChange[]>([]);
   const [namesByUserId, setNamesByUserId] = React.useState<Record<string, string>>({});
+  const [managerHistory, setManagerHistory] = React.useState<ManagerRateChange[]>([]);
 
   const reload = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [rates, changes] = await Promise.all([
+      const [rates, changes, managerChanges] = await Promise.all([
         loadCompanyPricingRates(auth.userId),
         loadCompanyPricingRateHistory(auth.userId),
+        loadManagerRateHistory(auth.userId),
       ]);
+      setManagerHistory(managerChanges);
       setSavedFixed(rates.fixedCostRate);
       setSavedVat(rates.vatRate);
       setFixed(String(rates.fixedCostRate));
@@ -972,7 +976,7 @@ function PricingRatesPanel() {
       // Імена авторів правок. Директорія — той самий канонічний кеш, що й
       // усюди; memberships_view для імен не годиться, там full_name порожній.
       const workspaceId = await resolveWorkspaceId(auth.userId);
-      if (workspaceId && changes.some((change) => change.changedBy)) {
+      if (workspaceId) {
         const directory = await listWorkspaceMemberDirectory(workspaceId);
         const map: Record<string, string> = {};
         for (const member of directory) {
@@ -1163,8 +1167,8 @@ function PricingRatesPanel() {
               Ставка менеджера
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              Персональна, у кожного своя — живе в картці співробітника на сторінці «Команда». Сюди не
-              переноситься навмисно: це не ставка компанії.
+              Персональна, у кожного своя — задається в картці співробітника на сторінці «Команда».
+              Сюди не переноситься навмисно: це не ставка компанії. Історія змін — нижче.
             </p>
           </div>
         </div>
@@ -1196,6 +1200,55 @@ function PricingRatesPanel() {
                     <span className="text-muted-foreground line-through">{change.oldValue} %</span>
                   )}
                   <span className="font-semibold">{change.newValue} %</span>
+                  <span className="text-2xs text-muted-foreground">
+                    {new Date(change.changedAt).toLocaleString("uk-UA", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Персональні ставки. СЕО просив бачити не лише поточну цифру, а «хто
+          коли яку ставку мав» — до появи цієї історії стара ставка затиралась
+          назавжди. */}
+      <div className="rounded-xl border border-border/60 bg-card p-4">
+        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+          Ставки менеджерів — історія
+        </div>
+        {managerHistory.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">Змін ще не було.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {managerHistory.map((change) => (
+              <div
+                key={change.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+              >
+                <div className="min-w-0">
+                  <span className="text-xs font-medium">
+                    {namesByUserId[change.userId] ?? "Співробітник"}
+                  </span>
+                  {change.changedBy && change.changedBy !== change.userId ? (
+                    <span className="ml-2 text-2xs text-muted-foreground">
+                      змінив {namesByUserId[change.changedBy] ?? "хтось із керівництва"}
+                    </span>
+                  ) : change.oldRate === null ? (
+                    <span className="ml-2 text-2xs text-muted-foreground">ставка на момент запуску історії</span>
+                  ) : null}
+                </div>
+                <div className="flex items-baseline gap-2 font-mono text-xs tabular-nums">
+                  {change.oldRate === null ? null : (
+                    <span className="text-muted-foreground line-through">{change.oldRate} %</span>
+                  )}
+                  <span className="font-semibold">{change.newRate} %</span>
                   <span className="text-2xs text-muted-foreground">
                     {new Date(change.changedAt).toLocaleString("uk-UA", {
                       day: "2-digit",

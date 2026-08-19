@@ -4480,6 +4480,36 @@ export type Database = {
         }
         Relationships: []
       }
+      team_member_manager_rate_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          new_rate: number
+          old_rate: number | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_rate: number
+          old_rate?: number | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_rate?: number
+          old_rate?: number | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       team_member_manager_rates: {
         Row: {
           created_at: string
