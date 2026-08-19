@@ -9,6 +9,7 @@ import {
   Loader2,
   Plus,
   ShieldAlert,
+  Percent,
   Tags,
   Trash2,
   Wallet,
@@ -31,6 +32,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/auth/AuthProvider";
+import { computeRunSalePricing } from "@/lib/quoteRuns";
+import {
+  loadCompanyPricingRates,
+  loadCompanyPricingRateHistory,
+  saveCompanyPricingRates,
+  type CompanyPricingRateChange,
+} from "@/lib/companyPricingRates";
+import { listWorkspaceMemberDirectory } from "@/lib/workspaceMemberDirectory";
+import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   createAccount,
   createExpenseCategory,
@@ -74,7 +85,9 @@ const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProps) {
-  const [tab, setTab] = React.useState<"entities" | "accounts" | "categories" | "requisites">("entities");
+  const [tab, setTab] = React.useState<"entities" | "accounts" | "categories" | "requisites" | "pricing">(
+    "entities"
+  );
   const [entities, setEntities] = React.useState<FinanceLegalEntity[]>([]);
   const [accounts, setAccounts] = React.useState<FinanceAccount[]>([]);
   const [categories, setCategories] = React.useState<FinanceExpenseCategory[]>([]);
@@ -155,6 +168,14 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         >
           <FileText className="h-3.5 w-3.5" /> Реквізити
         </button>
+        <button
+          type="button"
+          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap")}
+          data-state={tab === "pricing" ? "active" : "inactive"}
+          onClick={() => setTab("pricing")}
+        >
+          <Percent className="h-3.5 w-3.5" /> Ставки
+        </button>
       </SegmentedGroup>
 
       {loading ? (
@@ -171,6 +192,8 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         />
       ) : tab === "categories" ? (
         <CategoriesPanel teamId={teamId} categories={categories} onChanged={reload} />
+      ) : tab === "pricing" ? (
+        <PricingRatesPanel />
       ) : (
         <RequisitesPanel entities={entities} />
       )}
@@ -904,6 +927,290 @@ function EmptyState({ icon: Icon, text }: { icon: typeof Banknote; text: string 
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+/**
+ * Ставки ціноутворення компанії.
+ *
+ * Постійні витрати і податковий резерв були константами в коді — щоб їх
+ * змінити, потрібен був деплой (рішення СЕО 18.08: винести в налаштування).
+ *
+ * Ставка МЕНЕДЖЕРА свідомо лишається в картці співробітника: вона персональна,
+ * у кожного своя. Тут про це стоїть окремий рядок, щоб не шукали.
+ */
+function PricingRatesPanel() {
+  const auth = useAuth();
+  const canEdit = React.useMemo(() => {
+    if (auth.permissions.isSuperAdmin) return true;
+    return (auth.jobRole ?? "").toLowerCase() === "seo";
+  }, [auth.jobRole, auth.permissions.isSuperAdmin]);
+
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [savedFixed, setSavedFixed] = React.useState(30);
+  const [savedVat, setSavedVat] = React.useState(20);
+  const [fixed, setFixed] = React.useState("30");
+  const [vat, setVat] = React.useState("20");
+  const [history, setHistory] = React.useState<CompanyPricingRateChange[]>([]);
+  const [namesByUserId, setNamesByUserId] = React.useState<Record<string, string>>({});
+
+  const reload = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [rates, changes] = await Promise.all([
+        loadCompanyPricingRates(auth.userId),
+        loadCompanyPricingRateHistory(auth.userId),
+      ]);
+      setSavedFixed(rates.fixedCostRate);
+      setSavedVat(rates.vatRate);
+      setFixed(String(rates.fixedCostRate));
+      setVat(String(rates.vatRate));
+      setHistory(changes);
+
+      // Імена авторів правок. Директорія — той самий канонічний кеш, що й
+      // усюди; memberships_view для імен не годиться, там full_name порожній.
+      const workspaceId = await resolveWorkspaceId(auth.userId);
+      if (workspaceId && changes.some((change) => change.changedBy)) {
+        const directory = await listWorkspaceMemberDirectory(workspaceId);
+        const map: Record<string, string> = {};
+        for (const member of directory) {
+          const name = [member.firstName, member.lastName].filter(Boolean).join(" ").trim();
+          if (member.userId && name) map[member.userId] = name;
+        }
+        setNamesByUserId(map);
+      }
+    } catch (error) {
+      console.error("[finance] pricing rates load failed", error);
+      toast.error("Не вдалося завантажити ставки", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [auth.userId]);
+
+  React.useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const parsed = React.useMemo(() => {
+    const toRate = (value: string) => {
+      const n = Number(value.replace(",", "."));
+      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+    };
+    return { fixed: toRate(fixed), vat: toRate(vat) };
+  }, [fixed, vat]);
+
+  const dirty = parsed.fixed !== savedFixed || parsed.vat !== savedVat;
+  const valid = parsed.fixed !== null && parsed.vat !== null;
+
+  // Приклад із живою формулою: ставка сама по собі нічого не каже, а «націнка
+  // на цьому тиражі виросте на N ₴» — каже.
+  const preview = React.useMemo(() => {
+    const sample = { quantity: 180, costTotal: 8172, desiredManagerIncome: 500, managerRate: 10 };
+    const was = computeRunSalePricing({ ...sample, fixedCostRate: savedFixed, vatRate: savedVat });
+    const now = computeRunSalePricing({
+      ...sample,
+      fixedCostRate: parsed.fixed ?? savedFixed,
+      vatRate: parsed.vat ?? savedVat,
+    });
+    return { was, now, diff: now.markupTotal - was.markupTotal };
+  }, [parsed.fixed, parsed.vat, savedFixed, savedVat]);
+
+  const handleSave = async () => {
+    if (!valid || parsed.fixed === null || parsed.vat === null) return;
+    setSaving(true);
+    try {
+      const next = await saveCompanyPricingRates(
+        { fixedCostRate: parsed.fixed, vatRate: parsed.vat },
+        auth.userId
+      );
+      setSavedFixed(next.fixedCostRate);
+      setSavedVat(next.vatRate);
+      toast.success("Ставки збережено", {
+        description: "Діють на нові прорахунки. Уже надіслані лишаються зі своїми.",
+      });
+      await reload();
+    } catch (error) {
+      console.error("[finance] pricing rates save failed", error);
+      toast.error("Не вдалося зберегти ставки", {
+        description: getErrorMessage(error, "Спробуйте ще раз."),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const money = (value: number) =>
+    `${new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 0 }).format(Math.round(value))} ₴`;
+
+  if (loading) return <FinanceSkeleton variant="stats" />;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="pricing-fixed">Постійні витрати</Label>
+              <div className="relative">
+                <Input
+                  id="pricing-fixed"
+                  value={fixed}
+                  inputMode="decimal"
+                  disabled={!canEdit}
+                  onChange={(event) => setFixed(event.target.value)}
+                  className="pr-8 font-mono tabular-nums"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  %
+                </span>
+              </div>
+              <p className="text-2xs text-muted-foreground">від валового прибутку</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pricing-vat">Податковий резерв</Label>
+              <div className="relative">
+                <Input
+                  id="pricing-vat"
+                  value={vat}
+                  inputMode="decimal"
+                  disabled={!canEdit}
+                  onChange={(event) => setVat(event.target.value)}
+                  className="pr-8 font-mono tabular-nums"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  %
+                </span>
+              </div>
+              <p className="text-2xs text-muted-foreground">робоча назва, чекає бухгалтера</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2.5 rounded-lg bg-amber-500/10 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Нові ставки діють <b className="font-semibold">лише на нові прорахунки</b>. Ті, що вже
+              надіслані клієнтам, лишаються зі своїми.
+            </span>
+          </div>
+
+          {canEdit ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => void handleSave()} disabled={!dirty || !valid || saving}>
+                {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Зберегти ставки
+              </Button>
+              {dirty ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setFixed(String(savedFixed));
+                    setVat(String(savedVat));
+                  }}
+                >
+                  Як було
+                </Button>
+              ) : null}
+              {!valid ? <span className="text-2xs text-destructive">Ставка має бути від 0 до 100 %</span> : null}
+            </div>
+          ) : (
+            <p className="text-2xs text-muted-foreground">
+              Міняти ставки можуть власник і СЕО. Ви бачите їх для довідки.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+            <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+              Що це змінить
+            </div>
+            <p className="mt-1 text-2xs text-muted-foreground">
+              Приклад: тираж 180 шт, собівартість {money(8172)}, заробіток 500 ₴
+            </p>
+            <div className="mt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Націнка зараз</span>
+                <span className="font-mono font-semibold tabular-nums">{money(preview.was.markupTotal)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Націнка стане</span>
+                <span className="font-mono font-semibold tabular-nums text-primary">
+                  {money(preview.now.markupTotal)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3 border-t border-border/60 pt-1.5">
+                <span className="text-muted-foreground">Ціна / од.</span>
+                <span className="font-mono font-semibold tabular-nums">
+                  {preview.now.saleUnitPrice === null ? "—" : `${preview.now.saleUnitPrice.toFixed(2)} ₴`}
+                </span>
+              </div>
+            </div>
+            {Math.abs(preview.diff) >= 0.5 ? (
+              <p className="mt-3 text-2xs leading-relaxed text-amber-700 dark:text-amber-400">
+                Націнка {preview.diff > 0 ? "зросте" : "впаде"} на {money(Math.abs(preview.diff))} на цьому
+                прикладі.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+            <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+              Ставка менеджера
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              Персональна, у кожного своя — живе в картці співробітника на сторінці «Команда». Сюди не
+              переноситься навмисно: це не ставка компанії.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-card p-4">
+        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+          Історія змін
+        </div>
+        {history.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">Ставки ще не міняли.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {history.map((change) => (
+              <div
+                key={change.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+              >
+                <div className="min-w-0">
+                  <span className="text-xs font-medium">
+                    {change.changedBy ? (namesByUserId[change.changedBy] ?? "Співробітник") : "Початкове значення"}
+                  </span>
+                  <span className="ml-2 text-2xs text-muted-foreground">
+                    {change.field === "vat_rate" ? "Податковий резерв" : "Постійні витрати"}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 font-mono text-xs tabular-nums">
+                  {change.oldValue === null ? null : (
+                    <span className="text-muted-foreground line-through">{change.oldValue} %</span>
+                  )}
+                  <span className="font-semibold">{change.newValue} %</span>
+                  <span className="text-2xs text-muted-foreground">
+                    {new Date(change.changedAt).toLocaleString("uk-UA", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

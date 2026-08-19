@@ -81,6 +81,7 @@ import {
   type CustomerRow,
   type LeadSearchRow,
 } from "@/lib/toshoApi";
+import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import { getRunSalePricingFromRun, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
 import { NewQuoteDialog, QuoteBatchBuilderDialog } from "@/components/quotes";
 import type { NewQuoteFormData, QuoteBatchBuilderFormData } from "@/components/quotes";
@@ -186,8 +187,6 @@ type QuotesPageProps = {
 
 const ALL_MANAGERS_FILTER = "__all__";
 const DEFAULT_MANAGER_RATE = 10;
-const DEFAULT_FIXED_COST_RATE = 30;
-const DEFAULT_VAT_RATE = 20;
 const QUOTES_TABLE_PAGE_SIZE = 50;
 const QUOTES_TABLE_PAGE_INCREMENT = 50;
 const QUOTES_KANBAN_INITIAL_PAGE_SIZE = 120;
@@ -520,6 +519,8 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
+  // Ставки компанії — з налаштувань (Фінанси → Налаштування → Ставки).
+  const companyRates = useCompanyPricingRates(userId);
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const initialCache = readQuotesPageCache(teamId);
@@ -2547,8 +2548,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             logistics_cost: 0,
             desired_manager_income: 0,
             manager_rate: managerRate,
-            fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-            vat_rate: DEFAULT_VAT_RATE,
+            fixed_cost_rate: companyRates.fixedCostRate,
+            vat_rate: companyRates.vatRate,
             team_id: teamId,
           }));
 
@@ -4593,8 +4594,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             logistics_cost: Number(run.logistics_cost ?? 0) || 0,
             desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
             manager_rate: Number.isFinite(Number(run.manager_rate)) ? Number(run.manager_rate) : DEFAULT_MANAGER_RATE,
-            fixed_cost_rate: Number.isFinite(Number(run.fixed_cost_rate)) ? Number(run.fixed_cost_rate) : DEFAULT_FIXED_COST_RATE,
-            vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : DEFAULT_VAT_RATE,
+            fixed_cost_rate: Number.isFinite(Number(run.fixed_cost_rate)) ? Number(run.fixed_cost_rate) : companyRates.fixedCostRate,
+            vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : companyRates.vatRate,
           }))
         );
       }
@@ -4847,8 +4848,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             quoteItemId: editPrimaryItemId,
             managerRate,
             defaultManagerRate: DEFAULT_MANAGER_RATE,
-            defaultFixedCostRate: DEFAULT_FIXED_COST_RATE,
-            defaultVatRate: DEFAULT_VAT_RATE,
+            defaultFixedCostRate: companyRates.fixedCostRate,
+            defaultVatRate: companyRates.vatRate,
           });
           if (idsToDelete.length > 0) {
             const { error: deleteRunsError } = await supabase

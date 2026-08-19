@@ -4423,6 +4423,63 @@ export type Database = {
         }
         Relationships: []
       }
+      company_pricing_rate_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          field: string
+          id: number
+          new_value: number
+          old_value: number | null
+          workspace_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          field: string
+          id?: never
+          new_value: number
+          old_value?: number | null
+          workspace_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          field?: string
+          id?: never
+          new_value?: number
+          old_value?: number | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      company_pricing_rates: {
+        Row: {
+          created_at: string
+          fixed_cost_rate: number
+          updated_at: string
+          updated_by: string | null
+          vat_rate: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          fixed_cost_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+          vat_rate?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          fixed_cost_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+          vat_rate?: number
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       team_member_manager_rates: {
         Row: {
           created_at: string

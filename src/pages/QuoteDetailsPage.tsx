@@ -120,6 +120,7 @@ import {
   type QuoteRun,
   type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
+import { useCompanyPricingRates } from "@/lib/companyPricingRates";
 import {
   computeRunSalePricing,
   mergeQuoteRunsWithExisting,
@@ -289,8 +290,6 @@ const DEFAULT_DEADLINE_TIME = "09:00";
 const DEADLINE_FIELD_LABEL_CLASS =
   "text-2xs font-medium uppercase tracking-wide text-muted-foreground";
 const DEFAULT_MANAGER_RATE = 10;
-const DEFAULT_FIXED_COST_RATE = 30;
-const DEFAULT_VAT_RATE = 20;
 const DEADLINE_REMINDER_OPTIONS = [
   { value: "none", label: "Без сповіщення" },
   { value: "0", label: "У момент дедлайну" },
@@ -760,6 +759,9 @@ type DesignTaskRow = {
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
   const { userId, jobRole, accessRole, permissions } = useAuth();
+  // Ставки компанії — з налаштувань, а не з констант у коді. До завантаження
+  // віддають ті самі 30/20, тож перший кадр рахується як раніше.
+  const companyRates = useCompanyPricingRates(userId);
   const initialCache = readQuoteDetailsCache(teamId, quoteId);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
@@ -1215,8 +1217,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         costPerUnit: null as number | null,
         desiredManagerIncome: 0,
         managerRate: currentManagerRate,
-        fixedCostRate: DEFAULT_FIXED_COST_RATE,
-        vatRate: DEFAULT_VAT_RATE,
+        fixedCostRate: companyRates.fixedCostRate,
+        vatRate: companyRates.vatRate,
         requiredGrossProfit: 0,
         fixedCosts: 0,
         vatAmount: 0,
@@ -1232,8 +1234,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const managerRate = effectiveManagerId
       ? currentManagerRate || DEFAULT_MANAGER_RATE
       : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE);
-    const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE);
-    const vatRate = resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE);
+    const fixedCostRate = resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate);
+    const vatRate = resolveNumericRate(run.vat_rate, companyRates.vatRate);
     const pricing = computeRunSalePricing({
       quantity,
       costTotal,
@@ -1250,7 +1252,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       fixedCostRate,
       vatRate,
     };
-  }, [currentManagerRate, effectiveManagerId]);
+  }, [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, effectiveManagerId]);
 
   // Runs (tirages)
   const addRun = (quoteItemId?: string | null) => {
@@ -1267,8 +1269,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         logistics_cost: 0,
         desired_manager_income: 0,
         manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
-        fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-        vat_rate: DEFAULT_VAT_RATE,
+        fixed_cost_rate: companyRates.fixedCostRate,
+        vat_rate: companyRates.vatRate,
       },
     ]);
     setSelectedRunId(newId);
@@ -1329,8 +1331,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
         manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-        fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
-        vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+        fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
+        vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
       }));
       // delete missing (present before, absent now)
       const originalIds = new Set(
@@ -1389,11 +1391,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
-          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
+          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
         }))
       ),
-    [currentManagerRate, runs]
+    [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runs]
   );
 
   const runsOriginalAutosaveSignature = useMemo(
@@ -1408,11 +1410,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           logistics_cost: Math.max(0, Number(run.logistics_cost) || 0),
           desired_manager_income: Math.max(0, Number(run.desired_manager_income) || 0),
           manager_rate: resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
-          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
+          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
         }))
       ),
-    [currentManagerRate, runsOriginal]
+    [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, runsOriginal]
   );
 
   const removeRun = async (index: number) => {
@@ -3813,13 +3815,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           logistics_cost: 0,
           desired_manager_income: 0,
           manager_rate: currentManagerRate || DEFAULT_MANAGER_RATE,
-          fixed_cost_rate: DEFAULT_FIXED_COST_RATE,
-          vat_rate: DEFAULT_VAT_RATE,
+          fixed_cost_rate: companyRates.fixedCostRate,
+          vat_rate: companyRates.vatRate,
         },
       ]);
       setSelectedRunId(newId);
     }
-  }, [runsLoaded, runs.length, items, currentManagerRate]);
+  }, [companyRates.fixedCostRate, companyRates.vatRate, runsLoaded, runs.length, items, currentManagerRate]);
 
   useEffect(() => {
     if (!runsLoaded || !effectiveManagerId || runs.length === 0) return;
@@ -4804,8 +4806,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         manager_rate: effectiveManagerId
           ? currentManagerRate || DEFAULT_MANAGER_RATE
           : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, DEFAULT_FIXED_COST_RATE),
-          vat_rate: resolveNumericRate(run.vat_rate, DEFAULT_VAT_RATE),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
+          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
         }));
         await upsertQuoteRuns(newQuoteId, runsPayload);
       }
@@ -5010,8 +5012,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             quoteItemId: primaryItem.id,
             managerRate: targetManagerRate,
             defaultManagerRate: DEFAULT_MANAGER_RATE,
-            defaultFixedCostRate: DEFAULT_FIXED_COST_RATE,
-            defaultVatRate: DEFAULT_VAT_RATE,
+            defaultFixedCostRate: companyRates.fixedCostRate,
+            defaultVatRate: companyRates.vatRate,
           });
           if (idsToDelete.length > 0) {
             const { error: deleteRunsError } = await supabase
