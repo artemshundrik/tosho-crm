@@ -741,6 +741,14 @@ function renderBriefRichText(value: string | null | undefined) {
   });
 }
 
+/** Рядок дизайн-задачі прорахунку зі стрічки activity_log. */
+type DesignTaskRow = {
+  id: string;
+  title?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
   const { userId, jobRole, accessRole, permissions } = useAuth();
@@ -876,6 +884,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     assignedAt: string | null;
     metadata: Record<string, unknown>;
   } | null>(null);
+  /**
+   * Усі задачі прорахунку. `designTask` вище — найновіша з них: нею керує
+   * розгорнута панель (виконавець, тип, обраний візуал). Решта показані
+   * списком, кожна зі своїм посиланням.
+   */
+  const [designTasks, setDesignTasks] = useState<DesignTaskRow[]>([]);
   const [designTaskLoading, setDesignTaskLoading] = useState(false);
   const [designTaskError, setDesignTaskError] = useState<string | null>(null);
   const [designTaskSaving, setDesignTaskSaving] = useState(false);
@@ -883,6 +897,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designCollaboratorIds, setDesignCollaboratorIds] = useState<string[]>([]);
   const [designTaskType, setDesignTaskType] = useState<DesignTaskType | null>(null);
   const [createDesignTaskDialogOpen, setCreateDesignTaskDialogOpen] = useState(false);
+  /** На яку позицію створюємо задачу. null — на прорахунок загалом. */
+  const [designTaskItemId, setDesignTaskItemId] = useState<string | null>(null);
   const [designTaskCandidates, setDesignTaskCandidates] = useState<DesignTaskCandidate[]>([]);
   const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
   const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
@@ -2151,6 +2167,28 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // правило про те саме рано чи пізно розійдеться з першим.
   const canEditPrintSpec = canEditRuns;
 
+  /** Позиції, на які задача вже є (у старих задач позиції немає — вони нічого не «займають»). */
+  const designTaskItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const task of designTasks) {
+      const itemId = task.metadata?.quote_item_id;
+      if (typeof itemId === "string" && itemId.trim()) ids.add(itemId.trim());
+    }
+    return ids;
+  }, [designTasks]);
+
+  const itemsWithoutDesignTask = useMemo(
+    () => items.filter((item) => !designTaskItemIds.has(item.id)),
+    [designTaskItemIds, items]
+  );
+
+  /**
+   * Ще одну задачу пропонуємо лише тоді, коли позицій більше, ніж задач. На
+   * прорахунку з однією позицією й однією задачею кнопки, як і раніше, немає —
+   * інакше на старих прорахунках з'явилась би можливість наплодити дублів.
+   */
+  const canCreateMoreDesignTasks = items.length > designTasks.length;
+
   const runFieldLockHint = (allowed: boolean, who: string) =>
     canEditRuns && !allowed ? `Це поле заповнює ${who}` : undefined;
 
@@ -3000,6 +3038,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const loadDesignTask = async () => {
     if (!quoteId || !teamId) {
+      setDesignTasks([]);
       setDesignTask(null);
       setDesignAssigneeId(null);
       setDesignTaskType(null);
@@ -3008,16 +3047,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTaskLoading(true);
     setDesignTaskError(null);
     try {
+      // Без .limit(1): на прорахунку може бути кілька задач — по одній на
+      // позицію. «Основною» лишається найновіша (нею керує панель нижче),
+      // решта видно списком.
       const { data, error } = await supabase
         .from("activity_log")
-        .select("id, metadata, created_at")
+        .select("id, title, metadata, created_at")
         .eq("action", "design_task")
         .eq("entity_id", quoteId)
         .eq("team_id", teamId)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      let row = (data ?? [])[0] as { id: string; metadata?: Record<string, unknown> | null } | undefined;
+      let rows = (data ?? []) as DesignTaskRow[];
+      let row = rows[0] as DesignTaskRow | undefined;
       if (!row) {
         const { data: fallbackRows, error: fallbackError } = await supabase
           .from("activity_log")
@@ -3027,8 +3069,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           .filter("metadata->>quote_id", "eq", quoteId)
           .order("created_at", { ascending: false });
         if (fallbackError) throw fallbackError;
-        row = ((fallbackRows ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>)[0];
+        rows = (fallbackRows ?? []) as DesignTaskRow[];
+        row = rows[0];
       }
+      setDesignTasks(rows);
       if (!row) {
         setDesignTask(null);
         setDesignAssigneeId(null);
@@ -3049,6 +3093,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTaskType(parsedTaskType);
     } catch (e: unknown) {
       setDesignTaskError(getErrorMessage(e, "Не вдалося завантажити дизайн-задачу."));
+      setDesignTasks([]);
       setDesignTask(null);
       setDesignTaskType(null);
     } finally {
@@ -3061,7 +3106,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTaskCandidates([]);
       return;
     }
-    if (designTask) {
+    // Раніше тут стояло «якщо задача вже є — кандидатів немає». Тепер на
+    // прорахунку може бути кілька задач, тож закриваємось лише коли вільних
+    // позицій не лишилось.
+    if (designTask && !canCreateMoreDesignTasks) {
       setDesignTaskCandidates([]);
       return;
     }
@@ -3241,8 +3289,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         (userId ? memberById.get(userId) : null) ||
         authData.user?.email ||
         "System";
-      const modelName = override?.modelName ?? items[0]?.title ?? "Позиція";
-      const methodsCount = override?.methodsCount ?? items[0]?.methods?.length ?? 0;
+      // Позиція, на яку робимо задачу. Раніше тут завжди стояла items[0], тож
+      // на прорахунку з двома моделями задача називалась першою, а друга не
+      // згадувалась ніде.
+      const targetItem =
+        (designTaskItemId ? items.find((item) => item.id === designTaskItemId) : null) ??
+        itemsWithoutDesignTask[0] ??
+        items[0] ??
+        null;
+      const modelName = override?.modelName ?? targetItem?.title ?? "Позиція";
+      const methodsCount = override?.methodsCount ?? targetItem?.methods?.length ?? 0;
       const designDeadline = quote?.design_deadline_at ?? quote?.deadline_at ?? null;
       const assigneeUserId = override?.assigneeUserId ?? designAssigneeId ?? null;
       const collaboratorUserIds = Array.from(
@@ -3264,6 +3320,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           design_task_type: nextDesignTaskType,
           quote_type: quote?.quote_type ?? null,
           methods_count: methodsCount,
+          quote_item_id: targetItem?.id ?? null,
+          quote_item_title: targetItem?.title ?? null,
           // Скріпка на дизайн-задачі має означати «є що подивитись ДИЗАЙНЕРУ».
           // Файли прорахунку її не вмикають: інакше дизайнер відкриває задачу
           // по скріпці й бачить договір, який його не стосується.
@@ -3312,6 +3370,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata: meta,
       });
       setCreateDesignTaskDialogOpen(false);
+      setDesignTaskItemId(null);
       setDesignAssigneeId(nextAssignee ?? null);
       setDesignTaskType(nextDesignTaskType);
 
@@ -5857,7 +5916,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <span className="truncate">Створити замовлення</span>
                 </Button>
               ) : null}
-              {!designTask && !designTaskLoading ? (
+              {(!designTask || canCreateMoreDesignTasks) && !designTaskLoading ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -5865,11 +5924,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   disabled={designTaskSaving || !canEditQuoteContent}
                   onClick={() => {
                     setDesignTaskError(null);
+                    // Одразу підставляємо першу позицію без задачі — найчастіший
+                    // сценарій, і людині лишається натиснути «Створити».
+                    setDesignTaskItemId(itemsWithoutDesignTask[0]?.id ?? null);
                     setCreateDesignTaskDialogOpen(true);
                   }}
                 >
                   <Palette className="h-4 w-4" />
-                  <span className="truncate">{designTaskSaving ? "Створення..." : "Створити дизайн-задачу"}</span>
+                  <span className="truncate">
+                    {designTaskSaving
+                      ? "Створення..."
+                      : designTasks.length > 0
+                        ? "Ще одна дизайн-задача"
+                        : "Створити дизайн-задачу"}
+                  </span>
                 </Button>
               ) : null}
               <Button
@@ -7544,7 +7612,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
                   >
                     Задача
-                    <span className="ml-2 text-xs text-muted-foreground">{designTask ? 1 : 0}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{designTasks.length}</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -7757,7 +7825,42 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   ) : designTaskError ? (
                     <div className="text-sm text-destructive">{designTaskError}</div>
                   ) : designTask ? (
-                    <div className="grid max-w-3xl gap-4 rounded-xl border border-border/40 bg-muted/[0.02] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end md:p-5">
+                    <div className="max-w-3xl space-y-3">
+                      {designTasks.length > 1 ? (
+                        <div className="rounded-xl border border-border/40 bg-muted/[0.02] p-4">
+                          <div className="mb-3 text-sm font-semibold text-foreground">
+                            Задачі прорахунку · {designTasks.length}
+                          </div>
+                          <div className="space-y-1.5">
+                            {designTasks.map((task) => {
+                              const metadata = task.metadata ?? {};
+                              const number =
+                                typeof metadata.design_task_number === "string" ? metadata.design_task_number : null;
+                              const itemTitle =
+                                typeof metadata.quote_item_title === "string" ? metadata.quote_item_title : null;
+                              const assignee =
+                                typeof metadata.assignee_user_id === "string" ? metadata.assignee_user_id : null;
+                              return (
+                                <button
+                                  key={task.id}
+                                  type="button"
+                                  onClick={() => navigate(`/design/${task.id}`)}
+                                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 text-left transition hover:border-border/60 hover:bg-muted/20"
+                                >
+                                  <span className="min-w-0 truncate text-sm text-foreground">
+                                    {number ? `${number} · ` : ""}
+                                    {itemTitle || task.title || "Дизайн-задача"}
+                                  </span>
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {assignee ? memberById.get(assignee) ?? "Виконавець" : "Без виконавця"}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                    <div className="grid gap-4 rounded-xl border border-border/40 bg-muted/[0.02] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end md:p-5">
                       <div className="space-y-2">
                         <div className="text-sm font-semibold text-foreground">Дизайн-задача</div>
                         {selectedDesignOutputFileName ? (
@@ -7836,6 +7939,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       >
                         Відкрити
                       </Button>
+                    </div>
                     </div>
                   ) : (
                     <div className="space-y-3 rounded-xl border border-dashed border-border/40 bg-muted/[0.02] px-4 py-5">
@@ -9378,6 +9482,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             {designTaskError ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
                 {designTaskError}
+              </div>
+            ) : null}
+
+            {items.length > 1 ? (
+              <div className="space-y-2">
+                <Label>Позиція</Label>
+                <Select
+                  value={designTaskItemId ?? "all"}
+                  onValueChange={(value) => setDesignTaskItemId(value === "all" ? null : value)}
+                  disabled={designTaskSaving}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Оберіть позицію" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Весь прорахунок</SelectItem>
+                    {items.map((item) => (
+                      <SelectItem key={item.id} value={item.id} disabled={designTaskItemIds.has(item.id)}>
+                        {item.title || "Позиція"}
+                        {designTaskItemIds.has(item.id) ? " — задача вже є" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             ) : null}
 

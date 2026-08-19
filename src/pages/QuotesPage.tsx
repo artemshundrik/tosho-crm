@@ -2372,6 +2372,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
         const designProducts: Array<{
           itemName: string;
+          itemId: string;
           product: QuoteBatchBuilderFormData["products"][number];
           methodsCount: number;
         }> = [];
@@ -2575,43 +2576,38 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           if (product.createDesignTask) {
             designProducts.push({
               itemName,
+              itemId,
               product,
               methodsCount: isPrintPackageQuote ? 1 : product.printApplications.length,
             });
           }
         }
 
-        if (designProducts.length > 0) {
-          const firstDesignProduct = designProducts[0];
-          const designTaskType = firstDesignProduct.product.designTaskType;
+        // Задача на КОЖНУ позначену позицію, а не одна злита на всі. Раніше тут
+        // склеювались назви («Модель A, Модель B»), сумувались нанесення, а тип
+        // і виконавець бралися від першої позиції — тобто інтерфейс обіцяв
+        // задачу на кожну позицію, а видавав одну.
+        for (const designProduct of designProducts) {
+          const designTaskType = designProduct.product.designTaskType;
           if (!designTaskType) {
-            throw new Error(`${firstDesignProduct.itemName}: оберіть тип дизайнерської задачі.`);
+            throw new Error(`${designProduct.itemName}: оберіть тип дизайнерської задачі.`);
           }
-          const designBrief = designProducts
-            .map(({ itemName, product }) => {
-              const brief = product.designBrief || product.managerNote;
-              return brief.trim() ? `${itemName}:\n${brief.trim()}` : itemName;
-            })
-            .join("\n\n");
-          const designTaskId = await ensureDesignTaskForQuote({
+          const brief = designProduct.product.designBrief || designProduct.product.managerNote;
+          const designTaskId = await createDesignTaskForQuote({
             quoteId: created.id,
             quoteType: group.quoteType,
-            modelName: designProducts.map((item) => item.itemName).join(", "),
-            methodsCount: designProducts.reduce((total, item) => total + item.methodsCount, 0),
-            designBrief: designBrief || null,
+            modelName: designProduct.itemName,
+            methodsCount: designProduct.methodsCount,
+            designBrief: brief.trim() || null,
             designDeadline: data.deadlineAt,
-            assigneeUserId: firstDesignProduct.product.designAssigneeId,
-            collaboratorUserIds: Array.from(
-              new Set(
-                designProducts.flatMap((item) =>
-                  item.product.designCollaboratorIds.filter(
-                    (userId) => userId && userId !== firstDesignProduct.product.designAssigneeId
-                  )
-                )
-              )
+            assigneeUserId: designProduct.product.designAssigneeId,
+            collaboratorUserIds: designProduct.product.designCollaboratorIds.filter(
+              (userId) => userId && userId !== designProduct.product.designAssigneeId
             ),
             designTaskType,
-            hasFiles: designProducts.some((item) => item.product.files.length > 0),
+            hasFiles: designProduct.product.files.length > 0,
+            quoteItemId: designProduct.itemId,
+            quoteItemTitle: designProduct.itemName,
           });
           if (designTaskId) createdDesignTaskCount += 1;
         }
@@ -3085,7 +3081,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
-  const ensureDesignTaskForQuote = async (params: {
+  type CreateDesignTaskForQuoteParams = {
     quoteId: string;
     quoteType?: string;
     modelName: string;
@@ -3096,18 +3092,17 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     collaboratorUserIds?: string[];
     designTaskType: DesignTaskType;
     hasFiles: boolean;
-  }) => {
-    const { data: existingTask, error: existingTaskError } = await supabase
-      .from("activity_log")
-      .select("id")
-      .eq("team_id", teamId)
-      .eq("action", "design_task")
-      .eq("entity_id", params.quoteId)
-      .limit(1)
-      .maybeSingle();
-    if (existingTaskError) throw existingTaskError;
-    if (existingTask?.id) return existingTask.id;
+    /** Позиція прорахунку, на яку ця задача. null — задача на весь прорахунок. */
+    quoteItemId?: string | null;
+    quoteItemTitle?: string | null;
+  };
 
+  /**
+   * Створює задачу БЕЗ перевірки, чи вона вже є: на одному прорахунку їх може
+   * бути кілька — по одній на позицію. Перевірку робить `ensureDesignTaskForQuote`
+   * там, де це справді «одна на прорахунок» (чекбокс у редагуванні).
+   */
+  const createDesignTaskForQuote = async (params: CreateDesignTaskForQuoteParams) => {
     const actorName =
       currentUserId && memberById.get(currentUserId)
         ? (memberById.get(currentUserId)?.label as string)
@@ -3128,6 +3123,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         design_task_type: params.designTaskType,
         quote_type: params.quoteType ?? null,
         methods_count: params.methodsCount,
+        // Задача знає свою позицію, а не лише прорахунок: без цього дві задачі
+        // на одному прорахунку неможливо розрізнити ніде, крім назви.
+        quote_item_id: params.quoteItemId ?? null,
+        quote_item_title: params.quoteItemTitle ?? null,
         has_files: params.hasFiles,
         design_deadline: params.designDeadline,
         deadline: params.designDeadline,
@@ -3173,6 +3172,24 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
     }
     return designTaskId;
+  };
+
+  /**
+   * «Одна задача на прорахунок» там, де це справді так: чекбокс у редагуванні
+   * прорахунку не має плодити другу задачу при кожному збереженні.
+   */
+  const ensureDesignTaskForQuote = async (params: CreateDesignTaskForQuoteParams) => {
+    const { data: existingTask, error: existingTaskError } = await supabase
+      .from("activity_log")
+      .select("id")
+      .eq("team_id", teamId)
+      .eq("action", "design_task")
+      .eq("entity_id", params.quoteId)
+      .limit(1)
+      .maybeSingle();
+    if (existingTaskError) throw existingTaskError;
+    if (existingTask?.id) return existingTask.id;
+    return await createDesignTaskForQuote(params);
   };
 
   const handleCreate = async () => {

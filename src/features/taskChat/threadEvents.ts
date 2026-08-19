@@ -32,6 +32,7 @@ type ActivityRow = {
   title: string | null;
   created_at: string;
   user_id: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 /**
@@ -51,7 +52,7 @@ export async function fetchThreadEvents(
 
   const { data, error } = await supabase
     .from("activity_log")
-    .select("id,action,title,created_at,user_id")
+    .select("id,action,title,created_at,user_id,metadata")
     .eq("team_id", teamId)
     .in("action", [...actions])
     .eq("metadata->>quote_id", quoteRef)
@@ -69,6 +70,10 @@ export async function fetchThreadEvents(
     visibility: "team" as const,
     source: "crm" as const,
     eventType: row.action,
+    designTaskId:
+      typeof row.metadata?.design_task_id === "string" && row.metadata.design_task_id.trim()
+        ? row.metadata.design_task_id.trim()
+        : null,
     isPinned: false,
   }));
 }

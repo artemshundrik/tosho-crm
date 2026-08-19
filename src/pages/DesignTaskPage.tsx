@@ -11993,6 +11993,7 @@ export default function DesignTaskPage() {
                 threadKey={threadKeyForQuote(String(task.quoteId))}
                 eventActions={THREAD_EVENT_ACTIONS}
                 quoteId={quoteIdFromRef(String(task.quoteId))}
+                designTaskId={task.id}
                 teamId={effectiveTeamId}
                 canManage={canManageAssignments}
                 onAttachFiles={async (files) => {

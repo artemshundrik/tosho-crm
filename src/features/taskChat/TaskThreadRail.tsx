@@ -42,6 +42,15 @@ type Props = {
    * null: колонка quote_id приймає лише справжній uuid прорахунку.
    */
   quoteId?: string | null;
+  /**
+   * Якщо панель відкрита зі сторінки КОНКРЕТНОЇ дизайн-задачі — її id. Нитка
+   * одна на прорахунок (так задумано: розмова спільна для прорахунку, задачі й
+   * замовлення), але на одному прорахунку задач може бути кілька, і події
+   * сусідньої задачі в цій стрічці лише плутають. Кеш при цьому лишається
+   * спільним і повним — ховаємо на показі, а не в запиті, інакше два різні
+   * набори лягли б під один ключ нитки.
+   */
+  designTaskId?: string | null;
   teamId: string;
   /** Керівник може видаляти чужі повідомлення; свої може кожен. */
   canManage?: boolean;
@@ -60,6 +69,7 @@ export function TaskThreadRail({
   threadKey,
   eventActions,
   quoteId = null,
+  designTaskId = null,
   teamId,
   canManage = false,
   onAttachFiles,
@@ -85,7 +95,12 @@ export function TaskThreadRail({
   });
 
   const members = React.useMemo(() => membersQuery.data ?? [], [membersQuery.data]);
-  const entries = React.useMemo(() => entriesQuery.data ?? [], [entriesQuery.data]);
+  const entries = React.useMemo(() => {
+    const all = entriesQuery.data ?? [];
+    if (!designTaskId) return all;
+    // Події рівня прорахунку (designTaskId === null) лишаються всім.
+    return all.filter((entry) => !entry.designTaskId || entry.designTaskId === designTaskId);
+  }, [designTaskId, entriesQuery.data]);
 
   const messages = React.useMemo(() => entries.filter((item) => item.kind === "message"), [entries]);
   const events = React.useMemo(() => entries.filter((item) => item.kind === "event"), [entries]);

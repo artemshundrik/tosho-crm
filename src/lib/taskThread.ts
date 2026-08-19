@@ -28,6 +28,13 @@ export type ThreadEntry = {
   source: "crm" | "telegram";
   /** Для kind="event" — action із activity_log. */
   eventType: string | null;
+  /**
+   * Для kind="event" — до якої дизайн-задачі подія належить (metadata
+   * design_task_id). Нитка одна на ПРОРАХУНОК, а задач на ньому може бути
+   * кілька, тож сторінка задачі ховає чужі події цим полем. null = подія
+   * рівня прорахунку, її видно всім.
+   */
+  designTaskId?: string | null;
   isPinned: boolean;
   /** id повідомлення, на яке це є відповіддю. */
   replyTo?: string | null;
