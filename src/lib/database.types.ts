@@ -4480,6 +4480,39 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_run_income_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          new_income: number
+          old_income: number | null
+          quote_id: string
+          run_id: string
+          team_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_income: number
+          old_income?: number | null
+          quote_id: string
+          run_id: string
+          team_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_income?: number
+          old_income?: number | null
+          quote_id?: string
+          run_id?: string
+          team_id?: string
+        }
+        Relationships: []
+      }
       team_member_manager_rate_changes: {
         Row: {
           changed_at: string

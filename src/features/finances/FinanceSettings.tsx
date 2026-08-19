@@ -41,7 +41,12 @@ import {
   type CompanyPricingRateChange,
 } from "@/lib/companyPricingRates";
 import { listWorkspaceMemberDirectory } from "@/lib/workspaceMemberDirectory";
-import { loadManagerRateHistory, type ManagerRateChange } from "@/lib/managerRateHistory";
+import {
+  loadManagerRateHistory,
+  loadRunIncomeHistory,
+  type ManagerRateChange,
+  type RunIncomeChange,
+} from "@/lib/managerRateHistory";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import {
   createAccount,
@@ -957,16 +962,19 @@ function PricingRatesPanel() {
   const [history, setHistory] = React.useState<CompanyPricingRateChange[]>([]);
   const [namesByUserId, setNamesByUserId] = React.useState<Record<string, string>>({});
   const [managerHistory, setManagerHistory] = React.useState<ManagerRateChange[]>([]);
+  const [incomeHistory, setIncomeHistory] = React.useState<RunIncomeChange[]>([]);
 
   const reload = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [rates, changes, managerChanges] = await Promise.all([
+      const [rates, changes, managerChanges, incomeChanges] = await Promise.all([
         loadCompanyPricingRates(auth.userId),
         loadCompanyPricingRateHistory(auth.userId),
         loadManagerRateHistory(auth.userId),
+        loadRunIncomeHistory(),
       ]);
       setManagerHistory(managerChanges);
+      setIncomeHistory(incomeChanges);
       setSavedFixed(rates.fixedCostRate);
       setSavedVat(rates.vatRate);
       setFixed(String(rates.fixedCostRate));
@@ -1249,6 +1257,53 @@ function PricingRatesPanel() {
                     <span className="text-muted-foreground line-through">{change.oldRate} %</span>
                   )}
                   <span className="font-semibold">{change.newRate} %</span>
+                  <span className="text-2xs text-muted-foreground">
+                    {new Date(change.changedAt).toLocaleString("uk-UA", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Заробіток у тиражах. Це поле визначає всю націнку, тож одна правка
+          міняє ціну для клієнта — СЕО просив бачити, «хто щось змінював по
+          заробітку». Правки однієї сесії тригер схлопує в один рядок. */}
+      <div className="rounded-xl border border-border/60 bg-card p-4">
+        <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+          Заробіток у прорахунках — хто міняв
+        </div>
+        {incomeHistory.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Змін ще не було. Історія ведеться з моменту ввімкнення аудиту.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {incomeHistory.map((change) => (
+              <div
+                key={change.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+              >
+                <div className="min-w-0">
+                  <span className="text-xs font-medium">
+                    {change.changedBy ? (namesByUserId[change.changedBy] ?? "Співробітник") : "Невідомо хто"}
+                  </span>
+                  <span className="ml-2 font-mono text-2xs text-muted-foreground">
+                    {change.quoteNumber ?? "прорахунок"}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 font-mono text-xs tabular-nums">
+                  {change.oldIncome === null ? null : (
+                    <span className="text-muted-foreground line-through">{Math.round(change.oldIncome)} ₴</span>
+                  )}
+                  <span className="font-semibold">{Math.round(change.newIncome)} ₴</span>
                   <span className="text-2xs text-muted-foreground">
                     {new Date(change.changedAt).toLocaleString("uk-UA", {
                       day: "2-digit",
