@@ -3,6 +3,7 @@
 // never drift apart.
 export const POSITION_OPTIONS = [
   "Директор",
+  "Керівник",
   "Власник",
   "Адміністратор",
   "Маркетолог",
