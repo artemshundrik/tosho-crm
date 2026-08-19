@@ -148,10 +148,15 @@ export function mergeQuoteRunsWithExisting({
         unit_price_print: Math.max(0, Number(source?.unit_price_print) || 0),
         logistics_cost: Math.max(0, Number(source?.logistics_cost) || 0),
         desired_manager_income: Math.max(0, Number(source?.desired_manager_income) || 0),
-        manager_rate: resolveNumericRate(
-          managerRate,
-          resolveNumericRate(source?.manager_rate, defaultManagerRate)
-        ),
+        // Наявний тираж тримає СВОЮ ставку. Прорахунок, надісланий клієнту при
+        // 10 %, не має мовчки подорожчати, коли менеджеру піднімуть ставку до
+        // 12 % — а саме це й відбувалось при кожному пересохраненні (рішення
+        // СЕО 18.08: нова ставка діє лише на нові прорахунки). Поточну ставку
+        // застосовуємо лише до НОВИХ тиражів, де source ще немає. Постійні
+        // витрати і ПДВ поводились так завжди — тепер ставка з ними симетрична.
+        manager_rate: source
+          ? resolveNumericRate(source.manager_rate, defaultManagerRate)
+          : resolveNumericRate(managerRate, defaultManagerRate),
         fixed_cost_rate: resolveNumericRate(source?.fixed_cost_rate, defaultFixedCostRate),
         vat_rate: resolveNumericRate(source?.vat_rate, defaultVatRate),
       } satisfies QuoteRun;

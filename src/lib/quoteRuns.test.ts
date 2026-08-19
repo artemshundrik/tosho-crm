@@ -239,23 +239,49 @@ describe("mergeQuoteRunsWithExisting", () => {
     expect(idsToDelete).toEqual([]);
   });
 
-  it("ставки: параметр managerRate перекриває ставку run-у; NaN-параметр — ні", () => {
+  it("ставки: НАЯВНИЙ тираж тримає свою ставку, навіть якщо людині її підняли", () => {
+    // Було навпаки: поточна ставка перекривала збережену при кожному
+    // пересохраненні, тож прорахунок, надісланий клієнту при 30 %, мовчки
+    // дорожчав до 45 %. Рішення СЕО 18.08 — старі прорахунки не чіпаємо.
     const existing = [run({ id: "a", manager_rate: 30 })];
-    const overridden = mergeQuoteRunsWithExisting({
+    const { payload } = mergeQuoteRunsWithExisting({
       ...defaults,
       managerRate: 45,
       existingRuns: existing,
       nextRuns: [{ id: "a", quantity: 10 }],
     });
-    expect(overridden.payload[0].manager_rate).toBe(45);
+    expect(payload[0].manager_rate).toBe(30);
+  });
 
-    const untouched = mergeQuoteRunsWithExisting({
+  it("ставки: НОВИЙ тираж бере поточну ставку людини", () => {
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      managerRate: 45,
+      existingRuns: [],
+      nextRuns: [{ quantity: 10 }],
+    });
+    expect(payload[0].manager_rate).toBe(45);
+  });
+
+  it("ставки: без поточної ставки новий тираж бере дефолтну", () => {
+    const { payload } = mergeQuoteRunsWithExisting({
       ...defaults,
       managerRate: Number.NaN,
+      existingRuns: [],
+      nextRuns: [{ quantity: 10 }],
+    });
+    expect(payload[0].manager_rate).toBe(defaults.defaultManagerRate);
+  });
+
+  it("ставки: наявний тираж без збереженої ставки бере дефолтну, а не поточну", () => {
+    const existing = [run({ id: "a", manager_rate: Number.NaN as unknown as number })];
+    const { payload } = mergeQuoteRunsWithExisting({
+      ...defaults,
+      managerRate: 45,
       existingRuns: existing,
       nextRuns: [{ id: "a", quantity: 10 }],
     });
-    expect(untouched.payload[0].manager_rate).toBe(30);
+    expect(payload[0].manager_rate).toBe(defaults.defaultManagerRate);
   });
 
   it("новий ран без прототипу бере дефолтні ставки й нульові ціни", () => {
