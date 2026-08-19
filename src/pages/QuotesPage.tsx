@@ -335,6 +335,27 @@ type PendingAttachment = {
   previewUrl?: string;
 };
 
+/**
+ * Один тираж позиції: своя кількість, своя ціна за штуку, своя сума.
+ *
+ * Тиражі ВЗАЄМОВИКЛЮЧНІ — замовник обирає один із них, а не купує всі. Тому
+ * складати їх між собою не можна ніде: ні кількості, ні суми. Раніше КП саме
+ * це й робило — «100 + 150 + 200» перетворювалось на неіснуючий тираж 450 шт
+ * із середньою ціною, і замовник бачив пропозицію, якої ми ніколи не давали.
+ */
+type CommercialRunRow = {
+  id: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+/** Діапазон «від найдешевшого сценарію до найдорожчого». min === max — сума точна. */
+type MoneyRange = {
+  min: number;
+  max: number;
+};
+
 type CommercialItemRow = {
   id: string;
   position: number;
@@ -344,10 +365,14 @@ type CommercialItemRow = {
   description: string;
   methodsSummary: string;
   placementSummary: string;
-  qty: number;
   unit: string;
-  unitPrice: number;
-  lineTotal: number;
+  /**
+   * Завжди щонайменше один запис, відсортовані за зростанням кількості.
+   * Полів qty/unitPrice/lineTotal у позиції свідомо НЕМАЄ: поки тираж не
+   * обрано, єдиної кількості й ціни в позиції не існує, і будь-яке таке поле
+   * знову стало б середнім по взаємовиключних варіантах.
+   */
+  runs: CommercialRunRow[];
 };
 
 type CommercialQuoteSection = {
@@ -361,7 +386,7 @@ type CommercialQuoteSection = {
     name: string;
   }>;
   items: CommercialItemRow[];
-  total: number;
+  totalRange: MoneyRange;
 };
 
 type CommercialDocument = {
@@ -372,7 +397,7 @@ type CommercialDocument = {
   generatedAt: string;
   currency: string;
   sections: CommercialQuoteSection[];
-  total: number;
+  totalRange: MoneyRange;
 };
 
 type KanbanProductPreview = {
@@ -3687,6 +3712,20 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     }).format(value);
+  /**
+   * Підсумок для взаємовиключних тиражів. Поки замовник не обрав тираж, точної
+   * суми не існує — показуємо межі. Один тираж ⇒ межі збігаються ⇒ звичайне число,
+   * тобто для звичайних КП вигляд не змінюється.
+   */
+  const formatMoneyRange = (range: MoneyRange) =>
+    Math.abs(range.max - range.min) < 0.005
+      ? formatMoney(range.min)
+      : `від ${formatMoney(range.min)} до ${formatMoney(range.max)}`;
+  const formatMoneyRangePlain = (range: MoneyRange) =>
+    Math.abs(range.max - range.min) < 0.005
+      ? formatMoneyPlain(range.min)
+      : `від ${formatMoneyPlain(range.min)} до ${formatMoneyPlain(range.max)}`;
+  const isMoneyRangeSpread = (range: MoneyRange) => Math.abs(range.max - range.min) >= 0.005;
   const formatDateTime = (value?: string | null) => {
     if (!value) return "—";
     const date = new Date(value);
@@ -3934,22 +3973,41 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             : fallbackQty * fallbackUnitPrice;
         // Продажні ціни (з націнкою) живуть у quote_item_runs, а не в quote_items.unit_price
         // (там — застаріла/собівартісна копія, через що КП губив націнку або показував 0).
-        // Рахуємо ту саму суму, що й калькулятор прорахунку (QuoteDetailsPage): сума saleTotal
-        // по run-ах позиції. Один товар у прорахунку ⇒ беремо всі run-и (quote_item_id інколи null).
+        // Один товар у прорахунку ⇒ беремо всі run-и (quote_item_id інколи null).
         const itemRuns =
           rows.length === 1
             ? quoteRuns
             : quoteRuns.filter((run) => run.quote_item_id === row.id);
-        let runQty = 0;
-        let runSaleTotal = 0;
-        for (const run of itemRuns) {
-          runQty += Math.max(0, Number(run.quantity) || 0);
-          runSaleTotal += getRunSalePricingFromRun(run).saleTotal;
-        }
-        const qty = runQty > 0 ? runQty : fallbackQty;
-        const lineTotal = runSaleTotal > 0 ? runSaleTotal : fallbackLineTotal;
-        const unitPrice =
-          runSaleTotal > 0 && runQty > 0 ? runSaleTotal / runQty : fallbackUnitPrice;
+
+        // Кожен тираж — окремий рядок. НЕ підсумовувати: варіанти взаємовиключні,
+        // сума «всіх разом» не відповідає жодному можливому замовленню.
+        const runRows: CommercialRunRow[] = itemRuns
+          .map((run, runIndex) => {
+            const runQty = Math.max(0, Number(run.quantity) || 0);
+            const saleTotal = getRunSalePricingFromRun(run).saleTotal;
+            return {
+              id: run.id ?? `${row.id}-run-${runIndex}`,
+              qty: runQty,
+              unitPrice: runQty > 0 ? saleTotal / runQty : 0,
+              lineTotal: saleTotal,
+            };
+          })
+          .filter((run) => run.qty > 0)
+          .sort((a, b) => a.qty - b.qty);
+
+        // Прорахунки без збережених тиражів (старі або ще не порахованi) далі
+        // живуть на копії з quote_items — інакше позиція зникла б із КП.
+        const runs: CommercialRunRow[] =
+          runRows.length > 0
+            ? runRows
+            : [
+                {
+                  id: `${row.id}-fallback`,
+                  qty: fallbackQty,
+                  unitPrice: fallbackUnitPrice,
+                  lineTotal: fallbackLineTotal,
+                },
+              ];
         const modelMeta = row.catalog_model_id ? modelById.get(row.catalog_model_id) : undefined;
         const imageUrl = modelMeta?.imageUrl || "";
         const catalogPath = [
@@ -3975,14 +4033,24 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           description: row.description?.trim() || "",
           methodsSummary: parseMethodsSummary(row.methods),
           placementSummary,
-          qty,
           unit: normalizeUnitLabel(row.unit),
-          unitPrice,
-          lineTotal,
+          runs,
         };
       });
 
-      const itemsTotal = mappedItems.reduce((sum, row) => sum + row.lineTotal, 0);
+      // Підсумок прорахунку з взаємовиключними тиражами — це не число, а межі:
+      // найдешевший сценарій (по мінімальному тиражу кожної позиції) і найдорожчий.
+      // Коли тираж у позиціях один — межі збігаються, і виходить звичайна сума.
+      const itemsTotalRange = mappedItems.reduce<MoneyRange>(
+        (range, item) => {
+          const totals = item.runs.map((run) => run.lineTotal);
+          return {
+            min: range.min + Math.min(...totals),
+            max: range.max + Math.max(...totals),
+          };
+        },
+        { min: 0, max: 0 }
+      );
       const quoteTotalFromSummary =
         typeof quoteRef.quote_total === "number" && Number.isFinite(quoteRef.quote_total)
           ? Number(quoteRef.quote_total)
@@ -3995,13 +4063,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         createdAt: formatDateTime(quoteRef.quote_created_at),
         visualizations: visualizationsByQuoteId.get(quoteRef.quote_id) ?? [],
         items: mappedItems,
-        // Підсумок секції рахуємо із виправлених (run-based) рядків, щоб «Разом» збігалося
-        // з колонкою «Сума». На збережений quote_total відкочуємось лише коли цін немає зовсім.
-        total: itemsTotal > 0 ? itemsTotal : quoteTotalFromSummary ?? itemsTotal,
+        // На збережений quote_total відкочуємось лише коли цін немає зовсім.
+        totalRange:
+          itemsTotalRange.max > 0
+            ? itemsTotalRange
+            : { min: quoteTotalFromSummary ?? 0, max: quoteTotalFromSummary ?? 0 },
       };
     });
 
-    const total = sections.reduce((sum, section) => sum + section.total, 0);
+    const totalRange = sections.reduce<MoneyRange>(
+      (range, section) => ({
+        min: range.min + section.totalRange.min,
+        max: range.max + section.totalRange.max,
+      }),
+      { min: 0, max: 0 }
+    );
     const now = new Date();
     const createdAt = quoteSetDetailsTarget.created_at
       ? new Date(quoteSetDetailsTarget.created_at).toLocaleDateString("uk-UA")
@@ -4015,11 +4091,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       generatedAt: formatDateTime(now.toISOString()),
       currency: "грн",
       sections,
-      total,
+      totalRange,
     };
   };
 
   const renderCommercialDocumentHtml = (doc: CommercialDocument) => {
+    const docHasRunChoice = doc.sections.some((section) =>
+      section.items.some((item) => item.runs.length > 1)
+    );
     const sectionsHtml = doc.sections
       .map((section, sectionIndex) => {
         const rowsHtml =
@@ -4041,14 +4120,23 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       <td>${escapeHtml(item.catalogPath || "—")}</td>
                       <td>${escapeHtml(item.placementSummary || "—")}</td>
                       <td>${escapeHtml(item.methodsSummary || "—")}</td>
-                      <td class="num">${formatMoneyPlain(item.qty)}</td>
-                      <td>${escapeHtml(item.unit)}</td>
-                      <td class="num">${formatMoneyPlain(item.unitPrice)}</td>
-                      <td class="num">${formatMoneyPlain(item.lineTotal)}</td>
+                      <td class="num">${item.runs
+                        .map((run) => `<div class="run-line">${formatMoneyPlain(run.qty)}</div>`)
+                        .join("")}</td>
+                      <td>${item.runs
+                        .map(() => `<div class="run-line">${escapeHtml(item.unit)}</div>`)
+                        .join("")}</td>
+                      <td class="num">${item.runs
+                        .map((run) => `<div class="run-line">${formatMoneyPlain(run.unitPrice)}</div>`)
+                        .join("")}</td>
+                      <td class="num">${item.runs
+                        .map((run) => `<div class="run-line">${formatMoneyPlain(run.lineTotal)}</div>`)
+                        .join("")}</td>
                     </tr>
                   `
                 )
                 .join("");
+        const sectionHasRunChoice = section.items.some((item) => item.runs.length > 1);
 
         return `
           <section class="quote-section">
@@ -4088,9 +4176,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </thead>
               <tbody>${rowsHtml}</tbody>
             </table>
-            <div class="section-total">Разом по ${escapeHtml(section.quoteNumber)}: <b>${formatMoney(
-              section.total
-            )}</b></div>
+            <div class="section-total">Разом по ${escapeHtml(section.quoteNumber)}: <b>${formatMoneyRange(
+              section.totalRange
+            )}</b>${sectionHasRunChoice ? `<span class="run-hint">залежно від обраного тиражу</span>` : ""}</div>
           </section>
         `;
       })
@@ -4127,7 +4215,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     .visual-label { font-size: 12px; color: #334155; }
     .visual-grid { display: flex; gap: 8px; flex-wrap: wrap; }
     .visual-thumb { width: 180px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
-    .section-total { display: flex; justify-content: flex-end; margin-top: 8px; font-size: 14px; }
+    .section-total { display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 14px; }
+    .run-line { padding: 2px 0; }
+    .run-line + .run-line { border-top: 1px dashed #e2e8f0; }
+    .run-hint { color: #475569; font-size: 12px; }
     .total { margin-top: 20px; padding-top: 10px; border-top: 2px solid #0f172a; display: flex; justify-content: flex-end; font-size: 20px; font-weight: 700; }
     @media print {
       body { background: #fff; }
@@ -4149,10 +4240,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     <section class="summary">
       <div><b>Прорахунків у документі:</b> ${doc.sections.length}</div>
       <div><b>Номери:</b> ${escapeHtml(doc.sections.map((s) => s.quoteNumber).join(", "))}</div>
-      <div><b>Підсумок "Разом":</b> <strong>${formatMoney(doc.total)}</strong></div>
+      <div><b>Підсумок "Разом":</b> <strong>${formatMoneyRange(doc.totalRange)}</strong></div>
+      ${
+        docHasRunChoice
+          ? `<div class="muted">У документі є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає один, тому підсумок показано межами: від найменшого тиражу до найбільшого.</div>`
+          : ""
+      }
     </section>
     ${sectionsHtml}
-    <div class="total">Разом: ${formatMoney(doc.total)}</div>
+    <div class="total">Разом: ${formatMoneyRange(doc.totalRange)}</div>
   </main>
 </body>
 </html>`;
@@ -4175,7 +4271,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     lines.push(`Замовник:\t${normalizeTextCell(doc.customerName)}`);
     lines.push(`Сформовано:\t${normalizeTextCell(doc.generatedAt)}`);
     lines.push(`Прорахунків:\t${doc.sections.length}`);
-    lines.push(`Разом:\t${formatMoneyPlain(doc.total)}`);
+    lines.push(`Разом:\t${formatMoneyRangePlain(doc.totalRange)}`);
     lines.push("");
     doc.sections.forEach((section, index) => {
       lines.push(`${index + 1}. ${normalizeTextCell(section.quoteNumber)}\t${normalizeTextCell(section.status)}\t${normalizeTextCell(section.createdAt)}`);
@@ -4189,27 +4285,39 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         lines.push("\tНемає товарних позицій");
       } else {
         section.items.forEach((item) => {
-          lines.push(
-            [
-              item.position,
-              normalizeTextCell(item.name),
-              normalizeTextCell(item.description || "—"),
-              normalizeTextCell(item.catalogPath || "—"),
-              normalizeTextCell(item.placementSummary || "—"),
-              normalizeTextCell(item.methodsSummary || "—"),
-              formatMoneyPlain(item.qty),
-              normalizeTextCell(item.unit),
-              formatMoneyPlain(item.unitPrice),
-              formatMoneyPlain(item.lineTotal),
-              normalizeTextCell(item.imageUrl || "—"),
-            ].join("\t")
-          );
+          // Один рядок таблиці на КОЖЕН тираж. Опис товару повторювати не треба —
+          // порожні клітинки в продовженні читаються як «те саме, інший тираж».
+          item.runs.forEach((run, runIndex) => {
+            const isFirst = runIndex === 0;
+            lines.push(
+              [
+                isFirst ? item.position : "",
+                isFirst ? normalizeTextCell(item.name) : "",
+                isFirst ? normalizeTextCell(item.description || "—") : "",
+                isFirst ? normalizeTextCell(item.catalogPath || "—") : "",
+                isFirst ? normalizeTextCell(item.placementSummary || "—") : "",
+                isFirst ? normalizeTextCell(item.methodsSummary || "—") : "",
+                formatMoneyPlain(run.qty),
+                normalizeTextCell(item.unit),
+                formatMoneyPlain(run.unitPrice),
+                formatMoneyPlain(run.lineTotal),
+                isFirst ? normalizeTextCell(item.imageUrl || "—") : "",
+              ].join("\t")
+            );
+          });
         });
       }
-      lines.push(`\t\t\t\t\t\t\t\tРазом по прорахунку\t${formatMoneyPlain(section.total)}`);
+      lines.push(
+        `\t\t\t\t\t\t\t\tРазом по прорахунку\t${formatMoneyRangePlain(section.totalRange)}`
+      );
       lines.push("");
     });
-    lines.push(`Загальна сума\t${formatMoneyPlain(doc.total)}`);
+    lines.push(`Загальна сума\t${formatMoneyRangePlain(doc.totalRange)}`);
+    if (doc.sections.some((section) => section.items.some((item) => item.runs.length > 1))) {
+      lines.push(
+        "Тиражі взаємовиключні: замовник обирає один варіант, тому підсумок показано межами."
+      );
+    }
     return lines.join("\r\n");
   };
   const printCommercialHtml = (html: string) => {
@@ -7506,8 +7614,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} label={quoteSetDetailsTarget.name} /> : null}
             </DialogTitle>
             <DialogDescription>
-              Разом: {formatMoney(quoteSetCommercialDoc?.total ?? quoteSetTotalAmount)} · Позицій:{" "}
-              {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length}
+              Разом:{" "}
+              {quoteSetCommercialDoc
+                ? formatMoneyRange(quoteSetCommercialDoc.totalRange)
+                : formatMoney(quoteSetTotalAmount)}{" "}
+              · Позицій: {quoteSetCommercialDoc?.sections.length ?? quoteSetDetailsItems.length}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
@@ -7617,23 +7728,74 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                   <div className="text-xs text-muted-foreground">{item.methodsSummary}</div>
                                 ) : null}
                               </TableCell>
-                              <TableCell className="text-right">{formatMoneyPlain(item.qty)}</TableCell>
-                              <TableCell className="text-right">{item.unit}</TableCell>
-                              <TableCell className="text-right">{formatMoneyPlain(item.unitPrice)}</TableCell>
-                              <TableCell className="text-right font-medium">{formatMoney(item.lineTotal)}</TableCell>
+                              <TableCell className="text-right">
+                                {item.runs.map((run) => (
+                                  <div
+                                    key={`qty-${run.id}`}
+                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
+                                  >
+                                    {formatMoneyPlain(run.qty)}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.runs.map((run) => (
+                                  <div
+                                    key={`unit-${run.id}`}
+                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
+                                  >
+                                    {item.unit}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {item.runs.map((run) => (
+                                  <div
+                                    key={`price-${run.id}`}
+                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
+                                  >
+                                    {formatMoneyPlain(run.unitPrice)}
+                                  </div>
+                                ))}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {item.runs.map((run) => (
+                                  <div
+                                    key={`sum-${run.id}`}
+                                    className="whitespace-nowrap border-t border-dashed border-border/60 py-1 first:border-t-0"
+                                  >
+                                    {formatMoney(run.lineTotal)}
+                                  </div>
+                                ))}
+                              </TableCell>
                             </TableRow>
                           ))
                         )}
                       </TableBody>
                     </Table>
-                    <div className="px-4 py-3 border-t border-border/60 bg-muted/10 flex items-center justify-end text-sm font-medium">
-                      Разом по прорахунку: {formatMoney(section.total)}
+                    <div className="px-4 py-3 border-t border-border/60 bg-muted/10 flex flex-wrap items-baseline justify-end gap-x-2 text-sm font-medium">
+                      <span>Разом по прорахунку: {formatMoneyRange(section.totalRange)}</span>
+                      {section.items.some((item) => item.runs.length > 1) ? (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          залежно від обраного тиражу
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 ))}
-                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Загальна сума</span>
-                  <span className="text-lg font-semibold">{formatMoney(quoteSetCommercialDoc.total)}</span>
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Загальна сума</span>
+                    <span className="text-lg font-semibold">
+                      {formatMoneyRange(quoteSetCommercialDoc.totalRange)}
+                    </span>
+                  </div>
+                  {isMoneyRangeSpread(quoteSetCommercialDoc.totalRange) ? (
+                    <p className="text-xs text-muted-foreground">
+                      У КП є позиції з кількома тиражами. Тиражі взаємовиключні — замовник обирає
+                      один, тому підсумок показано межами: від найменшого тиражу до найбільшого.
+                    </p>
+                  ) : null}
                 </div>
               </>
             )}
