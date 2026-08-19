@@ -4,6 +4,8 @@ import {
   computeRunSalePricing,
   getRunSalePricingFromRun,
   mergeQuoteRunsWithExisting,
+  validateRunEconomics,
+  MIN_MANAGER_INCOME,
 } from "./quoteRuns";
 
 /**
@@ -301,5 +303,53 @@ describe("mergeQuoteRunsWithExisting", () => {
       quote_id: "quote-1",
       quote_item_id: "item-1",
     });
+  });
+});
+
+describe("validateRunEconomics", () => {
+  const rates = { managerRate: 10, fixedCostRate: 30, vatRate: 20 };
+
+  it("порожній заробіток при реальній собівартості — не зберігаємо", () => {
+    const issue = validateRunEconomics({ quantity: 180, costTotal: 8172, desiredManagerIncome: 0, ...rates });
+    expect(issue?.code).toBe("empty_income");
+    expect(issue?.markupTotal).toBe(0);
+  });
+
+  it("заробіток нижчий за поріг — не зберігаємо", () => {
+    const issue = validateRunEconomics({ quantity: 180, costTotal: 8172, desiredManagerIncome: 100, ...rates });
+    expect(issue?.code).toBe("income_below_min");
+  });
+
+  it("рівно поріг — зберігаємо", () => {
+    const issue = validateRunEconomics({
+      quantity: 180, costTotal: 8172, desiredManagerIncome: MIN_MANAGER_INCOME, ...rates,
+    });
+    expect(issue).toBeNull();
+  });
+
+  it("тираж без собівартості не перевіряємо — це заготовка", () => {
+    const issue = validateRunEconomics({ quantity: 180, costTotal: 0, desiredManagerIncome: 0, ...rates });
+    expect(issue).toBeNull();
+  });
+
+  it("поріг націнки спрацьовує при високій ставці менеджера", () => {
+    // 150 ₴ при ставці 30 % дають націнку 780 ₴ — нижче 1000. Саме той випадок,
+    // де поріг заробітку пройдено, а поріг націнки ні.
+    const issue = validateRunEconomics({
+      quantity: 180, costTotal: 8172, desiredManagerIncome: 150,
+      managerRate: 30, fixedCostRate: 30, vatRate: 20,
+    });
+    expect(issue?.code).toBe("markup_below_min");
+    expect(Math.round(issue?.markupTotal ?? 0)).toBe(780);
+  });
+
+  it("пороги рахуються від ЧИННИХ ставок, а не зашитих чисел", () => {
+    // Ті самі 150 ₴, але податковий резерв підняли до 60 % — націнка зросла
+    // до 1040 ₴ і поріг більше не спрацьовує.
+    const issue = validateRunEconomics({
+      quantity: 180, costTotal: 8172, desiredManagerIncome: 150,
+      managerRate: 30, fixedCostRate: 30, vatRate: 60,
+    });
+    expect(issue).toBeNull();
   });
 });

@@ -120,7 +120,13 @@ import {
   type QuoteRun,
   type QuoteSetMembershipInfo,
 } from "@/lib/toshoApi";
-import { computeRunSalePricing, mergeQuoteRunsWithExisting } from "@/lib/quoteRuns";
+import {
+  computeRunSalePricing,
+  mergeQuoteRunsWithExisting,
+  validateRunEconomics,
+  MIN_MANAGER_INCOME,
+  MIN_RUN_MARKUP,
+} from "@/lib/quoteRuns";
 import {
   canOpenQuoteDetails,
   canViewQuoteSummary,
@@ -2106,8 +2112,44 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const hasDeadline = Boolean((deadlineDate || "").trim() || (quote?.deadline_at ?? "").trim());
     if (!hasParty) issues.push("Замовник або Лід");
     if (!hasDeadline) issues.push("Дедлайн прорахунку");
+
+    // Захист від продажу за собівартістю (рішення СЕО 18.08).
+    //
+    // Перевірка живе САМЕ ТУТ, а не на кнопці «Зберегти»: тиражі мають
+    // автозбереження через 900 мс після правки, і гейт на кнопці воно б
+    // спокійно обійшло. quoteRequirements гальмує і кнопку, і автозбереження,
+    // і решту шляхів збереження — це єдине місце, повз яке не пройти.
+    const economicsIssues = new Set<string>();
+    for (const run of runs) {
+      const pricing = getRunPricing(run);
+      const issue = validateRunEconomics({
+        quantity: Number(run.quantity) || 0,
+        costTotal: pricing.costTotal,
+        desiredManagerIncome: pricing.desiredManagerIncome,
+        managerRate: pricing.managerRate,
+        fixedCostRate: pricing.fixedCostRate,
+        vatRate: pricing.vatRate,
+      });
+      if (!issue) continue;
+      const qty = Number(run.quantity) || 0;
+      const where = qty > 0 ? ` (тираж ${qty} шт)` : "";
+      economicsIssues.add(
+        issue.code === "markup_below_min"
+          ? `Націнка від ${MIN_RUN_MARKUP} ₴${where}`
+          : `Бажаний заробіток від ${MIN_MANAGER_INCOME} ₴${where}`
+      );
+    }
+    issues.push(...economicsIssues);
+
     return issues;
-  }, [deadlineDate, quote?.customer_id, quote?.customer_name, quote?.deadline_at]);
+  }, [
+    deadlineDate,
+    getRunPricing,
+    quote?.customer_id,
+    quote?.customer_name,
+    quote?.deadline_at,
+    runs,
+  ]);
   const quoteRequirementsHint = quoteRequirements.length
     ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
     : null;
@@ -6546,6 +6588,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 const activeItemRun = getSelectedRunForItem(item.id);
                                 const activeItemRunIndex = getRunIndex(activeItemRun);
                                 const activePricing = getRunPricing(activeItemRun);
+                                const activeRunEconomics = activeItemRun
+                                  ? validateRunEconomics({
+                                      quantity: Number(activeItemRun.quantity) || 0,
+                                      costTotal: activePricing.costTotal,
+                                      desiredManagerIncome: activePricing.desiredManagerIncome,
+                                      managerRate: activePricing.managerRate,
+                                      fixedCostRate: activePricing.fixedCostRate,
+                                      vatRate: activePricing.vatRate,
+                                    })
+                                  : null;
 
                                 return (
                                   <div className="space-y-4">
@@ -6693,10 +6745,48 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                               disabled={!runPriceFieldAccess.desired_manager_income}
                                               title={runFieldLockHint(runPriceFieldAccess.desired_manager_income, "менеджер")}
                                               onValueChange={(next) => updateRunValue(activeItemRunIndex, "desired_manager_income", next)}
-                                              className="h-11 rounded-xl bg-background font-mono text-lg tabular-nums"
+                                              className={cn(
+                                                "h-11 rounded-xl bg-background font-mono text-lg tabular-nums",
+                                                activeRunEconomics && "border-destructive focus-visible:ring-destructive/30"
+                                              )}
                                               placeholder="0"
                                               min={0}
                                             />
+                                            {/* Пояснення важливіше за заборону: менеджер лишав нуль не
+                                                зі злого наміру, а тому що не бачив зв'язку між цим полем
+                                                і ціною. Тепер зв'язок стоїть під полем і рахується наживо. */}
+                                            {activePricing.costTotal > 0 ? (
+                                              <p
+                                                className={cn(
+                                                  "text-2xs leading-snug",
+                                                  activeRunEconomics ? "text-destructive" : "text-muted-foreground"
+                                                )}
+                                              >
+                                                {activeRunEconomics?.code === "empty_income" ? (
+                                                  "Націнки немає — ціна дорівнює собівартості"
+                                                ) : (
+                                                  <>
+                                                    дає націнку{" "}
+                                                    <span className="font-semibold tabular-nums">
+                                                      {formatCurrency(activePricing.markupTotal, quote.currency)}
+                                                    </span>
+                                                    {activePricing.saleUnitPrice === null ? null : (
+                                                      <>
+                                                        {" · ціна "}
+                                                        <span className="font-semibold tabular-nums">
+                                                          {formatCurrency(activePricing.saleUnitPrice, quote.currency)}
+                                                        </span>
+                                                      </>
+                                                    )}
+                                                    {activeRunEconomics?.code === "income_below_min"
+                                                      ? ` · мінімум ${MIN_MANAGER_INCOME} ₴`
+                                                      : activeRunEconomics?.code === "markup_below_min"
+                                                        ? ` · націнка має бути від ${MIN_RUN_MARKUP} ₴`
+                                                        : null}
+                                                  </>
+                                                )}
+                                              </p>
+                                            ) : null}
                                           </div>
                                         </div>
 
