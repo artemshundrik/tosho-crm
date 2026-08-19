@@ -17,9 +17,15 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm notranslate",
+      // Підкладка приходить м'яко й трохи довше за вікно: спершу гасне тло,
+      // на ньому вже проявляється модалка. Крива smooth, а не пружна: для
+      // чистого фейду пружність не читається, лише вкорочує реальний час.
+      // Розмиття НЕ анімуємо — ramp backdrop-filter коштує кадрів на слабких
+      // машинах, а виграшу не дає: око ловить зміну яскравості, не різкості.
       "data-[state=open]:animate-in data-[state=open]:fade-in-0",
       "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
-      "duration-200",
+      "data-[state=open]:duration-slow data-[state=closed]:duration-fast ease-smooth",
+      "motion-reduce:animate-none",
       className
     )}
     translate="no"
@@ -79,13 +85,25 @@ const DialogContent = React.forwardRef<
         "max-h-[calc(100dvh-1.5rem)]",
         "rounded-4xl border border-border/40 bg-card shadow-2xl ring-1 ring-black/5 dark:ring-white/5 outline-none",
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0",
-        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
-        // НЕ додавати сюди slide-in-from-*-1/2 з рецептів shadcn: вони писані під
-        // Tailwind v3, де центрування жило в transform. У v4 воно в окремій
-        // властивості translate, тож slide-* не замінює її, а додається зверху —
-        // і модалка виїжджає з кута. Тут свідомо лише fade.
-        "duration-150",
+        // ВІДКРИТТЯ: проявлення + легкий приріст масштабу + підйом на 8px.
+        // Разом це читається як «вікно виринає», а не «кадр підмінили». Крива —
+        // токен ease-out (cubic-bezier(.32,.72,0,1), «пружне виринання»), тривалість
+        // slow (240ms): саме під це токен і заведений — «розгортання, поява панелей».
+        //
+        // ЗАКРИТТЯ навмисно вдвічі коротше (fast, 110ms) і без підйому: піти має
+        // швидко. Симетрична анімація закриття читається як гальмування інтерфейсу.
+        //
+        // ПРО slide-in-from-bottom-2 і Tailwind v4. Забороняти треба не slide взагалі,
+        // а ВІДСОТКОВІ зсуви з рецептів shadcn (slide-in-from-top-[48%] і подібні):
+        // ті писані під v3, де центрування жило в transform і зсув його ЗАМІНЯВ. У v4
+        // центрування в окремій властивості translate, тож зсув до нього ДОДАЄТЬСЯ —
+        // і 48% викидають вікно за екран. Фіксовані 8px (-2) додаються так само, але
+        // це рівно той підйом, який тут і потрібен. Перевірено заміром: вікно
+        // стартує на 8px нижче центру й доїжджає рівно в центр.
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-bottom-2",
+        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+        "data-[state=open]:duration-slow data-[state=closed]:duration-fast ease-out",
+        "motion-reduce:animate-none",
         className
       )}
       translate="no"
