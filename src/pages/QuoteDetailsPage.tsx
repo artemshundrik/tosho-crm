@@ -2194,6 +2194,32 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ),
     [canEditQuoteContent, currentStatus]
   );
+  // Разове попередження про новий поріг заробітку (СЕО 19.08: «попередь
+  // команду — при вході в прорахунок вікно по центру екрану»). Прапорець у
+  // localStorage, а не в базі: це оголошення, а не право. Побачив ще раз —
+  // нічого страшного; не побачив зовсім — гірше.
+  const marginNoticeKey = userId ? `tosho_margin_notice_v1_${userId}` : null;
+  const [showMarginNotice, setShowMarginNotice] = useState(false);
+
+  useEffect(() => {
+    if (!marginNoticeKey || !canEditRuns) return;
+    try {
+      if (window.localStorage.getItem(marginNoticeKey)) return;
+    } catch {
+      return; // приватний режим — краще змовчати, ніж падати
+    }
+    setShowMarginNotice(true);
+  }, [canEditRuns, marginNoticeKey]);
+
+  const dismissMarginNotice = () => {
+    setShowMarginNotice(false);
+    if (!marginNoticeKey) return;
+    try {
+      window.localStorage.setItem(marginNoticeKey, new Date().toISOString());
+    } catch {
+      // не змогли запам'ятати — покажемо ще раз, це не втрата
+    }
+  };
 
   // Кількість тиражу, додавання й видалення лишаються на спільному canEditRuns,
   // а чотири поля ціни розходяться по посадах. Статусний гейт зверху: у
@@ -9097,6 +9123,63 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           </div>
         </aside>
       </div>
+
+    {/* Разове попередження про поріг заробітку. Показуємо тим, хто реально
+
+        редагує тиражі: бухгалтеру чи спостерігачу воно нічого не змінює. */}
+
+    <Dialog open={showMarginNotice} onOpenChange={(open) => { if (!open) dismissMarginNotice(); }}>
+
+      <DialogContent className="sm:max-w-lg">
+
+        <DialogHeader>
+
+          <DialogTitle>Прорахунок більше не збережеться з порожнім заробітком</DialogTitle>
+
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+
+          <p>
+
+            Уся націнка рахується з поля <b className="font-semibold text-foreground">«Бажаний особистий
+
+            заробіток»</b>. Якщо воно порожнє, націнки немає взагалі — ні прибутку, ні постійних
+
+            витрат, ні податкового резерву, — і робота йде клієнту за собівартістю.
+
+          </p>
+
+          <p>
+
+            За останні три місяці так пішли <b className="font-semibold text-foreground">44 тиражі</b>,
+
+            два з них уже погодили.
+
+          </p>
+
+          <p>
+
+            Тепер прорахунок не збережеться, поки заробіток менший за{" "}
+
+            <b className="font-semibold text-foreground">{MIN_MANAGER_INCOME} ₴</b> на кожному тиражі.
+
+            Під полем видно, яку націнку і яку ціну дає введене число.
+
+          </p>
+
+        </div>
+
+        <DialogFooter>
+
+          <Button onClick={dismissMarginNotice}>Зрозуміло</Button>
+
+        </DialogFooter>
+
+      </DialogContent>
+
+    </Dialog>
+
 
     <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
       <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">
