@@ -3,6 +3,7 @@
 
 export type NotificationCategoryKey =
   | "customer_followup"
+  | "quote_created"
   | "quote_deadline"
   | "quote_comment"
   | "design"
@@ -23,6 +24,7 @@ export type NotificationCategory = {
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   { key: "customer_followup", label: "Клієнти та ліди" },
+  { key: "quote_created", label: "Нові прорахунки" },
   { key: "quote_deadline", label: "Дедлайни прорахунків" },
   { key: "quote_comment", label: "Коментарі у прорахунках" },
   { key: "design", label: "Дизайн-задачі" },
@@ -64,6 +66,10 @@ export function isCategoryVisibleForRole(key: NotificationCategoryKey, ctx: Role
       return isPrivileged;
     case "design":
       return isQuoteWorker || isDesigner;
+    // Нові прорахунки: власник, адміністратор, SEO і PM
+    // (див. src/lib/notificationCategories.ts — тримати синхронно).
+    case "quote_created":
+      return isPrivileged || job === "pm";
     case "customer_followup":
     case "quote_deadline":
     case "quote_comment":

@@ -21,7 +21,7 @@ import {
   toPersonHoverCardData,
 } from "@/components/app/PersonHoverCard";
 import { PartyHoverCard } from "@/components/app/PartyHoverCard";
-import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate } from "@/lib/workflowNotifications";
+import { notifyQuoteInitiatorOnStatusChange, notifyDesignTaskStakeholdersOnCreate, notifyQuotesCreated } from "@/lib/workflowNotifications";
 import { normalizeTeamAvailabilityStatus } from "@/lib/teamAvailability";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
@@ -2624,6 +2624,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         createdSetId = createdSet.id;
       }
 
+      // Одне сповіщення на весь сабміт: конструктор створює по прорахунку на
+      // кожну групу, і чотири групи не мають перетворитись на чотири push-и.
+      try {
+        await notifyQuotesCreated({
+          quoteIds: createdQuoteIds,
+          actorUserId: currentUserId ?? null,
+          actorName: currentUserManagerLabel,
+          customerName,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify leadership about new quotes", notifyError);
+      }
+
       completed = true;
       setBatchBuilderOpen(false);
       setBatchBuilderError(null);
@@ -3277,6 +3290,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setCreateError(null);
       setPendingAttachments([]);
       setAttachmentsError(attachmentWarning);
+      try {
+        await notifyQuotesCreated({
+          quoteIds: [created.id],
+          actorUserId: currentUserId ?? null,
+          actorName: currentUserManagerLabel,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify leadership about a new quote", notifyError);
+      }
+
       await loadQuotes();
       navigate(`/orders/estimates/${created.id}`);
 
@@ -4466,6 +4489,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             vat_rate: Number.isFinite(Number(run.vat_rate)) ? Number(run.vat_rate) : DEFAULT_VAT_RATE,
           }))
         );
+      }
+
+      try {
+        await notifyQuotesCreated({
+          quoteIds: [created.id],
+          actorUserId: currentUserId ?? null,
+          actorName: currentUserManagerLabel,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify leadership about a duplicated quote", notifyError);
       }
 
       toast.success("Прорахунок продубльовано");

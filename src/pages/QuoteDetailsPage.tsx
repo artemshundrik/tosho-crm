@@ -87,7 +87,9 @@ import type { Json } from "@/lib/database.types";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
-import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange } from "@/lib/workflowNotifications";
+import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange,
+  notifyQuotesCreated,
+} from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
@@ -4790,6 +4792,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             })) as never
           );
         if (insertAttachmentsError) throw insertAttachmentsError;
+      }
+
+      try {
+        await notifyQuotesCreated({
+          quoteIds: [created.id],
+          actorUserId: userId ?? null,
+          actorName: userId ? memberById.get(userId) ?? null : null,
+          customerName: quote.customer_name ?? null,
+        });
+      } catch (notifyError) {
+        console.warn("Failed to notify leadership about a duplicated quote", notifyError);
       }
 
       toast.success("Прорахунок продубльовано");

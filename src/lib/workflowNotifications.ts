@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { notifyUsers } from "@/lib/designTaskActivity";
+import { pluralUk } from "@/lib/lastSeen";
 
 const isUuid = (value?: string | null) =>
   typeof value === "string" &&
@@ -58,14 +59,33 @@ function pickCeoUserIds(rows: TeamMemberRoleRow[]) {
     .filter((value): value is string => !!value);
 }
 
-// Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
-// SEO users act as alternate contract approvers per project rule.
-function pickContractApproverUserIds(rows: TeamMemberRoleRow[]) {
+/**
+ * Хто дізнається про новий прорахунок: власник, адміністратор, SEO і проєктний
+ * менеджер. Ширше за «керівництво» нижче — PM веде виробництво й має бачити
+ * появу прорахунку, хоч і не є керівником.
+ */
+function pickQuoteWatcherUserIds(rows: TeamMemberRoleRow[]) {
+  return rows
+    .filter((row) => {
+      const access = normalizeRole(row.access_role);
+      const job = normalizeRole(row.job_role);
+      return access === "owner" || access === "admin" || job === "seo" || job === "pm";
+    })
+    .map((row) => row.user_id)
+    .filter((value): value is string => !!value);
+}
+
+/** Керівництво: access_role='owner' АБО job_role='seo'. */
+function pickOwnerAndSeoUserIds(rows: TeamMemberRoleRow[]) {
   return rows
     .filter((row) => normalizeRole(row.access_role) === "owner" || normalizeRole(row.job_role) === "seo")
     .map((row) => row.user_id)
     .filter((value): value is string => !!value);
 }
+
+// Approver pool for contract revisions: access_role='owner' OR job_role='seo'.
+// SEO users act as alternate contract approvers per project rule.
+const pickContractApproverUserIds = pickOwnerAndSeoUserIds;
 
 function pickDesignerUserIds(rows: TeamMemberRoleRow[]) {
   return rows
@@ -614,5 +634,107 @@ export async function notifyAbsenceRequestCancelled(params: {
     href: "/team",
     type: "info",
     category: "team_absences",
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Нові прорахунки                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Відсіює звільнених. `memberships_view` їх ніяк не позначає — HR-статус лежить
+ * окремо, у `tosho.team_member_profiles`. Порожній статус означає «людина в
+ * команді, просто без HR-рядка», тож такі лишаються в списку.
+ */
+async function filterActiveUserIds(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("team_member_profiles")
+    .select("user_id,employment_status")
+    .in("user_id", userIds);
+  if (error) {
+    // Краще сповістити зайвого, ніж мовчки не сповістити нікого.
+    console.warn("Failed to resolve employment status for quote notifications", error);
+    return userIds;
+  }
+  const departed = new Set(
+    ((data as Array<{ user_id?: string | null; employment_status?: string | null }> | null) ?? [])
+      .filter((row) => {
+        const status = (row.employment_status ?? "").trim().toLowerCase();
+        return status === "inactive" || status === "rejected";
+      })
+      .map((row) => row.user_id)
+      .filter((value): value is string => !!value)
+  );
+  return userIds.filter((userId) => !departed.has(userId));
+}
+
+/**
+ * Керівництво дізнається про новий прорахунок одразу — дзвіночок, браузер,
+ * Telegram. Який саме канал увімкнено, кожен вирішує сам у матриці налаштувань
+ * (категорія `quote_created`).
+ *
+ * Приймає СПИСОК, а не один id, свідомо: груповий конструктор створює по
+ * прорахунку на кожну групу в одному сабміті, і чотири групи мають дати одне
+ * сповіщення «створено 4 прорахунки», а не чотири push-и підряд.
+ */
+export async function notifyQuotesCreated(params: {
+  quoteIds: string[];
+  actorUserId?: string | null;
+  actorName?: string | null;
+  customerName?: string | null;
+}) {
+  const quoteIds = Array.from(new Set(params.quoteIds.filter((id) => isUuid(id))));
+  if (quoteIds.length === 0) return;
+
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("quotes")
+    .select("id,team_id,number,customer_name")
+    .in("id", quoteIds);
+  if (error) {
+    console.warn("Failed to load created quotes for notification", error);
+    return;
+  }
+
+  type CreatedQuoteRow = {
+    id: string;
+    team_id?: string | null;
+    number?: string | null;
+    customer_name?: string | null;
+  };
+  const rows = ((data as CreatedQuoteRow[] | null) ?? []).filter((row) => !!row?.id);
+  if (rows.length === 0) return;
+
+  const teamId = rows.find((row) => row.team_id)?.team_id ?? null;
+  const members = await resolveTeamMembers(teamId);
+  const actorUserId = params.actorUserId?.trim() || null;
+  const recipients = (await filterActiveUserIds(pickQuoteWatcherUserIds(members))).filter(
+    (userId) => userId !== actorUserId
+  );
+  if (recipients.length === 0) return;
+
+  const actorName = params.actorName?.trim() || "Менеджер";
+  const customerName =
+    params.customerName?.trim() || rows.find((row) => row.customer_name)?.customer_name?.trim() || "";
+  const customerSuffix = customerName ? ` · ${customerName}` : "";
+  const numbers = rows
+    .map((row) => row.number?.trim())
+    .filter((value): value is string => !!value)
+    .join(", ");
+
+  const single = rows.length === 1 ? rows[0] : null;
+  const countLabel = pluralUk(rows.length, "прорахунок", "прорахунки", "прорахунків");
+
+  await notifyUsers({
+    userIds: recipients,
+    title: single ? "Новий прорахунок" : `Нові прорахунки: ${rows.length}`,
+    body: single
+      ? `${actorName} завів(ла) прорахунок ${single.number?.trim() || ""}${customerSuffix}`.trim()
+      : `${actorName} завів(ла) ${rows.length} ${countLabel}${customerSuffix}${numbers ? `. Номери: ${numbers}` : ""}`,
+    href: single ? `/orders/estimates/${single.id}` : "/quotes",
+    type: "info",
+    category: "quote_created",
   });
 }
