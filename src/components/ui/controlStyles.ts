@@ -19,7 +19,19 @@ export const CONTROL_BASE = cx(
   "h-10 rounded-xl bg-muted/40",
   "border border-border/50 shadow-inner",
   "text-foreground placeholder:text-muted-foreground",
-  "transition-all duration-200 ease-out",
+  // Перелік властивостей ПОІМЕННО, а не `transition-all`. Слово `all` означає
+  // буквально все, зокрема ВІДСТУПИ — і саме через це модалки помітно
+  // «розгорталися» після відкриття. Ланцюг такий: `space-y-*` у Tailwind v4
+  // роздає margin усім дітям, крім останньої; поки React домальовує вміст,
+  // контрол на мить перестає бути останнім і його margin міняється. З
+  // `transition-all` браузер віз цю зміну 200 мс замість того, щоб перерахувати
+  // верстку миттєво, а що вікно центроване — разом із відступом плавно їхала
+  // вся модалка (заміряно на «Новому запиті»: 820→804 px, верхній край на 8 px).
+  // Доказ знято через document.getAnimations(): там висів CSSTransition саме на
+  // margin-bottom тривалістю 200 мс.
+  // Той самий рецепт уже застосований нижче для фільтрів — тримаємо однаково.
+  "transition-[background-color,border-color,color,box-shadow] duration-200 ease-out",
+  "motion-reduce:transition-none",
   "hover:bg-muted/60",
   // Фокус: тільки темніша рамка, без рінга (рінг давав «блюр»-глоу на темній) і
   // тільки focus-visible (клавіатура) — інакше обводка липла на селект-тригері
