@@ -125,7 +125,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
       <SegmentedGroup className={cn("inline-flex", SEGMENTED_GROUP_SM)}>
         <button
           type="button"
-          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap", tab === "entities" && "data-[state=active]")}
+          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap")}
           data-state={tab === "entities" ? "active" : "inactive"}
           onClick={() => setTab("entities")}
         >
@@ -133,7 +133,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         </button>
         <button
           type="button"
-          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap", tab === "accounts" && "data-[state=active]")}
+          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap")}
           data-state={tab === "accounts" ? "active" : "inactive"}
           onClick={() => setTab("accounts")}
         >
@@ -141,7 +141,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         </button>
         <button
           type="button"
-          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap", tab === "categories" && "data-[state=active]")}
+          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap")}
           data-state={tab === "categories" ? "active" : "inactive"}
           onClick={() => setTab("categories")}
         >
@@ -149,7 +149,7 @@ export function FinanceSettings({ teamId, canSeeSensitive }: FinanceSettingsProp
         </button>
         <button
           type="button"
-          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap", tab === "requisites" && "data-[state=active]")}
+          className={cn(SEGMENTED_TRIGGER_SM, "gap-1.5 whitespace-nowrap")}
           data-state={tab === "requisites" ? "active" : "inactive"}
           onClick={() => setTab("requisites")}
         >
