@@ -19,6 +19,14 @@ import {
   type Thread,
 } from "@/lib/releaseHistory";
 import type { WorkSession } from "@/features/features/releaseQueries";
+import { pluralWordUk } from "@/lib/lastSeen";
+
+/** «зміна / зміни / змін» — число поруч форматує fmtN, тож потрібне лише слово. */
+const changesWord = (n: number) => pluralWordUk(n, "зміна", "зміни", "змін");
+/** «місяць / місяці / місяців». */
+const monthsWord = (n: number) => pluralWordUk(n, "місяць", "місяці", "місяців");
+/** «день / дні / днів». */
+const daysWord = (n: number) => pluralWordUk(n, "день", "дні", "днів");
 
 /**
  * Історія релізів — для власника й SEO.
@@ -215,8 +223,26 @@ export function ReleaseHistory() {
         blocks: sessions.blocks,
       });
     }
+
+    // Дні, у які працювали, але жодного коміта не вийшло: розбір, планування,
+    // читання чужого коду, налагодження без результату. Доти таких днів на
+    // сторінці не існувало взагалі — теплокарта будувалась лише з днів комітів,
+    // і робота без коміта читалась як «нічого не робив».
+    for (const [day, session] of work ?? []) {
+      if (map.has(day) || session.hours <= 0) continue;
+      // У сесіях блок — {from,to}, у довіднику дня — кортеж: різні джерела,
+      // один формат на виході.
+      map.set(day, {
+        n: 0,
+        ins: 0,
+        del: 0,
+        hours: session.hours,
+        blocks: session.blocks.map((block) => [block.from, block.to] as [number, number]),
+      });
+    }
+
     return map;
-  }, [days]);
+  }, [days, work]);
 
   const dayKeys = useMemo(() => Array.from(dayInfo.keys()).sort(), [dayInfo]);
   const monthKeys = useMemo(
@@ -344,7 +370,8 @@ export function ReleaseHistory() {
         <div>
           <h2 className="text-base font-semibold tracking-tight">Релізи</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {fdate(dayKeys[0])} — сьогодні · {dayKeys.length} робочих днів
+            {fdate(dayKeys[0])} — сьогодні · {dayKeys.length}{" "}
+            {pluralWordUk(dayKeys.length, "робочий день", "робочі дні", "робочих днів")}
           </p>
         </div>
 
@@ -382,7 +409,7 @@ export function ReleaseHistory() {
           <span
             className="flex items-baseline gap-1.5 text-xs text-muted-foreground"
             {...bind(() => ({
-              title: `${fmtN(totals.n)} змін за ${monthKeys.length} місяців`,
+              title: `${fmtN(totals.n)} ${changesWord(totals.n)} за ${monthKeys.length} ${monthsWord(monthKeys.length)}`,
               rows: monthKeys.map((mk) => ({
                 label:
                   monthTitle(mk).replace(/\s\d{4}$/, "") +
@@ -394,7 +421,7 @@ export function ReleaseHistory() {
             }))}
           >
             <b className={cn("text-xl font-semibold tabular-nums", HOV)}>{fmtN(totals.n)}</b>
-            змін
+            {changesWord(totals.n)}
           </span>
 
           {shownStreak ? (
@@ -404,9 +431,18 @@ export function ReleaseHistory() {
                 title: "Серія без пропусків",
                 rows: [
                   { label: "Триває з", value: fdate(shownStreak.start), strong: true },
-                  { label: "Довжина", value: `${shownStreak.length} днів`, strong: true },
+                  {
+                    label: "Довжина",
+                    value: `${shownStreak.length} ${daysWord(shownStreak.length)}`,
+                    strong: true,
+                  },
                   ...(bestOther
-                    ? [{ label: "Попередній рекорд", value: `${bestOther.length} днів · до ${fdate(bestOther.end)}` }]
+                    ? [
+                        {
+                          label: "Попередній рекорд",
+                          value: `${bestOther.length} ${daysWord(bestOther.length)} · до ${fdate(bestOther.end)}`,
+                        },
+                      ]
                     : []),
                 ],
                 note: "День зараховується, якщо був хоч один коміт.",
@@ -415,7 +451,7 @@ export function ReleaseHistory() {
               <b className={cn("text-xl font-semibold tabular-nums text-chart-3", HOV)}>
                 {shownStreak.length}
               </b>
-              днів поспіль
+              {daysWord(shownStreak.length)} поспіль
             </span>
           ) : null}
 
@@ -590,12 +626,20 @@ function Heatmap({
                     type="button"
                     onClick={() => onPick({ t: "day", k: cell.key })}
                     aria-pressed={active.t === "day" && active.k === cell.key}
-                    title={`${fdate(cell.key)} — ${dayInfo.get(cell.key)?.n ?? 0} змін${
-                      dayInfo.has(cell.key) ? `, ≈${fmtN(hoursOf(cell.key))} год` : ""
-                    }`}
+                    title={`${fdate(cell.key)} — ${
+                      (dayInfo.get(cell.key)?.n ?? 0) === 0 && dayInfo.has(cell.key)
+                        ? "без комітів"
+                        : `${dayInfo.get(cell.key)?.n ?? 0} ${changesWord(dayInfo.get(cell.key)?.n ?? 0)}`
+                    }${dayInfo.has(cell.key) ? `, ≈${fmtN(hoursOf(cell.key))} год` : ""}`}
                     className={cn(
                       "h-[11px] w-[11px] cursor-pointer rounded-[2px]",
                       HEAT_BG[heatLevel(dayInfo.get(cell.key)?.n ?? 0, thresholds)],
+                      // День із годинами, але без комітів: заливки немає (нема
+                      // чого міряти), тож позначаємо обведенням — інакше він
+                      // виглядав би як день, коли не працювали.
+                      dayInfo.has(cell.key) &&
+                        (dayInfo.get(cell.key)?.n ?? 0) === 0 &&
+                        "ring-1 ring-inset ring-primary/40",
                       active.t === "day" &&
                         active.k === cell.key &&
                         "outline outline-2 outline-offset-1 outline-primary"
@@ -613,6 +657,8 @@ function Heatmap({
             <i key={index} className={cn("h-[11px] w-[11px] rounded-[2px]", bg)} />
           ))}
           <span>більше</span>
+          <i className="ml-2 h-[11px] w-[11px] rounded-[2px] ring-1 ring-inset ring-primary/40" />
+          <span>працював без комітів</span>
           <span className="ml-2">
             · пороги: {thresholds.join(", ")} змін · назва місяця відкриває місяць цілком
           </span>
@@ -673,7 +719,7 @@ function MonthView({
             </span>
           ) : null}
           <span className="text-xs text-muted-foreground">
-            {fmtN(stat.n)} змін ·{" "}
+            {fmtN(stat.n)} {changesWord(stat.n)} ·{" "}
             <span
               className={HOV}
               {...bind(() => ({
@@ -730,7 +776,7 @@ function MonthView({
                 {WD_SHORT[date.getUTCDay()]} {date.getUTCDate()}
               </span>
               <span className="w-16 shrink-0 text-xs tabular-nums text-muted-foreground">
-                {info.n} змін
+                {info.n} {changesWord(info.n)}
               </span>
               <span className="w-[4.5rem] shrink-0 text-xs font-semibold tabular-nums text-primary">
                 ≈{fmtN(hoursOf(k))} год
@@ -804,7 +850,9 @@ function DayView({
             {rel}
           </span>
           {info.n > 0 ? (
-            <span className="text-xs text-muted-foreground">{info.n} змін</span>
+            <span className="text-xs text-muted-foreground">
+              {info.n} {changesWord(info.n)}
+            </span>
           ) : null}
           <Diff ins={info.ins} del={info.del} dim />
 
@@ -932,7 +980,7 @@ function DayView({
 
       {threads.length === 0 ? (
         <p className="py-8 text-center text-xs text-muted-foreground">
-          {info.n} змін цього дня — без подробиць: до відновлення історії часу комітів тут не було.
+          {info.n} {changesWord(info.n)} цього дня — без подробиць: до відновлення історії часу комітів тут не було.
         </p>
       ) : (
         groups.map(([kind, list]) => (
@@ -1002,7 +1050,11 @@ function ThreadCard({ thread }: { thread: Thread }) {
             {scope}
           </span>
         ))}
-        {thread.count > 1 ? <span className="tabular-nums">{thread.count} зміни</span> : null}
+        {thread.count > 1 ? (
+          <span className="tabular-nums">
+            {thread.count} {changesWord(thread.count)}
+          </span>
+        ) : null}
         <Diff
           ins={thread.rest.reduce((s, c) => s + (c.ins ?? 0), thread.lead.ins ?? 0)}
           del={thread.rest.reduce((s, c) => s + (c.del ?? 0), thread.lead.del ?? 0)}
@@ -1127,7 +1179,7 @@ function ScopePanel({
               key={label}
               className={cn("grid gap-1", HOV, "border-b-0")}
               {...bind(() => ({
-                title: `${label} — ${bucket.n} ${bucket.n === 1 ? "зміна" : bucket.n < 5 ? "зміни" : "змін"}`,
+                title: `${label} — ${bucket.n} ${changesWord(bucket.n)}`,
                 rows: [
                   { label: "Нове", value: bucket.new, color: "bg-chart-3" },
                   { label: "Виправлення", value: bucket.fix, color: "bg-chart-7" },

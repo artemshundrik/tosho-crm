@@ -110,4 +110,17 @@ SINCE=$(date -v-7d +%F 2>/dev/null || date -d '7 days ago' +%F 2>/dev/null || ec
   fi
 ) 2>&1 | sed 's/^/[години] /' || true
 
+# ─────────────────────────── журнал комітів ──────────────────────────
+
+# Підмітання за гаком post-commit: він міг не спрацювати (не встановлений на цій
+# машині, не було мережі, коміти прийшли мерджем). Ідемпотентно за sha, тож
+# зайвий прохід нічого не псує.
+(
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env.backup
+  set +a
+  TOSHO_COMMITS_VERBOSE=1 node scripts/record-commits.mjs --limit=200
+) 2>&1 | sed 's/^/[коміти] /' || true
+
 exit 0

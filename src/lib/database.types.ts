@@ -935,6 +935,45 @@ export type Database = {
           },
         ]
       }
+      commits: {
+        Row: {
+          sha: string
+          committed_at: string
+          committed_local: string
+          type: string
+          scope: string | null
+          subject: string
+          ins: number
+          del: number
+          plain: string | null
+          recorded_at: string
+        }
+        Insert: {
+          sha: string
+          committed_at: string
+          committed_local: string
+          type?: string
+          scope?: string | null
+          subject: string
+          ins?: number
+          del?: number
+          plain?: string | null
+          recorded_at?: string
+        }
+        Update: {
+          sha?: string
+          committed_at?: string
+          committed_local?: string
+          type?: string
+          scope?: string | null
+          subject?: string
+          ins?: number
+          del?: number
+          plain?: string | null
+          recorded_at?: string
+        }
+        Relationships: []
+      }
       catalog_method_merges: {
         Row: {
           id: string

@@ -28,12 +28,21 @@ const RELATIVE_LIMIT_DAYS = 30;
  * заводимо: нове місце, якому треба відмінювання, бере цю.
  */
 export function pluralUk(n: number, one: string, few: string, many: string): string {
+  return `${n} ${pluralWordUk(n, one, few, many)}`;
+}
+
+/**
+ * Лише СЛОВО у потрібному відмінку, без числа — коли число поруч форматується
+ * окремо (тисячі з пробілом, tabular-nums, власний тег). Інакше такі місця
+ * писали слово намертво й видавали «3 змін» замість «3 зміни».
+ */
+export function pluralWordUk(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
   const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return `${n} ${many}`;
-  if (mod10 === 1) return `${n} ${one}`;
-  if (mod10 >= 2 && mod10 <= 4) return `${n} ${few}`;
-  return `${n} ${many}`;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
 }
 
 const days_ = (n: number) => pluralUk(n, "день", "дні", "днів");
