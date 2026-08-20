@@ -8,6 +8,7 @@
     "prebuild": "node scripts/check-netlify-functions.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint:compiler": "eslint . -c eslint.compiler.config.mjs",
     "check:feature-keys": "node scripts/check-feature-keys.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",

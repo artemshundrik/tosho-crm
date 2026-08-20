@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AppDropdown } from "@/components/app/AppDropdown";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { useNow } from "@/hooks/useNow";
 import { loadNormPlans, type MonthNormPlan } from "@/lib/designerPayroll";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -515,6 +516,10 @@ export function DesignersDashboard({
   const [normPlans, setNormPlans] = useState<Map<string, Map<string, MonthNormPlan>>>(() => new Map());
   /** Коли дані востаннє приїхали з БД — щоб чесно підписати «оновлено … тому». */
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  // Час для напису «щойно / N хв тому». Через хук, а не Date.now() у рендері:
+  // інакше напис оновлюється не коли минула хвилина, а коли сторінку
+  // перемалювало щось інше.
+  const now = useNow();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
   /** Який зі звітів піде на друк. Друкуємо після коміту React — див. ефект нижче. */
@@ -1128,9 +1133,9 @@ export function DesignersDashboard({
                   ? "оновлюємо…"
                   : fetchedAt == null
                     ? "оновити"
-                    : Date.now() - fetchedAt < 60_000
+                    : now - fetchedAt < 60_000
                       ? "щойно"
-                      : `${Math.round((Date.now() - fetchedAt) / 60_000)} хв тому`}
+                      : `${Math.round((now - fetchedAt) / 60_000)} хв тому`}
               </span>
             </button>
             <Select value={String(mi)} onValueChange={(value) => setMonthIdx(Number(value))}>

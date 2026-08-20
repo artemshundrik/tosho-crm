@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
@@ -65,7 +65,10 @@ export function FeatureHint({
   const { data: adoption } = useMyFeatureAdoption(viewUserId);
   const [state, setState] = useState<HintState | null | undefined>(undefined);
   const [visible, setVisible] = useState(false);
-  const instanceId = useRef(`${featureKey}-${Math.random().toString(36).slice(2)}`).current;
+  // Токен «хто зайняв підказку» для реєстру нижче. Раніше це був
+  // Math.random() у рендері; useId дає стабільний унікальний рядок на
+  // екземпляр компонента й не робить рендер випадковим.
+  const instanceId = useId();
   const markedRef = useRef(false);
 
   const uses = useMemo(() => {

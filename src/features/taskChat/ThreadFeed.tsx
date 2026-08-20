@@ -70,6 +70,21 @@ export function ThreadFeed({
     [entries, userId]
   );
 
+  // Під яким днем стоїть кожен блок — рахуємо наперед, одним проходом.
+  // Раніше це була змінна, яку мутували всередині .map прямо в JSX. Поки все
+  // виконується підряд — працює; але компілятор має право мемоїзувати колбек
+  // .map окремо, і тоді він побачить застаріле значення, а згорнутий день
+  // перестане ховати свої повідомлення.
+  const dayKeyByBlock = React.useMemo(() => {
+    const keys: Array<string | null> = [];
+    let day: string | null = null;
+    for (const block of blocks) {
+      if (block.type === "day") day = block.key;
+      keys.push(day);
+    }
+    return keys;
+  }, [blocks]);
+
   const toggleDay = (key: string) =>
     setCollapsedDays((previous) => {
       const next = new Set(previous);
@@ -98,13 +113,12 @@ export function ThreadFeed({
     );
   }
 
-  let currentDay: string | null = null;
-
   return (
     <div className="flex flex-col gap-2.5 px-2.5 py-3">
       {blocks.map((block, index) => {
+        const currentDay = dayKeyByBlock[index];
+
         if (block.type === "day") {
-          currentDay = block.key;
           const collapsed = collapsedDays.has(block.key);
           return (
             <button

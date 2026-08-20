@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 export function useMinimumLoading(loading: boolean, minMs = 180) {
   const [visible, setVisible] = useState(loading);
-  const startedAtRef = useRef<number | null>(loading ? Date.now() : null);
+  // Порожній на старті свідомо: ref читається лише всередині ефекту, а ефект
+  // при loading одразу пише сюди Date.now(). Ініціалізувати часом у рендері
+  // означало б рахувати його там, де рендер має лишатись чистим.
+  const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;

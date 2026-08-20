@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useNow } from "@/hooks/useNow";
 import {
   Sheet,
   SheetContent,
@@ -285,6 +286,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
   ltvEntry,
   ltvSegment,
 }) => {
+  // Час для напису «Тиша: N дн» — через хук, а не Date.now() у рендері.
+  const now = useNow();
   const primaryLegalEntity = form.legalEntities[0] ?? createEmptyCustomerLegalEntity();
   const isFopOwnership = primaryLegalEntity.ownershipType === "fop";
   const [logoOpen, setLogoOpen] = React.useState(false);
@@ -1682,7 +1685,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                       <div className="text-3xs uppercase tracking-wide">Тиша</div>
                       <div className="text-sm text-foreground">
                         {ltvEntry.lastOrderAt
-                          ? `${Math.floor((Date.now() - new Date(ltvEntry.lastOrderAt).getTime()) / 86400000)} дн`
+                          ? `${Math.floor((now - new Date(ltvEntry.lastOrderAt).getTime()) / 86400000)} дн`
                           : "—"}
                       </div>
                     </div>

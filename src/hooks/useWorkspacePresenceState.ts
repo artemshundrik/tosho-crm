@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import { useNow } from "@/hooks/useNow";
 import { derivePresence } from "@/lib/presenceWindow";
 import {
   disableRealtimeForSession,
@@ -563,6 +564,12 @@ export function useWorkspacePresenceState({
     };
   }, [teamId, userId, selfDisplayName]);
 
+  // «Онлайн» виводиться з віку last_seen_at, тож час має бути значенням, про
+  // зміну якого React знає: з Date.now() усередині memo статус оновлювався
+  // лише тоді, коли приходили нові дані, і людина висіла «онлайн» довше,
+  // ніж насправді.
+  const now = useNow();
+
   const entries = useMemo<WorkspacePresenceEntry[]>(() => {
     const allUserIds = new Set<string>([
       ...Object.keys(dbRowsByUserId),
@@ -570,7 +577,6 @@ export function useWorkspacePresenceState({
       ...(userId ? [userId] : []),
     ]);
 
-    const now = Date.now();
     const list = Array.from(allUserIds).map((uid) => {
       const dbRow = dbRowsByUserId[uid];
       const realtime = realtimeByUserId[uid];
@@ -624,7 +630,7 @@ export function useWorkspacePresenceState({
         const bTime = new Date(b.lastSeenAt ?? 0).getTime();
         return bTime - aTime;
       });
-  }, [dbRowsByUserId, directoryEntriesByUserId, realtimeByUserId, selfAvatarUrl, selfDisplayName, userId]);
+  }, [dbRowsByUserId, directoryEntriesByUserId, now, realtimeByUserId, selfAvatarUrl, selfDisplayName, userId]);
 
   const onlineEntries = useMemo(() => entries.filter((entry) => entry.online), [entries]);
 

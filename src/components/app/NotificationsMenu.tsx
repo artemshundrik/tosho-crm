@@ -169,14 +169,17 @@ export function NotificationsMenu({
 }: NotificationsMenuProps) {
   // Позначка дня друкується один раз на групу — дата в кожному рядку її не варта.
   const { rows, hiddenCount } = React.useMemo(() => {
-    let lastLabel: string | null = null;
+    const visible = items.slice(0, VISIBLE_LIMIT);
+    // Позначку дня виводимо з ПОПЕРЕДНЬОГО рядка, а не з накопичувача, який
+    // мутували між ітераціями: компілятор має право мемоїзувати колбек .map
+    // окремо, і тоді накопичувач показав би застаріле значення — заголовки
+    // днів почали б дублюватись або зникати.
+    const labels = visible.map((item) => getDayLabel(item));
     return {
-      rows: items.slice(0, VISIBLE_LIMIT).map((item) => {
-        const label = getDayLabel(item);
-        const withLabel = label !== lastLabel;
-        lastLabel = label;
-        return { item, label: withLabel ? label : null };
-      }),
+      rows: visible.map((item, index) => ({
+        item,
+        label: index === 0 || labels[index] !== labels[index - 1] ? labels[index] : null,
+      })),
       hiddenCount: Math.max(0, items.length - VISIBLE_LIMIT),
     };
   }, [items]);

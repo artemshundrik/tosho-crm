@@ -72,7 +72,9 @@ function markReload(buildId: string) {
  */
 export function AppVersionWatcher() {
   const pendingVersionRef = useRef<AppVersionPayload | null>(null);
-  const lastInteractionAtRef = useRef(Date.now());
+  // Відлік «тиші» починається з монтування сторожа, але ставить його ефект,
+  // а не рендер: Date.now() у рендері робить компонент нечистим.
+  const lastInteractionAtRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -90,6 +92,8 @@ export function AppVersionWatcher() {
 
   useEffect(() => {
     if (import.meta.env.DEV) return;
+
+    lastInteractionAtRef.current ??= Date.now();
 
     const clearRetryTimer = () => {
       if (retryTimerRef.current) {
@@ -115,7 +119,9 @@ export function AppVersionWatcher() {
       if (typeof document === "undefined") return false;
       if (document.hidden) return !editableFocused();
       if (editableFocused()) return false;
-      return Date.now() - lastInteractionAtRef.current >= SAFE_RELOAD_IDLE_MS;
+      const lastInteractionAt = lastInteractionAtRef.current;
+      if (lastInteractionAt === null) return false;
+      return Date.now() - lastInteractionAt >= SAFE_RELOAD_IDLE_MS;
     };
 
     // Rule 3: visible but quiet — keep probing until the pause comes.
