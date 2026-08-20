@@ -79,7 +79,6 @@ import {
 import { MINFIN_MB_URL, type MinfinFxResponse } from "@/lib/minfinFx";
 import { FX_RATES_UPDATED_EVENT } from "@/lib/fxRates";
 
-import { CommandPalette } from "@/components/app/CommandPalette";
 import { SidebarIconTooltip } from "@/components/app/SidebarIconTooltip";
 import { ToShoAiLauncherButton } from "@/components/app/ToShoAiLauncherButton";
 
@@ -101,6 +100,18 @@ import { ToShoAiMark, ToShoAiWordmark } from "@/features/tosho-ai/ToShoAiWordmar
 // Раніше вона сиділа в головному чанку і вантажилась усім на кожній сторінці.
 const ToShoAiConsole = lazy(() =>
   import("@/features/tosho-ai/ToShoAiConsole").then((m) => ({ default: m.ToShoAiConsole }))
+);
+
+// Палітра ⌘K — найважче, що висіло в оболонці. Тягнула за собою cmdk,
+// orderRecords і toshoApi: разом близько 48 кБ у gzip, які вантажив КОЖЕН на
+// першому вході, хоча палітру відкривають далеко не щодня.
+//
+// Чому не просто lazy на відкриття: тоді перше натискання ⌘K чекало б мережі.
+// Тому чанк підвантажується у простої, після першого малювання, і палітра
+// монтується закритою — так лишається й анімація відкриття (Radix програє її
+// на переході false→true, а не коли компонент з'являється вже відкритим).
+const CommandPalette = lazy(() =>
+  import("@/components/app/CommandPalette").then((m) => ({ default: m.CommandPalette }))
 );
 import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi";
 
@@ -939,6 +950,27 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   });
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  // Коли підвантажувати чанк палітри: у простої, вже після першого малювання.
+  // setState тут не синхронний у тілі ефекту, а в колбеку простою — тобто це не
+  // той каскадний рендер, за який свариться лінтер компілятора.
+  const [cmdkChunkReady, setCmdkChunkReady] = useState(false);
+
+  useEffect(() => {
+    if (cmdkChunkReady) return;
+    // requestIdleCallback є не скрізь (старі Safari), тож маємо запасний таймер:
+    // без нього палітра ніколи б не змонтувалась наперед і кожне перше ⌘K
+    // чекало б мережі.
+    const schedule =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback
+        : (callback: () => void) => window.setTimeout(callback, 1200);
+    const cancel =
+      typeof window.cancelIdleCallback === "function"
+        ? window.cancelIdleCallback
+        : window.clearTimeout;
+    const handle = schedule(() => setCmdkChunkReady(true));
+    return () => cancel(handle as never);
+  }, [cmdkChunkReady]);
   const [toshoAiOpen, setToshoAiOpen] = useState(false);
   const [toshoAiRequestedThreadId, setToshoAiRequestedThreadId] = useState<string | null>(null);
   /** Питання, набране в палітрі: консоль підставить його й відправить сама. */
@@ -2428,6 +2460,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           onClose={() => setDesignerTimerFloatingOpen(false)}
         />
       ) : null}
+      {cmdkChunkReady || cmdkOpen ? (
+      <Suspense fallback={null}>
       <CommandPalette
         open={cmdkOpen}
         onOpenChange={setCmdkOpen}
@@ -2440,6 +2474,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           setToshoAiOpen(true);
         }}
       />
+      </Suspense>
+      ) : null}
       <TelegramPromoModal />
       </div>
     </WorkspacePresenceProvider>

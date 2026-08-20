@@ -4,6 +4,7 @@ import os from "os";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { visualizer } from "rollup-plugin-visualizer";
 import { createClient } from "@supabase/supabase-js";
 import { renderFirstPagePreviewFiles } from "./scripts/attachment-preview-renderer.mjs";
 
@@ -292,6 +293,15 @@ export default defineConfig(({ command, mode }) => {
   plugins: [
     react(),
     tailwindcss(),
+    // Розбір складу бандла: `ANALYZE=1 npm run build` кладе в dist/stats.html
+    // карту, а поруч stats.json для машинного розбору. У звичайну збірку не
+    // потрапляє — інакше кожен деплой тягнув би зайву роботу й зайвий файл.
+    process.env.ANALYZE
+      ? visualizer({ filename: "dist/stats.html", template: "treemap", gzipSize: true })
+      : undefined,
+    process.env.ANALYZE
+      ? visualizer({ filename: "dist/stats.json", template: "raw-data", gzipSize: true })
+      : undefined,
     {
       name: "app-version-manifest",
       configureServer(server) {
