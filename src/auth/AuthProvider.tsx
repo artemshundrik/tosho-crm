@@ -114,7 +114,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userIdRef.current = userId;
   }, [userId]);
 
-  const refreshTeamContext = useCallback(async (targetUserId?: string | null, options?: { forceRefresh?: boolean }) => {
+  /**
+   * Один політ на людину: поки контекст оновлюється, повторний виклик чекає на
+   * той самий запит, а не заводить свій ланцюг.
+   *
+   * НАВІЩО. Оновлення тягне чотири звернення ПОСЛІДОВНО (блокування → воркспейс
+   * → членство → команда), і від нього залежить перший кадр сторінки. А кличуть
+   * його одразу троє: завантаження сесії, подія авторизації і повернення фокуса
+   * у вкладку. Заміряно 20.08.2026 на дизайн-задачі: current_user_blocked ×3,
+   * my_workspace_id ×3, memberships_view ×3 — три однакові ланцюги замість
+   * одного, і кожен додає власне очікування мережі.
+   *
+   * Приєднуємось лише до польоту, який не старіший за наш запит: примусове
+   * оновлення (forceRefresh) не має задовольнятись відповіддю з кешу.
+   */
+  const refreshInFlight = useRef<{ key: string; forced: boolean; task: Promise<void> } | null>(null);
+
+  const runTeamContextRefresh = useCallback(async (targetUserId?: string | null, options?: { forceRefresh?: boolean }) => {
     const effectiveUserId = targetUserId ?? userId;
     if (!effectiveUserId) {
       resetTeamContext();
@@ -164,6 +180,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessRole(accessRoleValue);
     setJobRole(jobRoleValue);
   }, [resetTeamContext, userId]);
+
+  const refreshTeamContext = useCallback(
+    async (targetUserId?: string | null, options?: { forceRefresh?: boolean }) => {
+      const effectiveUserId = targetUserId ?? userId;
+      if (!effectiveUserId) {
+        resetTeamContext();
+        return;
+      }
+
+      const forced = Boolean(options?.forceRefresh);
+      const pending = refreshInFlight.current;
+      if (pending && pending.key === effectiveUserId && (pending.forced || !forced)) {
+        return pending.task;
+      }
+
+      const task = runTeamContextRefresh(effectiveUserId, options);
+      refreshInFlight.current = { key: effectiveUserId, forced, task };
+      try {
+        await task;
+      } finally {
+        if (refreshInFlight.current?.task === task) refreshInFlight.current = null;
+      }
+    },
+    [resetTeamContext, runTeamContextRefresh, userId]
+  );
 
   const signOut = async () => {
     await supabase.auth.signOut();

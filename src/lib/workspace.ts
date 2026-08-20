@@ -2,6 +2,41 @@ import { supabase } from "@/lib/supabaseClient";
 
 const WORKSPACE_RPC_CANDIDATES = ["my_workspace_id", "current_workspace_id"] as const;
 const workspaceIdCache = new Map<string, string | null>();
+
+/**
+ * Ключ кешу, коли викликали без userId.
+ *
+ * RPC `my_workspace_id` відповідає за ПОТОЧНУ сесію й аргумент ігнорує, тож
+ * відповідь однакова. Без цього ключа виклики без userId не кешувались узагалі
+ * — і кожен ходив у базу заново.
+ */
+const SELF_KEY = "__self__";
+
+/**
+ * Один політ на ключ: поки перший запит у дорозі, решта чекають на нього, а не
+ * заводять свій.
+ *
+ * НАВІЩО. Кеш тут був, але він рятує лише ПІСЛЯ першої відповіді. На відкритті
+ * сторінки чотири компоненти монтуються одночасно, кеш ще порожній — і в базу
+ * летіли чотири однакові запити. Заміряно 20.08.2026 на дизайн-задачі:
+ * my_workspace_id ×3, current_user_blocked ×3, memberships_view ×3,
+ * team_members ×4 — 44 запити в дев'ять послідовних хвиль, остання відповідь
+ * через 5,5 с. Дублікати не просто зайві: кожен додає власне очікування мережі
+ * в ланцюг, від якого залежить перший кадр.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
+function singleFlight<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const pending = inFlight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+  const task = run();
+  inFlight.set(key, task);
+  void task.catch(() => undefined).then(() => {
+    // Знімаємо лише СВІЙ політ: за час запиту хтось міг покласти новий.
+    if (inFlight.get(key) === task) inFlight.delete(key);
+  });
+  return task;
+}
 const workspaceMembershipCache = new Map<string, { accessRole: string | null; jobRole: string | null } | null>();
 
 type WorkspaceLookupOptions = {
@@ -39,6 +74,7 @@ const isMissingRelationError = (message?: string | null) => {
 };
 
 export function invalidateWorkspaceResolution(userId?: string | null, workspaceId?: string | null) {
+  workspaceIdCache.delete(SELF_KEY);
   if (userId) {
     workspaceIdCache.delete(userId);
   }
@@ -51,10 +87,20 @@ export async function resolveWorkspaceId(
   userId?: string | null,
   options?: WorkspaceLookupOptions
 ): Promise<string | null> {
-  if (!options?.forceRefresh && userId && workspaceIdCache.has(userId)) {
-    return workspaceIdCache.get(userId) ?? null;
+  const cacheKey = userId ?? SELF_KEY;
+  if (!options?.forceRefresh && workspaceIdCache.has(cacheKey)) {
+    return workspaceIdCache.get(cacheKey) ?? null;
   }
+  if (options?.forceRefresh) inFlight.delete(`ws:${cacheKey}`);
 
+  return singleFlight(`ws:${cacheKey}`, async () => {
+    const resolved = await lookupWorkspaceId(userId);
+    workspaceIdCache.set(cacheKey, resolved);
+    return resolved;
+  });
+}
+
+async function lookupWorkspaceId(userId?: string | null): Promise<string | null> {
   const membershipSchemas = ["tosho", "public"] as const;
 
   for (const rpcName of WORKSPACE_RPC_CANDIDATES) {
@@ -113,7 +159,16 @@ export async function resolveWorkspaceMembership(
   if (!options?.forceRefresh && workspaceMembershipCache.has(cacheKey)) {
     return workspaceMembershipCache.get(cacheKey) ?? null;
   }
+  if (options?.forceRefresh) inFlight.delete(`mem:${cacheKey}`);
 
+  return singleFlight(`mem:${cacheKey}`, () => lookupWorkspaceMembership(workspaceId, userId, cacheKey));
+}
+
+async function lookupWorkspaceMembership(
+  workspaceId: string,
+  userId: string,
+  cacheKey: string
+): Promise<{ accessRole: string | null; jobRole: string | null } | null> {
   const viewResult = await supabase
     .schema("tosho")
     .from("memberships_view")
