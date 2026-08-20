@@ -1,0 +1,118 @@
+# Зовнішній сторож CRM.
+#
+# НАВІЩО ВІН ПОЗА SUPABASE. 20.08.2026 інстанс ліг цілком (Database, PostgREST,
+# Auth, Storage) — і разом із ним лягло ВСЕ наше спостереження: system-alerts
+# запускає pg_cron усередині тієї самої бази, тож у вікні 15:44–16:43 не
+# прийшло жодного сповіщення, а вранці алерти мовчали з 05:20 до 08:20. Журнал
+# помилок клієнта теж писати не було куди. Сторож, який живе всередині
+# пацієнта, помирає разом із ним — тому цей живе в GitHub Actions і не
+# залежить ані від Supabase, ані від Netlify.
+#
+# ЩО ВВАЖАЄМО ЖИВИМ. /auth/v1/health має віддати 200, а /rest/v1/ — відповісти
+# хоч чимось осмисленим (без ключа це 401 — і це ДОБРЕ: означає, що PostgREST
+# на місці й перевіряє доступ). Таймаут або 5xx/521 — інстанс лежить.
+#
+# ЧОМУ БЕЗ СЕКРЕТІВ У ПРОБІ. Обидва ендпоінти навмисно опитуються без ключів:
+# менше секретів — менше способів зламатись. Секрети потрібні лише для
+# надсилання в Telegram: TELEGRAM_BOT_TOKEN і WATCHDOG_CHAT_IDS (id через кому).
+#
+# Розклад */5 — це «раз на 5–15 хвилин» (GitHub не гарантує точність), для
+# виявлення лежачого прода цього досить. Дедуплікація через кеш: під час
+# довгої аварії лист іде раз на ~30 хвилин, а не кожні пʼять; про відновлення
+# повідомляємо один раз.
+name: watchdog
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Restore state
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: watchdog-state-${{ github.run_id }}
+          restore-keys: |
+            watchdog-state-
+
+      - name: Probe Supabase
+        id: probe
+        run: |
+          alive=0
+          auth=000; rest=000
+          # Три спроби з паузою: одиночний мережевий чих — не аварія.
+          for attempt in 1 2 3; do
+            auth=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' \
+              "https://nqqabedngnndtltzvqyi.supabase.co/auth/v1/health" || echo 000)
+            rest=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' \
+              "https://nqqabedngnndtltzvqyi.supabase.co/rest/v1/" || echo 000)
+            case "$auth:$rest" in
+              200:200|200:401) alive=1; break ;;
+            esac
+            sleep 20
+          done
+          echo "alive=$alive" >> "$GITHUB_OUTPUT"
+          echo "codes=auth:$auth rest:$rest" >> "$GITHUB_OUTPUT"
+          echo "Проба: alive=$alive (auth=$auth rest=$rest)"
+
+      - name: Decide and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WATCHDOG_CHAT_IDS: ${{ secrets.WATCHDOG_CHAT_IDS }}
+          ALIVE: ${{ steps.probe.outputs.alive }}
+          CODES: ${{ steps.probe.outputs.codes }}
+        run: |
+          mkdir -p state
+          now=$(date +%s)
+          was_down=$(cat state/down 2>/dev/null || echo 0)
+          last_sent=$(cat state/last_sent 2>/dev/null || echo 0)
+
+          send() {
+            # Кома розділяє одержувачів; кожному — окремий виклик API.
+            if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${WATCHDOG_CHAT_IDS:-}" ]; then
+              echo "Секрети Telegram не налаштовані — повідомлення пропущено: $1"
+              return 0
+            fi
+            IFS=',' read -ra ids <<< "$WATCHDOG_CHAT_IDS"
+            for id in "${ids[@]}"; do
+              curl -sS -m 10 -o /dev/null \
+                "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${id// /}" \
+                --data-urlencode "text=$1" || true
+            done
+          }
+
+          if [ "$ALIVE" = "1" ]; then
+            if [ "$was_down" = "1" ]; then
+              send "🟢 CRM знову працює. База відповідає ($CODES)."
+            fi
+            echo 0 > state/down
+          else
+            echo 1 > state/down
+            # Не частіше ніж раз на ~30 хвилин, щоб довга аварія не спамила.
+            if [ $((now - last_sent)) -ge 1800 ]; then
+              send "🔴 CRM лежить: Supabase не відповідає ($CODES). Сторінки покажуть «База не відповідає». Дії: Supabase → Restart project. Це зовнішній сторож — він працює, навіть коли база мертва."
+              echo "$now" > state/last_sent
+            else
+              echo "Аварія триває, лист уже надсилали $((now - last_sent)) с тому — мовчимо."
+            fi
+          fi
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: watchdog-state-${{ github.run_id }}
