@@ -16,9 +16,10 @@
  * Запуск: npm run check:functions (сам іде перед кожним npm run build).
  */
 
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const DIR = new URL("../netlify/functions/", import.meta.url);
+const SQL_DIR = new URL("../scripts/", import.meta.url);
 
 /** Розширення, які Netlify перетворює на функцію. .json та інші — просто файли. */
 const FUNCTION_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".mts", ".cts", ".zip"]);
@@ -81,3 +82,63 @@ const count = entries.filter(
 ).length;
 
 console.log(`Імена функцій Netlify чисті: ${count}.`);
+
+// ---------------------------------------------------------------------------
+// Друга перевірка: адреси функцій у SQL ↔ файли, які справді є.
+//
+// НАВІЩО. Крони живуть у базі й стукають за URL рядком. Перейменування файлу
+// функції для них не існує: SQL лишається старим, і джоб щогодини отримує 404
+// від Netlify — при цьому в cron.job_run_details стоїть «succeeded», бо
+// net.http_post лише ПОСТАВИВ запит у чергу. Тобто поломка мовчазна з обох
+// боків: журнал зелений, сповіщення не приходять.
+//
+// Реальний випадок 20.08.2026: ea2f418 перейменував team-events-reminders у
+// team-events-reminders-background і чесно оновив scripts/reminders-cron.sql,
+// але SQL на прод не поїхав. Нагадування про дні народження й відпустки
+// мовчали добу, а дошка здоровʼя показувала джоб зеленим.
+//
+// Тут звіряється РЕПОЗИТОРІЙ сам із собою: кожна адреса у tracked SQL має мати
+// свій файл. Розходження «в базі одне, у файлі інше» ловить окремо
+// scripts/check-cron-endpoints.mjs — його ганяє гак pre-push, бо для нього
+// потрібен доступ до прода.
+// ---------------------------------------------------------------------------
+
+/** netlify/functions/<name>.<ext> → набір імен функцій, які реально існують. */
+const functionNames = new Set(
+  entries
+    .filter((entry) => !entry.isDirectory())
+    .map((entry) => entry.name.slice(0, entry.name.lastIndexOf(".")))
+    .filter(Boolean)
+);
+
+const URL_IN_SQL = /\.netlify\/functions\/([A-Za-z0-9_-]+)/g;
+const brokenUrls = [];
+
+for (const file of readdirSync(SQL_DIR).filter((name) => name.endsWith(".sql"))) {
+  const sql = readFileSync(new URL(file, SQL_DIR), "utf8");
+  for (const line of sql.split("\n")) {
+    // Закоментовані приклади не рахуються: у reminders-cron.sql лежать
+    // вимкнені джоби, чиїх функцій у проєкті вже немає, і це нормально.
+    if (line.trimStart().startsWith("--")) continue;
+    for (const match of line.matchAll(URL_IN_SQL)) {
+      const name = match[1];
+      if (!functionNames.has(name)) brokenUrls.push({ file, name });
+    }
+  }
+}
+
+if (brokenUrls.length > 0) {
+  console.error("\nУ SQL є адреси функцій, яких немає в netlify/functions:\n");
+  for (const broken of brokenUrls) {
+    console.error(`  scripts/${broken.file} → ${broken.name}`);
+    const guess = [...functionNames].find(
+      (name) => name.startsWith(broken.name) || broken.name.startsWith(name)
+    );
+    if (guess) console.error(`    → схоже, мали на увазі «${guess}»`);
+  }
+  console.error("\nПерейменували функцію — оновіть SQL і ЗАСТОСУЙТЕ його на проді:");
+  console.error("  psql \"$BACKUP_DB_URL\" -f scripts/<файл>.sql");
+  process.exit(1);
+}
+
+console.log(`Адреси функцій у SQL звірені з файлами.`);

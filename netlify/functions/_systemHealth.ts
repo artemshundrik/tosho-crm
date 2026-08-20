@@ -11,6 +11,7 @@ import {
   classifyAttachmentHygiene,
   classifyBackupAge,
   classifyCronJob,
+  isSettledCronIncident,
   classifyDeadTuples,
   classifyDeadlocks,
   classifyStorageUsage,
@@ -116,6 +117,8 @@ type CronJobRow = {
   failures?: number | null;
   runs?: number | null;
   hours_since_last_run?: number | null;
+  /** Скільки годин тому був ОСТАННІЙ збій. null — за добу збоїв не було. */
+  hours_since_last_failure?: number | null;
 };
 
 /**
@@ -183,7 +186,13 @@ export function cronSignals(
     const name = (job.jobname ?? "—").trim();
     const failures = num(job.failures);
     const hoursSince = job.hours_since_last_run == null ? null : num(job.hours_since_last_run);
-    const tone = classifyCronJob({ hoursSinceLastRun: hoursSince, failures });
+    const hoursSinceFailure =
+      job.hours_since_last_failure == null ? null : num(job.hours_since_last_failure);
+    const tone = classifyCronJob({
+      hoursSinceLastRun: hoursSince,
+      failures,
+      hoursSinceLastFailure: hoursSinceFailure,
+    });
 
     if (tone === "good") {
       healthy += 1;
@@ -208,7 +217,17 @@ export function cronSignals(
       continue;
     }
     if (failures > 0) {
-      signals.push({ tone, code: "cron_failures", text: `Cron ${name}: ${failures} збоїв за добу` });
+      // Минулу аварію називаємо минулою. Інакше нічні збої світять червоним до
+      // наступного вечора, бо рахуються за добу, — і за пів дня привчають, що
+      // червоне можна не читати.
+      const settled = isSettledCronIncident({
+        hoursSinceLastRun: hoursSince,
+        hoursSinceLastFailure: hoursSinceFailure,
+      });
+      const text = settled
+        ? `Cron ${name}: ${failures} збоїв за добу, останній ${Math.round(hoursSinceFailure ?? 0)} год тому — відтоді працює`
+        : `Cron ${name}: ${failures} збоїв за добу`;
+      signals.push({ tone, code: "cron_failures", text });
       continue;
     }
     signals.push({ tone, code: "cron_stale", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });

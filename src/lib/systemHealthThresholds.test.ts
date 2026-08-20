@@ -10,6 +10,7 @@ import {
   classifyDeadlocks,
   classifyStorageUsage,
   isDeadTupleTableIgnored,
+  isSettledCronIncident,
   worstHealthTone,
 } from "./systemHealthThresholds";
 
@@ -135,6 +136,32 @@ describe("classifyCronJob", () => {
 
   it("простій понад 26 год — червоний", () => {
     expect(classifyCronJob({ hoursSinceLastRun: 30, failures: 0 })).toBe("danger");
+  });
+
+  it("нічна аварія, після якої джоб працює, більше не червона", () => {
+    // 20.08.2026: 156 збоїв між 04:47 і 08:19, алерт о 09:20 — червоний, хоча
+    // відтоді пройшла сотня успішних запусків.
+    expect(
+      classifyCronJob({ hoursSinceLastRun: 0, failures: 156, hoursSinceLastFailure: 2.1 })
+    ).toBe("warning");
+  });
+
+  it("свіжі збої лишаються червоними", () => {
+    expect(
+      classifyCronJob({ hoursSinceLastRun: 0, failures: 156, hoursSinceLastFailure: 0.5 })
+    ).toBe("danger");
+  });
+
+  it("щоденний джоб, чий єдиний запуск упав, не вважається одужалим", () => {
+    // Останній запуск І є тим збоєм: жодного успішного після нього не було.
+    expect(
+      isSettledCronIncident({ hoursSinceLastRun: 2.2, hoursSinceLastFailure: 2.2 })
+    ).toBe(false);
+  });
+
+  it("без даних про останній збій поводимось як раніше", () => {
+    expect(classifyCronJob({ hoursSinceLastRun: 0, failures: 3 })).toBe("danger");
+    expect(isSettledCronIncident({ hoursSinceLastRun: 0, hoursSinceLastFailure: null })).toBe(false);
   });
 
   it("збої: один — жовтий, три — червоний", () => {

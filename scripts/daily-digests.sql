@@ -138,7 +138,11 @@ begin
       select
         jobid,
         count(*)::integer as runs,
-        count(*) filter (where status is distinct from 'succeeded')::integer as failures
+        count(*) filter (where status is distinct from 'succeeded')::integer as failures,
+        -- Коли впало ОСТАННІЙ раз. Без цього нічна аварія світить червоним до
+        -- наступного вечора: збої рахуються за добу, і алерт не вміє сказати
+        -- «це вже минуло, джоб відтоді працює».
+        max(start_time) filter (where status is distinct from 'succeeded') as last_failure
       from cron.job_run_details
       where start_time >= now() - interval '24 hours'
       group by jobid
@@ -164,7 +168,11 @@ begin
         case
           when l.last_start is null then null
           else round(extract(epoch from (now() - l.last_start)) / 3600.0, 1)
-        end as hours_since_last_run
+        end as hours_since_last_run,
+        case
+          when r.last_failure is null then null
+          else round(extract(epoch from (now() - r.last_failure)) / 3600.0, 1)
+        end as hours_since_last_failure
       from cron.job j
       left join runs_24h r on r.jobid = j.jobid
       left join last_runs l on l.jobid = j.jobid

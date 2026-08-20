@@ -159,11 +159,51 @@ export const CRON_STALE_HOURS = 26;
  */
 export const CRON_HTTP_TIMEOUT_WARN = 12;
 
-/** `hoursSinceLastRun = null` — джоб щойно створено, першого запуску ще не було. */
-export function classifyCronJob(params: { hoursSinceLastRun: number | null; failures: number }): HealthTone {
+/**
+ * Через скільки годин після останнього збою інцидент вважається минулим.
+ *
+ * ЧОМУ ЦЕ ВЗАГАЛІ ПОТРІБНО. Збої рахуються за ДОБУ, тож нічна аварія світить
+ * червоним до наступного вечора, хоч джоб давно бігає. 20.08.2026 о 09:20 у чат
+ * прилетіло «Cron reminders-quote-deadline: 156 збоїв за добу» — усі 156 сталися
+ * між 04:47 і 08:19, а на момент алерта вже пройшло понад сотню успішних
+ * запусків. Червоне про те, що вже минуло, вчить не вірити червоному.
+ *
+ * Дві години, а не одна: джоб раз на годину має встигнути показати бодай один
+ * успішний запуск, перш ніж ми скажемо «минуло».
+ */
+export const CRON_FAILURE_SETTLED_HOURS = 2;
+
+/**
+ * `hoursSinceLastRun = null` — джоб щойно створено, першого запуску ще не було.
+ *
+ * `hoursSinceLastFailure` необовʼязковий: старі знімки метрик його не містять,
+ * і без нього поведінка лишається такою, як була.
+ */
+export function classifyCronJob(params: {
+  hoursSinceLastRun: number | null;
+  failures: number;
+  hoursSinceLastFailure?: number | null;
+}): HealthTone {
   if (params.hoursSinceLastRun === null) return "warning";
   if (params.hoursSinceLastRun > CRON_STALE_HOURS) return "danger";
+  if (params.failures >= CRON_WARN_FAILURES && isSettledCronIncident(params)) return "warning";
   if (params.failures >= CRON_DANGER_FAILURES) return "danger";
   if (params.failures >= CRON_WARN_FAILURES) return "warning";
   return "good";
+}
+
+/**
+ * Збої були, але скінчились: останній давно, а джоб відтоді працює.
+ *
+ * Обидві умови обовʼязкові. «Давно не падав» саме по собі нічого не варте, якщо
+ * джоб узагалі перестав запускатись, — тоді це не одужання, а тиша.
+ */
+export function isSettledCronIncident(params: {
+  hoursSinceLastRun: number | null;
+  hoursSinceLastFailure?: number | null;
+}): boolean {
+  const sinceFailure = params.hoursSinceLastFailure;
+  if (sinceFailure == null) return false;
+  if (params.hoursSinceLastRun === null) return false;
+  return sinceFailure >= CRON_FAILURE_SETTLED_HOURS && params.hoursSinceLastRun < sinceFailure;
 }

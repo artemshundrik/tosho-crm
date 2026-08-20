@@ -17,6 +17,10 @@
 # ЦІНА. Близько хвилини (найдовший — lint, ~47 с). Пушимо ми рідко й дорого,
 # тож хвилина перед деплоєм окупається з першого спійманого падіння.
 #
+# Остання перевірка в списку — «адреси кронів» — єдина, що дивиться в ЖИВУ базу:
+# розклад крона зберігає URL функції рядком, тож перейменування файлу лишає джоб
+# стукати за старою адресою. Без бази (CI, свіжий клон) вона мовчки пропускається.
+#
 # ЯК ОБІЙТИ, КОЛИ ПРОД ЛЕЖИТЬ І ТРЕБА ХОТФІКС НЕГАЙНО:
 #     SKIP_CHECKS=1 git push
 # або штатне git push --no-verify (вимкне заразом і оновлення годин).
@@ -60,7 +64,8 @@ else
     "тести|npm run test --silent" \
     "типи функцій|npm run typecheck:functions --silent" \
     "реєстр функцій|npm run check:functions --silent" \
-    "ключі фіч|npm run check:feature-keys --silent"
+    "ключі фіч|npm run check:feature-keys --silent" \
+    "адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs"
   do
     name=${check%%|*}
     cmd=${check#*|}
