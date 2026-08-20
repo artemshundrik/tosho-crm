@@ -2864,7 +2864,14 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 className="gap-2"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Створити {submitLabel}
+                {/*
+                  Поки триває створення, кнопка каже про це СЛОВАМИ, а не лише
+                  значком. Значок обертається (анімація на місці, перевірено), але
+                  на застиглому екрані це не читається: власник 20.08.2026 сказав
+                  «лодер не крутиться», хоча крутився — просто інтерфейс у ту мить
+                  чекав на мережу й виглядав завислим.
+                */}
+                {submitting ? "Створюємо…" : `Створити ${submitLabel}`}
               </Button>
             </div>
           </DialogFooter>

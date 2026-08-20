@@ -2650,24 +2650,34 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         createdSetId = createdSet.id;
       }
 
-      // Одне сповіщення на весь сабміт: конструктор створює по прорахунку на
-      // кожну групу, і чотири групи не мають перетворитись на чотири push-и.
-      try {
-        await notifyQuotesCreated({
-          quoteIds: createdQuoteIds,
-          actorUserId: currentUserId ?? null,
-          actorName: currentUserManagerLabel,
-          customerName,
-        });
-      } catch (notifyError) {
-        console.warn("Failed to notify leadership about new quotes", notifyError);
-      }
-
       completed = true;
       setBatchBuilderOpen(false);
       setBatchBuilderError(null);
       setSelectedIds(new Set());
-      await Promise.all([loadQuotes(), loadQuoteSets()]);
+
+      /**
+       * Вікно закривається, ЩОЙНО прорахунок є в базі — а не коли доробить усе
+       * інше.
+       *
+       * Було навпаки: спершу сповіщення керівництву (виклик Netlify-функції,
+       * тобто ще й можливий холодний старт), потім повне перечитування дошки —
+       * і лише тоді вікно зникало. Людина тим часом дивилась на завмерлу кнопку
+       * і не розуміла, чи взагалі щось відбувається. Скарга власника 20.08.2026:
+       * «зависає при створенні».
+       *
+       * Обидві дії нікому не потрібні СИНХРОННО: сповіщення адресоване не тому,
+       * хто натиснув, а дошку ми або перечитаємо у фоні, або взагалі покинемо —
+       * нижче стоїть перехід у картку створеного прорахунку.
+       */
+      void notifyQuotesCreated({
+        quoteIds: createdQuoteIds,
+        actorUserId: currentUserId ?? null,
+        actorName: currentUserManagerLabel,
+        customerName,
+      }).catch((notifyError) => {
+        console.warn("Failed to notify leadership about new quotes", notifyError);
+      });
+      void Promise.all([loadQuotes(), loadQuoteSets()]);
 
       if (createdSetId) {
         setContentView("sets");
@@ -4937,20 +4947,39 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  /**
+   * Видалення: вікно зникає ОДРАЗУ, а не після всієї роботи.
+   *
+   * Видалення прорахунку — це не один запит: спершу перелік вкладень, потім
+   * кожен файл зі сховища разом із його варіантами, і лише тоді сам рядок. На
+   * прорахунку з файлами це дві-три секунди, і весь цей час вікно
+   * підтвердження висіло на екрані — скарга власника 20.08.2026.
+   *
+   * Тепер працює як усюди, де дію не можна прискорити: підтвердив — вікно
+   * закрилось, картка зникла зі списку. Якщо база відмовить (немає прав,
+   * прорахунок відкритий в іншої людини), список перечитується з бази —
+   * картка повертається на місце, — і людина бачить, ЧОМУ не вийшло. Тихого
+   * «видалено» без видалення більше не буває: за цим стежить сама
+   * deleteQuote, яка тепер звіряє, чи рядок справді зник.
+   */
   const handleDelete = async () => {
     if (!deleteTargetId) return;
-    setRowDeleteBusy(deleteTargetId);
+    const targetId = deleteTargetId;
+    setRowDeleteBusy(targetId);
     setRowDeleteError(null);
+    setRows((prev) => prev.filter((row) => row.id !== targetId));
+    setDeleteDialogOpen(false);
+    setDeleteTargetId(null);
     try {
-      await deleteQuote(deleteTargetId, teamId);
-      setRows((prev) => prev.filter((row) => row.id !== deleteTargetId));
+      await deleteQuote(targetId, teamId);
       toast.success("Прорахунок видалено");
-      setDeleteDialogOpen(false);
-      setDeleteTargetId(null);
     } catch (e: unknown) {
       const message = getErrorMessage(e, "Не вдалося видалити прорахунок.");
       setRowDeleteError(message);
       toast.error("Помилка видалення", { description: message });
+      // Повертаємо картку з БАЗИ, а не з памʼяті: після невдалого видалення
+      // частина дітей могла зникнути, і список має показувати правду.
+      void loadQuotes();
     } finally {
       setRowDeleteBusy(null);
     }
