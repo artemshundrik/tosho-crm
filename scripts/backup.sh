@@ -38,11 +38,25 @@ if [[ "${BACKUP_SKIP_DB}" != "1" ]]; then
   # keeps long but healthy COPY streams alive.
   # NOTE: this guard reliably applies on a direct/session connection (port 5432). For pg_dump,
   # prefer the session pooler / direct host over the transaction pooler (port 6543).
+  # Журнал запусків крона у дамп НЕ йде.
+  #
+  # pg_cron реєструє cron.job_run_details як конфігураційну таблицю розширення
+  # (pg_extension.extconfig), тож pg_dump вивантажує її ВМІСТ нарівні з даними
+  # застосунку. На 20.08.2026 це було 256 тис. рядків і 129 МБ службової історії
+  # «джоб N відпрацював о 10:31» — у відновленні вона не потрібна нікому, а
+  # 19.08.2026 саме на ній обірвався денний бекап:
+  #   pg_dump: error: Dumping the contents of table "job_run_details" failed:
+  #   server closed the connection unexpectedly ... Command was: COPY cron.job_run_details
+  #
+  # --exclude-table-data, а НЕ --exclude-table: сама таблиця (і розклад у
+  # cron.job поруч) лишається в дампі, тож відновлена база має і структуру, і
+  # список джобів — без непотрібної історії їхніх запусків.
   PGOPTIONS="-c idle_in_transaction_session_timeout=300000 -c statement_timeout=0 ${PGOPTIONS:-}" \
   pg_dump \
     --format=custom \
     --no-owner \
     --no-privileges \
+    --exclude-table-data='cron.job_run_details' \
     --file "${WORK_DIR}/db/postgres.dump" \
     "${DB_URL}"
 fi
