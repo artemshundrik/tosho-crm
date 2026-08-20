@@ -12,7 +12,7 @@ import {
 
 type DictationButtonProps = {
   /** Ref to the textarea the transcript is inserted into (at the caret). */
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   /** Current textarea value (controlled). */
   value: string;
   /** Called with the new full value after inserting the transcript. */

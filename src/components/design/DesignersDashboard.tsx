@@ -677,7 +677,7 @@ export function DesignersDashboard({
     value: string;
     unit?: string;
     sub?: string;
-    delta: JSX.Element;
+    delta: React.JSX.Element;
     series: number[];
     seriesFmt: (value: number) => string;
   }> = [

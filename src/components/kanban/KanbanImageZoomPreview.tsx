@@ -151,7 +151,6 @@ export function KanbanImageZoomPreview({
   }, [imageUrl, isEager]);
 
   const shouldRenderImage = isEager || shouldLoad;
-  const fetchPriorityProps = { fetchpriority: isEager ? "high" : "auto" } as Record<string, string>;
 
   return (
     <div
@@ -182,7 +181,7 @@ export function KanbanImageZoomPreview({
             alt={alt}
             className={cn("h-full w-full object-contain", imageClassName)}
             loading={isEager ? "eager" : "lazy"}
-            {...fetchPriorityProps}
+            fetchPriority={isEager ? "high" : "auto"}
             decoding="async"
             onLoad={(event) => {
               warmedKanbanImageUrls.add(imageUrl);
