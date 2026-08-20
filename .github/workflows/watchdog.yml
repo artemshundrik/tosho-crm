@@ -8,9 +8,11 @@
 # пацієнта, помирає разом із ним — тому цей живе в GitHub Actions і не
 # залежить ані від Supabase, ані від Netlify.
 #
-# ЩО ВВАЖАЄМО ЖИВИМ. /auth/v1/health має віддати 200, а /rest/v1/ — відповісти
-# хоч чимось осмисленим (без ключа це 401 — і це ДОБРЕ: означає, що PostgREST
-# на місці й перевіряє доступ). Таймаут або 5xx/521 — інстанс лежить.
+# ЩО ВВАЖАЄМО ЖИВИМ. Обидва сервіси мають ВІДПОВІСТИ — 200 або 401. Без ключів
+# і auth/v1/health, і rest/v1 віддають 401, і це добре: сервіс на місці й
+# перевіряє доступ (перевірено на живому інстансі 20.08 — перша редакція
+# чекала від auth 200 і через це одразу дала хибну тривогу). Таймаут, 5xx,
+# 521 — інстанс лежить.
 #
 # ЧОМУ БЕЗ СЕКРЕТІВ У ПРОБІ. Обидва ендпоінти навмисно опитуються без ключів:
 # менше секретів — менше способів зламатись. Секрети потрібні лише для
@@ -58,9 +60,10 @@ jobs:
               "https://nqqabedngnndtltzvqyi.supabase.co/auth/v1/health" || echo 000)
             rest=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' \
               "https://nqqabedngnndtltzvqyi.supabase.co/rest/v1/" || echo 000)
-            case "$auth:$rest" in
-              200:200|200:401) alive=1; break ;;
-            esac
+            auth_ok=0; rest_ok=0
+            case "$auth" in 200|401) auth_ok=1 ;; esac
+            case "$rest" in 200|401) rest_ok=1 ;; esac
+            if [ "$auth_ok" = "1" ] && [ "$rest_ok" = "1" ]; then alive=1; break; fi
             sleep 20
           done
           echo "alive=$alive" >> "$GITHUB_OUTPUT"
