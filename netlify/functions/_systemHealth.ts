@@ -171,6 +171,19 @@ export function missedRareRun(schedule: string | null | undefined, now: Date): b
   return hoursSinceOccurrence <= MISSED_RUN_WINDOW_HOURS;
 }
 
+/**
+ * «35 хв тому» / «4 год тому». Хвилини лише поки менше години: на добовому
+ * лічильнику точність до хвилини нічого не додає, а рядок робить довшим.
+ */
+function formatAgo(hours: number | null): string {
+  if (hours == null || !Number.isFinite(hours)) return "";
+  if (hours < 1) {
+    const minutes = Math.max(1, Math.round(hours * 60));
+    return `${minutes} хв тому`;
+  }
+  return `${Math.round(hours)} год тому`;
+}
+
 export function cronSignals(
   jobs: CronJobRow[],
   httpFailures: number | null,
@@ -224,10 +237,21 @@ export function cronSignals(
         hoursSinceLastRun: hoursSince,
         hoursSinceLastFailure: hoursSinceFailure,
       });
-      const text = settled
-        ? `Cron ${name}: ${failures} збоїв за добу, останній ${Math.round(hoursSinceFailure ?? 0)} год тому — відтоді працює`
-        : `Cron ${name}: ${failures} збоїв за добу`;
-      signals.push({ tone, code: "cron_failures", text });
+      /**
+       * КОЛИ був останній збій — кажемо ЗАВЖДИ, а не лише коли він минув.
+       *
+       * 20.08.2026 о 12:20 прилетіло «158 збоїв за добу» червоним: 152 з них
+       * сталися вночі в одному вікні, а свіжих було шість. З рядка цього не
+       * було видно взагалі, і власник справедливо спитав, чому «знову», якщо
+       * виправляли. Лічильник за добу без позначки часу — це напівправда.
+       */
+      const when = formatAgo(hoursSinceFailure);
+      const tail = settled
+        ? `, останній ${when} — відтоді працює`
+        : when
+          ? `, останній ${when}`
+          : "";
+      signals.push({ tone, code: "cron_failures", text: `Cron ${name}: ${failures} збоїв за добу${tail}` });
       continue;
     }
     signals.push({ tone, code: "cron_stale", text: `Cron ${name}: не запускався ${Math.round(hoursSince)} год` });
