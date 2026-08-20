@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { fetchWithReadTimeout } from "./requestTimeout";
 
 // Typed against the generated schema (./database.types.ts): column names, row shapes, and
 // insert/update payloads are checked at compile time.
@@ -27,6 +28,14 @@ export function getSupabaseClient(): AnySupabaseClient {
       headers: {
         apikey: key,
       },
+      /**
+       * Читання з дедлайном. Коли база мовчить (20.08.2026 інстанс перестав
+       * відповідати зовсім), без цього сторінка крутить «Завантаження» стільки,
+       * скільки шлюз тримає зʼєднання, і людина не розуміє, чи щось відбувається.
+       * Тепер запит здається сам і сторінка може сказати правду. Записи й
+       * завантаження файлів не чіпаємо — див. requestTimeout.ts.
+       */
+      fetch: fetchWithReadTimeout(),
     },
   });
   return cachedSupabase;

@@ -23,6 +23,7 @@ import { AppVersionWatcher } from "@/components/app/AppVersionWatcher";
 import { AppLayout } from "@/layout/AppLayout";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AppShell } from "@/components/app/AppShell";
+import { BackendUnavailable } from "@/components/app/BackendUnavailable";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
 import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
 
@@ -449,8 +450,13 @@ function RequireAuth({
   loading: boolean;
 }) {
   const location = useLocation();
+  const { backendUnavailable } = useAuth();
 
   if (loading) return <AppShell />;
+
+  // Бекенд мовчить — це НЕ «вийшов з системи». Форма входу тут була б брехнею:
+  // вхід іде через ту саму базу й теж не спрацює.
+  if (backendUnavailable && !session) return <BackendUnavailable />;
 
   if (!session) {
     const redirect = encodeURIComponent(location.pathname + location.search);

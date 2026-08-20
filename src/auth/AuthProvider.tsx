@@ -47,6 +47,8 @@ type AuthState = {
    */
   viewUserId: string | null;
   loading: boolean;
+  /** Бекенд не відповідає: показувати не форму входу, а чесний екран. */
+  backendUnavailable: boolean;
   refreshTeamContext: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -92,6 +94,17 @@ async function resolveOperationalTeamId(userId: string, workspaceId: string | nu
   return workspaceId;
 }
 
+/**
+ * Скільки чекаємо на відповідь про сесію, перш ніж сказати «база не відповідає».
+ *
+ * 12 секунд — це вже явно «щось не так», але ще не встигає роздратувати того,
+ * у кого просто повільний інтернет.
+ */
+const SESSION_CHECK_TIMEOUT_MS = 12_000;
+
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error ?? "");
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [teamId, setTeamId] = useState<string | null>(null);
@@ -99,6 +112,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessRole, setAccessRole] = useState<AccessRole>(null);
   const [jobRole, setJobRole] = useState<JobRole>(null);
   const [loading, setLoading] = useState(true);
+  /** Бекенд не відповів на перевірку сесії — окремо від «немає сесії». */
+  const [backendUnavailable, setBackendUnavailable] = useState(false);
 
   const userId = session?.user?.id ?? null;
   const userIdRef = useRef<string | null>(null);
@@ -215,7 +230,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const { data } = await supabase.auth.getSession();
+        /**
+         * Перевірка сесії з ДЕДЛАЙНОМ.
+         *
+         * Коли бекенд мовчить, supabase-js не здається: він повторює оновлення
+         * токена знову й знову, і `getSession()` не повертається ВЗАГАЛІ.
+         * Застосунок при цьому показує «Завантаження CRM» скільки завгодно
+         * довго — саме це бачив власник під час аварії 20.08.2026, і саме тому
+         * мережевого тайм-ауту самого по собі не досить (перевірено на живій
+         * аварії: запити обривались за 5 с, а екран не змінювався).
+         *
+         * Дедлайн не «лагодить» бекенд — він лише дозволяє сказати правду
+         * замість вічного колеса.
+         */
+        const { data } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("SESSION_CHECK_TIMEOUT")), SESSION_CHECK_TIMEOUT_MS)
+          ),
+        ]);
         if (!mounted) return;
         const nextSession = data.session ?? null;
         setSession(nextSession);
@@ -234,6 +267,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error("Failed to initialize auth state", error);
         if (!mounted) return;
+        // Бекенд не відповів — це НЕ «користувач вийшов». Показати екран входу
+        // тут означало б збрехати: людина спробує увійти, і вхід теж не
+        // працюватиме. Тому окремий стан, який оболонка показує як «база не
+        // відповідає».
+        if (errorText(error) === "SESSION_CHECK_TIMEOUT") setBackendUnavailable(true);
         setSession(null);
         resetTeamContext();
       } finally {
@@ -429,6 +467,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       moduleAccess,
       loading,
+      backendUnavailable,
       refreshTeamContext,
       signOut,
       viewAs: activeViewAs,
@@ -445,6 +484,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       moduleAccess,
       loading,
+      backendUnavailable,
       refreshTeamContext,
       activeViewAs,
       realPermissions.isSuperAdmin,
