@@ -205,5 +205,20 @@ export function isSettledCronIncident(params: {
   const sinceFailure = params.hoursSinceLastFailure;
   if (sinceFailure == null) return false;
   if (params.hoursSinceLastRun === null) return false;
-  return sinceFailure >= CRON_FAILURE_SETTLED_HOURS && params.hoursSinceLastRun < sinceFailure;
+  /**
+   * Рішення приймаємо по ТОМУ САМОМУ числу, яке людина читає.
+   *
+   * Було: поріг звірявся по сирому 1.6, а в тексті стояло округлене «2 год
+   * тому». 20.08.2026 о 18:20 це дало лист, що суперечить сам собі: рядок
+   * «reminders-minute: останній 2 год тому» червоний, а рядком нижче
+   * «system-alerts: останній 2 год тому — відтоді працює» жовтий. Різниця між
+   * ними — 24 хвилини, яких у листі не видно.
+   *
+   * Алерт, у якому колір не збігається з написаним, вчить не вірити кольору —
+   * а це рівно те, від чого ми сьогодні лікувались.
+   */
+  return (
+    Math.round(sinceFailure) >= CRON_FAILURE_SETTLED_HOURS &&
+    params.hoursSinceLastRun < sinceFailure
+  );
 }
