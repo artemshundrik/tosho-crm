@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import { singleFlight } from "@/lib/singleFlight";
 import { cn } from "@/lib/utils";
 import { shouldShowHint, type HintState } from "@/lib/featureHintRules";
 import { useMyFeatureAdoption } from "@/features/features/queries";
@@ -77,13 +78,23 @@ export function FeatureHint({
     if (!viewUserId) return;
     let active = true;
     void (async () => {
-      const { data } = await supabase
-        .schema("tosho")
-        .from("feature_hints")
-        .select("shown_count, last_shown_at, dismissed_at")
-        .eq("user_id", viewUserId)
-        .eq("feature_key", featureKey)
-        .maybeSingle();
+      /**
+       * Кілька підказок з ОДНИМ ключем на сторінці — звичайна річ: слот показу
+       * один (claimedBy нижче), а екземплярів компонента кілька, і кожен читав
+       * свій стан сам. Заміряно 20.08.2026 на дизайн-задачі: два байт-у-байт
+       * однакові запити до feature_hints. Склеюємо одночасні — не кешуємо:
+       * після «більше не показувати» наступне читання має піти в базу.
+       */
+      const { data } = await singleFlight(`hint:${viewUserId}:${featureKey}`, async () =>
+        // await обов'язковий: запит Supabase — thenable, а не справжня обіцянка.
+        await supabase
+          .schema("tosho")
+          .from("feature_hints")
+          .select("shown_count, last_shown_at, dismissed_at")
+          .eq("user_id", viewUserId)
+          .eq("feature_key", featureKey)
+          .maybeSingle()
+      );
       if (!active) return;
       const row = data as
         | { shown_count: number; last_shown_at: string | null; dismissed_at: string | null }

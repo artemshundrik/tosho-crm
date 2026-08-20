@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { singleFlight } from "@/lib/singleFlight";
 
 /**
  * Блокування редагування сутності.
@@ -59,16 +60,37 @@ export async function acquireEntityLock(params: {
   userLabel?: string | null;
   ttlSeconds?: number;
 }): Promise<EntityLockResult> {
-  const { data, error } = await supabase.rpc("acquire_entity_lock", {
-    p_team_id: params.teamId,
-    p_entity_type: params.entityType,
-    p_entity_id: params.entityId,
-    p_user_id: params.userId,
-    p_user_label: params.userLabel?.trim() || undefined,
-    p_ttl_seconds: params.ttlSeconds ?? 45,
+  /**
+   * Одночасні взяття ОДНОГО лока склеюються в один виклик.
+   *
+   * На дизайн-задачі лок беруть двоє: сама сторінка й панель усередині неї —
+   * заміряно 20.08.2026, acquire_entity_lock ішов двічі поспіль з однаковими
+   * аргументами. Відповідь у них однакова (той самий власник, той самий строк),
+   * тож другий виклик був чистим очікуванням мережі.
+   *
+   * Це НЕ кеш: підтримка лока (heartbeat) іде окремими викликами через час,
+   * і на неї склеювання не впливає — див. singleFlight.
+   */
+  const key = [
+    "lock",
+    params.teamId,
+    params.entityType,
+    params.entityId,
+    params.userId,
+    params.ttlSeconds ?? 45,
+  ].join(":");
+  return singleFlight(key, async () => {
+    const { data, error } = await supabase.rpc("acquire_entity_lock", {
+      p_team_id: params.teamId,
+      p_entity_type: params.entityType,
+      p_entity_id: params.entityId,
+      p_user_id: params.userId,
+      p_user_label: params.userLabel?.trim() || undefined,
+      p_ttl_seconds: params.ttlSeconds ?? 45,
+    });
+    if (error) throw error;
+    return normalizeResult(data);
   });
-  if (error) throw error;
-  return normalizeResult(data);
 }
 
 export async function releaseEntityLock(params: {
