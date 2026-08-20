@@ -29,34 +29,56 @@ revoke all on tosho.cron_config from anon, authenticated, public;
 -- every reminder function now inserts with dedupeByHref, so re-runs are no-ops.
 -- ---------------------------------------------------------------------------
 
--- Customer / lead follow-up reminders (was: Netlify "* * * * *").
-select cron.schedule(
-  'reminders-customer-lead',
-  '* * * * *',
-  $$ select net.http_post(
-       url := 'https://tosho.pro/.netlify/functions/customer-lead-reminders',
-       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-       timeout_milliseconds := 20000) $$
-);
+-- Три щохвилинні нагадування — ОДНИМ джобом.
+--
+-- ЧОМУ РАЗОМ, А НЕ ТРИ ОКРЕМІ. pg_cron бере на кожен джоб окремий фоновий
+-- процес, а їх в інстансі рівно шість (max_worker_processes). Три щохвилинні
+-- джоби стартують в одну й ту саму секунду й тримають половину всього запасу.
+-- 20.08.2026 це вилилось у 479 збоїв «job startup timeout» за ніч: pg_cron не
+-- зміг підняти воркер, і наші функції в ті хвилини навіть не викликались.
+--
+-- Злиття НІЧОГО не міняє для людей: ті самі три виклики о тій самій хвилині,
+-- просто одним `select` — pg_net кладе всі три в чергу й віддає керування, тож
+-- воркер потрібен один замість трьох. Заодно втричі менше рядків у журналі
+-- запусків (було ~4 300 на добу, стало ~1 400).
+--
+-- ЦІНА, яку варто знати: на дошці здоровʼя це тепер ОДИН рядок замість трьох.
+-- Якщо мовчатиме конкретно одне з трьох нагадувань, джоб цього не покаже —
+-- дивитись треба в самі функції (net._http_response) або в сповіщення.
+--
+-- Повернути три окремі джоби можна цим же файлом з історії git.
 
--- Quote deadline reminders (was: Netlify "* * * * *").
-select cron.schedule(
-  'reminders-quote-deadline',
-  '* * * * *',
-  $$ select net.http_post(
-       url := 'https://tosho.pro/.netlify/functions/quote-deadline-reminders',
-       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-       timeout_milliseconds := 20000) $$
-);
+do $$
+begin
+  -- Прибираємо попередників, якщо вони ще стоять. Через exists, бо
+  -- cron.unschedule на неіснуючому імені кидає помилку й валить весь файл.
+  if exists (select 1 from cron.job where jobname = 'reminders-customer-lead') then
+    perform cron.unschedule('reminders-customer-lead');
+  end if;
+  if exists (select 1 from cron.job where jobname = 'reminders-quote-deadline') then
+    perform cron.unschedule('reminders-quote-deadline');
+  end if;
+  if exists (select 1 from cron.job where jobname = 'reminders-contractor') then
+    perform cron.unschedule('reminders-contractor');
+  end if;
+end $$;
 
--- Contractor / supplier reminders (was: Netlify "* * * * *").
 select cron.schedule(
-  'reminders-contractor',
+  'reminders-minute',
   '* * * * *',
-  $$ select net.http_post(
-       url := 'https://tosho.pro/.netlify/functions/contractor-reminders',
-       headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
-       timeout_milliseconds := 20000) $$
+  $$ select
+       net.http_post(
+         url := 'https://tosho.pro/.netlify/functions/customer-lead-reminders',
+         headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+         timeout_milliseconds := 20000),
+       net.http_post(
+         url := 'https://tosho.pro/.netlify/functions/quote-deadline-reminders',
+         headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+         timeout_milliseconds := 20000),
+       net.http_post(
+         url := 'https://tosho.pro/.netlify/functions/contractor-reminders',
+         headers := jsonb_build_object('x-cron-key', (select value from tosho.cron_config where key='cron_secret')),
+         timeout_milliseconds := 20000) $$
 );
 
 -- Team events: birthdays / work anniversaries / vacation start+end.
