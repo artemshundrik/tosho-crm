@@ -179,3 +179,23 @@ export const quoteStatusTextClass = buildClassMap(QUOTE_STATUS_TONE, toneTextCla
 export const quoteStatusDotClass = buildClassMap(QUOTE_STATUS_TONE, toneDotClass);
 export const designStatusBadgeClass = buildClassMap(DESIGN_STATUS_TONE, toneBadgeClass);
 export const designStatusDotClass = buildClassMap(DESIGN_STATUS_TONE, toneDotClass);
+
+/**
+ * Тон події команди — ОДНА мапа на всі поверхні: картки на «Команді», планер
+ * відсутностей, календар.
+ *
+ * ЧОМУ ЦЕ ТУТ, А НЕ В КОЖНОМУ КОМПОНЕНТІ. Мапи було дві: сторінка «Команда»
+ * давала дню народження святковий рожевий, планер — жовтий. Виходило, що та
+ * сама подія в календарі рожева, а плашкою поруч жовта, і жовтий читався як
+ * попередження — «щось не так», хоча в людини просто день народження.
+ *
+ * Жовтий тут не використовується СВІДОМО: він належить лікарняному.
+ */
+export const TEAM_EVENT_TONE = {
+  birthday: "festive",
+  anniversary: "accent",
+  return: "success",
+  holiday: "festive",
+} satisfies Record<string, Tone>;
+
+export type TeamEventKind = keyof typeof TEAM_EVENT_TONE;

@@ -44,6 +44,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { usePageData } from "@/hooks/usePageData";
+import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import { cn } from "@/lib/utils";
 import {
   formatEmploymentDuration,
@@ -93,7 +94,7 @@ import {
   upcomingHolidays,
   type AbsenceBalance,
 } from "@/lib/teamAbsenceQuotas";
-import { toneBadgeClass, toneTextClass, type Tone } from "@/lib/statusTones";
+import { TEAM_EVENT_TONE, toneBadgeClass, toneTextClass } from "@/lib/statusTones";
 import { formatLastSeenAgo, formatLastSeenExact } from "@/lib/lastSeen";
 import { getInitialsFromName } from "@/lib/userName";
 import {
@@ -157,13 +158,9 @@ type EnrichedMember = WorkspaceMemberDisplayRow & {
   tenureDays: number | null;
 };
 
-/** Свято має власний тон: жовтий тепер належить лікарняному одному. */
-const EVENT_TONE = {
-  birthday: "festive",
-  anniversary: "accent",
-  return: "success",
-  holiday: "festive",
-} satisfies Record<string, Tone>;
+/** Свято має власний тон: жовтий тепер належить лікарняному одному.
+ *  Мапа спільна з планером — див. TEAM_EVENT_TONE у statusTones. */
+const EVENT_TONE = TEAM_EVENT_TONE;
 
 const EVENT_ICONS: Record<keyof typeof EVENT_TONE, LucideIcon> = {
   birthday: Cake,
@@ -263,7 +260,7 @@ function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
   // Після фолбека на повну історію порожнє значення = людина СПРАВДІ жодного
   // разу не заходила (нема рядка в user_presence) — кажемо це, а не туманне
   // «давно», що з'являлось усім поза 30-хвилинним вікном.
-  if (!lastSeenAt) return "Ще не заходив(ла)";
+  if (!lastSeenAt) return "Візитів ще не було";
   return `${formatLastSeenAgo(lastSeenAt)}`;
 }
 
@@ -276,37 +273,11 @@ export function TeamPage() {
   const workspacePresence = useWorkspacePresence();
 
   /**
-   * ПОВНА історія «коли був» — окремо від контексту присутності.
-   *
-   * Контекст живить хедерний віджет «хто онлайн» і навмисно тягне з БД лише
-   * останні 30 хвилин (DB_HISTORY_WINDOW_MS) — тому картки показували
-   * «Давно не заходив» усім, хто закрив вкладку годину тому, хоча точна
-   * мітка лежить у user_presence. На проді просто зараз половина команди
-   * (11 із 22 рядків) — поза тим вікном. Тут тягнемо всі рядки команди:
-   * їх десятки, і це разове читання на завантаження сторінки.
+   * ПОВНА історія «коли був» — окремо від контексту присутності: той тягне лише
+   * свіже вікно, тож картки показували «Давно не заходив» усім, хто закрив
+   * вкладку годину тому. Запит спільний із Пульсом — див. useTeamLastSeen.
    */
-  const [lastSeenByUser, setLastSeenByUser] = useState<Map<string, string>>(() => new Map());
-
-  useEffect(() => {
-    if (!teamId) return;
-    let cancelled = false;
-    void (async () => {
-      const { data, error } = await supabase
-        .from("user_presence")
-        .select("user_id,last_seen_at")
-        .eq("team_id", teamId)
-        .limit(500);
-      if (cancelled || error) return;
-      const map = new Map<string, string>();
-      ((data ?? []) as Array<{ user_id?: string | null; last_seen_at?: string | null }>).forEach((row) => {
-        if (row.user_id && row.last_seen_at) map.set(row.user_id, row.last_seen_at);
-      });
-      setLastSeenByUser(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId]);
+  const lastSeenByUser = useTeamLastSeen(teamId);
 
   /** Вносити відсутності за інших і бачити чужі залишки може owner/SEO. */
   const canManageAbsences = permissions.isSuperAdmin || permissions.isSeo;

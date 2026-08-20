@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+
+import { derivePresence } from "@/lib/presenceWindow";
 import {
   disableRealtimeForSession,
   enableRealtimeForSession,
@@ -71,11 +73,11 @@ type UseWorkspacePresenceStateOptions = {
   currentLabel: string;
 };
 
-const ONLINE_WINDOW_MS = 45 * 1000;
-const IDLE_WINDOW_MS = 5 * 60 * 1000;
 const DB_HISTORY_WINDOW_MS = 30 * 60 * 1000;
 const ACTIVE_POLL_INTERVAL_MS = 3 * 60 * 1000;
 const FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+// Удар серця: як часто позначка «я тут» їде в базу. Вікно «онлайн» у
+// presenceWindow.ts мусить бути ДОВШИМ за цей крок — інакше присутність блимає.
 const REALTIME_BACKED_DB_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const FALLBACK_DB_SYNC_INTERVAL_MS = 60 * 1000;
 
@@ -575,8 +577,14 @@ export function useWorkspacePresenceState({
       const directoryEntry = directoryEntriesByUserId[uid];
       const lastSeenAt = realtime?.last_seen_at ?? dbRow?.last_seen_at ?? null;
       const ageMs = lastSeenAt ? now - new Date(lastSeenAt).getTime() : Number.POSITIVE_INFINITY;
-      const online = Boolean(realtime) || ageMs <= ONLINE_WINDOW_MS;
-      const idle = !online && ageMs <= IDLE_WINDOW_MS;
+      // Себе людина бачить онлайн ЗАВЖДИ. Вкладка відкрита — інакше цей код не
+      // виконувався б; сперечатися з цим через вік позначки в базі означає
+      // писати людині «тебе тут немає», поки вона на це дивиться.
+      const { online, idle } = derivePresence({
+        hasRealtime: Boolean(realtime),
+        ageMs,
+        isSelf: uid === userId,
+      });
       const fallbackName = uid === userId ? selfDisplayName : `Користувач ${uid.slice(0, 8)}`;
       return {
         userId: uid,

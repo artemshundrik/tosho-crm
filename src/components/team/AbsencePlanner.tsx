@@ -11,7 +11,7 @@ import {
 } from "@/lib/teamAbsences";
 import { ABSENCE_KIND_ICONS, type AvatarAbsence } from "@/lib/absenceIndicator";
 import { PersonHoverCardMaybe, type PersonHoverCardData } from "@/components/app/PersonHoverCard";
-import { toneBadgeClass, toneDotClass, toneTextClass } from "@/lib/statusTones";
+import { TEAM_EVENT_TONE, toneBadgeClass, toneDotClass, toneTextClass } from "@/lib/statusTones";
 
 /**
  * Планер відсутностей: люди × дні.
@@ -53,9 +53,17 @@ const MARK_ICONS: Record<PlannerMark["kind"], LucideIcon> = {
   anniversary: Award,
 };
 
+/**
+ * Тон позначки береться зі спільної мапи подій команди.
+ *
+ * Тут стояв власний список, і день народження в ньому був ЖОВТИЙ — той самий,
+ * що в лікарняного. У календарі на «Команді» він рожевий, тож одна подія мала
+ * два кольори, а жовтий читався як попередження. Мапа тепер одна на всі
+ * поверхні (TEAM_EVENT_TONE), і розійтись їм більше нема як.
+ */
 const MARK_TONE_CLASS: Record<PlannerMark["kind"], string> = {
-  birthday: toneTextClass.warning,
-  anniversary: toneTextClass.accent,
+  birthday: toneTextClass[TEAM_EVENT_TONE.birthday],
+  anniversary: toneTextClass[TEAM_EVENT_TONE.anniversary],
 };
 
 /**

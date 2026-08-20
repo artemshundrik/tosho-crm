@@ -95,6 +95,8 @@ import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar"
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
+import { useAuth } from "@/auth/AuthProvider";
+import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import type { PulseRange } from "@/components/team/pulsePeriod";
 import {
   Sheet,
@@ -498,6 +500,14 @@ export function TeamMembersPage() {
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
   const { entries } = useWorkspacePresence();
+  const { teamId } = useAuth();
+  /**
+   * Присутність із контексту знає лише свіже вікно, тож у Пульсі люди, які
+   * закрили вкладку годину тому, лишались зовсім без часу — рядок писав
+   * «Присутність без дій» і мовчав про те, коли людина була. Повна історія
+   * читається окремо, тим самим запитом, що й на сторінці «Команда».
+   */
+  const lastSeenByUser = useTeamLastSeen(teamId);
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
   const hasCache = Boolean(cached?.workspaceId);
@@ -1141,11 +1151,12 @@ export function TeamMembersPage() {
         jobRole: member?.job_role ?? null,
         online: !!memberPresenceByUserId[userId]?.online,
         // Той самий візит, що показує картка людини. Пульс без нього мовчав
-        // про тих, хто заходив, але не набрав активних хвилин.
-        lastSeenAt: memberPresenceByUserId[userId]?.lastSeenAt || null,
+        // про тих, хто заходив, але не набрав активних хвилин. Контекст
+        // присутності тримає лише свіжих — далі падаємо на повну історію.
+        lastSeenAt: memberPresenceByUserId[userId]?.lastSeenAt || lastSeenByUser.get(userId) || null,
       };
     },
-    [members, memberProfilesByUserId, memberPresenceByUserId, getMemberDisplayName]
+    [members, memberProfilesByUserId, memberPresenceByUserId, getMemberDisplayName, lastSeenByUser]
   );
 
   const pulsePeople = useMemo<PulsePerson[]>(

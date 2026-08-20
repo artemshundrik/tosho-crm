@@ -41,7 +41,7 @@ import {
   isNoiseActivity,
 } from "@/components/team/activityCategories";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
-import { formatLastSeenAgo } from "@/lib/lastSeen";
+import { formatPulsePresence } from "./pulsePresence";
 
 export type PulsePerson = {
   userId: string;
@@ -100,12 +100,6 @@ function formatMinutes(min: number) {
   if (hours === 0) return `${rest} хв`;
   if (rest === 0) return `${hours} год`;
   return `${hours} год ${rest} хв`;
-}
-
-function formatRelative(iso: string) {
-  if (!iso) return "—";
-  // Спільний форматер: дві суміжні одиниці, після 30 днів — дата.
-  return formatLastSeenAgo(iso);
 }
 
 export type PulsePeriodState = {
@@ -491,13 +485,13 @@ export function TeamPulsePanel({
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     <span className="truncate">
-                      {entry.actions > 0
-                        ? `Остання дія ${formatRelative(entry.lastActiveAt)}`
-                        : entry.minutes > 0
-                          ? "Присутність без дій"
-                          : entry.lastActiveAt
-                            ? `Заходив ${formatRelative(entry.lastActiveAt)}`
-                            : "Заходив"}
+                      {formatPulsePresence({
+                        online: person.online,
+                        actions: entry.actions,
+                        minutes: entry.minutes,
+                        lastActiveAt: entry.lastActiveAt,
+                        lastSeenAt: person.lastSeenAt,
+                      })}
                     </span>
                   </div>
                 </div>
