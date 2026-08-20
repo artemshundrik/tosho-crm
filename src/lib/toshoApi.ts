@@ -1524,15 +1524,44 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
     }
   };
 
-  const deleteQuoteRow = async (withTeam: boolean) => {
-    const q = schema.from("quotes").delete().eq("id", quoteId);
-    const { error } = withTeam && teamId ? await q.eq("team_id", teamId) : await q;
+  /**
+   * Повертає, чи рядок СПРАВДІ зник.
+   *
+   * `.select("id")` тут не прикраса. Без нього PostgREST на видаленні, яке не
+   * зачепило жодного рядка (не той фільтр команди, RLS не пустила), віддає
+   * успіх без помилки — і застосунок звітував «Прорахунок видалено», прибирав
+   * картку зі списку, а після оновлення вона поверталась. Саме на це
+   * поскаржився власник 20.08.2026: «створив тестовий, видаляв — не завжди
+   * вдавалося».
+   */
+  const deleteQuoteRow = async (withTeam: boolean): Promise<boolean> => {
+    const q = schema.from("quotes").delete().eq("id", quoteId).select("id");
+    const { data, error } = withTeam && teamId ? await q.eq("team_id", teamId) : await q;
     handleError(error);
+    return Array.isArray(data) && data.length > 0;
   };
+
+  /**
+   * Помилка гейта блокування — англійською з бази («Quote is locked by another
+   * user»). Показувати її людині як є означає показати внутрішній текст, тож
+   * перекладаємо в те, що можна прочитати й зрозуміти, що робити.
+   */
+  const humanize = (error: unknown): unknown => {
+    const message = getErrorMessage(error);
+    if (/locked by another user/i.test(message)) {
+      return new Error(
+        "Прорахунок зараз відкритий в іншої людини — видалити його можна, коли вона закриє картку."
+      );
+    }
+    return error;
+  };
+
+  const NOT_DELETED =
+    "Прорахунок не видалено: бракує прав або його вже видалив хтось інший. Оновіть сторінку.";
 
   try {
     await deleteAttachmentStorage(true);
-    await deleteQuoteRow(true);
+    if (await deleteQuoteRow(true)) return;
   } catch (error: unknown) {
     const message = getErrorMessage(error).toLowerCase();
     const isFk = message.includes("foreign key");
@@ -1540,19 +1569,22 @@ export async function deleteQuote(quoteId: string, teamId?: string | null) {
 
     if (isFk) {
       await deleteChildren(true);
-      await deleteQuoteRow(true);
-      return;
+      if (await deleteQuoteRow(true)) return;
+    } else if (!isNotFound && teamId) {
+      throw humanize(error);
     }
-
-    // fallback if team filter mismatched
-    if (isNotFound || !teamId) {
-      await deleteChildren(false);
-      await deleteQuoteRow(false);
-      return;
-    }
-
-    throw error;
   }
+
+  // Рядок не зник: або фільтр команди не збігся, або лишились діти. Пробуємо
+  // без командного фільтра — і цього разу вже НЕ мовчимо про невдачу.
+  try {
+    await deleteChildren(false);
+    if (await deleteQuoteRow(false)) return;
+  } catch (error: unknown) {
+    throw humanize(error);
+  }
+
+  throw new Error(NOT_DELETED);
 }
 
 export async function updateQuote(params: {
