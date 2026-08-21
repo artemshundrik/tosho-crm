@@ -4,6 +4,12 @@ import { isChannelEnabled } from "./_notificationCategories";
 import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
 import { collectSystemSignals, isProblem, type Signal } from "./_systemHealth";
 import { mergeTeamMembers, resolveTeamIds, isDeliverable } from "./_lib/teamMembers";
+import {
+  alertsFingerprint,
+  buildRuntimeErrorAlerts,
+  formatRuntimeErrorAlert,
+  signaturesOf,
+} from "./_lib/runtimeErrorAlerts";
 
 // Миттєві алерти про критичні проблеми — не чекаючи ранкового дайджесту.
 //
@@ -23,6 +29,15 @@ type HttpEvent = {
 };
 
 const ALERT_KEY = "system_danger";
+const ERRORS_ALERT_KEY = "runtime_errors";
+/**
+ * Вікно, за яке шукаємо нові помилки. Година з запасом: крон ходить раз на
+ * годину, але не по секундах, і без запасу помилка, що сталась у стик, не
+ * потрапила б у жодний прохід.
+ */
+const ERRORS_WINDOW_MINUTES = 90;
+/** Наскільки назад дивимось, щоб зрозуміти, чи помилка справді нова. */
+const ERRORS_HISTORY_DAYS = 30;
 const ALERT_COOLDOWN_HOURS = 12;
 const APP_URL = process.env.PUBLIC_APP_URL || "https://tosho.pro";
 const CATEGORY = "admin_digest";
@@ -74,11 +89,12 @@ export const handler = async (event: HttpEvent) => {
     });
 
     const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const teamIds = resolveTeamIds(members);
     const signals = await collectSystemSignals(admin, now, {
       aiFromIso: dayAgo,
       aiToIso: now.toISOString(),
       aiLabel: "за добу",
-      teamIds: resolveTeamIds(members),
+      teamIds,
     });
 
     // Алертимо лише червоним. Жовте — робота ранкового дайджесту, інакше
@@ -110,11 +126,80 @@ export const handler = async (event: HttpEvent) => {
       message = "🟢 Проблеми зникли, система в нормі.";
     }
 
-    if (!message) {
-      return json(200, { success: true, danger: danger.length, sent: false, reason: "no change" });
+    // ─── Помилки в браузері ────────────────────────────────────────────────
+    //
+    // Окремий блок і окремий ключ стану: «сервіс лежить» і «у людини впала
+    // сторінка» — різні події з різним терміном життя, і змішувати їх в один
+    // відбиток означало б гасити одне одним.
+    const errorsWindowFrom = new Date(now.getTime() - ERRORS_WINDOW_MINUTES * 60_000).toISOString();
+    const errorsHistoryFrom = new Date(now.getTime() - ERRORS_HISTORY_DAYS * 86_400_000).toISOString();
+    const errorSelect = "created_at,actor_name,user_id,metadata";
+
+    const [recentErrorsResult, historyErrorsResult, errorsStateResult] = await Promise.all([
+      teamIds.length > 0
+        ? admin
+            .schema("tosho")
+            .from("runtime_errors")
+            .select(errorSelect)
+            .in("team_id", teamIds)
+            .gte("created_at", errorsWindowFrom)
+            .limit(500)
+        : Promise.resolve({ data: [], error: null }),
+      teamIds.length > 0
+        ? admin
+            .schema("tosho")
+            .from("runtime_errors")
+            .select(errorSelect)
+            .in("team_id", teamIds)
+            .gte("created_at", errorsHistoryFrom)
+            .lt("created_at", errorsWindowFrom)
+            .limit(5000)
+        : Promise.resolve({ data: [], error: null }),
+      admin
+        .schema("tosho")
+        .from("alert_state")
+        .select("fingerprint,notified_at")
+        .eq("key", ERRORS_ALERT_KEY)
+        .maybeSingle(),
+    ]);
+
+    const errorAlerts = buildRuntimeErrorAlerts({
+      recent: (recentErrorsResult.data ?? []) as Parameters<typeof buildRuntimeErrorAlerts>[0]["recent"],
+      knownSignatures: signaturesOf(
+        (historyErrorsResult.data ?? []) as Parameters<typeof signaturesOf>[0]
+      ),
+    });
+    const errorsPrint = alertsFingerprint(errorAlerts);
+    const previousErrorsPrint =
+      ((errorsStateResult.data ?? null) as { fingerprint?: string } | null)?.fingerprint ?? "";
+
+    // Той самий набір за годину — мовчимо. Про відновлення тут не пишемо:
+    // «помилок більше немає» за годину нічого не означає, бо їх могло не бути
+    // просто тому, що ніхто не працював.
+    const errorsMessage =
+      errorAlerts.length > 0 && errorsPrint !== previousErrorsPrint
+        ? formatRuntimeErrorAlert(errorAlerts, { appUrl: APP_URL, escape: escapeTelegramHtml })
+        : null;
+
+    const messages = [message, errorsMessage].filter((value): value is string => Boolean(value));
+
+    if (messages.length === 0) {
+      return json(200, {
+        success: true,
+        danger: danger.length,
+        newErrors: errorAlerts.length,
+        sent: false,
+        reason: "no change",
+      });
     }
     if (dryRun) {
-      return json(200, { success: true, dryRun: true, danger: danger.length, message });
+      return json(200, {
+        success: true,
+        dryRun: true,
+        danger: danger.length,
+        newErrors: errorAlerts.length,
+        messages,
+      });
     }
 
     // Отримувачі — власник (та сама аудиторія, що в тех-дайджесту).
@@ -134,25 +219,43 @@ export const handler = async (event: HttpEvent) => {
       }>)) {
         if (row.telegram_chat_id == null || row.telegram_enabled === false) continue;
         if (!isChannelEnabled(row.channel_prefs, CATEGORY, "telegram")) continue;
-        const result = await sendTelegramMessage(row.telegram_chat_id, message, {
-          parseMode: "HTML",
-          disablePreview: true,
-        });
-        if (result.ok) delivered += 1;
+        for (const text of messages) {
+          const result = await sendTelegramMessage(row.telegram_chat_id, text, {
+            parseMode: "HTML",
+            disablePreview: true,
+          });
+          if (result.ok) delivered += 1;
+        }
       }
     }
 
     // Стан оновлюємо навіть якщо доставити не вдалося: інакше при збоях
     // Telegram той самий алерт полетить знову за годину.
+    const nowIso = now.toISOString();
     await admin
       .schema("tosho")
       .from("alert_state")
       .upsert(
-        { key: ALERT_KEY, fingerprint: currentPrint, notified_at: now.toISOString(), updated_at: now.toISOString() },
+        { key: ALERT_KEY, fingerprint: currentPrint, notified_at: nowIso, updated_at: nowIso },
         { onConflict: "key" }
       );
+    if (errorsMessage) {
+      await admin
+        .schema("tosho")
+        .from("alert_state")
+        .upsert(
+          { key: ERRORS_ALERT_KEY, fingerprint: errorsPrint, notified_at: nowIso, updated_at: nowIso },
+          { onConflict: "key" }
+        );
+    }
 
-    return json(200, { success: true, danger: danger.length, sent: true, delivered });
+    return json(200, {
+      success: true,
+      danger: danger.length,
+      newErrors: errorAlerts.length,
+      sent: true,
+      delivered,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json(500, { error: message });

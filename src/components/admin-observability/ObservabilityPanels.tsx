@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabaseClient";
 import { NOTIFICATION_CATEGORIES } from "@/lib/notificationCategories";
 import { getInitialsFromName } from "@/lib/userName";
+import { runtimeErrorSignature } from "@/lib/runtimeErrorSignature";
 
 export type ObservabilityTone = "good" | "warning" | "danger" | "neutral";
 export type ChartRange = "1d" | "7d" | "30d" | "all";
@@ -1439,20 +1440,6 @@ const RUNTIME_ERROR_RANGES = [
   { key: 90, label: "90 днів" },
 ] as const;
 
-/**
- * Ключ групування. Числа й ідентифікатори в лапках прибираємо: «reading 'url'»
- * і «reading 'state'» — різні помилки, а от «Loading chunk 42» і
- * «Loading chunk 77» — одна й та сама, і без нормалізації вони розпадаються на
- * десятки однакових рядків.
- */
-function runtimeErrorKey(message: string): string {
-  return message
-    .replace(/\b\d+\b/g, "#")
-    .replace(/https?:\/\/[^\s)]+/g, "<url>")
-    .trim()
-    .slice(0, 180);
-}
-
 function formatErrorMoment(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -1506,7 +1493,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
     for (const row of rows) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
       const message = typeof meta.message === "string" && meta.message.trim() ? meta.message.trim() : "Без повідомлення";
-      const key = runtimeErrorKey(message);
+      const key = runtimeErrorSignature(message);
       const existing = map.get(key);
       if (existing) {
         existing.count += 1;
