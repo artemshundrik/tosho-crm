@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { getCurrentUser, getCurrentUserId } from "./currentUser";
 
 type RuntimeErrorPayload = {
   teamId?: string | null;
@@ -16,8 +17,7 @@ let cachedActorName: string | null = null;
 
 async function resolveActorName(): Promise<string | null> {
   if (cachedActorName) return cachedActorName;
-  const { data } = await supabase.auth.getUser();
-  const user = data?.user;
+  const user = await getCurrentUser();
   if (!user) return null;
   const resolved = buildUserNameFromMetadata(
     user.user_metadata as Record<string, unknown> | undefined,
@@ -34,8 +34,7 @@ export async function logRuntimeError(payload: RuntimeErrorPayload) {
 
   let userId = payload.userId ?? null;
   if (!userId) {
-    const { data } = await supabase.auth.getUser();
-    userId = data?.user?.id ?? null;
+    userId = await getCurrentUserId();
   }
   if (!userId) return;
 

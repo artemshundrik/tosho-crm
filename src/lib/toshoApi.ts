@@ -10,6 +10,7 @@ import { formatUserShortName } from "@/lib/userName";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import type { AvatarAbsence } from "@/lib/absenceIndicator";
+import { getCurrentUserId } from "./currentUser";
 
 type ListQuotesParams = {
   teamId: string;
@@ -867,9 +868,7 @@ export async function createQuote(params: {
   deadlineReminderComment?: string | null;
   notes?: string | null;
 }) {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  handleError(userError);
-  const userId = userData.user?.id ?? null;
+  const userId = await getCurrentUserId();
 
   const payload: Record<string, unknown> = {
     team_id: params.teamId,
@@ -2507,9 +2506,7 @@ export async function createQuoteSet(params: {
   const customerName =
     typedQuoteRows.find((row) => (row.customer_name ?? "").trim())?.customer_name?.trim() ?? null;
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  handleError(authError);
-  const createdBy = authData.user?.id ?? null;
+  const createdBy = await getCurrentUserId();
 
   const optionalColumns = ["customer_name", "kind", "created_by"] as const;
   type OptionalColumn = (typeof optionalColumns)[number];

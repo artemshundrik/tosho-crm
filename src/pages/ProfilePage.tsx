@@ -108,6 +108,7 @@ import {
   type WorkspaceMemberDisplayRow,
 } from "@/lib/workspaceMemberDirectory";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
+import { getCurrentUser } from "@/lib/currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
@@ -483,7 +484,7 @@ export function ProfilePage() {
       if (!hasCache) {
         setLoading(true);
       }
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
 
       if (user) {
         setUserId(user.id);

@@ -243,6 +243,7 @@ import {
 } from "@/features/quotes/quote-details/catalog-utils";
 import { buildDraftKey, readDraft } from "@/lib/draftStorage";
 import { useDraftPersist } from "@/hooks/useDraftPersist";
+import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
 type QuoteDetailsPageProps = {
   teamId: string;
@@ -2975,12 +2976,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           .map((member) => member.id);
         if (genericMemberIds.length === 0) return;
 
-        const [profilesResult, authResult] = await Promise.all([
+        const [profilesResult, currentUser] = await Promise.all([
           supabase
             .from("team_member_profiles" as never)
             .select("user_id,first_name,last_name,full_name")
             .in("user_id", genericMemberIds),
-          supabase.auth.getUser(),
+          getCurrentUser(),
         ]);
 
         const nextOverrides: Record<string, string> = {};
@@ -3006,7 +3007,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           }
         }
 
-        const currentUser = authResult.data.user ?? null;
         if (currentUser?.id && genericMemberIds.includes(currentUser.id)) {
           const currentUserName = buildUserNameFromMetadata(
             currentUser.user_metadata as Record<string, unknown> | undefined,
@@ -3369,11 +3369,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignTaskSaving(true);
     setDesignTaskError(null);
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const userId = authData.user?.id ?? null;
+      const authUser = await getCurrentUser();
+      const userId = authUser?.id ?? null;
       const actorName =
         (userId ? memberById.get(userId) : null) ||
-        authData.user?.email ||
+        authUser?.email ||
         "System";
       // Позиція, на яку робимо задачу. Раніше тут завжди стояла items[0], тож
       // на прорахунку з двома моделями задача називалась першою, а друга не
@@ -3503,11 +3503,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
 
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const userId = authData.user?.id ?? null;
+      const authUser = await getCurrentUser();
+      const userId = authUser?.id ?? null;
       const actorName =
         (userId ? memberById.get(userId) : null) ||
-        authData.user?.email ||
+        authUser?.email ||
         "System";
 
       const { error } = await supabase
@@ -4139,11 +4139,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     setAttachmentsUploading(true);
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
+      const uploadedBy = await getCurrentUserId();
+      if (!uploadedBy) {
+        throw new Error("Користувач не авторизований");
       }
-      const uploadedBy = userData.user.id;
 
       const failures: string[] = [];
 
@@ -5225,11 +5224,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemAttachmentUploading(true);
     setItemAttachmentError(null);
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
-        throw new Error(getErrorMessage(userError, "User not authenticated"));
+      const uploadedBy = await getCurrentUserId();
+      if (!uploadedBy) {
+        throw new Error("User not authenticated");
       }
-      const uploadedBy = userData.user.id;
       const { data: membership, error: membershipError } = await supabase
         .from("team_members")
         .select("team_id, role")
@@ -5731,8 +5729,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         return parsed;
       };
 
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id ?? null;
+      const userId = await getCurrentUserId();
       if (!userId) {
         throw new Error("Не вдалося визначити користувача.");
       }

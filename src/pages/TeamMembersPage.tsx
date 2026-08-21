@@ -125,6 +125,7 @@ import {
   type ModuleKey,
 } from "@/lib/moduleAccess";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const DEFAULT_MANAGER_RATE = 10;
@@ -656,10 +657,9 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       if (cancelled) return;
-      if (error) return;
-      setCurrentUserId(data.user?.id ?? null);
+      setCurrentUserId(user?.id ?? null);
     };
 
     void loadUser();
@@ -679,11 +679,7 @@ export function TeamMembersPage() {
       let resolvedId: string | null = null;
 
       try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          throw userError;
-        }
-        resolvedId = await resolveWorkspaceId(userData.user?.id ?? null);
+        resolvedId = await resolveWorkspaceId(await getCurrentUserId());
       } catch (error: unknown) {
         if (!cancelled) setWorkspaceError(getErrorMessage(error));
       } finally {
@@ -799,23 +795,23 @@ export function TeamMembersPage() {
           return acc;
         }, {});
 
-        const { data: currentUserData } = await supabase.auth.getUser();
-        const currentUserId = currentUserData.user?.id ?? null;
+        const currentUserData = await getCurrentUser();
+        const currentUserId = currentUserData?.id ?? null;
         const currentUserAvatar = getCanonicalAvatarReference(
           {
-            avatarUrl: (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null,
-            avatarPath: (currentUserData.user?.user_metadata?.avatar_path as string | undefined) || null,
+            avatarUrl: (currentUserData?.user_metadata?.avatar_url as string | undefined) || null,
+            avatarPath: (currentUserData?.user_metadata?.avatar_path as string | undefined) || null,
           },
           AVATAR_BUCKET
         );
         if (currentUserId && currentUserAvatar) {
           const resolvedName = buildUserNameFromMetadata(
-            currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
-            currentUserData.user?.email
+            currentUserData?.user_metadata as Record<string, unknown> | undefined,
+            currentUserData?.email
           );
           const existing = nextMap[currentUserId];
           nextMap[currentUserId] = {
-            label: existing?.label || resolvedName.displayName || currentUserData.user?.email?.split("@")[0] || "Користувач",
+            label: existing?.label || resolvedName.displayName || currentUserData?.email?.split("@")[0] || "Користувач",
             avatarUrl: existing?.avatarUrl ?? currentUserAvatar,
           };
         }
@@ -824,18 +820,18 @@ export function TeamMembersPage() {
       } catch {
         if (cancelled) return;
         try {
-          const { data: currentUserData } = await supabase.auth.getUser();
-          const currentUserId = currentUserData.user?.id ?? null;
+          const currentUserData = await getCurrentUser();
+          const currentUserId = currentUserData?.id ?? null;
           const currentUserAvatar = getCanonicalAvatarReference(
             {
-              avatarUrl: (currentUserData.user?.user_metadata?.avatar_url as string | undefined) || null,
-              avatarPath: (currentUserData.user?.user_metadata?.avatar_path as string | undefined) || null,
+              avatarUrl: (currentUserData?.user_metadata?.avatar_url as string | undefined) || null,
+              avatarPath: (currentUserData?.user_metadata?.avatar_path as string | undefined) || null,
             },
             AVATAR_BUCKET
           );
           const currentUserLabel = buildUserNameFromMetadata(
-            currentUserData.user?.user_metadata as Record<string, unknown> | undefined,
-            currentUserData.user?.email
+            currentUserData?.user_metadata as Record<string, unknown> | undefined,
+            currentUserData?.email
           ).displayName;
 
           if (currentUserId && currentUserAvatar) {
@@ -900,8 +896,7 @@ export function TeamMembersPage() {
           return acc;
         }, {});
 
-        const { data: currentUserData } = await supabase.auth.getUser();
-        const selfUser = currentUserData.user;
+        const selfUser = await getCurrentUser();
         if (selfUser?.id) {
           const meta = (selfUser.user_metadata ?? {}) as Record<string, unknown>;
           const existing = profilesByUserId[selfUser.id] ?? DEFAULT_MEMBER_META;

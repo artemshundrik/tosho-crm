@@ -4,6 +4,7 @@ import { buildUserNameFromMetadata, formatUserShortName, getInitialsFromName } f
 import { getCanonicalAvatarReference, getImmediateAvatarDisplayUrl, sanitizeAvatarReference } from "@/lib/avatarUrl";
 import { normalizeEmploymentStatus, type EmploymentStatus } from "@/lib/employment";
 import { defaultModuleAccess, normalizeModuleAccess, type ModuleAccess } from "@/lib/moduleAccess";
+import { getCurrentUser } from "./currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 const workspaceDirectoryCache = new Map<string, WorkspaceMemberDirectoryRow[]>();
@@ -476,8 +477,7 @@ async function listFromFallback(workspaceId: string) {
   });
 
   try {
-    const { data: currentUserData } = await supabase.auth.getUser();
-    const currentUser = currentUserData.user;
+    const currentUser = await getCurrentUser();
     if (currentUser && !merged.some((row) => row.userId === currentUser.id)) {
       return merged;
     }
@@ -702,12 +702,12 @@ export async function getCurrentWorkspaceMemberDirectoryEntry() {
   if (currentWorkspaceMemberDirectoryEntryCache !== undefined) {
     return currentWorkspaceMemberDirectoryEntryCache;
   }
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return null;
-  const workspaceId = await resolveWorkspaceId(data.user.id);
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const workspaceId = await resolveWorkspaceId(user.id);
   if (!workspaceId) return null;
   const rows = await listWorkspaceMemberDirectory(workspaceId);
-  const entry = rows.find((row) => row.userId === data.user?.id) ?? null;
+  const entry = rows.find((row) => row.userId === user.id) ?? null;
   currentWorkspaceMemberDirectoryEntryCache = entry;
   return entry;
 }

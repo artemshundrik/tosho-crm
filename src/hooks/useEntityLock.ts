@@ -9,6 +9,7 @@ import {
   type EntityLockType,
 } from "@/lib/entityLock";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { getCurrentUser } from "@/lib/currentUser";
 
 /**
  * Блокування редагування з передачею.
@@ -81,8 +82,7 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const fallbackUserLabelFromAuth = async () => {
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  const user = await getCurrentUser();
   if (!user) return "";
   const resolved = buildUserNameFromMetadata(
     user.user_metadata as Record<string, unknown> | undefined,

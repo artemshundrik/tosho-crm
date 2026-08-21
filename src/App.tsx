@@ -26,6 +26,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { BackendUnavailable } from "@/components/app/BackendUnavailable";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
 import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
+import { getCurrentUser } from "@/lib/currentUser";
 
 // =======================
 // Helpers UI
@@ -326,8 +327,7 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
 
   void (async () => {
     try {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user ?? null;
+      const user = await getCurrentUser();
       const userId = user?.id ?? null;
       const teamId = await resolveRuntimeLogTeamId(userId);
       if (!teamId || !userId) return;

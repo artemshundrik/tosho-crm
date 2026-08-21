@@ -15,6 +15,7 @@ import { getCanonicalAvatarReference } from "@/lib/avatarUrl";
 import { buildUserNameFromMetadata, getInitialsFromName } from "@/lib/userName";
 import { getCurrentWorkspaceMemberDirectoryEntry } from "@/lib/workspaceMemberDirectory";
 import { JOB_ROLE_NAMES } from "@/lib/jobRoles";
+import { getCurrentUser } from "@/lib/currentUser";
 
 const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
@@ -63,7 +64,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
   useEffect(() => {
     async function getUserData() {
       // 1. Отримуємо дані про самого юзера (email, ім'я)
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       
       if (user) {
         // Пробуємо взяти ім'я з метаданих або з пошти

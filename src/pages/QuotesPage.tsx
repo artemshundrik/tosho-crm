@@ -180,6 +180,7 @@ import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTabl
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
 import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { getCurrentUserId } from "@/lib/currentUser";
 
 type QuotesPageProps = {
   teamId: string;
@@ -2917,12 +2918,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const uploadPendingAttachments = async (quoteId: string) => {
     if (pendingAttachments.length === 0) return;
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
+    const uploadedBy = await getCurrentUserId();
+    if (!uploadedBy) {
+      throw new Error("Користувач не авторизований");
     }
-
-    const uploadedBy = userData.user.id;
 
     let membershipVerified = false;
     let membershipFound = false;
@@ -3027,12 +3026,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   ) => {
     if (!files || files.length === 0) return;
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
-      throw new Error(getErrorMessage(userError, "Користувач не авторизований"));
+    const uploadedBy = await getCurrentUserId();
+    if (!uploadedBy) {
+      throw new Error("Користувач не авторизований");
     }
-
-    const uploadedBy = userData.user.id;
 
     let membershipVerified = false;
     let membershipFound = false;

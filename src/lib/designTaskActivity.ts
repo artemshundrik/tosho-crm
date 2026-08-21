@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import { buildUserNameFromMetadata } from "@/lib/userName";
+import { getCurrentUser } from "./currentUser";
 
 type LogDesignTaskActivityParams = {
   teamId: string | null | undefined;
@@ -41,8 +42,7 @@ export async function logDesignTaskActivity(params: LogDesignTaskActivityParams)
   let resolvedActorName = params.actorName?.trim() || null;
 
   if (!resolvedUserId || !resolvedActorName) {
-    const { data } = await supabase.auth.getUser();
-    const user = data.user ?? null;
+    const user = await getCurrentUser();
     if (!resolvedUserId) resolvedUserId = user?.id ?? null;
     if (!resolvedActorName) resolvedActorName = toActorName(user);
   }
