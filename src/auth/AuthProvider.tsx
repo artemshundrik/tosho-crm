@@ -60,7 +60,15 @@ const isMissingRelationError = (message?: string | null) => {
   return normalized.includes("does not exist") || normalized.includes("relation");
 };
 
-async function resolveOperationalTeamId(userId: string, workspaceId: string | null) {
+/**
+ * Пошук робочої команди людини.
+ *
+ * Навмисно НЕ приймає workspaceId: він тут потрібен був лише як запасне
+ * значення, і через це весь виклик чекав на резолв workspace, хоча самі
+ * запити залежать тільки від userId. Запасне значення тепер підставляє той,
+ * хто кличе, — і завдяки цьому пошук іде паралельно з резолвом workspace.
+ */
+async function lookupOperationalTeamId(userId: string) {
   const attempts = [
     () =>
       supabase
@@ -91,7 +99,7 @@ async function resolveOperationalTeamId(userId: string, workspaceId: string | nu
     }
   }
 
-  return workspaceId;
+  return null;
 }
 
 /**
@@ -152,30 +160,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Hard lockout: if the user has been offboarded (employment_status
-    // inactive/rejected) they must not stay in the app — even with a currently
-    // open tab. The RLS gates already deny their data, this forces a clean
-    // logout instead of a broken UI. Runs on every focus/visibility refresh.
-    try {
-      const { data: blocked, error: blockedError } = await supabase
-        .schema("tosho")
-        .rpc("current_user_blocked");
-      if (!blockedError && blocked === true) {
-        resetTeamContext();
-        await supabase.auth.signOut();
-        return;
-      }
-    } catch (error) {
-      // RPC not deployed yet or transient failure — fall through, never lock a
-      // legitimate user out because the check itself errored.
-      console.error("Failed to check access lockout", error);
-    }
-
     if (options?.forceRefresh) {
       invalidateWorkspaceResolution(effectiveUserId);
     }
 
-    const workspaceId = await resolveWorkspaceId(effectiveUserId, options);
+    /**
+     * Три незалежні запити — паралельно, а не ланцюжком.
+     *
+     * Було п'ять послідовних звернень до бази, перш ніж застосунок дізнавався
+     * свій teamId, і весь цей час екран показував «Завантаження CRM». Але
+     * залежність тут лише одна: членство потребує workspaceId. Перевірка
+     * блокування не залежить ні від чого, а пошук команди — тільки від userId.
+     *
+     * Порядок наслідків збережено: якщо людину заблоковано, ми виходимо ДО
+     * того, як щось запишемо в стан. Зайві два запити для заблокованого — це
+     * ціна, яку платить один випадок на тисячу; RLS їм усе одно нічого не
+     * віддасть.
+     */
+    const [blockedCheck, workspaceId, teamIdFromMembers] = await Promise.all([
+      // Hard lockout: if the user has been offboarded (employment_status
+      // inactive/rejected) they must not stay in the app — even with a currently
+      // open tab. The RLS gates already deny their data, this forces a clean
+      // logout instead of a broken UI. Runs on every focus/visibility refresh.
+      supabase
+        .schema("tosho")
+        .rpc("current_user_blocked")
+        .then(
+          ({ data, error }) => (!error && data === true ? "blocked" : "ok"),
+          (error) => {
+            // RPC not deployed yet or transient failure — fall through, never
+            // lock a legitimate user out because the check itself errored.
+            console.error("Failed to check access lockout", error);
+            return "ok" as const;
+          }
+        ),
+      resolveWorkspaceId(effectiveUserId, options),
+      // Помилку тут НЕ глушимо. Тихий відкат означав би teamId = workspaceId, а
+      // це різні сутності: дані по такому id просто не знайдуться, і людина
+      // побачить порожню, але правдоподібну CRM. Хай краще впаде вище — там
+      // контекст скидається чесно.
+      lookupOperationalTeamId(effectiveUserId),
+    ]);
+
+    if (blockedCheck === "blocked") {
+      resetTeamContext();
+      await supabase.auth.signOut();
+      return;
+    }
 
     let roleValue: TeamRole = null;
     let accessRoleValue: AccessRole = null;
@@ -189,7 +220,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const operationalTeamId = await resolveOperationalTeamId(effectiveUserId, workspaceId);
+    // Запасне значення підставляємо тут: раніше це робив сам пошук, і саме
+    // через це він чекав на workspaceId.
+    const operationalTeamId = teamIdFromMembers ?? workspaceId;
     setTeamId(operationalTeamId);
     setRole(roleValue);
     setAccessRole(accessRoleValue);

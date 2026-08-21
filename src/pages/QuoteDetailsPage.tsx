@@ -2905,9 +2905,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [teamId, userId]);
 
+  // Імена для згадок @ підтягуємо ЛИШЕ коли людина справді почала згадку.
+  //
+  // Раніше це висіло на монтуванні сторінки — і тягло за собою netlify-функцію
+  // create-workspace-invite, яка на холодному старті відповідає 1.8-2.4 секунди
+  // (заміряно на проді 21.08.2026). Тобто відкриття картки прорахунку чекало
+  // на дані, потрібні хіба що тому, хто зараз писатиме коментар зі згадкою.
+  // Поки список не підвантажився, у підказці стоять звичайні імена з
+  // teamMembers — вона працює, просто без уточнених підписів.
+  const mentionLabelsRequestedRef = useRef(false);
+  const mentionLabelsNeeded = mentionContext !== null;
+
   useEffect(() => {
+    if (!mentionLabelsNeeded) return;
+    if (mentionLabelsRequestedRef.current) return;
     if (teamMembers.length === 0) return;
     if (import.meta.env.DEV) return;
+    mentionLabelsRequestedRef.current = true;
 
     let active = true;
     const loadMentionLabelOverrides = async () => {
@@ -3014,7 +3028,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => {
       active = false;
     };
-  }, [teamMembers]);
+  }, [mentionLabelsNeeded, teamMembers]);
 
   useEffect(() => {
     if (!teamId || !editQuoteDialogOpen) return;
