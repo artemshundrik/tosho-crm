@@ -17,6 +17,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
+import { usePageCache } from "@/hooks/usePageCache";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc } from "@/lib/toshoRpc";
@@ -31,7 +33,6 @@ import { cn } from "@/lib/utils";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import {
   SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER_SM,
@@ -110,6 +111,15 @@ export type PulsePeriodState = {
   setPeriodOffset: (next: number | ((prev: number) => number)) => void;
 };
 
+type PulseCache = {
+  rows: ActivityRow[];
+  totalMinutes: number;
+  minutesByUser: Map<string, number>;
+};
+
+const EMPTY_ROWS: ActivityRow[] = [];
+const EMPTY_MINUTES: Map<string, number> = new Map();
+
 export function TeamPulsePanel({
   workspaceId,
   people,
@@ -129,22 +139,66 @@ export function TeamPulsePanel({
   // Дані activity_log ключуються по team_id — воркспейс тут не підходить.
   const { teamId } = useAuth();
   const { range, setRange, periodOffset, setPeriodOffset } = periodState;
-  const [rows, setRows] = useState<ActivityRow[]>([]);
+  const period = useMemo(() => getPulsePeriod(range, periodOffset), [range, periodOffset]);
+
+  /**
+   * Пульс із кешу сторінки (REQ-19).
+   *
+   * Панель — стандартний вигляд «Ролей та доступів», і саме вона щоразу лізла в
+   * мережу по 2000 рядків журналу: розділ формально відкривався миттєво, а
+   * Пульс усередині показував «Завантаження активності…» на кожен вхід. Ключ
+   * містить період: інший діапазон — інші дані, підставляти чужі не можна.
+   */
+  const pulseCacheKey = `team-pulse:${teamId ?? "none"}:${workspaceId ?? "none"}:${range}:${periodOffset}`;
+  const { cached: pulseCache, setCache: setPulseCache } = usePageCache<PulseCache>(pulseCacheKey);
+
+  const [rowsState, setRows] = useState<ActivityRow[] | null>(null);
+  const rows = rowsState ?? pulseCache?.rows ?? EMPTY_ROWS;
   const [loading, setLoading] = useState(false);
-  const [totalMinutes, setTotalMinutes] = useState(0);
-  const [minutesByUser, setMinutesByUser] = useState<Map<string, number>>(new Map());
+  const [totalMinutesState, setTotalMinutes] = useState<number | null>(null);
+  const totalMinutes = totalMinutesState ?? pulseCache?.totalMinutes ?? 0;
+  const [minutesByUserState, setMinutesByUser] = useState<Map<string, number> | null>(null);
+  const minutesByUser = minutesByUserState ?? pulseCache?.minutesByUser ?? EMPTY_MINUTES;
   const memberIdsRef = useRef<Set<string>>(new Set());
   memberIdsRef.current = new Set(people.map((p) => p.userId));
 
-  const period = useMemo(() => getPulsePeriod(range, periodOffset), [range, periodOffset]);
   const periodLabel = formatPulsePeriod(range, periodOffset, period.start, period.end);
   const bucket = bucketOf(range);
+
+  /**
+   * Дві половини даних приїжджають окремими запитами (журнал і хвилини), а в
+   * кеші вони мусять лежати разом — інакше другий запис затер би перший.
+   */
+  const rowsCacheRef = useRef<ActivityRow[] | null>(null);
+  const minutesCacheRef = useRef<{ totalMinutes: number; minutesByUser: Map<string, number> } | null>(null);
+  const hasPulseCacheRef = useRef(Boolean(pulseCache));
+  useEffect(() => {
+    hasPulseCacheRef.current = Boolean(pulseCache);
+  }, [pulseCache]);
+
+  useEffect(() => {
+    // Новий період — нові дані: накопичене від попереднього в кеш не потрапляє.
+    rowsCacheRef.current = null;
+    minutesCacheRef.current = null;
+  }, [pulseCacheKey]);
+
+  const writeCacheRef = useRef(setPulseCache);
+  writeCacheRef.current = setPulseCache;
 
   useEffect(() => {
     if (!workspaceId || !teamId) return;
     let cancelled = false;
+    const writeCache = () => {
+      if (!rowsCacheRef.current || !minutesCacheRef.current) return;
+      writeCacheRef.current({
+        rows: rowsCacheRef.current,
+        totalMinutes: minutesCacheRef.current.totalMinutes,
+        minutesByUser: minutesCacheRef.current.minutesByUser,
+      });
+    };
     const load = async () => {
-      setLoading(true);
+      // Є що показати з кешу — оновлюємось тихо, без підпису «Завантаження…».
+      if (!hasPulseCacheRef.current) setLoading(true);
       try {
         const startIso = period.start.toISOString();
         const endIso = period.end.toISOString();
@@ -170,7 +224,10 @@ export function TeamPulsePanel({
           .limit(2000);
         if (cancelled) return;
         if (error) throw error;
-        setRows((data ?? []) as ActivityRow[]);
+        const nextRows = (data ?? []) as ActivityRow[];
+        setRows(nextRows);
+        rowsCacheRef.current = nextRows;
+        writeCache();
       } catch {
         if (!cancelled) setRows([]);
       } finally {
@@ -200,6 +257,8 @@ export function TeamPulsePanel({
           map.set(person.userId, person.activeMinutes ?? 0);
         }
         setMinutesByUser(map);
+        minutesCacheRef.current = { totalMinutes: summary?.activeMinutes ?? 0, minutesByUser: map };
+        writeCache();
       } catch {
         if (!cancelled) {
           setTotalMinutes(0);
@@ -445,7 +504,27 @@ export function TeamPulsePanel({
       {/* People — same card rhythm as the chart above, so the right-aligned
           metrics keep their inset instead of running into the viewport edge. */}
       {loading && rows.length === 0 ? (
-        <AppSectionLoader label="Завантаження активності..." compact />
+        // Каркас рядків замість підпису «Завантаження активності…»: далі тут
+        // буде саме список людей із метриками (REQ-19).
+        <Card className="overflow-hidden border-border/60 p-0" role="status" aria-busy="true">
+          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+            <Skeleton className="h-3.5 w-3.5 rounded" />
+            <Skeleton className="h-3 w-16 rounded-full opacity-70" />
+          </div>
+          <div className="flex flex-col">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 border-b border-border/40 px-4 py-3 last:border-b-0">
+                <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-32" : "w-24")} />
+                  <Skeleton className="h-3 w-40 rounded-full opacity-60" />
+                </div>
+                <Skeleton className="h-2 w-40 shrink-0 rounded-full opacity-70" />
+                <Skeleton className="h-3 w-14 shrink-0 rounded-full opacity-60" />
+              </div>
+            ))}
+          </div>
+        </Card>
       ) : rankedPeople.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-inner border border-dashed border-border/70 py-12 text-center">
           <Activity className="h-6 w-6 text-muted-foreground/60" />

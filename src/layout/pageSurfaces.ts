@@ -92,6 +92,14 @@ export type PageSurface = {
    * нього не знав — і тягнувся від краю до краю там, де сторінка так не робить.
    */
   canvas?: boolean;
+  /**
+   * Власне обмеження ширини сторінки, якщо воно в неї є.
+   *
+   * Без цього каркас малювався на всю контентну колонку, а сторінка під ним
+   * стискалась до своєї ширини — на широкому екрані було видно, як щойно
+   * показаний каркас «згортається». Числа — ті самі, що в самих сторінках.
+   */
+  maxWidth?: number;
 };
 
 /**
@@ -107,7 +115,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
   { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true },
-  { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true },
+  { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true, maxWidth: 1760 },
   { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "board", canvas: true },
   { id: "ready-to-ship", path: "/orders/ready-to-ship", page: "src/pages/OrdersReadyToShipPage.tsx", toolbar: "none", shape: "list" },
 
@@ -130,10 +138,10 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   // Той самий випадок, що й «Інтеграції»: власний тулбар у тілі сторінки.
   { id: "handbook", path: "/whats-new/handbook", page: "src/pages/HandbookPage.tsx", toolbar: "none", shape: "list" },
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
-  { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list" },
+  { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list", maxWidth: 760 },
 
   { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true },
-  { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard" },
+  { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
 ] as const;
 

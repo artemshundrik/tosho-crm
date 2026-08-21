@@ -198,6 +198,7 @@ type InviteResult = {
 
 type TeamMembersPageCache = {
   workspaceId: string | null;
+  currentUserId: string | null;
   members: Member[];
   directoryRows: WorkspaceMemberDirectoryRow[];
   invites: Invite[];
@@ -553,7 +554,7 @@ export function TeamMembersPage() {
   const [workspaceLoading, setWorkspaceLoading] = useState(!hasCache);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(cached?.currentUserId ?? null);
 
   /**
    * Повторний вхід — миттєвий (REQ-19).
@@ -914,7 +915,16 @@ export function TeamMembersPage() {
   useEffect(() => {
     if (!workspaceId || !canOpenProfileCard || directoryRows.length === 0) {
       setMemberMetaLoading(false);
-      if (!canOpenProfileCard) setMemberMetaByUserId({});
+      /**
+       * Витирати метадані можна лише коли права ВІДОМІ.
+       *
+       * `canOpenProfileCard` виводиться з членства поточної людини, а воно
+       * зʼявляється не в першому кадрі. Поки його немає, прапорець хибно каже
+       * «не можна» — і ця гілка стирала щойно засіяні з кешу метадані, а ефект
+       * запису клав порожнечу назад у кеш. Наслідок: наступний вхід у розділ
+       * знову показував каркас, хоч кеш начебто був (REQ-19).
+       */
+      if (!canOpenProfileCard && currentUserId) setMemberMetaByUserId({});
       return;
     }
 
@@ -1003,7 +1013,7 @@ export function TeamMembersPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, canOpenProfileCard, canManageManagerRates, directoryRows]);
+  }, [workspaceId, canOpenProfileCard, canManageManagerRates, currentUserId, directoryRows]);
 
   useEffect(() => {
     if (members.length === 0) {
@@ -1092,13 +1102,14 @@ export function TeamMembersPage() {
     if (!workspaceId) return;
     setCache({
       workspaceId,
+      currentUserId,
       members,
       directoryRows,
       invites,
       memberProfilesByUserId,
       memberMetaByUserId,
     });
-  }, [workspaceId, members, directoryRows, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
+  }, [workspaceId, currentUserId, members, directoryRows, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
 
   const filteredMembers = sortMembersForList(members.filter((m) => {
     if (!activeFilter) return true;

@@ -468,6 +468,9 @@ export function PageLoading({
   useRouteLoadingSignal(true);
 
   const isCanvas = canvas ?? surface?.canvas ?? false;
+  // Сторінка, що обмежує собі ширину, мусить отримати каркас тієї ж ширини —
+  // інакше на широкому екрані видно, як каркас «згортається» під сторінку.
+  const maxWidth = surface?.maxWidth;
 
   if (!visible) {
     // Порожньо, але з тією ж роллю: читач екрана вже знає, що триває
@@ -480,7 +483,13 @@ export function PageLoading({
   }
 
   return (
-    <div role="status" aria-live="polite" aria-busy="true" className={cn("w-full", className)}>
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={cn("mx-auto w-full", className)}
+      style={maxWidth ? { maxWidth } : undefined}
+    >
       <span className="sr-only">Завантаження</span>
       <Shape canvas={isCanvas} />
     </div>
