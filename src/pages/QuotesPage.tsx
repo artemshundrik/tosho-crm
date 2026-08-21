@@ -910,16 +910,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     (assignedTo?: string | null) => {
       const normalizedValue = (assignedTo ?? "").trim();
       if (!normalizedValue) return null;
+      const byId = memberById.get(normalizedValue);
       const workspaceLabel = workspaceMemberLabelById[normalizedValue]?.trim();
       if (workspaceLabel) {
+        /**
+         * Ім'я з довідника воркспейсу, решта — з рядка учасника.
+         *
+         * Доти ця гілка повертала ЛИШЕ ім'я й аватар, і разом із ними зникали
+         * статус доступності та сьогоднішня відсутність. Виглядало так: заходиш
+         * у розділ — на аватарах спалахує позначка статусу й через частку
+         * секунди гасне (щойно доїхали імена). Не «моргання інтерфейсу», а
+         * втрата даних при злитті.
+         */
         return {
+          ...(byId ?? {}),
           id: normalizedValue,
           label: workspaceLabel,
           avatarUrl: getManagerAvatar(normalizedValue),
-          jobRole: null,
+          jobRole: byId?.jobRole ?? null,
         } satisfies TeamMemberRow;
       }
-      const byId = memberById.get(normalizedValue);
       if (byId) return { ...byId, avatarUrl: getManagerAvatar(normalizedValue) };
       const presenceLabel = presenceLabelById[normalizedValue]?.trim();
       if (presenceLabel) {

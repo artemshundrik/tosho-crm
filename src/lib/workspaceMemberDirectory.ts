@@ -546,12 +546,25 @@ export type TodayAbsence = {
   endDate: string;
 };
 
+/**
+ * Види відсутностей → статус доступності.
+ *
+ * `wfh` тут НЕМАЄ навмисно, і це не пропуск: робота з дому — не відсутність,
+ * людина працює (див. teamAbsences.ts, там у неї зелений тон і підпис
+ * «З дому»). Доти вона провалювалась у `?? "offline"` і людина ставала «поза
+ * офісом»: на аватарах з'являлась бурштинова крапка, хоч у профілі стоїть
+ * «доступний». Сам факт роботи з дому лишається — його показує бейдж на
+ * аватарі, а не статус доступності.
+ */
 const ABSENCE_KIND_TO_AVAILABILITY: Record<string, TodayAbsenceStatus> = {
   vacation: "vacation",
   sick_leave: "sick_leave",
   day_off: "offline",
   other: "offline",
 };
+
+/** Види, що НЕ роблять людину недоступною. */
+const AVAILABLE_ABSENCE_KINDS = new Set(["wfh"]);
 
 function currentDateKey() {
   const today = new Date();
@@ -606,8 +619,9 @@ function applyTodayAbsence(
 ): WorkspaceMemberDirectoryRow[] {
   return rows.map((row) => {
     const derived = absenceToday.get(row.userId) ?? null;
+    const derivedStatus = derived && !AVAILABLE_ABSENCE_KINDS.has(derived.kind) ? derived.status : null;
     const next: WorkspaceMemberDirectoryRow["availabilityStatus"] =
-      derived?.status ?? (row.availabilityStatus === "offline" ? "offline" : "available");
+      derivedStatus ?? (row.availabilityStatus === "offline" ? "offline" : "available");
     if (next === row.availabilityStatus && row.absenceToday === derived) return row;
     return { ...row, availabilityStatus: next, absenceToday: derived };
   });
