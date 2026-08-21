@@ -13,7 +13,7 @@ import {
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import type { ActivityRow } from "@/lib/activity";
 
-import { formatFileSize, getErrorMessage } from "./config";
+import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
 
 /**
  * Читання даних картки прорахунку — окремо від компонента.
@@ -248,5 +248,95 @@ export async function fetchQuoteSummaryForDetails(
     return { ok: true, data: summary };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити прорахунок.") };
+  }
+}
+
+export type QuoteComment = {
+  id: string;
+  body: string;
+  created_at: string;
+  created_by?: string | null;
+};
+
+/**
+ * Запасний шлях до коментарів через Netlify-функцію.
+ *
+ * Потрібен там, де RLS не пускає читати таблицю напряму: функція ходить під
+ * службовим ключем і сама вирішує, що людині можна показати. Експортується, бо
+ * тим самим шляхом ходить і збереження коментаря.
+ */
+export async function invokeQuoteCommentsFunction(
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Не вдалося визначити сесію користувача.");
+
+  const response = await fetch("/.netlify/functions/quote-comments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+  let parsed: Record<string, unknown> = {};
+  if (rawText) {
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      parsed = {};
+    }
+  }
+  if (!response.ok) {
+    const parsedError = typeof parsed.error === "string" ? parsed.error : null;
+    throw new Error(parsedError || `HTTP ${response.status}`);
+  }
+  return parsed;
+}
+
+function normalizeComment(row: unknown): QuoteComment {
+  const entry = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+  return {
+    id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
+    body: typeof entry.body === "string" ? entry.body : "",
+    created_at: typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
+    created_by: typeof entry.created_by === "string" ? entry.created_by : null,
+  };
+}
+
+export async function fetchQuoteComments(
+  quoteId: string,
+  teamId: string | null | undefined
+): Promise<QueryResult<QuoteComment[]>> {
+  try {
+    const loadRows = async (withTeamFilter: boolean) => {
+      let query = supabase
+        .schema("tosho")
+        .from("quote_comments")
+        .select("id,body,created_at,created_by")
+        .eq("quote_id", quoteId)
+        .order("created_at", { ascending: false });
+      if (withTeamFilter && teamId) {
+        query = query.eq("team_id", teamId);
+      }
+      return await query;
+    };
+
+    // Запасний прохід без team_id: у старіших базах цієї колонки немає.
+    let { data, error } = await loadRows(!!teamId);
+    if (error && teamId && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
+      ({ data, error } = await loadRows(false));
+    }
+
+    if (error) {
+      if (!shouldUseCommentsFallback(error.message)) throw error;
+      const fallback = await invokeQuoteCommentsFunction({ mode: "list", quoteId });
+      const rows = Array.isArray(fallback?.comments) ? fallback.comments : [];
+      return { ok: true, data: rows.map(normalizeComment) };
+    }
+
+    return { ok: true, data: (data ?? []).map(normalizeComment) };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити коментарі.") };
   }
 }

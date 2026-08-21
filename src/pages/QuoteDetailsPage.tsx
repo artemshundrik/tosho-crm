@@ -216,12 +216,14 @@ import {
 import {
   fetchDesignTaskRows,
   fetchQuoteActivity,
+  fetchQuoteComments,
   fetchQuoteSummaryForDetails,
   fetchQuoteAttachments,
   fetchQuoteRuns,
   fetchStatusHistory,
   type DesignTaskRow,
   type QuoteAttachment,
+  type QuoteComment,
 } from "@/features/quotes/quote-details/queries";
 import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
 import {
@@ -358,12 +360,6 @@ type QuoteItem = {
   resolvedModelImageUrl?: string;
   resolvedModelThumbUrl?: string;
   resolvedMethodNames?: Record<string, string>;
-};
-type QuoteComment = {
-  id: string;
-  body: string;
-  created_at: string;
-  created_by?: string | null;
 };
 type QuoteItemRecord = {
   id?: string | null;
@@ -3895,98 +3891,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadComments = async () => {
     setCommentsLoading(true);
     setCommentsError(null);
-    try {
-      const invokeQuoteCommentsFunction = async (payload: Record<string, unknown>) => {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-        if (!token) throw new Error("Не вдалося визначити сесію користувача.");
-
-        const response = await fetch("/.netlify/functions/quote-comments", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const rawText = await response.text();
-        let parsed: Record<string, unknown> = {};
-        if (rawText) {
-          try {
-            parsed = JSON.parse(rawText);
-          } catch {
-            parsed = {};
-          }
-        }
-
-        if (!response.ok) {
-          const parsedError = typeof parsed.error === "string" ? parsed.error : null;
-          throw new Error(parsedError || `HTTP ${response.status}`);
-        }
-
-        return parsed;
-      };
-
-      const loadRows = async (withTeamFilter: boolean) => {
-        let query = supabase
-          .schema("tosho")
-          .from("quote_comments")
-          .select("id,body,created_at,created_by")
-          .eq("quote_id", quoteId)
-          .order("created_at", { ascending: false });
-        if (withTeamFilter && teamId) {
-          query = query.eq("team_id", teamId);
-        }
-        return await query;
-      };
-
-      let { data, error } = await loadRows(!!teamId);
-      if (
-        error &&
-        teamId &&
-        /column/i.test(error.message ?? "") &&
-        /team_id/i.test(error.message ?? "")
-      ) {
-        ({ data, error } = await loadRows(false));
-      }
-      if (error) {
-        if (shouldUseCommentsFallback(error.message)) {
-          const fallback = await invokeQuoteCommentsFunction({
-            mode: "list",
-            quoteId,
-          });
-          const comments = Array.isArray(fallback?.comments) ? fallback.comments : [];
-          setComments(
-            comments.map((row: unknown) => {
-              const entry = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
-              return {
-                id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
-                body: typeof entry.body === "string" ? entry.body : "",
-                created_at:
-                  typeof entry.created_at === "string" ? entry.created_at : new Date().toISOString(),
-                created_by: typeof entry.created_by === "string" ? entry.created_by : null,
-              };
-            })
-          );
-          return;
-        }
-        throw error;
-      }
-      setComments(
-        (data ?? []).map((row) => ({
-          id: row.id,
-          body: row.body ?? "",
-          created_at: row.created_at ?? new Date().toISOString(),
-          created_by: row.created_by ?? null,
-        }))
-      );
-    } catch (e: unknown) {
-      setCommentsError(getErrorMessage(e, "Не вдалося завантажити коментарі."));
+    const result = await fetchQuoteComments(quoteId, teamId);
+    if (result.ok) {
+      setComments(result.data);
+    } else {
+      setCommentsError(result.message);
       setComments([]);
-    } finally {
-      setCommentsLoading(false);
     }
+    setCommentsLoading(false);
   };
 
   const loadActivityLog = async (options?: { full?: boolean }) => {
