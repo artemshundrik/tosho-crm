@@ -68,7 +68,7 @@ import { usePageHeaderActions } from "@/components/app/page-header-actions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -5388,7 +5388,7 @@ export default function DesignPage() {
                         count={items.length}
                       />
                     }
-                    bodyClassName="px-2.5 pb-1.5 pt-2.5 space-y-2"
+                    bodyClassName="px-2.5 pb-1.5 pt-2.5"
                     onDragOver={(event) => {
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
@@ -5415,7 +5415,13 @@ export default function DesignPage() {
                         Немає задач
                       </div>
                     ) : (
-                      items.map((task) => <Fragment key={task.id}>{renderTaskCard(task, { draggable: true })}</Fragment>)
+                      // Малюємо лише видимі картки: у найбільшій колонці їх
+                      // бувають сотні, і саме вони тримали 57 тисяч вузлів DOM.
+                      <KanbanVirtualList
+                        items={items}
+                        getKey={(task) => task.id}
+                        renderItem={(task) => renderTaskCard(task, { draggable: true })}
+                      />
                     )}
                   </KanbanColumn>
                 );
