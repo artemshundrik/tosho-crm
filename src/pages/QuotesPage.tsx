@@ -743,8 +743,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const fetchedKanbanPreviewQuoteIdsRef = useRef<Set<string>>(
     new Set(Object.keys(Object.fromEntries(initialCache?.kanbanProductEntries ?? [])))
   );
+  /**
+   * Прев'ю товарів під рукою в момент запису кеша.
+   *
+   * Оновлення списку прорахунків перезаписує кеш сторінки, і доти воно клало
+   * туди `kanbanProductEntries: []` — тобто щоразу ВИТИРАЛО картки товарів,
+   * зібрані попереднім заходом. Наслідок бачив Артем: повертаєшся в розділ, а
+   * на кожній картці знову «Завантаження товару…», хоч дані вже були (REQ-19).
+   */
+  const kanbanProductByQuoteIdRef = useRef<Record<string, KanbanProductPreview>>({});
   const inflightKanbanPreviewQuoteIdsRef = useRef<Set<string>>(new Set());
   const cacheKey = `quotes-page-cache:${teamId}`;
+
+  useEffect(() => {
+    kanbanProductByQuoteIdRef.current = kanbanProductByQuoteId;
+  }, [kanbanProductByQuoteId]);
 
   // Get current user ID
   useEffect(() => {
@@ -1543,13 +1556,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       setAttachmentCounts({});
 
       try {
+        // Прев'ю товарів переживають оновлення списку: вони не залежать від
+        // того, які рядки щойно приїхали, і збирати їх заново на кожен вхід у
+        // розділ — це та сама «Завантаження товару…» на всіх картках.
+        const survivingPreviewEntries = Object.entries(kanbanProductByQuoteIdRef.current).filter(
+          ([quoteId]) => mergedQuoteIds.includes(quoteId)
+        );
         sessionStorage.setItem(
           cacheKey,
           JSON.stringify({
             rows: mergedRows,
             attachmentCounts: {},
             quoteMembershipEntries: Array.from(nextMembershipByQuoteId.entries()),
-            kanbanProductEntries: [],
+            kanbanProductEntries: survivingPreviewEntries,
             cachedAt: Date.now(),
           })
         );
