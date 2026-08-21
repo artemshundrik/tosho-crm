@@ -2282,9 +2282,23 @@ export async function listQuoteRunPreviewsForQuotes(params: {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   if (uniqueQuoteIds.length === 0) return [];
 
-  const readRows = async (ids: string[], withTeamFilter: boolean) => {
+  /**
+   * Без фільтра по команді — його тут не може бути.
+   *
+   * У `tosho.quote_item_runs` НЕМАЄ колонки `team_id` (там лише id, quote_id,
+   * quote_item_id, quantity, ціни та ставки). Раніше запит усе одно починався
+   * з `team_id=eq.…`, сервер відповідав 400 «column does not exist», і код
+   * мовчки перепитував те саме без фільтра. Дані від цього не страждали — тому
+   * ніхто й не помічав, — але кожне звернення коштувало зайвого невдалого
+   * походу в мережу і червоного рядка в консолі. Заміряно на проді 21.08.2026:
+   * 12 помилок 400 за одну сесію, усі на цій таблиці.
+   *
+   * Доступ від цього не слабшає: на таблиці ввімкнена RLS із чотирма
+   * політиками, тож чужі тиражі не віддасть сама база — фільтр у клієнті був
+   * не кордоном, а звуженням, та ще й по неіснуючій колонці.
+   */
+  const readRows = async (ids: string[]) => {
     type QuoteRunsQuery = {
-      eq: (column: string, value: string) => QuoteRunsQuery;
       in: (column: string, values: string[]) => QuoteRunsQuery;
       order: (column: string, options: { ascending: boolean }) => QuoteRunsQuery;
       then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
@@ -2294,17 +2308,11 @@ export async function listQuoteRunPreviewsForQuotes(params: {
     };
 
     const quoteRunsTable = supabase.schema("tosho").from("quote_item_runs") as unknown as QuoteRunsTable;
-    let query = quoteRunsTable
+    return await quoteRunsTable
       .select("id,quote_id,quote_item_id,quantity,created_at")
       .in("quote_id", ids)
       .order("quote_id", { ascending: true })
       .order("created_at", { ascending: true });
-
-    if (withTeamFilter) {
-      query = query.eq("team_id", params.teamId);
-    }
-
-    return await query;
   };
 
   // Той самий ліміт довжини адреси, що й у listQuoteRunsForQuotes: перелік id
@@ -2314,20 +2322,11 @@ export async function listQuoteRunPreviewsForQuotes(params: {
     batches.push(uniqueQuoteIds.slice(index, index + QUOTE_ID_BATCH_SIZE));
   }
 
-  const readAll = async (withTeamFilter: boolean) => {
-    const results = await Promise.all(batches.map((ids) => readRows(ids, withTeamFilter)));
-    const failed = results.find((result) => result.error);
-    if (failed) return { data: null as unknown, error: failed.error };
-    return { data: results.flatMap((result) => (result.data as unknown[]) ?? []) as unknown, error: null };
-  };
+  const results = await Promise.all(batches.map((ids) => readRows(ids)));
+  const failed = results.find((result) => result.error);
+  handleError(failed?.error ?? null);
 
-  let { data, error } = await readAll(true);
-  if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
-    ({ data, error } = await readAll(false));
-  }
-
-  handleError(error);
-  return ((data ?? []) as unknown) as QuoteRunPreviewRow[];
+  return ((results.flatMap((result) => (result.data as unknown[]) ?? []) as unknown) as QuoteRunPreviewRow[]);
 }
 
 export async function listQuoteSetItems(teamId: string, quoteSetId: string): Promise<QuoteSetItemRow[]> {
