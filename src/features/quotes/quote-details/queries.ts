@@ -3,7 +3,14 @@ import {
   normalizeQuoteAttachmentAudience,
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
-import { getQuoteRuns, listStatusHistory, type QuoteStatusRow } from "@/lib/toshoApi";
+import {
+  getQuoteRuns,
+  getQuoteSummary,
+  listStatusHistory,
+  type QuoteStatusRow,
+  type QuoteSummaryRow,
+} from "@/lib/toshoApi";
+import { canOpenQuoteDetails } from "@/lib/permissions";
 import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage } from "./config";
@@ -161,5 +168,85 @@ export async function fetchQuoteActivity(
     };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити активність.") };
+  }
+}
+
+export type DesignTaskRow = {
+  id: string;
+  title?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
+/**
+ * Дизайн-задачі прорахунку. Без `.limit(1)`: на прорахунку може бути кілька —
+ * по одній на позицію. Запасний прохід шукає за `metadata->>quote_id` для
+ * старіших записів, де `entity_id` не проставлений.
+ */
+export async function fetchDesignTaskRows(
+  quoteId: string,
+  teamId: string
+): Promise<QueryResult<DesignTaskRow[]>> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_log")
+      .select("id, title, metadata, created_at")
+      .eq("action", "design_task")
+      .eq("entity_id", quoteId)
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+
+    let rows = (data ?? []) as DesignTaskRow[];
+    if (rows.length === 0) {
+      const { data: fallbackRows, error: fallbackError } = await supabase
+        .from("activity_log")
+        .select("id, metadata, created_at")
+        .eq("action", "design_task")
+        .eq("team_id", teamId)
+        .filter("metadata->>quote_id", "eq", quoteId)
+        .order("created_at", { ascending: false });
+      if (fallbackError) throw fallbackError;
+      rows = (fallbackRows ?? []) as DesignTaskRow[];
+    }
+    return { ok: true, data: rows };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити дизайн-задачу.") };
+  }
+}
+
+type QuoteAccessCheck = {
+  userId: string | null | undefined;
+  permissions: Parameters<typeof canOpenQuoteDetails>[0]["permissions"];
+};
+
+/**
+ * Прорахунок разом із перевіркою доступу: чужу команду не віддаємо взагалі, а
+ * всередині своєї питаємо `canOpenQuoteDetails`. Обидві відмови приходять як
+ * звичайний `{ ok: false }`, тож сторінці не треба ловити винятки.
+ */
+export async function fetchQuoteSummaryForDetails(
+  quoteId: string,
+  teamId: string | null | undefined,
+  access: QuoteAccessCheck
+): Promise<QueryResult<QuoteSummaryRow>> {
+  try {
+    const summary = await getQuoteSummary(quoteId);
+    if (summary.team_id && summary.team_id !== teamId) {
+      return { ok: false, message: "Немає доступу до цього прорахунку." };
+    }
+    if (
+      !canOpenQuoteDetails({
+        userId: access.userId,
+        quoteManagerUserId: summary.assigned_to ?? null,
+        quoteCreatedByUserId: summary.created_by ?? null,
+        permissions: access.permissions,
+      })
+    ) {
+      return { ok: false, message: "Немає доступу до цього прорахунку." };
+    }
+    return { ok: true, data: summary };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити прорахунок.") };
   }
 }

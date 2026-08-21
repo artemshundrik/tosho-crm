@@ -103,7 +103,6 @@ import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
   createQuote,
-  getQuoteSummary,
   getQuoteRuns,
   upsertQuoteRuns,
   deleteQuote,
@@ -215,10 +214,13 @@ import {
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
+  fetchDesignTaskRows,
   fetchQuoteActivity,
+  fetchQuoteSummaryForDetails,
   fetchQuoteAttachments,
   fetchQuoteRuns,
   fetchStatusHistory,
+  type DesignTaskRow,
   type QuoteAttachment,
 } from "@/features/quotes/quote-details/queries";
 import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
@@ -627,6 +629,25 @@ const parseQuoteItemMetadata = (value: unknown): QuoteItemMetadata | null => {
   return metadata.sku || metadata.catalogVariant || metadata.printSpec ? metadata : null;
 };
 
+/**
+ * Запис кешу — навмисно на рівні модуля, а не в тілі сторінки: тут `try` нікому
+ * не заважає, а в компоненті він засліплював би правила хуків (REQ-96).
+ */
+function persistQuoteDetailsCache(teamId: string, quoteId: string, quote: QuoteSummaryRow) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(
+      `quote-details-cache:${teamId}:${quoteId}`,
+      JSON.stringify({
+        quote: sanitizeQuoteSummaryForCache(quote),
+        cachedAt: Date.now(),
+      } satisfies QuoteDetailsCachePayload)
+    );
+  } catch {
+    // Кеш — необов'язковий; переповнене сховище не має ламати сторінку.
+  }
+}
+
 function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCachePayload | null {
   if (typeof window === "undefined" || !teamId || !quoteId) return null;
   try {
@@ -740,13 +761,6 @@ function renderBriefRichText(value: string | null | undefined) {
 }
 
 /** Рядок дизайн-задачі прорахунку зі стрічки activity_log. */
-type DesignTaskRow = {
-  id: string;
-  title?: string | null;
-  metadata?: Record<string, unknown> | null;
-  created_at?: string | null;
-};
-
 export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const navigate = useNavigate();
   const { userId, jobRole, accessRole, permissions } = useAuth();
@@ -3060,21 +3074,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const loadQuote = async () => {
     setError(null);
-    try {
-      const summary = await getQuoteSummary(quoteId);
-      if (summary.team_id && summary.team_id !== teamId) {
-        throw new Error("Немає доступу до цього прорахунку.");
+    const result = await fetchQuoteSummaryForDetails(quoteId, teamId, { userId, permissions });
+    if (!result.ok) {
+      const message = result.message;
+      if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
+        setError("Помилка БД (stack depth limit exceeded). Перевірте RLS/policy у таблицях quote_*.");
+      } else {
+        setError(message);
       }
-      if (
-        !canOpenQuoteDetails({
-          userId,
-          quoteManagerUserId: summary.assigned_to ?? null,
-          quoteCreatedByUserId: summary.created_by ?? null,
-          permissions,
-        })
-      ) {
-        throw new Error("Немає доступу до цього прорахунку.");
-      }
+      setLoading(false);
+      return;
+    }
+    {
+      const summary = result.data;
       setQuote(summary);
       setDeadlineDate(toDateInputValue(summary.deadline_at ?? null));
       setDeadlineTime(toTimeInputValue(summary.deadline_at ?? null));
@@ -3089,29 +3101,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           : String(summary.deadline_reminder_offset_minutes)
       );
       setDeadlineReminderComment(summary.deadline_reminder_comment ?? "");
-      if (typeof window !== "undefined") {
-        try {
-          sessionStorage.setItem(
-            `quote-details-cache:${teamId}:${quoteId}`,
-            JSON.stringify({
-              quote: sanitizeQuoteSummaryForCache(summary),
-              cachedAt: Date.now(),
-            } satisfies QuoteDetailsCachePayload)
-          );
-        } catch {
-          // ignore cache persistence failures
-        }
-      }
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося завантажити прорахунок.");
-      if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
-        setError("Помилка БД (stack depth limit exceeded). Перевірте RLS/policy у таблицях quote_*.");
-      } else {
-        setError(message);
-      }
-    } finally {
-      setLoading(false);
+      persistQuoteDetailsCache(teamId, quoteId, summary);
     }
+    setLoading(false);
   };
 
   const loadDesignTask = async () => {
@@ -3124,59 +3116,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setDesignTaskLoading(true);
     setDesignTaskError(null);
-    try {
-      // Без .limit(1): на прорахунку може бути кілька задач — по одній на
-      // позицію. «Основною» лишається найновіша (нею керує панель нижче),
-      // решта видно списком.
-      const { data, error } = await supabase
-        .from("activity_log")
-        .select("id, title, metadata, created_at")
-        .eq("action", "design_task")
-        .eq("entity_id", quoteId)
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      let rows = (data ?? []) as DesignTaskRow[];
-      let row = rows[0] as DesignTaskRow | undefined;
-      if (!row) {
-        const { data: fallbackRows, error: fallbackError } = await supabase
-          .from("activity_log")
-          .select("id, metadata, created_at")
-          .eq("action", "design_task")
-          .eq("team_id", teamId)
-          .filter("metadata->>quote_id", "eq", quoteId)
-          .order("created_at", { ascending: false });
-        if (fallbackError) throw fallbackError;
-        rows = (fallbackRows ?? []) as DesignTaskRow[];
-        row = rows[0];
-      }
-      setDesignTasks(rows);
-      if (!row) {
-        setDesignTask(null);
-        setDesignAssigneeId(null);
-        setDesignTaskType(null);
-        return;
-      }
-      const metadata = row.metadata ?? {};
-      const assigneeUserId = (metadata as { assignee_user_id?: string | null }).assignee_user_id ?? null;
-      const assignedAt = (metadata as { assigned_at?: string | null }).assigned_at ?? null;
-      const parsedTaskType = parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type);
-      setDesignTask({
-        id: row.id,
-        assigneeUserId,
-        assignedAt,
-        metadata,
-      });
-      setDesignAssigneeId(assigneeUserId);
-      setDesignTaskType(parsedTaskType);
-    } catch (e: unknown) {
-      setDesignTaskError(getErrorMessage(e, "Не вдалося завантажити дизайн-задачу."));
+    // «Основною» лишається найновіша задача (нею керує панель нижче), решта
+    // видно списком — тому запит повертає всі, а не одну.
+    const result = await fetchDesignTaskRows(quoteId, teamId);
+    if (!result.ok) {
+      setDesignTaskError(result.message);
       setDesignTasks([]);
       setDesignTask(null);
       setDesignTaskType(null);
-    } finally {
       setDesignTaskLoading(false);
+      return;
     }
+    const rows = result.data;
+    const row = rows[0] as DesignTaskRow | undefined;
+    setDesignTasks(rows);
+    if (!row) {
+      setDesignTask(null);
+      setDesignAssigneeId(null);
+      setDesignTaskType(null);
+      setDesignTaskLoading(false);
+      return;
+    }
+    const metadata = row.metadata ?? {};
+    const assigneeUserId = (metadata as { assignee_user_id?: string | null }).assignee_user_id ?? null;
+    const assignedAt = (metadata as { assigned_at?: string | null }).assigned_at ?? null;
+    setDesignTask({
+      id: row.id,
+      assigneeUserId,
+      assignedAt,
+      metadata,
+    });
+    setDesignAssigneeId(assigneeUserId);
+    setDesignTaskType(parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type));
+    setDesignTaskLoading(false);
   };
 
   const loadDesignTaskCandidates = async () => {
