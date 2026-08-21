@@ -358,7 +358,7 @@ export default function ProductCatalogPage() {
   }
 
   if (teamLoading || (catalogLoading && catalog.length === 0)) {
-    return <PageLoading shape="split" />;
+    return <PageLoading />;
   }
 
   if (catalogError && catalog.length === 0) {

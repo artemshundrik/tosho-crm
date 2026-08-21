@@ -1236,7 +1236,7 @@ export function ProfilePage() {
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  if (showSkeleton) return <PageLoading shape="detail" />;
+  if (showSkeleton) return <PageLoading />;
 
   const employmentDuration = formatEmploymentDuration(startDate);
   const employmentDays = getEmploymentDurationDays(startDate);

@@ -199,7 +199,7 @@ export default function ActivityPage() {
   const showSkeleton = useMinimumLoading(loading);
 
   if (showSkeleton) {
-    return <PageLoading shape="list" />;
+    return <PageLoading />;
   }
 
   const iconForItem = (item: ActivityItem) => {

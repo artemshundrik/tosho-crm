@@ -8352,7 +8352,7 @@ export default function DesignTaskPage() {
   ]);
 
   if (loading) {
-    return <PageLoading shape="detail" />;
+    return <PageLoading />;
   }
 
   if (error || !task) {

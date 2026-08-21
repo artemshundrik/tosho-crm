@@ -1358,7 +1358,7 @@ export function TeamPage() {
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  if (loading || showSkeleton) return <PageLoading shape="dashboard" />;
+  if (loading || showSkeleton) return <PageLoading />;
 
   // Хто вирішує заявки — показуємо людині в діалозі, щоб «піде на погодження»
   // не було безадресним.

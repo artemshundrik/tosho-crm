@@ -5849,7 +5849,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   if (loading || quoteSectionsBootstrapping) {
-    return <PageLoading shape="detail" />;
+    return <PageLoading />;
   }
 
   if (error || !quote) {

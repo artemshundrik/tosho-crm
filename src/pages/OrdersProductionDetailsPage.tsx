@@ -1784,7 +1784,7 @@ export default function OrdersProductionDetailsPage() {
   }
 
   if (loading) {
-    return <PageLoading shape="detail" />;
+    return <PageLoading />;
   }
 
   if (!session) {

@@ -28,16 +28,30 @@
  * pre-push: нову сторінку з тулбаром, але без запису тут, запушити не дадуть.
  */
 
-/** Форма майбутнього вмісту — за нею малюється каркас завантаження. */
+/**
+ * Форма майбутнього вмісту — за нею малюється каркас завантаження.
+ *
+ * Форм більше, ніж «список / картка / дошка», і це навмисно: каркас, який не
+ * повторює рамку сторінки, дратує сильніше за його відсутність. Картка
+ * прорахунку й дизайн-задача мають праву рейку різної ширини, «Активність» — це
+ * одна картка з рядками всередині, а не стрічка окремих карток, тож у кожного
+ * з цих випадків своя форма.
+ */
 export type PageShape =
-  /** Стрічка однакових рядків: сповіщення, активність, історія релізів. */
+  /** Стрічка окремих карток-рядків: сповіщення, релізи, «Що нового». */
   | "list"
-  /** Таблиця: шапка колонок і рядки під нею. */
+  /** Стрічка подій усередині однієї картки: «Активність». */
+  | "feed"
+  /** Таблиця на всю ширину полотна: замовники, підрядники, склад. */
   | "table"
   /** Канбан: колонки з картками. */
   | "board"
-  /** Картка сутності: шапка, дії, кілька секцій. */
+  /** Проста картка сутності: замовлення, профіль, налаштування сервісу. */
   | "detail"
+  /** Картка прорахунку: верхня панель + права рейка 360 px. */
+  | "quote-record"
+  /** Дизайн-задача: права рейка 412 px, без верхньої панелі. */
+  | "design-record"
   /** Дашборд: плитки з числами й панелі під ними. */
   | "dashboard"
   /** Галерея однакових карток. */
@@ -69,6 +83,15 @@ export type PageSurface = {
   page: string;
   toolbar: PageToolbarKind;
   shape: PageShape;
+  /**
+   * Режим полотна: контентна колонка йде без бічних відступів і без обмеження
+   * ширини, а відступи додає сама сторінка.
+   *
+   * Живе тут, а не окремим списком шляхів у макеті, бо від цього залежать двоє:
+   * сам макет і каркас завантаження. Поки список був один на макет, каркас про
+   * нього не знав — і тягнувся від краю до краю там, де сторінка так не робить.
+   */
+  canvas?: boolean;
 };
 
 /**
@@ -76,28 +99,28 @@ export type PageSurface = {
  * своїми списками (`/design/:id` перед `/design`).
  */
 export const PAGE_SURFACES: readonly PageSurface[] = [
-  { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "list" },
-  { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "list" },
+  { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "list", canvas: true },
+  { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "feed" },
   { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard" },
   { id: "team", path: "/team", page: "src/pages/TeamPage.tsx", toolbar: "full", shape: "dashboard" },
 
-  { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table" },
-  { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "detail" },
-  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board" },
-  { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail" },
-  { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "board" },
+  { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
+  { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
+  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true },
+  { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "board", canvas: true },
   { id: "ready-to-ship", path: "/orders/ready-to-ship", page: "src/pages/OrdersReadyToShipPage.tsx", toolbar: "none", shape: "list" },
 
   { id: "catalog", path: "/catalog/products", page: "src/features/catalog/ProductCatalogPage/index.tsx", toolbar: "none", shape: "split" },
   { id: "logistics", path: "/logistics", page: "src/pages/LogisticsPage.tsx", toolbar: "none", shape: "list" },
-  { id: "design-task", path: "/design/:id", page: "src/pages/DesignTaskPage.tsx", toolbar: "none", shape: "detail" },
-  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board" },
-  { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table" },
-  { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table" },
-  { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard" },
+  { id: "design-task", path: "/design/:id", page: "src/pages/DesignTaskPage.tsx", toolbar: "none", shape: "design-record", canvas: true },
+  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table", canvas: true },
+  { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
+  { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
   { id: "marketing", path: "/marketing", page: "src/pages/MarketingPage.tsx", toolbar: "full", shape: "grid" },
 
-  { id: "members-access", path: "/settings/members", page: "src/pages/TeamMembersPage.tsx", toolbar: "compact", shape: "split" },
+  { id: "members-access", path: "/settings/members", page: "src/pages/TeamMembersPage.tsx", toolbar: "compact", shape: "split", canvas: true },
   // Налаштування конкретного сервісу — перед загальною гілкою «Інтеграцій».
   { id: "nova-poshta", path: "/integrations/nova-poshta", page: "src/pages/NovaPoshtaSettingsPage.tsx", toolbar: "none", shape: "detail" },
   // Тулбар малюється всередині тіла сторінки — макету резервувати нічого.
@@ -109,7 +132,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
   { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list" },
 
-  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board" },
+  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "list" },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
 ] as const;

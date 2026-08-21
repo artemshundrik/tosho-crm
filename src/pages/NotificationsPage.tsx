@@ -884,7 +884,7 @@ export default function NotificationsPage() {
   usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
 
   if (showSkeleton) {
-    return <PageLoading shape="list" />;
+    return <PageLoading />;
   }
 
   return (

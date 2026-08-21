@@ -1102,7 +1102,7 @@ export default function ContractorsPage() {
   // authLoading тут був зайвим: поки він true, RequireAuth малює оболонку і
   // сторінка взагалі не монтується (REQ-19, пункт про подвійні гейти).
   if (loading) {
-    return <PageLoading shape="table" />;
+    return <PageLoading />;
   }
 
   if (!teamId) {

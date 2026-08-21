@@ -46,7 +46,8 @@ import {
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
 import { PageToolbarSkeleton } from "@/components/app/page-loading";
-import { useLoadingGate, useTimeoutFlag } from "@/hooks/useLoadingGate";
+import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { useTimeoutFlag } from "@/hooks/useTimeoutFlag";
 import { resolvePageSurface, type PageToolbarKind } from "@/layout/pageSurfaces";
 import { RouteProgressBar, RouteProgressProvider } from "@/layout/routeProgress";
 import { recallToolbarHeight, rememberToolbarHeight } from "@/layout/toolbarHeights";
@@ -857,7 +858,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       ? "compact"
       : "none";
   const toolbarPending = toolbarKind !== "none" && !headerActions;
-  const showToolbarSkeleton = useLoadingGate(toolbarPending);
+  /**
+   * Каркас тулбара живе за тими самими правилами, що й каркас вмісту: перший в
+   * естафеті чекає 150 мс, наступні підхоплюють миттєво. Інакше на холодному
+   * вході смуга встигала проявитись і згаснути між двома фазами завантаження.
+   */
+  const showToolbarSkeleton = useSkeletonVisible(toolbarPending);
   /**
    * Сторінка може й не змонтуватись зовсім: гейт доступу покаже «потрібен
    * доступ», обгортка — «немає команди». Кнопок у такому разі не буде ніколи,
@@ -975,22 +981,16 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   ) : (
     pageNode
   );
-  const isCanvasMode =
-    location.pathname === ROUTES.ordersEstimates ||
-    location.pathname.startsWith(`${ROUTES.ordersEstimates}/`) ||
-    location.pathname.startsWith(ROUTES.ordersCustomers) ||
-    location.pathname.startsWith(ROUTES.ordersProduction) ||
-    location.pathname.startsWith(ROUTES.design) ||
-    location.pathname.startsWith(ROUTES.contractors) ||
-    location.pathname.startsWith(ROUTES.sampleStock) ||
-    location.pathname.startsWith(ROUTES.notifications) ||
-    location.pathname.startsWith(ROUTES.membersAccess) ||
-    // Тільки беклог: він канбан і має поводитись як дошки дизайну й
-    // прорахунків — іти наскрізь до правого краю, щоб колонки заїжджали під
-    // сайдбар при горизонтальному скролі. «Релізи» й «Здоровʼя» — звичайні
-    // сторінки з читомою шириною, їм полотно нашкодило б.
-    location.pathname.startsWith(DEV_PATHS.backlog) ||
-    location.pathname.startsWith(ROUTES.finances);
+  /**
+   * Полотно — з реєстру поверхонь, а не з власного списку шляхів.
+   *
+   * Раніше тут жив перелік із десяти `startsWith`, і про нього знав лише макет.
+   * Каркас завантаження про нього не знав — і малювався від краю до краю там,
+   * де сторінка так не робить (картка прорахунку). Один список на обох.
+   * Беклог у ньому є, а «Релізи» й «Здоровʼя» — ні: беклог канбан і має йти
+   * наскрізь до правого краю, а ті дві — звичайні сторінки з читомою шириною.
+   */
+  const isCanvasMode = Boolean(pageSurface?.canvas);
 
   // Optional workspace logo (kept null by default to avoid heavy legacy team queries)
   const [workspaceLogo] = useState<string | null>(null);

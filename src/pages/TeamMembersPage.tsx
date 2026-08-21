@@ -2469,7 +2469,7 @@ export function TeamMembersPage() {
   usePageHeaderActions(headerActions, [headerActions]);
 
   if (showSkeleton) {
-    return <PageLoading shape="split" />;
+    return <PageLoading />;
   }
 
   if (!workspaceId) {

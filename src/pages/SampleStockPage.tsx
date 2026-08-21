@@ -945,7 +945,7 @@ export default function SampleStockPage() {
   }, [deleteTarget, loadItems, teamId]);
 
   if (loading) {
-    return <PageLoading shape="table" />;
+    return <PageLoading />;
   }
 
   if (!teamId) {

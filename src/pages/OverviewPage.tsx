@@ -1109,7 +1109,7 @@ export function OverviewPage() {
   ]);
 
   if (showSkeleton || loading) {
-    return <PageLoading shape="dashboard" />;
+    return <PageLoading />;
   }
 
   return (
