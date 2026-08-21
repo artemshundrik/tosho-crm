@@ -2618,8 +2618,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const availableKinds = selectedType?.kinds ?? [];
   const selectedKind = availableKinds.find((kind) => kind.id === effectiveItemKindId) ?? null;
   const availableModels = selectedKind?.models ?? [];
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  const availableMethods = selectedKind?.methods ?? [];
+  // Лише methods обгорнуто: сусідні kinds/models у списки залежностей не
+  // потрапляють, а цей масив читає ефект нижче — і без сталої тотожності
+  // перезапускався б на кожен рендер сторінки.
+  const availableMethods = useMemo(() => selectedKind?.methods ?? [], [selectedKind]);
 
   const catalogGroups = useMemo(() => {
     return catalogTypes.map((type) => ({

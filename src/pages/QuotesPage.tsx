@@ -986,14 +986,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     () => catalogTypes.find((t) => t.id === selectedTypeId),
     [catalogTypes, selectedTypeId]
   );
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  const selectedKinds = selectedType?.kinds ?? [];
+  const selectedKinds = useMemo(() => selectedType?.kinds ?? [], [selectedType]);
   const selectedKind = useMemo(
     () => selectedKinds.find((k) => k.id === selectedKindId),
     [selectedKinds, selectedKindId]
   );
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  const selectedModels = selectedKind?.models ?? [];
+  const selectedModels = useMemo(() => selectedKind?.models ?? [], [selectedKind]);
   const selectedModel = useMemo(
     () => selectedModels.find((m) => m.id === selectedModelId),
     [selectedModels, selectedModelId]

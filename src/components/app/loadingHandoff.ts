@@ -63,11 +63,12 @@ export function acquireLoadingHandoff() {
 export function useSkeletonVisible(active = true, delayMs = 150) {
   const [visible, setVisible] = useState(() => active && isLoadingHandoffActive());
 
+  // Те саме скидання в рендері, що й у useTimeoutFlag: повернене нижче значення
+  // й так множиться на active, тож ефекту тут лишається тільки відлік.
+  if (!active && visible) setVisible(false);
+
   useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
+    if (!active) return;
     if (visible) return acquireLoadingHandoff();
     const timer = setTimeout(() => setVisible(true), delayMs);
     return () => clearTimeout(timer);

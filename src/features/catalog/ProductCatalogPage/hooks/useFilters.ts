@@ -83,8 +83,9 @@ export function useFilters({ catalog, initialTypeId = "", initialKindId = "" }: 
     [catalog, selectedTypeId]
   );
   
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  const selectedKinds = selectedType?.kinds ?? [];
+  // Обгортка не «щоб лінт замовк»: без неї це новий масив на кожен рендер,
+  // і мемоізація selectedKind нижче не спрацьовує жодного разу.
+  const selectedKinds = useMemo(() => selectedType?.kinds ?? [], [selectedType]);
   
   const selectedKind = useMemo(
     () => selectedKinds.find((k) => k.id === selectedKindId),

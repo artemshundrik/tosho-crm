@@ -16,14 +16,16 @@ import { useEffect, useState } from "react";
 export function useTimeoutFlag(active: boolean, ms: number) {
   const [elapsed, setElapsed] = useState(false);
 
+  // Скидання в рендері, а не в ефекті. Ефект зробив би це на кадр пізніше —
+  // зайвий прохід рендеру рівно там, де REQ-19 прибирав блимання. Умова сама
+  // себе гасить: після перерахунку elapsed уже false, і другого виклику немає.
+  if (!active && elapsed) setElapsed(false);
+
   useEffect(() => {
-    if (!active) {
-      setElapsed(false);
-      return;
-    }
+    if (!active) return;
     const timer = setTimeout(() => setElapsed(true), ms);
     return () => clearTimeout(timer);
   }, [active, ms]);
 
-  return elapsed;
+  return active && elapsed;
 }
