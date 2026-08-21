@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
+import { usePageCache } from "@/hooks/usePageCache";
 import { usePageData } from "@/hooks/usePageData";
 import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";
 import { cn } from "@/lib/utils";
@@ -268,6 +269,21 @@ function formatPresenceText(lastSeenAt?: string | null, online?: boolean) {
 /* Сторінка                                                            */
 /* ------------------------------------------------------------------ */
 
+type TeamAbsenceCache = {
+  absences: TeamAbsence[];
+  pendingAll: TeamAbsence[];
+  balances: Map<string, AbsenceBalance>;
+  exceptions: Map<string, boolean>;
+  holidayNames: Map<string, string>;
+  decisionComments: Map<string, string>;
+};
+
+/** Спільні порожні значення: нова Map на кожен рендер зривала б мемоізацію. */
+const EMPTY_BALANCES: Map<string, AbsenceBalance> = new Map();
+const EMPTY_EXCEPTIONS: Map<string, boolean> = new Map();
+const EMPTY_HOLIDAYS: Map<string, string> = new Map();
+const EMPTY_COMMENTS: Map<string, string> = new Map();
+
 export function TeamPage() {
   const { userId, teamId, loading, permissions } = useAuth();
   const workspacePresence = useWorkspacePresence();
@@ -325,17 +341,6 @@ export function TeamPage() {
   const [monthOffset, setMonthOffset] = useState(0);
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-  const [absences, setAbsences] = useState<TeamAbsence[] | null>(null);
-  /**
-   * Черга погоджень окремо від журналу року: непогоджена заявка може бути на
-   * будь-який рік, а журнал — завжди про один (REQ-22).
-   */
-  const [pendingAll, setPendingAll] = useState<TeamAbsence[] | null>(null);
-  const [absencesLoading, setAbsencesLoading] = useState(false);
-  const [balances, setBalances] = useState<Map<string, AbsenceBalance>>(new Map());
-  const [exceptions, setExceptions] = useState<Map<string, boolean>>(new Map());
-  /** день → назва свята. Окремо від математики: та про підписи не знає. */
-  const [holidayNames, setHolidayNames] = useState<Map<string, string>>(new Map());
 
   const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
   const [absenceDialogInitial, setAbsenceDialogInitial] = useState<AbsenceDialogValue | null>(null);
@@ -345,7 +350,7 @@ export function TeamPage() {
   const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
   const [holidayDialogOpen, setHolidayDialogOpen] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
-  const [decisionComments, setDecisionComments] = useState<Map<string, string>>(new Map());
+  const [decisionCommentsState, setDecisionComments] = useState<Map<string, string> | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<TeamAbsence | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -356,6 +361,42 @@ export function TeamPage() {
   const selectedMonth = useMemo(() => addMonths(startOfMonth(new Date()), monthOffset), [monthOffset]);
   const year = selectedMonth.getFullYear();
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+
+  /**
+   * Журнал відсутностей із кешу сторінки (REQ-19).
+   *
+   * ЩО ЛІКУЄ. Люди приїжджали з кешу миттєво, а відсутності, свята, баланси й
+   * черга погоджень — щоразу з нуля. Через це сторінка добудовувалась на очах:
+   * заміряно на повторному вході, висота 2524 → 2755 → 3338 px за півсекунди.
+   * Формально «не каркас», а по відчуттю — та сама смиканина.
+   *
+   * ЧОМУ ЧЕРЕЗ ПОХІДНЕ ЗНАЧЕННЯ, А НЕ ЧЕРЕЗ ІНІЦІАЛІЗАТОР useState. Воркспейс
+   * резолвиться асинхронно, тож на першому рендері ключа кешу ще немає — а
+   * ініціалізатор виконується рівно раз. Похідне значення підхоплює кеш у тому
+   * ж кадрі, у якому з'явився воркспейс: жодного проміжного стану з порожнім
+   * журналом на екрані не буває.
+   */
+  const absenceCacheKey = workspaceId ? `team-absences:${workspaceId}:${year}` : "team-absences:none";
+  const { cached: absenceCache, setCache: setAbsenceCache } = usePageCache<TeamAbsenceCache>(absenceCacheKey);
+
+  const [absencesState, setAbsences] = useState<TeamAbsence[] | null>(null);
+  const absences = absencesState ?? absenceCache?.absences ?? null;
+  /**
+   * Черга погоджень окремо від журналу року: непогоджена заявка може бути на
+   * будь-який рік, а журнал — завжди про один (REQ-22).
+   */
+  const [pendingAllState, setPendingAll] = useState<TeamAbsence[] | null>(null);
+  const pendingAll = pendingAllState ?? absenceCache?.pendingAll ?? null;
+  const [absencesLoading, setAbsencesLoading] = useState(false);
+  const [balancesState, setBalances] = useState<Map<string, AbsenceBalance> | null>(null);
+  const balances = balancesState ?? absenceCache?.balances ?? EMPTY_BALANCES;
+  const [exceptionsState, setExceptions] = useState<Map<string, boolean> | null>(null);
+  const exceptions = exceptionsState ?? absenceCache?.exceptions ?? EMPTY_EXCEPTIONS;
+  /** день → назва свята. Окремо від математики: та про підписи не знає. */
+  const [holidayNamesState, setHolidayNames] = useState<Map<string, string> | null>(null);
+  const holidayNames = holidayNamesState ?? absenceCache?.holidayNames ?? EMPTY_HOLIDAYS;
+
+  const decisionComments = decisionCommentsState ?? absenceCache?.decisionComments ?? EMPTY_COMMENTS;
 
   const { data, showSkeleton } = usePageData({
     cacheKey: `team-page:${userId ?? "none"}`,
@@ -421,6 +462,15 @@ export function TeamPage() {
       ]);
       setBalances(balanceMap);
       setDecisionComments(comments);
+      // Наступний вхід у розділ малює журнал одразу, без добудови на очах.
+      setAbsenceCache({
+        absences: rows,
+        pendingAll: pendingRows,
+        balances: balanceMap,
+        exceptions: calendar.exceptions,
+        holidayNames: calendar.holidayNames,
+        decisionComments: comments,
+      });
       // Бейджі доступності на інших сторінках виводяться з цього ж журналу, а
       // директорія кешується в модулі — без скидання вони лишились би старими
       // до кінця життя вкладки.
@@ -433,7 +483,7 @@ export function TeamPage() {
     } finally {
       setAbsencesLoading(false);
     }
-  }, [workspaceId, year]);
+  }, [setAbsenceCache, workspaceId, year]);
 
   useEffect(() => {
     void reloadAbsenceData();

@@ -199,6 +199,7 @@ type InviteResult = {
 type TeamMembersPageCache = {
   workspaceId: string | null;
   members: Member[];
+  directoryRows: WorkspaceMemberDirectoryRow[];
   invites: Invite[];
   memberProfilesByUserId: Record<string, { label: string; avatarUrl: string | null }>;
   memberMetaByUserId: Record<string, MemberProfileMeta>;
@@ -512,6 +513,40 @@ export function TeamMembersPage() {
 
   const { cached, setCache } = usePageCache<TeamMembersPageCache>("team-members");
   const hasCache = Boolean(cached?.workspaceId);
+  /**
+   * Що з кешу ми вже можемо намалювати. Від цього залежить не вміст (він
+   * підставлений в ініціалізаторах нижче), а чи вмикати каркас на час звірки з
+   * сервером: показувати його поверх наявних людей означає «усе зникло».
+   */
+  const hasCachedMembers = Boolean(cached?.members?.length);
+  const hasCachedProfiles = Boolean(
+    cached?.memberProfilesByUserId && Object.keys(cached.memberProfilesByUserId).length > 0
+  );
+  const hasCachedMeta = Boolean(
+    cached?.memberMetaByUserId && Object.keys(cached.memberMetaByUserId).length > 0
+  );
+  /**
+   * Ті самі прапорці, але для завантажувачів.
+   *
+   * У залежності ефектів їх класти НЕ МОЖНА: кеш пишеться після кожного
+   * успішного завантаження, прапорець миттю стає true — і ефект пішов би на
+   * друге коло за власним записом. Ref читається всередині, ідентичності не
+   * має, кола не робить.
+   */
+  const cacheReadyRef = useRef({
+    workspace: hasCache,
+    members: hasCachedMembers,
+    profiles: hasCachedProfiles,
+    meta: hasCachedMeta,
+  });
+  useEffect(() => {
+    cacheReadyRef.current = {
+      workspace: hasCache,
+      members: hasCachedMembers,
+      profiles: hasCachedProfiles,
+      meta: hasCachedMeta,
+    };
+  }, [hasCache, hasCachedMembers, hasCachedProfiles, hasCachedMeta]);
   const [workspaceResolved, setWorkspaceResolved] = useState(Boolean(cached?.workspaceId));
 
   const [workspaceId, setWorkspaceId] = useState<string | null>(cached?.workspaceId ?? null);
@@ -520,16 +555,29 @@ export function TeamMembersPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
+  /**
+   * Повторний вхід — миттєвий (REQ-19).
+   *
+   * Кеш сторінки писався й раніше, але читались із нього лише воркспейс і
+   * інвайти: люди, профілі й метадані щоразу починали з порожнечі, тож розділ
+   * ЗАВЖДИ показував каркас, скільки б разів на день у нього не зайшли.
+   */
+  const [members, setMembers] = useState<Member[]>(cached?.members ?? []);
+  const [membersLoading, setMembersLoading] = useState(!cached?.members?.length);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [memberProfilesByUserId, setMemberProfilesByUserId] = useState<
     Record<string, { label: string; avatarUrl: string | null }>
-  >({});
-  const [directoryRows, setDirectoryRows] = useState<WorkspaceMemberDirectoryRow[]>([]);
-  const [memberProfilesLoading, setMemberProfilesLoading] = useState(true);
-  const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>({});
-  const [memberMetaLoading, setMemberMetaLoading] = useState(true);
+  >(cached?.memberProfilesByUserId ?? {});
+  const [directoryRows, setDirectoryRows] = useState<WorkspaceMemberDirectoryRow[]>(
+    cached?.directoryRows ?? []
+  );
+  const [memberProfilesLoading, setMemberProfilesLoading] = useState(
+    !cached?.memberProfilesByUserId
+  );
+  const [memberMetaByUserId, setMemberMetaByUserId] = useState<Record<string, MemberProfileMeta>>(
+    cached?.memberMetaByUserId ?? {}
+  );
+  const [memberMetaLoading, setMemberMetaLoading] = useState(!cached?.memberMetaByUserId);
   const [memberProfileStorageAvailable, setMemberProfileStorageAvailable] = useState(true);
   const [memberPresenceByUserId, setMemberPresenceByUserId] = useState<Record<string, MemberPresence>>({});
 
@@ -673,7 +721,9 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadWorkspaceId = async () => {
-      setWorkspaceLoading(true);
+      // Воркспейс у нас уже є з кешу — звіряємось тихо. Інакше кожен вхід у
+      // розділ починався з каркаса, хоч показувати було що (REQ-19).
+      if (!cacheReadyRef.current.workspace) setWorkspaceLoading(true);
       setWorkspaceError(null);
 
       let resolvedId: string | null = null;
@@ -704,7 +754,8 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMembers = async () => {
-      setMembersLoading(true);
+      // Є кого показати — звіряємось тихо (той самий підхід, що й для інвайтів).
+      if (!cacheReadyRef.current.members) setMembersLoading(true);
       setMembersError(null);
 
       try {
@@ -752,7 +803,7 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMemberProfiles = async () => {
-      setMemberProfilesLoading(true);
+      if (!cacheReadyRef.current.profiles) setMemberProfilesLoading(true);
       try {
         const memberIds = Array.from(new Set(directoryRows.map((member) => member.userId).filter(Boolean)));
 
@@ -870,7 +921,7 @@ export function TeamMembersPage() {
     let cancelled = false;
 
     const loadMemberMeta = async () => {
-      setMemberMetaLoading(true);
+      if (!cacheReadyRef.current.meta) setMemberMetaLoading(true);
       try {
         const profilesByUserId = directoryRows.reduce<Record<string, MemberProfileMeta>>((acc, row) => {
           acc[row.userId] = {
@@ -1042,11 +1093,12 @@ export function TeamMembersPage() {
     setCache({
       workspaceId,
       members,
+      directoryRows,
       invites,
       memberProfilesByUserId,
       memberMetaByUserId,
     });
-  }, [workspaceId, members, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
+  }, [workspaceId, members, directoryRows, invites, memberProfilesByUserId, memberMetaByUserId, setCache]);
 
   const filteredMembers = sortMembersForList(members.filter((m) => {
     if (!activeFilter) return true;

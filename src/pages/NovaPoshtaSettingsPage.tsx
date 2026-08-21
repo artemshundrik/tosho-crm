@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Truck, AlertTriangle, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/auth/AuthProvider";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -254,9 +255,20 @@ export default function NovaPoshtaSettingsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Завантаження…
+          // Каркас полів замість рядка «Завантаження…»: далі тут буде саме
+          // сітка з двох колонок, і підміняти її словом — зайвий кадр (REQ-19).
+          <div role="status" aria-busy="true" className="space-y-5 p-5">
+            <span className="sr-only">Завантаження</span>
+            {Array.from({ length: 3 }).map((_, block) => (
+              <div key={block} className="grid items-start gap-4 sm:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, field) => (
+                  <div key={field} className="space-y-2">
+                    <Skeleton className="h-3 w-28 rounded-full opacity-70" />
+                    <Skeleton className="h-9 w-full rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         ) : (
           <>

@@ -137,6 +137,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
@@ -5873,10 +5874,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {contentView !== "quotes" && (
       <EstimatesTableCanvas>
         {quoteSetsLoading ? (
-          <div className="px-5 py-12 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">Завантаження...</p>
-          </div>
+          // Канонічний каркас таблиці замість спінера з підписом: далі тут
+          // з'явиться саме таблиця, і слово посеред порожнечі лише зайвий кадр.
+          <SurfaceSkeleton variant="table" label="Готуємо КП та набори" rows={6} />
         ) : filteredQuoteSets.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <Layers className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />

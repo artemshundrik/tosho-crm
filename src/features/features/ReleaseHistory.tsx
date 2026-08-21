@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMous
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { PageLoading } from "@/components/app/page-loading";
 import { useReleases, useWorkSessions } from "@/features/features/releaseQueries";
 import {
   buildThreads,
@@ -333,7 +334,10 @@ export function ReleaseHistory() {
   }, [active, dayKeys, monthKeys, go]);
 
   if (isPending) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">Завантажую…</p>;
+    // Був голий рядок «Завантажую…» посеред порожнечі: каркас маршруту встигав
+    // з'явитись і зникнути, а на його місці лишалось слово. Тепер тут той самий
+    // каркас, що й у маршруту, — картинка не міняється (REQ-19).
+    return <PageLoading />;
   }
   if (dayKeys.length === 0) {
     return (
