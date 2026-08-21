@@ -56,6 +56,9 @@ const BackupsTabPanel = lazy(() =>
 const TelegramTabPanel = lazy(() =>
   import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.TelegramTabPanel }))
 );
+const RuntimeErrorsTabPanel = lazy(() =>
+  import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.RuntimeErrorsTabPanel }))
+);
 const AiUsageTabPanel = lazy(() =>
   import("@/components/admin-observability/ObservabilityPanels").then((module) => ({ default: module.AiUsageTabPanel }))
 );
@@ -331,10 +334,10 @@ function sliceTrendData(data: TrendDatum[], range: ChartRange) {
 }
 
 export default function AdminObservabilityPage() {
-  const { userId, loading: authLoading, permissions } = useAuth();
+  const { userId, teamId, loading: authLoading, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [backupRuns, setBackupRuns] = useState<BackupRunRow[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups" | "telegram" | "ai-usage">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups" | "telegram" | "errors" | "ai-usage">("overview");
   const [operationsRange, setOperationsRange] = useState<ChartRange>("7d");
   const [operationsMetric, setOperationsMetric] = useState<OperationsMetricKey>("storageTodayMb");
   const [loading, setLoading] = useState(true);
@@ -980,7 +983,7 @@ export default function AdminObservabilityPage() {
             </div>
           </section>
         ) : (
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups" | "telegram" | "ai-usage")} className="w-full">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "overview" | "attachments" | "backups" | "telegram" | "errors" | "ai-usage")} className="w-full">
             {refreshError ? (
               <section className="mb-6 rounded-4xl border border-warning-soft-border bg-warning-soft/80 p-4 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -1017,6 +1020,12 @@ export default function AdminObservabilityPage() {
                   className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
                   Telegram
+                </TabsTrigger>
+                <TabsTrigger
+                  value="errors"
+                  className="h-10 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
+                  Помилки
                 </TabsTrigger>
                 <TabsTrigger
                   value="ai-usage"
@@ -1237,6 +1246,24 @@ export default function AdminObservabilityPage() {
               }
             >
               <TelegramTabPanel />
+            </Suspense>
+
+            <Suspense
+              fallback={
+                activeTab === "errors" ? (
+                  <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 shadow-sm">
+                    <AppSectionLoader label="Читаємо журнал помилок..." className="border-none bg-transparent py-12" />
+                  </section>
+                ) : null
+              }
+            >
+              {/*
+                teamId, а НЕ workspaceId: журнал помилок пишеться з
+                public.team_members.team_id, і це інший ідентифікатор.
+                Із workspaceId вкладка мовчки показувала «падінь не було»
+                при 1274 записах у базі.
+              */}
+              <RuntimeErrorsTabPanel teamId={teamId} />
             </Suspense>
 
             <Suspense

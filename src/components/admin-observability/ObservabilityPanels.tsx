@@ -1,7 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BellRing,
+  Bug,
+  ChevronDown,
   Download,
   ExternalLink,
   Eye,
@@ -1398,6 +1400,273 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
           <p className="px-1 text-xs text-muted-foreground">
             Вартість рахується за тарифами в <code>netlify/functions/_aiPricing.ts</code>. Ставки gpt-5.4
             орієнтовні — звірте з рахунком OpenAI для точних цифр.
+          </p>
+        </>
+      )}
+    </TabsContent>
+  );
+}
+
+
+/* ------------------------------- Помилки -------------------------------- */
+
+type RuntimeErrorRow = {
+  id: string;
+  created_at: string;
+  actor_name: string | null;
+  user_id: string | null;
+  source: string | null;
+  href: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type RuntimeErrorGroup = {
+  key: string;
+  message: string;
+  count: number;
+  people: Set<string>;
+  lastAt: string;
+  firstAt: string;
+  routes: Set<string>;
+  releases: Set<string>;
+  sources: Set<string>;
+  sample: RuntimeErrorRow;
+};
+
+const RUNTIME_ERROR_RANGES = [
+  { key: 7, label: "7 днів" },
+  { key: 30, label: "30 днів" },
+  { key: 90, label: "90 днів" },
+] as const;
+
+/**
+ * Ключ групування. Числа й ідентифікатори в лапках прибираємо: «reading 'url'»
+ * і «reading 'state'» — різні помилки, а от «Loading chunk 42» і
+ * «Loading chunk 77» — одна й та сама, і без нормалізації вони розпадаються на
+ * десятки однакових рядків.
+ */
+function runtimeErrorKey(message: string): string {
+  return message
+    .replace(/\b\d+\b/g, "#")
+    .replace(/https?:\/\/[^\s)]+/g, "<url>")
+    .trim()
+    .slice(0, 180);
+}
+
+function formatErrorMoment(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Kiev",
+  }).format(date);
+}
+
+export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
+  const [days, setDays] = useState<number>(30);
+  const [rows, setRows] = useState<RuntimeErrorRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!teamId) return;
+    let active = true;
+    void (async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase
+          .schema("tosho")
+          .from("runtime_errors")
+          .select("id,created_at,actor_name,user_id,source,href,metadata")
+          .eq("team_id", teamId)
+          .gte("created_at", from)
+          .order("created_at", { ascending: false })
+          .limit(2000);
+        if (error) throw new Error(error.message);
+        if (active) setRows((data ?? []) as RuntimeErrorRow[]);
+      } catch (e) {
+        if (active) setLoadError(e instanceof Error ? e.message : "Помилка завантаження");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [teamId, days]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, RuntimeErrorGroup>();
+    for (const row of rows) {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const message = typeof meta.message === "string" && meta.message.trim() ? meta.message.trim() : "Без повідомлення";
+      const key = runtimeErrorKey(message);
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        if (row.actor_name) existing.people.add(row.actor_name);
+        if (row.created_at < existing.firstAt) existing.firstAt = row.created_at;
+        if (typeof meta.route_pattern === "string") existing.routes.add(meta.route_pattern);
+        if (typeof meta.release === "string") existing.releases.add(meta.release);
+        if (row.source) existing.sources.add(row.source);
+        continue;
+      }
+      map.set(key, {
+        key,
+        message,
+        count: 1,
+        people: new Set(row.actor_name ? [row.actor_name] : []),
+        lastAt: row.created_at,
+        firstAt: row.created_at,
+        routes: new Set(typeof meta.route_pattern === "string" ? [meta.route_pattern] : []),
+        releases: new Set(typeof meta.release === "string" ? [meta.release] : []),
+        sources: new Set(row.source ? [row.source] : []),
+        sample: row,
+      });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count || (a.lastAt < b.lastAt ? 1 : -1));
+  }, [rows]);
+
+  const peopleAffected = useMemo(() => {
+    const all = new Set<string>();
+    groups.forEach((group) => group.people.forEach((person) => all.add(person)));
+    return all.size;
+  }, [groups]);
+
+  return (
+    <TabsContent value="errors" className="mt-6 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-foreground">Помилки в браузері</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            Падіння клієнтської частини — те, про що раніше дізнавались із робочого чату.
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-muted/30 p-1">
+          {RUNTIME_ERROR_RANGES.map((range) => (
+            <Button
+              key={range.key}
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setDays(range.key)}
+              className={cn(
+                "h-8 rounded-xl px-3 text-xs font-medium",
+                days === range.key && "bg-background text-foreground shadow-sm"
+              )}
+            >
+              {range.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <AppSectionLoader label="Читаємо журнал помилок..." className="border-none bg-transparent py-12" />
+      ) : loadError ? (
+        <div className="rounded-3xl border border-border/60 bg-card/95 p-4 text-sm text-destructive">{loadError}</div>
+      ) : groups.length === 0 ? (
+        <div className="rounded-3xl border border-border/60 bg-card/95 p-6 text-center text-sm text-muted-foreground">
+          За цей період падінь не було.
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+              <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Падінь усього</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{rows.length}</div>
+            </div>
+            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+              <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Різних помилок</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{groups.length}</div>
+            </div>
+            <div className="rounded-3xl border border-border/60 bg-card/95 p-4">
+              <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Кого зачепило</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{peopleAffected}</div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-border/60 bg-card/95">
+            <div className="divide-y divide-border/40">
+              {groups.map((group) => {
+                const expanded = openKey === group.key;
+                const meta = (group.sample.metadata ?? {}) as Record<string, unknown>;
+                const stack = typeof meta.stack === "string" ? meta.stack : null;
+                const componentStack = typeof meta.component_stack === "string" ? meta.component_stack : null;
+                return (
+                  <div key={group.key}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenKey(expanded ? null : group.key)}
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                      aria-expanded={expanded}
+                    >
+                      <Bug className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-foreground">{group.message}</span>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
+                          <span>{formatErrorMoment(group.lastAt)}</span>
+                          <span>
+                            {group.people.size > 0 ? [...group.people].join(", ") : "невідомо хто"}
+                          </span>
+                          {[...group.routes].slice(0, 2).map((route) => (
+                            <span key={route} className="tabular-nums">{route}</span>
+                          ))}
+                        </span>
+                      </span>
+                      <Badge variant="secondary" className="shrink-0 tabular-nums">
+                        {group.count}
+                      </Badge>
+                      <ChevronDown
+                        className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")}
+                        aria-hidden
+                      />
+                    </button>
+                    {expanded ? (
+                      <div className="space-y-3 border-t border-border/40 bg-muted/20 px-4 py-3 text-xs">
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+                          <span>Перший раз: {formatErrorMoment(group.firstAt)}</span>
+                          <span>Джерело: {[...group.sources].join(", ") || "—"}</span>
+                          <span>Адреса: {group.sample.href ?? "—"}</span>
+                          {group.releases.size > 0 ? <span>Збірка: {[...group.releases].slice(0, 3).join(", ")}</span> : null}
+                        </div>
+                        {stack ? (
+                          <div>
+                            <div className="mb-1 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Стек</div>
+                            <pre className="max-h-64 overflow-auto rounded-inner border border-border/60 bg-background p-2 text-3xs leading-relaxed text-foreground">
+                              {stack}
+                            </pre>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">
+                            Стека немає — запис зроблено до того, як його почали зберігати.
+                          </div>
+                        )}
+                        {componentStack ? (
+                          <div>
+                            <div className="mb-1 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Компоненти</div>
+                            <pre className="max-h-40 overflow-auto rounded-inner border border-border/60 bg-background p-2 text-3xs leading-relaxed text-muted-foreground">
+                              {componentStack}
+                            </pre>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <p className="text-2xs text-muted-foreground">
+            Записи до 21.08.2026 містять і шум із локальної розробки: гарячий перезапуск на localhost давав
+            «X is not defined», і воно писалось у той самий журнал. Відтоді розробка сюди не пише.
           </p>
         </>
       )}

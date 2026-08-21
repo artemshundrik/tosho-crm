@@ -289,7 +289,30 @@ function getRuntimeRouteContext(pathname: string) {
   };
 }
 
+/**
+ * Витягуємо стек акуратно: у нього іноді потрапляє токен із адреси, а рядок
+ * буває на кілька кілобайт. Ріжемо до 12 кадрів — далі вже шум збірника.
+ */
+function extractErrorStack(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const stack = (error as { stack?: unknown }).stack;
+  if (typeof stack !== "string" || !stack.trim()) return null;
+  return stack.split("\n").slice(0, 12).join("\n").slice(0, 4000);
+}
+
 function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; source: "boundary" | "window_error" | "unhandledrejection" }) {
+  // Розробка сюди не пише. Раніше писала — і саме тому в таблиці лежить купа
+  // «X is not defined»: так виглядає частково застосований гарячий перезапуск
+  // на localhost. У проді ці рядки нічого не означають, але тонуть у них
+  // справжні помилки, яких ніхто через це не бачить. У розробника помилка й
+  // так перед очима в консолі.
+  if (import.meta.env.DEV) return;
+
+  // Помилку завантаження чанка не пишемо: це не збій застосунку, а стара
+  // вкладка після викочування. На неї вже є окрема реакція — одноразове
+  // перезавантаження, — і в журналі вона лише створює масовку.
+  if (isChunkLikeError(params.error)) return;
+
   const message = getRuntimeErrorMessage(params.error) || "Unknown runtime error";
   const path = typeof window !== "undefined"
     ? `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -337,6 +360,13 @@ function reportRuntimeError(params: { error: unknown; info?: ErrorInfo | null; s
                 }
               : null,
           component_stack: summarizeComponentStack(params.info),
+          // Стек і версія збірки — те, без чого запис лишається здогадом:
+          // «Cannot read properties of undefined» без стека не веде нікуди, а
+          // без версії неможливо сказати, чи помилка ще жива після викочування.
+          stack: extractErrorStack(params.error),
+          release: __APP_VERSION__.buildId,
+          app_version: __APP_VERSION__.version,
+          origin: typeof window !== "undefined" ? window.location.origin : null,
         },
       });
     } catch (loggingError) {
