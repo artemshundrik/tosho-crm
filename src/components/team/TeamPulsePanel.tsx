@@ -17,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { callToshoRpc } from "@/lib/toshoRpc";
 import {
@@ -125,6 +126,8 @@ export function TeamPulsePanel({
   people: PulsePerson[];
   resolvePerson: (userId: string) => PulsePerson;
 }) {
+  // Дані activity_log ключуються по team_id — воркспейс тут не підходить.
+  const { teamId } = useAuth();
   const { range, setRange, periodOffset, setPeriodOffset } = periodState;
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -138,34 +141,36 @@ export function TeamPulsePanel({
   const bucket = bucketOf(range);
 
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !teamId) return;
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
         const startIso = period.start.toISOString();
         const endIso = period.end.toISOString();
-        const build = (scope: "team" | "workspace" | "none") => {
-          let query = supabase
-            .from("activity_log")
-            .select("user_id,title,action,entity_type,href,created_at")
-            .gte("created_at", startIso)
-            .lt("created_at", endIso)
-            .order("created_at", { ascending: false })
-            .limit(2000);
-          if (scope === "team") query = query.eq("team_id", workspaceId);
-          if (scope === "workspace") query = query.eq("workspace_id", workspaceId);
-          return query;
-        };
-        const [teamScoped, workspaceScoped, unscoped] = await Promise.all([
-          build("team"),
-          build("workspace"),
-          build("none"),
-        ]);
-        const candidates = [teamScoped, workspaceScoped, unscoped].filter((candidate) => !candidate.error);
-        const best = candidates.sort((a, b) => (b.data?.length ?? 0) - (a.data?.length ?? 0))[0];
+        /**
+         * Один запит замість трьох «наосліп».
+         *
+         * Раніше тут летіли ТРИ варіанти одночасно (team_id / workspace_id /
+         * без фільтра) і перемагав той, що повернув більше рядків. Насправді ж:
+         * фільтр по workspace_id падав 400 на КОЖНОМУ відкритті (у
+         * public.activity_log такої колонки немає), а фільтр по team_id мовчки
+         * давав нуль рядків, бо в нього передавали workspaceId — це РІЗНІ
+         * сутності (див. memory: workspace_id ≠ team_id). Тобто панель завжди
+         * жила з нефільтрованого запиту, а «переможець за кількістю рядків»
+         * просто маскував обидві помилки. Заміряно на проді 21.08.2026.
+         */
+        const { data, error } = await supabase
+          .from("activity_log")
+          .select("user_id,title,action,entity_type,href,created_at")
+          .eq("team_id", teamId)
+          .gte("created_at", startIso)
+          .lt("created_at", endIso)
+          .order("created_at", { ascending: false })
+          .limit(2000);
         if (cancelled) return;
-        setRows((best?.data ?? []) as ActivityRow[]);
+        if (error) throw error;
+        setRows((data ?? []) as ActivityRow[]);
       } catch {
         if (!cancelled) setRows([]);
       } finally {
@@ -208,7 +213,7 @@ export function TeamPulsePanel({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, period.start, period.end]);
+  }, [workspaceId, teamId, period.start, period.end]);
 
   const { groups, totalActions, trend } = useMemo(() => {
     const memberIds = memberIdsRef.current;

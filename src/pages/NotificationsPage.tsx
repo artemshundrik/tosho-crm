@@ -299,7 +299,7 @@ const NOTIFICATION_BADGE_CLASS =
 const NOTIFICATION_AVATAR_SHELL_CLASS = "relative mt-0.5 flex h-12 w-12 shrink-0 items-start justify-start";
 
 export default function NotificationsPage() {
-  const { userId, accessRole, jobRole } = useAuth();
+  const { userId, teamId, accessRole, jobRole } = useAuth();
   const push = usePushNotifications(userId);
   const location = useLocation();
   const navigate = useNavigate();
@@ -381,7 +381,7 @@ export default function NotificationsPage() {
     let active = true;
 
     const loadAvatarSources = async () => {
-      if (!userId) return;
+      if (!userId || !teamId) return;
       const workspaceId = await resolveWorkspaceId(userId);
       if (!workspaceId || !active) return;
 
@@ -402,17 +402,20 @@ export default function NotificationsPage() {
 
       const [members, customersResult, leadsResult, quotesResult, designTasksResult] = await Promise.all([
         listWorkspaceMembersForDisplay(workspaceId).catch(() => []),
+        // team_id, не workspaceId: це різні сутності, і фільтр по воркспейсу
+        // тут мовчки повертав нуль рядків — сповіщення лишались без назв і
+        // логотипів замовників (помічено під час аудиту 21.08.2026).
         supabase
           .schema("tosho")
           .from("customers")
           .select("id, name, legal_name, logo_url")
-          .eq("team_id", workspaceId)
+          .eq("team_id", teamId)
           .limit(5000),
         supabase
           .schema("tosho")
           .from("leads")
           .select("id, company_name, legal_name, logo_url")
-          .eq("team_id", workspaceId)
+          .eq("team_id", teamId)
           .limit(5000),
         quoteNumbers.length > 0
           ? supabase
@@ -534,7 +537,7 @@ export default function NotificationsPage() {
     return () => {
       active = false;
     };
-  }, [notifications, userId]);
+  }, [notifications, teamId, userId]);
 
   const memberByNormalizedName = useMemo(() => {
     const map = new Map<string, WorkspaceMemberDisplayRow>();

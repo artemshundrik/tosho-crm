@@ -1652,7 +1652,13 @@ export function TeamMembersPage() {
                       .schema(schemaName)
                       .from(attempt.tableName as never)
                       .delete()
-                      .eq("team_id", workspaceId)
+                      // Саме team_id, НЕ workspaceId: це різні сутності, і з
+                      // воркспейсом делет мовчки видаляв нуль рядків. Через це
+                      // «видалені» люди лишались у public.team_members — а на
+                      // цій таблиці тримається is_team_member(), тобто вся RLS
+                      // даних. Знайдено аудитом 21.08.2026: двоє видалених
+                      // зберігали повний доступ до CRM.
+                      .eq("team_id", teamId ?? "")
                       .eq("user_id", memberToDelete.user_id);
 
             if (error && !isRecoverableMemberDeleteError(error.message)) {
@@ -1980,7 +1986,10 @@ export function TeamMembersPage() {
                         .schema(schemaName)
                         .from(attempt.tableName as never)
                         .update(attempt.payload as never)
-                        .eq("team_id", workspaceId)
+                        // team_id, не workspaceId — інакше оновлення ролей у
+                        // public.team_members мовчки не торкалось жодного рядка
+                        // (саме тому там досі «сміття» замість ролей).
+                        .eq("team_id", teamId ?? "")
                         .eq("user_id", editMember.user_id);
 
               if (error) {

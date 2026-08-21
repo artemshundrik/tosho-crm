@@ -373,6 +373,21 @@ export const handler = async (event: HttpEvent) => {
     }
 
     const membershipId = membershipTarget?.id ?? null;
+    /**
+     * Операційна команда цілі — для записів у public.team_members.
+     *
+     * workspaceId сюди НЕ підходить: team_id і workspace_id — різні сутності з
+     * різними значеннями, і фільтр по воркспейсу мовчки оновлював нуль рядків
+     * (Supabase не вважає це помилкою). Саме тому ролі в public.team_members
+     * роками лишались застарілими. Резолвимо з рядка самої людини.
+     */
+    const { data: teamRow } = await adminClient
+      .from("team_members")
+      .select("team_id")
+      .eq("user_id", targetUserId)
+      .limit(1)
+      .maybeSingle<{ team_id?: string | null }>();
+    const targetTeamId = teamRow?.team_id ?? null;
     const currentAccessRole = membershipTarget?.access_role ?? null;
     const currentJobRole = membershipTarget?.job_role ?? null;
     const accessRoleChanged = !sameRole(currentAccessRole, nextAccessRole);
@@ -428,6 +443,9 @@ export const handler = async (event: HttpEvent) => {
         if (scope === "membership_id" && !membershipId) {
           continue;
         }
+        if (scope === "team_user" && !targetTeamId) {
+          continue;
+        }
 
         const { error } =
           scope === "workspace_user"
@@ -447,7 +465,7 @@ export const handler = async (event: HttpEvent) => {
                   .schema(schemaName)
                   .from(tableName)
                   .update(updatePayload)
-                  .eq("team_id", workspaceId)
+                  .eq("team_id", targetTeamId as string)
                   .eq("user_id", targetUserId);
 
         if (error) {
