@@ -80,7 +80,6 @@ import {
   type DesignTaskType,
 } from "@/lib/designTaskType";
 import {
-  normalizeQuoteAttachmentAudience,
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import { supabase } from "@/lib/supabaseClient";
@@ -110,7 +109,6 @@ import {
   deleteQuote,
   listCustomersBySearch,
   listLeadsBySearch,
-  listStatusHistory,
   setStatus,
   updateQuote,
   listQuoteSetMemberships,
@@ -216,6 +214,11 @@ import {
   statusIcons,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
+import {
+  fetchQuoteAttachments,
+  fetchStatusHistory,
+  type QuoteAttachment,
+} from "@/features/quotes/quote-details/queries";
 import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
 import {
   QuoteDeadlineBadge,
@@ -406,20 +409,6 @@ type MentionDropdownState = {
   side: "top" | "bottom";
   maxHeight: number;
 };
-type QuoteAttachment = {
-  id: string;
-  name: string;
-  size: string;
-  created_at: string;
-  url?: string;
-  mimeType?: string | null;
-  uploadedBy?: string | null;
-  uploadedByLabel?: string;
-  storageBucket?: string | null;
-  storagePath?: string | null;
-  audience?: QuoteAttachmentAudience;
-};
-
 type DesignOutputMetaFile = {
   id: string;
   file_name: string;
@@ -3921,15 +3910,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadHistory = async () => {
     setHistoryLoading(true);
     setHistoryError(null);
-    try {
-      const data = await listStatusHistory(quoteId, teamId);
-      setHistory(data);
-    } catch (e: unknown) {
-      setHistoryError(getErrorMessage(e, "Не вдалося завантажити історію."));
+    const result = await fetchStatusHistory(quoteId, teamId);
+    if (result.ok) {
+      setHistory(result.data);
+    } else {
+      setHistoryError(result.message);
       setHistory([]);
-    } finally {
-      setHistoryLoading(false);
     }
+    setHistoryLoading(false);
   };
 
   const loadComments = async () => {
@@ -4062,57 +4050,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadAttachments = async () => {
     setAttachmentsLoading(true);
     setAttachmentsError(null);
-    try {
-      const loadRows = async (withTeamFilter: boolean) => {
-        let query = supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .select("id,file_name,mime_type,file_size,created_at,storage_bucket,storage_path,uploaded_by,audience")
-          .eq("quote_id", quoteId)
-          .order("created_at", { ascending: false });
-        if (withTeamFilter && teamId) {
-          query = query.eq("team_id", teamId);
-        }
-        return await query;
-      };
-
-      let { data, error } = await loadRows(!!teamId);
-      if (
-        error &&
-        teamId &&
-        /column/i.test(error.message ?? "") &&
-        /team_id/i.test(error.message ?? "")
-      ) {
-        ({ data, error } = await loadRows(false));
-      }
-      if (error) throw error;
-
-      const rows = data ?? [];
-      const mapped = rows.map((row) => ({
-        id: row.id,
-        name: row.file_name ?? "Файл",
-        size: formatFileSize(row.file_size),
-        created_at: row.created_at ?? new Date().toISOString(),
-        mimeType: row.mime_type ?? null,
-        uploadedBy: row.uploaded_by ?? null,
-        uploadedByLabel:
-          memberById.get(row.uploaded_by ?? "") ??
-          (row.uploaded_by ? "Невідомий користувач" : undefined),
-        storageBucket: row.storage_bucket ?? null,
-        storagePath: row.storage_path ?? null,
-        audience: normalizeQuoteAttachmentAudience(row.audience),
-      } satisfies QuoteAttachment));
-      const isDesignVisualization = (file: QuoteAttachment) =>
-        (file.storagePath ?? "").includes("design-outputs/");
-      setAttachments(mapped.filter((file) => !isDesignVisualization(file)));
-      setDesignVisualizations(mapped.filter((file) => isDesignVisualization(file)));
-    } catch (e: unknown) {
-      setAttachmentsError(getErrorMessage(e, "Не вдалося завантажити файли."));
+    const result = await fetchQuoteAttachments(quoteId, teamId, memberById);
+    if (result.ok) {
+      setAttachments(result.data.attachments);
+      setDesignVisualizations(result.data.designVisualizations);
+    } else {
+      setAttachmentsError(result.message);
       setAttachments([]);
       setDesignVisualizations([]);
-    } finally {
-      setAttachmentsLoading(false);
     }
+    setAttachmentsLoading(false);
   };
 
   const uploadAttachments = async (
