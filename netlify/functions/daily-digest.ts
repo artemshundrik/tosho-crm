@@ -714,16 +714,20 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
       admin
         .schema("tosho")
         .from("ua_workday_exceptions")
-        .select("day,note")
+        // Без фільтра по is_workday: буває робоче свято (24 серпня 2026), і
+        // привітати з ним усе одно треба — просто не називаючи вихідним.
+        .select("day,note,is_workday")
         .in("workspace_id", workspaceIds)
-        .eq("is_workday", false)
         .in("day", [todayKey, tomorrowKey]),
     ]);
 
     const holidayByDay = new Map(
-      ((holidayRows.data ?? []) as Array<{ day?: string | null; note?: string | null }>)
-        .filter((row) => row.day)
-        .map((row) => [row.day as string, (row.note ?? "").trim() || "Свято"])
+      ((holidayRows.data ?? []) as Array<{ day?: string | null; note?: string | null; is_workday?: boolean | null }>)
+        .filter((row) => row.day && (row.note ?? "").trim())
+        .map((row) => [
+          row.day as string,
+          { name: (row.note ?? "").trim(), isWorkday: row.is_workday === true },
+        ])
     );
 
     type AbsRow = { user_id?: string | null; start_date?: string | null; end_date?: string | null; kind?: string | null; created_at?: string | null };
@@ -743,7 +747,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     // Свято сьогодні — перше, що має стояти в ранковому звіті: решта цифр
     // цього дня читається інакше.
     if (holidayByDay.has(todayKey)) {
-      absenceSection.push(`• 🎉 Сьогодні свято — ${escapeTelegramHtml(holidayByDay.get(todayKey) as string)}`);
+      const holiday = holidayByDay.get(todayKey)!;
+      absenceSection.push(
+        `• 🎉 Сьогодні свято — ${escapeTelegramHtml(holiday.name)}` +
+          (holiday.isWorkday ? " (працюємо)" : "")
+      );
     }
     if (outToday.length > 0) {
       const parts = outToday.map((r) => {
@@ -762,7 +770,8 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
       );
     }
     if (holidayByDay.has(tomorrowKey)) {
-      tomorrowBits.unshift(`🎉 свято (${holidayByDay.get(tomorrowKey)})`);
+      const holiday = holidayByDay.get(tomorrowKey)!;
+      tomorrowBits.unshift(`🎉 свято (${holiday.name})${holiday.isWorkday ? ", працюємо" : ""}`);
     }
     if (tomorrowBits.length > 0) {
       absenceSection.push(`• Завтра: ${escapeTelegramHtml(tomorrowBits.join(" · "))}`);

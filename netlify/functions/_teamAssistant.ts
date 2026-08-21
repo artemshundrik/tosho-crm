@@ -467,9 +467,11 @@ export async function renderWhoIsAbsent(params: {
     admin
       .schema("tosho")
       .from("ua_workday_exceptions")
-      .select("day,note")
+      // Без фільтра по is_workday: свято буває й робочим (24 серпня 2026
+      // команда працює). Фільтр ховав такий день цілком, замість того щоб
+      // просто не називати його вихідним.
+      .select("day,note,is_workday")
       .eq("workspace_id", workspaceId)
-      .eq("is_workday", false)
       .in("day", [todayKey, tomorrowKey]),
   ]);
   if (currentResult.error) throw new Error(`team_absences: ${currentResult.error.message}`);
@@ -498,16 +500,24 @@ export async function renderWhoIsAbsent(params: {
   const backTomorrow = today.filter((row) => row.end_date === todayKey);
 
   const holidays = new Map(
-    ((holidayResult.data ?? []) as Array<{ day?: string | null; note?: string | null }>)
-      .filter((row) => row.day)
-      .map((row) => [row.day as string, (row.note ?? "").trim() || "Свято"])
+    ((holidayResult.data ?? []) as Array<{ day?: string | null; note?: string | null; is_workday?: boolean | null }>)
+      .filter((row) => row.day && (row.note ?? "").trim())
+      .map((row) => [
+        row.day as string,
+        { name: (row.note ?? "").trim(), isWorkday: row.is_workday === true },
+      ])
   );
 
   const lines: string[] = [];
 
   // Свято сьогодні — головна новина дня, тож іде першим рядком.
   if (holidays.has(todayKey)) {
-    lines.push(`🎉 <b>Сьогодні свято — ${escapeTelegramHtml(holidays.get(todayKey) as string)}</b>`, "");
+    const holiday = holidays.get(todayKey)!;
+    lines.push(
+      `🎉 <b>Сьогодні свято — ${escapeTelegramHtml(holiday.name)}</b>` +
+        (holiday.isWorkday ? " (працюємо)" : ""),
+      ""
+    );
   }
 
   if (today.length === 0) {
@@ -543,7 +553,11 @@ export async function renderWhoIsAbsent(params: {
     );
   }
   if (holidays.has(tomorrowKey)) {
-    tomorrow.unshift(`🎉 свято — ${escapeTelegramHtml(holidays.get(tomorrowKey) as string)}, неробочий день`);
+    const holiday = holidays.get(tomorrowKey)!;
+    tomorrow.unshift(
+      `🎉 свято — ${escapeTelegramHtml(holiday.name)}` +
+        (holiday.isWorkday ? ", працюємо" : ", вихідний")
+    );
   }
   if (tomorrow.length > 0) lines.push("", "<b>Завтра</b>", ...tomorrow);
 

@@ -62,7 +62,14 @@ export function fallbackBalance(userId: string): AbsenceBalance {
 export type WorkdayCalendar = {
   /** день → чи робочий. Це те, що їсть математика. */
   exceptions: Map<string, boolean>;
-  /** день → назва свята. Лише для неробочих винятків із заповненим note. */
+  /**
+   * день → назва свята. Будь-який виняток із підписом, робочий він чи ні.
+   *
+   * Раніше сюди потрапляли лише НЕробочі: «свято» і «вихідний» вважались одним
+   * і тим самим. Але буває робоче свято — 24 серпня 2026 команда працює, а
+   * привітати з Днем Незалежності все одно треба. Чи вихідний це, каже
+   * `exceptions`, і тільки він; тут лежить ім'я, а не режим дня.
+   */
   holidayNames: Map<string, string>;
 };
 
@@ -86,17 +93,21 @@ export async function loadWorkdayExceptions(params: {
   (data ?? []).forEach((row) => {
     exceptions.set(row.day, row.is_workday);
     const note = (row.note as string | null)?.trim();
-    // Робочу суботу теж можна підписати, але «свято» — це саме неробочий день.
-    if (!row.is_workday && note) holidayNames.set(row.day, note);
+    // Підписаний виняток — це свято, незалежно від того, працюємо ми того дня
+    // чи ні. Режим дня лишається в `exceptions`.
+    if (note) holidayNames.set(row.day, note);
   });
   return { exceptions, holidayNames };
 }
 
-export type HolidayRow = { dateKey: string; name: string };
+export type HolidayRow = { dateKey: string; name: string; isWorkday: boolean };
 
 /**
- * Список свят року для редактора. Беремо лише неробочі винятки: робоча
- * субота — теж виняток, але це не свято й у списку свят їй не місце.
+ * Список свят року для редактора: усі підписані винятки.
+ *
+ * Фільтр «лише неробочі» тут був, поки свято й вихідний означали одне й те
+ * саме. Робоче свято (24 серпня 2026) при такому фільтрі просто зникало зі
+ * списку — і виглядало так, ніби його хтось видалив.
  */
 export async function listHolidays(params: {
   workspaceId: string;
@@ -107,16 +118,18 @@ export async function listHolidays(params: {
     .from("ua_workday_exceptions")
     .select("day,is_workday,note")
     .eq("workspace_id", params.workspaceId)
-    .eq("is_workday", false)
     .gte("day", `${params.year}-01-01`)
     .lte("day", `${params.year}-12-31`)
     .order("day", { ascending: true });
 
   if (error) throw error;
-  return ((data ?? []) as Array<{ day: string; note: string | null }>).map((row) => ({
-    dateKey: row.day,
-    name: row.note?.trim() || "Свято",
-  }));
+  return ((data ?? []) as Array<{ day: string; is_workday: boolean; note: string | null }>)
+    .filter((row) => (row.note ?? "").trim().length > 0)
+    .map((row) => ({
+      dateKey: row.day,
+      name: row.note?.trim() || "Свято",
+      isWorkday: row.is_workday,
+    }));
 }
 
 /** Додати або перейменувати святковий день. Пише лише owner/admin/SEO (RLS). */

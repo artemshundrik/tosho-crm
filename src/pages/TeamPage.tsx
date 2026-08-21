@@ -870,16 +870,26 @@ export function TeamPage() {
     });
 
     // Свята — теж подія команди: «через 3 тижні День Незалежності» рятує від
-    // планування дедлайну на неробочий день.
+    // планування дедлайну на день, коли половини людей немає.
     upcomingHolidays(holidayNames, todayKey, 3).forEach((holiday) => {
       const daysUntil = eachDateKey(todayKey, holiday.dateKey).length - 1;
       if (daysUntil < 0 || daysUntil > 45) return;
+      // Свято не означає вихідний: буває, що в цей день команда працює.
+      // Підпис бере це з календаря, а не припускає — інакше сторінка каже
+      // «не робочий» там, де насправді робочий, і люди планують навпаки.
+      const isWorkingHoliday = exceptions.get(holiday.dateKey) === true;
       events.push({
         id: `h:${holiday.dateKey}`,
         userId: null,
         type: "holiday",
         title: holiday.name,
-        caption: daysUntil === 0 ? "Свято — сьогодні" : "Святковий день, не робочий",
+        caption: isWorkingHoliday
+          ? daysUntil === 0
+            ? "Свято — сьогодні, але робочий день"
+            : "Святковий, але робочий день"
+          : daysUntil === 0
+            ? "Свято — сьогодні"
+            : "Святковий день, вихідний",
         dateLabel: formatShort(holiday.dateKey),
         daysUntil,
       });
@@ -888,7 +898,7 @@ export function TeamPage() {
     // Стелю тримає кнопка «ще N», а не обрізання: інакше лічильник у шапці
     // брехав би, показуючи 8 замість справжньої кількості.
     return events.sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 20);
-  }, [activeMembers, absenceTodayByUser, holidayNames, todayKey]);
+  }, [activeMembers, absenceTodayByUser, exceptions, holidayNames, todayKey]);
 
   /* ------------------------------ Дії -------------------------------- */
 

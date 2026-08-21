@@ -202,7 +202,7 @@ export function HolidayEditorDialog({
             </p>
           ) : draftDate && isWeekend(draftDate) ? (
             <p className="text-2xs text-muted-foreground">
-              Це вихідний — він і так неробочий, на квоту запис не вплине.
+              Це субота або неділя — на квоту запис не вплине.
             </p>
           ) : null}
 
@@ -230,7 +230,14 @@ export function HolidayEditorDialog({
                       <span className="ml-1 text-muted-foreground">{weekdayLabel(row.dateKey)}</span>
                     </span>
                     <span className="min-w-0 flex-1 truncate text-xs text-foreground">{row.name}</span>
-                    {isWeekend(row.dateKey) ? (
+                    {/*
+                      Робоче свято підписуємо окремо: у списку воно виглядає
+                      точно як будь-яке інше, і без позначки неможливо зрозуміти,
+                      чому норма місяця не зменшилась.
+                    */}
+                    {row.isWorkday ? (
+                      <span className="shrink-0 text-3xs text-muted-foreground">працюємо</span>
+                    ) : isWeekend(row.dateKey) ? (
                       <span className="shrink-0 text-3xs text-muted-foreground">вихідний</span>
                     ) : null}
                     <Button

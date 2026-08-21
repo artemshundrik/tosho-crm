@@ -137,7 +137,7 @@ type AbsencePlannerProps = {
   absences: TeamAbsence[];
   marks?: PlannerMark[];
   exceptions?: Map<string, boolean>;
-  /** день → назва свята. Свято неробоче, як і вихідний, але має ім'я. */
+  /** день → назва свята. Чи вихідний він — каже `exceptions`, а не наявність тут. */
   holidayNames?: Map<string, string>;
   todayKey: string;
   currentUserId?: string | null;
@@ -188,8 +188,8 @@ function AbsencePlannerImpl({
       days.map((dateKey) => ({
         dateKey,
         rest: !isBusinessDay(dateKey, exceptions),
-        // Свято теж неробоче, але з іменем — і саме тому його треба
-        // відрізняти від суботи, інакше 24 серпня виглядає як вихідний.
+        // Ім'я свята незалежне від режиму дня: `rest` вище вже врахував
+        // календар, тож робоче свято не отримає сірого фону вихідного.
         holiday: holidayNames?.get(dateKey) ?? null,
         today: dateKey === todayKey,
       })),
@@ -246,7 +246,7 @@ function AbsencePlannerImpl({
               key={day.dateKey}
               className={cn(
                 "px-0.5 py-1.5 text-center text-3xs uppercase tracking-wide text-muted-foreground",
-                // Свято теж неробоче, але фон інший: сірий = просто вихідний.
+                // Фон свята інший, ніж у вихідного: сірий = просто вихідний.
                 day.rest && !day.holiday && "bg-muted/40 text-muted-foreground/70",
                 day.holiday && HOLIDAY_COLUMN_CLASS
               )}
@@ -256,7 +256,7 @@ function AbsencePlannerImpl({
               <div
                 className={cn(
                   "mt-0.5 text-2xs font-semibold tabular-nums text-foreground",
-                  // Свято неробоче так само, як субота, тож фон однаковий —
+                  // Свято має власний фон, тож тон тексту звіряємо з ним —
                   // відрізняє його колір числа. «Сьогодні» лишається сильнішим
                   // сигналом і перебиває: воно одне на весь місяць.
                   day.holiday && !day.today && toneTextClass.festive,
