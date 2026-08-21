@@ -1225,43 +1225,33 @@ export async function listQuotesByIds(teamId: string, quoteIds: string[]): Promi
   return ((data ?? []) as unknown) as QuoteListRow[];
 }
 
-export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
-  const runQuery = async (withTeamFilter: boolean, useFallbackSelect = false) => {
-    let query = supabase
+/**
+ * Тиражі одного прорахунку.
+ *
+ * БЕЗ ФІЛЬТРА ПО КОМАНДІ, і це не недогляд: у `tosho.quote_item_runs` немає
+ * колонки `team_id`. Запит із нею сервер відхиляє як «column does not exist» —
+ * саме звідси бралися помилки 400 на цій таблиці. Доступ стереже RLS (чотири
+ * політики), тож чужі тиражі база не віддасть незалежно від того, що просить
+ * клієнт.
+ */
+export async function getQuoteRuns(quoteId: string) {
+  const runQuery = async (useFallbackSelect = false) => {
+    return await supabase
       .schema("tosho")
       .from("quote_item_runs")
       .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
       .eq("quote_id", quoteId)
       .order("created_at", { ascending: true });
-    if (withTeamFilter && teamId) {
-      query = query.eq("team_id", teamId);
-    }
-    return await query;
   };
 
-  let { data, error } = await runQuery(false);
-  if (
-    error &&
-    teamId &&
-    /column/i.test(error.message ?? "") &&
-    /team_id/i.test(error.message ?? "")
-  ) {
-    ({ data, error } = await runQuery(false));
-  }
+  // Єдиний живий запасний варіант — старіша схема без полів ставок.
+  let { data, error } = await runQuery();
   if (
     error &&
     /column/i.test(error.message ?? "") &&
     /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
   ) {
-    ({ data, error } = await runQuery(!!teamId, true));
-    if (
-      error &&
-      teamId &&
-      /column/i.test(error.message ?? "") &&
-      /team_id/i.test(error.message ?? "")
-    ) {
-      ({ data, error } = await runQuery(false, true));
-    }
+    ({ data, error } = await runQuery(true));
   }
   handleError(error);
   return ((data as Array<Partial<QuoteRun>>) ?? []).map((run) => ({
@@ -1282,58 +1272,51 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
 /**
  * Скільки id прорахунків кладемо в один запит.
  *
- * Перелік їде в АДРЕСІ (`quote_id=in.(…)`), а адреса має межу. На проді
- * 21.08.2026 при 163 прорахунках вона виростала до 6582 символів, і шлюз
- * відповідав 400. Найгірше було не саме падіння, а те, що воно ТИХЕ: код
- * отримував порожній список і малював сторінку так, ніби тиражів немає, — а
- * тиражі це ціна продажу.
+ * Перелік їде в АДРЕСІ (`quote_id=in.(…)`), і межа в адреси справді є — але не
+ * там, де вважалось. Заміряно на живому проді 21.08.2026: шлюз починає
+ * відповідати 400 десь між 24 і 26 кБ, а запит на 163 id (6163 символи) з
+ * реальним токеном і чинною RLS повертає 200.
  *
- * 50 id — це близько 2 кБ адреси: із запасом під будь-який шлюз і водночас
- * достатньо велика пачка, щоб не плодити запити.
+ * Тобто число 50, поставлене колись «із запасом», було вчетверо обережнішим за
+ * потрібне і різало один запит на чотири без будь-якої причини. 200 id — це
+ * ≈8 кБ: досі втричі менше за межу, і сьогоднішні 163 прорахунки їдуть одним
+ * запитом.
+ *
+ * ВАЖЛИВО ДЛЯ ТОГО, ХТО ПРИЙДЕ СЮДИ ЧЕРЕЗ ПОМИЛКУ 400: перевір спершу назви
+ * колонок. Ті 400, що списували на довжину, насправді давав фільтр
+ * `team_id=eq.…` по колонці, якої в `quote_item_runs` немає (коміт ccb2bfb).
  */
-const QUOTE_ID_BATCH_SIZE = 50;
+const QUOTE_ID_BATCH_SIZE = 200;
 
 // Batched sibling of getQuoteRuns: one `.in("quote_id", …)` query for many quotes,
 // grouped by quote_id. Mirrors getQuoteRuns' schema-tolerant fallback + mapping so the
 // per-quote result is identical — collapses the N+1 in order derivation to a single read.
 export async function listQuoteRunsForQuotes(params: {
-  teamId?: string | null;
   quoteIds: string[];
 }): Promise<Map<string, Awaited<ReturnType<typeof getQuoteRuns>>>> {
-  const teamId = params.teamId ?? null;
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   const byQuote = new Map<string, Awaited<ReturnType<typeof getQuoteRuns>>>();
   if (uniqueQuoteIds.length === 0) return byQuote;
 
-  const runQuery = async (ids: string[], withTeamFilter: boolean, useFallbackSelect = false) => {
-    let query = supabase
+  // Без фільтра по команді — з тієї ж причини, що й у getQuoteRuns: колонки
+  // `team_id` у цій таблиці немає, а доступ стереже RLS.
+  const runQuery = async (ids: string[], useFallbackSelect = false) => {
+    return await supabase
       .schema("tosho")
       .from("quote_item_runs")
       .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
       .in("quote_id", ids)
       .order("created_at", { ascending: true });
-    if (withTeamFilter && teamId) {
-      query = query.eq("team_id", teamId);
-    }
-    return await query;
   };
 
   const fetchBatch = async (ids: string[]) => {
-    let { data, error } = await runQuery(ids, false);
+    let { data, error } = await runQuery(ids);
     if (
       error &&
       /column/i.test(error.message ?? "") &&
       /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
     ) {
-      ({ data, error } = await runQuery(ids, !!teamId, true));
-      if (
-        error &&
-        teamId &&
-        /column/i.test(error.message ?? "") &&
-        /team_id/i.test(error.message ?? "")
-      ) {
-        ({ data, error } = await runQuery(ids, false, true));
-      }
+      ({ data, error } = await runQuery(ids, true));
     }
     handleError(error);
     return (data as Array<Partial<QuoteRun>>) ?? [];
@@ -2276,7 +2259,6 @@ export async function listQuoteItemPreviewsForQuotes(params: {
 }
 
 export async function listQuoteRunPreviewsForQuotes(params: {
-  teamId: string;
   quoteIds: string[];
 }): Promise<QuoteRunPreviewRow[]> {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));

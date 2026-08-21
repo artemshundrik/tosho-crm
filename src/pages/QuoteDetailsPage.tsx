@@ -3829,7 +3829,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setRunsLoading(true);
     setRunsError(null);
     try {
-      const data = await getQuoteRuns(quoteId, teamId);
+      const data = await getQuoteRuns(quoteId);
       setRuns(data);
       setRunsOriginal(data);
     } catch (e: unknown) {
@@ -4832,7 +4832,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         if (insertItemsError) throw insertItemsError;
       }
 
-      const sourceRuns = await getQuoteRuns(sourceQuoteId, effectiveTeamId);
+      const sourceRuns = await getQuoteRuns(sourceQuoteId);
       if (sourceRuns.length > 0) {
         const runsPayload: QuoteRun[] = sourceRuns.map((run) => ({
           quote_id: newQuoteId,

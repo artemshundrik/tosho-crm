@@ -3481,7 +3481,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       try {
         const [itemRows, runRows] = await Promise.all([
           listQuoteItemPreviewsForQuotes({ teamId, quoteIds: missingQuoteIds }),
-          listQuoteRunPreviewsForQuotes({ teamId, quoteIds: missingQuoteIds }),
+          listQuoteRunPreviewsForQuotes({ quoteIds: missingQuoteIds }),
         ]);
         if (cancelled) return;
 
@@ -3824,7 +3824,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     const runsByQuoteId = new Map<string, QuoteRun[]>();
     await Promise.all(
       quoteIds.map(async (quoteId) => {
-        runsByQuoteId.set(quoteId, await getQuoteRuns(quoteId, teamId));
+        runsByQuoteId.set(quoteId, await getQuoteRuns(quoteId));
       })
     );
     const { data: visualizationRows, error: visualizationsError } = await supabase
@@ -4587,7 +4587,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         if (insertItemsError) throw insertItemsError;
       }
 
-      const sourceRuns = await getQuoteRuns(quoteId, teamId);
+      const sourceRuns = await getQuoteRuns(quoteId);
       if (sourceRuns.length > 0) {
         await upsertQuoteRuns(
           created.id,
@@ -4662,7 +4662,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       const [fresh, itemRows, runRows] = await Promise.all([
         getQuoteSummary(row.id),
         listQuoteItemsForQuotes({ teamId, quoteIds: [row.id] }),
-        getQuoteRuns(row.id, teamId),
+        getQuoteRuns(row.id),
       ]);
       setEditTarget((prev) => ({ ...(prev ?? row), ...fresh }));
       const quoteItems = itemRows.filter((item) => item.quote_id === row.id);

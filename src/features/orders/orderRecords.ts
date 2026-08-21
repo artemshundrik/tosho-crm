@@ -893,7 +893,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
       });
       return Array.from(unique.values());
     })(),
-    listQuoteRunsForQuotes({ teamId, quoteIds }).then((runsByQuote) =>
+    listQuoteRunsForQuotes({ quoteIds }).then((runsByQuote) =>
       quoteIds.map((quoteId) => ({ quoteId, runs: runsByQuote.get(quoteId) ?? [] }))
     ),
   ]);
@@ -1272,7 +1272,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       listStoredOrderItems(teamId, storedOrders.map((order) => order.id)),
       storedQuoteIds.length > 0 ? listQuoteItemsForQuotes({ teamId, quoteIds: storedQuoteIds }) : [],
       storedQuoteIds.length > 0 ? listQuotesByIds(teamId, storedQuoteIds) : [],
-      listQuoteRunsForQuotes({ teamId, quoteIds: storedQuoteIds }).then((runsByQuote) =>
+      listQuoteRunsForQuotes({ quoteIds: storedQuoteIds }).then((runsByQuote) =>
         storedQuoteIds.map((quoteId) => ({ quoteId, runs: runsByQuote.get(quoteId) ?? [] }))
       ),
       storedQuoteIds.length > 0
