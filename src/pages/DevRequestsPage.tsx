@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
+import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
 import {
   BoardFilters,
@@ -43,6 +45,7 @@ import {
 } from "@/features/devRequests/queries";
 import {
   ARCHIVE_AFTER_DAYS,
+  BOARD_COLUMNS,
   isArchivedRequest,
   isOpenRequestStatus,
   type DevRequest,
@@ -108,6 +111,15 @@ export default function DevRequestsPage() {
     (jobRole ?? "").trim().toLowerCase() === "seo";
 
   const board = useDevRequestBoard(teamId);
+  /**
+   * Перше завантаження дошки — коли даних ще нема ЗОВСІМ.
+   *
+   * Доти сторінка малювала справжню дошку з порожніми колонками («Немає
+   * задач»), а через секунду картки просто з'являлись — тобто спершу брехня,
+   * потім вміст. Тепер тут каркас, як на «Дизайні» й «Прорахунках» (REQ-19).
+   * Повторний вхід каркаса не показує: React Query віддає дані з кешу одразу.
+   */
+  const showBoardSkeleton = Boolean(teamId) && board.isPending;
   const createRequest = useCreateDevRequest();
   const moveRequest = useMoveDevRequest(teamId);
   const updateRequest = useUpdateDevRequest(teamId);
@@ -463,24 +475,58 @@ export default function DevRequestsPage() {
           className="min-h-0 overflow-hidden"
           style={kanbanViewportHeight ? { height: `${kanbanViewportHeight}px` } : undefined}
         >
-          <DevRequestBoard
-            requests={requests}
-            onMove={handleMove}
-            onSelect={setSelected}
-            onEdit={openEdit}
-            onDelete={setPendingDelete}
-            onCopyCard={setReleaseCardFor}
-            viewerId={userId}
-            groupBy={groupBy}
-            canManage={canSee}
-          />
+          {showBoardSkeleton ? (
+            /* Ті самі п'ять колонок і та сама ширина 300 px, що й у справжньої
+               дошки: інакше поява карток читалась би як перебудова екрана. */
+            <KanbanSkeleton
+              columns={BOARD_COLUMNS.map((column) => ({
+                id: column.status,
+                label: column.label,
+                className: "w-[300px] basis-[300px]",
+              }))}
+              boardClassName="h-full pb-2 md:pb-3"
+              rowClassName="h-full items-stretch"
+              cardsPerColumn={3}
+            />
+          ) : (
+            <DevRequestBoard
+              requests={requests}
+              onMove={handleMove}
+              onSelect={setSelected}
+              onEdit={openEdit}
+              onDelete={setPendingDelete}
+              onCopyCard={setReleaseCardFor}
+              viewerId={userId}
+              groupBy={groupBy}
+              canManage={canSee}
+            />
+          )}
         </div>
       ) : (
         /* Списку полотно ні до чого — це читомий стовпчик рядків, а не дошка,
            яку прокручують убік. Відступи, що їх у режимі полотна не дає
            каркас, повертаємо тут — тими самими кроками (px-4/5/6). */
         <div className="px-4 py-4 md:px-5 md:py-5 lg:px-6">
-        {view === "someday" ? (
+        {showBoardSkeleton ? (
+          /* Списки чекають так само, як дошка: порожній екран із написом
+             «нічого немає» під час завантаження — це неправда, а не порожнеча. */
+          <div role="status" aria-busy="true" className="space-y-2">
+            <span className="sr-only">Завантаження</span>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/70 px-4 py-3.5"
+              >
+                <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-[46%]" : "w-[34%]")} />
+                  <Skeleton className="h-3 w-[62%] rounded-full opacity-70" />
+                </div>
+                <Skeleton className="h-6 w-20 shrink-0 rounded-full opacity-80" />
+              </div>
+            ))}
+          </div>
+        ) : view === "someday" ? (
           /* «Ідеї» — стіною нотаток, а не списком: рядок на всю ширину показує
              чотири поля й лишає порожнечу посередині, бо сканувати тут нема
              чого — ідеї не впорядковані ні за чим. «Не робимо» лишається
