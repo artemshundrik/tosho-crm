@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabaseClient';
 import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
 import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
 import { readViewAs, VIEW_AS_CHANGED_EVENT, type ViewAsTarget } from '@/auth/viewAs';
+import {
+  clearCachedTeamContext,
+  readCachedTeamContext,
+  writeCachedModuleAccess,
+  writeCachedTeamContext,
+} from '@/auth/teamContextCache';
 import { defaultModuleAccess, type ModuleAccess } from '@/lib/moduleAccess';
 import {
   getCachedCurrentWorkspaceMemberDirectoryEntry,
@@ -109,6 +115,24 @@ async function lookupOperationalTeamId(userId: string) {
  * у кого просто повільний інтернет.
  */
 const SESSION_CHECK_TIMEOUT_MS = 12_000;
+
+/**
+ * Чи це та сама картка доступів.
+ *
+ * Потрібне саме порівняння ЗНАЧЕНЬ: фонова звірка щоразу приносить новий
+ * об'єкт, і якщо класти його в стан не дивлячись, контекст авторизації
+ * «міняється» на кожному фокусі вкладки — а з ним перезбирається піддерево
+ * маршруту й сторінка монтується заново.
+ */
+const sameModuleAccess = (a: ModuleAccess | undefined, b: ModuleAccess | undefined) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof ModuleAccess>;
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+};
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error ?? "");
@@ -227,7 +251,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(roleValue);
     setAccessRole(accessRoleValue);
     setJobRole(jobRoleValue);
+    // Запам'ятовуємо ЩОЙНО перевірене, щоб наступний старт не чекав на мережу.
+    writeCachedTeamContext(effectiveUserId, {
+      teamId: operationalTeamId,
+      role: roleValue,
+      accessRole: accessRoleValue,
+      jobRole: jobRoleValue,
+    });
   }, [resetTeamContext, userId]);
+
+  /**
+   * Підставити контекст, збережений минулого разу.
+   *
+   * Повертає `true`, якщо вдалося: тоді той, хто кличе, не тримає екран
+   * «Завантаження CRM» на час мережевої звірки, а пускає застосунок одразу і
+   * лишає справжній резолв у фоні.
+   *
+   * Гейт `if (!teamId) return` на сторінках лишається на місці — кешоване
+   * значення приходить ДО першого рендеру, а не замість перевірки.
+   */
+  const applyCachedTeamContext = useCallback((targetUserId: string | null | undefined) => {
+    const cached = readCachedTeamContext(targetUserId);
+    if (!cached) return false;
+    setTeamId(cached.teamId);
+    setRole(cached.role);
+    setAccessRole(cached.accessRole);
+    setJobRole(cached.jobRole);
+    return true;
+  }, []);
 
   const refreshTeamContext = useCallback(
     async (targetUserId?: string | null, options?: { forceRefresh?: boolean }) => {
@@ -286,12 +337,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextSession = data.session ?? null;
         setSession(nextSession);
         if (nextSession?.user?.id) {
-          try {
-            await refreshTeamContext(nextSession.user.id, { forceRefresh: true });
-          } catch (error) {
-            console.error("Failed to initialize team context", error);
-            if (mounted) {
-              resetTeamContext();
+          const bootUserId = nextSession.user.id;
+          /**
+           * Є збережений контекст — не тримаємо застосунок на місці.
+           *
+           * Раніше `loading` лишався true до кінця цього ланцюга, а поки він
+           * true, `RequireAuth` малює оболонку і ЖОДНА сторінка не монтується.
+           * Тобто дві хвилі запитів стояли перед кожним відкриттям картки.
+           */
+          if (applyCachedTeamContext(bootUserId)) {
+            setLoading(false);
+            void refreshTeamContext(bootUserId, { forceRefresh: true }).catch((error) => {
+              // Контекст у нас уже є. Скидати його через мережевий збій означало б
+              // зламати робочу вкладку заради помилки, яка сама по собі минуща.
+              // Блокування співробітника це не пропускає: перевірка живе
+              // всередині refreshTeamContext і виходить із системи сама.
+              console.error("Failed to verify cached team context", error);
+            });
+          } else {
+            try {
+              await refreshTeamContext(bootUserId, { forceRefresh: true });
+            } catch (error) {
+              console.error("Failed to initialize team context", error);
+              if (mounted) {
+                resetTeamContext();
+              }
             }
           }
         } else {
@@ -326,6 +396,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Lightweight handling for sign-out.
       if (event === "SIGNED_OUT") {
+        clearCachedTeamContext();
         resetTeamContext();
         setLoading(false);
         return;
@@ -347,8 +418,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Only block UI when auth context switches to another user.
-      setLoading(true);
+      /**
+       * Only block UI when auth context switches to another user.
+       *
+       * Той самий виняток, що й на старті: якщо контекст цієї людини вже
+       * збережений, тримати перед нею «Завантаження CRM» немає за чим —
+       * звірка все одно піде слідом. Тут це важливо ще й тому, що подія
+       * INITIAL_SESSION приходить сюди ж: вона трапляється на кожному
+       * завантаженні, і без винятку саме вона повертала б екран очікування
+       * назад одразу після того, як старт його зняв.
+       *
+       * Прапорець ставимо явно, а не «не вмикаємо»: на старті він уже true.
+       */
+      setLoading(!applyCachedTeamContext(nextUserId));
       void (async () => {
         try {
           await refreshTeamContext(nextUserId, { forceRefresh: true });
@@ -367,7 +449,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [refreshTeamContext, resetTeamContext]);
+  }, [applyCachedTeamContext, refreshTeamContext, resetTeamContext]);
 
   useEffect(() => {
     if (!userId) return;
@@ -454,11 +536,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    /**
+     * Доступи з минулого разу — до того, як приїде відповідь.
+     *
+     * Не заради швидшого меню: без цього значення в контексті підміняється вже
+     * ПІСЛЯ того, як сторінка змонтувалась, і вона монтується вдруге, заново
+     * питаючи всі свої дані.
+     */
+    if (!activeViewAs) {
+      const cachedAccess = readCachedTeamContext(targetUserId)?.moduleAccess ?? undefined;
+      if (cachedAccess) {
+        setModuleAccess((prev) => (sameModuleAccess(prev, cachedAccess) ? prev : cachedAccess));
+      }
+    }
+
     const load = async () => {
       try {
         if (!activeViewAs) {
           const entry = await getCurrentWorkspaceMemberDirectoryEntry();
-          if (!cancelled) setModuleAccess(entry?.moduleAccess ?? fallback());
+          writeCachedModuleAccess(targetUserId, entry?.moduleAccess ?? null);
+          const next = entry?.moduleAccess ?? fallback();
+          if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, next) ? prev : next));
           return;
         }
         const workspaceId = await resolveWorkspaceId(userId!);
@@ -468,7 +566,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const rows = await listWorkspaceMemberDirectory(workspaceId);
         const entry = rows.find((row) => row.userId === targetUserId);
-        if (!cancelled) setModuleAccess(entry?.moduleAccess ?? fallback());
+        const next = entry?.moduleAccess ?? fallback();
+        if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, next) ? prev : next));
       } catch (error) {
         console.error('Failed to resolve module access', error);
         if (!cancelled) setModuleAccess(fallback());
