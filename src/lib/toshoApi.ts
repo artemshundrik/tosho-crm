@@ -1280,6 +1280,20 @@ export async function getQuoteRuns(quoteId: string, teamId?: string | null) {
   }));
 }
 
+/**
+ * Скільки id прорахунків кладемо в один запит.
+ *
+ * Перелік їде в АДРЕСІ (`quote_id=in.(…)`), а адреса має межу. На проді
+ * 21.08.2026 при 163 прорахунках вона виростала до 6582 символів, і шлюз
+ * відповідав 400. Найгірше було не саме падіння, а те, що воно ТИХЕ: код
+ * отримував порожній список і малював сторінку так, ніби тиражів немає, — а
+ * тиражі це ціна продажу.
+ *
+ * 50 id — це близько 2 кБ адреси: із запасом під будь-який шлюз і водночас
+ * достатньо велика пачка, щоб не плодити запити.
+ */
+const QUOTE_ID_BATCH_SIZE = 50;
+
 // Batched sibling of getQuoteRuns: one `.in("quote_id", …)` query for many quotes,
 // grouped by quote_id. Mirrors getQuoteRuns' schema-tolerant fallback + mapping so the
 // per-quote result is identical — collapses the N+1 in order derivation to a single read.
@@ -1292,12 +1306,12 @@ export async function listQuoteRunsForQuotes(params: {
   const byQuote = new Map<string, Awaited<ReturnType<typeof getQuoteRuns>>>();
   if (uniqueQuoteIds.length === 0) return byQuote;
 
-  const runQuery = async (withTeamFilter: boolean, useFallbackSelect = false) => {
+  const runQuery = async (ids: string[], withTeamFilter: boolean, useFallbackSelect = false) => {
     let query = supabase
       .schema("tosho")
       .from("quote_item_runs")
       .select(useFallbackSelect ? QUOTE_RUN_LEGACY_SELECT : QUOTE_RUN_SELECT)
-      .in("quote_id", uniqueQuoteIds)
+      .in("quote_id", ids)
       .order("created_at", { ascending: true });
     if (withTeamFilter && teamId) {
       query = query.eq("team_id", teamId);
@@ -1305,25 +1319,47 @@ export async function listQuoteRunsForQuotes(params: {
     return await query;
   };
 
-  let { data, error } = await runQuery(false);
-  if (
-    error &&
-    /column/i.test(error.message ?? "") &&
-    /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
-  ) {
-    ({ data, error } = await runQuery(!!teamId, true));
+  const fetchBatch = async (ids: string[]) => {
+    let { data, error } = await runQuery(ids, false);
     if (
       error &&
-      teamId &&
       /column/i.test(error.message ?? "") &&
-      /team_id/i.test(error.message ?? "")
+      /(desired_manager_income|manager_rate|fixed_cost_rate|vat_rate)/i.test(error.message ?? "")
     ) {
-      ({ data, error } = await runQuery(false, true));
+      ({ data, error } = await runQuery(ids, !!teamId, true));
+      if (
+        error &&
+        teamId &&
+        /column/i.test(error.message ?? "") &&
+        /team_id/i.test(error.message ?? "")
+      ) {
+        ({ data, error } = await runQuery(ids, false, true));
+      }
     }
-  }
-  handleError(error);
+    handleError(error);
+    return (data as Array<Partial<QuoteRun>>) ?? [];
+  };
 
-  (((data as Array<Partial<QuoteRun>>) ?? [])).forEach((run) => {
+  /**
+   * Перелік id їде в АДРЕСІ запиту (`quote_id=in.(…)`), а адреса має межу.
+   *
+   * На проді 21.08.2026 при 163 прорахунках вона виростала до 6582 символів, і
+   * шлюз відповідав 400. Найгірше було не саме падіння, а те, що воно ТИХЕ:
+   * код отримував порожній список і малював сторінку так, ніби тиражів немає, —
+   * а тиражі це ціна продажу.
+   *
+   * 50 id — це близько 2 кБ адреси: із запасом під будь-який шлюз і водночас
+   * достатньо велика пачка, щоб не плодити запити.
+   */
+  const batches: string[][] = [];
+  for (let index = 0; index < uniqueQuoteIds.length; index += QUOTE_ID_BATCH_SIZE) {
+    batches.push(uniqueQuoteIds.slice(index, index + QUOTE_ID_BATCH_SIZE));
+  }
+
+  const results = await Promise.all(batches.map((ids) => fetchBatch(ids)));
+  const data = results.flat();
+
+  ((data)).forEach((run) => {
     const quoteId = run.quote_id;
     if (!quoteId) return;
     const list = byQuote.get(quoteId) ?? [];
@@ -2247,7 +2283,7 @@ export async function listQuoteRunPreviewsForQuotes(params: {
   const uniqueQuoteIds = Array.from(new Set(params.quoteIds.filter(Boolean)));
   if (uniqueQuoteIds.length === 0) return [];
 
-  const readRows = async (withTeamFilter: boolean) => {
+  const readRows = async (ids: string[], withTeamFilter: boolean) => {
     type QuoteRunsQuery = {
       eq: (column: string, value: string) => QuoteRunsQuery;
       in: (column: string, values: string[]) => QuoteRunsQuery;
@@ -2261,7 +2297,7 @@ export async function listQuoteRunPreviewsForQuotes(params: {
     const quoteRunsTable = supabase.schema("tosho").from("quote_item_runs") as unknown as QuoteRunsTable;
     let query = quoteRunsTable
       .select("id,quote_id,quote_item_id,quantity,created_at")
-      .in("quote_id", uniqueQuoteIds)
+      .in("quote_id", ids)
       .order("quote_id", { ascending: true })
       .order("created_at", { ascending: true });
 
@@ -2272,9 +2308,23 @@ export async function listQuoteRunPreviewsForQuotes(params: {
     return await query;
   };
 
-  let { data, error } = await readRows(true);
+  // Той самий ліміт довжини адреси, що й у listQuoteRunsForQuotes: перелік id
+  // їде в URL, і при півтори сотні прорахунків він переростає межу шлюзу.
+  const batches: string[][] = [];
+  for (let index = 0; index < uniqueQuoteIds.length; index += QUOTE_ID_BATCH_SIZE) {
+    batches.push(uniqueQuoteIds.slice(index, index + QUOTE_ID_BATCH_SIZE));
+  }
+
+  const readAll = async (withTeamFilter: boolean) => {
+    const results = await Promise.all(batches.map((ids) => readRows(ids, withTeamFilter)));
+    const failed = results.find((result) => result.error);
+    if (failed) return { data: null as unknown, error: failed.error };
+    return { data: results.flatMap((result) => (result.data as unknown[]) ?? []) as unknown, error: null };
+  };
+
+  let { data, error } = await readAll(true);
   if (error && /column/i.test(error.message ?? "") && /team_id/i.test(error.message ?? "")) {
-    ({ data, error } = await readRows(false));
+    ({ data, error } = await readAll(false));
   }
 
   handleError(error);
