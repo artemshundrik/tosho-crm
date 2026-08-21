@@ -60,7 +60,7 @@ else
   failed=""
   for check in \
     "типи застосунку|npx tsc --noEmit" \
-    "лінт|npm run lint --silent" \
+    "лінт + борг компілятора|node scripts/check-compiler-debt.mjs" \
     "тести|npm run test --silent" \
     "типи функцій|npm run typecheck:functions --silent" \
     "реєстр функцій|npm run check:functions --silent" \
