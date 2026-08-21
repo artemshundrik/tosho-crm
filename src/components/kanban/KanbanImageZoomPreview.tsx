@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const warmedKanbanImageUrls = new Set<string>();
@@ -38,6 +39,18 @@ export function KanbanImageZoomPreview({
   const [shouldLoad, setShouldLoad] = useState(
     () => isEager || warmedKanbanImageUrls.has(imageUrl)
   );
+  /**
+   * Поки картинка не намалювалась — на її місці мерехтить каркас, а не крапка.
+   *
+   * Крапка (16×16 всередині квадрата 56×56) читалась як зламане зображення, а
+   * не як очікування. Каркас на весь квадрат — та сама мова, що й у решті
+   * завантажень CRM (REQ-19).
+   *
+   * `warmedKanbanImageUrls` рятує від мерехтіння на повторному вході: URL, який
+   * уже малювався в цій вкладці, лежить у кеші браузера й приходить миттєво.
+   */
+  const [isLoaded, setIsLoaded] = useState(() => warmedKanbanImageUrls.has(imageUrl));
+  const [hasFailed, setHasFailed] = useState(false);
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
     left: 0,
@@ -148,6 +161,8 @@ export function KanbanImageZoomPreview({
 
   useEffect(() => {
     setShouldLoad(isEager || warmedKanbanImageUrls.has(imageUrl));
+    setIsLoaded(warmedKanbanImageUrls.has(imageUrl));
+    setHasFailed(false);
   }, [imageUrl, isEager]);
 
   const shouldRenderImage = isEager || shouldLoad;
@@ -174,26 +189,51 @@ export function KanbanImageZoomPreview({
       )}
       tabIndex={0}
     >
-      <div className="h-full w-full overflow-hidden rounded-lg">
-        {shouldRenderImage ? (
+      <div className="relative h-full w-full overflow-hidden rounded-lg">
+        {shouldRenderImage && !hasFailed ? (
           <img
             src={imageUrl}
             alt={alt}
-            className={cn("h-full w-full object-contain", imageClassName)}
+            className={cn(
+              "h-full w-full object-contain transition-opacity duration-200",
+              isLoaded ? "opacity-100" : "opacity-0",
+              imageClassName
+            )}
             loading={isEager ? "eager" : "lazy"}
             fetchPriority={isEager ? "high" : "auto"}
             decoding="async"
+            ref={(node) => {
+              // Картинка з кеша браузера буває готова ще до onLoad — тоді
+              // каркаса не показуємо взагалі.
+              if (node?.complete && node.naturalWidth > 0) {
+                warmedKanbanImageUrls.add(imageUrl);
+                setIsLoaded(true);
+              }
+            }}
             onLoad={(event) => {
               warmedKanbanImageUrls.add(imageUrl);
+              setIsLoaded(true);
               const { naturalWidth, naturalHeight } = event.currentTarget;
               if (!naturalWidth || !naturalHeight) return;
               setPreviewAspectRatio(naturalWidth / naturalHeight);
             }}
+            onError={() => setHasFailed(true)}
           />
-        ) : (
+        ) : null}
+        {hasFailed ? (
+          // Не завантажилась зовсім — тут іконка доречна: це не очікування, а
+          // факт, що картинки немає.
           <div className="grid h-full w-full place-items-center text-muted-foreground/60">
             <ImageIcon className="h-4 w-4" />
           </div>
+        ) : isLoaded ? null : shouldRenderImage ? (
+          // Картинка вже їде — мерехтимо.
+          <Skeleton className="absolute inset-0 h-full w-full rounded-lg" />
+        ) : (
+          // Ще навіть не почали (картка поза видимою частиною колонки): тримаємо
+          // те саме поле, але без анімації — блимати тим, що нікуди не поспішає,
+          // немає сенсу, та й десятки пульсацій за кадром ні до чого.
+          <div className="absolute inset-0 rounded-lg bg-[hsl(var(--skeleton-bg))]" />
         )}
       </div>
       {isOpen && shouldRenderImage && typeof document !== "undefined"

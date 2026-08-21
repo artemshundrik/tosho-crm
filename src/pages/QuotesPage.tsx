@@ -7048,13 +7048,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                               />
                                             ) : (
                                               <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
-                                                <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                                                  {kanbanPreviewsLoading ? (
-                                                    <div className="h-4 w-4 animate-pulse rounded-full bg-muted-foreground/20" />
-                                                  ) : (
+                                                {kanbanPreviewsLoading ? (
+                                                  // Каркас на весь квадрат, а не крапка посередині: крапка
+                                                  // читалась як зламане зображення, а не як очікування.
+                                                  <Skeleton className="h-full w-full rounded-lg" />
+                                                ) : (
+                                                  <div className="grid h-full w-full place-items-center text-muted-foreground/60">
                                                     <Package className="h-4 w-4" />
-                                                  )}
-                                                </div>
+                                                  </div>
+                                                )}
                                               </div>
                                             )}
                                             <div className="min-w-0 flex-1">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   getSignedAttachmentUrl,
@@ -35,6 +36,14 @@ export function StorageObjectImage({
   const [hoverSrc, setHoverSrc] = useState<string | null>(null);
   const [hoverFailed, setHoverFailed] = useState(false);
   const [hoverOpen, setHoverOpen] = useState(false);
+  /**
+   * Поки картинка їде — каркас на весь квадрат, а не іконка посередині.
+   *
+   * Іконка означає «зображення немає», і показувати її під час очікування —
+   * брехати на секунду. Тепер іконка лишається тільки для двох чесних випадків:
+   * файла немає взагалі або він не завантажився (REQ-19).
+   */
+  const [isLoaded, setIsLoaded] = useState(false);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [previewBounds, setPreviewBounds] = useState({
     top: 0,
@@ -110,6 +119,7 @@ export function StorageObjectImage({
     let active = true;
     setSrc(null);
     setFailedVariant(false);
+    setIsLoaded(false);
     if (!bucket || !path || !shouldLoad) return;
 
     const load = async () => {
@@ -150,10 +160,14 @@ export function StorageObjectImage({
     setHoverFailed(true);
   }, [bucket, hoverFailed, hoverPreview, hoverSrc, path]);
 
+  // Чекаємо, поки файл є в наявності й ще не зламався: або URL ще резолвиться,
+  // або картинка вже їде. Немає bucket/path — чекати нічого.
+  const isWaitingForImage = Boolean(bucket && path) && !failedVariant && !isLoaded;
+
   return (
     <div
       ref={anchorRef}
-      className={cn("grid place-items-center overflow-hidden bg-muted/20", className)}
+      className={cn("relative grid place-items-center overflow-hidden bg-muted/20", className)}
       onMouseEnter={() => {
         if (!hoverPreview) return;
         void ensureHoverSrc();
@@ -174,23 +188,41 @@ export function StorageObjectImage({
         <img
           src={src}
           alt={alt}
-          className={cn("h-full w-full object-contain", imageClassName)}
+          className={cn(
+            "h-full w-full object-contain transition-opacity duration-200",
+            isLoaded ? "opacity-100" : "opacity-0",
+            imageClassName
+          )}
           loading="lazy"
           decoding="async"
+          ref={(node) => {
+            // З кеша браузера картинка буває готова ще до onLoad.
+            if (node?.complete && node.naturalWidth > 0) setIsLoaded(true);
+          }}
           onError={() => {
             if (failedVariant) return;
             setFailedVariant(true);
             setSrc(null);
           }}
           onLoad={(event) => {
+            setIsLoaded(true);
             const { naturalWidth, naturalHeight } = event.currentTarget;
             if (!naturalWidth || !naturalHeight) return;
             setPreviewAspectRatio(naturalWidth / naturalHeight);
           }}
         />
-      ) : (
+      ) : null}
+      {isWaitingForImage ? (
+        shouldLoad ? (
+          <Skeleton className="absolute inset-0 h-full w-full rounded-[inherit]" />
+        ) : (
+          // Ще поза екраном — поле те саме, але без пульсації.
+          <div className="absolute inset-0 rounded-[inherit] bg-[hsl(var(--skeleton-bg))]" />
+        )
+      ) : null}
+      {!src && !isWaitingForImage ? (
         <ImageIcon className="h-4 w-4 text-muted-foreground/60" />
-      )}
+      ) : null}
       {hoverOpen && hoverSrc && typeof document !== "undefined"
         ? createPortal(
             <div
