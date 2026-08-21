@@ -100,7 +100,36 @@ export type PageSurface = {
    * показаний каркас «згортається». Числа — ті самі, що в самих сторінках.
    */
   maxWidth?: number;
+  /**
+   * Геометрія дошки, якщо ця поверхня — канбан.
+   *
+   * Ширина колонки в кожної дошки СВОЯ: «Прорахунки» й «Дизайн» тягнуть колонку
+   * від ширини полотна, «Замовлення» ділять його на три, беклог має рівно
+   * 300 px. Каркас маршруту малюється до того, як дошка існує, тож ці числа
+   * мусять лежати тут — інакше каркас показує колонки одної ширини, а дошка
+   * приїжджає з іншою, і це видно як стрибок.
+   *
+   * `columnWidth` — значення flex-basis як у самій дошці, слово в слово.
+   */
+  board?: { columns: number; columnWidth: string };
+  /**
+   * Сторінка, яка вміє показувати той самий розділ двома виглядами.
+   *
+   * «Прорахунки» памʼятають вибір людини в localStorage і за замовчуванням
+   * відкриваються СПИСКОМ, а не дошкою. Каркас, який цього не знає, малює
+   * канбан — і список приїжджає на його місце. Тобто форму треба питати не
+   * лише в маршруту, а й у збереженого вибору.
+   */
+  view?: {
+    storageKey: string;
+    /** Значення, за якого малюється `shape`; будь-яке інше — `fallbackShape`. */
+    boardValue: string;
+    fallbackShape: PageShape;
+  };
 };
+
+/** Ширина колонки на «Прорахунках» і «Дизайні» — тягнеться від ширини полотна. */
+const KANBAN_FLUID_COLUMN = "clamp(224px, calc((100cqw - 52px) / 4.2), 312px)";
 
 /**
  * Порядок має значення: перший збіг виграє, тож картки сутностей стоять перед
@@ -114,15 +143,17 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
 
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "quote-details", path: "/orders/estimates/:id", page: "src/pages/OrdersEstimateDetailsPage.tsx", toolbar: "none", shape: "quote-record", canvas: true },
-  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  { id: "quotes", path: "/orders/estimates", page: "src/pages/OrdersEstimatesPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 6, columnWidth: KANBAN_FLUID_COLUMN }, view: { storageKey: "quotes_view_mode", boardValue: "kanban", fallbackShape: "table" } },
   { id: "order-details", path: "/orders/production/:id", page: "src/pages/OrdersProductionDetailsRoutePage.tsx", toolbar: "none", shape: "detail", canvas: true, maxWidth: 1760 },
-  { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  // «Замовлення» відкриваються реєстром: канбан там вмикають вручну й вибір не
+  // зберігається, тож типова форма розділу — таблиця, а не дошка.
+  { id: "orders", path: "/orders/production", page: "src/pages/OrdersProductionPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "ready-to-ship", path: "/orders/ready-to-ship", page: "src/pages/OrdersReadyToShipPage.tsx", toolbar: "none", shape: "list" },
 
   { id: "catalog", path: "/catalog/products", page: "src/features/catalog/ProductCatalogPage/index.tsx", toolbar: "none", shape: "split" },
   { id: "logistics", path: "/logistics", page: "src/pages/LogisticsPage.tsx", toolbar: "none", shape: "list" },
   { id: "design-task", path: "/design/:id", page: "src/pages/DesignTaskPage.tsx", toolbar: "none", shape: "design-record", canvas: true },
-  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  { id: "design", path: "/design", page: "src/pages/DesignPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 7, columnWidth: KANBAN_FLUID_COLUMN } },
   { id: "contractors", path: "/contractors", page: "src/pages/ContractorsPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "stock", path: "/stock/samples", page: "src/pages/SampleStockPage.tsx", toolbar: "full", shape: "table", canvas: true },
   { id: "finances", path: "/finances", page: "src/pages/FinancesPage.tsx", toolbar: "none", shape: "dashboard", canvas: true },
@@ -140,7 +171,7 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "features", path: "/whats-new/features", page: "src/pages/FeaturesPage.tsx", toolbar: "full", shape: "grid" },
   { id: "whats-new", path: "/whats-new", page: "src/pages/WhatsNewPage.tsx", toolbar: "full", shape: "list", maxWidth: 760 },
 
-  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true },
+  { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 5, columnWidth: "300px" } },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
 ] as const;
@@ -157,6 +188,22 @@ function matchesSurface(surface: PageSurface, pathSegments: string[]) {
   return patternSegments.every((segment, index) =>
     segment.startsWith(":") ? Boolean(pathSegments[index]) : segment === pathSegments[index]
   );
+}
+
+/**
+ * Форма поверхні з урахуванням збереженого вибору вигляду.
+ *
+ * Читаємо той самий ключ, що й сама сторінка, — інакше каркас і сторінка
+ * розійдуться саме там, де людина колись перемкнула вигляд.
+ */
+export function resolveSurfaceShape(surface: PageSurface): PageShape {
+  if (!surface.view) return surface.shape;
+  try {
+    const saved = window.localStorage.getItem(surface.view.storageKey);
+    return saved === surface.view.boardValue ? surface.shape : surface.view.fallbackShape;
+  } catch {
+    return surface.shape;
+  }
 }
 
 /** Яка поверхня відкрита. `null` — маршрут поза оболонкою (вхід, інвайт, 404). */

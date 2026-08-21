@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { useSkeletonVisible } from "@/components/app/loadingHandoff";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouteLoadingSignal } from "@/layout/routeProgress";
-import { resolvePageSurface, type PageShape, type PageToolbarKind } from "@/layout/pageSurfaces";
+import { resolvePageSurface, resolveSurfaceShape, type PageShape, type PageToolbarKind } from "@/layout/pageSurfaces";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,7 +28,19 @@ import { cn } from "@/lib/utils";
  * ознака полотна записані поруч зі шляхом у pageSurfaces.ts.
  */
 
-type ShapeProps = { canvas: boolean };
+type BoardGeometry = { columns: number; columnWidth: string };
+
+type ShapeProps = {
+  canvas: boolean;
+  /** Скільки колонок і якої ширини — у кожної дошки своє (див. pageSurfaces). */
+  board?: BoardGeometry;
+};
+
+/** Запасна геометрія: коли поверхня дошки в реєстрі не описана. */
+const DEFAULT_BOARD: BoardGeometry = {
+  columns: 5,
+  columnWidth: "clamp(224px, calc((100cqw - 52px) / 4.2), 312px)",
+};
 
 /* ─────────────────────────── допоміжні цеглинки ─────────────────────────── */
 
@@ -83,15 +95,19 @@ function SectionBlock({ rows = 3, title = "w-32" }: { rows?: number; title?: str
  * контейнера, ті самі поверхні колонок. Інакше перехід від цього каркаса до
  * власного каркаса дошки читався б як перебудова екрана.
  */
-function BoardShape() {
+function BoardShape({ board }: ShapeProps) {
+  const { columns, columnWidth } = board ?? DEFAULT_BOARD;
   return (
     <div className="h-[calc(100dvh-177px)] min-h-[420px] overflow-hidden">
       <div className="h-full overflow-hidden px-4 pt-4 pb-6 [container-type:inline-size] [scrollbar-gutter:stable_both-edges] md:px-5 md:pt-5 md:pb-7">
         <div className="flex h-full w-max items-stretch gap-4 pb-2">
-          {Array.from({ length: 5 }).map((_, columnIndex) => (
+          {Array.from({ length: columns }).map((_, columnIndex) => (
             <div
               key={columnIndex}
-              className="kanban-column-surface flex h-full shrink-0 basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] flex-col"
+              className="kanban-column-surface flex h-full shrink-0 flex-col"
+              // Ширина — рядком із реєстру, слово в слово як у самої дошки:
+              // клас тут не годиться, бо значення різне в різних розділів.
+              style={{ flexBasis: columnWidth }}
             >
               <div className="kanban-column-header flex shrink-0 items-center justify-between gap-2 px-3.5 py-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -463,7 +479,7 @@ export function PageLoading({
 }) {
   const location = useLocation();
   const surface = resolvePageSurface(location.pathname);
-  const Shape = SHAPES[shape ?? surface?.shape ?? "list"];
+  const Shape = SHAPES[shape ?? (surface ? resolveSurfaceShape(surface) : "list")];
   const visible = useSkeletonVisible();
   useRouteLoadingSignal(true);
 
@@ -491,7 +507,7 @@ export function PageLoading({
       style={maxWidth ? { maxWidth } : undefined}
     >
       <span className="sr-only">Завантаження</span>
-      <Shape canvas={isCanvas} />
+      <Shape canvas={isCanvas} board={surface?.board} />
     </div>
   );
 }

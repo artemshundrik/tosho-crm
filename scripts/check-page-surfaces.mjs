@@ -41,6 +41,7 @@ for (const match of registryBody.matchAll(/\{\s*id:\s*"([^"]+)"[^}]*?\}/g)) {
     page: entry.match(/page:\s*"([^"]+)"/)?.[1] ?? null,
     toolbar: entry.match(/toolbar:\s*"([^"]+)"/)?.[1] ?? null,
     shape: entry.match(/shape:\s*"([^"]+)"/)?.[1] ?? null,
+    board: /board:\s*\{/.test(entry),
   });
 }
 
@@ -52,6 +53,15 @@ if (surfaces.length === 0) {
 for (const surface of surfaces) {
   if (!surface.path || !surface.page || !surface.toolbar || !surface.shape) {
     problems.push(`Поверхня «${surface.id}» неповна: потрібні path, page, toolbar і shape.`);
+  }
+  // Ширина колонки в кожної дошки своя (300 px у беклога, тягуча на дизайні).
+  // Каркас без цих чисел намалює колонки не тієї ширини — і поява справжньої
+  // дошки читатиметься як стрибок.
+  if (surface.shape === "board" && !surface.board) {
+    problems.push(
+      `Поверхня «${surface.id}» — дошка, але не описала геометрію колонок ` +
+        "(`board: { columns, columnWidth }`). Каркас намалює чужу ширину."
+    );
   }
 }
 
