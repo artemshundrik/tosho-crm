@@ -215,7 +215,9 @@ import {
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
+  fetchQuoteActivity,
   fetchQuoteAttachments,
+  fetchQuoteRuns,
   fetchStatusHistory,
   type QuoteAttachment,
 } from "@/features/quotes/quote-details/queries";
@@ -259,7 +261,6 @@ type QuoteDetailsCachePayload = {
   quote: QuoteSummaryRow;
   cachedAt: number;
 };
-const QUOTE_ACTIVITY_PAGE_SIZE = 60;
 
 function sanitizeQuoteSummaryForCache(quote: QuoteSummaryRow): QuoteSummaryRow {
   return {
@@ -3819,17 +3820,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadRuns = async () => {
     setRunsLoading(true);
     setRunsError(null);
-    try {
-      const data = await getQuoteRuns(quoteId);
-      setRuns(data);
-      setRunsOriginal(data);
-    } catch (e: unknown) {
-      setRunsError(getErrorMessage(e, "Не вдалося завантажити тиражі."));
+    const result = await fetchQuoteRuns(quoteId);
+    if (result.ok) {
+      setRuns(result.data);
+      setRunsOriginal(result.data);
+    } else {
+      setRunsError(result.message);
       setRuns([]);
-    } finally {
-      setRunsLoading(false);
-      setRunsLoaded(true);
     }
+    setRunsLoading(false);
+    setRunsLoaded(true);
   };
 
   useEffect(() => {
@@ -4020,31 +4020,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadActivityLog = async (options?: { full?: boolean }) => {
     setActivityLoading(true);
     setActivityError(null);
-    try {
-      let query = supabase
-        .from("activity_log")
-        .select("id,team_id,user_id,actor_name,action,entity_type,entity_id,title,href,metadata,created_at")
-        .eq("entity_type", "quotes")
-        .eq("entity_id", quoteId)
-        .order("created_at", { ascending: false });
-      if (teamId) {
-        query = query.eq("team_id", teamId);
-      }
-      if (!options?.full) {
-        query = query.limit(QUOTE_ACTIVITY_PAGE_SIZE);
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      const rows = (data as ActivityRow[]) ?? [];
-      setActivityRows(rows);
-      setActivityLoadedAll(options?.full ?? rows.length < QUOTE_ACTIVITY_PAGE_SIZE);
-    } catch (e: unknown) {
-      setActivityError(getErrorMessage(e, "Не вдалося завантажити активність."));
+    const result = await fetchQuoteActivity(quoteId, teamId, options);
+    if (result.ok) {
+      setActivityRows(result.data.rows);
+      setActivityLoadedAll(result.data.loadedAll);
+    } else {
+      setActivityError(result.message);
       setActivityRows([]);
       setActivityLoadedAll(false);
-    } finally {
-      setActivityLoading(false);
     }
+    setActivityLoading(false);
   };
 
   const loadAttachments = async () => {

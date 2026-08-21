@@ -3,7 +3,8 @@ import {
   normalizeQuoteAttachmentAudience,
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
-import { listStatusHistory, type QuoteStatusRow } from "@/lib/toshoApi";
+import { getQuoteRuns, listStatusHistory, type QuoteStatusRow } from "@/lib/toshoApi";
+import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage } from "./config";
 
@@ -12,17 +13,26 @@ import { formatFileSize, getErrorMessage } from "./config";
  *
  * НАВІЩО ЦЕ ТУТ, А НЕ В ТІЛІ СТОРІНКИ (REQ-96)
  *
- * `eslint-plugin-react-hooks` замовкає в компоненті, у тілі якого є try/catch, —
- * і замовкає ПОВНІСТЮ, від одного-єдиного блоку (facebook/react#35644). У
- * QuoteDetailsPage таких блоків 54 у 37 функціях, тому лінт не бачить у ній
- * жодного порушення правил хуків. Не бо чисто, а бо не дістає.
+ * Три правила лінту — `set-state-in-effect`, `purity`, `immutability` — питають
+ * про відповідь у React Compiler. Якщо компілятор компонент зібрати не може, ці
+ * правила мовчать: не бо код чистий, а бо перевірити нікому.
+ *
+ * ЗАМІРЯНО ПРОБАМИ 2026-08-22 (важливо, бо перше пояснення було неточне):
+ *
+ *   простий `try/catch` у компоненті   → порушення ВИДНО
+ *   `try/finally`                      → порушення ЗНИКАЄ
+ *
+ * Тобто винен не `try` взагалі, а саме `finally` та `throw` всередині `try` —
+ * конструкції, які компілятор 1.0 не вміє. У QuoteDetailsPage 28 блоків
+ * `finally`, і тому лінт не бачить у ній жодного порушення цих трьох правил при
+ * 145 useState.
  *
  * Тому обробка помилок переїжджає СЮДИ, у звичайні функції поза React: тут
- * try/catch нікому не заважає. Компонент натомість отримує результат
- * `QueryResult` і розбирає його звичайним `if` — без try/catch у своєму тілі.
+ * `finally` нікому не заважає. Компонент отримує `QueryResult` і розбирає його
+ * звичайним `if` — без `try`, `finally` й `throw` у своєму тілі.
  *
- * Зір лінту повернеться не поступово, а стрибком — коли останній із 37 піде
- * тим самим шляхом. Доти кожна перенесена функція просто наближає той момент.
+ * Зір повернеться не поступово, а стрибком — коли піде останній `finally`.
+ * Доти кожна перенесена функція лише наближає той момент.
  */
 
 export type QueryResult<T> = { ok: true; data: T } | { ok: false; message: string };
@@ -108,5 +118,48 @@ export async function fetchQuoteAttachments(
     };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити файли.") };
+  }
+}
+
+/** Скільки подій активності беремо, поки не попросили «показати всю». */
+export const QUOTE_ACTIVITY_PAGE_SIZE = 60;
+
+export async function fetchQuoteRuns(
+  quoteId: string
+): Promise<QueryResult<Awaited<ReturnType<typeof getQuoteRuns>>>> {
+  try {
+    return { ok: true, data: await getQuoteRuns(quoteId) };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити тиражі.") };
+  }
+}
+
+export async function fetchQuoteActivity(
+  quoteId: string,
+  teamId: string | null | undefined,
+  options?: { full?: boolean }
+): Promise<QueryResult<{ rows: ActivityRow[]; loadedAll: boolean }>> {
+  try {
+    let query = supabase
+      .from("activity_log")
+      .select("id,team_id,user_id,actor_name,action,entity_type,entity_id,title,href,metadata,created_at")
+      .eq("entity_type", "quotes")
+      .eq("entity_id", quoteId)
+      .order("created_at", { ascending: false });
+    if (teamId) {
+      query = query.eq("team_id", teamId);
+    }
+    if (!options?.full) {
+      query = query.limit(QUOTE_ACTIVITY_PAGE_SIZE);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    const rows = (data as ActivityRow[]) ?? [];
+    return {
+      ok: true,
+      data: { rows, loadedAll: options?.full ?? rows.length < QUOTE_ACTIVITY_PAGE_SIZE },
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити активність.") };
   }
 }
