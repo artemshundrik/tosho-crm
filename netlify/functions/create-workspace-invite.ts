@@ -443,7 +443,10 @@ export const handler = async (event: HttpEvent) => {
         if (scope === "membership_id" && !membershipId) {
           continue;
         }
-        if (scope === "team_user" && !targetTeamId) {
+        // Прив'язка до воркспейсу актора: без membership у НАШОМУ воркспейсі
+        // команду цілі не чіпаємо. Сьогодні команда одна, але якщо колись
+        // з'явиться друга, цей рядок не дасть адміну однієї писати в іншу.
+        if (scope === "team_user" && (!targetTeamId || !membershipId)) {
           continue;
         }
 
