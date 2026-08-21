@@ -23,10 +23,10 @@ import {
   type LeadFormState,
 } from "@/components/customers";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { InlineLoading } from "@/components/app/loading-primitives";
 import { listCustomerQuotes, listCustomersBySearch, listLeadsBySearch } from "@/lib/toshoApi";
 import { loadDerivedOrders, formatOrderMoney } from "@/features/orders/orderRecords";
@@ -354,7 +354,6 @@ const getInitials = (value?: string | null) => {
   return (first + last).toUpperCase() || "?";
 };
 
-
 const getErrorMessage = (error: unknown, fallback: string) => {
   const resolveRawMessage = () => {
     if (error instanceof Error && error.message) return error.message;
@@ -540,6 +539,25 @@ function readCustomersPageCache(teamId: string): CustomersPageCachePayload | nul
   }
 }
 
+/**
+ * Дані списку, збережені для миттєвого повторного входу (REQ-19).
+ *
+ * Окремо від `CustomersPageCachePayload`: той тримає стан інтерфейсу (вкладка,
+ * пошук, фільтри) і відновлюється лише при поверненні «назад», а це — самі
+ * рядки, і потрібні вони при будь-якому вході в розділ.
+ */
+type CustomersListCache = {
+  rows: CustomerRow[];
+  total: number;
+  hasMore: boolean;
+};
+
+type LeadsListCache = {
+  leads: LeadRow[];
+  total: number;
+  hasMore: boolean;
+};
+
 function writeCustomersPageCache(teamId: string, payload: CustomersPageCachePayload) {
   if (typeof window === "undefined" || !teamId) return;
   try {
@@ -580,21 +598,37 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const [crossManagerMatches, setCrossManagerMatches] = useState<SearchVisibilityMatch[]>([]);
   const [crossManagerMatchesLoading, setCrossManagerMatchesLoading] = useState(false);
 
-  const [rows, setRows] = useState<CustomerRow[]>([]);
+  /**
+   * Миттєве відкриття розділу (REQ-19): рядки беруться з кешу сторінки, каркас
+   * не показується, свіжі дані доїжджають тихо (loadCustomers сам перемикається
+   * на `refreshing`, коли рядки вже є).
+   *
+   * Кешуємо лише вигляд БЕЗ пошуку: із запитом у полі попередній результат
+   * показав би не ті рядки, а користі з нього нуль — пошук усе одно йде на
+   * сервер. Ключ містить фільтр менеджера, тож чужий зріз не підставляється.
+   */
+  const customersCacheKey = `customers-rows:${teamId}:${customerManagerFilter}`;
+  const leadsCacheKey = `leads-rows:${teamId}:${leadManagerFilter}`;
+  const { cached: cachedCustomers, setCache: setCustomersCache } = usePageCache<CustomersListCache>(customersCacheKey);
+  const { cached: cachedLeads, setCache: setLeadsCache } = usePageCache<LeadsListCache>(leadsCacheKey);
+  const seededCustomers = search.trim() ? null : cachedCustomers;
+  const seededLeads = search.trim() ? null : cachedLeads;
+
+  const [rows, setRows] = useState<CustomerRow[]>(seededCustomers?.rows ?? []);
   const customersFullFetchCompletedKeyRef = useRef<string | null>(null);
-  const [customersLoading, setCustomersLoading] = useState(true);
+  const [customersLoading, setCustomersLoading] = useState(!seededCustomers);
   const [customersRefreshing, setCustomersRefreshing] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
-  const [customersTotal, setCustomersTotal] = useState(0);
-  const [customersHasMore, setCustomersHasMore] = useState(false);
+  const [customersTotal, setCustomersTotal] = useState(seededCustomers?.total ?? 0);
+  const [customersHasMore, setCustomersHasMore] = useState(seededCustomers?.hasMore ?? false);
 
-  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [leads, setLeads] = useState<LeadRow[]>(seededLeads?.leads ?? []);
   const leadsFullFetchCompletedKeyRef = useRef<string | null>(null);
-  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leadsLoading, setLeadsLoading] = useState(!seededLeads);
   const [leadsRefreshing, setLeadsRefreshing] = useState(false);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [leadsTotal, setLeadsTotal] = useState(0);
-  const [leadsHasMore, setLeadsHasMore] = useState(false);
+  const [leadsTotal, setLeadsTotal] = useState(seededLeads?.total ?? 0);
+  const [leadsHasMore, setLeadsHasMore] = useState(seededLeads?.hasMore ?? false);
   const [teamMembers, setTeamMembers] = useState<WorkspaceMemberDisplayRow[]>([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -2038,8 +2072,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
         nextOffset += pageSize;
       }
 
-      setCustomersTotal(totalCount ?? nextRows.length);
-      setCustomersHasMore(fetchAll ? false : offset + nextRows.length < (totalCount ?? nextRows.length));
+      const nextTotal = totalCount ?? nextRows.length;
+      const nextHasMore = fetchAll ? false : offset + nextRows.length < nextTotal;
+      setCustomersTotal(nextTotal);
+      setCustomersHasMore(nextHasMore);
+      if (!append && !search.trim()) {
+        setCustomersCache({ rows: nextRows, total: nextTotal, hasMore: nextHasMore });
+      }
       if (!append) {
         customersFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
       }
@@ -2055,7 +2094,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setCustomersLoading(false);
       setCustomersRefreshing(false);
     }
-  }, [currentManagerLabel, customerManagerFilter, isManagerUser, memberByLabel, runCustomerSelect, search, teamId, userId]);
+  }, [currentManagerLabel, customerManagerFilter, isManagerUser, memberByLabel, runCustomerSelect, search, setCustomersCache, teamId, userId]);
 
   const loadLeads = useCallback(async (options?: { append?: boolean; fetchAll?: boolean; fullFetchKey?: string }) => {
     const append = !!options?.append;
@@ -2236,8 +2275,13 @@ function CustomersPage({ teamId }: { teamId: string }) {
         nextOffset += pageSize;
       }
 
-      setLeadsTotal(totalCount ?? nextLeads.length);
-      setLeadsHasMore(fetchAll ? false : offset + nextLeads.length < (totalCount ?? nextLeads.length));
+      const nextTotal = totalCount ?? nextLeads.length;
+      const nextHasMore = fetchAll ? false : offset + nextLeads.length < nextTotal;
+      setLeadsTotal(nextTotal);
+      setLeadsHasMore(nextHasMore);
+      if (!append && !search.trim()) {
+        setLeadsCache({ leads: nextLeads, total: nextTotal, hasMore: nextHasMore });
+      }
       if (!append) {
         leadsFullFetchCompletedKeyRef.current = fetchAll ? (options?.fullFetchKey ?? "__full__") : null;
       }
@@ -2258,7 +2302,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       setLeadsLoading(false);
       setLeadsRefreshing(false);
     }
-  }, [currentManagerLabel, isManagerUser, leadManagerFilter, memberByLabel, search, teamId, userId]);
+  }, [currentManagerLabel, isManagerUser, leadManagerFilter, memberByLabel, search, setLeadsCache, teamId, userId]);
 
   const loadTeamMembers = useCallback(async () => {
     try {
@@ -4201,12 +4245,11 @@ function CustomersPage({ teamId }: { teamId: string }) {
 }
 
 export default function OrdersCustomersPage() {
-  const { teamId, loading, session } = useAuth();
+  const { teamId, session } = useAuth();
 
-  if (loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо замовників, лідів і пов'язані дані." />;
-  }
-
+  // Гейта на auth loading тут немає свідомо: поки він true, RequireAuth малює
+  // оболонку застосунку, і жодна сторінка не монтується. Дубль лише додавав ще
+  // один кадр із лоадером (REQ-19).
   if (!session) {
     return <div className="p-6 text-sm text-destructive">User not authenticated</div>;
   }

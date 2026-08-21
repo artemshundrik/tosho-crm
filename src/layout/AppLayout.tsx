@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import React, { ReactNode, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -45,6 +45,11 @@ import {
   PageHeaderActionsProvider,
   usePageHeaderActionsValue,
 } from "@/components/app/page-header-actions";
+import { PageToolbarSkeleton } from "@/components/app/page-loading";
+import { useLoadingGate, useTimeoutFlag } from "@/hooks/useLoadingGate";
+import { resolvePageSurface, type PageToolbarKind } from "@/layout/pageSurfaces";
+import { RouteProgressBar, RouteProgressProvider } from "@/layout/routeProgress";
+import { recallToolbarHeight, rememberToolbarHeight } from "@/layout/toolbarHeights";
 import { preloadRoute } from "@/routes/routePreload";
 import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
@@ -796,11 +801,13 @@ function stripToShoAiIntent(search: string) {
 
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <PageHeaderActionsProvider>
-      <div className="notranslate" translate="no">
-        <AppLayoutInner>{children}</AppLayoutInner>
-      </div>
-    </PageHeaderActionsProvider>
+    <RouteProgressProvider>
+      <PageHeaderActionsProvider>
+        <div className="notranslate" translate="no">
+          <AppLayoutInner>{children}</AppLayoutInner>
+        </div>
+      </PageHeaderActionsProvider>
+    </RouteProgressProvider>
   );
 }
 
@@ -825,7 +832,56 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   });
   const pageNode = children ?? <Outlet />;
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
-  const headerActions = usePageHeaderActionsValue();
+  /**
+   * Що цей маршрут обіцяє намалювати — смугу дій і форму вмісту (REQ-19).
+   * Факт із реєстру, а не спостереження за тим, що вже встигло з'явитись.
+   */
+  const pageSurface = useMemo(() => resolvePageSurface(location.pathname), [location.pathname]);
+  const headerActionsState = usePageHeaderActionsValue();
+  /**
+   * Чужі дії не показуємо. Прибирання ефекту попередньої сторінки виконується
+   * після рендера нового маршруту, тож без цієї звірки смуга встигала блимнути
+   * тулбаром сторінки, з якої ми щойно пішли.
+   */
+  const headerActions =
+    headerActionsState && headerActionsState.surfaceId === (pageSurface?.id ?? null)
+      ? headerActionsState.node
+      : null;
+  /**
+   * Невідомий макету маршрут (їх у реєстрі немає — 404, службові адреси) і далі
+   * поводиться як раніше: смуга є рівно тоді, коли є що в неї покласти.
+   */
+  const toolbarKind: PageToolbarKind = pageSurface
+    ? pageSurface.toolbar
+    : headerActions
+      ? "compact"
+      : "none";
+  const toolbarPending = toolbarKind !== "none" && !headerActions;
+  const showToolbarSkeleton = useLoadingGate(toolbarPending);
+  /**
+   * Сторінка може й не змонтуватись зовсім: гейт доступу покаже «потрібен
+   * доступ», обгортка — «немає команди». Кнопок у такому разі не буде ніколи,
+   * тож через кілька секунд резерв знімаємо — інакше над повідомленням вічно
+   * мерехтів би каркас тулбара.
+   */
+  const toolbarAbandoned = useTimeoutFlag(toolbarPending, 6000);
+  /**
+   * Перший показ тулбара — це замір. Далі резервуємо рівно стільки, скільки він
+   * справді займає на цій сторінці й при цій ширині вікна.
+   */
+  const toolbarNodeRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const node = toolbarNodeRef.current;
+    if (!node || !headerActions || !pageSurface) return;
+    rememberToolbarHeight(pageSurface.id, node.offsetHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      rememberToolbarHeight(pageSurface.id, node.offsetHeight);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [headerActions, pageSurface]);
+  const reservedToolbarHeight = recallToolbarHeight(pageSurface?.id);
   const toshoAiContext = useMemo(
     () =>
       buildToShoAiRouteContext({
@@ -1906,6 +1962,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <header
           key={theme}
           className={cn(
+            // Смуга прогресу всередині шапки позиціонується абсолютно й
+            // тримається її нижнього краю: `fixed` уже є позиціонованим
+            // предком, тож окремий `relative` тут не потрібен (і не можна —
+            // два класи позиції сперечались би).
             "fixed top-0 right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
@@ -2297,6 +2357,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             </div>
           </div>
+          {/* Тонка смуга переходу по нижньому краю шапки — видно, що щось
+              вантажиться, ще до того, як з'явиться каркас (REQ-19). */}
+          <RouteProgressBar />
         </header>
 
         {/* CONTENT */}
@@ -2331,7 +2394,19 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
               до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
               <main>, інакше роздільник обрізався б по краях max-width. */}
-          {header.showPageHeader === false && headerActions ? (
+          {/*
+            РЕЗЕРВ ВИСОТИ (REQ-19). Смуга стоїть від першого кадру маршруту, а не
+            з'являється тоді, коли сторінка нарешті віддала кнопки. Раніше умова
+            була «showPageHeader === false && є actions» — тобто смуга з'являлась
+            після монтування сторінки, і весь контент під нею стрибав униз;
+            на переході стрибок був подвійний, бо стара смуга спершу зникала.
+
+            Поки кнопок немає, місце тримає каркас тулбара: він рахує ту саму
+            висоту, тож нічого підбирати в пікселях не треба. Перші 150 мс він
+            прозорий — при швидкому переході людина не бачить ні порожнечі, ні
+            зайвого сірого кадру, лише готовий тулбар.
+          */}
+          {toolbarKind !== "none" && !(toolbarAbandoned && !headerActions) ? (
             <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
               <div
                 className={cn(
@@ -2341,7 +2416,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     : "mx-auto w-full max-w-[1600px] px-4 pb-4 md:px-5 lg:px-6"
                 )}
               >
-                {headerActions}
+                {headerActions ? (
+                  <div ref={toolbarNodeRef}>{headerActions}</div>
+                ) : (
+                  <div
+                    className={cn(
+                      "transition-opacity duration-200",
+                      showToolbarSkeleton ? "opacity-100" : "opacity-0"
+                    )}
+                    // Заміряна висота цієї ж поверхні, якщо ми її вже бачили;
+                    // інакше працює оцінка за класом тулбара.
+                    style={reservedToolbarHeight ? { minHeight: reservedToolbarHeight } : undefined}
+                  >
+                    <PageToolbarSkeleton kind={toolbarKind} />
+                  </div>
+                )}
               </div>
             </div>
           ) : null}

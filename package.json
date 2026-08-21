@@ -14,6 +14,7 @@
     "check:duplicate-singletons": "node scripts/check-duplicate-singletons.mjs",
     "check:feature-keys": "node scripts/check-feature-keys.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
+    "check:page-surfaces": "node scripts/check-page-surfaces.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

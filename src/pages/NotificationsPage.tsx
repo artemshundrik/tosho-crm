@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { NotificationChannelMatrix } from "@/components/notifications/NotificationChannelMatrix";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { PageLoading } from "@/components/app/page-loading";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
@@ -884,7 +884,7 @@ export default function NotificationsPage() {
   usePageHeaderActions(notificationsHeaderActions, [notificationsHeaderActions]);
 
   if (showSkeleton) {
-    return <ListSkeleton />;
+    return <PageLoading shape="list" />;
   }
 
   return (

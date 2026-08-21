@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent } from "react";
 import { DateTimePicker, deadlineUrgencyTone } from "@/components/ui/picker-input";
+import { PageLoading } from "@/components/app/page-loading";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -164,7 +165,6 @@ import {
 } from "@/lib/designTimerStatusRules";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { copyText, renderInlineRichText, renderRichTextBlocks } from "@/components/ui/rich-text-links";
@@ -8352,7 +8352,7 @@ export default function DesignTaskPage() {
   ]);
 
   if (loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо дизайн-задачу." />;
+    return <PageLoading shape="detail" />;
   }
 
   if (error || !task) {

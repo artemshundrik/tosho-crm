@@ -2,6 +2,7 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
+import { PageLoading } from "@/components/app/page-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
@@ -221,7 +222,6 @@ import {
   type QuoteDeadlineTone,
 } from "@/features/quotes/components/QuoteDeadlineBadge";
 import { QuoteKindBadge } from "@/features/quotes/components/QuoteKindBadge";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { CustomerLeadQuickViewDialog } from "@/components/customers";
 import {
@@ -5849,7 +5849,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   if (loading || quoteSectionsBootstrapping) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо прорахунок." />;
+    return <PageLoading shape="detail" />;
   }
 
   if (error || !quote) {

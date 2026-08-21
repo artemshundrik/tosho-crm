@@ -2332,3 +2332,27 @@ html[data-theme-switching]::view-transition-old(root) {
 html[data-theme-switching]::view-transition-new(root) {
   z-index: 1;
 }
+
+/* Екран запуску CRM: смужка їздить туди-сюди, поки перевіряється сесія.
+   Той самий брендовий рожевий, що й у смузі переходів (REQ-19). */
+@keyframes app-shell-boot-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.app-shell-boot-line {
+  background: linear-gradient(90deg, #ff77be 0%, #e6007e 55%, #ffafd8 100%);
+  animation: app-shell-boot-slide 1.15s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-boot-line {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
+  }
+}

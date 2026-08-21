@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { PageLoading } from "@/components/app/page-loading";
 import { AlertCircle } from "lucide-react";
 import { exportToCSV } from "@/utils/catalogUtils";
 
@@ -358,7 +358,7 @@ export default function ProductCatalogPage() {
   }
 
   if (teamLoading || (catalogLoading && catalog.length === 0)) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо каталог продукції." />;
+    return <PageLoading shape="split" />;
   }
 
   if (catalogError && catalog.length === 0) {

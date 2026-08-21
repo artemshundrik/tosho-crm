@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { PageLoading } from "@/components/app/page-loading";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
@@ -1287,7 +1287,7 @@ const buildOrderDocumentHtml = (
 export default function OrdersProductionDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { teamId, loading: authLoading, session, userId, accessRole, jobRole } = useAuth();
+  const { teamId, session, userId, accessRole, jobRole } = useAuth();
   // Approver pool for contract revisions: owner OR job_role=seo (per project policy).
   const isCeo = accessRole === "owner" || (jobRole ?? "").toLowerCase() === "seo";
   const [loading, setLoading] = useState(true);
@@ -1783,8 +1783,8 @@ export default function OrdersProductionDetailsPage() {
     return <div className="p-6 text-sm text-muted-foreground">Невірний ідентифікатор.</div>;
   }
 
-  if (authLoading || loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Відкриваємо деталі замовлення." />;
+  if (loading) {
+    return <PageLoading shape="detail" />;
   }
 
   if (!session) {

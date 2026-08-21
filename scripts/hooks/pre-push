@@ -65,6 +65,7 @@ else
     "типи функцій|npm run typecheck:functions --silent" \
     "реєстр функцій|npm run check:functions --silent" \
     "ключі фіч|npm run check:feature-keys --silent" \
+    "реєстр поверхонь|npm run check:page-surfaces --silent" \
     "копії спільних модулів|npm run check:duplicate-singletons --silent" \
     "адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs"
   do

@@ -16,7 +16,7 @@ import {
 
 import { useAuth } from "@/auth/AuthProvider";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { DashboardSkeleton } from "@/components/app/page-skeleton-templates";
+import { PageLoading } from "@/components/app/page-loading";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1109,7 +1109,7 @@ export function OverviewPage() {
   ]);
 
   if (showSkeleton || loading) {
-    return <DashboardSkeleton />;
+    return <PageLoading shape="dashboard" />;
   }
 
   return (

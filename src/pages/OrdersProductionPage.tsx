@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -350,7 +349,7 @@ const buildGroupedSpecificationHtml = (records: DerivedOrderRecord[], options: B
 export default function OrdersProductionPage() {
   const navigate = useNavigate();
   const navigationType = useNavigationType();
-  const { teamId, loading: authLoading, session, userId } = useAuth();
+  const { teamId, session, userId } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
   const initialCache = readOrdersProductionPageCache(teamId ?? "");
@@ -791,10 +790,9 @@ export default function OrdersProductionPage() {
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  if (authLoading) {
-    return <AppPageLoader title="Завантаження" subtitle="Підтягуємо затверджені прорахунки та чергу замовлень." />;
-  }
-
+  // Гейта на auth loading тут немає свідомо: поки він true, RequireAuth малює
+  // оболонку застосунку, і жодна сторінка не монтується. Дубль лише додавав ще
+  // один кадр із лоадером (REQ-19).
   if (!session) {
     return <div className="p-6 text-sm text-destructive">User not authenticated</div>;
   }

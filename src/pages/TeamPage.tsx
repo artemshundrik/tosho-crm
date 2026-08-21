@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { DEFAULT_TEAM_TAB, resolveTeamTab, type TeamTab } from "@/lib/teamTabs";
+import { PageLoading } from "@/components/app/page-loading";
 import {
   Award,
   Cake,
@@ -29,7 +30,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatJobRole } from "@/lib/jobRoles";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
@@ -1358,7 +1358,7 @@ export function TeamPage() {
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  if (loading || showSkeleton) return <AppPageLoader title="Завантаження" subtitle="Готуємо команду." />;
+  if (loading || showSkeleton) return <PageLoading shape="dashboard" />;
 
   // Хто вирішує заявки — показуємо людині в діалозі, щоб «піде на погодження»
   // не було безадресним.

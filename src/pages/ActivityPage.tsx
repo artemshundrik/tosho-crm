@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
-import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { PageLoading } from "@/components/app/page-loading";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { cn } from "@/lib/utils";
@@ -199,7 +199,7 @@ export default function ActivityPage() {
   const showSkeleton = useMinimumLoading(loading);
 
   if (showSkeleton) {
-    return <ListSkeleton />;
+    return <PageLoading shape="list" />;
   }
 
   const iconForItem = (item: ActivityItem) => {

@@ -20,7 +20,7 @@ import { supabase, db } from "@/lib/supabaseClient";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { Button } from "@/components/ui/button";
-import { DetailSkeleton } from "@/components/app/page-skeleton-templates";
+import { PageLoading } from "@/components/app/page-loading";
 import { Link, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/picker-input";
@@ -1236,7 +1236,7 @@ export function ProfilePage() {
 
   usePageHeaderActions(headerActions, [headerActions]);
 
-  if (showSkeleton) return <DetailSkeleton />;
+  if (showSkeleton) return <PageLoading shape="detail" />;
 
   const employmentDuration = formatEmploymentDuration(startDate);
   const employmentDays = getEmploymentDurationDays(startDate);

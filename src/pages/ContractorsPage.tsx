@@ -1,10 +1,11 @@
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
+import { PageLoading } from "@/components/app/page-loading";
 import { AddressAutocomplete } from "@/components/address/AddressAutocomplete";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Button } from "@/components/ui/button";
@@ -718,8 +719,14 @@ function renderLinkedLines(value?: string | null, emptyLabel = "—") {
 
 export default function ContractorsPage() {
   const { teamId, loading: authLoading } = useAuth();
-  const [rows, setRows] = useState<ContractorRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  /**
+   * Повторний вхід у розділ — миттєвий (REQ-19): дані беруться з кешу сторінки,
+   * каркас не показується взагалі, а свіжі рядки доїжджають тихо.
+   */
+  const { cached, setCache, clearCache } = usePageCache<ContractorRow[]>(teamId ? `contractors:${teamId}` : "contractors:none");
+  const hasCacheRef = useRef(Boolean(cached));
+  const [rows, setRows] = useState<ContractorRow[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [schemaMissing, setSchemaMissing] = useState(false);
@@ -746,7 +753,10 @@ export default function ContractorsPage() {
       return;
     }
 
-    if (options?.silent) setRefreshing(true);
+    // Є що показати — оновлюємось тихо. Каркас поверх наявних даних читається
+    // як «усе зникло», хоча насправді ми лише звіряємось із сервером.
+    const silent = options?.silent ?? hasCacheRef.current;
+    if (silent) setRefreshing(true);
     else setLoading(true);
 
     setError(null);
@@ -761,7 +771,10 @@ export default function ContractorsPage() {
         .order("name", { ascending: true, nullsFirst: false });
 
       if (queryError) throw queryError;
-      setRows((((data ?? []) as unknown) as ContractorRow[]) ?? []);
+      const nextRows = (((data ?? []) as unknown) as ContractorRow[]) ?? [];
+      setRows(nextRows);
+      setCache(nextRows);
+      hasCacheRef.current = true;
     } catch (loadError) {
       const message = getErrorMessage(loadError, "Не вдалося завантажити підрядників.");
       const normalized = message.toLowerCase();
@@ -772,6 +785,10 @@ export default function ContractorsPage() {
       ) {
         setSchemaMissing(true);
         setRows([]);
+        // Таблиці ще немає (міграція не доїхала) — старий кеш показувати не
+        // можна: наступний вхід засіяв би сторінку даними, яких уже нема.
+        clearCache();
+        hasCacheRef.current = false;
       } else {
         setError(message);
       }
@@ -779,7 +796,7 @@ export default function ContractorsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [teamId]);
+  }, [clearCache, setCache, teamId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -1082,8 +1099,10 @@ export default function ContractorsPage() {
     }
   }, [deleteTarget, loadContractors, teamId]);
 
-  if (authLoading || loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо підрядників і постачальників." />;
+  // authLoading тут був зайвим: поки він true, RequireAuth малює оболонку і
+  // сторінка взагалі не монтується (REQ-19, пункт про подвійні гейти).
+  if (loading) {
+    return <PageLoading shape="table" />;
   }
 
   if (!teamId) {

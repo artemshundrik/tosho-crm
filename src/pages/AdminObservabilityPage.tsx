@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { AppSectionLoader } from "@/components/app/AppSectionLoader";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { DropboxHealthCard } from "@/features/observability/DropboxHealthCard";
@@ -334,7 +333,7 @@ function sliceTrendData(data: TrendDatum[], range: ChartRange) {
 }
 
 export default function AdminObservabilityPage() {
-  const { userId, teamId, loading: authLoading, permissions } = useAuth();
+  const { userId, teamId, permissions } = useAuth();
   const [rows, setRows] = useState<ObservabilitySnapshotRow[]>([]);
   const [backupRuns, setBackupRuns] = useState<BackupRunRow[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "attachments" | "backups" | "telegram" | "errors" | "ai-usage">("overview");
@@ -912,10 +911,9 @@ export default function AdminObservabilityPage() {
       }
     : null;
 
-  if (authLoading) {
-    return <AppPageLoader title="Завантаження" subtitle="Перевіряємо доступ до observability dashboard." />;
-  }
-
+  // Гейта на auth loading тут немає свідомо: поки він true, RequireAuth малює
+  // оболонку застосунку, і жодна сторінка не монтується. Дубль лише додавав ще
+  // один кадр із лоадером (REQ-19).
   return (
     <PageCanvas>
       <PageCanvasBody className="space-y-6 px-5 py-3 pb-20 md:pb-6">

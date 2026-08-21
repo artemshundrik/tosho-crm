@@ -44,7 +44,7 @@ import { AppDropdown } from "@/components/app/AppDropdown";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { ListSkeleton } from "@/components/app/page-skeleton-templates";
+import { PageLoading } from "@/components/app/page-loading";
 import { usePageCache } from "@/hooks/usePageCache";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import {
@@ -2469,7 +2469,7 @@ export function TeamMembersPage() {
   usePageHeaderActions(headerActions, [headerActions]);
 
   if (showSkeleton) {
-    return <ListSkeleton />;
+    return <PageLoading shape="split" />;
   }
 
   if (!workspaceId) {

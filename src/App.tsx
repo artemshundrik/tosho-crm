@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/password-input";
 import { AppVersionWatcher } from "@/components/app/AppVersionWatcher";
 import { AppLayout } from "@/layout/AppLayout";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { RouteFallback } from "@/components/app/page-loading";
 import { AppShell } from "@/components/app/AppShell";
 import { BackendUnavailable } from "@/components/app/BackendUnavailable";
 import { migrateAndPruneSessionCaches } from "@/lib/sessionCache";
@@ -93,15 +93,26 @@ const NotificationsPage = lazyWithRetry(() => import("./pages/NotificationsPage"
 const ActivityPage = lazyWithRetry(() => import("./pages/ActivityPage"));
 const AdminObservabilityPage = lazyWithRetry(() => import("./pages/AdminObservabilityPage"));
 
+/**
+ * Обгортка маршруту: межа помилок + очікування чанка сторінки.
+ *
+ * `shell` нарешті щось означає (REQ-19). Раніше прапорець приймався й ніде не
+ * використовувався: маршрути всередині оболонки й окремі повноекранні сторінки
+ * (вхід, інвайт, скидання пароля) отримували однаковий фолбек. Тепер він каже
+ * фолбеку, чи є в цієї адреси форма сторінки в реєстрі поверхонь: усередині
+ * оболонки малюємо каркас саме тієї форми, поза нею — нічого, бо там свій
+ * повноекранний макет і будь-який каркас списку був би чужим.
+ */
 function RouteSuspense({
   children,
+  shell = false,
 }: {
   children: React.ReactNode;
   shell?: boolean;
 }) {
   return (
     <RouteRuntimeBoundary>
-      <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+      <Suspense fallback={<RouteFallback shell={shell} />}>{children}</Suspense>
     </RouteRuntimeBoundary>
   );
 }

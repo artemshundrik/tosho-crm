@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
+import { PageLoading } from "@/components/app/page-loading";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { Badge } from "@/components/ui/badge";
@@ -474,8 +475,14 @@ function StockTable({ rows, handlers }: { rows: SampleStockItemRow[]; handlers: 
 
 export default function SampleStockPage() {
   const { teamId, loading: authLoading } = useAuth();
-  const [rows, setRows] = useState<SampleStockItemRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  /**
+   * Повторний вхід у розділ — миттєвий (REQ-19): дані беруться з кешу сторінки,
+   * каркас не показується взагалі, а свіжі рядки доїжджають тихо.
+   */
+  const { cached, setCache, clearCache } = usePageCache<SampleStockItemRow[]>(teamId ? `sample-stock:${teamId}` : "sample-stock:none");
+  const hasCacheRef = useRef(Boolean(cached));
+  const [rows, setRows] = useState<SampleStockItemRow[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [schemaMissing, setSchemaMissing] = useState(false);
@@ -512,7 +519,9 @@ export default function SampleStockPage() {
       return;
     }
 
-    if (options?.silent) setRefreshing(true);
+    // Є що показати — оновлюємось тихо, без каркаса поверх наявних даних.
+    const silent = options?.silent ?? hasCacheRef.current;
+    if (silent) setRefreshing(true);
     else setLoading(true);
 
     setError(null);
@@ -541,7 +550,10 @@ export default function SampleStockPage() {
       }
 
       if (queryError) throw queryError;
-      setRows((((data ?? []) as unknown) as SampleStockItemRow[]) ?? []);
+      const nextRows = (((data ?? []) as unknown) as SampleStockItemRow[]) ?? [];
+      setRows(nextRows);
+      setCache(nextRows);
+      hasCacheRef.current = true;
     } catch (loadError) {
       const message = getErrorMessage(loadError, "Не вдалося завантажити склад.");
       const normalized = message.toLowerCase();
@@ -552,6 +564,10 @@ export default function SampleStockPage() {
       ) {
         setSchemaMissing(true);
         setRows([]);
+        // Таблиці ще немає (міграція не доїхала) — старий кеш показувати не
+        // можна: наступний вхід засіяв би сторінку даними, яких уже нема.
+        clearCache();
+        hasCacheRef.current = false;
       } else {
         setError(message);
       }
@@ -559,7 +575,7 @@ export default function SampleStockPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [teamId]);
+  }, [clearCache, setCache, teamId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -928,8 +944,8 @@ export default function SampleStockPage() {
     }
   }, [deleteTarget, loadItems, teamId]);
 
-  if (authLoading || loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Готуємо склад." />;
+  if (loading) {
+    return <PageLoading shape="table" />;
   }
 
   if (!teamId) {

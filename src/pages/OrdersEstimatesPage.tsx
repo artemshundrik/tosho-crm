@@ -1,14 +1,12 @@
 import { useAuth } from "@/auth/AuthProvider";
-import { AppPageLoader } from "@/components/app/AppPageLoader";
 import { QuotesPage } from "@/pages/QuotesPage";
 
 export default function OrdersEstimatesPage() {
-  const { teamId, loading, session } = useAuth();
+  const { teamId, session } = useAuth();
 
-  if (loading) {
-    return <AppPageLoader title="Завантаження" subtitle="Відкриваємо прорахунки." />;
-  }
-
+  // Гейта на auth loading тут немає свідомо: поки він true, RequireAuth малює
+  // оболонку застосунку, і жодна сторінка не монтується. Дубль лише додавав ще
+  // один кадр із лоадером (REQ-19).
   if (!session) {
     return <div className="p-6 text-sm text-destructive">User not authenticated</div>;
   }
