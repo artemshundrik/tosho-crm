@@ -25,7 +25,12 @@ import {
   createOrderFromApprovedQuote,
   loadOrderCreationDraft,
 } from "@/features/orders/orderRecords";
-import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
+import {
+  getSignedAttachmentUrl,
+  removeAttachmentWithVariants,
+  uploadAttachmentWithVariants,
+} from "@/lib/attachmentPreview";
+import { getCurrentUserId } from "@/lib/currentUser";
 import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
@@ -1142,5 +1147,72 @@ export async function logDesignTaskEvent(
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, fallbackMessage) };
+  }
+}
+
+/**
+ * Завантажити візуал позиції: у сховище, потім рядок вкладення.
+ *
+ * Перевірка членства в команді тут не зайва: RLS пустила б запис і без неї,
+ * але повідомлення «ви не член команди цього прорахунку» зрозуміліше за
+ * мовчазну відмову.
+ */
+export async function uploadQuoteItemVisual(input: {
+  teamId: string;
+  quoteId: string;
+  file: File;
+  bucket: string;
+}): Promise<
+  QueryResult<{
+    url: string;
+    row: { id: string; file_name: string | null; file_size: number | null; created_at: string | null } | null;
+  }>
+> {
+  try {
+    const uploadedBy = await getCurrentUserId();
+    if (!uploadedBy) throw new Error("User not authenticated");
+
+    const { data: membership, error: membershipError } = await supabase
+      .from("team_members")
+      .select("team_id, role")
+      .eq("user_id", uploadedBy)
+      .eq("team_id", input.teamId)
+      .maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!membership) throw new Error("Користувач не є членом команди для цього прорахунку.");
+
+    const safeName = input.file.name.replace(/[^\w.-]+/g, "_");
+    const storagePathCandidate = `teams/${input.teamId}/quote-items/${input.quoteId}/${Date.now()}-${safeName}`;
+
+    const uploadResult = await uploadAttachmentWithVariants({
+      bucket: input.bucket,
+      storagePath: storagePathCandidate,
+      file: input.file,
+      cacheControl: "31536000, immutable",
+    });
+
+    const url = await getSignedAttachmentUrl(input.bucket, uploadResult.storagePath, "original", 60 * 60 * 24 * 7);
+    if (!url) throw new Error("Не вдалося підготувати доступ до файлу");
+
+    const { data: attachmentRow, error: attachError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .insert({
+        team_id: input.teamId,
+        quote_id: input.quoteId,
+        file_name: input.file.name,
+        mime_type: uploadResult.contentType || input.file.type || null,
+        file_size: uploadResult.size || input.file.size,
+        storage_bucket: input.bucket,
+        storage_path: uploadResult.storagePath,
+        uploaded_by: uploadedBy,
+      })
+      .select("id,file_name,file_size,created_at")
+      .single();
+    if (attachError) throw attachError;
+
+    return { ok: true, data: { url, row: attachmentRow ?? null } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити файл") };
   }
 }

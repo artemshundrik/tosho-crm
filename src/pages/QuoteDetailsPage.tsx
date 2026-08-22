@@ -44,7 +44,6 @@ import {
   getAttachmentDisplayFileName,
   getAttachmentDownloadFileName,
   getSignedAttachmentUrl,
-  uploadAttachmentWithVariants,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
 import { convertWebpBlobForSharing, isWebpBlob, swapFilenameExtension } from "@/lib/imageConversion";
@@ -205,6 +204,7 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   attachDesignTaskToQuote,
+  uploadQuoteItemVisual,
   changeQuoteStatus,
   logDesignTaskEvent,
   syncDesignOutputFiles,
@@ -4773,100 +4773,48 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setItemAttachmentUploading(true);
     setItemAttachmentError(null);
-    try {
-      const uploadedBy = await getCurrentUserId();
-      if (!uploadedBy) {
-        throw new Error("User not authenticated");
-      }
-      const { data: membership, error: membershipError } = await supabase
-        .from("team_members")
-        .select("team_id, role")
-        .eq("user_id", uploadedBy)
-        .eq("team_id", effectiveTeamId)
-        .maybeSingle();
-      if (membershipError) throw membershipError;
-      if (!membership) {
-        throw new Error("Користувач не є членом команди для цього прорахунку.");
-      }
 
-      const safeName = file.name.replace(/[^\w.-]+/g, "_");
-      const baseName = `${Date.now()}-${safeName}`;
-      const candidatePaths = [`teams/${effectiveTeamId}/quote-items/${quoteId}/${baseName}`];
+    const uploaded = await uploadQuoteItemVisual({
+      teamId: effectiveTeamId,
+      quoteId,
+      file,
+      bucket: ITEM_VISUAL_BUCKET,
+    });
 
-      let path = "";
-      let storedContentType: string | null = file.type || null;
-      let storedSize = file.size;
-      let lastError: unknown = null;
-      for (const candidate of candidatePaths) {
-        try {
-          const uploadResult = await uploadAttachmentWithVariants({
-            bucket: ITEM_VISUAL_BUCKET,
-            storagePath: candidate,
-            file,
-            cacheControl: "31536000, immutable",
-          });
-          path = uploadResult.storagePath;
-          storedContentType = uploadResult.contentType || storedContentType;
-          storedSize = uploadResult.size || storedSize;
-          lastError = null;
-          break;
-        } catch (uploadError) {
-          lastError = uploadError;
-        }
-      }
-      if (!path) {
-        throw lastError ?? new Error("Не вдалося завантажити файл");
-      }
-
-      const publicUrl = await getSignedAttachmentUrl(ITEM_VISUAL_BUCKET, path, "original", 60 * 60 * 24 * 7);
-      if (!publicUrl) throw new Error("Не вдалося підготувати доступ до файлу");
-
-      const { data: attachmentRow, error: attachError } = await supabase
-        .schema("tosho")
-        .from("quote_attachments")
-        .insert({
-          team_id: effectiveTeamId,
-          quote_id: quoteId,
-          file_name: file.name,
-          mime_type: storedContentType,
-          file_size: storedSize,
-          storage_bucket: ITEM_VISUAL_BUCKET,
-          storage_path: path,
-          uploaded_by: uploadedBy,
-        })
-        .select("id,file_name,file_size,created_at")
-        .single();
-      if (attachError) throw attachError;
-
-      setItemAttachment({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        url: publicUrl,
-      });
-
-      if (attachmentRow) {
-        const sizeLabel =
-          attachmentRow.file_size != null
-            ? `${(Number(attachmentRow.file_size) / 1024).toFixed(1)} KB`
-            : `${(file.size / 1024).toFixed(1)} KB`;
-        setAttachments((prev) => [
-          {
-            id: attachmentRow.id,
-            name: attachmentRow.file_name ?? file.name,
-            size: sizeLabel,
-            created_at: attachmentRow.created_at ?? new Date().toISOString(),
-            url: publicUrl,
-          },
-          ...prev,
-        ]);
-      }
-    } catch (error: unknown) {
-      setItemAttachmentError(getErrorMessage(error, "Не вдалося завантажити файл"));
+    if (!uploaded.ok) {
+      setItemAttachmentError(uploaded.message);
       setItemAttachment(null);
-    } finally {
       setItemAttachmentUploading(false);
+      return;
     }
+
+    const { url: publicUrl, row: attachmentRow } = uploaded.data;
+
+    setItemAttachment({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      url: publicUrl,
+    });
+
+    if (attachmentRow) {
+      const sizeLabel =
+        attachmentRow.file_size != null
+          ? `${(Number(attachmentRow.file_size) / 1024).toFixed(1)} KB`
+          : `${(file.size / 1024).toFixed(1)} KB`;
+      setAttachments((prev) => [
+        {
+          id: attachmentRow.id,
+          name: attachmentRow.file_name ?? file.name,
+          size: sizeLabel,
+          created_at: attachmentRow.created_at ?? new Date().toISOString(),
+          url: publicUrl,
+        },
+        ...prev,
+      ]);
+    }
+
+    setItemAttachmentUploading(false);
   };
 
   useEffect(() => {
