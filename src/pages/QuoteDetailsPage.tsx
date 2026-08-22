@@ -106,7 +106,6 @@ import {
   getQuoteRuns,
   upsertQuoteRuns,
   deleteQuote,
-  setStatus,
   updateQuote,
   listQuoteSetMemberships,
   type TeamMemberRow,
@@ -210,6 +209,7 @@ import {
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
+  changeQuoteStatus,
   createQuoteComment,
   logQuoteActivity,
   updateQuoteFields,
@@ -4284,13 +4284,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     setDeadlineSaving(true);
     setDeadlineError(null);
-    try {
-      const updatedQuote = await updateQuote({
-        quoteId: quote.id,
-        teamId,
-        customerDeadlineAt: field === "customer_deadline_at" ? nextValue : undefined,
-        designDeadlineAt: field === "design_deadline_at" ? nextValue : undefined,
-      });
+    {
+      const saved = await updateQuoteFields(
+        {
+          quoteId: quote.id,
+          teamId,
+          customerDeadlineAt: field === "customer_deadline_at" ? nextValue : undefined,
+          designDeadlineAt: field === "design_deadline_at" ? nextValue : undefined,
+        },
+        "Не вдалося оновити дедлайн."
+      );
+      if (!saved.ok) {
+        setDeadlineError(saved.message);
+        setDeadlineSaving(false);
+        return;
+      }
+      const updatedQuote = saved.data;
       setQuote((prev) =>
         prev
           ? {
@@ -4313,25 +4322,30 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         setDesignDeadlineDate(toDateInputValue(nextValue));
         setDesignDeadlineTime(toTimeInputValue(nextValue));
       }
-      await logActivity({
-        teamId,
-        action: options.action,
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `${options.title}: ${formatDeadlineLabel(prevValue)} → ${formatDeadlineLabel(nextValue)}`,
-        href: `/orders/estimates/${quoteId}`,
-        metadata: {
-          source: field,
-          from: prevValue,
-          to: nextValue,
+      const logged = await logQuoteActivity(
+        {
+          teamId,
+          action: options.action,
+          entityType: "quotes",
+          entityId: quoteId,
+          title: `${options.title}: ${formatDeadlineLabel(prevValue)} → ${formatDeadlineLabel(nextValue)}`,
+          href: `/orders/estimates/${quoteId}`,
+          metadata: {
+            source: field,
+            from: prevValue,
+            to: nextValue,
+          },
         },
-      });
+        "Не вдалося оновити дедлайн."
+      );
+      if (!logged.ok) {
+        setDeadlineError(logged.message);
+        setDeadlineSaving(false);
+        return;
+      }
       await loadActivityLog();
-    } catch (e: unknown) {
-      setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
-    } finally {
-      setDeadlineSaving(false);
     }
+    setDeadlineSaving(false);
   };
 
   // Quick status change
@@ -4339,14 +4353,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const nextStatus = normalizeStatus(newStatus);
     setStatusBusy(true);
     setStatusError(null);
-    try {
+    {
       const previousStatus = normalizeStatus(quote?.status);
       const note = (noteOverride ?? statusNote).trim();
-      await setStatus({
+      const changed = await changeQuoteStatus({
         quoteId,
         status: nextStatus,
         note: note ? note : undefined,
       });
+      if (!changed.ok) {
+        setStatusError(changed.message);
+        setStatusBusy(false);
+        return;
+      }
+      // Сповіщення ініціатора не має ламати зміну статусу: вона вже сталась.
       try {
         await notifyQuoteInitiatorOnStatusChange({
           quoteId,
@@ -4357,15 +4377,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about status change", notifyError);
       }
-      await logActivity({
-        teamId,
-        action: "змінив статус",
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `Статус: ${formatStatusLabel(previousStatus)} → ${formatStatusLabel(nextStatus)}`,
-        href: `/orders/estimates/${quoteId}`,
-        metadata: { source: "quote_status", from: previousStatus, to: nextStatus, note },
-      });
+      const logged = await logQuoteActivity(
+        {
+          teamId,
+          action: "змінив статус",
+          entityType: "quotes",
+          entityId: quoteId,
+          title: `Статус: ${formatStatusLabel(previousStatus)} → ${formatStatusLabel(nextStatus)}`,
+          href: `/orders/estimates/${quoteId}`,
+          metadata: { source: "quote_status", from: previousStatus, to: nextStatus, note },
+        },
+        "Помилка зміни статусу"
+      );
+      if (!logged.ok) {
+        setStatusError(logged.message);
+        setStatusBusy(false);
+        return;
+      }
       if (nextStatus === "approved" && normalizeStatus(quote?.status) !== "approved") {
         await Promise.allSettled([
           logActivity({
@@ -4392,11 +4420,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await loadHistory();
       await loadActivityLog();
       setStatusNote("");
-    } catch (e: unknown) {
-      setStatusError(getErrorMessage(e, "Помилка зміни статусу"));
-    } finally {
-      setStatusBusy(false);
     }
+    setStatusBusy(false);
   };
 
   const buildCancelNote = () => {

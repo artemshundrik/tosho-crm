@@ -5,6 +5,7 @@ import {
 } from "@/lib/quoteAttachmentAudience";
 import {
   getQuoteRuns,
+  setStatus,
   updateQuote,
   listCustomersBySearch,
   listLeadsBySearch,
@@ -676,5 +677,17 @@ export async function logQuoteActivity(
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, fallbackMessage) };
+  }
+}
+
+/** Зміна статусу прорахунку. Аудит статусу веде тригер у базі, не цей виклик. */
+export async function changeQuoteStatus(
+  params: Parameters<typeof setStatus>[0]
+): Promise<QueryResult<null>> {
+  try {
+    await setStatus(params);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Помилка зміни статусу") };
   }
 }
