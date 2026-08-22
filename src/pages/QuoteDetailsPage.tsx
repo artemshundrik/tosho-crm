@@ -4165,7 +4165,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setDeadlineSaving(true);
     setDeadlineError(null);
-    try {
+    {
       const prevDate = quote.deadline_at ?? "";
       const prevNote = quote.deadline_note ?? "";
       const prevReminderOffset = quote.deadline_reminder_offset_minutes;
@@ -4189,14 +4189,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           Number.isFinite(nextReminderOffset ?? NaN) ? nextReminderOffset : null,
         deadline_reminder_comment: nextReminderComment || null,
       };
-      const updatedQuote = await updateQuote({
-        quoteId: quote.id,
-        teamId,
-        deadlineAt: payload.deadline_at,
-        deadlineNote: payload.deadline_note,
-        deadlineReminderOffsetMinutes: payload.deadline_reminder_offset_minutes,
-        deadlineReminderComment: payload.deadline_reminder_comment,
-      });
+      const saved = await updateQuoteFields(
+        {
+          quoteId: quote.id,
+          teamId,
+          deadlineAt: payload.deadline_at,
+          deadlineNote: payload.deadline_note,
+          deadlineReminderOffsetMinutes: payload.deadline_reminder_offset_minutes,
+          deadlineReminderComment: payload.deadline_reminder_comment,
+        },
+        "Не вдалося оновити дедлайн."
+      );
+      if (!saved.ok) {
+        setDeadlineError(saved.message);
+        setDeadlineSaving(false);
+        return;
+      }
+      const updatedQuote = saved.data;
       setQuote((prev) =>
         prev
           ? {
@@ -4222,29 +4231,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       );
       setDeadlineReminderComment(payload.deadline_reminder_comment ?? "");
       if (deadlineChanged) {
-        await logActivity({
-          teamId,
-          action: "змінив дедлайн",
-          entityType: "quotes",
-          entityId: quoteId,
-          title: `Дедлайн: ${formatDeadlineLabel(prevDate)} → ${formatDeadlineLabel(nextDate)}`,
-          href: `/orders/estimates/${quoteId}`,
-          metadata: {
-            source: "quote_deadline",
-            from: prevDate || null,
-            to: nextDate || null,
-            note: nextNote || null,
-            reminder_offset_minutes: payload.deadline_reminder_offset_minutes,
-            reminder_comment: payload.deadline_reminder_comment,
+        const logged = await logQuoteActivity(
+          {
+            teamId,
+            action: "змінив дедлайн",
+            entityType: "quotes",
+            entityId: quoteId,
+            title: `Дедлайн: ${formatDeadlineLabel(prevDate)} → ${formatDeadlineLabel(nextDate)}`,
+            href: `/orders/estimates/${quoteId}`,
+            metadata: {
+              source: "quote_deadline",
+              from: prevDate || null,
+              to: nextDate || null,
+              note: nextNote || null,
+              reminder_offset_minutes: payload.deadline_reminder_offset_minutes,
+              reminder_comment: payload.deadline_reminder_comment,
+            },
           },
-        });
+          "Не вдалося оновити дедлайн."
+        );
+        if (!logged.ok) {
+          setDeadlineError(logged.message);
+          setDeadlineSaving(false);
+          return;
+        }
         await loadActivityLog();
       }
-    } catch (e: unknown) {
-      setDeadlineError(getErrorMessage(e, "Не вдалося оновити дедлайн."));
-    } finally {
-      setDeadlineSaving(false);
     }
+    setDeadlineSaving(false);
   };
 
   const handleSaveSecondaryDeadline = async (
