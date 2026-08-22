@@ -5,6 +5,7 @@ import {
 } from "@/lib/quoteAttachmentAudience";
 import {
   getQuoteRuns,
+  updateQuote,
   listCustomersBySearch,
   listLeadsBySearch,
   listCatalogModelsByIds,
@@ -14,6 +15,7 @@ import {
   type QuoteSummaryRow,
 } from "@/lib/toshoApi";
 import { canOpenQuoteDetails } from "@/lib/permissions";
+import { logActivity } from "@/lib/activityLogger";
 import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
@@ -643,5 +645,36 @@ export async function fetchTeamDesignTasks(
     return { ok: true, data: (data ?? []) as DesignTaskCandidateRow[] };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити дизайн-задачі.") };
+  }
+}
+
+/**
+ * Обгортки над записом — щоб сторінка не тримала try/catch у себе.
+ *
+ * Навмисно окремі, а не одна «збережи й запиши в журнал»: між ними сторінка
+ * встигає оновити свій стан, і цей порядок треба зберегти. Журнал, який упав
+ * після успішного збереження, і далі показує помилку — як було до REQ-96.
+ */
+export async function updateQuoteFields(
+  params: Parameters<typeof updateQuote>[0],
+  fallbackMessage: string
+): Promise<QueryResult<Partial<QuoteSummaryRow> | null>> {
+  try {
+    const data = await updateQuote(params);
+    return { ok: true, data: (data ?? null) as Partial<QuoteSummaryRow> | null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, fallbackMessage) };
+  }
+}
+
+export async function logQuoteActivity(
+  payload: Parameters<typeof logActivity>[0],
+  fallbackMessage: string
+): Promise<QueryResult<null>> {
+  try {
+    await logActivity(payload);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, fallbackMessage) };
   }
 }

@@ -211,6 +211,8 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   createQuoteComment,
+  logQuoteActivity,
+  updateQuoteFields,
   fetchDesignTaskRows,
   fetchQuotePartyOptions,
   fetchTeamDesignTasks,
@@ -1439,27 +1441,41 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setBriefSaving(true);
     setBriefError(null);
-    try {
-      const nextBrief = briefText.trim();
-      const data = await updateQuote({
+
+    const fail = (message: string) => {
+      setBriefError(message);
+      toast.error(message);
+      setBriefSaving(false);
+    };
+
+    const nextBrief = briefText.trim();
+    const saved = await updateQuoteFields(
+      {
         quoteId,
         teamId,
         comment: nextBrief ? nextBrief : null,
         designBrief: nextBrief ? nextBrief : null,
-      });
-      setQuote((prev) =>
-        prev
-          ? {
-              ...prev,
-              comment: (data as Partial<QuoteSummaryRow> | null)?.comment ?? nextBrief ?? null,
-              design_brief: (data as Partial<QuoteSummaryRow> | null)?.design_brief ?? nextBrief ?? null,
-              updated_at: (data as Partial<QuoteSummaryRow> | null)?.updated_at ?? prev.updated_at,
-            }
-          : prev
-      );
-      setBriefDirty(false);
-      setBriefInlineEditing(false);
-      await logActivity({
+      },
+      "Не вдалося зберегти ТЗ."
+    );
+    if (!saved.ok) return fail(saved.message);
+
+    const data = saved.data;
+    setQuote((prev) =>
+      prev
+        ? {
+            ...prev,
+            comment: data?.comment ?? nextBrief ?? null,
+            design_brief: data?.design_brief ?? nextBrief ?? null,
+            updated_at: data?.updated_at ?? prev.updated_at,
+          }
+        : prev
+    );
+    setBriefDirty(false);
+    setBriefInlineEditing(false);
+
+    const logged = await logQuoteActivity(
+      {
         teamId,
         action: "оновив ТЗ",
         entityType: "quotes",
@@ -1467,41 +1483,48 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         title: `Оновив ТЗ для дизайнера${quote?.number ? ` (#${quote.number})` : ""}`,
         href: `/orders/estimates/${quoteId}`,
         metadata: { source: "quote_brief" },
-      });
-      await loadActivityLog();
-      toast.success("ТЗ збережено");
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося зберегти ТЗ.");
-      setBriefError(message);
-      toast.error(message);
-    } finally {
-      setBriefSaving(false);
-    }
+      },
+      "Не вдалося зберегти ТЗ."
+    );
+    if (!logged.ok) return fail(logged.message);
+
+    await loadActivityLog();
+    toast.success("ТЗ збережено");
+    setBriefSaving(false);
   };
 
   const saveNotes = async () => {
     if (!quote || !teamId || notesSaving) return;
     setNotesSaving(true);
     setNotesError(null);
-    try {
-      const nextNotes = notesText.trim();
-      const data = await updateQuote({
-        quoteId,
-        teamId,
-        notes: nextNotes ? nextNotes : null,
-      });
-      setQuote((prev) =>
-        prev
-          ? {
-              ...prev,
-              notes: nextNotes ? nextNotes : null,
-              updated_at: (data as Partial<QuoteSummaryRow> | null)?.updated_at ?? prev.updated_at,
-            }
-          : prev
-      );
-      setNotesDirty(false);
-      setNotesEditing(false);
-      await logActivity({
+
+    const fail = (message: string) => {
+      setNotesError(message);
+      toast.error(message);
+      setNotesSaving(false);
+    };
+
+    const nextNotes = notesText.trim();
+    const saved = await updateQuoteFields(
+      { quoteId, teamId, notes: nextNotes ? nextNotes : null },
+      "Не вдалося зберегти доповнення."
+    );
+    if (!saved.ok) return fail(saved.message);
+
+    setQuote((prev) =>
+      prev
+        ? {
+            ...prev,
+            notes: nextNotes ? nextNotes : null,
+            updated_at: saved.data?.updated_at ?? prev.updated_at,
+          }
+        : prev
+    );
+    setNotesDirty(false);
+    setNotesEditing(false);
+
+    const logged = await logQuoteActivity(
+      {
         teamId,
         action: "оновив доповнення",
         entityType: "quotes",
@@ -1509,16 +1532,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         title: `Оновив доповнення${quote?.number ? ` (#${quote.number})` : ""}`,
         href: `/orders/estimates/${quoteId}`,
         metadata: { source: "quote_notes" },
-      });
-      await loadActivityLog();
-      toast.success("Доповнення збережено");
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося зберегти доповнення.");
-      setNotesError(message);
-      toast.error(message);
-    } finally {
-      setNotesSaving(false);
-    }
+      },
+      "Не вдалося зберегти доповнення."
+    );
+    if (!logged.ok) return fail(logged.message);
+
+    await loadActivityLog();
+    toast.success("Доповнення збережено");
+    setNotesSaving(false);
   };
 
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
