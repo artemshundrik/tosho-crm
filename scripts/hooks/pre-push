@@ -67,6 +67,8 @@ else
     "ключі фіч|npm run check:feature-keys --silent" \
     "реєстр поверхонь|npm run check:page-surfaces --silent" \
     "копії спільних модулів|npm run check:duplicate-singletons --silent" \
+    "заглушки правил хуків|node scripts/check-hook-disables.mjs" \
+    "розростання файлів|node scripts/check-file-growth.mjs" \
     "адреси кронів|set -a; . ./.env.backup 2>/dev/null; set +a; node scripts/check-cron-endpoints.mjs"
   do
     name=${check%%|*}

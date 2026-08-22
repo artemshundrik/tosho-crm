@@ -13,6 +13,8 @@
     "check:compiler-debt": "node scripts/check-compiler-debt.mjs",
     "check:duplicate-singletons": "node scripts/check-duplicate-singletons.mjs",
     "check:feature-keys": "node scripts/check-feature-keys.mjs",
+    "check:file-growth": "node scripts/check-file-growth.mjs",
+    "check:hook-disables": "node scripts/check-hook-disables.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:page-surfaces": "node scripts/check-page-surfaces.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
