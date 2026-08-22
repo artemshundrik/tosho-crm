@@ -36,7 +36,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { threadKeyForQuote } from "@/lib/taskThread";
@@ -80,7 +79,6 @@ import {
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import { supabase } from "@/lib/supabaseClient";
-import type { Json } from "@/lib/database.types";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
 import { notifyUsers } from "@/lib/designTaskActivity";
@@ -99,8 +97,6 @@ import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
-  createQuote,
-  getQuoteRuns,
   upsertQuoteRuns,
   updateQuote,
   listQuoteSetMemberships,
@@ -189,6 +185,7 @@ import {
   formatCurrency,
   formatCurrencyCompact,
   formatFileSize,
+  resolveNumericRate,
   formatStatusLabel,
   getErrorMessage,
   getFileExtension,
@@ -204,6 +201,9 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   attachDesignTaskToQuote,
+  duplicateQuoteWithContents,
+  fetchNextDesignTaskNumber,
+  insertDesignTaskRow,
   uploadQuoteItemVisual,
   changeQuoteStatus,
   logDesignTaskEvent,
@@ -320,11 +320,6 @@ const DEADLINE_REMINDER_OPTIONS = [
   { value: "180", label: "За 3 години" },
   { value: "1440", label: "За 1 день" },
 ] as const;
-
-const resolveNumericRate = (value: unknown, fallback: number) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
-};
 
 const isGenericMentionLabel = (label?: string | null) => {
   const normalized = (label ?? "").trim().toLowerCase();
@@ -3225,7 +3220,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setDesignTaskSaving(true);
     setDesignTaskError(null);
-    try {
+
+    const fail = (message: string) => {
+      setDesignTaskError(message);
+      toast.error(message);
+      setDesignTaskSaving(false);
+    };
+
+    {
       const authUser = await getCurrentUser();
       const userId = authUser?.id ?? null;
       const actorName =
@@ -3249,7 +3251,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       );
       const assignedAt = assigneeUserId ? new Date().toISOString() : null;
       const createdAtIso = new Date().toISOString();
-      const designTaskNumber = await getNextDesignTaskNumber(teamId, createdAtIso);
+      const numbered = await fetchNextDesignTaskNumber(teamId, createdAtIso);
+      if (!numbered.ok) return fail(numbered.message);
+      const designTaskNumber = numbered.data;
 
       const designTaskMetadata = withDesignTaskCollaboratorMetadata(
         {
@@ -3287,27 +3291,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       );
 
-      const { data, error } = await supabase
-        .from("activity_log")
-        .insert({
-          team_id: teamId,
-          user_id: userId ?? null,
-          actor_name: actorName,
-          action: "design_task",
-          entity_type: "design_task",
-          entity_id: quoteId,
-          title: `Дизайн: ${modelName}`,
-          metadata: designTaskMetadata as Json,
-        })
-        .select("id, metadata")
-        .single();
-      if (error) throw error;
+      const created = await insertDesignTaskRow({
+        teamId,
+        userId,
+        actorName,
+        quoteId,
+        title: `Дизайн: ${modelName}`,
+        metadata: designTaskMetadata,
+      });
+      if (!created.ok) return fail(created.message);
 
-      const meta = (data as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
+      const meta = created.data.metadata;
       const nextAssignee = (meta as { assignee_user_id?: string | null }).assignee_user_id ?? assigneeUserId;
       const nextAssignedAt = (meta as { assigned_at?: string | null }).assigned_at ?? assignedAt;
       setDesignTask({
-        id: (data as { id: string }).id,
+        id: created.data.id,
         assigneeUserId: nextAssignee ?? null,
         assignedAt: nextAssignedAt ?? null,
         metadata: meta,
@@ -3320,7 +3318,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       try {
         await notifyDesignTaskStakeholdersOnCreate({
           quoteId,
-          designTaskId: (data as { id: string }).id,
+          designTaskId: created.data.id,
           assigneeUserId,
           collaboratorUserIds,
           actorUserId: userId,
@@ -3329,7 +3327,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       } catch (notifyError) {
         console.warn("Failed to notify stakeholders about new task", notifyError);
       }
-      const createdTaskId = (data as { id: string }).id;
+      const createdTaskId = created.data.id;
       toast.success("Дизайн-задачу створено", {
         description: `Задача ${designTaskNumber}${nextAssignee ? ` · ${getMemberLabel(nextAssignee)}` : ""}`,
         action: {
@@ -3337,13 +3335,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           onClick: () => navigate(`/design/${createdTaskId}`),
         },
       });
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося створити дизайн-задачу.");
-      setDesignTaskError(message);
-      toast.error(message);
-    } finally {
-      setDesignTaskSaving(false);
     }
+    setDesignTaskSaving(false);
   };
 
   const updateDesignAssignee = async (nextAssigneeUserId: string | null) => {
@@ -4298,153 +4291,46 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const handleDuplicateQuote = async () => {
     if (!quote?.id) return;
     setDuplicateQuoteBusy(true);
-    try {
-      const sourceQuoteId = quote.id;
-      const effectiveTeamId = quote.team_id ?? teamId;
-      if (!effectiveTeamId) {
-        throw new Error("Не вдалося визначити команду для дублювання.");
-      }
 
-      const created = await createQuote({
-        teamId: effectiveTeamId,
-        customerId: quote.customer_id ?? null,
-        customerName: quote.customer_name ?? null,
-        customerLogoUrl: quote.customer_logo_url ?? null,
-        title: quote.title ?? null,
-        quoteType: quote.quote_type ?? null,
-        printType: quote.print_type ?? null,
-        deliveryType: quote.delivery_type ?? null,
-        deliveryDetails: quote.delivery_details ?? null,
-        comment: quote.comment ?? null,
-        designBrief: quote.design_brief ?? null,
-        currency: quote.currency ?? "UAH",
-        assignedTo: quote.assigned_to ?? null,
-        deadlineAt: quote.deadline_at ?? null,
-        customerDeadlineAt: quote.customer_deadline_at ?? null,
-        designDeadlineAt: quote.design_deadline_at ?? null,
-        deadlineNote: quote.deadline_note ?? null,
-        deadlineReminderOffsetMinutes: quote.deadline_reminder_offset_minutes ?? null,
-        deadlineReminderComment: quote.deadline_reminder_comment ?? null,
-      });
-      const newQuoteId = created?.id;
-      if (!newQuoteId) throw new Error("Не вдалося створити дублікат прорахунку.");
-
-      const loadSourceItems = async (withMetadata: boolean) =>
-        await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .select(
-            withMetadata
-              ? "id,position,name,description,metadata,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
-              : "id,position,name,description,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
-          )
-          .eq("quote_id", sourceQuoteId)
-          .order("position", { ascending: true });
-      let { data: sourceItems, error: sourceItemsError } = await loadSourceItems(true);
-      if (
-        sourceItemsError &&
-        /column/i.test(sourceItemsError.message ?? "") &&
-        /metadata/i.test(sourceItemsError.message ?? "")
-      ) {
-        ({ data: sourceItems, error: sourceItemsError } = await loadSourceItems(false));
-      }
-      if (sourceItemsError) throw sourceItemsError;
-
-      const itemIdMap = new Map<string, string>();
-      const itemRows = ((sourceItems as Array<Record<string, unknown>> | null) ?? []).map((row, index) => {
-        const oldId = typeof row.id === "string" ? row.id : null;
-        const nextId = crypto.randomUUID();
-        if (oldId) itemIdMap.set(oldId, nextId);
-        return {
-          id: nextId,
-          team_id: effectiveTeamId,
-          quote_id: newQuoteId,
-          position: Number(row.position ?? index + 1) || index + 1,
-          name: (row.name as string | null) ?? "Позиція",
-          description: (row.description as string | null) ?? null,
-          metadata: ((row.metadata as Record<string, unknown> | null | undefined) ?? null),
-          qty: Number(row.qty ?? 1) || 1,
-          unit: normalizeUnitLabel(row.unit as string | null),
-          unit_price: Number(row.unit_price ?? 0) || 0,
-          line_total: Number(row.line_total ?? 0) || 0,
-          catalog_type_id: (row.catalog_type_id as string | null) ?? null,
-          catalog_kind_id: (row.catalog_kind_id as string | null) ?? null,
-          catalog_model_id: (row.catalog_model_id as string | null) ?? null,
-          methods: (row.methods as unknown) ?? null,
-          attachment: (row.attachment as unknown) ?? null,
-        };
-      });
-      if (itemRows.length > 0) {
-        const { error: insertItemsError } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .insert(itemRows as never);
-        if (insertItemsError) throw insertItemsError;
-      }
-
-      const sourceRuns = await getQuoteRuns(sourceQuoteId);
-      if (sourceRuns.length > 0) {
-        const runsPayload: QuoteRun[] = sourceRuns.map((run) => ({
-          quote_id: newQuoteId,
-          quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
-          quantity: Number(run.quantity ?? 1) || 1,
-          unit_price_model: Number(run.unit_price_model ?? 0) || 0,
-          unit_price_print: Number(run.unit_price_print ?? 0) || 0,
-          logistics_cost: Number(run.logistics_cost ?? 0) || 0,
-          desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
-        manager_rate: effectiveManagerId
-          ? currentManagerRate || DEFAULT_MANAGER_RATE
-          : resolveNumericRate(run.manager_rate, currentManagerRate || DEFAULT_MANAGER_RATE),
-          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, companyRates.fixedCostRate),
-          vat_rate: resolveNumericRate(run.vat_rate, companyRates.vatRate),
-        }));
-        await upsertQuoteRuns(newQuoteId, runsPayload);
-      }
-
-      const { data: sourceAttachments, error: sourceAttachmentsError } = await supabase
-        .schema("tosho")
-        .from("quote_attachments")
-        .select("file_name,mime_type,file_size,storage_bucket,storage_path,uploaded_by")
-        .eq("quote_id", sourceQuoteId);
-      if (sourceAttachmentsError) throw sourceAttachmentsError;
-      const attachmentRows = (sourceAttachments as Array<Record<string, unknown>> | null) ?? [];
-      if (attachmentRows.length > 0) {
-        const { error: insertAttachmentsError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .insert(
-            attachmentRows.map((row) => ({
-              team_id: effectiveTeamId,
-              quote_id: newQuoteId,
-              file_name: (row.file_name as string | null) ?? null,
-              mime_type: (row.mime_type as string | null) ?? null,
-              file_size: (row.file_size as number | null) ?? null,
-              storage_bucket: (row.storage_bucket as string | null) ?? null,
-              storage_path: (row.storage_path as string | null) ?? null,
-              uploaded_by: (row.uploaded_by as string | null) ?? null,
-            })) as never
-          );
-        if (insertAttachmentsError) throw insertAttachmentsError;
-      }
-
-      try {
-        await notifyQuotesCreated({
-          quoteIds: [created.id],
-          actorUserId: userId ?? null,
-          actorName: userId ? memberById.get(userId) ?? null : null,
-          customerName: quote.customer_name ?? null,
-        });
-      } catch (notifyError) {
-        console.warn("Failed to notify leadership about a duplicated quote", notifyError);
-      }
-
-      toast.success("Прорахунок продубльовано");
-      navigate(`/orders/estimates/${newQuoteId}`);
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Не вдалося продублювати прорахунок."));
-    } finally {
+    const effectiveTeamId = quote.team_id ?? teamId;
+    if (!effectiveTeamId) {
+      toast.error("Не вдалося визначити команду для дублювання.");
       setDuplicateQuoteBusy(false);
+      return;
     }
+
+    const duplicated = await duplicateQuoteWithContents({
+      source: quote,
+      teamId: effectiveTeamId,
+      rates: {
+        manager: currentManagerRate || DEFAULT_MANAGER_RATE,
+        fixedCost: companyRates.fixedCostRate,
+        vat: companyRates.vatRate,
+      },
+      forceManagerRate: Boolean(effectiveManagerId),
+    });
+    if (!duplicated.ok) {
+      toast.error(duplicated.message);
+      setDuplicateQuoteBusy(false);
+      return;
+    }
+
+    const newQuoteId = duplicated.data.newQuoteId;
+
+    try {
+      await notifyQuotesCreated({
+        quoteIds: [newQuoteId],
+        actorUserId: userId ?? null,
+        actorName: userId ? memberById.get(userId) ?? null : null,
+        customerName: quote.customer_name ?? null,
+      });
+    } catch (notifyError) {
+      console.warn("Failed to notify leadership about a duplicated quote", notifyError);
+    }
+
+    toast.success("Прорахунок продубльовано");
+    navigate(`/orders/estimates/${newQuoteId}`);
+    setDuplicateQuoteBusy(false);
   };
 
   const openEditQuote = () => {
@@ -5841,7 +5727,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       <div
                         key={item.id}
                         className={cn(
-                          "overflow-hidden rounded-4xl border border-border/60 bg-background shadow-sm",
+                          "overflow-hidden rounded-4xl border border-border/60 bg-background",
                           itemIndex > 0 && "mt-4"
                         )}
                       >
@@ -6387,7 +6273,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Тиражі для розрахунку цін і підсумкової суми по прорахунку.
                     </div>
                   </div>
@@ -6768,7 +6654,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Ключові дати прорахунку, нагадування і постановка задачі для дизайну.
                     </div>
                   </div>
@@ -6778,17 +6664,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <div className="space-y-4">
                 <Tabs defaultValue="internal" className="w-full">
                   <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-                  <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0 shadow-none">
+                  <TabsList className="grid h-auto w-full grid-cols-1 gap-2 border-0 bg-transparent p-0">
                     <TabsTrigger
                       value="customer"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн замовника</div>
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
                           Готовність до відвантаження.
                         </div>
                       </div>
@@ -6825,14 +6711,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="internal"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Внутрішній дедлайн</div>
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
                           Відповідь замовнику.
                         </div>
                       </div>
@@ -6855,14 +6741,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                     <TabsTrigger
                       value="design"
-                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:shadow-none data-[state=active]:ring-0"
+                      className="flex h-full min-h-[96px] flex-col items-start justify-between rounded-xl border border-border/40 bg-muted/[0.02] px-4 py-4 text-left transition-colors hover:border-border/70 hover:bg-muted/[0.04] focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary/40 data-[state=active]:bg-primary/[0.04] data-[state=active]:ring-0"
                     >
                       <div className="relative flex items-center gap-2">
                         <div className="text-sm font-semibold text-foreground">Дедлайн дизайну</div>
                         <span className="peer inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground">
                           <CircleHelp className="h-3.5 w-3.5" />
                         </span>
-                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100">
+                        <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-48 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100">
                           Погодити макет.
                         </div>
                       </div>
@@ -7173,7 +7059,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       ТЗ для дизайнера і готові візуалізації в одному місці.
                     </div>
                   </div>
@@ -7181,23 +7067,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               <Tabs defaultValue="brief" className="w-full">
-                <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
+                <TabsList className="mb-5 h-auto justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0">
                   <TabsTrigger
                     value="brief"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     ТЗ
                   </TabsTrigger>
                   <TabsTrigger
                     value="visuals"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     Візуалізації
                     <span className="ml-2 text-xs text-muted-foreground">{visibleDesignVisualizations.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="task"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     Задача
                     <span className="ml-2 text-xs text-muted-foreground">{designTasks.length}</span>
@@ -7729,7 +7615,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Загальні коментарі, вкладення від замовника і журнал активності по прорахунку.
                     </div>
                   </div>
@@ -7737,24 +7623,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               <Tabs value={detailsTab} onValueChange={(value) => setDetailsTab(value as "comments" | "files" | "activity")} className="w-full">
-                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0 shadow-none">
+                <TabsList className="mb-5 h-auto w-full justify-start rounded-none border-0 border-b border-border/30 bg-transparent p-0">
                   <TabsTrigger
                     value="comments"
-                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     Коментарі
                     <span className="ml-2 text-xs text-muted-foreground">{comments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="files"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     Вкладення
                     <span className="ml-2 text-xs text-muted-foreground">{attachments.length}</span>
                   </TabsTrigger>
                   <TabsTrigger
                     value="activity"
-                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground shadow-none hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0"
+                    className="ml-6 h-auto rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-3 text-sm font-medium text-muted-foreground hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0"
                   >
                     Активність
                   </TabsTrigger>
@@ -7784,7 +7670,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         {mentionContext ? (
                           <div
                             className={cn(
-                              "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                              "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover",
                               mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
                             )}
                           >
@@ -8975,7 +8861,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     className={cn(
                       "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all",
                       isActive
-                        ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                        ? "border-primary/40 bg-primary/10 text-primary"
                         : "border-border/60 hover:border-border"
                     )}
                   >
@@ -9337,16 +9223,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               onValueChange={(v) => setItemFormMode(v as "simple" | "advanced")}
               className="w-full"
             >
-              <TabsList className="mb-6 grid w-full grid-cols-2 rounded-xl bg-muted/30 p-1 shadow-inner">
+              <TabsList className="mb-6 grid w-full grid-cols-2 rounded-xl bg-muted/30 p-1">
                 <TabsTrigger
                   value="simple"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground"
                 >
                   Проста позиція
                 </TabsTrigger>
                 <TabsTrigger
                   value="advanced"
-                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="rounded-lg py-2.5 text-sm data-[state=active]:border data-[state=active]:border-border/50 data-[state=active]:bg-card data-[state=active]:text-foreground"
                 >
                   Із каталогу
                 </TabsTrigger>

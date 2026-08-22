@@ -248,3 +248,12 @@ export function minutesAgo(value: string | null | undefined) {
 export function createLocalId() {
   return `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
+
+/**
+ * Ставка з рядка тиражу: недійсне значення замінюємо запасним, відʼємне —
+ * нулем. Живе тут, бо потрібне і сторінці, і queries.ts.
+ */
+export const resolveNumericRate = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
+};

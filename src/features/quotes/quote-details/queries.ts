@@ -4,6 +4,7 @@ import {
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import {
+  createQuote,
   deleteQuote,
   getQuoteRuns,
   upsertQuoteRuns,
@@ -20,6 +21,7 @@ import {
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
 import { logDesignTaskActivity } from "@/lib/designTaskActivity";
+import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import {
   createOrderFromApprovedQuote,
@@ -33,7 +35,13 @@ import {
 import { getCurrentUserId } from "@/lib/currentUser";
 import type { ActivityRow } from "@/lib/activity";
 
-import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
+import {
+  formatFileSize,
+  getErrorMessage,
+  resolveNumericRate,
+  shouldUseCommentsFallback,
+} from "./config";
+import { normalizeUnitLabel } from "@/lib/units";
 import type { CatalogMethod, CatalogPriceTier, CatalogPrintPosition } from "./catalog-utils";
 
 /**
@@ -1214,5 +1222,203 @@ export async function uploadQuoteItemVisual(input: {
     return { ok: true, data: { url, row: attachmentRow ?? null } };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити файл") };
+  }
+}
+
+/** Наступний номер дизайн-задачі. Окремо, бо теж уміє впасти на запиті до бази. */
+export async function fetchNextDesignTaskNumber(
+  teamId: string,
+  createdAtIso: string
+): Promise<QueryResult<Awaited<ReturnType<typeof getNextDesignTaskNumber>>>> {
+  try {
+    return { ok: true, data: await getNextDesignTaskNumber(teamId, createdAtIso) };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося створити дизайн-задачу.") };
+  }
+}
+
+/**
+ * Створити дизайн-задачу. Задача живе рядком в activity_log — окремої таблиці
+ * під неї немає, і entity_id одразу вказує на прорахунок.
+ */
+export async function insertDesignTaskRow(input: {
+  teamId: string;
+  userId: string | null;
+  actorName: string;
+  quoteId: string;
+  title: string;
+  metadata: unknown;
+}): Promise<QueryResult<{ id: string; metadata: Record<string, unknown> }>> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_log")
+      .insert({
+        team_id: input.teamId,
+        user_id: input.userId ?? null,
+        actor_name: input.actorName,
+        action: "design_task",
+        entity_type: "design_task",
+        entity_id: input.quoteId,
+        title: input.title,
+        metadata: input.metadata as never,
+      })
+      .select("id, metadata")
+      .single();
+    if (error) throw error;
+    const row = data as { id: string; metadata?: Record<string, unknown> | null };
+    return { ok: true, data: { id: row.id, metadata: row.metadata ?? {} } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося створити дизайн-задачу.") };
+  }
+}
+
+/**
+ * Дублювання прорахунку: новий прорахунок, позиції, тиражі, вкладення.
+ *
+ * Позиціям видаються НОВІ id, і по дорозі тримається мапа старий→новий — інакше
+ * тиражі прив'язались би до позицій оригіналу. Файли не копіюються у сховищі,
+ * копіюються лише рядки: обидва прорахунки посилаються на той самий об'єкт.
+ */
+export async function duplicateQuoteWithContents(input: {
+  source: QuoteSummaryRow;
+  teamId: string;
+  rates: { manager: number; fixedCost: number; vat: number };
+  forceManagerRate: boolean;
+}): Promise<QueryResult<{ newQuoteId: string }>> {
+  try {
+    const sourceQuoteId = input.source.id;
+    const teamId = input.teamId;
+
+    const created = await createQuote({
+      teamId,
+      customerId: input.source.customer_id ?? null,
+      customerName: input.source.customer_name ?? null,
+      customerLogoUrl: input.source.customer_logo_url ?? null,
+      title: input.source.title ?? null,
+      quoteType: input.source.quote_type ?? null,
+      printType: input.source.print_type ?? null,
+      deliveryType: input.source.delivery_type ?? null,
+      deliveryDetails: input.source.delivery_details ?? null,
+      comment: input.source.comment ?? null,
+      designBrief: input.source.design_brief ?? null,
+      currency: input.source.currency ?? "UAH",
+      assignedTo: input.source.assigned_to ?? null,
+      deadlineAt: input.source.deadline_at ?? null,
+      customerDeadlineAt: input.source.customer_deadline_at ?? null,
+      designDeadlineAt: input.source.design_deadline_at ?? null,
+      deadlineNote: input.source.deadline_note ?? null,
+      deadlineReminderOffsetMinutes: input.source.deadline_reminder_offset_minutes ?? null,
+      deadlineReminderComment: input.source.deadline_reminder_comment ?? null,
+    });
+    const newQuoteId = created?.id;
+    if (!newQuoteId) throw new Error("Не вдалося створити дублікат прорахунку.");
+
+    const loadSourceItems = async (withMetadata: boolean) =>
+      await supabase
+        .schema("tosho")
+        .from("quote_items")
+        .select(
+          withMetadata
+            ? "id,position,name,description,metadata,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
+            : "id,position,name,description,qty,unit,unit_price,line_total,catalog_type_id,catalog_kind_id,catalog_model_id,methods,attachment"
+        )
+        .eq("quote_id", sourceQuoteId)
+        .order("position", { ascending: true });
+
+    let { data: sourceItems, error: sourceItemsError } = await loadSourceItems(true);
+    if (
+      sourceItemsError &&
+      /column/i.test(sourceItemsError.message ?? "") &&
+      /metadata/i.test(sourceItemsError.message ?? "")
+    ) {
+      ({ data: sourceItems, error: sourceItemsError } = await loadSourceItems(false));
+    }
+    if (sourceItemsError) throw sourceItemsError;
+
+    const itemIdMap = new Map<string, string>();
+    const itemRows = ((sourceItems as Array<Record<string, unknown>> | null) ?? []).map((row, index) => {
+      const oldId = typeof row.id === "string" ? row.id : null;
+      const nextId = crypto.randomUUID();
+      if (oldId) itemIdMap.set(oldId, nextId);
+      return {
+        id: nextId,
+        team_id: teamId,
+        quote_id: newQuoteId,
+        position: Number(row.position ?? index + 1) || index + 1,
+        name: (row.name as string | null) ?? "Позиція",
+        description: (row.description as string | null) ?? null,
+        metadata: (row.metadata as Record<string, unknown> | null | undefined) ?? null,
+        qty: Number(row.qty ?? 1) || 1,
+        unit: normalizeUnitLabel(row.unit as string | null),
+        unit_price: Number(row.unit_price ?? 0) || 0,
+        line_total: Number(row.line_total ?? 0) || 0,
+        catalog_type_id: (row.catalog_type_id as string | null) ?? null,
+        catalog_kind_id: (row.catalog_kind_id as string | null) ?? null,
+        catalog_model_id: (row.catalog_model_id as string | null) ?? null,
+        methods: (row.methods as unknown) ?? null,
+        attachment: (row.attachment as unknown) ?? null,
+      };
+    });
+    if (itemRows.length > 0) {
+      const { error: insertItemsError } = await supabase
+        .schema("tosho")
+        .from("quote_items")
+        .insert(itemRows as never);
+      if (insertItemsError) throw insertItemsError;
+    }
+
+    const sourceRuns = await getQuoteRuns(sourceQuoteId);
+    if (sourceRuns.length > 0) {
+      await upsertQuoteRuns(
+        newQuoteId,
+        sourceRuns.map((run) => ({
+          quote_id: newQuoteId,
+          quote_item_id: run.quote_item_id ? itemIdMap.get(run.quote_item_id) ?? null : null,
+          quantity: Number(run.quantity ?? 1) || 1,
+          unit_price_model: Number(run.unit_price_model ?? 0) || 0,
+          unit_price_print: Number(run.unit_price_print ?? 0) || 0,
+          logistics_cost: Number(run.logistics_cost ?? 0) || 0,
+          desired_manager_income: Number(run.desired_manager_income ?? 0) || 0,
+          // Якщо в дубліката є свій менеджер — беремо його ставку, а не ту, що
+          // стояла в оригіналі.
+          manager_rate: input.forceManagerRate
+            ? input.rates.manager
+            : resolveNumericRate(run.manager_rate, input.rates.manager),
+          fixed_cost_rate: resolveNumericRate(run.fixed_cost_rate, input.rates.fixedCost),
+          vat_rate: resolveNumericRate(run.vat_rate, input.rates.vat),
+        })) as Parameters<typeof upsertQuoteRuns>[1]
+      );
+    }
+
+    const { data: sourceAttachments, error: sourceAttachmentsError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .select("file_name,mime_type,file_size,storage_bucket,storage_path,uploaded_by")
+      .eq("quote_id", sourceQuoteId);
+    if (sourceAttachmentsError) throw sourceAttachmentsError;
+
+    const attachmentRows = (sourceAttachments as Array<Record<string, unknown>> | null) ?? [];
+    if (attachmentRows.length > 0) {
+      const { error: insertAttachmentsError } = await supabase
+        .schema("tosho")
+        .from("quote_attachments")
+        .insert(
+          attachmentRows.map((row) => ({
+            team_id: teamId,
+            quote_id: newQuoteId,
+            file_name: (row.file_name as string | null) ?? null,
+            mime_type: (row.mime_type as string | null) ?? null,
+            file_size: (row.file_size as number | null) ?? null,
+            storage_bucket: (row.storage_bucket as string | null) ?? null,
+            storage_path: (row.storage_path as string | null) ?? null,
+            uploaded_by: (row.uploaded_by as string | null) ?? null,
+          })) as never
+        );
+      if (insertAttachmentsError) throw insertAttachmentsError;
+    }
+
+    return { ok: true, data: { newQuoteId } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося продублювати прорахунок.") };
   }
 }
