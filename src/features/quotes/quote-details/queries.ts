@@ -1422,3 +1422,33 @@ export async function duplicateQuoteWithContents(input: {
     return { ok: false, message: getErrorMessage(error, "Не вдалося продублювати прорахунок.") };
   }
 }
+
+/** Оновити рядок позиції прорахунку. */
+export async function updateQuoteItemRow(
+  itemId: string,
+  patch: Record<string, unknown>
+): Promise<QueryResult<null>> {
+  try {
+    const { error } = await supabase
+      .schema("tosho")
+      .from("quote_items")
+      .update(patch as never)
+      .eq("id", itemId);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося оновити прорахунок.") };
+  }
+}
+
+/** Прибрати тиражі за списком id. Порожній список — не запит, а просто «нічого». */
+export async function deleteQuoteRunsByIds(ids: string[]): Promise<QueryResult<null>> {
+  try {
+    if (ids.length === 0) return { ok: true, data: null };
+    const { error } = await supabase.schema("tosho").from("quote_item_runs").delete().in("id", ids);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося оновити прорахунок.") };
+  }
+}

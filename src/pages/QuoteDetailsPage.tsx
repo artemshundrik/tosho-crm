@@ -97,8 +97,6 @@ import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
-  upsertQuoteRuns,
-  updateQuote,
   listQuoteSetMemberships,
   type TeamMemberRow,
   type QuoteStatusRow,
@@ -201,6 +199,8 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   attachDesignTaskToQuote,
+  deleteQuoteRunsByIds,
+  updateQuoteItemRow,
   duplicateQuoteWithContents,
   fetchNextDesignTaskNumber,
   insertDesignTaskRow,
@@ -1011,7 +1011,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        toast.error("Не вдалося завантажити файл", {
+          description: `HTTP ${response.status}`,
+        });
+        return;
       }
       let blob = await response.blob();
       let outputFilename = (filename && filename.trim()) || "file";
@@ -1097,8 +1100,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .maybeSingle<{ manager_rate?: number | null }>();
 
       if (error) {
+        // «Немає таблиці» — очікувана відмова на старих базах, мовчимо.
+        // Будь-яка інша варта запису в консоль, але ставку однаково беремо
+        // типову: без неї не порахувати нічого.
         if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-          throw error;
+          console.error("Failed to load current manager rate", error);
         }
         return DEFAULT_MANAGER_RATE;
       }
@@ -1148,7 +1154,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
       if (error) {
         if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-          throw error;
+          console.error("Failed to load current manager rate", error);
         }
         setCurrentManagerRate(DEFAULT_MANAGER_RATE);
         return;
@@ -4404,7 +4410,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!quote) return;
     setEditQuoteSaving(true);
     setEditQuoteError(null);
-    try {
+
+    const fail = (message: string) => {
+      setEditQuoteError(message);
+      setEditQuoteSaving(false);
+    };
+
+    {
       const selectedParty = editQuoteCustomers.find(
         (item) => item.id === data.customerId && (item.entityType ?? "customer") === (data.customerType ?? "customer")
       );
@@ -4414,7 +4426,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const customerLogoUrl = selectedParty?.logo_url ?? quote.customer_logo_url ?? null;
       const title = data.customerType === "lead" ? customerName : quote.title ?? null;
 
-      await updateQuote({
+      const savedQuote = await updateQuoteFields(
+        {
         quoteId,
         teamId,
         customerId: customerIdForQuote,
@@ -4438,7 +4451,10 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         quoteType: data.quoteType?.trim() ? data.quoteType : null,
         deliveryType: data.deliveryType?.trim() ? data.deliveryType : null,
         deliveryDetails: data.deliveryDetails ?? null,
-      });
+        },
+        "Не вдалося оновити прорахунок."
+      );
+      if (!savedQuote.ok) return fail(savedQuote.message);
 
       const primaryItem = items[0] ?? null;
       const normalizedRuns = (data.runs ?? []).filter((run) => Number(run.quantity) > 0);
@@ -4458,10 +4474,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const primaryPrint = methodsPayload?.[0] ?? null;
 
       if (primaryItem?.id && data.modelId && Number.isFinite(primaryRunQuantity) && primaryRunQuantity > 0) {
-        const { error: itemError } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .update({
+        const savedItem = await updateQuoteItemRow(primaryItem.id, {
             name: model?.name ?? primaryItem.title ?? "Позиція",
             qty: primaryRunQuantity,
             unit: normalizeUnitLabel(data.quantityUnit || primaryItem.unit || "шт."),
@@ -4474,9 +4487,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             print_width_mm: primaryPrint?.print_width_mm ?? null,
             print_height_mm: primaryPrint?.print_height_mm ?? null,
             methods: methodsPayload,
-          })
-          .eq("id", primaryItem.id);
-        if (itemError) throw itemError;
+        });
+        if (!savedItem.ok) return fail(savedItem.message);
 
         if (normalizedRuns.length > 0) {
           const targetManagerRate = await getManagerRateForUser(data.managerId?.trim() || quote?.assigned_to || quote?.created_by || userId);
@@ -4490,27 +4502,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             defaultFixedCostRate: companyRates.fixedCostRate,
             defaultVatRate: companyRates.vatRate,
           });
-          if (idsToDelete.length > 0) {
-            const { error: deleteRunsError } = await supabase
-              .schema("tosho")
-              .from("quote_item_runs")
-              .delete()
-              .in("id", idsToDelete);
-            if (deleteRunsError) throw deleteRunsError;
-          }
-          await upsertQuoteRuns(quoteId, payload);
+          const savedRuns = await persistQuoteRuns(quoteId, payload, idsToDelete);
+          if (!savedRuns.ok) return fail(savedRuns.message);
         } else if (editQuoteOriginalRuns.length > 0) {
           const idsToDelete = editQuoteOriginalRuns
             .map((run) => run.id)
             .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
-          if (idsToDelete.length > 0) {
-            const { error: deleteRunsError } = await supabase
-              .schema("tosho")
-              .from("quote_item_runs")
-              .delete()
-              .in("id", idsToDelete);
-            if (deleteRunsError) throw deleteRunsError;
-          }
+          const removed = await deleteQuoteRunsByIds(idsToDelete);
+          if (!removed.ok) return fail(removed.message);
         }
       }
 
@@ -4539,11 +4538,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       await Promise.all([loadQuote(), loadItems(), loadRuns()]);
       setEditQuoteDialogOpen(false);
       toast.success("Прорахунок оновлено");
-    } catch (error: unknown) {
-      setEditQuoteError(getErrorMessage(error, "Не вдалося оновити прорахунок."));
-    } finally {
-      setEditQuoteSaving(false);
     }
+    setEditQuoteSaving(false);
   };
 
   // Inline quantity editing
