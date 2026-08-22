@@ -44,7 +44,6 @@ import {
   getAttachmentDisplayFileName,
   getAttachmentDownloadFileName,
   getSignedAttachmentUrl,
-  removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
@@ -210,6 +209,10 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   changeQuoteStatus,
+  deleteQuoteAttachmentRow,
+  fetchDesignTasksLinkedToQuote,
+  updateActivityMetadata,
+  uploadQuoteAttachmentFile,
   persistQuoteRuns,
   createQuoteComment,
   logQuoteActivity,
@@ -3805,89 +3808,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (allowed.length === 0) return;
 
     setAttachmentsUploading(true);
-    try {
-      const uploadedBy = await getCurrentUserId();
-      if (!uploadedBy) {
-        throw new Error("Користувач не авторизований");
-      }
 
-      const failures: string[] = [];
-
-      for (const file of allowed) {
-        const safeName = file.name.replace(/[^\w.-]+/g, "_");
-        const baseName = `${Date.now()}-${safeName}`;
-        const candidatePaths = [`teams/${teamId}/quote-attachments/${quoteId}/${baseName}`];
-
-        let storagePath = "";
-        let storedContentType: string | null = file.type || null;
-        let storedSize = file.size;
-        let lastError: unknown = null;
-        for (const candidate of candidatePaths) {
-          try {
-            const uploadResult = await uploadAttachmentWithVariants({
-              bucket: ITEM_VISUAL_BUCKET,
-              storagePath: candidate,
-              file,
-              cacheControl: "31536000, immutable",
-            });
-            storagePath = uploadResult.storagePath;
-            storedContentType = uploadResult.contentType || storedContentType;
-            storedSize = uploadResult.size || storedSize;
-            lastError = null;
-            break;
-          } catch (uploadError) {
-            lastError = uploadError;
-          }
-        }
-
-        if (!storagePath) {
-          failures.push(file.name);
-          console.error("Attachment upload failed", lastError);
-          continue;
-        }
-
-        const { error: insertError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .insert({
-            team_id: teamId,
-            quote_id: quoteId,
-            file_name: file.name,
-            mime_type: storedContentType,
-            file_size: storedSize,
-            storage_bucket: ITEM_VISUAL_BUCKET,
-            storage_path: storagePath,
-            uploaded_by: uploadedBy,
-            // Панель «Файли» на картці прорахунку — це файли прорахунку, а не
-            // ТЗ дизайнеру. Матеріали для дизайнера додають у дизайн-блоці
-            // модалки або на самій дизайн-задачі — звідти сюди приходить
-            // явний audience.
-            audience,
-          });
-
-        if (insertError) {
-          failures.push(file.name);
-          console.error("Attachment insert failed", insertError);
-        }
-      }
-
-      if (failures.length > 0) {
-        setAttachmentsUploadError(
-          failures.length === allowed.length
-            ? "Не вдалося завантажити файли."
-            : `Не всі файли завантажилися (${failures.length}/${allowed.length}).`
-        );
-      }
-
-      await loadAttachments();
-    } catch (e: unknown) {
-      setAttachmentsUploadError(getErrorMessage(e, "Не вдалося завантажити файли."));
-    } finally {
+    const finish = () => {
       setAttachmentsUploading(false);
       if (attachmentsInputRef.current) {
         attachmentsInputRef.current.value = "";
       }
+    };
+
+    const uploadedBy = await getCurrentUserId();
+    if (!uploadedBy) {
+      setAttachmentsUploadError("Користувач не авторизований");
+      finish();
+      return;
     }
+
+    // Кожен файл окремо: один невдалий не має скасовувати решту, тому список
+    // тих, що не долетіли, збирається й показується разом.
+    const failures: string[] = [];
+    for (const file of allowed) {
+      const uploaded = await uploadQuoteAttachmentFile({
+        teamId,
+        quoteId,
+        file,
+        uploadedBy,
+        audience,
+        bucket: ITEM_VISUAL_BUCKET,
+      });
+      if (!uploaded.ok) {
+        failures.push(file.name);
+        console.error("Attachment upload failed", uploaded.message);
+      }
+    }
+
+    if (failures.length > 0) {
+      setAttachmentsUploadError(
+        failures.length === allowed.length
+          ? "Не вдалося завантажити файли."
+          : `Не всі файли завантажилися (${failures.length}/${allowed.length}).`
+      );
+    }
+
+    await loadAttachments();
+    finish();
   };
 
   const requestDeleteAttachment = (attachment: QuoteAttachment) => {
@@ -3911,55 +3874,39 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setAttachmentsDeletingId(attachment.id);
     setAttachmentsDeleteError(null);
-    try {
-      if (attachment.storageBucket && attachment.storagePath) {
-        await removeAttachmentWithVariants(attachment.storageBucket, attachment.storagePath);
-      }
 
-      const { error } = await supabase
-        .schema("tosho")
-        .from("quote_attachments")
-        .delete()
-        .eq("id", attachment.id);
-      if (error) throw error;
-
-      if (quoteId && attachment.storageBucket && attachment.storagePath) {
-        const { data: linkedTasks, error: linkedTasksError } = await supabase
-          .from("activity_log")
-          .select("id,metadata")
-          .eq("action", "design_task")
-          .eq("team_id", teamId)
-          .filter("metadata->>quote_id", "eq", quoteId);
-        if (linkedTasksError) throw linkedTasksError;
-
-        for (const row of ((linkedTasks ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }>)) {
-          const metadata = parseActivityMetadata(row.metadata);
-          const nextMetadata = removeDesignOutputReferencesFromMetadata(
-            metadata,
-            attachment.storageBucket,
-            attachment.storagePath
-          );
-          if (!nextMetadata) continue;
-          const { error: syncError } = await supabase
-            .from("activity_log")
-            .update({ metadata: nextMetadata as Json })
-            .eq("id", row.id)
-            .eq("team_id", teamId);
-          if (syncError) throw syncError;
-        }
-      }
-
-      setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
-      setDeleteAttachmentOpen(false);
-      setDeleteAttachmentTarget(null);
-      toast.success("Файл видалено");
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося видалити файл.");
+    const fail = (message: string) => {
       setAttachmentsDeleteError(message);
       toast.error("Помилка видалення", { description: message });
-    } finally {
       setAttachmentsDeletingId(null);
+    };
+
+    const removed = await deleteQuoteAttachmentRow(attachment);
+    if (!removed.ok) return fail(removed.message);
+
+    // Файл могли вибрати як візуалізацію в дизайн-задачі — прибираємо посилання
+    // й там, інакше задача показуватиме те, чого вже немає у сховищі.
+    if (quoteId && attachment.storageBucket && attachment.storagePath) {
+      const linked = await fetchDesignTasksLinkedToQuote(quoteId, teamId);
+      if (!linked.ok) return fail(linked.message);
+
+      for (const row of linked.data) {
+        const nextMetadata = removeDesignOutputReferencesFromMetadata(
+          parseActivityMetadata(row.metadata),
+          attachment.storageBucket,
+          attachment.storagePath
+        );
+        if (!nextMetadata) continue;
+        const synced = await updateActivityMetadata(row.id, teamId, nextMetadata);
+        if (!synced.ok) return fail(synced.message);
+      }
     }
+
+    setAttachments((prev) => prev.filter((item) => item.id !== attachment.id));
+    setDeleteAttachmentOpen(false);
+    setDeleteAttachmentTarget(null);
+    toast.success("Файл видалено");
+    setAttachmentsDeletingId(null);
   };
 
   useEffect(() => {

@@ -18,6 +18,7 @@ import {
 } from "@/lib/toshoApi";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
+import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
@@ -715,5 +716,117 @@ export async function persistQuoteRuns(
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося зберегти тиражі.") };
+  }
+}
+
+/**
+ * Завантажити один файл у сховище й записати рядок вкладення.
+ *
+ * По одному файлу навмисно: у циклі сторінка збирає список тих, що не
+ * долетіли, і показує «не всі файли завантажилися» — а не падає на першому.
+ */
+export async function uploadQuoteAttachmentFile(input: {
+  teamId: string;
+  quoteId: string;
+  file: File;
+  uploadedBy: string;
+  audience: QuoteAttachmentAudience;
+  bucket: string;
+}): Promise<QueryResult<null>> {
+  try {
+    const safeName = input.file.name.replace(/[^\w.-]+/g, "_");
+    const storagePathCandidate = `teams/${input.teamId}/quote-attachments/${input.quoteId}/${Date.now()}-${safeName}`;
+
+    const uploadResult = await uploadAttachmentWithVariants({
+      bucket: input.bucket,
+      storagePath: storagePathCandidate,
+      file: input.file,
+      cacheControl: "31536000, immutable",
+    });
+
+    const { error: insertError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .insert({
+        team_id: input.teamId,
+        quote_id: input.quoteId,
+        file_name: input.file.name,
+        mime_type: uploadResult.contentType || input.file.type || null,
+        file_size: uploadResult.size || input.file.size,
+        storage_bucket: input.bucket,
+        storage_path: uploadResult.storagePath,
+        uploaded_by: input.uploadedBy,
+        // Панель «Файли» на картці прорахунку — це файли прорахунку, а не ТЗ
+        // дизайнеру. Матеріали для дизайнера додають у дизайн-блоці модалки або
+        // на самій дизайн-задачі — звідти сюди приходить явний audience.
+        audience: input.audience,
+      });
+    if (insertError) throw insertError;
+
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити файл.") };
+  }
+}
+
+/** Прибрати файл зі сховища (разом із похідними) і викинути рядок вкладення. */
+export async function deleteQuoteAttachmentRow(attachment: {
+  id: string;
+  storageBucket?: string | null;
+  storagePath?: string | null;
+}): Promise<QueryResult<null>> {
+  try {
+    if (attachment.storageBucket && attachment.storagePath) {
+      await removeAttachmentWithVariants(attachment.storageBucket, attachment.storagePath);
+    }
+    const { error } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .delete()
+      .eq("id", attachment.id);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося видалити файл.") };
+  }
+}
+
+/**
+ * Дизайн-задачі, прив'язані до прорахунку через metadata.
+ * Потрібні, щоб після видалення файлу прибрати посилання на нього і в них.
+ */
+export async function fetchDesignTasksLinkedToQuote(
+  quoteId: string,
+  teamId: string
+): Promise<QueryResult<Array<{ id: string; metadata?: Record<string, unknown> | null }>>> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_log")
+      .select("id,metadata")
+      .eq("action", "design_task")
+      .eq("team_id", teamId)
+      .filter("metadata->>quote_id", "eq", quoteId);
+    if (error) throw error;
+    return { ok: true, data: (data ?? []) as Array<{ id: string; metadata?: Record<string, unknown> | null }> };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося видалити файл.") };
+  }
+}
+
+export async function updateActivityMetadata(
+  id: string,
+  teamId: string,
+  metadata: unknown
+): Promise<QueryResult<null>> {
+  try {
+    const { error } = await supabase
+      .from("activity_log")
+      .update({ metadata: metadata as never })
+      .eq("id", id)
+      .eq("team_id", teamId);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося видалити файл.") };
   }
 }
