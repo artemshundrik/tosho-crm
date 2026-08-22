@@ -1,6 +1,8 @@
 import * as React from "react";
 import { AlertTriangle, Layers, Lock, Package, ShieldCheck, Wallet } from "lucide-react";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
+import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { PriorityBars } from "@/features/devRequests/PriorityBars";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shell, Section, Caption } from "../shell";
@@ -10,14 +12,6 @@ import { Shell, Section, Caption } from "../shell";
  * (щільність, поверхню, стани), а не відтворити всі поля чотирьох дошок.
  * Оболонка справжня — це той самий KanbanCard, що на проді.
  */
-
-function Avatar({ label, tone = "bg-muted" }: { label: string; tone?: string }) {
-  return (
-    <span className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border/60 text-3xs font-semibold ${tone}`}>
-      {label}
-    </span>
-  );
-}
 
 function QuoteBody() {
   return (
@@ -33,7 +27,7 @@ function QuoteBody() {
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2.5">
-        <Avatar label="ТП" />
+        <AvatarBase name="Тарас П." fallback="ТП" size={20} className="border-border/60 shrink-0" fallbackClassName="text-3xs font-semibold" />
         <span className="truncate text-[15px] font-semibold">ТОВ «Приклад»</span>
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -53,7 +47,7 @@ function DesignBody() {
       </div>
       <p className="mt-2 line-clamp-2 text-[13px] font-medium leading-snug">Логотип на футболки, 2 кольори, груди + спина</p>
       <div className="mt-3 flex items-center gap-2">
-        <Avatar label="ІС" />
+        <AvatarBase name="Іван С." fallback="ІС" size={20} className="border-border/60 shrink-0" fallbackClassName="text-3xs font-semibold" />
         <span className="truncate text-xs text-muted-foreground">Іван С.</span>
         <Badge tone="neutral" size="sm" className="ml-auto">3 візуали</Badge>
       </div>
@@ -66,7 +60,7 @@ function OrderBody() {
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar label="FT" tone="bg-info-soft" />
+          <EntityAvatar name="FAYNA TEAM" fallback="FT" size={40} />
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">FAYNA TEAM</div>
             <div className="truncate text-xs text-muted-foreground">TS-0826-0039 • 276 грн</div>
@@ -92,11 +86,7 @@ function RequestBody() {
   return (
     <>
       <div className="flex items-center gap-2">
-        <span className="inline-flex gap-0.5">
-          <i className="h-3 w-0.5 rounded-full bg-danger-foreground" />
-          <i className="h-3 w-0.5 rounded-full bg-danger-foreground" />
-          <i className="h-3 w-0.5 rounded-full bg-border" />
-        </span>
+        <PriorityBars priority="high" />
         <span className="tone-text-danger text-2xs font-semibold">Не працює</span>
         <span className="font-mono text-2xs font-semibold tracking-wide text-muted-foreground">REQ-105</span>
       </div>
@@ -127,14 +117,21 @@ export default function KanbanCardCard() {
         </>
       }
     >
-      <Section title="Чотири дошки поруч" hint="наведи на будь-яку — межа підсвічується однаково">
+      <Section
+        title="Чотири дошки поруч"
+        hint="на підкладці колонки — так, як картка лежить у застосунку, а не на голому тлі"
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           {BOARDS.map((b) => (
             <div key={b.name}>
               <p className="mb-1.5 text-3xs uppercase tracking-[0.1em] text-muted-foreground">
                 {b.name} · density={b.density} · surface={b.surface}
               </p>
-              <KanbanCard density={b.density} surface={b.surface}>{b.body}</KanbanCard>
+              {/* .kanban-column-surface — та сама підкладка, що на дошках:
+                  без неї картка читається інакше, бо колонка тонована. */}
+              <div className="kanban-column-surface p-2">
+                <KanbanCard density={b.density} surface={b.surface}>{b.body}</KanbanCard>
+              </div>
             </div>
           ))}
         </div>
