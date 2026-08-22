@@ -207,12 +207,12 @@ import {
   normalizeMentionKey,
   normalizeStatus,
   renderTextWithMentions,
-  shouldUseCommentsFallback,
   statusClasses,
   statusIcons,
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
+  createQuoteComment,
   fetchDesignTaskRows,
   fetchQuoteActivity,
   fetchQuoteComments,
@@ -221,7 +221,9 @@ import {
   fetchQuoteAttachments,
   fetchQuoteRuns,
   fetchStatusHistory,
+  invokeQuoteCommentsFunction,
   type DesignTaskRow,
+  type InsertedCommentRow,
   type QuoteAttachment,
   type QuoteComment,
 } from "@/features/quotes/quote-details/queries";
@@ -360,12 +362,6 @@ type QuoteItem = {
   resolvedModelImageUrl?: string;
   resolvedModelThumbUrl?: string;
   resolvedMethodNames?: Record<string, string>;
-};
-type InsertedCommentRow = {
-  id: string;
-  body: string;
-  created_at: string;
-  created_by: string | null;
 };
 type MentionContext = {
   start: number;
@@ -5362,144 +5358,92 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const saveComment = async (body: string) => {
     setCommentSaving(true);
     setCommentsError(null);
-    try {
-      const invokeQuoteCommentsFunction = async (payload: Record<string, unknown>) => {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-        if (!token) throw new Error("Не вдалося визначити сесію користувача.");
 
-        const response = await fetch("/.netlify/functions/quote-comments", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const rawText = await response.text();
-        let parsed: Record<string, unknown> = {};
-        if (rawText) {
-          try {
-            parsed = JSON.parse(rawText);
-          } catch {
-            parsed = {};
-          }
-        }
-
-        if (!response.ok) {
-          const parsedError = typeof parsed.error === "string" ? parsed.error : null;
-          throw new Error(parsedError || `HTTP ${response.status}`);
-        }
-
-        return parsed;
-      };
-
-      const userId = await getCurrentUserId();
-      if (!userId) {
-        throw new Error("Не вдалося визначити користувача.");
-      }
-      const effectiveTeamId = quote?.team_id ?? teamId;
-      if (!effectiveTeamId) {
-        throw new Error("Немає доступної команди.");
-      }
-
-      const mentionKeys = extractMentionKeys(body);
-      const hasMentionsInBody = mentionKeys.length > 0;
-      const mentionedUserIds = new Set<string>();
-      for (const mentionKey of mentionKeys) {
-        const candidates = mentionLookup.get(mentionKey);
-        if (!candidates || candidates.size !== 1) continue;
-        const [mentionedUserId] = Array.from(candidates);
-        if (mentionedUserId && mentionedUserId !== userId) {
-          mentionedUserIds.add(mentionedUserId);
-        }
-      }
-      const mentionUserIdsList = Array.from(mentionedUserIds);
-      let mentionsHandledViaServer = false;
-
-      let { data, error } = await supabase
-        .schema("tosho")
-        .from("quote_comments")
-        .insert({
-          team_id: effectiveTeamId,
-          quote_id: quoteId,
-          thread_key: threadKeyForQuote(quoteId),
-          body,
-          created_by: userId,
-        })
-        .select("id,body,created_at,created_by")
-        .single();
-      if (error) {
-        if (shouldUseCommentsFallback(error.message)) {
-          const fallback = await invokeQuoteCommentsFunction({
-            mode: "add",
-            quoteId,
-            body,
-            mentionedUserIds: mentionUserIdsList,
-          });
-          data = ((fallback?.comment as InsertedCommentRow | null) ?? null) as unknown as {
-            id: string;
-            body: string;
-            created_at: string;
-            created_by: string;
-          } | null;
-          if (hasMentionsInBody) {
-            mentionsHandledViaServer = !fallback?.mentionError;
-          }
-          error = null;
-        } else {
-          throw error;
-        }
-      }
-
-      const inserted = data as InsertedCommentRow;
-      setComments((prev) => [
-        {
-          id: inserted.id,
-          body: inserted.body ?? body,
-          created_at: inserted.created_at ?? new Date().toISOString(),
-          created_by: inserted.created_by ?? userId,
-        },
-        ...prev,
-      ]);
-
-      if (hasMentionsInBody && !mentionsHandledViaServer) {
-        try {
-          await invokeQuoteCommentsFunction({
-            mode: "notify_mentions",
-            quoteId,
-            body,
-            mentionedUserIds: mentionUserIdsList,
-          });
-          mentionsHandledViaServer = true;
-        } catch (notifyError) {
-          const actorLabel = memberById.get(userId) ?? "Користувач";
-          const quoteLabel = quote?.number ? `#${quote.number}` : quoteId;
-          const trimmedBody = body.length > 220 ? `${body.slice(0, 217)}...` : body;
-          try {
-            await notifyUsers({
-              userIds: mentionUserIdsList,
-              title: `${actorLabel} згадав(ла) вас у коментарі`,
-              body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
-              href: `/orders/estimates/${quoteId}`,
-              type: "info",
-            });
-          } catch (notificationsError) {
-            console.warn("Failed to send mention notifications", notificationsError, notifyError);
-          }
-        }
-      }
-
-      setCommentText("");
-      setMentionContext(null);
-      setMentionActiveIndex(0);
-      await loadActivityLog();
-    } catch (e: unknown) {
-      setCommentsError(getErrorMessage(e, "Не вдалося додати коментар."));
-    } finally {
+    const authorId = await getCurrentUserId();
+    if (!authorId) {
+      setCommentsError("Не вдалося визначити користувача.");
       setCommentSaving(false);
+      return;
     }
+    const effectiveTeamId = quote?.team_id ?? teamId;
+    if (!effectiveTeamId) {
+      setCommentsError("Немає доступної команди.");
+      setCommentSaving(false);
+      return;
+    }
+
+    const mentionKeys = extractMentionKeys(body);
+    const hasMentionsInBody = mentionKeys.length > 0;
+    const mentionedUserIds = new Set<string>();
+    for (const mentionKey of mentionKeys) {
+      const candidates = mentionLookup.get(mentionKey);
+      // Згадку розсилаємо лише коли ім'я однозначне: два однакові — не вгадуємо.
+      if (!candidates || candidates.size !== 1) continue;
+      const [mentionedUserId] = Array.from(candidates);
+      if (mentionedUserId && mentionedUserId !== authorId) {
+        mentionedUserIds.add(mentionedUserId);
+      }
+    }
+    const mentionUserIdsList = Array.from(mentionedUserIds);
+
+    const result = await createQuoteComment({
+      quoteId,
+      teamId: effectiveTeamId,
+      body,
+      userId: authorId,
+      threadKey: threadKeyForQuote(quoteId),
+      mentionedUserIds: mentionUserIdsList,
+      hasMentionsInBody,
+    });
+
+    if (!result.ok) {
+      setCommentsError(result.message);
+      setCommentSaving(false);
+      return;
+    }
+
+    const inserted: InsertedCommentRow = result.data.comment;
+    setComments((prev) => [
+      {
+        id: inserted.id,
+        body: inserted.body ?? body,
+        created_at: inserted.created_at ?? new Date().toISOString(),
+        created_by: inserted.created_by ?? authorId,
+      },
+      ...prev,
+    ]);
+
+    if (hasMentionsInBody && !result.data.mentionsHandledViaServer) {
+      try {
+        await invokeQuoteCommentsFunction({
+          mode: "notify_mentions",
+          quoteId,
+          body,
+          mentionedUserIds: mentionUserIdsList,
+        });
+      } catch (notifyError) {
+        const actorLabel = memberById.get(authorId) ?? "Користувач";
+        const quoteLabel = quote?.number ? `#${quote.number}` : quoteId;
+        const trimmedBody = body.length > 220 ? `${body.slice(0, 217)}...` : body;
+        try {
+          await notifyUsers({
+            userIds: mentionUserIdsList,
+            title: `${actorLabel} згадав(ла) вас у коментарі`,
+            body: `Прорахунок ${quoteLabel}: ${trimmedBody}`,
+            href: `/orders/estimates/${quoteId}`,
+            type: "info",
+          });
+        } catch (notificationsError) {
+          console.warn("Failed to send mention notifications", notificationsError, notifyError);
+        }
+      }
+    }
+
+    setCommentText("");
+    setMentionContext(null);
+    setMentionActiveIndex(0);
+    await loadActivityLog();
+    setCommentSaving(false);
   };
 
   const toggleMethod = (methodId: string) => {

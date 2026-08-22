@@ -514,3 +514,68 @@ export async function fetchQuoteItemsWithCatalog(
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити позиції.") };
   }
 }
+
+export type InsertedCommentRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  created_by: string | null;
+};
+
+/**
+ * Додати коментар до прорахунку.
+ *
+ * Якщо RLS не пускає писати напряму, той самий коментар іде через
+ * Netlify-функцію під службовим ключем. Вона ж уміє розіслати згадки, і тоді
+ * повертає mentionsHandledViaServer: true — щоб сторінка не слала їх удруге.
+ */
+export async function createQuoteComment(input: {
+  quoteId: string;
+  teamId: string;
+  body: string;
+  userId: string;
+  threadKey: string;
+  mentionedUserIds: string[];
+  hasMentionsInBody: boolean;
+}): Promise<QueryResult<{ comment: InsertedCommentRow; mentionsHandledViaServer: boolean }>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("quote_comments")
+      .insert({
+        team_id: input.teamId,
+        quote_id: input.quoteId,
+        thread_key: input.threadKey,
+        body: input.body,
+        created_by: input.userId,
+      })
+      .select("id,body,created_at,created_by")
+      .single();
+
+    if (error) {
+      if (!shouldUseCommentsFallback(error.message)) throw error;
+      const fallback = await invokeQuoteCommentsFunction({
+        mode: "add",
+        quoteId: input.quoteId,
+        body: input.body,
+        mentionedUserIds: input.mentionedUserIds,
+      });
+      const comment = (fallback?.comment ?? null) as InsertedCommentRow | null;
+      if (!comment) throw new Error("Коментар не збережено.");
+      return {
+        ok: true,
+        data: {
+          comment,
+          mentionsHandledViaServer: input.hasMentionsInBody ? !fallback?.mentionError : false,
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      data: { comment: data as InsertedCommentRow, mentionsHandledViaServer: false },
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося додати коментар.") };
+  }
+}
