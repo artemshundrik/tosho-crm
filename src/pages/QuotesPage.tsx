@@ -6937,9 +6937,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     setDragPlaceholder(null);
                                   }}
                                   onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                                  interactive={canOpen}
+                                  disabled={!canOpen}
                                   className={cn(
-                                    "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-3 transition-[border-color] duration-220 ease-out dark:hover:border-foreground/22",
-                                    canOpen ? "cursor-pointer hover:border-foreground/24" : "cursor-not-allowed opacity-70",
+                                    // Вигляд перетягування поки свій на кожній
+                                    // дошці — зводимо після звірки в дизайн-системі.
                                     draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
                                   )}
                                 >

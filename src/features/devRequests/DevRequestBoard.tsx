@@ -180,12 +180,11 @@ export function DevRequestBoard({
         }}
         onDragStart={(event) => startDragging(event, request.id)}
         onDragEnd={stopDragging}
+        density="compact"
         className={cn(
-          // Розкладка й класи — ті самі, що на дошках дизайну та прорахунків
-          // (DesignPage/QuotesPage): картка запиту має читатись як їхня рідня,
-          // а не як гість із іншого проєкту.
-          "kanban-estimate-card rounded-2xl border border-border/60 bg-card p-2.5 transition-[border-color,opacity] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
           urgent && "dev-request-card-urgent",
+          // Перетягування має власний вигляд на кожній дошці; зведемо після
+          // того, як побачимо всі чотири поруч у дизайн-системі.
           canManage && "cursor-grab active:cursor-grabbing",
           draggingId === request.id && "opacity-50"
         )}

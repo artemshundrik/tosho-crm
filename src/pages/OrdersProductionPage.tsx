@@ -1114,7 +1114,9 @@ export default function OrdersProductionPage() {
                           columnRecords.map((record) => (
                             <KanbanCard
                               key={record.id}
-                              className="kanban-estimate-card cursor-pointer overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-4 transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22"
+                              surface="raised"
+                              density="roomy"
+                              className="overflow-hidden"
                               onClick={() => openRecord(record)}
                             >
                               <div className="flex items-start justify-between gap-3">

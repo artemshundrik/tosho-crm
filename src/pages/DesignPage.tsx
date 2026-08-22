@@ -4706,8 +4706,8 @@ export default function DesignPage() {
             openTask(task.id, true);
           }
         }}
+        surface="raised"
         className={cn(
-          "kanban-estimate-card rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card/95 to-card/75 p-3 cursor-pointer transition-[border-color] duration-220 ease-out hover:border-foreground/24 dark:hover:border-foreground/22",
           draggingId === task.id && "ring-2 ring-primary/40"
         )}
       >
