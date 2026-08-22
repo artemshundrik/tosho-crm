@@ -1423,21 +1423,84 @@ export async function duplicateQuoteWithContents(input: {
   }
 }
 
-/** Оновити рядок позиції прорахунку. */
+/** Ознака «у базі немає колонки metadata» — на старіших базах її справді немає. */
+function isMissingMetadataColumn(message: string | null | undefined) {
+  return /column/i.test(message ?? "") && /metadata/i.test(message ?? "");
+}
+
+function withoutMetadata(payload: Record<string, unknown>) {
+  const copy = { ...payload };
+  delete copy.metadata;
+  return copy;
+}
+
+/**
+ * Оновити рядок позиції прорахунку.
+ *
+ * Прапорець retryWithoutMetadata вмикає запасний прохід без колонки metadata.
+ * Він потрібен лише там, де був і раніше: у редагуванні позиції з діалогу. У
+ * редагуванні прорахунку його не було, і додавати «за компанію» означало б тихо
+ * змінити поведінку.
+ */
 export async function updateQuoteItemRow(
   itemId: string,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  options?: { retryWithoutMetadata?: boolean }
 ): Promise<QueryResult<null>> {
   try {
-    const { error } = await supabase
-      .schema("tosho")
-      .from("quote_items")
-      .update(patch as never)
-      .eq("id", itemId);
+    const run = async (payload: Record<string, unknown>) =>
+      await supabase.schema("tosho").from("quote_items").update(payload as never).eq("id", itemId);
+
+    let { error } = await run(patch);
+    if (error && options?.retryWithoutMetadata && isMissingMetadataColumn(error.message)) {
+      ({ error } = await run(withoutMetadata(patch)));
+    }
     if (error) throw error;
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося оновити прорахунок.") };
+  }
+}
+
+const QUOTE_ITEM_SELECT_WITH_METADATA =
+  "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment";
+const QUOTE_ITEM_SELECT_WITHOUT_METADATA =
+  "id, position, name, description, qty, unit, unit_price, methods, attachment";
+
+/** Вставити позицію прорахунку, із тим самим запасним проходом без metadata. */
+export async function insertQuoteItemRow(
+  payload: Record<string, unknown>
+): Promise<QueryResult<Record<string, unknown> | null>> {
+  try {
+    let { data, error } = await supabase
+      .schema("tosho")
+      .from("quote_items")
+      .insert(payload as never)
+      .select(QUOTE_ITEM_SELECT_WITH_METADATA)
+      .single();
+    if (error && isMissingMetadataColumn(error.message)) {
+      ({ data, error } = await supabase
+        .schema("tosho")
+        .from("quote_items")
+        .insert(withoutMetadata(payload) as never)
+        .select(QUOTE_ITEM_SELECT_WITHOUT_METADATA)
+        .single());
+    }
+    if (error) throw error;
+    return { ok: true, data: (data as Record<string, unknown> | null) ?? null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося зберегти позицію.") };
+  }
+}
+
+/** Видалити позицію прорахунку. */
+export async function deleteQuoteItemRow(itemId: string): Promise<QueryResult<null>> {
+  try {
+    const { error } = await supabase.schema("tosho").from("quote_items").delete().eq("id", itemId);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося видалити позицію.") };
   }
 }
 

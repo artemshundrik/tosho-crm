@@ -199,6 +199,8 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   attachDesignTaskToQuote,
+  deleteQuoteItemRow,
+  insertQuoteItemRow,
   deleteQuoteRunsByIds,
   updateQuoteItemRow,
   duplicateQuoteWithContents,
@@ -1366,7 +1368,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   };
 
   const saveRunsRef = useRef(saveRuns);
-  saveRunsRef.current = saveRuns;
+  // Запис у ref НЕ під час рендеру, а в ефекті — інакше це порушення правил
+  // React, через яке компілятор пропускає весь компонент. Ефект оголошений
+  // вище за автозбереження, тож на момент його спрацювання ref уже свіжий.
+  useEffect(() => {
+    saveRunsRef.current = saveRuns;
+  });
 
   const runsAutosaveSignature = useMemo(
     () =>
@@ -1420,10 +1427,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setSelectedRunId(next[0]?.id ?? null);
     }
     if (removed?.id && removed.quote_item_id) {
-      const nextItemRun = next.find((run) => run.quote_item_id === removed.quote_item_id);
+      // Ключ окремою змінною, а не приведенням типу прямо в літералі: React
+      // Compiler не вміє TSAsExpression у ключі обʼєкта й через нього пропускає
+      // весь компонент (REQ-109).
+      const removedItemId: string = removed.quote_item_id;
+      const nextItemRun = next.find((run) => run.quote_item_id === removedItemId);
       setSelectedRunIdByItem((prev) => ({
         ...prev,
-        [removed.quote_item_id as string]: nextItemRun?.id ?? "",
+        [removedItemId]: nextItemRun?.id ?? "",
       }));
     }
     await saveRuns(next);
@@ -4559,15 +4570,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const current = items.find((item) => item.id === itemId);
       if (!current) return;
       const unitPrice = Number(current.price ?? 0) || 0;
-      const { error } = await supabase
-        .schema("tosho")
-        .from("quote_items")
-        .update({
-          qty: newQty,
-          line_total: unitPrice * newQty,
-        })
-        .eq("id", itemId);
-      if (error) throw error;
+      const saved = await updateQuoteItemRow(itemId, {
+        qty: newQty,
+        line_total: unitPrice * newQty,
+      });
+      if (!saved.ok) setItemsError("Не вдалося оновити кількість.");
     } catch (e: unknown) {
       setItemsError(getErrorMessage(e, "Не вдалося оновити кількість."));
     }
@@ -4824,31 +4831,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           methods: methodsPayload,
           attachment: attachmentPayload,
         };
-        let { error } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .update(updatePayload)
-          .eq("id", editingItemId);
-        if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
-          ({ error } = await supabase
-            .schema("tosho")
-            .from("quote_items")
-            .update({
-              name: newItem.title,
-              description: newItem.description ?? null,
-              qty: newItem.qty,
-              unit: normalizeUnitLabel(newItem.unit),
-              unit_price: newItem.price,
-              line_total: newItem.qty * newItem.price,
-              catalog_type_id: newItem.catalogTypeId ?? null,
-              catalog_kind_id: newItem.catalogKindId ?? null,
-              catalog_model_id: newItem.catalogModelId ?? null,
-              methods: methodsPayload,
-              attachment: attachmentPayload,
-            })
-            .eq("id", editingItemId));
+        const savedItem = await updateQuoteItemRow(editingItemId, updatePayload, {
+          retryWithoutMetadata: true,
+        });
+        if (!savedItem.ok) {
+          setItemsError(savedItem.message);
+          return;
         }
-        if (error) throw error;
         setItems((prev) =>
           prev.map((item) => (item.id === editingItemId ? newItem : item))
         );
@@ -4874,46 +4863,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           methods: methodsPayload,
           attachment: attachmentPayload,
         };
-        let { data, error } = await supabase
-          .schema("tosho")
-          .from("quote_items")
-          .insert(insertPayload)
-          .select("id, position, name, description, metadata, qty, unit, unit_price, methods, attachment")
-          .single();
-        if (error && /column/i.test(error.message ?? "") && /metadata/i.test(error.message ?? "")) {
-          ({ data, error } = await supabase
-            .schema("tosho")
-            .from("quote_items")
-            .insert({
-              id: newId,
-              team_id: effectiveTeamId,
-              quote_id: quoteId,
-              position: nextPosition,
-              name: newItem.title,
-              description: newItem.description ?? null,
-              qty: newItem.qty,
-              unit: normalizeUnitLabel(newItem.unit),
-              unit_price: newItem.price,
-              line_total: newItem.qty * newItem.price,
-              catalog_type_id: newItem.catalogTypeId ?? null,
-              catalog_kind_id: newItem.catalogKindId ?? null,
-              catalog_model_id: newItem.catalogModelId ?? null,
-              methods: methodsPayload,
-              attachment: attachmentPayload,
-            })
-            .select("id, position, name, description, qty, unit, unit_price, methods, attachment")
-            .single());
+        const insertedRow = await insertQuoteItemRow(insertPayload);
+        if (!insertedRow.ok) {
+          setItemsError(insertedRow.message);
+          return;
         }
-        if (error) throw error;
+        // Рядок повертається як довільний обʼєкт: у запасному проході без
+        // metadata набір колонок інший, тож поля читаємо поштучно.
+        const data = insertedRow.data as
+          | {
+              id?: string | null;
+              position?: number | null;
+              qty?: number | null;
+              unit?: string | null;
+              unit_price?: number | null;
+              description?: string | null;
+              metadata?: unknown;
+            }
+          | null;
         const inserted: QuoteItem = {
           ...newItem,
           id: data?.id ?? newId,
           position: data?.position ?? nextPosition,
           qty: Number(data?.qty ?? newItem.qty),
-          unit: normalizeUnitLabel((data?.unit as string | null | undefined) ?? newItem.unit),
+          unit: normalizeUnitLabel(data?.unit ?? newItem.unit),
           price: Number(data?.unit_price ?? newItem.price),
           description: data?.description ?? newItem.description,
-          metadata: parseQuoteItemMetadata((data as Record<string, unknown> | null | undefined)?.metadata) ?? newItem.metadata ?? null,
+          metadata: parseQuoteItemMetadata(data?.metadata) ?? newItem.metadata ?? null,
         };
         setItems((prev) => [...prev, inserted]);
       }
@@ -4925,16 +4901,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
   const handleDeleteItem = async (itemId: string) => {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
-    try {
-      const { error } = await supabase
-        .schema("tosho")
-        .from("quote_items")
-        .delete()
-        .eq("id", itemId);
-      if (error) throw error;
-    } catch (e: unknown) {
-      setItemsError(getErrorMessage(e, "Не вдалося видалити позицію."));
-    }
+    const removed = await deleteQuoteItemRow(itemId);
+    if (!removed.ok) setItemsError(removed.message);
   };
   void handleDeleteItem;
 
