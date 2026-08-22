@@ -111,7 +111,6 @@ import {
   setStatus,
   updateQuote,
   listQuoteSetMemberships,
-  listCatalogModelsByIds,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
@@ -217,6 +216,7 @@ import {
   fetchDesignTaskRows,
   fetchQuoteActivity,
   fetchQuoteComments,
+  fetchQuoteItemsWithCatalog,
   fetchQuoteSummaryForDetails,
   fetchQuoteAttachments,
   fetchQuoteRuns,
@@ -360,32 +360,6 @@ type QuoteItem = {
   resolvedModelImageUrl?: string;
   resolvedModelThumbUrl?: string;
   resolvedMethodNames?: Record<string, string>;
-};
-type QuoteItemRecord = {
-  id?: string | null;
-  position?: number | null;
-  name?: string | null;
-  description?: string | null;
-  metadata?: unknown;
-  qty?: number | null;
-  unit?: string | null;
-  unit_price?: number | null;
-  methods?: unknown;
-  attachment?: unknown;
-  catalog_type_id?: string | null;
-  catalog_kind_id?: string | null;
-  catalog_model_id?: string | null;
-  print_position_id?: string | null;
-  print_width_mm?: number | null;
-  print_height_mm?: number | null;
-};
-type BasicSelectableQuery = {
-  eq: (column: string, value: string) => BasicSelectableQuery;
-  order: (column: string, options: { ascending: boolean }) => BasicSelectableQuery;
-  then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
-};
-type BasicSelectableTable = {
-  select: (columns: string) => BasicSelectableQuery;
 };
 type InsertedCommentRow = {
   id: string;
@@ -3552,138 +3526,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const loadItems = async () => {
     setItemsLoading(true);
     setItemsError(null);
-    try {
-      const quoteItemColumnsWithMetadata =
-        "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
-      const quoteItemColumnsWithoutMetadata =
-        "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
-      const loadRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
-        const quoteItemsTable = supabase.schema("tosho").from("quote_items") as unknown as BasicSelectableTable;
-        let query = quoteItemsTable.select(withMetadata ? quoteItemColumnsWithMetadata : quoteItemColumnsWithoutMetadata)
-          .eq("quote_id", quoteId)
-          .order("position", { ascending: true });
-        if (withTeamFilter && teamId) {
-          query = query.eq("team_id", teamId);
-        }
-        return await query;
-      };
-
-      let { data, error } = await loadRows(!!teamId, true);
-      if (
-        error &&
-        /column/i.test(error.message ?? "") &&
-        /metadata/i.test(error.message ?? "")
-      ) {
-        ({ data, error } = await loadRows(!!teamId, false));
-      }
-      if (
-        error &&
-        teamId &&
-        /column/i.test(error.message ?? "") &&
-        /team_id/i.test(error.message ?? "")
-      ) {
-        ({ data, error } = await loadRows(false, true));
-        if (
-          error &&
-          /column/i.test(error.message ?? "") &&
-          /metadata/i.test(error.message ?? "")
-        ) {
-          ({ data, error } = await loadRows(false, false));
-        }
-      }
-      if (error) throw error;
-      const rows = (data ?? []) as QuoteItemRecord[];
-      const kindIds = Array.from(
-        new Set(
-          rows
-            .map((row) => (typeof row.catalog_kind_id === "string" ? row.catalog_kind_id.trim() : ""))
-            .filter(Boolean)
-        )
-      );
-      const modelIds = Array.from(
-        new Set(
-          rows
-            .map((row) => (typeof row.catalog_model_id === "string" ? row.catalog_model_id.trim() : ""))
-            .filter(Boolean)
-        )
-      );
-      const methodIds = Array.from(
-        new Set(
-          rows.flatMap((row) =>
-            Array.isArray(row.methods)
-              ? row.methods
-                  .map((method) =>
-                    typeof (method?.method_id ?? method?.methodId ?? method?.id) === "string"
-                      ? String(method.method_id ?? method.methodId ?? method.id).trim()
-                      : ""
-                  )
-                  .filter(Boolean)
-              : []
-          )
-        )
-      );
-
-      const [kindResult, modelResult, methodResult] = await Promise.all([
-        kindIds.length
-          ? supabase
-              .schema("tosho")
-              .from("catalog_kinds")
-              .select("id,type_id,name")
-              .in("id", kindIds)
-          : Promise.resolve({ data: [], error: null }),
-        modelIds.length
-          ? listCatalogModelsByIds(modelIds).then((map) => ({
-              data: Array.from(map.values()).map((row) => ({
-                id: row.id,
-                kind_id: "",
-                name: row.name ?? "",
-                image_url: row.image_url ?? null,
-                thumb_url: row.thumb_url ?? null,
-              })),
-              error: null,
-            }))
-          : Promise.resolve({ data: [], error: null }),
-        methodIds.length
-          ? supabase
-              .schema("tosho")
-              .from("catalog_methods")
-              .select("id,name")
-              .in("id", methodIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      if (kindResult.error) throw kindResult.error;
-      if (modelResult.error) throw modelResult.error;
-      if (methodResult.error) throw methodResult.error;
-
-      const kindRows = (kindResult.data ?? []) as Array<{ id: string; type_id: string; name: string }>;
-      const modelRows = (modelResult.data ?? []) as Array<{
-        id: string;
-        kind_id: string;
-        name: string;
-        image_url: string | null;
-        thumb_url: string | null;
-      }>;
-      const typeIds = Array.from(new Set(kindRows.map((row) => row.type_id).filter(Boolean)));
-
-      const typeResult = typeIds.length
-        ? await supabase
-            .schema("tosho")
-            .from("catalog_types")
-            .select("id,name")
-            .in("id", typeIds)
-        : { data: [], error: null };
-      if (typeResult.error) throw typeResult.error;
-
-      const kindById = new Map(kindRows.map((row) => [row.id, row]));
-      const modelById = new Map(modelRows.map((row) => [row.id, row]));
-      const methodById = new Map(
-        ((methodResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name])
-      );
-      const typeById = new Map(
-        ((typeResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row])
-      );
-
+    const result = await fetchQuoteItemsWithCatalog(quoteId, teamId);
+    if (!result.ok) {
+      setItemsError(result.message);
+      setItems([]);
+      setItemsLoading(false);
+      setItemsLoaded(true);
+      return;
+    }
+    {
+      const { rows, kindById, modelById, methodById, typeById } = result.data;
       setItems(
         rows.map((row) => {
           const rawMethods = Array.isArray(row.methods) ? row.methods : [];
@@ -3776,13 +3628,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           };
         })
       );
-    } catch (e: unknown) {
-      setItemsError(getErrorMessage(e, "Не вдалося завантажити позиції."));
-      setItems([]);
-    } finally {
-      setItemsLoading(false);
-      setItemsLoaded(true);
     }
+    setItemsLoading(false);
+    setItemsLoaded(true);
   };
 
   const loadRuns = async () => {

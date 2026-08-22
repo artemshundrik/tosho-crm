@@ -5,6 +5,7 @@ import {
 } from "@/lib/quoteAttachmentAudience";
 import {
   getQuoteRuns,
+  listCatalogModelsByIds,
   getQuoteSummary,
   listStatusHistory,
   type QuoteStatusRow,
@@ -338,5 +339,178 @@ export async function fetchQuoteComments(
     return { ok: true, data: (data ?? []).map(normalizeComment) };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити коментарі.") };
+  }
+}
+
+export type QuoteItemRecord = {
+  id?: string | null;
+  position?: number | null;
+  name?: string | null;
+  description?: string | null;
+  metadata?: unknown;
+  qty?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  methods?: unknown;
+  attachment?: unknown;
+  catalog_type_id?: string | null;
+  catalog_kind_id?: string | null;
+  catalog_model_id?: string | null;
+  print_position_id?: string | null;
+  print_width_mm?: number | null;
+  print_height_mm?: number | null;
+};
+
+type BasicSelectableQuery = {
+  eq: (column: string, value: string) => BasicSelectableQuery;
+  order: (column: string, options: { ascending: boolean }) => BasicSelectableQuery;
+  then: PromiseLike<{ data: unknown; error: { message?: string | null } | null }>["then"];
+};
+type BasicSelectableTable = {
+  select: (columns: string) => BasicSelectableQuery;
+};
+
+type CatalogKindRow = { id: string; type_id: string; name: string };
+type CatalogModelRow = {
+  id: string;
+  kind_id: string;
+  name: string;
+  image_url: string | null;
+  thumb_url: string | null;
+};
+type CatalogTypeRow = { id: string; name: string };
+
+export type QuoteItemsWithCatalog = {
+  rows: QuoteItemRecord[];
+  kindById: Map<string, CatalogKindRow>;
+  modelById: Map<string, CatalogModelRow>;
+  methodById: Map<string, string>;
+  typeById: Map<string, CatalogTypeRow>;
+};
+
+const QUOTE_ITEM_COLUMNS_WITH_METADATA =
+  "id, position, name, description, metadata, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+const QUOTE_ITEM_COLUMNS_WITHOUT_METADATA =
+  "id, position, name, description, qty, unit, unit_price, methods, attachment, catalog_type_id, catalog_kind_id, catalog_model_id, print_position_id, print_width_mm, print_height_mm";
+
+function collectIds(rows: QuoteItemRecord[], key: "catalog_kind_id" | "catalog_model_id") {
+  return Array.from(
+    new Set(rows.map((row) => (typeof row[key] === "string" ? String(row[key]).trim() : "")).filter(Boolean))
+  );
+}
+
+function collectMethodIds(rows: QuoteItemRecord[]) {
+  return Array.from(
+    new Set(
+      rows.flatMap((row) =>
+        Array.isArray(row.methods)
+          ? row.methods
+              .map((method) =>
+                typeof (method?.method_id ?? method?.methodId ?? method?.id) === "string"
+                  ? String(method.method_id ?? method.methodId ?? method.id).trim()
+                  : ""
+              )
+              .filter(Boolean)
+          : []
+      )
+    )
+  );
+}
+
+/**
+ * Позиції прорахунку разом із довідниками каталогу.
+ *
+ * Повертає СИРІ рядки й готові мапи, а не готові позиції: розкладання рядка в
+ * позицію — чиста робота без запитів, і їй місце в сторінці, поруч із типами
+ * подання. Тут лишається лише те, що вміє впасти.
+ *
+ * Два запасні проходи: без колонки metadata і без team_id — у старіших базах
+ * їх немає, і без цього список позицій просто не завантажився б.
+ */
+export async function fetchQuoteItemsWithCatalog(
+  quoteId: string,
+  teamId: string | null | undefined
+): Promise<QueryResult<QuoteItemsWithCatalog>> {
+  try {
+    const loadRows = async (withTeamFilter: boolean, withMetadata: boolean) => {
+      const table = supabase.schema("tosho").from("quote_items") as unknown as BasicSelectableTable;
+      let query = table
+        .select(withMetadata ? QUOTE_ITEM_COLUMNS_WITH_METADATA : QUOTE_ITEM_COLUMNS_WITHOUT_METADATA)
+        .eq("quote_id", quoteId)
+        .order("position", { ascending: true });
+      if (withTeamFilter && teamId) {
+        query = query.eq("team_id", teamId);
+      }
+      return await query;
+    };
+
+    const missing = (message: string | null | undefined, column: string) =>
+      /column/i.test(message ?? "") && new RegExp(column, "i").test(message ?? "");
+
+    let { data, error } = await loadRows(!!teamId, true);
+    if (error && missing(error.message, "metadata")) {
+      ({ data, error } = await loadRows(!!teamId, false));
+    }
+    if (error && teamId && missing(error.message, "team_id")) {
+      ({ data, error } = await loadRows(false, true));
+      if (error && missing(error.message, "metadata")) {
+        ({ data, error } = await loadRows(false, false));
+      }
+    }
+    if (error) throw error;
+
+    const rows = (data ?? []) as QuoteItemRecord[];
+    const kindIds = collectIds(rows, "catalog_kind_id");
+    const modelIds = collectIds(rows, "catalog_model_id");
+    const methodIds = collectMethodIds(rows);
+
+    const [kindResult, modelResult, methodResult] = await Promise.all([
+      kindIds.length
+        ? supabase.schema("tosho").from("catalog_kinds").select("id,type_id,name").in("id", kindIds)
+        : Promise.resolve({ data: [], error: null }),
+      modelIds.length
+        ? listCatalogModelsByIds(modelIds).then((map) => ({
+            data: Array.from(map.values()).map((row) => ({
+              id: row.id,
+              kind_id: "",
+              name: row.name ?? "",
+              image_url: row.image_url ?? null,
+              thumb_url: row.thumb_url ?? null,
+            })),
+            error: null,
+          }))
+        : Promise.resolve({ data: [], error: null }),
+      methodIds.length
+        ? supabase.schema("tosho").from("catalog_methods").select("id,name").in("id", methodIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (kindResult.error) throw kindResult.error;
+    if (modelResult.error) throw modelResult.error;
+    if (methodResult.error) throw methodResult.error;
+
+    const kindRows = (kindResult.data ?? []) as CatalogKindRow[];
+    const modelRows = (modelResult.data ?? []) as CatalogModelRow[];
+    const typeIds = Array.from(new Set(kindRows.map((row) => row.type_id).filter(Boolean)));
+
+    const typeResult = typeIds.length
+      ? await supabase.schema("tosho").from("catalog_types").select("id,name").in("id", typeIds)
+      : { data: [], error: null };
+    if (typeResult.error) throw typeResult.error;
+
+    return {
+      ok: true,
+      data: {
+        rows,
+        kindById: new Map(kindRows.map((row) => [row.id, row])),
+        modelById: new Map(modelRows.map((row) => [row.id, row])),
+        methodById: new Map(
+          ((methodResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name])
+        ),
+        typeById: new Map(((typeResult.data ?? []) as CatalogTypeRow[]).map((row) => [row.id, row])),
+      },
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити позиції.") };
   }
 }
