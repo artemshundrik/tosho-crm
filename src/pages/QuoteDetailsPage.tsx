@@ -206,6 +206,7 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   changeQuoteStatus,
+  linkDesignVisualizationToQuote,
   fetchCatalogBase,
   fetchCatalogEnrichment,
   createOrderFromQuote,
@@ -3933,40 +3934,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     let active = true;
     const syncSelectedVisualization = async () => {
       setDesignVisualizationSyncing(true);
-      try {
-        const { data: existing, error: existingError } = await supabase
-          .schema("tosho")
-          .from("quote_attachments")
-          .select("id")
-          .eq("quote_id", quoteId)
-          .eq("storage_bucket", selectedDesignOutputFile.storage_bucket)
-          .eq("storage_path", selectedDesignOutputFile.storage_path)
-          .maybeSingle();
-        if (existingError) throw existingError;
-
-        if (!existing?.id) {
-          const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
-            team_id: teamId,
-            quote_id: quoteId,
-            file_name: selectedDesignOutputFile.file_name,
-            mime_type: selectedDesignOutputFile.mime_type || null,
-            file_size: selectedDesignOutputFile.file_size,
-            storage_bucket: selectedDesignOutputFile.storage_bucket,
-            storage_path: selectedDesignOutputFile.storage_path,
-            uploaded_by: (selectedDesignOutputFile.uploaded_by ?? userId ?? null) as string,
-          });
-          if (insertError) throw insertError;
-        }
-
-        if (active) {
-          await loadAttachments();
-        }
-      } catch (error) {
-        console.warn("Failed to backfill selected design visualization into quote", error);
-      } finally {
-        if (active) {
-          setDesignVisualizationSyncing(false);
-        }
+      const linked = await linkDesignVisualizationToQuote({
+        teamId,
+        quoteId,
+        file: selectedDesignOutputFile,
+        fallbackUploadedBy: userId ?? null,
+      });
+      if (!linked.ok) {
+        // Фонове доповнення: не зриваємо через нього показ прорахунку.
+        console.warn("Failed to backfill selected design visualization into quote", linked.message);
+      } else if (active) {
+        await loadAttachments();
+      }
+      if (active) {
+        setDesignVisualizationSyncing(false);
       }
     };
 

@@ -1041,3 +1041,55 @@ export async function fetchCatalogEnrichment(
     return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити каталог.") };
   }
 }
+
+/**
+ * Донести обрану візуалізацію дизайну у вкладення прорахунку.
+ *
+ * Ідемпотентно: якщо такий файл уже прив'язаний — нічого не робимо. Помилку
+ * повертаємо, але сторінка її лише пише в консоль: це фонове доповнення, і
+ * зривати через нього показ прорахунку не можна.
+ */
+export async function linkDesignVisualizationToQuote(input: {
+  teamId: string;
+  quoteId: string;
+  file: {
+    file_name: string;
+    mime_type?: string | null;
+    file_size: number | null;
+    storage_bucket: string;
+    storage_path: string;
+    uploaded_by?: string | null;
+  };
+  fallbackUploadedBy: string | null;
+}): Promise<QueryResult<{ alreadyLinked: boolean }>> {
+  try {
+    const { data: existing, error: existingError } = await supabase
+      .schema("tosho")
+      .from("quote_attachments")
+      .select("id")
+      .eq("quote_id", input.quoteId)
+      .eq("storage_bucket", input.file.storage_bucket)
+      .eq("storage_path", input.file.storage_path)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    if (existing?.id) return { ok: true, data: { alreadyLinked: true } };
+
+    const { error: insertError } = await supabase.schema("tosho").from("quote_attachments").insert({
+      team_id: input.teamId,
+      quote_id: input.quoteId,
+      file_name: input.file.file_name,
+      mime_type: input.file.mime_type || null,
+      // Колонка nullable — не підміняємо порожній розмір нулем, як було й досі.
+      file_size: input.file.file_size,
+      storage_bucket: input.file.storage_bucket,
+      storage_path: input.file.storage_path,
+      uploaded_by: (input.file.uploaded_by ?? input.fallbackUploadedBy ?? null) as string,
+    });
+    if (insertError) throw insertError;
+
+    return { ok: true, data: { alreadyLinked: false } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося прив'язати візуалізацію.") };
+  }
+}
