@@ -106,8 +106,6 @@ import {
   getQuoteRuns,
   upsertQuoteRuns,
   deleteQuote,
-  listCustomersBySearch,
-  listLeadsBySearch,
   setStatus,
   updateQuote,
   listQuoteSetMemberships,
@@ -214,6 +212,8 @@ import {
 import {
   createQuoteComment,
   fetchDesignTaskRows,
+  fetchQuotePartyOptions,
+  fetchTeamDesignTasks,
   fetchQuoteActivity,
   fetchQuoteComments,
   fetchQuoteItemsWithCatalog,
@@ -3007,30 +3007,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     let active = true;
     const loadCustomers = async () => {
       setEditQuoteCustomersLoading(true);
-      try {
-        const [customerRows, leadRows] = await Promise.all([
-          listCustomersBySearch(teamId, editQuoteCustomerSearch),
-          listLeadsBySearch(teamId, editQuoteCustomerSearch),
-        ]);
-        if (!active) return;
-        setEditQuoteCustomers([
-          ...customerRows.map((customer) => ({
-            ...customer,
-            entityType: "customer" as const,
-          })),
-          ...leadRows.map((lead) => ({
-            id: lead.id,
-            name: lead.company_name ?? lead.legal_name ?? null,
-            legal_name: lead.legal_name ?? null,
-            logo_url: lead.logo_url ?? null,
-            entityType: "lead" as const,
-          })),
-        ]);
-      } catch {
-        if (active) setEditQuoteCustomers([]);
-      } finally {
-        if (active) setEditQuoteCustomersLoading(false);
-      }
+      const result = await fetchQuotePartyOptions(teamId, editQuoteCustomerSearch);
+      // Пізня відповідь на вже скасований пошук нічого не чіпає.
+      if (!active) return;
+      setEditQuoteCustomers(result.ok ? result.data : []);
+      setEditQuoteCustomersLoading(false);
     };
     void loadCustomers();
     return () => {
@@ -3130,14 +3111,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       return;
     }
     setDesignTaskCandidatesLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("activity_log")
-        .select("id, title, metadata, created_at")
-        .eq("action", "design_task")
-        .eq("team_id", teamId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+    const candidatesResult = await fetchTeamDesignTasks(teamId);
+    if (!candidatesResult.ok) {
+      setDesignTaskCandidates([]);
+      setDesignTaskCandidatesLoading(false);
+      return;
+    }
+    {
+      const data = candidatesResult.data;
 
       const quoteCustomerId =
         typeof (quote as unknown as { customer_id?: string | null }).customer_id === "string" &&
@@ -3191,12 +3172,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         .filter(Boolean) as DesignTaskCandidate[];
 
       setDesignTaskCandidates(nextCandidates);
-    } catch (e) {
-      console.warn("Failed to load standalone design task candidates", e);
-      setDesignTaskCandidates([]);
-    } finally {
-      setDesignTaskCandidatesLoading(false);
     }
+    setDesignTaskCandidatesLoading(false);
   };
 
   const attachExistingDesignTask = async (candidate: DesignTaskCandidate) => {

@@ -5,6 +5,8 @@ import {
 } from "@/lib/quoteAttachmentAudience";
 import {
   getQuoteRuns,
+  listCustomersBySearch,
+  listLeadsBySearch,
   listCatalogModelsByIds,
   getQuoteSummary,
   listStatusHistory,
@@ -577,5 +579,69 @@ export async function createQuoteComment(input: {
     };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося додати коментар.") };
+  }
+}
+
+export type QuotePartyOption = {
+  id: string;
+  name?: string | null;
+  legal_name?: string | null;
+  logo_url?: string | null;
+  entityType?: "customer" | "lead";
+};
+
+/**
+ * Замовники й ліди одним списком для перемикача в редагуванні прорахунку.
+ * Порожній результат при помилці — свідомо: підказка не має ламати форму.
+ */
+export async function fetchQuotePartyOptions(
+  teamId: string,
+  search: string
+): Promise<QueryResult<QuotePartyOption[]>> {
+  try {
+    const [customerRows, leadRows] = await Promise.all([
+      listCustomersBySearch(teamId, search),
+      listLeadsBySearch(teamId, search),
+    ]);
+    return {
+      ok: true,
+      data: [
+        ...customerRows.map((customer) => ({ ...customer, entityType: "customer" as const })),
+        ...leadRows.map((lead) => ({
+          id: lead.id,
+          name: lead.company_name ?? lead.legal_name ?? null,
+          legal_name: lead.legal_name ?? null,
+          logo_url: lead.logo_url ?? null,
+          entityType: "lead" as const,
+        })),
+      ],
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити замовників.") };
+  }
+}
+
+export type DesignTaskCandidateRow = {
+  id: string;
+  title: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+};
+
+/** Усі дизайн-задачі команди — сторінка сама відбирає з них придатних кандидатів. */
+export async function fetchTeamDesignTasks(
+  teamId: string
+): Promise<QueryResult<DesignTaskCandidateRow[]>> {
+  try {
+    const { data, error } = await supabase
+      .from("activity_log")
+      .select("id, title, metadata, created_at")
+      .eq("action", "design_task")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []) as DesignTaskCandidateRow[] };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити дизайн-задачі.") };
   }
 }
