@@ -84,7 +84,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { formatActivityClock, formatActivityDayLabel, type ActivityRow } from "@/lib/activity";
 import { logActivity } from "@/lib/activityLogger";
-import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
+import { notifyUsers } from "@/lib/designTaskActivity";
 import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChange,
   notifyQuotesCreated,
 } from "@/lib/workflowNotifications";
@@ -3359,78 +3359,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       assigned_at: nextAssignedAt,
     };
 
-    try {
-      const authUser = await getCurrentUser();
-      const userId = authUser?.id ?? null;
-      const actorName =
-        (userId ? memberById.get(userId) : null) ||
-        authUser?.email ||
-        "System";
-
-      const { error } = await supabase
-        .from("activity_log")
-        .update({ metadata: nextMetadata as Json })
-        .eq("id", designTask.id)
-        .eq("team_id", teamId);
-      if (error) throw error;
-
-      setDesignTask({
-        ...designTask,
-        assigneeUserId: nextAssigneeUserId,
-        assignedAt: nextAssignedAt,
-        metadata: nextMetadata,
-      });
-      setDesignAssigneeId(nextAssigneeUserId);
-
-      try {
-        await logDesignTaskActivity({
-          teamId,
-          designTaskId: designTask.id,
-          quoteId,
-          userId,
-          actorName,
-          action: "design_task_assignment",
-          title: nextAssigneeUserId
-            ? `Призначено виконавця: ${getMemberLabel(nextAssigneeUserId)}`
-            : `Знято виконавця (${getMemberLabel(previousAssignee)})`,
-          metadata: {
-            source: "design_task_assignment",
-            from_assignee_user_id: previousAssignee,
-            from_assignee_label: getMemberLabel(previousAssignee),
-            to_assignee_user_id: nextAssigneeUserId,
-            to_assignee_label: nextAssigneeUserId ? getMemberLabel(nextAssigneeUserId) : null,
-          },
-        });
-      } catch (logError) {
-        console.warn("Failed to log design task assignment event", logError);
-      }
-
-      const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
-      try {
-        if (nextAssigneeUserId && nextAssigneeUserId !== userId) {
-          await notifyUsers({
-            userIds: [nextAssigneeUserId],
-            title: "Вас призначено на дизайн-задачу",
-            body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
-            href: `/design/${designTask.id}`,
-            type: "info",
-          });
-        }
-        if (previousAssignee && previousAssignee !== userId && previousAssignee !== nextAssigneeUserId) {
-          await notifyUsers({
-            userIds: [previousAssignee],
-            title: "Вас знято з дизайн-задачі",
-            body: `${actorName} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
-            href: `/design/${designTask.id}`,
-            type: "warning",
-          });
-        }
-      } catch (notifyError) {
-        console.warn("Failed to notify design task assignment change", notifyError);
-      }
-
-      toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
-    } catch (e: unknown) {
+    // Якщо запис не пройшов — повертаємо виконавця, якого бачили до спроби.
+    // Інакше на екрані лишився б новий, а в базі старий.
+    const rollback = (message: string) => {
       setDesignTask({
         ...designTask,
         assigneeUserId: previousAssignee,
@@ -3438,13 +3369,80 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         metadata: designTask.metadata,
       });
       setDesignAssigneeId(previousAssignee);
-      const message = getErrorMessage(e, "Не вдалося оновити виконавця.");
       setDesignTaskError(message);
       toast.error(message);
-    } finally {
       setDesignTaskSaving(false);
+    };
+
+    const authUser = await getCurrentUser();
+    const actorUserId = authUser?.id ?? null;
+    const actorName = (actorUserId ? memberById.get(actorUserId) : null) || authUser?.email || "System";
+
+    const saved = await updateActivityMetadata(designTask.id, teamId, nextMetadata);
+    if (!saved.ok) return rollback("Не вдалося оновити виконавця.");
+
+    setDesignTask({
+      ...designTask,
+      assigneeUserId: nextAssigneeUserId,
+      assignedAt: nextAssignedAt,
+      metadata: nextMetadata,
+    });
+    setDesignAssigneeId(nextAssigneeUserId);
+
+    // Журнал і сповіщення — не привід відкочувати призначення: воно вже в базі.
+    const logged = await logDesignTaskEvent(
+      {
+        teamId,
+        designTaskId: designTask.id,
+        quoteId,
+        userId: actorUserId,
+        actorName,
+        action: "design_task_assignment",
+        title: nextAssigneeUserId
+          ? `Призначено виконавця: ${getMemberLabel(nextAssigneeUserId)}`
+          : `Знято виконавця (${getMemberLabel(previousAssignee)})`,
+        metadata: {
+          source: "design_task_assignment",
+          from_assignee_user_id: previousAssignee,
+          from_assignee_label: getMemberLabel(previousAssignee),
+          to_assignee_user_id: nextAssigneeUserId,
+          to_assignee_label: nextAssigneeUserId ? getMemberLabel(nextAssigneeUserId) : null,
+        },
+      },
+      "Не вдалося оновити виконавця."
+    );
+    if (!logged.ok) {
+      console.warn("Failed to log design task assignment event", logged.message);
     }
+
+    const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
+    try {
+      if (nextAssigneeUserId && nextAssigneeUserId !== actorUserId) {
+        await notifyUsers({
+          userIds: [nextAssigneeUserId],
+          title: "Вас призначено на дизайн-задачу",
+          body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+          href: `/design/${designTask.id}`,
+          type: "info",
+        });
+      }
+      if (previousAssignee && previousAssignee !== actorUserId && previousAssignee !== nextAssigneeUserId) {
+        await notifyUsers({
+          userIds: [previousAssignee],
+          title: "Вас знято з дизайн-задачі",
+          body: `${actorName} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
+          href: `/design/${designTask.id}`,
+          type: "warning",
+        });
+      }
+    } catch (notifyError) {
+      console.warn("Failed to notify design task assignment change", notifyError);
+    }
+
+    toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
+    setDesignTaskSaving(false);
   };
+
 
   const loadItems = async () => {
     setItemsLoading(true);
