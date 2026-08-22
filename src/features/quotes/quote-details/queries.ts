@@ -19,6 +19,8 @@ import {
 } from "@/lib/toshoApi";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
+import { logDesignTaskActivity } from "@/lib/designTaskActivity";
+import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import {
   createOrderFromApprovedQuote,
   loadOrderCreationDraft,
@@ -1091,5 +1093,54 @@ export async function linkDesignVisualizationToQuote(input: {
     return { ok: true, data: { alreadyLinked: false } };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося прив'язати візуалізацію.") };
+  }
+}
+
+/**
+ * Привʼязати наявну дизайн-задачу до прорахунку.
+ *
+ * Разом із metadata оновлюється entity_id — саме за ним задачу потім знаходять
+ * швидким запитом, без пошуку по metadata->>quote_id.
+ */
+export async function attachDesignTaskToQuote(
+  designTaskId: string,
+  teamId: string,
+  quoteId: string,
+  metadata: unknown
+): Promise<QueryResult<null>> {
+  try {
+    const { error } = await supabase
+      .from("activity_log")
+      .update({ metadata: metadata as never, entity_id: quoteId })
+      .eq("id", designTaskId)
+      .eq("team_id", teamId);
+    if (error) throw error;
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося привʼязати дизайн-задачу.") };
+  }
+}
+
+export async function syncDesignOutputFiles(
+  params: Parameters<typeof syncDesignOutputFilesToQuoteAttachments>[0],
+  fallbackMessage: string
+): Promise<QueryResult<null>> {
+  try {
+    await syncDesignOutputFilesToQuoteAttachments(params);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, fallbackMessage) };
+  }
+}
+
+export async function logDesignTaskEvent(
+  params: Parameters<typeof logDesignTaskActivity>[0],
+  fallbackMessage: string
+): Promise<QueryResult<null>> {
+  try {
+    await logDesignTaskActivity(params);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, fallbackMessage) };
   }
 }

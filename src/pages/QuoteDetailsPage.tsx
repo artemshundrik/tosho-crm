@@ -47,7 +47,6 @@ import {
   uploadAttachmentWithVariants,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
-import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import { convertWebpBlobForSharing, isWebpBlob, swapFilenameExtension } from "@/lib/imageConversion";
 import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
@@ -205,7 +204,10 @@ import {
   toEmailLocalPart,
 } from "@/features/quotes/quote-details/config";
 import {
+  attachDesignTaskToQuote,
   changeQuoteStatus,
+  logDesignTaskEvent,
+  syncDesignOutputFiles,
   linkDesignVisualizationToQuote,
   fetchCatalogBase,
   fetchCatalogEnrichment,
@@ -3119,36 +3121,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!teamId || !quote || attachingDesignTaskId) return;
     setAttachingDesignTaskId(candidate.id);
     setDesignTaskError(null);
-    try {
-      const actorName = userId ? memberById.get(userId) ?? userId : "System";
-      const nextMetadata: Record<string, unknown> = {
-        ...(candidate.metadata ?? {}),
-        quote_id: quoteId,
-        quote_number: quote.number ?? null,
-        quote_type: quote.quote_type ?? null,
-        customer_name: quote.customer_name ?? null,
-        customer_logo_url: quote.customer_logo_url ?? null,
-        task_kind: "linked",
-        attached_quote_at: new Date().toISOString(),
-        attached_quote_by: userId ?? null,
-      };
 
-      const { error } = await supabase
-        .from("activity_log")
-        .update({ metadata: nextMetadata as Json, entity_id: quoteId })
-        .eq("id", candidate.id)
-        .eq("team_id", teamId);
-      if (error) throw error;
+    const fail = (message: string) => {
+      setDesignTaskError(message);
+      toast.error(message);
+      setAttachingDesignTaskId(null);
+    };
+    const FAIL_MESSAGE = "Не вдалося прив’язати дизайн-задачу.";
 
-      const candidateFiles = parseDesignOutputMetaFiles(candidate.metadata.design_output_files);
-      await syncDesignOutputFilesToQuoteAttachments({
+    const actorName = userId ? memberById.get(userId) ?? userId : "System";
+    const nextMetadata: Record<string, unknown> = {
+      ...(candidate.metadata ?? {}),
+      quote_id: quoteId,
+      quote_number: quote.number ?? null,
+      quote_type: quote.quote_type ?? null,
+      customer_name: quote.customer_name ?? null,
+      customer_logo_url: quote.customer_logo_url ?? null,
+      task_kind: "linked",
+      attached_quote_at: new Date().toISOString(),
+      attached_quote_by: userId ?? null,
+    };
+
+    const attached = await attachDesignTaskToQuote(candidate.id, teamId, quoteId, nextMetadata);
+    if (!attached.ok) return fail(attached.message);
+
+    const synced = await syncDesignOutputFiles(
+      {
         teamId,
         quoteId,
-        files: candidateFiles,
+        files: parseDesignOutputMetaFiles(candidate.metadata.design_output_files),
         fallbackUploadedBy: userId ?? null,
-      });
+      },
+      FAIL_MESSAGE
+    );
+    if (!synced.ok) return fail(synced.message);
 
-      await logDesignTaskActivity({
+    const taskLogged = await logDesignTaskEvent(
+      {
         teamId,
         designTaskId: candidate.id,
         quoteId,
@@ -3165,8 +3174,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               ? candidate.metadata.selected_design_output_file_id
               : null,
         },
-      });
-      await logActivity({
+      },
+      FAIL_MESSAGE
+    );
+    if (!taskLogged.ok) return fail(taskLogged.message);
+
+    const logged = await logQuoteActivity(
+      {
         teamId,
         action: "привʼязав дизайн-задачу",
         entityType: "quotes",
@@ -3177,18 +3191,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           source: "design_task_attachment",
           design_task_id: candidate.id,
         },
-      });
+      },
+      FAIL_MESSAGE
+    );
+    if (!logged.ok) return fail(logged.message);
 
-      setAttachDesignTaskDialogOpen(false);
-      toast.success("Дизайн-задачу прив’язано");
-      await Promise.all([loadDesignTask(), loadAttachments(), loadActivityLog()]);
-    } catch (e) {
-      const message = getErrorMessage(e, "Не вдалося прив’язати дизайн-задачу.");
-      setDesignTaskError(message);
-      toast.error(message);
-    } finally {
-      setAttachingDesignTaskId(null);
-    }
+    setAttachDesignTaskDialogOpen(false);
+    toast.success("Дизайн-задачу прив’язано");
+    await Promise.all([loadDesignTask(), loadAttachments(), loadActivityLog()]);
+    setAttachingDesignTaskId(null);
   };
 
   const createDesignTask = async (override?: {
