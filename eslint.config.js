@@ -6,7 +6,13 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Згенероване й стороннє — не наш код, лінтувати нічого.
+  // `ds-bundle` це вихід конвертера дизайн-системи: у ньому зібраний бандл із
+  // чужими `eslint-disable`-коментарями на правила, яких у нашому конфігу немає
+  // (`jsx-a11y/*`, `@typescript-eslint/no-explicit-any`). ESLint вважає посилання
+  // на невідоме правило помилкою — і `npm run lint` червонів на файлі, який git
+  // навіть не відстежує. Це блокувало pre-push і скрипт боргу компілятора.
+  globalIgnores(['dist', 'ds-bundle', '.ds-sync', '.design-sync']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
