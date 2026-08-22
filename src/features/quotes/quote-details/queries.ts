@@ -5,6 +5,7 @@ import {
 } from "@/lib/quoteAttachmentAudience";
 import {
   getQuoteRuns,
+  upsertQuoteRuns,
   setStatus,
   updateQuote,
   listCustomersBySearch,
@@ -689,5 +690,30 @@ export async function changeQuoteStatus(
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Помилка зміни статусу") };
+  }
+}
+
+/**
+ * Записати тиражі: спершу прибрати ті, яких більше немає, потім зберегти решту.
+ * Порядок важливий — інакше видалення могло б зачепити щойно збережене.
+ */
+export async function persistQuoteRuns(
+  quoteId: string,
+  runs: Parameters<typeof upsertQuoteRuns>[1],
+  idsToDelete: string[]
+): Promise<QueryResult<null>> {
+  try {
+    if (idsToDelete.length > 0) {
+      const { error } = await supabase
+        .schema("tosho")
+        .from("quote_item_runs")
+        .delete()
+        .in("id", idsToDelete);
+      if (error) throw error;
+    }
+    await upsertQuoteRuns(quoteId, runs);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося зберегти тиражі.") };
   }
 }

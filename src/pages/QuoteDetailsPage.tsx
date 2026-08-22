@@ -210,6 +210,7 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   changeQuoteStatus,
+  persistQuoteRuns,
   createQuoteComment,
   logQuoteActivity,
   updateQuoteFields,
@@ -1295,7 +1296,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const targetRuns = Array.isArray(nextRuns) ? nextRuns : runs;
     setRunsSaving(true);
     setRunsError(null);
-    try {
+    {
       const sanitized = targetRuns.map((run) => ({
         ...run,
         quantity: Math.max(1, Number(run.quantity) || 1),
@@ -1315,38 +1316,44 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         sanitized.map((r) => r.id).filter((id): id is string => Boolean(id))
       );
       const idsToDelete = Array.from(originalIds).filter((id) => !keepIds.has(id));
-      if (idsToDelete.length > 0) {
-        await supabase.schema("tosho").from("quote_item_runs").delete().in("id", idsToDelete);
-      }
 
-      await upsertQuoteRuns(quoteId, sanitized);
+      // Окремим повідомленням, бо ця помилка означає не «щось пішло не так»,
+      // а конкретну незастосовану міграцію — і підказка мусить бути дієвою.
+      const fail = (message: string) => {
+        if (/record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)) {
+          setRunsError(
+            "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
+          );
+        } else {
+          setRunsError(message);
+        }
+        if (!silent) toast.error("Помилка збереження");
+        setRunsSaving(false);
+      };
+
+      const saved = await persistQuoteRuns(quoteId, sanitized, idsToDelete);
+      if (!saved.ok) return fail(saved.message);
+
       await loadRuns();
       if (!silent) {
-        await logActivity({
-          teamId,
-          action: "прорахував тиражі",
-          entityType: "quotes",
-          entityId: quoteId,
-          title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
-          href: `/orders/estimates/${quoteId}`,
-          metadata: { source: "quote_runs" },
-        });
+        const logged = await logQuoteActivity(
+          {
+            teamId,
+            action: "прорахував тиражі",
+            entityType: "quotes",
+            entityId: quoteId,
+            title: `Прорахував тиражі для прорахунку ${quote?.number ?? ""}`.trim(),
+            href: `/orders/estimates/${quoteId}`,
+            metadata: { source: "quote_runs" },
+          },
+          "Не вдалося зберегти тиражі."
+        );
+        if (!logged.ok) return fail(logged.message);
         await loadActivityLog();
         toast.success("Тиражі збережено");
       }
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося зберегти тиражі.");
-      if (/record\s+"new"\s+has\s+no\s+field\s+"team_id"/i.test(message)) {
-        setRunsError(
-          "Потрібно оновити SQL hotfix для блокувань (scripts/entity-locks-hotfix-quote-child-team-id.sql)."
-        );
-      } else {
-        setRunsError(message);
-      }
-      if (!silent) toast.error("Помилка збереження");
-    } finally {
-      setRunsSaving(false);
     }
+    setRunsSaving(false);
   };
 
   const saveRunsRef = useRef(saveRuns);
