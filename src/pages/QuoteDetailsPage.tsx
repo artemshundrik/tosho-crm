@@ -206,6 +206,8 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   changeQuoteStatus,
+  fetchCatalogBase,
+  fetchCatalogEnrichment,
   createOrderFromQuote,
   deleteQuoteById,
   fetchOrderCreationDraft,
@@ -2657,39 +2659,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const loadCatalog = async () => {
       setCatalogLoading(true);
       setCatalogError(null);
-      try {
-        const [
-          { data: typeRows, error: typeError },
-          { data: kindRows, error: kindError },
-          { data: modelRows, error: modelError },
-        ] = await Promise.all([
-          supabase
-            .schema("tosho")
-            .from("catalog_types")
-            .select("id,name,sort_order")
-            .eq("team_id", teamId)
-            .order("sort_order", { ascending: true })
-            .order("name", { ascending: true }),
-          supabase
-            .schema("tosho")
-            .from("catalog_kinds")
-            .select("id,type_id,name,sort_order")
-            .eq("team_id", teamId)
-            .order("sort_order", { ascending: true })
-            .order("name", { ascending: true }),
-          supabase
-            .schema("tosho")
-            .from("catalog_models")
-            .select(
-              "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,specPreset:metadata->>specPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
-            )
-            .eq("team_id", teamId)
-            .order("name", { ascending: true }),
-        ]);
 
-        if (typeError) throw typeError;
-        if (kindError) throw kindError;
-        if (modelError) throw modelError;
+      const base = await fetchCatalogBase(teamId);
+      if (!base.ok) {
+        if (!cancelled) {
+          setCatalogError(base.message);
+          setCatalogTypes([]);
+          setCatalogLoading(false);
+        }
+        return;
+      }
+      const { typeRows, kindRows, modelRows } = base.data;
 
         const buildCatalog = ({
           methodsByKind,
@@ -2757,6 +2737,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           }));
         };
 
+        // Перший прохід: дерево видно одразу, без методів і позицій нанесення.
+        // Другий прохід нижче їх дозаповнює — саме заради цього два запити, а
+        // не один.
         if (!cancelled) {
           setCatalogTypes(
             buildCatalog({
@@ -2769,95 +2752,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           setCatalogLoading(false);
         }
 
-        const modelIds = (modelRows ?? []).map((row) => row.id);
-        const [
-          { data: methodRows, error: methodError },
-          { data: printRows, error: printError },
-          { data: modelMethodRows, error: modelMethodError },
-          { data: tierRows, error: tierError },
-        ] = await Promise.all([
-          supabase
-            .schema("tosho")
-            .from("catalog_methods")
-            .select("id,kind_id,name,price")
-            .eq("team_id", teamId)
-            .order("name", { ascending: true }),
-          supabase
-            .schema("tosho")
-            .from("catalog_print_positions")
-            .select("id,kind_id,label,sort_order")
-            .order("sort_order", { ascending: true })
-            .order("label", { ascending: true }),
-          modelIds.length
-            ? supabase
-                .schema("tosho")
-                .from("catalog_model_methods")
-                .select("model_id,method_id")
-                .in("model_id", modelIds)
-            : Promise.resolve({ data: [], error: null }),
-          modelIds.length
-            ? supabase
-                .schema("tosho")
-                .from("catalog_price_tiers")
-                .select("id,model_id,min_qty,max_qty,price")
-                .in("model_id", modelIds)
-                .order("min_qty", { ascending: true })
-            : Promise.resolve({ data: [], error: null }),
-        ]);
-
-        if (methodError) throw methodError;
-        if (printError) throw printError;
-        if (modelMethodError) throw modelMethodError;
-        if (tierError) throw tierError;
-
-        const methodIdsByModel = new Map<string, string[]>();
-        (modelMethodRows ?? []).forEach((row) => {
-          const list = methodIdsByModel.get(row.model_id) ?? [];
-          list.push(row.method_id);
-          methodIdsByModel.set(row.model_id, list);
-        });
-
-        const tiersByModel = new Map<string, CatalogPriceTier[]>();
-        (tierRows ?? []).forEach((row) => {
-          const list = tiersByModel.get(row.model_id) ?? [];
-          list.push({ id: row.id, min: row.min_qty, max: row.max_qty, price: row.price });
-          tiersByModel.set(row.model_id, list);
-        });
-
-        const methodsByKind = new Map<string, CatalogMethod[]>();
-        (methodRows ?? []).forEach((row) => {
-          const list = methodsByKind.get(row.kind_id) ?? [];
-          list.push({ id: row.id, name: row.name, price: row.price ?? undefined });
-          methodsByKind.set(row.kind_id, list);
-        });
-
-        const printPositionsByKind = new Map<string, CatalogPrintPosition[]>();
-        (printRows ?? []).forEach((row) => {
-          const list = printPositionsByKind.get(row.kind_id) ?? [];
-          list.push({ id: row.id, label: row.label, sort_order: row.sort_order ?? undefined });
-          printPositionsByKind.set(row.kind_id, list);
-        });
-
-        if (!cancelled) {
-          setCatalogTypes(
-            buildCatalog({
-              methodsByKind,
-              printPositionsByKind,
-              methodIdsByModel,
-              tiersByModel,
-            })
-          );
+        const enriched = await fetchCatalogEnrichment(
+          teamId,
+          modelRows.map((row) => row.id)
+        );
+        if (!enriched.ok) {
+          if (!cancelled) {
+            setCatalogError(enriched.message);
+            setCatalogTypes([]);
+            setCatalogLoading(false);
+          }
+          return;
         }
-      } catch (e: unknown) {
+
         if (!cancelled) {
-          setCatalogError(getErrorMessage(e, "Не вдалося завантажити каталог."));
-          setCatalogTypes([]);
-        }
-      } finally {
-        if (!cancelled) {
+          setCatalogTypes(buildCatalog(enriched.data));
           setCatalogLoading(false);
         }
-      }
     };
 
     void loadCatalog();

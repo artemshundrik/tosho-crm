@@ -27,6 +27,7 @@ import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/li
 import type { ActivityRow } from "@/lib/activity";
 
 import { formatFileSize, getErrorMessage, shouldUseCommentsFallback } from "./config";
+import type { CatalogMethod, CatalogPriceTier, CatalogPrintPosition } from "./catalog-utils";
 
 /**
  * Читання даних картки прорахунку — окремо від компонента.
@@ -877,5 +878,166 @@ export async function createOrderFromQuote(
     return { ok: true, data: await createOrderFromApprovedQuote(input) };
   } catch (error: unknown) {
     return { ok: false, message: plainErrorMessage(error, "Не вдалося створити замовлення.") };
+  }
+}
+
+export type CatalogTypeRowRaw = { id: string; name: string; sort_order?: number | null };
+export type CatalogKindRowRaw = { id: string; type_id: string; name: string; sort_order?: number | null };
+export type CatalogModelRowRaw = {
+  id: string;
+  kind_id: string;
+  name: string;
+  price?: number | null;
+  image_url?: string | null;
+  configuratorPreset?: "print_package" | "print_notebook" | "print_note_blocks" | "print_certificates" | null;
+  specPreset?: string | null;
+  supplierUrl?: string | null;
+  avantprintUrl?: string | null;
+};
+
+/**
+ * Кістяк каталогу: типи, види, моделі. Окремо від збагачення навмисно —
+ * сторінка малює дерево одразу з цього, не чекаючи методів і позицій нанесення.
+ */
+export async function fetchCatalogBase(teamId: string): Promise<
+  QueryResult<{
+    typeRows: CatalogTypeRowRaw[];
+    kindRows: CatalogKindRowRaw[];
+    modelRows: CatalogModelRowRaw[];
+  }>
+> {
+  try {
+    const [
+      { data: typeRows, error: typeError },
+      { data: kindRows, error: kindError },
+      { data: modelRows, error: modelError },
+    ] = await Promise.all([
+      supabase
+        .schema("tosho")
+        .from("catalog_types")
+        .select("id,name,sort_order")
+        .eq("team_id", teamId)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .schema("tosho")
+        .from("catalog_kinds")
+        .select("id,type_id,name,sort_order")
+        .eq("team_id", teamId)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .schema("tosho")
+        .from("catalog_models")
+        .select(
+          "id,kind_id,name,price,image_url,configuratorPreset:metadata->>configuratorPreset,specPreset:metadata->>specPreset,supplierUrl:metadata->>supplierUrl,avantprintUrl:metadata->>avantprintUrl"
+        )
+        .eq("team_id", teamId)
+        .order("name", { ascending: true }),
+    ]);
+
+    if (typeError) throw typeError;
+    if (kindError) throw kindError;
+    if (modelError) throw modelError;
+
+    return {
+      ok: true,
+      data: {
+        typeRows: (typeRows ?? []) as CatalogTypeRowRaw[],
+        kindRows: (kindRows ?? []) as CatalogKindRowRaw[],
+        modelRows: (modelRows ?? []) as CatalogModelRowRaw[],
+      },
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити каталог.") };
+  }
+}
+
+/** Методи, позиції нанесення, звʼязки моделей із методами і цінові сходинки. */
+export async function fetchCatalogEnrichment(
+  teamId: string,
+  modelIds: string[]
+): Promise<
+  QueryResult<{
+    methodsByKind: Map<string, CatalogMethod[]>;
+    printPositionsByKind: Map<string, CatalogPrintPosition[]>;
+    methodIdsByModel: Map<string, string[]>;
+    tiersByModel: Map<string, CatalogPriceTier[]>;
+  }>
+> {
+  try {
+    const [
+      { data: methodRows, error: methodError },
+      { data: printRows, error: printError },
+      { data: modelMethodRows, error: modelMethodError },
+      { data: tierRows, error: tierError },
+    ] = await Promise.all([
+      supabase
+        .schema("tosho")
+        .from("catalog_methods")
+        .select("id,kind_id,name,price")
+        .eq("team_id", teamId)
+        .order("name", { ascending: true }),
+      // Без .eq("team_id"): у catalog_print_positions такої колонки немає.
+      // Я її сюди дописав був «за аналогією» — каталог мовчки спорожнів.
+      supabase
+        .schema("tosho")
+        .from("catalog_print_positions")
+        .select("id,kind_id,label,sort_order")
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true }),
+      modelIds.length
+        ? supabase.schema("tosho").from("catalog_model_methods").select("model_id,method_id").in("model_id", modelIds)
+        : Promise.resolve({ data: [], error: null }),
+      modelIds.length
+        ? supabase
+            .schema("tosho")
+            .from("catalog_price_tiers")
+            .select("id,model_id,min_qty,max_qty,price")
+            .in("model_id", modelIds)
+            .order("min_qty", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (methodError) throw methodError;
+    if (printError) throw printError;
+    if (modelMethodError) throw modelMethodError;
+    if (tierError) throw tierError;
+
+    const methodIdsByModel = new Map<string, string[]>();
+    ((modelMethodRows ?? []) as Array<{ model_id: string; method_id: string }>).forEach((row) => {
+      const list = methodIdsByModel.get(row.model_id) ?? [];
+      list.push(row.method_id);
+      methodIdsByModel.set(row.model_id, list);
+    });
+
+    const tiersByModel = new Map<string, CatalogPriceTier[]>();
+    ((tierRows ?? []) as Array<{ id: string; model_id: string; min_qty: number; max_qty: number | null; price: number }>).forEach(
+      (row) => {
+        const list = tiersByModel.get(row.model_id) ?? [];
+        list.push({ id: row.id, min: row.min_qty, max: row.max_qty, price: row.price });
+        tiersByModel.set(row.model_id, list);
+      }
+    );
+
+    const methodsByKind = new Map<string, CatalogMethod[]>();
+    ((methodRows ?? []) as Array<{ id: string; kind_id: string; name: string; price?: number | null }>).forEach((row) => {
+      const list = methodsByKind.get(row.kind_id) ?? [];
+      list.push({ id: row.id, name: row.name, price: row.price ?? undefined });
+      methodsByKind.set(row.kind_id, list);
+    });
+
+    const printPositionsByKind = new Map<string, CatalogPrintPosition[]>();
+    ((printRows ?? []) as Array<{ id: string; kind_id: string; label: string; sort_order?: number | null }>).forEach(
+      (row) => {
+        const list = printPositionsByKind.get(row.kind_id) ?? [];
+        list.push({ id: row.id, label: row.label, sort_order: row.sort_order ?? undefined });
+        printPositionsByKind.set(row.kind_id, list);
+      }
+    );
+
+    return { ok: true, data: { methodsByKind, printPositionsByKind, methodIdsByModel, tiersByModel } };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити каталог.") };
   }
 }
