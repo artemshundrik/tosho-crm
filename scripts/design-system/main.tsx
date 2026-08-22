@@ -8,6 +8,7 @@ import Inputs from "./cards/inputs";
 import StatusTones from "./cards/status-tones";
 import Table from "./cards/table";
 import Overlays from "./cards/overlays";
+import KanbanCardCard from "./cards/kanban-card";
 import Elevation from "./cards/elevation";
 import Typography from "./cards/typography";
 import Colors from "./cards/colors";
@@ -18,6 +19,7 @@ const CARDS: Record<string, React.ComponentType> = {
   "status-tones": StatusTones,
   table: Table,
   overlays: Overlays,
+  "kanban-card": KanbanCardCard,
   elevation: Elevation,
   typography: Typography,
   colors: Colors,

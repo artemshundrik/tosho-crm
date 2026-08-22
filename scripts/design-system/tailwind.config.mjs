@@ -10,6 +10,7 @@ export default {
   ...base,
   content: [
     "../../src/components/ui/**/*.{ts,tsx}",
+    "../../src/components/kanban/**/*.{ts,tsx}",
     "../../src/lib/statusTones.ts",
     "./cards/**/*.tsx",
     "./shell.tsx",

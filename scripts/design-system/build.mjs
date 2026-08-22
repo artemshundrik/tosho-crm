@@ -41,6 +41,7 @@ const CARDS = [
   ["components/status-tones", "status-tones", "Компоненти"],
   ["components/table", "table", "Компоненти"],
   ["components/overlays", "overlays", "Компоненти"],
+  ["composites/kanban-card", "kanban-card", "Композити"],
 ];
 
 const onlyArg = process.argv.indexOf("--only");
