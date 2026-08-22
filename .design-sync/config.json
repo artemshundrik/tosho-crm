@@ -101,5 +101,26 @@
     "ToggleGroupItem": null,
     "UnsavedGuardListener": null
   },
-  "docsDir": ".design-sync/docs"
+  "docsDir": ".design-sync/docs",
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "Sheet": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "DropdownMenu": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "Popover": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "Select": {
+      "cardMode": "column"
+    }
+  }
 }
