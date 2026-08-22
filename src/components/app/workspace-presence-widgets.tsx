@@ -31,7 +31,7 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
               name={entry.displayName}
               fallback={entry.displayName.slice(0, 2).toUpperCase()}
               size={size}
-              className="border-background shadow-sm"
+              className="border-background"
               fallbackClassName="text-3xs font-semibold"
               showStatusIndicator={false}
             />

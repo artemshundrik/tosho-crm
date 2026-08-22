@@ -35,7 +35,7 @@ const WAVE_BARS = [
 
 export function FeaturePreview({ featureKey }: { featureKey: FeatureKey }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-2.5 py-1.5">
         <span className="h-1.5 w-1.5 rounded-full bg-border" />
         <span className="h-1.5 w-1.5 rounded-full bg-border" />

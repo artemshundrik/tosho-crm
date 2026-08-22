@@ -17,10 +17,10 @@ const badgeVariants = cva(
        * Keep shadcn-style variants for backwards compatibility
        */
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground shadow-sm",
+        default: "border-transparent bg-primary text-primary-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow-sm",
+          "border-transparent bg-destructive text-destructive-foreground",
         outline: "bg-transparent text-foreground",
       },
 
@@ -61,19 +61,19 @@ const badgeVariants = cva(
 
     compoundVariants: [
       // If tone is used, we usually want outline-like behavior but with soft bg; ensure no shadow by default
-      { tone: "neutral", className: "shadow-none" },
-      { tone: "info", className: "shadow-none" },
-      { tone: "accent", className: "shadow-none" },
-      { tone: "success", className: "shadow-none" },
-      { tone: "warning", className: "shadow-none" },
-      { tone: "danger", className: "shadow-none" },
-      { tone: "destructive", className: "shadow-none" },
+      { tone: "neutral", className: "" },
+      { tone: "info", className: "" },
+      { tone: "accent", className: "" },
+      { tone: "success", className: "" },
+      { tone: "warning", className: "" },
+      { tone: "danger", className: "" },
+      { tone: "destructive", className: "" },
 
       // Default shadcn variants: make them look nice if pill is true
-      { variant: "default", pill: true, className: "shadow-none" },
-      { variant: "secondary", pill: true, className: "shadow-none" },
-      { variant: "destructive", pill: true, className: "shadow-none" },
-      { variant: "outline", pill: true, className: "shadow-none" },
+      { variant: "default", pill: true, className: "" },
+      { variant: "secondary", pill: true, className: "" },
+      { variant: "destructive", pill: true, className: "" },
+      { variant: "outline", pill: true, className: "" },
     ],
 
     defaultVariants: {

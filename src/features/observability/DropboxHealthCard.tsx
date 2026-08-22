@@ -103,7 +103,7 @@ export function DropboxHealthCard() {
   const markedPercent = health && health.approvedTotal > 0 ? Math.round((marked / health.approvedTotal) * 100) : 0;
 
   return (
-    <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 p-6 shadow-sm">
+    <section className="mt-6 rounded-4xl border border-border/60 bg-card/95 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <FolderTree className="h-5 w-5 text-muted-foreground" />

@@ -146,8 +146,6 @@ export default {
           // Уся шкала глибини — з токенів index.css (світла/темна теми).
           // Без цієї реєстрації код був змушений писати shadow-[var(--shadow-*)].
           card: "var(--shadow-card)",
-          surface: "var(--shadow-surface)",
-          floating: "var(--shadow-floating)",
           overlay: "var(--shadow-overlay)",
           menu: "var(--shadow-menu)",
           "elevated-sm": "var(--shadow-elevated-sm)",

@@ -130,7 +130,7 @@ export function ModelEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!w-[min(1120px,calc(100vw-1.5rem))] !max-w-none !gap-0 !overflow-hidden !p-0 sm:!p-0 max-h-[92vh] border border-border/60 bg-background shadow-2xl">
+      <DialogContent className="!w-[min(1120px,calc(100vw-1.5rem))] !max-w-none !gap-0 !overflow-hidden !p-0 sm:!p-0 max-h-[92vh] border border-border/60 bg-background">
         <div className="border-b border-border/60 bg-muted/10 px-4 py-3 pr-14">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold tracking-normal">

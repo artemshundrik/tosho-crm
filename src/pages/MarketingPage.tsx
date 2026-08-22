@@ -987,8 +987,8 @@ export default function MarketingPage() {
           key={group.key}
           className={cn(
             "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card",
-            "shadow-surface transition-[border-color,box-shadow] duration-200 ease-out",
-            "hover:border-border hover:shadow-elevated-sm",
+            "transition-[border-color,box-shadow] duration-200 ease-out",
+            "hover:border-border",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             record.isHidden && "opacity-70",
             options?.className
@@ -1442,7 +1442,7 @@ export default function MarketingPage() {
                             "relative h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-150",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                             isActive
-                              ? "border-primary shadow-elevated-sm"
+                              ? "border-primary"
                               : "border-transparent opacity-60 hover:opacity-100"
                           )}
                         >

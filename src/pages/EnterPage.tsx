@@ -50,7 +50,7 @@ export default function EnterPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground">
+      <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground">
         {invalid ? (
           <>
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-danger-soft-border bg-danger-soft text-danger-foreground">

@@ -196,7 +196,7 @@ export function NotificationsMenu({
           type="button"
           variant="control"
           size="iconMd"
-          className="relative h-10 w-10 rounded-xl border border-border/50 bg-muted/40 shadow-inner transition-all duration-200 hover:bg-muted/60"
+          className="relative h-10 w-10 rounded-xl border border-border/50 bg-muted/40 transition-all duration-200 hover:bg-muted/60"
           aria-label={unreadCount > 0 ? `Сповіщення, непрочитаних: ${unreadCount}` : "Сповіщення"}
           title="Сповіщення"
         >

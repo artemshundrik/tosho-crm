@@ -28,10 +28,10 @@ const Input = React.forwardRef<
       type={type}
       className={cn(
         CONTROL_BASE,
-        // Без тіні: `shadow-sm` — дефолт Tailwind із shadcn-заготовки, повз наші
+        // Без тіні: `` — дефолт Tailwind із shadcn-заготовки, повз наші
         // токени (--shadow-card / --shadow-menu / --shadow-elevated-*). Поле
         // відділяє від фону межа, а не підйом; усередині поповера це взагалі
-        // читалось як бруд — тінь на тіні, бо панель уже має shadow-menu.
+        // читалось як бруд — тінь на тіні, бо панель уже має
         "w-full",
         INPUT_SIZE[controlSize],
         "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",

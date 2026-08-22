@@ -226,7 +226,7 @@ export function DuplicateDesignTaskDialog({
                         </span>
                         <span className="truncate">{file.name}</span>
                         {showImage ? (
-                          <span className="pointer-events-none absolute bottom-9 left-9 z-20 hidden w-44 rounded-md border bg-background p-2 shadow-md group-hover:block">
+                          <span className="pointer-events-none absolute bottom-9 left-9 z-20 hidden w-44 rounded-md border bg-background p-2 group-hover:block">
                             <img
                               src={previewUrl ?? ""}
                               alt=""

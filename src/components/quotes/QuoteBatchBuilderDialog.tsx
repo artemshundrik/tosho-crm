@@ -2015,10 +2015,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       type="button"
                       onClick={() => setActiveProductId(product.id)}
                       className={cn(
-                        "group relative w-full overflow-hidden rounded-xl border p-3 text-left shadow-sm transition-all",
+                        "group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all",
                         selected
-                          ? "border-primary/45 bg-primary/10 shadow-[0_12px_28px_-24px_hsl(var(--primary))] ring-1 ring-primary/15"
-                          : "border-border/60 bg-background/85 hover:border-border hover:bg-background hover:shadow-md"
+                          ? "border-primary/45 bg-primary/10 ring-1 ring-primary/15"
+                          : "border-border/60 bg-background/85 hover:border-border hover:bg-background"
                       )}
                     >
                       <div className="flex gap-3">
@@ -2735,7 +2735,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                               emptyValue={null}
                               value={run.quantity === "" ? null : Number(run.quantity)}
                               onValueChange={(next) => updateRun(run.id, next === null ? "" : String(next))}
-                              className="h-8 w-28 border-0 bg-transparent px-2 shadow-none"
+                              className="h-8 w-28 border-0 bg-transparent px-2"
                               placeholder="К-сть"
                             />
                             <button

@@ -99,7 +99,7 @@ export function SurfaceSkeleton({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        "rounded-4xl border border-border/60 bg-card/82 p-4 shadow-elevated-sm",
+        "rounded-4xl border border-border/60 bg-card/82 p-4",
         compact ? "space-y-3" : "space-y-4",
         className
       )}

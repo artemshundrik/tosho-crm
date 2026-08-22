@@ -258,7 +258,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                   <div
                     key={item.id}
                     className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3",
+                      "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3",
                       bucket.tone === "danger" && "flag-danger"
                     )}
                   >

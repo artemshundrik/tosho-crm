@@ -753,7 +753,7 @@ function ThreadCard({
       className={cn(
         "group w-full rounded-4xl border px-4 py-4 text-left transition-colors",
         active
-          ? "border-foreground/20 bg-foreground/5 text-foreground shadow-elevated-sm"
+          ? "border-foreground/20 bg-foreground/5 text-foreground"
           : "border-border/60 bg-card/60 text-foreground hover:bg-muted/35"
       )}
     >
@@ -885,7 +885,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                         <img
                           src={row.avatarUrl}
                           alt=""
-                          className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover shadow-sm sm:h-[72px] sm:w-[72px]"
+                          className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover sm:h-[72px] sm:w-[72px]"
                           loading="lazy"
                         />
                       ) : (
@@ -1123,7 +1123,7 @@ function EmptyChatSuggestions({
   }
 
   return (
-    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4 shadow-elevated-sm">
+    <div className="rounded-[26px] border border-border/60 bg-card/72 p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full border border-ai-accent/18 bg-ai-accent/10 text-ai-accent">
           <Sparkles className="h-4 w-4" />
@@ -1218,7 +1218,7 @@ function MessageCard({
         </div>
         <div
           className={cn(
-            "rounded-4xl border px-3.5 py-3 text-[15px] shadow-elevated-sm sm:rounded-[28px] sm:px-4 sm:py-3.5",
+            "rounded-4xl border px-3.5 py-3 text-[15px] sm:rounded-[28px] sm:px-4 sm:py-3.5",
             isUser
               ? "border-ai-accent/18 bg-ai-accent/12"
               : "border-border/60 bg-card/88"
@@ -2150,7 +2150,7 @@ export function ToShoAiConsole({
             </div>
 
             {showRequestList ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-elevated-sm">
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">Попередні чати</div>
@@ -2195,7 +2195,7 @@ export function ToShoAiConsole({
             ) : null}
 
             {knowledgeExpanded ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4 shadow-elevated-sm">
+              <div className="rounded-[26px] border border-border/60 bg-card/88 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">База знань</div>
@@ -2297,7 +2297,7 @@ export function ToShoAiConsole({
             ) : null}
 
             {!snapshot && !loading && loadError ? (
-              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4 shadow-elevated-sm">
+              <div className="rounded-[26px] border border-border/60 bg-card/70 p-4">
                 <EmptyPanel
                   icon={<Bot className="h-5 w-5" />}
                   title="ToSho AI тимчасово недоступний"
@@ -2444,7 +2444,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-4xl border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 shadow-inner [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto rounded-4xl border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-4xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"
@@ -2603,7 +2603,7 @@ function MentionSuggestionPanel({
 }) {
   const title = `Підставити ${getMentionKindLabel(activeMention.kind)}`;
   return (
-    <div className="rounded-3xl border border-border/60 bg-card/95 p-2 shadow-elevated-sm">
+    <div className="rounded-3xl border border-border/60 bg-card/95 p-2">
       <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         {title}
       </div>

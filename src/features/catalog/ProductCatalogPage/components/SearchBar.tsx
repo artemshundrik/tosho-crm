@@ -128,7 +128,7 @@ export function SearchBar({
         </DropdownMenu>
 
         {/* Primary */}
-        <Button onClick={onCreateModel} size="sm" className="h-9 gap-2 shadow-lg shadow-primary/20">
+        <Button onClick={onCreateModel} size="sm" className="h-9 gap-2 ">
           <Plus className="h-4 w-4" />
           Нова модель
         </Button>

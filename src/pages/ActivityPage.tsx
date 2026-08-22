@@ -251,7 +251,6 @@ export default function ActivityPage() {
                           onClick={() => item.href && navigate(item.href)}
                           className={cn(
                             "h-auto p-5",
-                            "hover:shadow-floating"
                           )}
                         >
                           <div className="flex items-start gap-4">

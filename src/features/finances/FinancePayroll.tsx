@@ -183,7 +183,7 @@ const FROZEN_PERSON =
   // справді щось заїхало — доти ділити нема чого, і зайва лінія посеред
   // таблиці тільки шумить. Стан вмикає data-scrolled-x на самому боксі.
   //
-  // Малюємо псевдоелементом, а НЕ через `shadow-[…]`: Tailwind v4 читає слеш
+  // Малюємо псевдоелементом, а НЕ через ``: Tailwind v4 читає слеш
   // усередині hsl(var(--border)/0.35) як модифікатор прозорості, і правило
   // тихо зникає — перевірено, у computed style лишався прозорий box-shadow.
   "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border " +

@@ -89,8 +89,6 @@
     --btn-danger-active: color-mix(in oklab, hsl(var(--destructive)) 78%, hsl(var(--background)));
 
     /* --- ТІНІ --- */
-    --shadow-surface: none;
-    --shadow-floating: none;
     --shadow-overlay: 0 8px 18px rgba(21, 31, 56, 0.1);
     /* Кольорові гало для суцільних семантичних кнопок. Беруть той самий токен,
        що й заливка кнопки, тому гало ніколи не «роз'їжджається» з фоном і
@@ -339,7 +337,6 @@
     --canvas-bg: 0 0% 99.2%;
     --canvas-border: 0 0% 87%;
     --canvas-radius: 28px;
-    --canvas-shadow: none;
     --canvas-header-bg: 0 0% 98.4%;
     --canvas-grid-line: 0 0% 90%;
     --canvas-gutter-x: 20px;
@@ -421,8 +418,6 @@
     --control-active-bg: 0 0% 14.5%;
     --control-active-border: 0 0% 25%;
 
-    --shadow-surface: none;
-    --shadow-floating: none;
     --shadow-overlay: 0 10px 24px rgba(2, 6, 23, 0.38);
     --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
     --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
@@ -610,7 +605,6 @@
     --canvas-bg: 0 0% 7.6%;
     --canvas-border: 0 0% 14.4%;
     --canvas-radius: 24px;
-    --canvas-shadow: none;
     --canvas-header-bg: 0 0% 8.2%;
     --canvas-grid-line: 0 0% 15.4%;
     --canvas-gutter-x: 20px;
@@ -987,7 +981,6 @@
   .segmented-slider [data-state="on"] {
     background-color: transparent;
     border-color: transparent;
-    box-shadow: none;
     --tw-ring-shadow: 0 0 #0000;
   }
 
@@ -1214,7 +1207,6 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    box-shadow: none;
   }
   .quote-details-page-canvas {
     @apply w-full max-w-[1400px] mx-auto pb-20 md:pb-0 space-y-6 bg-gradient-to-b from-muted/20 via-transparent to-transparent rounded-section;
@@ -1224,14 +1216,12 @@
     border-radius: var(--canvas-radius);
     border: 1px solid hsl(var(--canvas-border));
     background: hsl(var(--canvas-bg));
-    box-shadow: var(--canvas-shadow);
   }
   .quote-sticky-section {
     @apply overflow-hidden;
     border-radius: var(--canvas-radius);
     border: 1px solid hsl(var(--canvas-border));
     background: hsl(var(--canvas-header-bg));
-    box-shadow: var(--canvas-shadow);
   }
   .quote-soft-card {
     @apply border-border/80 bg-card/80 shadow-sm;
@@ -1323,7 +1313,6 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    box-shadow: none;
   }
 
   /*
@@ -1336,7 +1325,6 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    box-shadow: none;
   }
 
   .quote-page-canvas > .page-canvas-body + .page-canvas-body {
@@ -1347,21 +1335,18 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    box-shadow: none;
   }
 
   .estimates-kanban-canvas {
     border: none;
     border-radius: 0;
     background: transparent;
-    box-shadow: none;
   }
 
   .kanban-column-surface {
     border-radius: calc(var(--radius-lg) + 2px);
     border: 1px solid hsl(var(--kanban-col-new-border));
     background-color: hsl(var(--kanban-col-new-bg));
-    box-shadow: none;
     overflow: hidden;
   }
 
@@ -1407,7 +1392,6 @@
     border-color: hsl(var(--primary) / 0.28);
     background: hsl(var(--primary) / 0.04);
     min-height: 74px;
-    box-shadow: none;
   }
 
   .kanban-drop-placeholder-inline {
@@ -1447,7 +1431,6 @@
   .kanban-column-status-new {
     border-color: hsl(var(--kanban-col-new-border));
     background-color: hsl(var(--kanban-col-new-bg));
-    box-shadow: none;
   }
 
   .kanban-column-status-estimating {
@@ -2133,13 +2116,6 @@
   }
 }
 
-/* Remove non-popover shadows globally, keep shadows inside Radix popper content. */
-:where(*:not([data-radix-popper-content-wrapper], [data-radix-popper-content-wrapper] *)) {
-  box-shadow:
-    var(--tw-ring-offset-shadow, 0 0 #0000),
-    var(--tw-ring-shadow, 0 0 #0000),
-    0 0 #0000 !important;
-}
 
 /* === CUSTOM SCROLLBARS (macOS style) === */
 ::-webkit-scrollbar {

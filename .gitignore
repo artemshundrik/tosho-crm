@@ -41,3 +41,6 @@ scripts/.backfill-quote-totals.backup.*.json
 # заповнена таблиця рішень. Це стан конкретного запуску, не код.
 dropbox-inbox-*.json
 inbox-plan.csv
+
+# Збірка дизайн-системи для Claude Design (scripts/design-system-export.mjs)
+.design-system-export/

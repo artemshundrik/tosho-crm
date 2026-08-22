@@ -34,7 +34,7 @@ type EntityLockBannerProps = {
 };
 
 const SHELL = "rounded-xl border px-3.5 py-2.5 text-sm";
-const CALM = "border-border bg-card shadow-card";
+const CALM = "border-border bg-card";
 
 /** Живий вогник присутності. Кільце гасне при prefers-reduced-motion. */
 function LiveDot() {

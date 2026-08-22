@@ -128,7 +128,7 @@ const SectionCard = ({
   children: React.ReactNode;
   className?: string;
 }) => (
-  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm", className)}>
+  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4", className)}>
     {title ? (
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
         <SectionHeader>{title}</SectionHeader>
@@ -140,7 +140,7 @@ const SectionCard = ({
 );
 
 const UNDERLINE_TAB =
-  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0";
+  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "ЛД";
@@ -379,7 +379,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
         {/* Identity header — logo + name + payment + manager hub */}
-        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
+        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
               <button
@@ -805,7 +805,7 @@ export const LeadDialog: React.FC<LeadDialogProps> = ({
             </div>
           ) : (
             <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-              <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0 shadow-none">
+              <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0">
                 <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
                 <TabsTrigger value="requisites" className={UNDERLINE_TAB}>Реквізити</TabsTrigger>
                 <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>

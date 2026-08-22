@@ -277,7 +277,7 @@ const RunsEditor: React.FC<{
                 value={run.quantity === "" ? null : Number(run.quantity)}
                 onValueChange={(next) => onRunChange(run.id, next === null ? "" : String(next))}
                 className={cn(
-                  "h-9 border-0 bg-transparent px-2 shadow-none",
+                  "h-9 border-0 bg-transparent px-2",
                   compact ? "w-28" : "w-32"
                 )}
               />
@@ -2716,7 +2716,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                   onClick={() => void handleSubmit()}
                   size="sm"
                   disabled={submitting}
-                  className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] shadow-md shadow-primary/20"
+                  className="gap-1.5 px-4 h-9 rounded-[var(--radius-md)] "
                 >
                   <Plus className="h-3.5 w-3.5" />
                   {submitting ? "Збереження..." : isEditMode ? "Зберегти" : "Створити"}

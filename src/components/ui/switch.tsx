@@ -71,7 +71,7 @@ export function Switch({
         className={cn(
           // Кулька світла й з обідком — на темнішій доріжці вона тримає форму
           // і не губиться.
-          "pointer-events-none inline-block rounded-full bg-background shadow-sm ring-1 ring-foreground/5 transition-transform",
+          "pointer-events-none inline-block rounded-full bg-background ring-1 ring-foreground/5 transition-transform",
           dims.knob,
           checked ? dims.on : dims.off
         )}

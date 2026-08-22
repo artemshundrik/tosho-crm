@@ -48,7 +48,6 @@ export function EmptyStateCard({
         "mx-auto w-full max-w-md",
         padding,
         "text-center",
-        "shadow-surface",
         className
       )}
     >

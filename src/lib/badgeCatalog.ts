@@ -186,7 +186,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
           { label: "Відхилено", note: "Негативний результат", className: "bg-danger-soft text-danger-foreground border-danger-soft-border", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
           { label: "Інвайт: pending", note: "Очікує відповіді", variant: "secondary", className: "bg-muted text-muted-foreground hover:bg-muted", source: ["src/pages/TeamMembersPage.tsx"] },
           { label: "Інвайт: declined", note: "Інвайт відхилено", variant: "destructive", className: "bg-danger-soft text-danger-foreground border-danger-soft-border hover:bg-danger-soft", source: ["src/pages/TeamMembersPage.tsx"] },
-          { label: "Інвайт: accepted", note: "Інвайт прийнято", variant: "default", className: "bg-success-soft text-success-foreground border-success-soft-border hover:bg-success-soft shadow-none", source: ["src/pages/TeamMembersPage.tsx"] },
+          { label: "Інвайт: accepted", note: "Інвайт прийнято", variant: "default", className: "bg-success-soft text-success-foreground border-success-soft-border hover:bg-success-soft", source: ["src/pages/TeamMembersPage.tsx"] },
         ],
       },
       {
@@ -255,7 +255,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Catalog Model Tags",
         description: "Локальні badges у карточках моделі та пошуку каталогу.",
         items: [
-          { label: "3 тиражів", note: "Tier count на зображенні моделі", variant: "secondary", className: "bg-background/90 backdrop-blur-sm shadow-md text-xs font-semibold gap-1 px-2.5 py-1", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
+          { label: "3 тиражів", note: "Tier count на зображенні моделі", variant: "secondary", className: "bg-background/90 backdrop-blur-sm text-xs font-semibold gap-1 px-2.5 py-1", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "Шовкодрук", note: "Method tag у карточці моделі", variant: "outline", className: "text-xs px-2 py-0 h-6", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "+2", note: "Стиснений badge для extra methods", variant: "outline", className: "text-xs px-2 py-0 h-6", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "Фільтр", note: "Outline badge у пошуковому рядку каталогу", variant: "outline", className: "text-xs px-2.5 py-1 h-9 flex items-center gap-1.5", source: ["src/features/catalog/ProductCatalogPage/components/SearchBar.tsx"] },

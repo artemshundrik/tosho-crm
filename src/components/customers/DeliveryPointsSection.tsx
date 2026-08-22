@@ -50,7 +50,7 @@ export function DeliveryPointsSection({
   defaultEdrpou,
 }: DeliveryPointsSectionProps) {
   return (
-    <section className="rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
+    <section className="rounded-xl border border-border/50 bg-card/40 p-4">
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
         <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Адреси доставки

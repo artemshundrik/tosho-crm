@@ -170,7 +170,7 @@ function SimpleModelCardBase({
       tabIndex={0}
       className={cn(
         "group relative flex cursor-pointer flex-col rounded-xl border bg-card transition-all duration-200",
-        "hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         !validation.isValid
           ? "border-warning-soft-border hover:border-warning-foreground/50"
           : "border-border/60 hover:border-primary/30"
@@ -186,7 +186,7 @@ function SimpleModelCardBase({
               size="icon"
               variant="ghost"
               aria-label="Дії з моделлю"
-              className="h-8 w-8 rounded-full border border-border/60 bg-background/90 text-muted-foreground shadow-md backdrop-blur-sm transition-all hover:bg-background hover:text-foreground hover:shadow-lg data-[state=open]:bg-background data-[state=open]:text-foreground data-[state=open]:ring-2 data-[state=open]:ring-primary/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 data-[state=open]:opacity-100"
+              className="h-8 w-8 rounded-full border border-border/60 bg-background/90 text-muted-foreground backdrop-blur-sm transition-all hover:bg-background hover:text-foreground data-[state=open]:bg-background data-[state=open]:text-foreground data-[state=open]:ring-2 data-[state=open]:ring-primary/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 data-[state=open]:opacity-100"
             >
               <MoreVertical className="h-4 w-4" />
             </Button>
@@ -269,7 +269,7 @@ function SimpleModelCardBase({
               );
             })}
             {variants.length > 7 ? (
-              <span className="flex h-9 shrink-0 items-center rounded-md border border-border/60 bg-background/90 px-2 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+              <span className="flex h-9 shrink-0 items-center rounded-md border border-border/60 bg-background/90 px-2 text-xs font-medium text-muted-foreground backdrop-blur">
                 +{variants.length - 7}
               </span>
             ) : null}
@@ -280,7 +280,7 @@ function SimpleModelCardBase({
           <div className="absolute right-3 bottom-3 z-10">
             <Badge
               variant="secondary"
-              className="bg-background/90 backdrop-blur-sm shadow-md text-xs font-semibold gap-1 px-2.5 py-1"
+              className="bg-background/90 backdrop-blur-sm text-xs font-semibold gap-1 px-2.5 py-1"
             >
               <Layers className="h-3 w-3" />
               {model.priceTiers?.length} тиражів

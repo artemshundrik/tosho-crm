@@ -231,7 +231,7 @@ export function FeatureHint({
     <span
       role="note"
       className={cn(
-        "absolute z-30 flex w-max max-w-[240px] items-start gap-1.5 rounded-lg border border-primary/30 bg-popover px-2.5 py-1.5 shadow-[var(--shadow-menu)]",
+        "absolute z-30 flex w-max max-w-[240px] items-start gap-1.5 rounded-lg border border-primary/30 bg-popover px-2.5 py-1.5",
         side === "top" ? "bottom-full mb-2" : "top-full mt-2",
         align === "end" ? "right-0" : "left-0",
         className

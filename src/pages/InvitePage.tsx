@@ -86,7 +86,7 @@ export default function InvitePage() {
   if (!token) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
+        <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95">
           <div className="mx-auto bg-danger-soft w-16 h-16 rounded-full flex items-center justify-center mb-6 text-danger-foreground border border-danger-soft-border">
             <ShieldAlert className="w-8 h-8" />
           </div>
@@ -172,7 +172,7 @@ export default function InvitePage() {
   if (!session) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
+        <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300">
           <div className="mx-auto bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center mb-6 text-primary border border-primary/20">
             <User className="w-10 h-10" />
           </div>
@@ -205,7 +205,7 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-section border border-border bg-card shadow-surface p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
+      <div className="w-full max-w-md rounded-section border border-border bg-card p-8 text-center text-card-foreground animate-in fade-in zoom-in-95 duration-300 relative">
         <Button
           variant="ghost"
           size="sm"
@@ -236,7 +236,7 @@ export default function InvitePage() {
               </div>
             ) : null}
 
-            <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-primary font-bold text-xl border-4 border-background shadow-sm">
+            <div className="mx-auto bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-primary font-bold text-xl border-4 border-background">
               {email?.slice(0, 2).toUpperCase()}
             </div>
 
@@ -262,7 +262,7 @@ export default function InvitePage() {
             ) : null}
 
             <div className="mt-6 bg-muted/30 border border-border rounded-inner p-4 text-left flex items-start gap-3">
-              <div className="bg-background p-1.5 rounded-[var(--radius)] shadow-sm text-primary border border-border shrink-0">
+              <div className="bg-background p-1.5 rounded-[var(--radius)] text-primary border border-border shrink-0">
                 <User className="w-5 h-5" />
               </div>
               <div>

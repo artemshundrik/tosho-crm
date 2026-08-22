@@ -106,7 +106,7 @@ export function useSegmentedSlider<T extends HTMLElement>() {
       aria-hidden
       data-segmented-indicator=""
       className={cn(
-        "pointer-events-none absolute z-0 rounded-lg border border-border bg-background shadow-sm",
+        "pointer-events-none absolute z-0 rounded-lg border border-border bg-background",
         animated && "transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
       )}
       style={{

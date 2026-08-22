@@ -9454,7 +9454,7 @@ export default function DesignTaskPage() {
         )}
 
         {selectedRowKeysInKind.length > 0 ? (
-          <div className="sticky bottom-3 z-docked flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-card/95 px-3 py-2 shadow-elevated-md backdrop-blur">
+          <div className="sticky bottom-3 z-docked flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-card/95 px-3 py-2 backdrop-blur">
             <span className="px-1 text-sm font-semibold text-foreground">
               Вибрано {selectedRowKeysInKind.length}
             </span>
@@ -9611,7 +9611,7 @@ export default function DesignTaskPage() {
       <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1.75fr)_412px] xl:items-start xl:overflow-hidden">
         <div className="min-w-0 space-y-4 xl:min-h-0 xl:h-full xl:overflow-y-auto">
       <EntityHeader
-        className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 shadow-none sm:px-5 md:px-6 xl:px-8"
+        className="rounded-none border-x-0 border-t-0 border-b border-border/40 bg-transparent px-4 pb-5 pt-0 sm:px-5 md:px-6 xl:px-8"
         topBar={null}
         title={
           <div className="flex flex-wrap items-baseline gap-2 leading-tight">
@@ -9653,7 +9653,7 @@ export default function DesignTaskPage() {
                   onKeyDown={handleInlineTitleKeyDown}
                   disabled={renameSaving || designTaskLockedByOther}
                   className={cn(
-                    "h-auto min-w-0 rounded-none border-transparent bg-transparent px-0 py-0 text-[20px] font-medium tracking-tight shadow-none outline-none ring-0 transition-colors md:text-[20px]",
+                    "h-auto min-w-0 rounded-none border-transparent bg-transparent px-0 py-0 text-[20px] font-medium tracking-tight outline-none ring-0 transition-colors md:text-[20px]",
                     "cursor-text overflow-visible text-ellipsis whitespace-nowrap hover:border-transparent hover:bg-transparent focus:border-transparent focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0",
                     titleEditing ? "text-foreground" : "text-foreground hover:text-foreground/90"
                   )}
@@ -9946,7 +9946,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Опис задачі для дизайнера, версії ТЗ і правки від менеджера.
                   </div>
                 </div>
@@ -10008,7 +10008,7 @@ export default function DesignTaskPage() {
                 <DesignTaskProductCard product={standaloneProduct} />
               ) : null}
               {/* CARD 1: Brief */}
-              <Card className="border-border/50 bg-card/40 shadow-none">
+              <Card className="border-border/50 bg-card/40">
                 <CardContent className="space-y-4 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
@@ -10154,7 +10154,7 @@ export default function DesignTaskPage() {
               </Card>
 
               {/* CARD 2: Change requests */}
-              <Card className="border-border/50 bg-card/40 shadow-none">
+              <Card className="border-border/50 bg-card/40">
                 <CardContent className="space-y-3 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -10573,7 +10573,7 @@ export default function DesignTaskPage() {
                                           <span className="text-sm leading-none">{emoji}</span>
                                           <span className="font-medium">{entries.length}</span>
                                         </button>
-                                        <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[220px] -translate-x-1/2 rounded-md border border-border/60 bg-popover px-2.5 py-2 opacity-0 shadow-md transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                                        <div className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[220px] -translate-x-1/2 rounded-md border border-border/60 bg-popover px-2.5 py-2 opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                                           <div className="mb-1 flex items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground">
                                             <span className="text-sm leading-none">{emoji}</span>
                                             <span>
@@ -10700,7 +10700,7 @@ export default function DesignTaskPage() {
 
               {/* CARD 3: Історія версій — розкривається кнопкою «Історія» в шапці секції */}
               {hasBriefHistory && historyExpanded ? (
-                <Card className="border-border/50 bg-card/40 shadow-none">
+                <Card className="border-border/50 bg-card/40">
                   <CardContent className="p-5">
                     <div className="flex w-full items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -10785,7 +10785,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Коментарі дизайн-задачі та згадки з відповідного прорахунку.
                   </div>
                 </div>
@@ -10840,7 +10840,7 @@ export default function DesignTaskPage() {
                   {mentionContext ? (
                     <div
                       className={cn(
-                        "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover shadow-lg",
+                        "absolute left-0 right-0 z-30 overflow-hidden rounded-lg border border-border bg-popover",
                         mentionDropdown.side === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
                       )}
                     >
@@ -10992,7 +10992,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Матеріали для дизайну — те, що додали в дизайн-зону. Файли прорахунку
                     (договори, розміри) лежать на сусідньому чипі: вони тут для довідки,
                     а не як завдання.
@@ -11238,7 +11238,7 @@ export default function DesignTaskPage() {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Методи нанесення, позиції та розміри з привʼязаного прорахунку.
                     </div>
                   </div>
@@ -11284,7 +11284,7 @@ export default function DesignTaskPage() {
                   >
                     <CircleHelp className="h-3.5 w-3.5" />
                   </button>
-                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 shadow-sm transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                     Готові візуалізації, макети та посилання від дизайнера.
                   </div>
                 </div>
@@ -11412,7 +11412,7 @@ export default function DesignTaskPage() {
               </TabsContent>
             </Tabs>
 
-            <Card className="overflow-hidden border border-border/50 bg-card/40 shadow-none">
+            <Card className="overflow-hidden border border-border/50 bg-card/40">
               <CardContent className="p-0">
                 {/* Матеріали ВІД замовника живуть у теці «Бренд», а не у вкладеннях
                     задачі: брендбук належить клієнту, а не одній роботі, і не має
@@ -11651,7 +11651,7 @@ export default function DesignTaskPage() {
               заголовка тягнеться від краю до краю, а має-селектор підсвічує
               всю секцію — незалежно від того, куди саме навели, на підпис чи
               на стрілку. */}
-          <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card shadow-card transition-colors has-[.details-toggle:hover]:bg-muted/40">
+          <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card transition-colors has-[.details-toggle:hover]:bg-muted/40">
             <button
               type="button"
               onClick={toggleDetailsCollapsed}
@@ -11726,7 +11726,7 @@ export default function DesignTaskPage() {
                 <div className="design-task-detail-value relative">
                   <EntityAvatar src={task.customerLogoUrl ?? null} name={task.customerName ?? undefined} fallback={getInitials(task.customerName)} size={24} />
                   <span className="truncate">{task.customerName ?? "Не вказано"}</span>
-                  <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition group-hover:opacity-100">
+                  <span className="pointer-events-none absolute right-0 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md bg-background/90 text-muted-foreground opacity-0 backdrop-blur-sm transition group-hover:opacity-100">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </span>
                 </div>
@@ -11744,7 +11744,7 @@ export default function DesignTaskPage() {
                 {!designTaskLockedByOther && managerMembers.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={managerSaving}>
+                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={managerSaving}>
                         {managerSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
@@ -11784,7 +11784,7 @@ export default function DesignTaskPage() {
                 {canManageAssignments ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningMemberId}>
+                      <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningMemberId}>
                         {assigningMemberId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                       </Button>
                     </DropdownMenuTrigger>
@@ -11793,7 +11793,7 @@ export default function DesignTaskPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : !task.assigneeUserId && canTakeOverForSelf ? (
-                  <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
+                  <Button size="icon" variant="ghost" className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100" disabled={!!assigningSelf} onClick={() => void assignTaskToMe()}>
                     {assigningSelf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
                   </Button>
                 ) : null}
@@ -11836,7 +11836,7 @@ export default function DesignTaskPage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100"
+                        className="absolute right-0 h-7 w-7 shrink-0 rounded-md bg-background/90 opacity-0 backdrop-blur-sm transition focus-visible:ring-0 group-hover:opacity-100"
                         disabled={collaboratorSaving}
                       >
                         {collaboratorSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PencilLine className="h-3.5 w-3.5" />}
@@ -11922,7 +11922,7 @@ export default function DesignTaskPage() {
 
           </section>
 
-          <section className="shrink-0 rounded-inner border border-border/40 bg-card shadow-card">
+          <section className="shrink-0 rounded-inner border border-border/40 bg-card">
             <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
               <span className="design-task-side-heading">Таймер</span>
               {isTimerRunning ? (
@@ -12134,7 +12134,7 @@ export default function DesignTaskPage() {
                 placeholder="Опишіть задачу для дизайнера. Використовуйте ## для заголовків, - для списків, **жирний** і *курсив*."
                 disabled={briefSaving || designTaskLockedByOther}
                 className={cn(
-                  "min-h-0 flex-1 resize-none border-0 bg-transparent px-5 py-4 text-sm leading-7 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  "min-h-0 flex-1 resize-none border-0 bg-transparent px-5 py-4 text-sm leading-7 focus-visible:ring-0 focus-visible:ring-offset-0"
                 )}
               />
             </div>
@@ -12266,7 +12266,7 @@ export default function DesignTaskPage() {
         <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              <DropboxIcon className="h-10 w-10 shrink-0 rounded-[22%] shadow-[0_12px_28px_-18px_rgba(0,97,255,0.7)]" />
+              <DropboxIcon className="h-10 w-10 shrink-0 rounded-[22%]" />
               Підготовка експорту в Dropbox
             </DialogTitle>
             <DialogDescription>
@@ -12792,7 +12792,7 @@ export default function DesignTaskPage() {
           власну гілку і, на відміну від шапки, не враховувала блокування. */}
       {renderTaskActionBar({
         className:
-          "sticky bottom-3 z-10 xl:hidden rounded-lg border border-border/60 bg-card/90 px-3 py-2 shadow-sm backdrop-blur",
+          "sticky bottom-3 z-10 xl:hidden rounded-lg border border-border/60 bg-card/90 px-3 py-2 backdrop-blur",
       })}
     </div>
   );

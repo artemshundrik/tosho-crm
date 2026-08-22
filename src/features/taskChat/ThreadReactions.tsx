@@ -117,7 +117,7 @@ export function ThreadReactionBar({
         align === "end" ? "right-0" : "left-0"
       )}
     >
-      <div className="flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5 shadow-[var(--shadow-menu)]">
+      <div className="flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5">
       {QUICK_REACTIONS.map((emoji) => (
         <button
           key={emoji}

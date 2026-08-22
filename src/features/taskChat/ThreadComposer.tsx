@@ -162,7 +162,7 @@ export function ThreadComposer({
       ) : null}
 
       {matches.length > 0 ? (
-        <div className="mb-2 max-h-[184px] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-card shadow-[var(--shadow-menu)]">
+        <div className="mb-2 max-h-[184px] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-card">
           {matches.map((candidate, index) => (
             <button
               key={candidate.userId}

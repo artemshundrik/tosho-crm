@@ -130,7 +130,7 @@ function WorkdayGrid({ cells }: { cells: WorkdayCell[] }) {
       {active ? (
         <div
           className={cn(
-            "pointer-events-none absolute bottom-full z-10 mb-1.5 max-w-full whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-3xs leading-snug text-background shadow-md",
+            "pointer-events-none absolute bottom-full z-10 mb-1.5 max-w-full whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-3xs leading-snug text-background",
             anchor === "start" && "left-0",
             anchor === "center" && "left-1/2 -translate-x-1/2",
             anchor === "end" && "right-0"
@@ -315,7 +315,7 @@ export function DesignerEarningsWidget({
     /* Пігулка — контейнер із ДВОМА сусідніми кнопками, а не кнопка в кнопці.
        Раніше око було span[role=button] всередині тригера: невалідний HTML,
        скрінрідер оголошував це як одну кнопку, а Enter міг спрацювати двічі. */
-    <div className="inline-flex h-10 items-center gap-1 rounded-xl border border-border/50 bg-muted/40 pl-3 pr-1 shadow-inner">
+    <div className="inline-flex h-10 items-center gap-1 rounded-xl border border-border/50 bg-muted/40 pl-3 pr-1">
       <AppDropdown
         align="end"
         sideOffset={14}

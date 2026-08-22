@@ -341,7 +341,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-elevated-lg">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -1471,7 +1471,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         id: toastId,
         position: "top-right",
         duration: getInAppNotificationDuration(item.tone),
-        className: "!border-0 !bg-transparent !p-0 !shadow-none",
+        className: "!border-0 !bg-transparent !p-0 !",
         }
       );
 
@@ -1995,7 +1995,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     hideClose
                     dismissible
                     className={cn(
-                      "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 shadow-2xl backdrop-blur-xl",
+                      "min-h-[100dvh] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
                       "data-[state=open]:duration-300 data-[state=closed]:duration-200 data-[state=open]:ease-out data-[state=closed]:ease-in"
                     )}
@@ -2147,7 +2147,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 // Наведення нейтральне, як у решти полів: світлішає фон, рамка
                 // лишається своя. Рожевий обідок робив із поля рекламу модуля —
                 // сам колір бренду живе в пігулці праворуч, і цього досить.
-                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground shadow-inner transition-all duration-200 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
+                className="group/search inline-flex h-10 w-[320px] cursor-pointer items-center gap-2 rounded-xl border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2194,7 +2194,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   клік по самому полю. Приклад береться з того самого реєстру, що
                   й підказки в палітрі, — тобто залежить від посади й сторінки. */}
               {searchHintExample ? (
-                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover px-2.5 py-1 text-xs text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                   наприклад: {searchHintExample}
                 </span>
               ) : null}
@@ -2221,7 +2221,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   trigger={
                     <button
                       type="button"
-                      className="hidden lg:inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-border/50 bg-muted/40 shadow-inner px-3 text-xs transition-all duration-200 hover:bg-muted/60 cursor-pointer"
+                      className="hidden lg:inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-border/50 bg-muted/40 px-3 text-xs transition-all duration-200 hover:bg-muted/60 cursor-pointer"
                       aria-label="Курси валют"
                       title={fxError ?? fxStaleWarning ?? "Мінфін міжбанк · продаж"}
                     >
@@ -2719,10 +2719,10 @@ function SidebarGroup({
                     : "h-9 rounded-lg",
                 active
                   ? collapsed
-                    ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
+                    ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
                     : isMobileDrawer
-                      ? "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20"
-                      : "bg-foreground/5 text-foreground shadow-sm ring-1 ring-border/20 font-medium"
+                      ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
+                      : "bg-foreground/5 text-foreground ring-1 ring-border/20 font-medium"
                   : isMobileDrawer
                     ? "text-muted-foreground hover:bg-background hover:text-foreground"
                     : "text-muted-foreground hover:bg-background hover:text-foreground"

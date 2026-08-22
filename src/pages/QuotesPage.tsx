@@ -6660,7 +6660,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             return (
                               <Badge
                                 className={cn(
-                                  "cursor-pointer transition-all hover:shadow-sm",
+                                  "cursor-pointer transition-all",
                                   statusClasses[normalizedStatus] ?? statusClasses.new
                                 )}
                                 variant="outline"

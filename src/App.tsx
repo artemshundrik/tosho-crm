@@ -677,7 +677,7 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">
             {isInviteFlow ? "Вхід за інвайтом" : "Вхід у ToSho CRM"}

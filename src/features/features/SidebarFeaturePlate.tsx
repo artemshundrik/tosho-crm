@@ -156,7 +156,7 @@ export function SidebarFeaturePlate({ collapsed = false }: { collapsed?: boolean
 function PlateThumb({ featureKey }: { featureKey: FeatureDefinition["key"] }) {
   if (featureKey === "voice_dictation") {
     return (
-      <span className="relative w-[78%] rounded-md border border-border bg-card p-1.5 shadow-sm">
+      <span className="relative w-[78%] rounded-md border border-border bg-card p-1.5">
         <span className="mb-1 block h-1 w-3/4 rounded-full bg-foreground/15" />
         <span className="flex items-center gap-1">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
@@ -168,7 +168,7 @@ function PlateThumb({ featureKey }: { featureKey: FeatureDefinition["key"] }) {
 
   if (featureKey === "task_chat") {
     return (
-      <span className="relative grid w-[78%] gap-1 rounded-md border border-border bg-card p-1.5 shadow-sm">
+      <span className="relative grid w-[78%] gap-1 rounded-md border border-border bg-card p-1.5">
         <span className="block h-2 w-3/5 rounded-md bg-muted" />
         <span className="ml-auto block h-2 w-2/5 rounded-md bg-primary/70" />
       </span>
@@ -176,7 +176,7 @@ function PlateThumb({ featureKey }: { featureKey: FeatureDefinition["key"] }) {
   }
 
   return (
-    <span className="relative grid w-[78%] gap-1 rounded-md border border-border bg-card p-1.5 shadow-sm">
+    <span className="relative grid w-[78%] gap-1 rounded-md border border-border bg-card p-1.5">
       <span className="block h-2 w-full rounded-sm bg-success-soft" />
       <span className="block h-1.5 w-2/3 rounded-full bg-foreground/12" />
     </span>

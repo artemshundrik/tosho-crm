@@ -288,7 +288,7 @@ export function AvatarBase({
       <Avatar
         ref={avatarRef}
         className={cn(
-          "border border-border/60 bg-muted/60 text-muted-foreground/80 shadow-sm dark:bg-muted/40",
+          "border border-border/60 bg-muted/60 text-muted-foreground/80 dark:bg-muted/40",
           shape === "rounded" ? "rounded-[var(--radius-lg)]" : "rounded-full",
           inactive
             ? "opacity-60 grayscale"
@@ -412,7 +412,7 @@ export function EntityAvatar({
 
   return (
     <Avatar
-      className={cn("shrink-0 border shadow-sm", hasLogo ? "border-border/60 bg-muted/20" : cn("border-border/40", tone.shell), className)}
+      className={cn("shrink-0 border", hasLogo ? "border-border/60 bg-muted/20" : cn("border-border/40", tone.shell), className)}
       style={{ width: size, height: size }}
     >
       {hasLogo ? (

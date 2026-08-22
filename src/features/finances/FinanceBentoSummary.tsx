@@ -109,7 +109,7 @@ export function FinanceBentoSummary({
   );
 
   return (
-    <div className="rounded-2xl border border-border/40 bg-card p-4 shadow-card sm:p-5">
+    <div className="rounded-2xl border border-border/40 bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
           <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>

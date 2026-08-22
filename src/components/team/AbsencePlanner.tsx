@@ -331,7 +331,7 @@ function AbsencePlannerImpl({
                   // Стовпчик свята фарбується НАСКРІЗЬ, а не лише в шапці:
                   // мітка вгорі губилась серед сірих вихідних.
                   day.holiday && HOLIDAY_COLUMN_CLASS,
-                  day.today && "shadow-[inset_1.5px_0_0_hsl(var(--primary)/0.35),inset_-1.5px_0_0_hsl(var(--primary)/0.35)]",
+                  day.today && "",
                   canPick && "cursor-pointer hover:bg-primary/5"
                 );
                 const style = { gridColumn: `${index + 2} / ${index + 3}`, gridRow: 1 } as const;
@@ -391,7 +391,7 @@ function AbsencePlannerImpl({
                   pending &&
                     "border-dashed [background-image:repeating-linear-gradient(45deg,transparent_0_5px,hsl(var(--card)/0.5)_5px_10px)]",
                   handleClick &&
-                    "cursor-pointer transition-[filter,box-shadow] hover:brightness-[0.97] hover:shadow-[var(--shadow-elevated-sm)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
+                    "cursor-pointer transition-[filter,box-shadow] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
                 );
 
                 const barStyle = {

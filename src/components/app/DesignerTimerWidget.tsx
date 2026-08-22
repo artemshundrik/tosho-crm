@@ -491,7 +491,7 @@ export function DesignerHeaderTimerWidget({
       trigger={
         <div
           className={cn(
-            "hidden lg:inline-flex h-10 w-[190px] items-center justify-between gap-1.5 whitespace-nowrap rounded-xl border px-2 shadow-inner transition-all duration-200 cursor-pointer",
+            "hidden lg:inline-flex h-10 w-[190px] items-center justify-between gap-1.5 whitespace-nowrap rounded-xl border px-2 transition-all duration-200 cursor-pointer",
             currentRunning
               ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80"
               : currentPaused
@@ -504,10 +504,10 @@ export function DesignerHeaderTimerWidget({
           <button
             type="button"
             className={cn(
-              "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border shadow-sm transition-colors disabled:cursor-not-allowed",
+              "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed",
               startableTask && !currentRunning
                 ? "border-transparent bg-success-foreground text-white hover:bg-success-foreground/90"
-                : "border-transparent bg-transparent text-current/30 shadow-none"
+                : "border-transparent bg-transparent text-current/30"
             )}
             disabled={!startableTask || currentRunning || currentBusy}
             onPointerDown={stopHeaderControlEvent}
@@ -527,10 +527,10 @@ export function DesignerHeaderTimerWidget({
           <button
             type="button"
             className={cn(
-              "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border shadow-sm transition-colors disabled:cursor-not-allowed",
+              "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed",
               currentRunning
                 ? "border-transparent bg-warning-foreground text-background hover:bg-warning-foreground/80"
-                : "border-transparent bg-transparent text-current/30 shadow-none"
+                : "border-transparent bg-transparent text-current/30"
             )}
             disabled={!currentRunning || !currentTask || currentBusy}
             onPointerDown={stopHeaderControlEvent}
@@ -659,7 +659,7 @@ export function DesignerFloatingTimerWidget({
   return (
     <div
       className={cn(
-        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background shadow-elevated-panel backdrop-blur cursor-grab active:cursor-grabbing",
+        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background backdrop-blur cursor-grab active:cursor-grabbing",
         currentRunning
           ? "border-success-soft-border/55 ring-1 ring-success-soft-border/25"
           : currentPaused
@@ -736,8 +736,8 @@ export function DesignerFloatingTimerWidget({
                   // тримає власні disabled-кольори, що повторюють її спокій.
                   "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   startableTask && !currentRunning
-                    ? "border-transparent bg-success-foreground text-white shadow-success-glow hover:border-transparent hover:bg-success-foreground/90 hover:text-white disabled:border-transparent disabled:bg-success-foreground disabled:text-white disabled:shadow-success-glow"
-                    : "border-background/20 bg-background/[0.08] text-background/40 shadow-inner hover:bg-background/[0.08] hover:text-background/40 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/40 disabled:shadow-inner"
+                    ? "border-transparent bg-success-foreground text-white hover:border-transparent hover:bg-success-foreground/90 hover:text-white disabled:border-transparent disabled:bg-success-foreground disabled:text-white"
+                    : "border-background/20 bg-background/[0.08] text-background/40 hover:bg-background/[0.08] hover:text-background/40 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/40"
                 )}
                 disabled={!startableTask || currentRunning || startBusy}
                 onClick={() => {
@@ -761,8 +761,8 @@ export function DesignerFloatingTimerWidget({
                 className={cn(
                   "h-11 w-full justify-center rounded-xl px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   currentRunning
-                    ? "border-transparent bg-warning-foreground text-background shadow-warning-glow hover:border-transparent hover:bg-warning-foreground/80 hover:text-background disabled:border-transparent disabled:bg-warning-foreground disabled:text-background disabled:shadow-warning-glow"
-                    : "border-background/20 bg-background/[0.08] text-background/50 shadow-inner hover:bg-background/[0.08] hover:text-background/50 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/50 disabled:shadow-inner"
+                    ? "border-transparent bg-warning-foreground text-background hover:border-transparent hover:bg-warning-foreground/80 hover:text-background disabled:border-transparent disabled:bg-warning-foreground disabled:text-background"
+                    : "border-background/20 bg-background/[0.08] text-background/50 hover:bg-background/[0.08] hover:text-background/50 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/50"
                 )}
                 disabled={!currentRunning || !currentTask || controller.busyTaskId === currentTask.taskId}
                 onClick={() => {

@@ -313,7 +313,7 @@ export function AbsenceDialog({
               role="radiogroup"
               aria-label="Тип відсутності"
               className={cn(
-                "grid gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner",
+                "grid gap-1 rounded-xl border border-border/50 bg-muted/40 p-1",
                 // 5 типів в один рядок уже не влазять — підписи ламались на
                 // два рядки і пігулки пливли по висоті. Сітка дає рівні ряди:
                 // 5 → 3+2; 4 (режим заявки) → 2×2 на вузькому, один ряд на sm.
@@ -334,7 +334,7 @@ export function AbsenceDialog({
                       "flex h-9 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-xs font-medium transition-all duration-200",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       active
-                        ? cn("shadow-[var(--shadow-elevated-sm)]", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])
+                        ? cn("", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])
                         : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
                     )}
                   >

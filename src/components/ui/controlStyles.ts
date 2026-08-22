@@ -8,7 +8,7 @@ export function cx(...arr: Array<string | undefined | false | null>) {
  * мають виглядати однаково заблокованими, і набір міняється в одному місці.
  */
 export const CONTROL_DISABLED_STATE = cx(
-  "disabled:bg-control-disabled disabled:text-control-disabled-fg disabled:border-control-disabled-border disabled:shadow-none"
+  "disabled:bg-control-disabled disabled:text-control-disabled-fg disabled:border-control-disabled-border"
 );
 
 /**
@@ -17,7 +17,7 @@ export const CONTROL_DISABLED_STATE = cx(
  */
 export const CONTROL_BASE = cx(
   "h-10 rounded-xl bg-muted/40",
-  "border border-border/50 shadow-inner",
+  "border border-border/50",
   "text-foreground placeholder:text-muted-foreground",
   // Перелік властивостей ПОІМЕННО, а не `transition-all`. Слово `all` означає
   // буквально все, зокрема ВІДСТУПИ — і саме через це модалки помітно
@@ -155,11 +155,11 @@ export const SEARCH_INPUT = cx(TOOLBAR_CONTROL, "pl-9 pr-9");
 export const SEARCH_CLEAR_BTN_POS = cx("absolute right-2 top-1/2 -translate-y-1/2");
 
 export const SEGMENTED_GROUP = cx(
-  "inline-flex p-1 h-11 items-center rounded-xl border border-border/50 bg-muted/40 shadow-inner"
+  "inline-flex p-1 h-11 items-center rounded-xl border border-border/50 bg-muted/40"
 );
 
 export const SEGMENTED_GROUP_SM = cx(
-  "inline-flex p-0.5 h-9 items-center rounded-lg border border-border/50 bg-muted/40 shadow-inner"
+  "inline-flex p-0.5 h-9 items-center rounded-lg border border-border/50 bg-muted/40"
 );
 
 /**
@@ -175,8 +175,8 @@ const SEGMENTED_TRIGGER_BASE = cx(
   "flex-1 inline-flex items-center justify-center font-medium",
   "transition-all duration-base ease-out motion-reduce:transition-none",
   "text-muted-foreground hover:text-foreground hover:bg-background/50",
-  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-elevated-sm data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]",
-  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-elevated-sm data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
+  "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]",
+  "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );
 
 export const SEGMENTED_TRIGGER = cx(SEGMENTED_TRIGGER_BASE, "gap-2 h-9 rounded-lg px-4 text-sm");

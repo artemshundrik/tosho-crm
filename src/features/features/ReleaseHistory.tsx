@@ -106,7 +106,7 @@ function TipView({ tip }: { tip: TipState }) {
         zIndex: 60,
         pointerEvents: "none",
       }}
-      className="w-max max-w-[min(88vw,320px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-menu"
+      className="w-max max-w-[min(88vw,320px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug"
     >
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">

@@ -115,8 +115,8 @@ export function TeamMemberCard({
   return (
     <article
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card shadow-card",
-        "transition-all duration-200 hover:border-border hover:shadow-[var(--shadow-elevated-sm)]"
+        "group flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card",
+        "transition-all duration-200 hover:border-border"
       )}
     >
       <div className="flex items-start gap-3 p-4 pb-0">

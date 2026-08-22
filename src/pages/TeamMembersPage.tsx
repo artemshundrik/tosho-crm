@@ -3464,7 +3464,7 @@ export function TeamMembersPage() {
                               Прострочено
                             </Badge>
                           ) : (
-                            <Badge variant="default" className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft shadow-none">
+                            <Badge variant="default" className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft">
                               Очікує входу
                             </Badge>
                           )}
@@ -3584,7 +3584,7 @@ export function TeamMembersPage() {
                           ) : (
                             <Badge
                               variant="default"
-                              className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft shadow-none"
+                              className="bg-warning-soft text-warning-foreground border-warning-soft-border hover:bg-warning-soft"
                             >
                               Очікує входу
                             </Badge>
@@ -3815,7 +3815,7 @@ export function TeamMembersPage() {
             ) : inviteResult.delivery === "link" ? (
               <div className="space-y-6">
                 <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
-                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
+                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border">
                     <LinkIcon className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-lg text-foreground">Посилання готове!</span>
@@ -3860,7 +3860,7 @@ export function TeamMembersPage() {
             ) : (
               <div className="space-y-6">
                 <div className="tone-success-subtle tone-text-success flex flex-col items-center justify-center rounded-inner border p-6">
-                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm">
+                  <div className="tone-icon-box-success mb-3 flex h-12 w-12 items-center justify-center rounded-full border">
                     <Mail className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-lg text-foreground">Лист надіслано</span>

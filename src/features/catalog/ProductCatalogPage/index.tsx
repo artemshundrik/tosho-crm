@@ -592,7 +592,7 @@ export default function ProductCatalogPage() {
         icon={<AlertCircle className="h-5 w-5 text-destructive" />}
         confirmLabel="Видалити"
         cancelLabel="Скасувати"
-        confirmClassName="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20"
+        confirmClassName="bg-destructive hover:bg-destructive/90 text-destructive-foreground "
         onConfirm={modelEditor.handleDeleteModel}
       />
     </div>

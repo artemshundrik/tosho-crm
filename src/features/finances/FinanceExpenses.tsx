@@ -1367,7 +1367,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     return (
       <div
         key={expense.id}
-        className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
+        className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
       >
         <div className="flex min-w-0 gap-3">
           <SubscriptionLogo
@@ -1433,7 +1433,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       <div
         key={expense.id}
         className={cn(
-          "overflow-hidden rounded-xl border border-border/40 bg-card shadow-card",
+          "overflow-hidden rounded-xl border border-border/40 bg-card",
           // Перехід зі сповіщення «закрити місяць» підсвічує саме ті рядки,
           // про які написали — інакше в довгому списку їх ще треба знайти.
           missingEntry && highlightMissing && "border-warning/60 ring-1 ring-warning/25"

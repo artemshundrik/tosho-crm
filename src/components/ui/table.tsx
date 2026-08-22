@@ -64,7 +64,7 @@ const Table = React.forwardRef<
   const stickyClasses = stickyHeader
     ? [
         "[&_thead]:sticky [&_thead]:top-[var(--app-header-height)] [&_thead]:z-10",
-        "[&_thead]:bg-card [&_thead]:shadow-[0_1px_0_0_hsl(var(--border)/0.5)]",
+        "[&_thead]:bg-card",
       ].join(" ")
     : "";
 

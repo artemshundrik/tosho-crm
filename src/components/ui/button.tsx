@@ -44,25 +44,24 @@ const buttonVariants = cva(
         primary: [
           "!font-medium",
           "bg-foreground text-background",
-          "shadow-elevated-sm ring-1 ring-[hsl(var(--soft-ring))]",
+          "ring-1 ring-[hsl(var(--soft-ring))]",
           "hover:bg-(--btn-solid-hover)",
-          "active:bg-(--btn-solid-active) active:scale-[0.972] active:shadow-none",
+          "active:bg-(--btn-solid-active) active:scale-[0.972]",
         ].join(" "),
 
         // ✅ Surface (hero/secondary): medium by default (як у Linear)
         secondary: [
           "!font-medium",
           "bg-muted/40 text-foreground border border-border/50",
-          "shadow-inner",
           "hover:bg-muted/80",
-          "active:bg-muted active:scale-[0.972] active:shadow-none",
+          "active:bg-muted active:scale-[0.972]",
         ].join(" "),
 
         outline: [
           "!font-medium",
           "border border-border/50 bg-transparent text-foreground",
           "hover:bg-muted/60",
-          "active:bg-muted/80 active:scale-[0.972] active:shadow-none",
+          "active:bg-muted/80 active:scale-[0.972]",
         ].join(" "),
 
         // ✅ Danger: soft, low-emphasis destructive tone
@@ -78,9 +77,8 @@ const buttonVariants = cva(
         destructiveSolid: [
           "!font-medium",
           "bg-destructive text-destructive-foreground",
-          "shadow-elevated-sm",
           "hover:bg-(--btn-danger-hover)",
-          "active:bg-(--btn-danger-active) active:scale-[0.972] active:shadow-none",
+          "active:bg-(--btn-danger-active) active:scale-[0.972]",
         ].join(" "),
 
         // ✅ Success: тональна для дій-підтверджень («Сплачено», «Готово», «Виплачено»)
@@ -88,14 +86,14 @@ const buttonVariants = cva(
           "!font-medium",
           "bg-success-soft text-success-foreground border border-success-soft-border",
           "hover:bg-success-soft/70",
-          "active:scale-[0.972] active:shadow-none",
+          "active:scale-[0.972]",
         ].join(" "),
 
         // ✅ Ghost/link: medium.
         // Прозорим варіантам disabled-плашка з бази недоречна: кнопка, якої «не
         // видно» до ховера, у disabled матеріалізувалась би в сірий прямокутник.
         // Текст сіріє тим самим токеном, тло лишається прозорим.
-        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:bg-muted/80 active:scale-[0.972] active:shadow-none disabled:bg-transparent disabled:border-transparent",
+        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:bg-muted/80 active:scale-[0.972] disabled:bg-transparent disabled:border-transparent",
         link: "!font-medium bg-transparent text-primary underline-offset-4 hover:underline disabled:bg-transparent disabled:border-transparent",
 
         // ✅ Menu trigger / list item
@@ -120,9 +118,9 @@ const buttonVariants = cva(
 
         // ✅ Segmented tabs (uses aria-pressed for active state)
         segmented: [
-          "!font-medium border border-transparent bg-transparent text-muted-foreground shadow-none",
+          "!font-medium border border-transparent bg-transparent text-muted-foreground",
           "hover:bg-background/40 hover:text-foreground",
-          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground aria-[pressed=true]:shadow-sm",
+          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
 
@@ -130,15 +128,15 @@ const buttonVariants = cva(
         chip: [
           "!font-semibold rounded-full border border-border/50",
           "h-7 px-3",
-          "bg-muted/40 text-muted-foreground shadow-inner",
+          "bg-muted/40 text-muted-foreground",
           "hover:text-foreground hover:bg-muted/60",
-          "aria-[pressed=true]:border-foreground/20 aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:shadow-md",
+          "aria-[pressed=true]:border-foreground/20 aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background",
         ].join(" "),
 
         // ✅ Card-like action (list items, selection cards)
         card: [
           "!font-medium w-full justify-start text-left",
-          "rounded-xl border border-border/50 bg-card/60 shadow-sm",
+          "rounded-xl border border-border/50 bg-card/60",
           "hover:bg-muted/40",
           "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
           "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-danger-soft-border data-[status=unavailable]:bg-danger-soft data-[status=unavailable]:opacity-80",
@@ -176,8 +174,8 @@ const buttonVariants = cva(
         // ✅ Pill toggle (attendance / binary switch)
         pill: [
           "!font-semibold rounded-full",
-          "bg-muted/40 text-foreground shadow-inner hover:bg-muted/60",
-          "aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:hover:bg-foreground/90 aria-[pressed=true]:shadow-md",
+          "bg-muted/40 text-foreground hover:bg-muted/60",
+          "aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:hover:bg-foreground/90",
           "border border-transparent",
         ].join(" "),
       },

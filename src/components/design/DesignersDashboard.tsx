@@ -253,7 +253,7 @@ function ChartTooltipView({ tip }: { tip: TipState }) {
         zIndex: 60,
         pointerEvents: "none",
       }}
-      className="w-max max-w-[min(88vw,360px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug shadow-[var(--shadow-menu)]"
+      className="w-max max-w-[min(88vw,360px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug"
     >
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">
@@ -387,7 +387,7 @@ const analyticsCache = new Map<string, AnalyticsCacheEntry>();
 function DashboardSkeleton() {
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5" aria-busy="true" aria-label="Завантажуємо аналітику">
-      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70 shadow-card">
+      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70">
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <Skeleton className="h-9 w-64 rounded-xl" />
           <Skeleton className="ml-auto h-9 w-[180px] rounded-lg" />
@@ -1063,10 +1063,10 @@ export function DesignersDashboard({
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
-      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70 shadow-card">
+      <section className="overflow-hidden rounded-2xl border border-border/60 bg-background/70">
         {/* Ряд 1 — перемикач скоупу + місяць */}
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
-          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner">
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-muted/40 p-1">
             {canSeeAll ? (
               <button
                 type="button"
@@ -1075,7 +1075,7 @@ export function DesignersDashboard({
                 className={cn(
                   "inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all",
                   "hover:text-foreground",
-                  scope === "team" && "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]"
+                  scope === "team" && "bg-background text-foreground ring-1 ring-[hsl(var(--soft-ring))]"
                 )}
               >
                 <Users className="h-3.5 w-3.5" />
@@ -1093,7 +1093,7 @@ export function DesignersDashboard({
                   className={cn(
                     "inline-flex cursor-pointer items-center gap-2 rounded-lg py-1 pl-1.5 pr-3 text-xs font-medium text-muted-foreground transition-all",
                     "hover:text-foreground",
-                    active && "bg-background text-foreground shadow-[var(--shadow-elevated-sm)] ring-1 ring-[hsl(var(--soft-ring))]"
+                    active && "bg-background text-foreground ring-1 ring-[hsl(var(--soft-ring))]"
                   )}
                 >
                   <AvatarBase
@@ -2200,7 +2200,7 @@ export function DesignersDashboard({
                                 </div>
                               ) : (
                                 <div
-                                  className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04] hover:shadow-[var(--shadow-menu)]"
+                                  className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04]"
                                   style={{
                                     background: `hsl(var(--heat-${heatBucket(value)}))`,
                                     color: `hsl(var(--heat-ink-${heatBucket(value)}))`,
@@ -2314,7 +2314,7 @@ export function DesignersDashboard({
                       }
                       return (
                         <div
-                          className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04] hover:shadow-[var(--shadow-menu)]"
+                          className="flex h-10 cursor-help items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-transform hover:scale-[1.04]"
                           style={{ background: `hsl(var(--heat-${bucket}))`, color: `hsl(var(--heat-ink-${bucket}))` }}
                           {...bindTip(() => ({
                             title: `${designer.label} · ${label}`,

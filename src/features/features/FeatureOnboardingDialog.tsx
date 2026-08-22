@@ -153,7 +153,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                 }}
               />
               {LIVE_DEMO_KEYS.includes(feature.key) ? (
-                <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card">
                   <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-3 py-2">
                     <span className="h-2 w-2 rounded-full bg-border" />
                     <span className="h-2 w-2 rounded-full bg-border" />

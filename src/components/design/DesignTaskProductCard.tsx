@@ -41,7 +41,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
     );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
       {/* Header: media + identity + supplier actions on one balanced line */}
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="shrink-0">

@@ -27,14 +27,14 @@ export function ViewSwitcher({ view, onViewChange, className }: ViewSwitcherProp
       <ToggleGroupItem
         value="grid"
         aria-label="Grid view"
-        className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
+        className="data-[state=on]:bg-background"
       >
         <Grid3x3 className="h-4 w-4" />
       </ToggleGroupItem>
       <ToggleGroupItem
         value="table"
         aria-label="Table view"
-        className="data-[state=on]:bg-background data-[state=on]:shadow-sm"
+        className="data-[state=on]:bg-background"
       >
         <List className="h-4 w-4" />
       </ToggleGroupItem>

@@ -123,7 +123,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))] shadow-elevated-lg">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-4xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -295,7 +295,7 @@ function getCompactNotificationDescription(item: NotificationItem) {
 
 const NOTIFICATION_AVATAR_SIZE = 48;
 const NOTIFICATION_BADGE_CLASS =
-  "absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border shadow-sm sm:-bottom-2 sm:-right-2 sm:h-7 sm:w-7";
+  "absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border sm:-bottom-2 sm:-right-2 sm:h-7 sm:w-7";
 const NOTIFICATION_AVATAR_SHELL_CLASS = "relative mt-0.5 flex h-12 w-12 shrink-0 items-start justify-start";
 
 export default function NotificationsPage() {
@@ -707,7 +707,7 @@ export default function NotificationsPage() {
         id: `notification-preview:${tone}:${Date.now()}`,
         position: "top-right",
         duration: getInAppNotificationDuration(tone),
-        className: "!border-0 !bg-transparent !p-0 !shadow-none",
+        className: "!border-0 !bg-transparent !p-0 !",
       }
     );
 
@@ -890,7 +890,7 @@ export default function NotificationsPage() {
   return (
     <PageCanvas>
       <PageCanvasBody className="space-y-5 px-3 py-3 pb-20 sm:px-5 md:space-y-6 md:pb-6">
-        <section className="rounded-[28px] border border-border/60 bg-card/95 p-4 shadow-sm md:p-5">
+        <section className="rounded-[28px] border border-border/60 bg-card/95 p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-4">
             <div className="min-w-0">
               <div className="text-lg font-semibold tracking-tight text-foreground">Стрічка подій</div>
@@ -910,7 +910,7 @@ export default function NotificationsPage() {
           </DialogHeader>
 
           <div className="space-y-2.5 sm:space-y-3">
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -977,7 +977,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1021,7 +1021,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
               <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -1100,7 +1100,7 @@ export default function NotificationsPage() {
               </div>
             </section>
 
-            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+            <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
                   <Send className="h-4 w-4" />
@@ -1201,7 +1201,7 @@ export default function NotificationsPage() {
               size="md"
               onClick={() => openNotification(n)}
               className={cn(
-                "group h-auto w-full justify-start rounded-4xl p-0 text-left shadow-none hover:bg-transparent",
+                "group h-auto w-full justify-start rounded-4xl p-0 text-left hover:bg-transparent",
                 !n.read && "data-[state=active]:ring-0"
               )}
             >
@@ -1209,7 +1209,7 @@ export default function NotificationsPage() {
                 className={cn(
                   "flex w-full items-start gap-3 rounded-4xl border border-border/60 p-3 transition-colors duration-200 ease-out hover:bg-muted/28 sm:gap-4 sm:p-4",
                   notificationCardToneClass(n),
-                  !n.read && "shadow-surface"
+                  !n.read && ""
                 )}
               >
                 {member?.avatarDisplayUrl ? (

@@ -1338,7 +1338,7 @@ export function ProfilePage() {
   };
 
   const identityCard = (
-    <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card md:p-6">
+    <div className="rounded-inner border border-border/40 bg-card p-5 md:p-6">
       <div className="flex flex-col gap-5 md:flex-row md:items-center">
         <div className="relative mx-auto shrink-0 md:mx-0">
           <AvatarBase
@@ -1357,7 +1357,7 @@ export function ProfilePage() {
             variant="inverted"
             size="iconXs"
             onClick={handlePickAvatar}
-            className="absolute bottom-0.5 right-0.5 border-[3px] border-card shadow-sm"
+            className="absolute bottom-0.5 right-0.5 border-[3px] border-card"
             aria-label="Змінити фото профілю"
             disabled={avatarUploading}
           >
@@ -1462,7 +1462,7 @@ export function ProfilePage() {
               style={{ width: `${journeyFillPercent}%` }}
             />
             {/* Старт */}
-            <span className="absolute left-0 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success shadow-sm" />
+            <span className="absolute left-0 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success" />
             <span className="absolute left-0 top-4 text-left">
               <span className="block text-xs font-semibold tabular-nums text-foreground">
                 {formatEmploymentDate(startDate)}
@@ -1474,7 +1474,7 @@ export function ProfilePage() {
             {probationMilestonePercent !== null && probationEndDate ? (
               <>
                 <span
-                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success shadow-sm"
+                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-success"
                   style={{ left: `${probationMilestonePercent}%` }}
                 />
                 <span
@@ -1495,10 +1495,10 @@ export function ProfilePage() {
             {probationActive && probation ? (
               <>
                 <span
-                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-warning shadow-sm"
+                  className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card tone-dot-warning"
                   style={{ left: `${journeyFillPercent}%` }}
                 />
-                <span className="absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card bg-muted-foreground/40 shadow-sm" />
+                <span className="absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card bg-muted-foreground/40" />
                 <span className="absolute right-0 top-4 text-right">
                   <span className="block text-xs font-semibold text-foreground">{probation.statusLabel}</span>
                   <span className="block text-2xs tabular-nums text-muted-foreground">
@@ -1510,7 +1510,7 @@ export function ProfilePage() {
               <>
                 <span
                   className={cn(
-                    "absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card shadow-sm",
+                    "absolute right-0 top-1/2 h-3.5 w-3.5 translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card",
                     journeyEnded ? "bg-muted-foreground/40" : "tone-dot-success"
                   )}
                 />
@@ -1551,7 +1551,7 @@ export function ProfilePage() {
           {identityCard}
 
           {avatarDraftUrl ? (
-            <div className="rounded-inner border border-border/40 bg-card p-4 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div className="relative h-40 w-40 overflow-hidden rounded-full border border-border bg-background">
                   <Cropper
@@ -1815,7 +1815,7 @@ export function ProfilePage() {
       {tab === "settings" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="space-y-4">
-            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Особисті дані</div>
                 <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
@@ -1852,7 +1852,7 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Безпека</div>
                 <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
@@ -1912,7 +1912,7 @@ export function ProfilePage() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Telegram-бот</div>
                 <div className="mt-1 text-sm text-muted-foreground">
@@ -1974,7 +1974,7 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-5">
               <div className="mb-4">
                 <div className="text-lg font-semibold text-foreground">Тихі години</div>
                 <div className="mt-1 text-sm text-muted-foreground">
@@ -2003,7 +2003,7 @@ export function ProfilePage() {
           </div>
 
           <div className="xl:col-span-2">
-            <div className="rounded-inner border border-border/40 bg-card p-5 shadow-card">
+            <div className="rounded-inner border border-border/40 bg-card p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-lg font-semibold text-foreground">

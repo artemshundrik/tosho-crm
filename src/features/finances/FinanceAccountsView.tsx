@@ -139,7 +139,7 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
                 key={account.id}
                 /* Чутливість НЕ фарбує весь ряд (жовта заливка на широкій площі —
                    бруд): сигнал несе бейдж «Топ-ролі». */
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card shadow-card px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

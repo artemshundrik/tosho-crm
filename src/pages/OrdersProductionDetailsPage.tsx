@@ -1822,7 +1822,7 @@ export default function OrdersProductionDetailsPage() {
     <PageCanvas>
       <PageCanvasBody className="px-4 py-4 pb-20 sm:px-6 lg:px-8 2xl:px-10 md:pb-8">
         <div className="mx-auto max-w-[1760px] space-y-5">
-      <Card className="border-border/60 bg-card/95 p-4 shadow-sm sm:p-5">
+      <Card className="border-border/60 bg-card/95 p-4 sm:p-5">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-3">
           <Button variant="outline" className="gap-2" onClick={() => navigate("/orders/production")}>

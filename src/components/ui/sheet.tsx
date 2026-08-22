@@ -41,7 +41,7 @@ SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
  * Прокручується лише середина — див. `SheetBody`.
  */
 const sheetVariants = cva(
-  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-elevated-panel transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {

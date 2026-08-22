@@ -31,7 +31,7 @@ export function PageHeader({
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between">
         <div className="min-w-0 flex items-center gap-3">
           {icon ? (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/35 bg-primary/10 text-primary shadow-sm">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/35 bg-primary/10 text-primary">
               {icon}
             </div>
           ) : null}

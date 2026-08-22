@@ -5436,7 +5436,7 @@ export default function DesignPage() {
       {viewMode === "timeline" ? (
         <div className="space-y-3">
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
-            <div className="rounded-section border border-border/60 bg-card/80 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/80 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-2xs font-semibold uppercase tracking-caps text-primary">
@@ -5508,7 +5508,7 @@ export default function DesignPage() {
               </div>
             </div>
 
-            <div className="rounded-section border border-border/60 bg-card/80 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/80 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Орієнтири</div>
@@ -5570,7 +5570,7 @@ export default function DesignPage() {
                     <button
                       type="button"
                       key={row.task.id}
-                      className="rounded-section border border-border/60 bg-card/70 p-4 text-left shadow-sm transition-colors hover:bg-card"
+                      className="rounded-section border border-border/60 bg-card/70 p-4 text-left transition-colors hover:bg-card"
                       onClick={() => openTask(row.task.id)}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -5637,7 +5637,7 @@ export default function DesignPage() {
                 })}
               </div>
 
-              <div className="hidden overflow-hidden rounded-section border border-border/60 bg-card/70 shadow-sm md:block">
+              <div className="hidden overflow-hidden rounded-section border border-border/60 bg-card/70 md:block">
                 <div
                   className="grid min-w-[1120px]"
                   style={{
@@ -5769,7 +5769,7 @@ export default function DesignPage() {
                             <div className="relative h-full">
                               <div
                                 className={cn(
-                                  "absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl border shadow-sm",
+                                  "absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl border",
                                   row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "border-dashed border-border/70 bg-background/70",
                                   row.isStartRisk && "ring-2 ring-warning-soft-border",
                                   row.isOverdue && "ring-2 ring-danger-soft-border"
@@ -5811,7 +5811,7 @@ export default function DesignPage() {
           )}
 
           {timelineData.noDeadlineTasks.length > 0 ? (
-            <div className="rounded-section border border-border/60 bg-card/70 p-4 shadow-sm">
+            <div className="rounded-section border border-border/60 bg-card/70 p-4">
               <div className="flex flex-col gap-3 border-b border-border/50 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Backlog</div>

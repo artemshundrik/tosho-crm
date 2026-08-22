@@ -1376,7 +1376,7 @@ export default function ContractorsPage() {
               <div
                 role="radiogroup"
                 aria-label="Періодичність нагадування"
-                className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1 shadow-inner"
+                className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1"
               >
                 {(["none", "weekly", "monthly"] as ContractorReminderRepeat[]).map((option) => {
                   const active = form.reminderRepeat === option;
@@ -1393,7 +1393,7 @@ export default function ContractorsPage() {
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                         "disabled:cursor-not-allowed disabled:opacity-50",
                         active
-                          ? "bg-background text-foreground shadow-[var(--shadow-elevated-sm)]"
+                          ? "bg-background text-foreground"
                           : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
                       )}
                     >

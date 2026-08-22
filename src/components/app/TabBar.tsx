@@ -113,7 +113,7 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
                   "relative flex h-[44px] flex-1 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-full text-2xs font-medium",
                   "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-[var(--tabbar-transition)] ease-out",
                   active
-                    ? "border border-[hsl(var(--tabbar-active-border)/var(--tabbar-active-border-alpha))] bg-[hsl(var(--tabbar-active-bg)/var(--tabbar-active-bg-alpha))] text-[hsl(var(--tabbar-label-active))] shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_8px_24px_hsl(0_0%_0%/0.12)] backdrop-blur-xl"
+                    ? "border border-[hsl(var(--tabbar-active-border)/var(--tabbar-active-border-alpha))] bg-[hsl(var(--tabbar-active-bg)/var(--tabbar-active-bg-alpha))] text-[hsl(var(--tabbar-label-active))] backdrop-blur-xl"
                     : "border border-transparent text-muted-foreground/60"
                 )}
               >

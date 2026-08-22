@@ -197,7 +197,7 @@ const SectionCard = ({
   children: React.ReactNode;
   className?: string;
 }) => (
-  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm", className)}>
+  <section className={cn("rounded-xl border border-border/50 bg-card/40 p-4", className)}>
     {title ? (
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/40 pb-2.5">
         <SectionHeader>{title}</SectionHeader>
@@ -209,7 +209,7 @@ const SectionCard = ({
 );
 
 const UNDERLINE_TAB =
-  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground shadow-none transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:ring-0";
+  "h-auto shrink-0 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:ring-0";
 
 const getInitials = (value?: string) => {
   if (!value) return "Не вказано";
@@ -582,7 +582,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3 space-y-5">
 
         {/* Identity header — logo + name + payment + manager hub */}
-        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4 shadow-sm">
+        <div className="flex items-start gap-4 rounded-xl border border-border/50 bg-card/40 p-4">
           <Popover open={logoOpen} onOpenChange={setLogoOpen}>
             <PopoverTrigger asChild>
               <button
@@ -978,7 +978,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             </div>
           ) : (
           <Tabs value={section} onValueChange={(value) => setSection(value as typeof section)} className="w-full">
-            <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0 shadow-none">
+            <TabsList className="mb-4 h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-0 border-b border-border/40 bg-transparent p-0">
               <TabsTrigger value="basic" className={UNDERLINE_TAB}>Основне</TabsTrigger>
               <TabsTrigger value="legalEntities" className={UNDERLINE_TAB}>Юр. особи</TabsTrigger>
               <TabsTrigger value="communication" className={UNDERLINE_TAB}>Комунікація</TabsTrigger>
@@ -1183,10 +1183,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                           "w-full rounded-xl border px-3 py-3 text-left transition-colors",
                           !hasIdentity
                             ? isActive
-                              ? "border-primary/35 border-dashed bg-primary/5 shadow-sm"
+                              ? "border-primary/35 border-dashed bg-primary/5"
                               : "border-dashed border-border/70 bg-muted/10 hover:border-border hover:bg-muted/20"
                             : isActive
-                              ? "border-primary/40 bg-primary/5 shadow-sm"
+                              ? "border-primary/40 bg-primary/5"
                               : "border-border/60 bg-card hover:border-border hover:bg-muted/20"
                         )}
                       >
