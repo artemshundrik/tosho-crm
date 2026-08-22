@@ -659,7 +659,7 @@ export function DesignerFloatingTimerWidget({
   return (
     <div
       className={cn(
-        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background backdrop-blur cursor-grab active:cursor-grabbing",
+        "fixed z-floating w-[508px] max-w-[calc(100vw-16px)] select-none rounded-[26px] border bg-foreground text-background shadow-menu backdrop-blur cursor-grab active:cursor-grabbing",
         currentRunning
           ? "border-success-soft-border/55 ring-1 ring-success-soft-border/25"
           : currentPaused

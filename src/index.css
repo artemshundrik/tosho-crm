@@ -98,17 +98,11 @@
     /* Плаваюча інвертована панель (таймер): темна тінь у ОБОХ темах — панель
        завжди контрастна до полотна, тому тінь не інвертується разом з нею. */
     --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.46);
-    --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.12), 0 1px 2px -1px hsl(var(--foreground) / 0.08);
-    --shadow-elevated-md: 0 18px 40px -20px hsl(var(--foreground) / 0.18);
     --shadow-elevated-lg: 0 42px 120px -40px hsl(var(--foreground) / 0.22), 0 22px 54px -34px hsl(var(--foreground) / 0.14);
     --shadow-elevated-preview: 0 18px 40px -14px hsl(var(--foreground) / 0.28);
     /* Двошарова тінь для плаваючих меню (дропдаун/селект/поповер): контактний
        шар + м'який розсіяний — дає глибину без «жорсткої межі». */
     --shadow-menu: 0 4px 12px -2px hsl(var(--foreground) / 0.1), 0 12px 32px -8px hsl(var(--foreground) / 0.13);
-    /* Ледь помітна глибина для in-flow карток (рядки, stat-картки, bento):
-       контакт 1px + м'який розсіяний шар. Працює В ПАРІ з тоншою межею /40 —
-       межа тихне, обʼєм зʼявляється. */
-    --shadow-card: 0 1px 2px 0 hsl(var(--foreground) / 0.04), 0 2px 8px -2px hsl(var(--foreground) / 0.07);
     --soft-ring: 0 0% 12% / 0.08;
     --overlay-scrim: 0 0% 6% / 0.58;
     --surface-sheen: 0 0% 100% / 0.36;
@@ -422,14 +416,10 @@
     --shadow-success-glow: 0 10px 24px hsl(var(--success-foreground) / 0.22);
     --shadow-warning-glow: 0 10px 24px hsl(var(--warning-foreground) / 0.18);
     --shadow-elevated-panel: 0 28px 90px hsl(0 0% 0% / 0.62);
-    --shadow-elevated-sm: 0 1px 3px -1px hsl(var(--foreground) / 0.1), 0 1px 2px -1px hsl(var(--foreground) / 0.06);
-    --shadow-elevated-md: 0 18px 40px -20px hsl(0 0% 2% / 0.42);
     --shadow-elevated-lg: 0 52px 140px -42px hsl(0 0% 2% / 0.85), 0 26px 60px -36px hsl(0 0% 2% / 0.62);
     --shadow-elevated-preview: 0 18px 40px -14px hsl(0 0% 2% / 0.45);
     /* Плаваючі меню в темній — глибша тінь для контрасту на темному тлі. */
     --shadow-menu: 0 4px 14px -2px hsl(0 0% 0% / 0.45), 0 18px 44px -12px hsl(0 0% 0% / 0.6);
-    /* In-flow картки в темній: чорна контактна тінь (світла на темному не працює). */
-    --shadow-card: 0 1px 2px 0 hsl(0 0% 0% / 0.35), 0 2px 8px -2px hsl(0 0% 0% / 0.3);
     --soft-ring: 0 0% 100% / 0.1;
     --overlay-scrim: 220 40% 2% / 0.62;
     --surface-sheen: 0 0% 100% / 0.2;

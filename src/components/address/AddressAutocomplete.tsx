@@ -174,7 +174,7 @@ export function AddressAutocomplete({
     <div className="relative">
       {field}
       {open && showFailure ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-border/60 bg-popover p-2">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl border border-border/60 bg-popover p-2 shadow-menu">
           <p className="text-2xs leading-4 text-muted-foreground">
             Підказки адрес зараз недоступні — довідник не відповідає. Адресу можна ввести
             вручну, поле це приймає.
@@ -183,7 +183,7 @@ export function AddressAutocomplete({
       ) : null}
       {open && (loading || hasResults) ? (
         <div
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[240px] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1 shadow-menu"
           role="listbox"
         >
           {loading ? (

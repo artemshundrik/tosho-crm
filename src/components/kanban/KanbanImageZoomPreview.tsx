@@ -240,7 +240,7 @@ export function KanbanImageZoomPreview({
         ? createPortal(
             <div
               aria-hidden="true"
-              className="pointer-events-none fixed z-preview hidden overflow-hidden rounded-xl border border-border/70 bg-card opacity-100 scale-100 md:block"
+              className="pointer-events-none fixed z-preview hidden overflow-hidden rounded-xl border border-border/70 bg-card shadow-elevated-preview opacity-100 scale-100 md:block"
               style={{
                 top: `${previewBounds.top}px`,
                 left: `${previewBounds.left}px`,

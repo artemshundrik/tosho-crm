@@ -117,7 +117,7 @@ export function HoverTip({
         // Підказка нічого не ловить: кліки й ховер мають лишатися в тригері.
         onOpenAutoFocus={(event) => event.preventDefault()}
         className={cn(
-          "pointer-events-none w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-md",
+          "pointer-events-none w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-menu",
           contentClassName
         )}
       >

@@ -2194,7 +2194,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   клік по самому полю. Приклад береться з того самого реєстру, що
                   й підказки в палітрі, — тобто залежить від посади й сторінки. */}
               {searchHintExample ? (
-                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover shadow-menu px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
                   наприклад: {searchHintExample}
                 </span>
               ) : null}
