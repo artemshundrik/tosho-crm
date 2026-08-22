@@ -120,7 +120,51 @@
       "primaryStory": "Opened"
     },
     "Select": {
-      "cardMode": "column"
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "AlertDialog": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "UnsavedChangesPrompt": {
+      "cardMode": "single",
+      "primaryStory": "Opened"
+    },
+    "Calendar": {
+      "cardMode": "single",
+      "primaryStory": "Basic"
     }
+  },
+  "dtsPropsFor": {
+    "Button": "variant?: \"primary\" | \"secondary\" | \"outline\" | \"ghost\" | \"destructive\" | \"destructiveSolid\" | \"successTonal\" | \"link\" | \"menu\" | \"textMuted\" | \"textPrimary\" | \"onPrimary\" | \"segmented\" | \"chip\" | \"card\" | \"control\" | \"controlDestructive\"; size?: \"xxs\" | \"xs\" | \"sm\" | \"md\" | \"lg\" | \"iconXs\" | \"iconSm\" | \"iconMd\" | \"icon\"; loading?: boolean; asChild?: boolean; disabled?: boolean; type?: \"button\" | \"submit\" | \"reset\"; onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void; \"aria-pressed\"?: boolean; \"aria-label\"?: string; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "SegmentedGroup": "className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Input": "controlSize?: \"sm\" | \"md\" | \"lg\"; type?: string; value?: string | number; defaultValue?: string | number; placeholder?: string; disabled?: boolean; readOnly?: boolean; required?: boolean; name?: string; onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void; \"aria-invalid\"?: boolean; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Textarea": "rows?: number; value?: string; defaultValue?: string; placeholder?: string; disabled?: boolean; onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void; \"aria-invalid\"?: boolean; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Label": "htmlFor?: string; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "PrefixField": "prefix: React.ReactNode; invalid?: boolean; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "TagsInput": "value: string; onValueChange: (next: string) => void; options?: string[]; placeholder?: string; id?: string;",
+    "PhoneListInput": "value: string[]; onValueChange: (next: string[]) => void; id?: string;",
+    "Checkbox": "checked?: boolean | \"indeterminate\"; defaultChecked?: boolean; onCheckedChange?: (checked: boolean | \"indeterminate\") => void; disabled?: boolean; required?: boolean; name?: string; id?: string; className?: string;",
+    "Select": "value?: string; defaultValue?: string; onValueChange?: (value: string) => void; disabled?: boolean; open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "DateInput": "value?: string; onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void; disabled?: boolean; placeholder?: string; id?: string; \"aria-invalid\"?: boolean; className?: string;",
+    "TimeInput": "value?: string; onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void; disabled?: boolean; id?: string; className?: string;",
+    "DateTimeInput": "value?: string; onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void; disabled?: boolean; id?: string; className?: string;",
+    "Dialog": "open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "AlertDialog": "open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "Sheet": "open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "Popover": "open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "DropdownMenu": "open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void; modal?: boolean; children?: React.ReactNode;",
+    "Command": "value?: string; onValueChange?: (value: string) => void; shouldFilter?: boolean; loop?: boolean; label?: string; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "HoverTip": "label: React.ReactNode; children: React.ReactNode; side?: \"top\" | \"bottom\" | \"left\" | \"right\"; className?: string; contentClassName?: string; ready?: boolean; maxReadyWaitMs?: number;",
+    "Table": "className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Card": "className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Alert": "variant?: \"default\" | \"destructive\"; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Separator": "orientation?: \"horizontal\" | \"vertical\"; decorative?: boolean; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Tabs": "value?: string; defaultValue?: string; onValueChange?: (value: string) => void; orientation?: \"horizontal\" | \"vertical\"; className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "Avatar": "className?: string; children?: React.ReactNode; id?: string; style?: React.CSSProperties;",
+    "DictationButton": "dictation: unknown; className?: string;",
+    "DictationCapsule": "dictation: unknown; className?: string;",
+    "UnsavedChangesPrompt": "open: boolean; onDismiss: () => void; onDiscard: () => void;"
   }
 }

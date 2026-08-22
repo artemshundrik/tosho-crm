@@ -42,10 +42,6 @@ scripts/.backfill-quote-totals.backup.*.json
 dropbox-inbox-*.json
 inbox-plan.csv
 
-# Збірка дизайн-системи для Claude Design (scripts/design-system/build.mjs)
-.design-system-export/
-# Згенеровані входи збірки дизайн-системи (app.css, tokens.json)
-scripts/design-system/.gen/
 
 # design-sync: staged converter + generated bundle + machine state.
 # Довговічне (config.json, NOTES.md, conventions.md, previews/, overrides/) — комітиться.
@@ -54,3 +50,6 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# Дерево типів для design-sync (генерується tsconfig.types.json)
+types/

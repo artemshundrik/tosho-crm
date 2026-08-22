@@ -83,3 +83,45 @@
   виключення з `ds-bundle`, а після першої вдалої збірки там лишаються тільки
   куратовані 48 — вийшло б порожньо й конфіг обнулився б. Тепер скрипт лише
   ЗВІРЯЄ конфіг із доками й скаржиться на розбіжність.
+
+## Третя хвиля, 22.08.2026 — контракти, прев'ю, конвенції
+
+**Контракти пропсів вирішено.** `tsconfig.types.json` емітить дерево `.d.ts` у
+`types/` кореня — саме там `findTypesRoot()` шукає типи, коли `package.json` їх не
+оголошує, тож **package.json чіпати не довелося**. Було: `[key: string]: unknown`
+в усіх 48. Стало: 48 із 48 із контрактом.
+
+Двадцять із них екстрактор розгорнув сам; решту 28 (`forwardRef`-обгортки й
+реекспорти Radix) написано руками в `cfg.dtsPropsFor` — це штатний шлях скіла.
+`Button.variant` теж руками: він іде з `cva`, і ts-morph його не розгортає.
+
+**ГОЧА, що коштувала трьох падінь рендеру:** неправдивий контракт ГІРШИЙ за
+порожній. Я написав `PhoneListInput.value: string`, а насправді там `string[]` —
+прев'ю впало з `value.map is not a function`. Перед тим як писати `dtsPropsFor`,
+звіряй сигнатуру в `types/components/ui/<файл>.d.ts`, а не пиши з голови.
+
+**Прев'ю: 45 із 48 авторських**, render-check 48/48 чисто. Без прев'ю лишились
+три: `DateTimePicker` та обидва компоненти диктування — їм потрібен живий об'єкт
+`dictation`, у статичній картці його не зробиш чесно.
+
+**Портальні шари** (Dialog, AlertDialog, Sheet, Popover, DropdownMenu, Select,
+Calendar, UnsavedChangesPrompt) переведено в `cardMode: "single"` — вони
+позиціонуються `fixed` і в клітинку сітки не вміщаються (`[GRID_OVERFLOW]`).
+
+**`conventions.md` написано** — прошито в README, його читає агент дизайну.
+Усі назви класів звірено з зібраним CSS перед тим, як писати.
+
+**Прибрано `scripts/design-system/`** — моя рукописна збірка. Дві правди гірші за
+одну; тепер джерело одне, штатний конвертер.
+
+**`types/` довелось додати до `globalIgnores` eslint** — та сама пастка, що з
+`ds-bundle`: git ігнорує, eslint ні, і `npm run lint` червонів на згенерованому.
+
+### Порядок повного перезбирання
+```
+npx tsc -p .design-sync/tsconfig.types.json      # типи → types/
+node .design-sync/make-docs.mjs                  # доки → .design-sync/docs
+node .ds-sync/package-build.mjs --config .design-sync/config.json \
+     --node-modules ./node_modules --out ./ds-bundle
+node .ds-sync/package-validate.mjs ./ds-bundle
+```

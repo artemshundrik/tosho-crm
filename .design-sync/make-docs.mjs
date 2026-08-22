@@ -143,8 +143,28 @@ const DOCS = [
     "`size`: `sm` (робочий — списки, канбан) | `md` (акцентний — тулбари). `pill` додає капс і трекінг.\n\n" +
     "Статус завжди несе І колір, І слово: колір сам по собі не є інформацією."],
   ["Table", "Data",
-    "Таблиця. Складові: `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell`, `TableFooter`, `TableCaption`.\n\n" +
-    "Числа — праворуч і з `tabular-nums`, інакше суми стрибають при перерахунку.",
+    "Таблиця. Числа — праворуч і з `tabular-nums`, інакше суми стрибають при перерахунку.\n\n" +
+    "ВКЛАДЕНІСТЬ ВАЖЛИВА: усі заголовки — це `TableHead` В ОДНОМУ `TableRow` всередині `TableHeader`. " +
+    "Якщо покласти кожен заголовок в окремий `TableRow`, шапка розповзеться на кілька рядків і перестане " +
+    "стояти над своїми колонками.\n\n" +
+    "```jsx\n" +
+    "<Table>\n" +
+    "  <TableHeader>\n" +
+    "    <TableRow>\n" +
+    "      <TableHead>Номер</TableHead>\n" +
+    "      <TableHead>Замовник</TableHead>\n" +
+    "      <TableHead className=\"text-right\">Сума, ₴</TableHead>\n" +
+    "    </TableRow>\n" +
+    "  </TableHeader>\n" +
+    "  <TableBody>\n" +
+    "    <TableRow>\n" +
+    "      <TableCell className=\"tabular-nums\">TS-0826-0009</TableCell>\n" +
+    "      <TableCell>ТОВ «Приклад»</TableCell>\n" +
+    "      <TableCell className=\"text-right tabular-nums\">48 200,00</TableCell>\n" +
+    "    </TableRow>\n" +
+    "  </TableBody>\n" +
+    "</Table>\n" +
+    "```",
     ["TableHeader", "TableBody", "TableRow", "TableHead", "TableCell", "TableFooter", "TableCaption"]],
   ["Card", "Data",
     "Картка-контейнер. Складові: `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`.\n\n" +

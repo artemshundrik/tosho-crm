@@ -1,0 +1,20 @@
+{
+  "//": "Дерево типів для /design-sync. Конвертер витягує пропси зі ЗБІРНИХ .d.ts, а застосунок їх не публікує — без цього в кожному <Name>.d.ts стояло [key: string]: unknown, і агент дизайну не знав ні про variant, ні про size. findTypesRoot() шукає теку `types/` у корені пакета, тож емітимо саме туди й package.json не чіпаємо. Тека згенерована — в .gitignore.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "rootDir": "../src",
+    "outDir": "../types"
+  },
+  "include": [
+    "../src/components/ui/**/*.ts",
+    "../src/components/ui/**/*.tsx",
+    "../src/components/app/avatar-kit.tsx",
+    "../src/components/kanban/KanbanCard.tsx"
+  ]
+}
