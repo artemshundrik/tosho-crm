@@ -406,21 +406,18 @@ function cardTable() {
 
 // ── Картка: глибина ──
 const SHADOW_TOKENS = [
-  ["shadow-menu", "меню, поповери, селекти", true],
+  ["shadow-menu", "меню, поповери, селекти, підказки, рукописні випадні списки", true],
   ["shadow-elevated-lg", "модальні вікна", true],
   ["shadow-elevated-panel", "бічні панелі (дровери)", true],
+  ["shadow-elevated-preview", "збільшене зображення з дошки", true],
   ["shadow-overlay", "тости", true],
-  ["shadow-card", "—", false],
-  ["shadow-elevated-sm", "—", false],
-  ["shadow-elevated-md", "—", false],
-  ["shadow-elevated-preview", "—", false],
 ];
 
 function cardElevation() {
   let body = `<h1 class="text-lg font-semibold mb-1">Глибина</h1>
 <p class="text-xs text-muted-foreground mb-3">Правило одне: <b>тінь має лише те, що спливає над сторінкою</b> — меню, поповер, тултип, селект, модалка, дровер, тост, плаваючий лаунчер. Усе, що лежить у потоці сторінки, піднімається межею й фоном.</p>
 <div class="tone-success-subtle rounded-lg border px-3 py-2 text-xs mb-4">
-  До 22.08.2026 це трималось глобальним правилом у кінці <code>index.css</code>, яке гасило <code>box-shadow</code> усьому, крім вмісту Radix-поперів. Правило прибрано, а разом із ним — 336 класів <code>shadow-*</code>, які через нього нічого не малювали. Тепер клас тіні в коді означає тінь на екрані.
+  До 22.08.2026 це трималось глобальним правилом у кінці <code>index.css</code>, яке гасило <code>box-shadow</code> усьому, крім вмісту Radix-поперів. Правило прибрано, а разом із ним — 336 класів <code>shadow-*</code>, які через нього нічого не малювали. Тепер клас тіні в коді означає тінь на екрані, а всі п’ять токенів глибини — у роботі.
 </div>`;
   body += h("Токени в роботі", "застосовані на справжніх поверхнях");
   body += `<div class="grid grid-cols-2 gap-3">`;
@@ -430,14 +427,8 @@ function cardElevation() {
     </div>`;
   }
   body += `</div>`;
-  body += h("Заведені, але не вживані", "лишились у tailwind.config на майбутнє — кандидати на прибирання");
-  body += `<div class="grid grid-cols-2 gap-3">`;
-  for (const [cls] of SHADOW_TOKENS.filter((t) => !t[2])) {
-    body += `<div class="${cls} rounded-xl border border-dashed border-border/60 bg-card/60 px-3 py-3">
-      <p class="text-3xs font-medium text-muted-foreground">${cls}</p>
-    </div>`;
-  }
-  body += `</div>`;
+  body += h("Що прибрано", "токени, чиї імена описували поверхні в потоці сторінки");
+  body += `<p class="text-xs text-muted-foreground"><code>--shadow-card</code>, <code>--shadow-elevated-sm</code>, <code>--shadow-elevated-md</code> не вживались, а їхні назви підказували, що карткам і кнопкам належить тінь. Незужитий токен не нейтральний: він запрошує повернути те, що ми щойно прибрали. <code>--shadow-surface</code> і <code>--shadow-floating</code> дорівнювали <code>none</code>.</p>`;
   body += `<p class="text-3xs text-muted-foreground mt-3">Плоске за замовчуванням — свідоме рішення, а не недогляд. Додаючи тінь новій поверхні, спершу спитай: вона справді спливає над сторінкою?</p>`;
   return shell("Основи", "Глибина", body);
 }
