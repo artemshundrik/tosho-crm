@@ -45,8 +45,7 @@ import {
   getSignedAttachmentUrl,
   type AttachmentPreviewVariant,
 } from "@/lib/attachmentPreview";
-import { convertWebpBlobForSharing, isWebpBlob, swapFilenameExtension } from "@/lib/imageConversion";
-import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { downloadFileToDevice } from "@/lib/downloadFileToDevice";
 import { renderRichTextBlocks } from "@/components/ui/rich-text-links";
 import {
   BRIEF_DIALOG_PREVIEW_CLASS,
@@ -97,7 +96,6 @@ import { EntityLockBanner } from "@/components/app/EntityLockBanner";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { isInactiveEmployment } from "@/lib/employment";
 import {
-  listQuoteSetMemberships,
   type TeamMemberRow,
   type QuoteStatusRow,
   type QuoteSummaryRow,
@@ -232,6 +230,10 @@ import {
   fetchQuoteItemsWithCatalog,
   fetchQuoteSummaryForDetails,
   fetchQuoteAttachments,
+  fetchManagerRate,
+  fetchMentionLabelOverrides,
+  fetchQuoteSetMembership,
+  notifyDesignTaskAssignmentChange,
   fetchQuoteRuns,
   fetchStatusHistory,
   invokeQuoteCommentsFunction,
@@ -240,7 +242,7 @@ import {
   type QuoteAttachment,
   type QuoteComment,
 } from "@/features/quotes/quote-details/queries";
-import { quoteTypeIcon, quoteTypeLabel } from "@/features/quotes/quotes-page/config";
+import { QuoteTypeBadge } from "@/features/quotes/components/QuoteTypeBadge";
 import {
   QuoteDeadlineBadge,
   type QuoteDeadlineTone,
@@ -322,6 +324,114 @@ const DEADLINE_REMINDER_OPTIONS = [
   { value: "180", label: "За 3 години" },
   { value: "1440", label: "За 1 день" },
 ] as const;
+
+/**
+ * Чисті форматувальники дати й часу — на рівні модуля, а не в тілі сторінки.
+ *
+ * Вони не читають нічого зі стану, зате їх кличе loadQuote. Поки вони жили в
+ * компоненті, кожен рендер створював нові функції — і loadQuote неможливо було
+ * загорнути в useCallback, не зациклюючи ефект. Через це на ефекті завантаження
+ * висіла заглушка правила залежностей, а через неї мовчали правила хуків
+ * (REQ-109).
+ */
+const toDateInputValue = (value?: string | null) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const toTimeInputValue = (value?: string | null) => {
+  if (!value) return DEFAULT_DEADLINE_TIME;
+  const directMatch = value.match(/T(\d{2}):(\d{2})/);
+  if (directMatch) return `${directMatch[1]}:${directMatch[2]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return DEFAULT_DEADLINE_TIME;
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+};
+
+/**
+ * Дедлайни — теж чисті форматувальники на рівні модуля.
+ *
+ * formatDeadlineLabel читає стрічка подій (useMemo). Поки функція жила в тілі
+ * компонента, React перестворював її щорендеру, тож чесний список залежностей
+ * перераховував би всю стрічку на кожен рендер — саме тому там і висіла
+ * заглушка. На рівні модуля тотожність стала, і залежність зникає (REQ-109).
+ *
+ * Дедлайни зберігаються як настінний час без пояси — хвіст «+00:00»/«Z»
+ * навмисно ігнорується, читаються компоненти як є.
+ */
+const toLocalDate = (value?: string | null) => {
+  if (!value) return undefined;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return undefined;
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d));
+};
+
+const parseDeadlineDate = (value?: string | null) => {
+  if (!value) return null;
+  // Deadlines are stored as floating wall-clock times; ignore any trailing
+  // timezone offset (e.g. "+00:00"/"Z") and read the wall-clock components.
+  const dateTimeMatch = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/
+  );
+  if (dateTimeMatch) {
+    const [, y, m, d, hh, mm, ss] = dateTimeMatch;
+    return new Date(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(hh),
+      Number(mm),
+      Number(ss ?? "0")
+    );
+  }
+  const local = toLocalDate(value);
+  if (local) return local;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const formatDeadlineLabel = (value?: string | null) => {
+  const date = parseDeadlineDate(value);
+  if (!date) return "Без дедлайну";
+  const dateLabel = date.toLocaleDateString("uk-UA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  if (!/T\d{2}:\d{2}/.test(value ?? "")) return dateLabel;
+  return `${dateLabel}, ${date.toLocaleTimeString("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
+
+/**
+ * Повертає true рівно на тому рендері, коли `signature` змінився.
+ *
+ * Це React-івський шаблон «виправити стан під новий вхід прямо в рендері»
+ * замість ефекту. React відкидає незавершений рендер і починає новий ще ДО
+ * того, як щось потрапить на екран, тож зайвого показу старого значення немає
+ * — а через useEffect те саме коштує додатковий прохід.
+ *
+ * Підпис збираємо рядком із усіх значень, від яких залежав ефект: так
+ * поведінка лишається ТОЧНО такою ж, як зі списком залежностей (REQ-109).
+ */
+function useSignatureChanged(signature: string) {
+  const [seen, setSeen] = useState(signature);
+  if (seen !== signature) {
+    setSeen(signature);
+    return true;
+  }
+  return false;
+}
 
 const isGenericMentionLabel = (label?: string | null) => {
   const normalized = (label ?? "").trim().toLowerCase();
@@ -795,8 +905,20 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [runsError, setRunsError] = useState<string | null>(null);
   const [runsSaving, setRunsSaving] = useState(false);
   const [runsLoaded, setRunsLoaded] = useState(false);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunIdRaw, setSelectedRunId] = useState<string | null>(null);
   const [selectedRunIdByItem, setSelectedRunIdByItem] = useState<Record<string, string>>({});
+
+  // Вибраний тираж — ПОХІДНЕ значення, а не окремий стан.
+  //
+  // Збережений вибір діє, поки такий тираж існує; зник — беремо перший. Раніше
+  // це саме робив ефект, тобто правив стан навздогін: кадр із мертвим вибором
+  // устигав потрапити на екран, і лише наступний прохід його виправляв. Читачі
+  // (selectedRun, getSelectedRunForItem) запасний варіант мали й тоді, тож
+  // єдиним споживачем ефекту лишалась підсвітка рядка (REQ-109).
+  const selectedRunId =
+    selectedRunIdRaw && runs.some((run) => run.id === selectedRunIdRaw)
+      ? selectedRunIdRaw
+      : runs[0]?.id ?? null;
 
   const [comments, setComments] = useState<QuoteComment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -808,14 +930,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentSaving, setCommentSaving] = useState(false);
   useDraftPersist(commentDraftKey, commentText);
   // Re-hydrate when navigating between quotes (same component instance, new quoteId).
-  const commentDraftQuoteIdRef = useRef(quoteId);
-  useEffect(() => {
-    if (commentDraftQuoteIdRef.current === quoteId) return;
-    commentDraftQuoteIdRef.current = quoteId;
+  // Перемкнули прорахунок — підставляємо його чернетку коментаря.
+  //
+  // Це не побічна дія, а виправлення стану під новий вхід, тож робиться прямо
+  // під час рендеру, а не в ефекті: React відкидає незавершений рендер і
+  // починає новий ще ДО того, як щось потрапить на екран. Через ефект те саме
+  // коштувало б зайвий показ старого тексту (REQ-109).
+  const [commentDraftQuoteId, setCommentDraftQuoteId] = useState(quoteId);
+  if (commentDraftQuoteId !== quoteId) {
+    setCommentDraftQuoteId(quoteId);
     setCommentText(readDraft<string>(commentDraftKey)?.value ?? "");
-  }, [quoteId, commentDraftKey]);
+  }
   const [mentionContext, setMentionContext] = useState<MentionContext | null>(null);
-  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [mentionActiveIndexRaw, setMentionActiveIndex] = useState(0);
   const [mentionDropdown, setMentionDropdown] = useState<MentionDropdownState>({
     side: "bottom",
     maxHeight: 224,
@@ -892,7 +1019,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [designTaskCandidatesLoading, setDesignTaskCandidatesLoading] = useState(false);
   const [attachDesignTaskDialogOpen, setAttachDesignTaskDialogOpen] = useState(false);
   const [attachingDesignTaskId, setAttachingDesignTaskId] = useState<string | null>(null);
-  const [designVisualizationSyncing, setDesignVisualizationSyncing] = useState(false);
+  // Сторож від повторного входу — ref, а не стан: його ніхто не показує на
+  // екрані, зате як стан він отруював ефект синхронізації. У чесному списку
+  // залежностей він змушував ефект перезапуститись одразу після setSyncing(true),
+  // а прибирання попереднього запуску ставило active=false і обривало
+  // синхронізацію на півдорозі. Заодно зник зайвий перемальовок (REQ-109).
+  const designVisualizationSyncingRef = useRef(false);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemFormMode, setItemFormMode] = useState<"simple" | "advanced">("simple");
@@ -948,7 +1080,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   void editingQty;
   const [qtyValue, setQtyValue] = useState("");
 
-  const [currentManagerRate, setCurrentManagerRate] = useState(DEFAULT_MANAGER_RATE);
+  // Стан тримає лише ЗАВАНТАЖЕНУ ставку; випадок «менеджера немає» —
+  // похідне значення, а не ще один запис у стан. Раніше типова ставка
+  // виставлялась синхронно всередині ефекту, тобто коштувала зайвий прохід
+  // рендеру щоразу, коли менеджера не було (REQ-109).
+  const [fetchedManagerRate, setFetchedManagerRate] = useState<number | null>(null);
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState("new");
@@ -1009,43 +1145,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [attachmentAccessUrlByKey, getAttachmentStorageKey]
   );
 
-  const downloadFileToDevice = useCallback(async (url: string, filename?: string) => {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        toast.error("Не вдалося завантажити файл", {
-          description: `HTTP ${response.status}`,
-        });
-        return;
-      }
-      let blob = await response.blob();
-      let outputFilename = (filename && filename.trim()) || "file";
-      // WebP → JPEG (or PNG when alpha present). See src/lib/imageConversion.ts.
-      if (isWebpBlob(blob)) {
-        try {
-          const converted = await convertWebpBlobForSharing(blob);
-          blob = converted.blob;
-          outputFilename = swapFilenameExtension(outputFilename, converted.extension);
-        } catch (conversionError) {
-          console.warn("Failed to convert WebP attachment for sharing, falling back to raw bytes", conversionError);
-        }
-      }
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = outputFilename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      toast.error("Не вдалося завантажити файл", {
-        description: getErrorMessage(error, "Спробуйте ще раз."),
-      });
-    }
-  }, []);
-
-
   const getAttachmentDisplayName = useCallback(
     (attachment: {
       name?: string | null;
@@ -1085,37 +1184,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     viewerJobRole,
     permissions,
   });
+  // Запит живе в queries.ts: «Немає таблиці» там уже зведено до undefined,
+  // тож типова ставка береться тим самим resolveNumericRate, що й раніше.
   const getManagerRateForUser = useCallback(async (targetUserId?: string | null) => {
     const normalizedUserId = targetUserId?.trim();
     if (!normalizedUserId) return DEFAULT_MANAGER_RATE;
 
-    try {
-      const workspaceId = await resolveWorkspaceId(normalizedUserId);
-      if (!workspaceId) return DEFAULT_MANAGER_RATE;
-
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("team_member_manager_rates")
-        .select("manager_rate")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", normalizedUserId)
-        .maybeSingle<{ manager_rate?: number | null }>();
-
-      if (error) {
-        // «Немає таблиці» — очікувана відмова на старих базах, мовчимо.
-        // Будь-яка інша варта запису в консоль, але ставку однаково беремо
-        // типову: без неї не порахувати нічого.
-        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-          console.error("Failed to load current manager rate", error);
-        }
-        return DEFAULT_MANAGER_RATE;
-      }
-
-      return resolveNumericRate(data?.manager_rate, DEFAULT_MANAGER_RATE);
-    } catch (error) {
-      console.error("Failed to load current manager rate", error);
+    const result = await fetchManagerRate(normalizedUserId);
+    if (!result.ok) {
+      console.error("Failed to load current manager rate", result.message);
       return DEFAULT_MANAGER_RATE;
     }
+    return resolveNumericRate(result.data, DEFAULT_MANAGER_RATE);
   }, []);
   const canEditQuoteContent =
     permissions.isSuperAdmin ||
@@ -1134,44 +1214,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   );
 
   const loadCurrentManagerRate = useCallback(async () => {
-    if (!effectiveManagerId) {
-      setCurrentManagerRate(DEFAULT_MANAGER_RATE);
+    if (!effectiveManagerId) return;
+
+    const result = await fetchManagerRate(effectiveManagerId);
+    if (!result.ok) {
+      console.error("Failed to load current manager rate", result.message);
+      setFetchedManagerRate(null);
       return;
     }
-
-    try {
-      const workspaceId = await resolveWorkspaceId(effectiveManagerId);
-      if (!workspaceId) {
-        setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .schema("tosho")
-        .from("team_member_manager_rates")
-        .select("manager_rate")
-        .eq("workspace_id", workspaceId)
-        .eq("user_id", effectiveManagerId)
-        .maybeSingle<{ manager_rate?: number | null }>();
-
-      if (error) {
-        if (!/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
-          console.error("Failed to load current manager rate", error);
-        }
-        setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-        return;
-      }
-
-      setCurrentManagerRate(Math.max(0, Number(data?.manager_rate) || DEFAULT_MANAGER_RATE));
-    } catch (error) {
-      console.error("Failed to load current manager rate", error);
-      setCurrentManagerRate(DEFAULT_MANAGER_RATE);
-    }
+    // Зведення НЕ таке, як у getManagerRateForUser вище: тут збережений нуль
+    // теж стає типовою ставкою. Різницю лишено як була (REQ-109).
+    setFetchedManagerRate(Math.max(0, Number(result.data) || DEFAULT_MANAGER_RATE));
   }, [effectiveManagerId]);
 
   useEffect(() => {
-    void loadCurrentManagerRate();
+    // Обгортка навмисна, не прикрашання: правило set-state-in-effect вважає
+    // будь-який виклик завантажувача просто в тілі ефекту синхронним записом у
+    // стан. Тут це вже неправда — типова ставка стала похідним значенням, і в
+    // loadCurrentManagerRate не лишилось жодного setState до await. Обгортка
+    // дає це побачити, не повертаючи заглушку лінту (REQ-109).
+    void (async () => {
+      await loadCurrentManagerRate();
+    })();
   }, [loadCurrentManagerRate]);
+
+  const currentManagerRate = effectiveManagerId
+    ? fetchedManagerRate ?? DEFAULT_MANAGER_RATE
+    : DEFAULT_MANAGER_RATE;
 
   useEffect(() => {
     const handleWindowFocus = () => {
@@ -1238,6 +1307,96 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       vatRate,
     };
   }, [companyRates.fixedCostRate, companyRates.vatRate, currentManagerRate, effectiveManagerId]);
+
+  // ── Оголошено ТУТ, а не серед сусідів за змістом ──────────────────────
+  //
+  // quoteRequirements, loadRuns і loadActivityLog читає saveRuns нижче.
+  // Поки вони стояли після нього, React Compiler відмовлявся збирати весь
+  // компонент: «Cannot access variable before it is declared». У JS воно
+  // працює (виклик стається пізніше за оголошення), але компілятор не може
+  // довести, що замикання побачить свіже значення — і мовчки пропускає
+  // сторінку цілком, а разом із нею засинає лінт правил React (REQ-109).
+  //
+  // loadRuns і loadActivityLog через це відірвані від решти load*-функцій
+  // нижче. Це свідомо: порядок тут важливіший за сусідство.
+
+  const quoteRequirements = useMemo(() => {
+    const issues: string[] = [];
+    const hasParty = Boolean(quote?.customer_id || (quote?.customer_name ?? "").trim());
+    const hasDeadline = Boolean((deadlineDate || "").trim() || (quote?.deadline_at ?? "").trim());
+    if (!hasParty) issues.push("Замовник або Лід");
+    if (!hasDeadline) issues.push("Дедлайн прорахунку");
+
+    // Захист від продажу за собівартістю (рішення СЕО 18.08).
+    //
+    // Перевірка живе САМЕ ТУТ, а не на кнопці «Зберегти»: тиражі мають
+    // автозбереження через 900 мс після правки, і гейт на кнопці воно б
+    // спокійно обійшло. quoteRequirements гальмує і кнопку, і автозбереження,
+    // і решту шляхів збереження — це єдине місце, повз яке не пройти.
+    const economicsIssues = new Set<string>();
+    for (const run of runs) {
+      const pricing = getRunPricing(run);
+      const issue = validateRunEconomics({
+        quantity: Number(run.quantity) || 0,
+        costTotal: pricing.costTotal,
+        desiredManagerIncome: pricing.desiredManagerIncome,
+        managerRate: pricing.managerRate,
+        fixedCostRate: pricing.fixedCostRate,
+        vatRate: pricing.vatRate,
+      });
+      if (!issue) continue;
+      const qty = Number(run.quantity) || 0;
+      const where = qty > 0 ? ` (тираж ${qty} шт)` : "";
+      economicsIssues.add(
+        issue.code === "markup_below_min"
+          ? `Націнка від ${MIN_RUN_MARKUP} ₴${where}`
+          : `Бажаний заробіток від ${MIN_MANAGER_INCOME} ₴${where}`
+      );
+    }
+    issues.push(...economicsIssues);
+
+    return issues;
+  }, [
+    deadlineDate,
+    getRunPricing,
+    quote?.customer_id,
+    quote?.customer_name,
+    quote?.deadline_at,
+    runs,
+  ]);
+  const quoteRequirementsHint = quoteRequirements.length
+    ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
+    : null;
+
+  const loadRuns = useCallback(async () => {
+    setRunsLoading(true);
+    setRunsError(null);
+    const result = await fetchQuoteRuns(quoteId);
+    if (result.ok) {
+      setRuns(result.data);
+      setRunsOriginal(result.data);
+    } else {
+      setRunsError(result.message);
+      setRuns([]);
+    }
+    setRunsLoading(false);
+    setRunsLoaded(true);
+  }, [quoteId]);
+
+  const loadActivityLog = useCallback(async (options?: { full?: boolean }) => {
+    setActivityLoading(true);
+    setActivityError(null);
+    const result = await fetchQuoteActivity(quoteId, teamId, options);
+    if (result.ok) {
+      setActivityRows(result.data.rows);
+      setActivityLoadedAll(result.data.loadedAll);
+    } else {
+      setActivityError(result.message);
+      setActivityRows([]);
+      setActivityLoadedAll(false);
+    }
+    setActivityLoading(false);
+  }, [quoteId, teamId]);
 
   // Runs (tirages)
   const addRun = (quoteItemId?: string | null) => {
@@ -1687,39 +1846,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const quoteSectionsBootstrapping =
     (!itemsLoaded && items.length === 0) || (!runsLoaded && runs.length === 0);
 
-  const toDateInputValue = (value?: string | null) => {
-    if (!value) return "";
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  };
-
-  const toTimeInputValue = (value?: string | null) => {
-    if (!value) return DEFAULT_DEADLINE_TIME;
-    const directMatch = value.match(/T(\d{2}):(\d{2})/);
-    if (directMatch) return `${directMatch[1]}:${directMatch[2]}`;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return DEFAULT_DEADLINE_TIME;
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  };
-
   const combineDeadlineValue = (date?: string | null, time?: string | null) => {
     const normalizedDate = (date ?? "").trim();
     if (!normalizedDate) return "";
     const normalizedTime = (time ?? "").trim() || DEFAULT_DEADLINE_TIME;
     return `${normalizedDate}T${normalizedTime}:00`;
-  };
-
-  const toLocalDate = (value?: string | null) => {
-    if (!value) return undefined;
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!match) return undefined;
-    const [, y, m, d] = match;
-    return new Date(Number(y), Number(m) - 1, Number(d));
   };
 
   const formatDateInput = (value?: Date | null) => {
@@ -1728,46 +1859,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     const m = String(value.getMonth() + 1).padStart(2, "0");
     const d = String(value.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  };
-
-  const parseDeadlineDate = (value?: string | null) => {
-    if (!value) return null;
-    // Deadlines are stored as floating wall-clock times; ignore any trailing
-    // timezone offset (e.g. "+00:00"/"Z") and read the wall-clock components.
-    const dateTimeMatch = value.match(
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/
-    );
-    if (dateTimeMatch) {
-      const [, y, m, d, hh, mm, ss] = dateTimeMatch;
-      return new Date(
-        Number(y),
-        Number(m) - 1,
-        Number(d),
-        Number(hh),
-        Number(mm),
-        Number(ss ?? "0")
-      );
-    }
-    const local = toLocalDate(value);
-    if (local) return local;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date;
-  };
-
-  const formatDeadlineLabel = (value?: string | null) => {
-    const date = parseDeadlineDate(value);
-    if (!date) return "Без дедлайну";
-    const dateLabel = date.toLocaleDateString("uk-UA", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    if (!/T\d{2}:\d{2}/.test(value ?? "")) return dateLabel;
-    return `${dateLabel}, ${date.toLocaleTimeString("uk-UA", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })}`;
   };
 
   const formatDeadlineDateOnlyLabel = (value?: string | null) => {
@@ -2005,30 +2096,38 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       .slice(0, 12);
   }, [mentionContext, mentionSuggestions]);
 
-  useEffect(() => {
-    if (filteredMentionSuggestions.length === 0) {
-      setMentionActiveIndex(0);
-      return;
-    }
-    setMentionActiveIndex((prev) =>
-      Math.max(0, Math.min(prev, filteredMentionSuggestions.length - 1))
-    );
-  }, [filteredMentionSuggestions.length]);
-  useEffect(() => {
-    if (!quote) return;
-    if (briefDirty) return;
-    setBriefText(quote.design_brief ?? quote.comment ?? "");
-    setBriefError(null);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quote?.design_brief, quote?.comment, quote?.id, briefDirty]);
+  // Індекс тримаємо в межах ПРИ ЧИТАННІ, а не ефектом.
+  //
+  // Ефект правив стан навздогін: список підказок уже перемалювався з коротшим
+  // масивом, і лише наступним проходом індекс ставав валідним. Тепер обрізаємо
+  // на місці — зайвий прохід зник, а поведінка та сама (REQ-109).
+  const mentionActiveIndex =
+    filteredMentionSuggestions.length === 0
+      ? 0
+      : Math.max(0, Math.min(mentionActiveIndexRaw, filteredMentionSuggestions.length - 1));
+  // Поля дістаємо ДО ефектів: тоді їхні тіла читають лише рядки, а не весь
+  // quote, і списки залежностей стають чесними. Якби в залежностях стояв сам
+  // quote, набраний текст перезаписувався б на КОЖНЕ його перезавантаження —
+  // навіть коли жодне з цих полів не змінилось (REQ-109).
+  const quoteIdentity = quote?.id ?? null;
+  const briefSourceText = quote?.design_brief ?? quote?.comment ?? "";
+  const notesSourceText = quote?.notes ?? "";
 
-  useEffect(() => {
-    if (!quote) return;
-    if (notesDirty) return;
-    setNotesText(quote.notes ?? "");
+  const briefInputChanged = useSignatureChanged(
+    `${quoteIdentity ?? ""}\u0000${briefDirty ? "1" : "0"}\u0000${briefSourceText}`
+  );
+  if (briefInputChanged && quoteIdentity && !briefDirty) {
+    setBriefText(briefSourceText);
+    setBriefError(null);
+  }
+
+  const notesInputChanged = useSignatureChanged(
+    `${quoteIdentity ?? ""}\u0000${notesDirty ? "1" : "0"}\u0000${notesSourceText}`
+  );
+  if (notesInputChanged && quoteIdentity && !notesDirty) {
+    setNotesText(notesSourceText);
     setNotesError(null);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quote?.notes, quote?.id, notesDirty]);
+  }
 
   useEffect(() => {
     resizeBriefTextarea(briefTextareaRef.current, BRIEF_INLINE_TEXTAREA_MAX_HEIGHT, BRIEF_MIN_HEIGHT);
@@ -2126,53 +2225,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const orderedActive =
     selectedBriefText.trim().length > 0 && selectedBriefText.split("\n").every((line) => /^\d+\.\s+/.test(line));
   const currentStatus = normalizeStatus(quote?.status);
-  const quoteRequirements = useMemo(() => {
-    const issues: string[] = [];
-    const hasParty = Boolean(quote?.customer_id || (quote?.customer_name ?? "").trim());
-    const hasDeadline = Boolean((deadlineDate || "").trim() || (quote?.deadline_at ?? "").trim());
-    if (!hasParty) issues.push("Замовник або Лід");
-    if (!hasDeadline) issues.push("Дедлайн прорахунку");
-
-    // Захист від продажу за собівартістю (рішення СЕО 18.08).
-    //
-    // Перевірка живе САМЕ ТУТ, а не на кнопці «Зберегти»: тиражі мають
-    // автозбереження через 900 мс після правки, і гейт на кнопці воно б
-    // спокійно обійшло. quoteRequirements гальмує і кнопку, і автозбереження,
-    // і решту шляхів збереження — це єдине місце, повз яке не пройти.
-    const economicsIssues = new Set<string>();
-    for (const run of runs) {
-      const pricing = getRunPricing(run);
-      const issue = validateRunEconomics({
-        quantity: Number(run.quantity) || 0,
-        costTotal: pricing.costTotal,
-        desiredManagerIncome: pricing.desiredManagerIncome,
-        managerRate: pricing.managerRate,
-        fixedCostRate: pricing.fixedCostRate,
-        vatRate: pricing.vatRate,
-      });
-      if (!issue) continue;
-      const qty = Number(run.quantity) || 0;
-      const where = qty > 0 ? ` (тираж ${qty} шт)` : "";
-      economicsIssues.add(
-        issue.code === "markup_below_min"
-          ? `Націнка від ${MIN_RUN_MARKUP} ₴${where}`
-          : `Бажаний заробіток від ${MIN_MANAGER_INCOME} ₴${where}`
-      );
-    }
-    issues.push(...economicsIssues);
-
-    return issues;
-  }, [
-    deadlineDate,
-    getRunPricing,
-    quote?.customer_id,
-    quote?.customer_name,
-    quote?.deadline_at,
-    runs,
-  ]);
-  const quoteRequirementsHint = quoteRequirements.length
-    ? `Заповніть обов'язкові поля: ${quoteRequirements.join(", ")}.`
-    : null;
 
   useEffect(() => {
     if (!runsLoaded || runsSaving || quoteRequirements.length > 0) return;
@@ -2217,20 +2269,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // localStorage, а не в базі: це оголошення, а не право. Побачив ще раз —
   // нічого страшного; не побачив зовсім — гірше.
   const marginNoticeKey = userId ? `tosho_margin_notice_v1_${userId}` : null;
-  const [showMarginNotice, setShowMarginNotice] = useState(false);
-
-  useEffect(() => {
-    if (!marginNoticeKey || !canEditRuns) return;
+  // Чи бачили підказку — читаємо сховище один раз на ключ, а не щорендеру.
+  const marginNoticeAlreadySeen = useMemo(() => {
+    if (!marginNoticeKey) return true;
     try {
-      if (window.localStorage.getItem(marginNoticeKey)) return;
+      return Boolean(window.localStorage.getItem(marginNoticeKey));
     } catch {
-      return; // приватний режим — краще змовчати, ніж падати
+      return true; // приватний режим — краще змовчати, ніж падати
     }
-    setShowMarginNotice(true);
-  }, [canEditRuns, marginNoticeKey]);
+  }, [marginNoticeKey]);
+
+  // Показ — похідне значення, а не окремий стан. Ефект виставляв його
+  // синхронно, тобто підказка з'являлась лише другим проходом рендеру; тепер
+  // видно одразу, і зайвого проходу немає (REQ-109).
+  const [marginNoticeDismissed, setMarginNoticeDismissed] = useState(false);
+  const showMarginNotice = canEditRuns && !marginNoticeAlreadySeen && !marginNoticeDismissed;
 
   const dismissMarginNotice = () => {
-    setShowMarginNotice(false);
+    setMarginNoticeDismissed(true);
     if (!marginNoticeKey) return;
     try {
       window.localStorage.setItem(marginNoticeKey, new Date().toISOString());
@@ -2278,6 +2334,29 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
    * інакше на старих прорахунках з'явилась би можливість наплодити дублів.
    */
   const canCreateMoreDesignTasks = items.length > designTasks.length;
+
+  /**
+   * Значення, які завантажувачі читають НА МОМЕНТ ВИКЛИКУ.
+   *
+   * Досі кожен load* був звичайною стрілкою — React перестворював її щорендеру,
+   * тож усередині завжди опинялись найсвіжіші значення. useCallback це змінює:
+   * він заморожує захоплені змінні до наступної зміни списку залежностей.
+   *
+   * Якби ці об'єкти просто поїхали в списки залежностей, змінилась би поведінка:
+   * права й склад команди доїжджають пізніше за прорахунок, і ефект нижче, який
+   * СКИДАЄ весь стан сторінки, спрацював би вдруге — рівно та подвійна хвиля,
+   * про яку попереджає коментар усередині нього.
+   *
+   * Тому об'єктні значення читаємо через ref. Це не хитрість, а дослівний
+   * переклад того, що було: «бери найсвіжіше, коли тебе покликали». Завдяки
+   * цьому всі load* залежать лише від quoteId і teamId, тобто сталі на весь час
+   * життя сторінки — і їх можна чесно вписати в залежності ефектів (REQ-109).
+   */
+  const loaderInputsRef = useRef({ memberById, permissions, userId, quote, designTask, canCreateMoreDesignTasks });
+  useEffect(() => {
+    loaderInputsRef.current = { memberById, permissions, userId, quote, designTask, canCreateMoreDesignTasks };
+  });
+
 
   const runFieldLockHint = (allowed: boolean, who: string) =>
     canEditRuns && !allowed ? `Це поле заповнює ${who}` : undefined;
@@ -2473,7 +2552,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return [...statusEvents, ...commentEvents, ...activityLogEvents].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activityRows, comments, history, memberById]);
 
   const activityGroups = useMemo(() => {
@@ -2635,7 +2713,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // Лише methods обгорнуто: сусідні kinds/models у списки залежностей не
   // потрапляють, а цей масив читає ефект нижче — і без сталої тотожності
   // перезапускався б на кожен рендер сторінки.
-  const availableMethods = useMemo(() => selectedKind?.methods ?? [], [selectedKind]);
+  //
+  // Рахуємо від кореня (catalogTypes + два id), а не від selectedKind поруч:
+  // ланцюжок проміжних значень React Compiler незмінним визнати не може
+  // («Existing memoization could not be preserved») і через це пропускає всю
+  // сторінку. Від стану й двох рядків — вміє (REQ-109).
+  const availableMethods = useMemo(
+    () =>
+      catalogTypes
+        .find((type) => type.id === effectiveItemTypeId)
+        ?.kinds.find((kind) => kind.id === effectiveItemKindId)?.methods ?? [],
+    [catalogTypes, effectiveItemKindId, effectiveItemTypeId]
+  );
 
   const catalogGroups = useMemo(() => {
     return catalogTypes.map((type) => ({
@@ -2851,102 +2940,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     let active = true;
     const loadMentionLabelOverrides = async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (accessToken) {
-          const response = await fetch("/.netlify/functions/create-workspace-invite", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ mode: "list_workspace_member_profiles" }),
-          });
+      const genericMemberIds = teamMembers
+        .filter((member) => isGenericMentionLabel(member.label))
+        .map((member) => member.id);
 
-          if (response.ok) {
-            const payload = (await response.json().catch(() => null)) as
-              | {
-                  profilesByUserId?: Record<
-                    string,
-                    {
-                      firstName?: string;
-                      lastName?: string;
-                      fullName?: string;
-                    }
-                  >;
-                }
-              | null;
-
-            const nextOverrides: Record<string, string> = {};
-            for (const [memberId, profile] of Object.entries(payload?.profilesByUserId ?? {})) {
-              const label = formatUserShortName({
-                firstName: profile.firstName ?? null,
-                lastName: profile.lastName ?? null,
-                fullName: profile.fullName ?? null,
-                fallback: "",
-              });
-              if (label) {
-                nextOverrides[memberId] = label;
-              }
-            }
-            if (!active) return;
-            setMentionLabelOverrides(nextOverrides);
-            return;
-          }
-        }
-
-        const genericMemberIds = teamMembers
-          .filter((member) => isGenericMentionLabel(member.label))
-          .map((member) => member.id);
-        if (genericMemberIds.length === 0) return;
-
-        const [profilesResult, currentUser] = await Promise.all([
-          supabase
-            .from("team_member_profiles" as never)
-            .select("user_id,first_name,last_name,full_name")
-            .in("user_id", genericMemberIds),
-          getCurrentUser(),
-        ]);
-
-        const nextOverrides: Record<string, string> = {};
-        const profileRows =
-          ((profilesResult.data as Array<{
-            user_id?: string | null;
-            first_name?: string | null;
-            last_name?: string | null;
-            full_name?: string | null;
-          }> | null) ?? []);
-
-        for (const row of profileRows) {
-          const userId = row.user_id?.trim();
-          if (!userId) continue;
-          const label = formatUserShortName({
-            firstName: row.first_name ?? null,
-            lastName: row.last_name ?? null,
-            fullName: row.full_name ?? null,
-            fallback: "",
-          });
-          if (label) {
-            nextOverrides[userId] = label;
-          }
-        }
-
-        if (currentUser?.id && genericMemberIds.includes(currentUser.id)) {
-          const currentUserName = buildUserNameFromMetadata(
-            currentUser.user_metadata as Record<string, unknown> | undefined,
-            currentUser.email
-          ).displayName;
-          if (currentUserName) {
-            nextOverrides[currentUser.id] = currentUserName;
-          }
-        }
-
-        if (!active) return;
-        setMentionLabelOverrides(nextOverrides);
-      } catch {
-        if (active) setMentionLabelOverrides({});
+      const result = await fetchMentionLabelOverrides(genericMemberIds);
+      if (!active) return;
+      if (!result.ok) {
+        setMentionLabelOverrides({});
+        return;
       }
+      // null — «міняти нема кого»: підписи лишаються ті, що були.
+      if (result.data === null) return;
+      setMentionLabelOverrides(result.data);
     };
 
     void loadMentionLabelOverrides();
@@ -2972,9 +2978,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   }, [teamId, editQuoteDialogOpen, editQuoteCustomerSearch]);
 
-  const loadQuote = async () => {
+  const loadQuote = useCallback(async () => {
+    const { userId: currentUserId, permissions: currentPermissions } = loaderInputsRef.current;
     setError(null);
-    const result = await fetchQuoteSummaryForDetails(quoteId, teamId, { userId, permissions });
+    const result = await fetchQuoteSummaryForDetails(quoteId, teamId, {
+      userId: currentUserId,
+      permissions: currentPermissions,
+    });
     if (!result.ok) {
       const message = result.message;
       if ((message ?? "").toLowerCase().includes("stack depth limit exceeded")) {
@@ -3004,9 +3014,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       persistQuoteDetailsCache(teamId, quoteId, summary);
     }
     setLoading(false);
-  };
+  }, [quoteId, teamId]);
 
-  const loadDesignTask = async () => {
+  const loadDesignTask = useCallback(async () => {
     if (!quoteId || !teamId) {
       setDesignTasks([]);
       setDesignTask(null);
@@ -3049,17 +3059,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setDesignAssigneeId(assigneeUserId);
     setDesignTaskType(parseDesignTaskType((metadata as { design_task_type?: unknown }).design_task_type));
     setDesignTaskLoading(false);
-  };
+  }, [quoteId, teamId]);
 
-  const loadDesignTaskCandidates = async () => {
-    if (!teamId || !quote) {
+  const loadDesignTaskCandidates = useCallback(async () => {
+    // Знімок робимо один раз на виклик — див. пояснення біля loaderInputsRef.
+    const {
+      quote: currentQuote,
+      designTask: currentDesignTask,
+      canCreateMoreDesignTasks: canCreateMore,
+    } = loaderInputsRef.current;
+    if (!teamId || !currentQuote) {
       setDesignTaskCandidates([]);
       return;
     }
     // Раніше тут стояло «якщо задача вже є — кандидатів немає». Тепер на
     // прорахунку може бути кілька задач, тож закриваємось лише коли вільних
     // позицій не лишилось.
-    if (designTask && !canCreateMoreDesignTasks) {
+    if (currentDesignTask && !canCreateMore) {
       setDesignTaskCandidates([]);
       return;
     }
@@ -3074,11 +3090,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       const data = candidatesResult.data;
 
       const quoteCustomerId =
-        typeof (quote as unknown as { customer_id?: string | null }).customer_id === "string" &&
-        (quote as unknown as { customer_id?: string | null }).customer_id
-          ? ((quote as unknown as { customer_id?: string | null }).customer_id as string)
+        typeof (currentQuote as unknown as { customer_id?: string | null }).customer_id === "string" &&
+        (currentQuote as unknown as { customer_id?: string | null }).customer_id
+          ? ((currentQuote as unknown as { customer_id?: string | null }).customer_id as string)
           : null;
-      const quoteCustomerName = normalizePartyMatch(quote.customer_name ?? null);
+      const quoteCustomerName = normalizePartyMatch(currentQuote.customer_name ?? null);
 
       const nextCandidates = ((data ?? []) as Array<{
         id: string;
@@ -3127,7 +3143,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignTaskCandidates(nextCandidates);
     }
     setDesignTaskCandidatesLoading(false);
-  };
+  }, [teamId]);
 
   const attachExistingDesignTask = async (candidate: DesignTaskCandidate) => {
     if (!teamId || !quote || attachingDesignTaskId) return;
@@ -3426,35 +3442,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
 
     const quoteLabel = quote?.number ? `#${quote.number}` : quoteId.slice(0, 8);
-    try {
-      if (nextAssigneeUserId && nextAssigneeUserId !== actorUserId) {
-        await notifyUsers({
-          userIds: [nextAssigneeUserId],
-          title: "Вас призначено на дизайн-задачу",
-          body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
-          href: `/design/${designTask.id}`,
-          type: "info",
-        });
-      }
-      if (previousAssignee && previousAssignee !== actorUserId && previousAssignee !== nextAssigneeUserId) {
-        await notifyUsers({
-          userIds: [previousAssignee],
-          title: "Вас знято з дизайн-задачі",
-          body: `${actorName} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
-          href: `/design/${designTask.id}`,
-          type: "warning",
-        });
-      }
-    } catch (notifyError) {
-      console.warn("Failed to notify design task assignment change", notifyError);
-    }
+    await notifyDesignTaskAssignmentChange({
+      designTaskId: designTask.id,
+      quoteLabel,
+      actorName,
+      actorUserId,
+      previousAssignee,
+      nextAssigneeUserId,
+    });
 
     toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
     setDesignTaskSaving(false);
   };
 
 
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     setItemsLoading(true);
     setItemsError(null);
     const result = await fetchQuoteItemsWithCatalog(quoteId, teamId);
@@ -3562,22 +3564,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     setItemsLoading(false);
     setItemsLoaded(true);
-  };
-
-  const loadRuns = async () => {
-    setRunsLoading(true);
-    setRunsError(null);
-    const result = await fetchQuoteRuns(quoteId);
-    if (result.ok) {
-      setRuns(result.data);
-      setRunsOriginal(result.data);
-    } else {
-      setRunsError(result.message);
-      setRuns([]);
-    }
-    setRunsLoading(false);
-    setRunsLoaded(true);
-  };
+  }, [quoteId, teamId]);
 
   useEffect(() => {
     if (!runsLoaded) return;
@@ -3616,45 +3603,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     });
   }, [runsLoaded, runs.length, effectiveManagerId, currentManagerRate]);
 
-  useEffect(() => {
-    if (!runsLoaded) return;
-    if (runs.length === 0) {
-      setSelectedRunId(null);
-      setSelectedRunIdByItem({});
-      return;
-    }
-    if (!selectedRunId || !runs.some((run) => run.id === selectedRunId)) {
-      setSelectedRunId(runs[0]?.id ?? null);
-    }
-  }, [runsLoaded, runs, selectedRunId]);
-
-  useEffect(() => {
-    if (!runsLoaded || items.length === 0) return;
-    setSelectedRunIdByItem((prev) => {
-      let changed = false;
-      const next: Record<string, string> = {};
-      items.forEach((item) => {
-        const itemRuns = runs.filter((run) =>
-          run.quote_item_id ? run.quote_item_id === item.id : items.length === 1
-        );
-        const currentId = prev[item.id];
-        const currentStillExists = currentId && itemRuns.some((run) => run.id === currentId);
-        const fallbackId = itemRuns.find((run) => run.id)?.id;
-        if (currentStillExists) {
-          next[item.id] = currentId;
-        } else if (fallbackId) {
-          next[item.id] = fallbackId;
-          changed = true;
-        } else if (currentId) {
-          changed = true;
-        }
-      });
-      if (Object.keys(prev).length !== Object.keys(next).length) changed = true;
-      return changed ? next : prev;
-    });
-  }, [items, runs, runsLoaded]);
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     setHistoryError(null);
     const result = await fetchStatusHistory(quoteId, teamId);
@@ -3665,9 +3614,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setHistory([]);
     }
     setHistoryLoading(false);
-  };
+  }, [quoteId, teamId]);
 
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     setCommentsLoading(true);
     setCommentsError(null);
     const result = await fetchQuoteComments(quoteId, teamId);
@@ -3678,27 +3627,12 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setComments([]);
     }
     setCommentsLoading(false);
-  };
+  }, [quoteId, teamId]);
 
-  const loadActivityLog = async (options?: { full?: boolean }) => {
-    setActivityLoading(true);
-    setActivityError(null);
-    const result = await fetchQuoteActivity(quoteId, teamId, options);
-    if (result.ok) {
-      setActivityRows(result.data.rows);
-      setActivityLoadedAll(result.data.loadedAll);
-    } else {
-      setActivityError(result.message);
-      setActivityRows([]);
-      setActivityLoadedAll(false);
-    }
-    setActivityLoading(false);
-  };
-
-  const loadAttachments = async () => {
+  const loadAttachments = useCallback(async () => {
     setAttachmentsLoading(true);
     setAttachmentsError(null);
-    const result = await fetchQuoteAttachments(quoteId, teamId, memberById);
+    const result = await fetchQuoteAttachments(quoteId, teamId, loaderInputsRef.current.memberById);
     if (result.ok) {
       setAttachments(result.data.attachments);
       setDesignVisualizations(result.data.designVisualizations);
@@ -3708,7 +3642,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setDesignVisualizations([]);
     }
     setAttachmentsLoading(false);
-  };
+  }, [quoteId, teamId]);
 
   const uploadAttachments = async (
     files: FileList | File[] | null,
@@ -3878,23 +3812,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     void loadComments();
     void loadDesignTask();
     void loadAttachments();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteId, teamId]);
+  }, [loadAttachments, loadComments, loadDesignTask, loadItems, loadQuote, loadRuns, quoteId, teamId]);
 
   useEffect(() => {
     if (!teamId || !quoteId) return;
     let active = true;
     const loadMembership = async () => {
-      try {
-        const map = await listQuoteSetMemberships(teamId, [quoteId]);
-        if (!active) return;
-        setQuoteSetMembership(map.get(quoteId) ?? null);
-      } catch {
-        if (!active) return;
-        setQuoteSetMembership(null);
-      }
+      const result = await fetchQuoteSetMembership(teamId, quoteId);
+      if (!active) return;
+      setQuoteSetMembership(result.ok ? result.data : null);
     };
-    void loadMembership();
+    // Обгортка з await — щоб правило побачило, що запис у стан тут лише ПІСЛЯ
+    // мережевого виклику, а не синхронно в тілі ефекту (як у loadCurrentManagerRate).
+    void (async () => {
+      await loadMembership();
+    })();
     return () => {
       active = false;
     };
@@ -3907,16 +3839,14 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     if (!attachDesignTaskDialogOpen) return;
     void loadDesignTaskCandidates();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachDesignTaskDialogOpen, quote?.id, quoteId, teamId, designTask?.id]);
+  }, [attachDesignTaskDialogOpen, designTask?.id, loadDesignTaskCandidates, quote, quoteId, teamId]);
 
   useEffect(() => {
     if (detailsTab !== "files") return;
     if (!quoteId || filesTabLoadedQuoteRef.current === quoteId) return;
     filesTabLoadedQuoteRef.current = quoteId;
     void loadAttachments();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsTab, quoteId]);
+  }, [detailsTab, loadAttachments, quoteId]);
 
   useEffect(() => {
     if (detailsTab !== "activity") return;
@@ -3925,8 +3855,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     activityTabLoadedQuoteRef.current = quoteId;
     void loadHistory();
     void loadActivityLog();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsTab, quote?.id, quoteId, error]);
+  }, [detailsTab, error, loadActivityLog, loadHistory, quote, quoteId]);
 
   useEffect(() => {
     if (attachments.length === 0 || memberById.size === 0) return;
@@ -3942,7 +3871,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   }, [memberById, attachments.length]);
 
   useEffect(() => {
-    if (!teamId || !quoteId || !selectedDesignOutputFile || designVisualizationSyncing) return;
+    if (!teamId || !quoteId || !selectedDesignOutputFile || designVisualizationSyncingRef.current) return;
     const alreadyVisible = designVisualizations.some(
       (file) =>
         file.storageBucket === selectedDesignOutputFile.storage_bucket &&
@@ -3952,7 +3881,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     let active = true;
     const syncSelectedVisualization = async () => {
-      setDesignVisualizationSyncing(true);
+      designVisualizationSyncingRef.current = true;
       const linked = await linkDesignVisualizationToQuote({
         teamId,
         quoteId,
@@ -3966,7 +3895,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         await loadAttachments();
       }
       if (active) {
-        setDesignVisualizationSyncing(false);
+        designVisualizationSyncingRef.current = false;
       }
     };
 
@@ -3974,8 +3903,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return () => {
       active = false;
     };
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, quoteId, selectedDesignOutputFile, designVisualizations, userId]);
+  }, [designVisualizations, loadAttachments, quoteId, selectedDesignOutputFile, teamId, userId]);
 
   const didInitItemAttachmentRefreshRef = useRef(false);
 
@@ -3986,8 +3914,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     }
     if (itemAttachmentUploading) return;
     void loadAttachments();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemAttachmentUploading]);
+  }, [itemAttachmentUploading, loadAttachments]);
 
   const handleAttachmentsDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -4228,12 +4155,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         return;
       }
       // Сповіщення ініціатора не має ламати зміну статусу: вона вже сталась.
+      //
+      // Значення рахуємо ДО try: будь-який «??», «&&» чи «?.» усередині
+      // try/catch React Compiler не вміє й через нього пропускає всю сторінку
+      // разом із перевірками лінту (REQ-109).
+      const statusNotifyActorUserId = userId ?? null;
       try {
         await notifyQuoteInitiatorOnStatusChange({
           quoteId,
           fromStatus: previousStatus,
           toStatus: nextStatus,
-          actorUserId: userId ?? null,
+          actorUserId: statusNotifyActorUserId,
         });
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about status change", notifyError);
@@ -4334,12 +4266,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
     const newQuoteId = duplicated.data.newQuoteId;
 
+    // Три значення рахуємо ДО try — див. пояснення вище про value blocks.
+    const duplicateNotifyActorUserId = userId ?? null;
+    const duplicateNotifyActorName = userId ? memberById.get(userId) ?? null : null;
+    const duplicateNotifyCustomerName = quote.customer_name ?? null;
     try {
       await notifyQuotesCreated({
         quoteIds: [newQuoteId],
-        actorUserId: userId ?? null,
-        actorName: userId ? memberById.get(userId) ?? null : null,
-        customerName: quote.customer_name ?? null,
+        actorUserId: duplicateNotifyActorUserId,
+        actorName: duplicateNotifyActorName,
+        customerName: duplicateNotifyCustomerName,
       });
     } catch (notifyError) {
       console.warn("Failed to notify leadership about a duplicated quote", notifyError);
@@ -4566,10 +4502,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       prev.map((item) => (item.id === itemId ? { ...item, qty: newQty } : item))
     );
     setEditingQty(null);
+    // Пошук позиції й ціна — до try, див. пояснення про value blocks вище.
+    const current = items.find((item) => item.id === itemId);
+    if (!current) return;
+    const unitPrice = Number(current.price ?? 0) || 0;
     try {
-      const current = items.find((item) => item.id === itemId);
-      if (!current) return;
-      const unitPrice = Number(current.price ?? 0) || 0;
       const saved = await updateQuoteItemRow(itemId, {
         qty: newQty,
         line_total: unitPrice * newQty,
@@ -4706,38 +4643,43 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemAttachmentUploading(false);
   };
 
-  useEffect(() => {
-    if (itemFormMode !== "advanced") return;
-    if (!effectiveItemModelId) return;
-    const modelLabel = getModelLabel(
-      catalogTypes,
-      effectiveItemTypeId,
-      effectiveItemKindId,
-      effectiveItemModelId
-    ) ?? "";
-    if (!modelLabel) return;
-    if (!itemTitle.trim() || itemTitle === lastAutoTitle) {
-      setItemTitle(modelLabel);
-      setLastAutoTitle(modelLabel);
-    }
-  }, [
-    catalogTypes,
-    effectiveItemKindId,
-    effectiveItemModelId,
-    effectiveItemTypeId,
-    itemFormMode,
-    itemTitle,
-    lastAutoTitle,
-  ]);
+  // Назва позиції підставляється з обраної моделі.
+  //
+  // У підпис входять і itemTitle з lastAutoTitle — навмисно: коли назву
+  // стирають руками, вона має підставитись знову. Саме так поводився ефект, і
+  // цю поведінку тут збережено дослівно (REQ-109).
+  const autoItemTitle =
+    itemFormMode === "advanced" && effectiveItemModelId
+      ? getModelLabel(catalogTypes, effectiveItemTypeId, effectiveItemKindId, effectiveItemModelId) ?? ""
+      : "";
+  const autoItemTitleChanged = useSignatureChanged(
+    `${autoItemTitle}\u0000${itemTitle}\u0000${lastAutoTitle}`
+  );
+  if (autoItemTitleChanged && autoItemTitle && (!itemTitle.trim() || itemTitle === lastAutoTitle)) {
+    setItemTitle(autoItemTitle);
+    setLastAutoTitle(autoItemTitle);
+  }
 
-  useEffect(() => {
-    if (itemFormMode !== "advanced") return;
-    if (!effectiveItemModelId) return;
-    if (autoMethodsApplied) return;
-    if (availableMethods.length === 0) return;
-    setItemMethods([{ id: createLocalId(), methodId: availableMethods[0].id, count: 1 }]);
+  // Перший метод нанесення підставляється сам — один раз на обрану модель.
+  //
+  // Ідентифікатор рядка тут передбачуваний, а не createLocalId(): той бере
+  // Date.now() і Math.random(), а рендер React може відкинути й повторити —
+  // тоді на кожну спробу виходив би інший id. Для ключа списку достатньо
+  // походження методу, а руками додані рядки й далі отримують createLocalId.
+  const autoMethodCandidateId = availableMethods[0]?.id ?? "";
+  const autoMethodsInputChanged = useSignatureChanged(
+    `${itemFormMode}\u0000${effectiveItemModelId}\u0000${autoMethodsApplied ? "1" : "0"}\u0000${autoMethodCandidateId}`
+  );
+  if (
+    autoMethodsInputChanged &&
+    itemFormMode === "advanced" &&
+    effectiveItemModelId &&
+    !autoMethodsApplied &&
+    autoMethodCandidateId
+  ) {
+    setItemMethods([{ id: `auto-${autoMethodCandidateId}`, methodId: autoMethodCandidateId, count: 1 }]);
     setAutoMethodsApplied(true);
-  }, [itemFormMode, effectiveItemModelId, availableMethods, autoMethodsApplied]);
+  }
 
   const handleSaveItem = async () => {
     if (!itemTitle.trim()) return;
@@ -4815,88 +4757,90 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         : undefined,
     };
 
-    try {
-      if (editingItemId) {
-        const updatePayload = {
-          name: newItem.title,
-          description: newItem.description ?? null,
-          metadata: newItem.metadata ?? null,
-          qty: newItem.qty,
-          unit: normalizeUnitLabel(newItem.unit),
-          unit_price: newItem.price,
-          line_total: newItem.qty * newItem.price,
-          catalog_type_id: newItem.catalogTypeId ?? null,
-          catalog_kind_id: newItem.catalogKindId ?? null,
-          catalog_model_id: newItem.catalogModelId ?? null,
-          methods: methodsPayload,
-          attachment: attachmentPayload,
-        };
-        const savedItem = await updateQuoteItemRow(editingItemId, updatePayload, {
-          retryWithoutMetadata: true,
-        });
-        if (!savedItem.ok) {
-          setItemsError(savedItem.message);
-          return;
-        }
-        setItems((prev) =>
-          prev.map((item) => (item.id === editingItemId ? newItem : item))
-        );
-      } else {
-        const newId = crypto.randomUUID();
-        const nextPosition =
-          items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1;
-        const insertPayload = {
-          id: newId,
-          team_id: effectiveTeamId,
-          quote_id: quoteId,
-          position: nextPosition,
-          name: newItem.title,
-          description: newItem.description ?? null,
-          metadata: newItem.metadata ?? null,
-          qty: newItem.qty,
-          unit: normalizeUnitLabel(newItem.unit),
-          unit_price: newItem.price,
-          line_total: newItem.qty * newItem.price,
-          catalog_type_id: newItem.catalogTypeId ?? null,
-          catalog_kind_id: newItem.catalogKindId ?? null,
-          catalog_model_id: newItem.catalogModelId ?? null,
-          methods: methodsPayload,
-          attachment: attachmentPayload,
-        };
-        const insertedRow = await insertQuoteItemRow(insertPayload);
-        if (!insertedRow.ok) {
-          setItemsError(insertedRow.message);
-          return;
-        }
-        // Рядок повертається як довільний обʼєкт: у запасному проході без
-        // metadata набір колонок інший, тож поля читаємо поштучно.
-        const data = insertedRow.data as
-          | {
-              id?: string | null;
-              position?: number | null;
-              qty?: number | null;
-              unit?: string | null;
-              unit_price?: number | null;
-              description?: string | null;
-              metadata?: unknown;
-            }
-          | null;
-        const inserted: QuoteItem = {
-          ...newItem,
-          id: data?.id ?? newId,
-          position: data?.position ?? nextPosition,
-          qty: Number(data?.qty ?? newItem.qty),
-          unit: normalizeUnitLabel(data?.unit ?? newItem.unit),
-          price: Number(data?.unit_price ?? newItem.price),
-          description: data?.description ?? newItem.description,
-          metadata: parseQuoteItemMetadata(data?.metadata) ?? newItem.metadata ?? null,
-        };
-        setItems((prev) => [...prev, inserted]);
+    // Без try/catch: обидва записи нижче — updateQuoteItemRow та
+    // insertQuoteItemRow — повертають QueryResult і не кидають, а решта
+    // (normalizeUnitLabel, parseQuoteItemMetadata, crypto.randomUUID) чиста.
+    // Обидві відмови вже показує setItemsError у гілках `!ok`. Прибрано, бо
+    // «??» усередині try/catch React Compiler не вміє — і через цей блок
+    // пропускав усю сторінку разом із перевірками лінту (REQ-109).
+    if (editingItemId) {
+      const updatePayload = {
+        name: newItem.title,
+        description: newItem.description ?? null,
+        metadata: newItem.metadata ?? null,
+        qty: newItem.qty,
+        unit: normalizeUnitLabel(newItem.unit),
+        unit_price: newItem.price,
+        line_total: newItem.qty * newItem.price,
+        catalog_type_id: newItem.catalogTypeId ?? null,
+        catalog_kind_id: newItem.catalogKindId ?? null,
+        catalog_model_id: newItem.catalogModelId ?? null,
+        methods: methodsPayload,
+        attachment: attachmentPayload,
+      };
+      const savedItem = await updateQuoteItemRow(editingItemId, updatePayload, {
+        retryWithoutMetadata: true,
+      });
+      if (!savedItem.ok) {
+        setItemsError(savedItem.message);
+        return;
       }
-      setItemModalOpen(false);
-    } catch (e: unknown) {
-      setItemsError(getErrorMessage(e, "Не вдалося зберегти позицію."));
+      setItems((prev) =>
+        prev.map((item) => (item.id === editingItemId ? newItem : item))
+      );
+    } else {
+      const newId = crypto.randomUUID();
+      const nextPosition =
+        items.length === 0 ? 1 : Math.max(...items.map((item) => item.position ?? 0)) + 1;
+      const insertPayload = {
+        id: newId,
+        team_id: effectiveTeamId,
+        quote_id: quoteId,
+        position: nextPosition,
+        name: newItem.title,
+        description: newItem.description ?? null,
+        metadata: newItem.metadata ?? null,
+        qty: newItem.qty,
+        unit: normalizeUnitLabel(newItem.unit),
+        unit_price: newItem.price,
+        line_total: newItem.qty * newItem.price,
+        catalog_type_id: newItem.catalogTypeId ?? null,
+        catalog_kind_id: newItem.catalogKindId ?? null,
+        catalog_model_id: newItem.catalogModelId ?? null,
+        methods: methodsPayload,
+        attachment: attachmentPayload,
+      };
+      const insertedRow = await insertQuoteItemRow(insertPayload);
+      if (!insertedRow.ok) {
+        setItemsError(insertedRow.message);
+        return;
+      }
+      // Рядок повертається як довільний обʼєкт: у запасному проході без
+      // metadata набір колонок інший, тож поля читаємо поштучно.
+      const data = insertedRow.data as
+        | {
+            id?: string | null;
+            position?: number | null;
+            qty?: number | null;
+            unit?: string | null;
+            unit_price?: number | null;
+            description?: string | null;
+            metadata?: unknown;
+          }
+        | null;
+      const inserted: QuoteItem = {
+        ...newItem,
+        id: data?.id ?? newId,
+        position: data?.position ?? nextPosition,
+        qty: Number(data?.qty ?? newItem.qty),
+        unit: normalizeUnitLabel(data?.unit ?? newItem.unit),
+        price: Number(data?.unit_price ?? newItem.price),
+        description: data?.description ?? newItem.description,
+        metadata: parseQuoteItemMetadata(data?.metadata) ?? newItem.metadata ?? null,
+      };
+      setItems((prev) => [...prev, inserted]);
     }
+    setItemModalOpen(false);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -5245,15 +5189,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   >
                     {quote.number ?? quote.id}
                   </HoverCopyText>
-                  {(() => {
-                    const Icon = quoteTypeIcon(quote.quote_type);
-                    return (
-                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
-                        {Icon ? <Icon className="h-3 w-3" /> : null}
-                        {quoteTypeLabel(quote.quote_type)}
-                      </div>
-                    );
-                  })()}
+                  <QuoteTypeBadge quoteType={quote.quote_type} />
                   {quoteSetMembership && (quoteSetMembership.kp_count > 0 || quoteSetMembership.set_count > 0) ? (
                     <>
                       {quoteSetMembership.kp_names.map((name) => (

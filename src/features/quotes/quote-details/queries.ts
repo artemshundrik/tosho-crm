@@ -14,13 +14,15 @@ import {
   listLeadsBySearch,
   listCatalogModelsByIds,
   getQuoteSummary,
+  listQuoteSetMemberships,
   listStatusHistory,
+  type QuoteSetMembershipInfo,
   type QuoteStatusRow,
   type QuoteSummaryRow,
 } from "@/lib/toshoApi";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
-import { logDesignTaskActivity } from "@/lib/designTaskActivity";
+import { logDesignTaskActivity, notifyUsers } from "@/lib/designTaskActivity";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { syncDesignOutputFilesToQuoteAttachments } from "@/lib/designTaskOutputSync";
 import {
@@ -32,7 +34,9 @@ import {
   removeAttachmentWithVariants,
   uploadAttachmentWithVariants,
 } from "@/lib/attachmentPreview";
-import { getCurrentUserId } from "@/lib/currentUser";
+import { getCurrentUser, getCurrentUserId } from "@/lib/currentUser";
+import { buildUserNameFromMetadata, formatUserShortName } from "@/lib/userName";
+import { resolveWorkspaceId } from "@/lib/workspace";
 import type { ActivityRow } from "@/lib/activity";
 
 import {
@@ -159,6 +163,195 @@ export async function fetchQuoteAttachments(
 
 /** Скільки подій активності беремо, поки не попросили «показати всю». */
 export const QUOTE_ACTIVITY_PAGE_SIZE = 60;
+
+/**
+ * Ставка менеджера — СИРА, без нормалізації.
+ *
+ * Два виклики на сторінці зводять її до числа по-різному: один через
+ * resolveNumericRate (збережений нуль лишається нулем), другий через
+ * `Number(x) || DEFAULT` (нуль і null стають типовою ставкою). Різниця
+ * справжня, тож нормалізацію лишено на місці виклику — інакше переїзд сюди
+ * тихо змінив би поведінку одного з них.
+ *
+ * `undefined` означає «взяти запасну»: немає робочого простору або немає
+ * самої таблиці (очікувана відмова на старих базах).
+ */
+export async function fetchManagerRate(
+  userId: string
+): Promise<QueryResult<number | null | undefined>> {
+  try {
+    const workspaceId = await resolveWorkspaceId(userId);
+    if (!workspaceId) return { ok: true, data: undefined };
+
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("team_member_manager_rates")
+      .select("manager_rate")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle<{ manager_rate?: number | null }>();
+
+    if (error) {
+      if (/does not exist|relation|schema cache|could not find the table/i.test(error.message ?? "")) {
+        return { ok: true, data: undefined };
+      }
+      return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити ставку менеджера.") };
+    }
+
+    return { ok: true, data: data?.manager_rate };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити ставку менеджера.") };
+  }
+}
+
+/**
+ * Підписи для згадок (@) — коли в списку сидять «Користувач» без імені.
+ *
+ * Два шляхи, як і було: спершу повний список профілів робочого простору через
+ * Netlify-функцію, а якщо вона недоступна — точковий запит лише по тих, у кого
+ * підпис узагальнений.
+ *
+ * `data: null` означає «нічого не міняти» — саме так поводився ранній вихід
+ * у сторінці, коли міняти не було кого. Порожній обʼєкт — це вже «замінити на
+ * порожньо», і плутати їх не можна.
+ */
+export async function fetchMentionLabelOverrides(
+  genericMemberIds: string[]
+): Promise<QueryResult<Record<string, string> | null>> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (accessToken) {
+      const response = await fetch("/.netlify/functions/create-workspace-invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ mode: "list_workspace_member_profiles" }),
+      });
+
+      if (response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              profilesByUserId?: Record<
+                string,
+                { firstName?: string; lastName?: string; fullName?: string }
+              >;
+            }
+          | null;
+
+        const nextOverrides: Record<string, string> = {};
+        for (const [memberId, profile] of Object.entries(payload?.profilesByUserId ?? {})) {
+          const label = formatUserShortName({
+            firstName: profile.firstName ?? null,
+            lastName: profile.lastName ?? null,
+            fullName: profile.fullName ?? null,
+            fallback: "",
+          });
+          if (label) nextOverrides[memberId] = label;
+        }
+        return { ok: true, data: nextOverrides };
+      }
+    }
+
+    if (genericMemberIds.length === 0) return { ok: true, data: null };
+
+    const [profilesResult, currentUser] = await Promise.all([
+      supabase
+        .from("team_member_profiles" as never)
+        .select("user_id,first_name,last_name,full_name")
+        .in("user_id", genericMemberIds),
+      getCurrentUser(),
+    ]);
+
+    const nextOverrides: Record<string, string> = {};
+    const profileRows =
+      (profilesResult.data as Array<{
+        user_id?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        full_name?: string | null;
+      }> | null) ?? [];
+
+    for (const row of profileRows) {
+      const userId = row.user_id?.trim();
+      if (!userId) continue;
+      const label = formatUserShortName({
+        firstName: row.first_name ?? null,
+        lastName: row.last_name ?? null,
+        fullName: row.full_name ?? null,
+        fallback: "",
+      });
+      if (label) nextOverrides[userId] = label;
+    }
+
+    if (currentUser?.id && genericMemberIds.includes(currentUser.id)) {
+      const currentUserName = buildUserNameFromMetadata(
+        currentUser.user_metadata as Record<string, unknown> | undefined,
+        currentUser.email
+      ).displayName;
+      if (currentUserName) nextOverrides[currentUser.id] = currentUserName;
+    }
+
+    return { ok: true, data: nextOverrides };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити підписи згадок.") };
+  }
+}
+
+/**
+ * Сповістити про зміну виконавця дизайн-задачі — по змозі.
+ *
+ * Помилку ковтаємо свідомо: призначення вже в базі, і відкочувати його через
+ * недоставлений пуш не можна. Живе тут, а не в сторінці, бо `&&` усередині
+ * try/catch React Compiler не вміє — і через один цей блок пропускав усю
+ * картку прорахунку (REQ-109).
+ */
+export async function notifyDesignTaskAssignmentChange(input: {
+  designTaskId: string;
+  quoteLabel: string;
+  actorName: string;
+  actorUserId: string | null;
+  previousAssignee: string | null;
+  nextAssigneeUserId: string | null;
+}): Promise<void> {
+  const { designTaskId, quoteLabel, actorName, actorUserId, previousAssignee, nextAssigneeUserId } = input;
+  try {
+    if (nextAssigneeUserId && nextAssigneeUserId !== actorUserId) {
+      await notifyUsers({
+        userIds: [nextAssigneeUserId],
+        title: "Вас призначено на дизайн-задачу",
+        body: `${actorName} призначив(ла) вас на задачу по прорахунку ${quoteLabel}.`,
+        href: `/design/${designTaskId}`,
+        type: "info",
+      });
+    }
+    if (previousAssignee && previousAssignee !== actorUserId && previousAssignee !== nextAssigneeUserId) {
+      await notifyUsers({
+        userIds: [previousAssignee],
+        title: "Вас знято з дизайн-задачі",
+        body: `${actorName} зняв(ла) вас із задачі по прорахунку ${quoteLabel}.`,
+        href: `/design/${designTaskId}`,
+        type: "warning",
+      });
+    }
+  } catch (error) {
+    console.warn("Failed to notify design task assignment change", error);
+  }
+}
+
+export async function fetchQuoteSetMembership(
+  teamId: string,
+  quoteId: string
+): Promise<QueryResult<QuoteSetMembershipInfo | null>> {
+  try {
+    const map = await listQuoteSetMemberships(teamId, [quoteId]);
+    return { ok: true, data: map.get(quoteId) ?? null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося завантажити набір прорахунків.") };
+  }
+}
 
 export async function fetchQuoteRuns(
   quoteId: string
