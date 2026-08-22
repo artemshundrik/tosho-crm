@@ -104,7 +104,6 @@ import {
   createQuote,
   getQuoteRuns,
   upsertQuoteRuns,
-  deleteQuote,
   updateQuote,
   listQuoteSetMemberships,
   type TeamMemberRow,
@@ -131,8 +130,6 @@ import {
   resolveQuoteRunPriceFieldAccess,
 } from "@/lib/permissions";
 import {
-  createOrderFromApprovedQuote,
-  loadOrderCreationDraft,
   type OrderCreationDraft,
 } from "@/features/orders/orderRecords";
 import type { LucideIcon } from "lucide-react";
@@ -209,6 +206,9 @@ import {
 } from "@/features/quotes/quote-details/config";
 import {
   changeQuoteStatus,
+  createOrderFromQuote,
+  deleteQuoteById,
+  fetchOrderCreationDraft,
   deleteQuoteAttachmentRow,
   fetchDesignTasksLinkedToQuote,
   updateActivityMetadata,
@@ -1427,18 +1427,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (deleteQuoteBusy) return;
     setDeleteQuoteBusy(true);
     setStatusError(null);
-    try {
-      await deleteQuote(quoteId, teamId);
+
+    const removed = await deleteQuoteById(quoteId, teamId);
+    if (removed.ok) {
       toast.success("Прорахунок видалено");
       navigate("/orders/estimates", { replace: true });
-    } catch (e: unknown) {
-      const message = getErrorMessage(e, "Не вдалося видалити прорахунок");
-      setStatusError(message);
-      toast.error(message);
-    } finally {
-      setDeleteQuoteBusy(false);
-      setDeleteQuoteDialogOpen(false);
+    } else {
+      setStatusError(removed.message);
+      toast.error(removed.message);
     }
+    setDeleteQuoteBusy(false);
+    setDeleteQuoteDialogOpen(false);
   };
 
   const saveBrief = async () => {
@@ -2303,21 +2302,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setCreateOrderLoading(true);
     setCreateOrderError(null);
     setCreateOrderDialogOpen(true);
-    try {
-      const draft = await loadOrderCreationDraft(teamId, quoteId, userId);
+    const prepared = await fetchOrderCreationDraft(teamId, quoteId, userId);
+    if (prepared.ok) {
+      const draft = prepared.data;
       setCreateOrderDraft(draft);
       setCreateOrderSelectedItemIds(
         draft.selectableItems.map((item) => item.quoteItemId ?? item.id).filter(Boolean) as string[]
       );
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Не вдалося підготувати створення замовлення.";
+    } else {
       setCreateOrderDraft(null);
       setCreateOrderSelectedItemIds([]);
-      setCreateOrderError(message);
-    } finally {
-      setCreateOrderLoading(false);
+      setCreateOrderError(prepared.message);
     }
+    setCreateOrderLoading(false);
   };
 
   const toggleCreateOrderItem = (quoteItemId: string, checked: boolean) => {
@@ -2331,20 +2328,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (!createOrderDraft) return;
     setCreateOrderSubmitting(true);
     setCreateOrderError(null);
-    try {
-      const result = await createOrderFromApprovedQuote({
-        teamId,
-        quoteId,
-        selectedQuoteItemIds: createOrderSelectedItemIds,
-        userId,
-      });
-      toast.success(result.created ? "Замовлення створено" : "Замовлення вже існує");
-      window.location.assign(`/orders/production/${result.id}`);
-    } catch (error: unknown) {
-      setCreateOrderError(error instanceof Error ? error.message : "Не вдалося створити замовлення.");
-    } finally {
-      setCreateOrderSubmitting(false);
+    const created = await createOrderFromQuote({
+      teamId,
+      quoteId,
+      selectedQuoteItemIds: createOrderSelectedItemIds,
+      userId,
+    });
+    if (created.ok) {
+      toast.success(created.data.created ? "Замовлення створено" : "Замовлення вже існує");
+      window.location.assign(`/orders/production/${created.data.id}`);
+    } else {
+      setCreateOrderError(created.message);
     }
+    setCreateOrderSubmitting(false);
   };
 
   const activityEvents = useMemo<ActivityEvent[]>(() => {

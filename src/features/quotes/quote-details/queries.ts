@@ -4,6 +4,7 @@ import {
   type QuoteAttachmentAudience,
 } from "@/lib/quoteAttachmentAudience";
 import {
+  deleteQuote,
   getQuoteRuns,
   upsertQuoteRuns,
   setStatus,
@@ -18,6 +19,10 @@ import {
 } from "@/lib/toshoApi";
 import { canOpenQuoteDetails } from "@/lib/permissions";
 import { logActivity } from "@/lib/activityLogger";
+import {
+  createOrderFromApprovedQuote,
+  loadOrderCreationDraft,
+} from "@/features/orders/orderRecords";
 import { removeAttachmentWithVariants, uploadAttachmentWithVariants } from "@/lib/attachmentPreview";
 import type { ActivityRow } from "@/lib/activity";
 
@@ -828,5 +833,49 @@ export async function updateActivityMetadata(
     return { ok: true, data: null };
   } catch (error: unknown) {
     return { ok: false, message: getErrorMessage(error, "Не вдалося видалити файл.") };
+  }
+}
+
+/**
+ * Текст помилки «як в оригіналі» для створення замовлення.
+ *
+ * Навмисно НЕ getErrorMessage: ці два місця завжди показували саме
+ * error.message, і підміна розбору тут змінила б те, що бачить менеджер.
+ */
+function plainErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export async function deleteQuoteById(
+  quoteId: string,
+  teamId: string
+): Promise<QueryResult<null>> {
+  try {
+    await deleteQuote(quoteId, teamId);
+    return { ok: true, data: null };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося видалити прорахунок") };
+  }
+}
+
+export async function fetchOrderCreationDraft(
+  teamId: string,
+  quoteId: string,
+  userId: string | null | undefined
+): Promise<QueryResult<Awaited<ReturnType<typeof loadOrderCreationDraft>>>> {
+  try {
+    return { ok: true, data: await loadOrderCreationDraft(teamId, quoteId, userId) };
+  } catch (error: unknown) {
+    return { ok: false, message: plainErrorMessage(error, "Не вдалося підготувати створення замовлення.") };
+  }
+}
+
+export async function createOrderFromQuote(
+  input: Parameters<typeof createOrderFromApprovedQuote>[0]
+): Promise<QueryResult<Awaited<ReturnType<typeof createOrderFromApprovedQuote>>>> {
+  try {
+    return { ok: true, data: await createOrderFromApprovedQuote(input) };
+  } catch (error: unknown) {
+    return { ok: false, message: plainErrorMessage(error, "Не вдалося створити замовлення.") };
   }
 }
