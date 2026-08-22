@@ -1,0 +1,16 @@
+{
+  "projectId": "5f6a7109-2c5e-4792-a447-971af96f3c64",
+  "shape": "package",
+  "pkg": "tosho-crm",
+  "globalName": "ToShoCRM",
+  "srcDir": "src/components/ui",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": ".design-sync/.cache/app.css",
+  "extraEntries": [
+    "./src/components/app/avatar-kit.tsx"
+  ],
+  "readmeHeader": ".design-sync/conventions.md",
+  "guidelinesGlob": [
+    "docs/DESIGN_SYSTEM_AUDIT-2026-08-15.md"
+  ]
+}

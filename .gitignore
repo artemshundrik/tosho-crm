@@ -46,3 +46,11 @@ inbox-plan.csv
 .design-system-export/
 # Згенеровані входи збірки дизайн-системи (app.css, tokens.json)
 scripts/design-system/.gen/
+
+# design-sync: staged converter + generated bundle + machine state.
+# Довговічне (config.json, NOTES.md, conventions.md, previews/, overrides/) — комітиться.
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
