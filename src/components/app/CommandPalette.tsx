@@ -509,6 +509,15 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               icon: Search,
             },
             {
+              key: "route-dev-stack",
+              label: "Dev · стек",
+              description: "З чого зроблена CRM і що з цим не так",
+              kindLabel: "Dev",
+              keywords: ["стек", "stack", "залежності", "версії", "npm", "оновлення", "безпека", "пакети"],
+              to: DEV_PATHS.stack,
+              icon: Search,
+            },
+            {
               key: "route-dev-health",
               label: "Dev · здоровʼя",
               description: "Observability, storage і технічні метрики",

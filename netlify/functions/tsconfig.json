@@ -54,6 +54,7 @@
     "dev-request-draft.ts",
     "finance-payment-reminders.ts",
     "quote-comments.ts",
+    "stack-versions.ts",
     "system-alerts.ts",
     "telegram-assistant-background.ts",
     "telegram-dev-request-background.ts",

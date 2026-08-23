@@ -15,6 +15,7 @@ import {
   GitCommitVertical,
   GitPullRequestArrow,
   KeyRound,
+  Layers3,
   LayoutGrid,
   Plug,
   Megaphone,
@@ -533,14 +534,17 @@ const baseSidebarLinks: SidebarLink[] = [
    * Dev — найнижча група в меню.
    *
    * Її бачать двоє (власник і SEO), і це кухня самої CRM, а не робота компанії,
-   * тож вона стоїть під усім робочим. Три пункти замість трьох поверхонь у
-   * трьох різних місцях: беклог сидів у сайдбарі серед «Операцій», релізи й
-   * здоровʼя — рядками в меню акаунта.
+   * тож вона стоїть під усім робочим. Пункти зведені з поверхонь, які раніше
+   * жили в різних місцях: беклог сидів у сайдбарі серед «Операцій», релізи й
+   * здоровʼя — рядками в меню акаунта. «Стек» доданий четвертим (REQ-116).
    */
   { label: DEV_LABELS.backlog, to: DEV_PATHS.backlog, group: "dev", icon: GitPullRequestArrow, moduleKey: "dev" },
   // Іконка комітів, а не «ракета» чи годинник: розділ буквально будується з
   // комітів релізу (scripts/lib/releaseCommits.mjs), і це видно з першого разу.
   { label: DEV_LABELS.releases, to: DEV_PATHS.releases, group: "dev", icon: GitCommitVertical, moduleKey: "dev" },
+  // Іконка шарів: головне групування сторінки — саме поверхи (екран / дані /
+  // збірка / платформа), і пункт меню має обіцяти те, що людина побачить.
+  { label: DEV_LABELS.stack, to: DEV_PATHS.stack, group: "dev", icon: Layers3, moduleKey: "dev" },
   { label: DEV_LABELS.health, to: DEV_PATHS.health, group: "dev", icon: Activity, moduleKey: "dev" },
 ];
 
@@ -667,7 +671,7 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       // Сторінка малює власний UnifiedPageToolbar — типовий заголовок задвоївся б.
       showPageHeader: false,
     };
-  // Три окремі пункти меню — отже три власні заголовки, а не один на розділ.
+  // Чотири окремі пункти меню — отже чотири власні заголовки, а не один на розділ.
   if (pathname.startsWith(DEV_ROOT)) {
     const surface = resolveDevSurface(pathname);
     const subtitle =
@@ -675,7 +679,9 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
         ? "Скільки роботи зроблено — по днях і за період."
         : surface === "health"
           ? "Щоденні snapshots по базі, storage і важких SQL-шляхах."
-          : "Що просить команда і що ми вирішили зробити.";
+          : surface === "stack"
+            ? "З чого зроблена CRM і що з цим не так."
+            : "Що просить команда і що ми вирішили зробити.";
     return {
       title: DEV_LABELS[surface],
       subtitle,

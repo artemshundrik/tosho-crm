@@ -20,6 +20,8 @@ import {
   type HealthTone,
 } from "../../src/lib/systemHealthThresholds";
 import { collectDropboxHealth, hasDropboxProblems } from "./_lib/dropboxHealth";
+import { STACK_SNAPSHOT } from "../../src/data/stackSnapshot.generated";
+import { buildStackItems, stackSummaryText, stackTotals, type StackVersionRow } from "../../src/lib/stack";
 
 // Сигнали здоров'я системи — ЄДИНЕ джерело для ранкового тех-дайджесту і для
 // питань у боті («що не працює?»).
@@ -47,7 +49,8 @@ export type SignalCode =
   | "attachments"
   | "audit_trigger"
   | "runtime_errors"
-  | "dropbox";
+  | "dropbox"
+  | "stack";
 
 export type Signal = { tone: Tone; text: string; code?: SignalCode };
 
@@ -471,7 +474,47 @@ export async function collectSystemSignals(
   // 9. Падіння інтерфейсу в людей.
   signals.push(await runtimeErrorsSignal(admin, options.teamIds ?? [], now));
 
+  // 10. Стек: чи не відстали залежності й чи немає відкритих дірок безпеки.
+  signals.push(await stackSignal(admin));
+
   return signals;
+}
+
+/**
+ * Стан стеку одним рядком — той самий, що на сторінці Dev → Стек.
+ *
+ * ЧОМУ ЧЕРВОНИМ ТІЛЬКИ ДІРКИ БЕЗПЕКИ. Відставання на мажор — це обслуговування,
+ * а не аварія: воно триває тижнями й нікого не будить. Якби воно давало
+ * `danger`, щогодинний алерт гудів би місяцями, і його перестали б читати —
+ * рівно те, від чого застерігає таксономія порогів («обслуговування ніколи не
+ * червоне»). Дірка безпеки — інша річ: вона має свою дату й закривається.
+ *
+ * ЧОМУ РЯДОК Є ЗАВЖДИ. Мовчання алерту двозначне: або чисто, або ланцюжок
+ * зламався. Щоденний рядок «дірок безпеки немає» знімає цю двозначність — той
+ * самий урок, що з журналом помилок (REQ-100).
+ */
+async function stackSignal(admin: SupabaseClient): Promise<Signal> {
+  try {
+    const { data, error } = await admin
+      .schema("tosho")
+      .from("stack_versions")
+      .select("name,latest_version,latest_seen_at,checked_at,advisories");
+    if (error) throw error;
+
+    const totals = stackTotals(buildStackItems(STACK_SNAPSHOT, (data as StackVersionRow[]) ?? []));
+    const text = stackSummaryText(totals);
+
+    if (totals.vulnerable > 0) {
+      const critical = totals.worstSeverity === "high" || totals.worstSeverity === "critical";
+      return { tone: critical ? "danger" : "warning", code: "stack", text };
+    }
+    // Ніколи не перевіряли — це не «добре», а «невідомо»: сірий рядок чесніший
+    // за зелений, бо зелене тут означало б перевірку, якої не було.
+    if (totals.checkedAt === null) return { tone: "neutral", code: "stack", text };
+    return { tone: "good", code: "stack", text };
+  } catch {
+    return { tone: "neutral", code: "stack", text: "Стек: дані недоступні" };
+  }
 }
 
 /**

@@ -2,6 +2,26 @@
 // Schema types for `public` + `tosho`. Regenerate after any schema change.
 // Wired into src/lib/supabaseClient.ts (createClient<Database>). If new tables/views
 // are missing here, code that writes them casts `as never` — regenerate to fix.
+//
+// УВАГА (23.08.2026, REQ-116): `stack_versions` і `get_stack_platform` дописані
+// сюди РУКАМИ — байт у байт тим, що видає генератор. Причина: повна
+// регенерація зараз ЛАМАЄ `npx tsc --noEmit` трьома помилками, і жодна з них
+// не про стек.
+//
+// У проді `tosho.catalog_methods.directory_id` став NOT NULL без DEFAULT
+// (міграція довідника методів, REQ-54), а три місця в коді вставляють метод
+// БЕЗ цієї колонки — і мають рацію: її проставляє тригер
+// `catalog_methods_bind_directory` ще до запису рядка. Тригерів генератор
+// типів не бачить, тож у згенерованому `Insert` колонка стає обовʼязковою, і
+// цілком робочий код перестає збиратись.
+//
+// Полагодити можна двома способами (обидва — окрема задача, не в межах REQ-116):
+//   • зняти NOT NULL з колонки — інваріант і так тримає тригер на INSERT і
+//     UPDATE, тобто обмеження нічого не додає понад нього;
+//   • або привести три виклики до згенерованого типу — але вони живуть у
+//     QuotesPage.tsx і useModelEditor.ts, які вже стоять на стелі ратчета
+//     розміру, і будь-який доданий рядок валить pre-push.
+// Доки цього не зробили, повна регенерація потребує ручного огляду.
 
 export type Json =
   | string
@@ -4037,6 +4057,30 @@ export type Database = {
           },
         ]
       }
+      stack_versions: {
+        Row: {
+          advisories: Json
+          checked_at: string
+          latest_seen_at: string | null
+          latest_version: string | null
+          name: string
+        }
+        Insert: {
+          advisories?: Json
+          checked_at?: string
+          latest_seen_at?: string | null
+          latest_version?: string | null
+          name: string
+        }
+        Update: {
+          advisories?: Json
+          checked_at?: string
+          latest_seen_at?: string | null
+          latest_version?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
       support_feedback: {
         Row: {
           created_at: string
@@ -5285,6 +5329,7 @@ export type Database = {
         }
         Returns: Json
       }
+      get_stack_platform: { Args: never; Returns: Json }
       get_team_pulse_summary: {
         Args: {
           p_from: string

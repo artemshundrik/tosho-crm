@@ -67,6 +67,7 @@ const FeaturesPage = lazyWithRetry(() => import("./pages/FeaturesPage"));
 const WhatsNewPage = lazyWithRetry(() => import("./pages/WhatsNewPage"));
 const ReleasesPage = lazyWithRetry(() => import("./pages/ReleasesPage"));
 const DevRequestsPage = lazyWithRetry(() => import("./pages/DevRequestsPage"));
+const StackPage = lazyWithRetry(() => import("./pages/StackPage"));
 const ProfilePage = lazyWithRetry(() =>
   import("./pages/ProfilePage").then((module) => ({ default: module.ProfilePage }))
 );
@@ -269,6 +270,7 @@ function getRuntimeRouteContext(pathname: string) {
     { pattern: "/dev/health", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/health") },
     { pattern: "/dev/releases", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/releases") },
     { pattern: "/dev/backlog", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/backlog") },
+    { pattern: "/dev/stack", scope: "page", group: "dev", test: (value) => value.startsWith("/dev/stack") },
     { pattern: "/orders/customers", scope: "page", group: "orders", test: (value) => value.startsWith("/orders/customers") },
     { pattern: "/orders/estimates", scope: "page", group: "orders", test: (value) => value === "/orders/estimates" },
     { pattern: "/orders/estimates/:id", scope: "details", group: "orders", test: (value) => /^\/orders\/estimates\/[^/]+$/.test(value) },
@@ -1184,6 +1186,19 @@ function AppRoutes() {
             <ModuleRouteGate moduleKey="dev">
               <RouteSuspense shell>
                 <ReleasesPage />
+              </RouteSuspense>
+            </ModuleRouteGate>
+          }
+        />
+        {/* «Стек» бачать ті самі двоє, що й «Релізи», — гейт живе всередині
+            сторінки, як у ReleasesPage: RLS на tosho.stack_versions стоїть на
+            тому самому предикаті, тож розходження між UI і базою тут неможливе. */}
+        <Route
+          path="dev/stack"
+          element={
+            <ModuleRouteGate moduleKey="dev">
+              <RouteSuspense shell>
+                <StackPage />
               </RouteSuspense>
             </ModuleRouteGate>
           }

@@ -35,7 +35,9 @@
     "eval:tosho-ai": "node scripts/run-tosho-ai-evals.mjs",
     "export:orphan-attachments": "node scripts/export-orphan-attachment-originals.mjs",
     "export:orphan-attachment-summary": "node scripts/export-orphan-attachment-summary.mjs",
-    "generate:vapid": "node scripts/generate-vapid-keys.mjs"
+    "generate:vapid": "node scripts/generate-vapid-keys.mjs",
+    "stack:snapshot": "node scripts/build-stack-snapshot.mjs",
+    "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs"
   },
   "overrides": {
     "react-day-picker": {

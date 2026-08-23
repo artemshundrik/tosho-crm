@@ -275,6 +275,16 @@ Practical implication:
 - `backup_runs`
   - storage backup execution history used in admin observability
 
+- `stack_versions`
+  - what npm knows about each dependency: `latest_version`, `latest_seen_at`
+    (when *we* first saw that version, not its publish date) and `advisories`
+  - written daily by `netlify/functions/stack-versions.ts` (pg_cron job
+    `stack-versions`), read by Dev → Стек and by the nightly system digest
+  - installed versions are NOT here — they live in the committed snapshot
+    `src/data/stackSnapshot.generated.ts`
+  - RLS: owner/SEO only, via `tosho.can_read_all_feature_adoption()`
+  - tracked schema in [scripts/stack-schema.sql](/Users/artem/Projects/tosho-crm/scripts/stack-schema.sql)
+
 ## Important Stored Functions And Helpers Seen In Code
 
 - `tosho.my_workspace_id()`
@@ -286,6 +296,11 @@ Practical implication:
 
 - `tosho.get_admin_attachment_audit(p_workspace_id uuid)`
   - attachment audit/reporting function
+
+- `tosho.get_stack_platform()`
+  - Postgres version, `tosho` table/function counts, active cron count, database
+    and storage size for the Dev → Стек footnote; SECURITY DEFINER because the
+    numbers live in system catalogs, gated by the owner/SEO predicate inside
 
 - `public.assert_quote_lock_from_quote_id()`
   - quote lock helper

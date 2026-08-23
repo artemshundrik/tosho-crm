@@ -174,6 +174,9 @@ export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "dev-backlog", path: "/dev/backlog", page: "src/pages/DevRequestsPage.tsx", toolbar: "full", shape: "board", canvas: true, board: { columns: 5, columnWidth: "300px" } },
   { id: "dev-releases", path: "/dev/releases", page: "src/pages/ReleasesPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "dev-health", path: "/dev/health", page: "src/pages/AdminObservabilityPage.tsx", toolbar: "none", shape: "dashboard" },
+  // Смуги дій немає навмисно: вкладки «за шарами / за терміновістю» живуть у
+  // тілі сторінки, як у затвердженому макеті REQ-116.
+  { id: "dev-stack", path: "/dev/stack", page: "src/pages/StackPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
 ] as const;
 
 function segmentsOf(value: string) {
