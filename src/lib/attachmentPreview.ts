@@ -299,7 +299,11 @@ async function renderPdfVariantBlob(file: File, maxSize: number) {
 
   const { getDocument } = await pdfRuntimePromise;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdf = await getDocument({ data: bytes }).promise;
+  // pdfjs 6 прибрав destroy() з документа — тепер воно живе на задачі
+  // завантаження, і саме вона гасить воркер. Тримаємо на неї посилання, інакше
+  // після кожного прев'ю лишався б висіти окремий worker-потік.
+  const loadingTask = getDocument({ data: bytes });
+  const pdf = await loadingTask.promise;
   const page = await pdf.getPage(1);
   const initialViewport = page.getViewport({ scale: 1 });
   const scale = Math.min(1, maxSize / Math.max(initialViewport.width, initialViewport.height));
@@ -310,7 +314,7 @@ async function renderPdfVariantBlob(file: File, maxSize: number) {
   canvas.height = Math.max(1, Math.round(viewport.height));
   const context = canvas.getContext("2d", { alpha: false });
   if (!context) {
-    await pdf.destroy();
+    await loadingTask.destroy();
     return null;
   }
 
@@ -326,7 +330,7 @@ async function renderPdfVariantBlob(file: File, maxSize: number) {
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((nextBlob) => resolve(nextBlob), "image/webp", 0.88);
   });
-  await pdf.destroy();
+  await loadingTask.destroy();
   return blob;
 }
 

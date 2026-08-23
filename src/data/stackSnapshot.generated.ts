@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T14:40:43.773Z",
+  "generatedAt": "2026-08-23T15:11:10.883Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -40,7 +40,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.2.6",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -48,7 +48,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.3.11",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -72,7 +72,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "2.1.15",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -96,7 +96,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.1.15",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -104,7 +104,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.3.3",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -112,7 +112,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.3.7",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -120,7 +120,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.1.21",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
     },
     {
@@ -128,7 +128,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "4.7.0",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": "2026-06-24T12:19:38+03:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://github.com/diegomura.png?size=64"
     },
     {
@@ -152,7 +152,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "5.102.1",
       "layer": "data",
       "dev": false,
-      "bumpedAt": "2026-01-17T11:04:55+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
     },
     {
@@ -280,7 +280,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.4.14",
       "layer": "data",
       "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://github.com/cure53.png?size=64"
     },
     {
@@ -341,7 +341,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "pdfjs-dist",
-      "version": "5.6.205",
+      "version": "6.2.108",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-04-06T00:17:23+03:00",
@@ -384,7 +384,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "7.18.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -392,7 +392,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.10.1",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://github.com/recharts.png?size=64"
     },
     {
@@ -405,7 +405,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "sharp",
-      "version": "0.34.5",
+      "version": "0.35.3",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-04-06T02:16:50+03:00",
@@ -416,7 +416,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "2.0.8",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-29T18:05:12+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
     },
     {
@@ -424,7 +424,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.6.0",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://github.com/dcastil.png?size=64"
     },
     {
@@ -456,7 +456,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "8.67.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=typescript-eslint.io&sz=128"
     },
     {
@@ -472,7 +472,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "4.1.11",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-07-20T23:24:45+03:00",
+      "bumpedAt": "2026-08-23T17:47:00+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
     {
@@ -503,5 +503,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "20",
   "netlifyFunctions": 42,
-  "sourceLines": 232002
+  "sourceLines": 231990
 };
