@@ -2,19 +2,28 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, type DropdownProps } from "react-day-picker"
 import { uk } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+/**
+ * Календар застосунку.
+ *
+ * ПЕРЕПИСАНО ПІД react-day-picker 10 (з 8, через 9). Головна пастка переїзду —
+ * мовчазна: дев'ятка перейменувала ВСІ ключі `classNames`, і старі не викликають
+ * ані помилки, ані попередження. Календар просто збереться й виглядатиме
+ * розсипаним. Тому імена нижче взяті не з памʼяті, а з перелічень `UI`,
+ * `DayFlag` і `SelectionState` у типах самої бібліотеки.
+ *
+ * ДРУГА ЗМІНА, ЯКУ ЛЕГКО НЕ ПОМІТИТИ: у восьмій `day` був кнопкою, у десятій
+ * це КОМІРКА таблиці, а кнопка всередині — `day_button`. Тож усе, що робило
+ * клітинку клікабельною, переїхало на `day_button`, а стани (вибраний,
+ * сьогодні) лишились на комірці.
+ */
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
-type CalendarDropdownProps = {
-  value?: string | number
-  onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void
-  children?: React.ReactNode
-}
 
 function Calendar({
   className,
@@ -30,70 +39,70 @@ function Calendar({
       className={cn("w-full p-2", className)}
       classNames={{
         months: "flex flex-col w-full",
-        month: "space-y-3 w-full",
-        caption: "flex items-center justify-between w-full pt-0.5",
+        // relative — щоб навігація могла лягти поверх рядка з місяцем і роком.
+        month: "space-y-3 w-full relative",
+        month_caption: "flex items-center justify-center w-full pt-0.5 px-9",
         caption_label: "text-sm font-medium hidden",
-        nav: "contents",
-        nav_button: cn(
+        /**
+         * У восьмій навігація жила ВСЕРЕДИНІ рядка з підписом місяця, тож
+         * вистачало `contents` і порядку flex. У десятій це окремий блок —
+         * і той самий прийом розкидав стрілки: одна над сіткою, друга під нею.
+         * Тому кладемо навігацію поверх рядка підпису й розводимо по краях.
+         */
+        nav: "absolute inset-x-0 top-0 flex items-center justify-between pointer-events-none",
+        button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0"
+          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0 pointer-events-auto"
         ),
-        nav_button_previous: "order-first",
-        nav_button_next: "order-last",
-        table: "w-full border-collapse space-y-0.5",
-        head_row: "flex w-full",
-        head_cell:
+        button_next: cn(
+          buttonVariants({ variant: "outline" }),
+          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0 pointer-events-auto"
+        ),
+        month_grid: "w-full border-collapse space-y-0.5",
+        weekdays: "flex w-full",
+        weekday:
           "text-muted-foreground rounded-[var(--radius-md)] flex-1 font-normal text-[0.8rem] text-center",
-        row: "mt-1.5 flex w-full",
-        cell: "flex-1 aspect-square text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-[var(--radius-md)] [&:has([aria-selected].day-outside)]:bg-accent/50 focus-within:relative focus-within:z-20",
-        day: cn(
+        week: "mt-1.5 flex w-full",
+        day: "flex-1 aspect-square text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+        day_button: cn(
           buttonVariants({ variant: "ghost" }),
           "h-full w-full p-0 font-normal aria-selected:opacity-100"
         ),
-        day_range_end: "day-range-end",
-        day_selected:
-          "!bg-primary !text-primary-foreground hover:!bg-primary hover:!text-primary-foreground focus:!bg-primary focus:!text-primary-foreground font-semibold",
-        day_today:
-          "bg-accent/70 text-accent-foreground ring-1 ring-primary/35 font-semibold relative after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary/70 aria-selected:!bg-primary aria-selected:!text-primary-foreground aria-selected:ring-0 aria-selected:after:hidden",
-        day_outside:
-          "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-        day_disabled: "text-muted-foreground opacity-50",
-        day_range_middle:
-          "aria-selected:bg-accent aria-selected:text-accent-foreground",
-        day_hidden: "invisible",
-        caption_dropdowns: "flex items-center gap-2 flex-1 justify-center mx-2",
+        selected:
+          "[&>button]:!bg-primary [&>button]:!text-primary-foreground [&>button]:hover:!bg-primary [&>button]:hover:!text-primary-foreground [&>button]:!font-semibold",
+        today:
+          "[&>button]:bg-accent/70 [&>button]:text-accent-foreground [&>button]:ring-1 [&>button]:ring-primary/35 [&>button]:!font-semibold",
+        outside: "text-muted-foreground opacity-50",
+        disabled: "text-muted-foreground opacity-50",
+        range_middle: "[&>button]:!bg-accent [&>button]:!text-accent-foreground",
+        range_end: "day-range-end",
+        hidden: "invisible",
+        dropdowns: "flex items-center gap-2 flex-1 justify-center mx-2",
         ...classNames,
       }}
       components={{
-        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-        IconRight: () => <ChevronRight className="h-4 w-4" />,
-        Dropdown: ({ value, onChange, children }: CalendarDropdownProps) => {
-          const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[]
-          const selected = options.find((child) => child.props.value === value)
-          const handleChange = (value: string) => {
-            const changeEvent = {
-              target: { value },
-            } as React.ChangeEvent<HTMLSelectElement>
-            onChange?.(changeEvent)
+        // Одна стрілка на обидві кнопки — напрям приходить пропом.
+        Chevron: ({ orientation }) =>
+          orientation === "left" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />,
+        // У десятій випадайка отримує готовий список `options`, а не дітей-<option>.
+        Dropdown: ({ value, onChange, options }: DropdownProps) => {
+          const handleChange = (next: string) => {
+            onChange?.({ target: { value: next } } as React.ChangeEvent<HTMLSelectElement>)
           }
+          const selected = options?.find((option) => String(option.value) === String(value))
           return (
-            <Select
-              value={value?.toString()}
-              onValueChange={(value) => {
-                handleChange(value)
-              }}
-            >
+            <Select value={value?.toString()} onValueChange={handleChange}>
               <SelectTrigger className="h-[32px] min-w-0 pl-3 pr-2 gap-1 text-sm [&>svg]:ml-auto [&>svg]:shrink-0">
-                <SelectValue>{selected?.props?.children}</SelectValue>
+                <SelectValue>{selected?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent position="popper">
-                  <div className="max-h-[var(--radix-select-content-available-height)] overflow-y-auto">
-                    {options.map((option, id) => (
-                        <SelectItem key={`${option.props.value}-${id}`} value={option.props.value?.toString() ?? ""}>
-                        {option.props.children}
-                        </SelectItem>
-                    ))}
-                  </div>
+                <div className="max-h-[var(--radix-select-content-available-height)] overflow-y-auto">
+                  {(options ?? []).map((option) => (
+                    <SelectItem key={option.value} value={String(option.value)} disabled={option.disabled}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </div>
               </SelectContent>
             </Select>
           )

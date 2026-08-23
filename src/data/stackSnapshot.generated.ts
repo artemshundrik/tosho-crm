@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T19:21:32.278Z",
+  "generatedAt": "2026-08-23T19:38:05.462Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -647,7 +647,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react-day-picker",
-      "version": "8.10.1",
+      "version": "10.0.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -656,9 +656,9 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "subject": "Initial commit"
       },
       "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
-      "homepage": "http://react-day-picker.js.org",
+      "homepage": "https://daypicker.dev",
       "usedIn": 1,
-      "iconUrl": "https://www.google.com/s2/favicons?domain=react-day-picker.js.org&sz=128"
+      "iconUrl": "https://www.google.com/s2/favicons?domain=daypicker.dev&sz=128"
     },
     {
       "name": "react-dom",
@@ -955,5 +955,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 233001
+  "sourceLines": 233097
 };

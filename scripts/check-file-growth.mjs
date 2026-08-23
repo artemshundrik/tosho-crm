@@ -57,7 +57,7 @@ const GIANT_THRESHOLD = 2000;
  */
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12800,
-  "src/pages/QuoteDetailsPage.tsx": 9848,
+  "src/pages/QuoteDetailsPage.tsx": 9845,
   "src/pages/QuotesPage.tsx": 8196,
   "src/pages/DesignPage.tsx": 6559,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,

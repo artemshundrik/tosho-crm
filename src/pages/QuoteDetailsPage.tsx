@@ -6891,8 +6891,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     setCustomerDeadlineDate(nextDate);
                                     setCustomerDeadlinePopoverOpen(false);
                                   }}
-                                  initialFocus
-                                />
+                                              />
                                 <DateQuickActions
                                   onSelect={(date) => {
                                     const nextDate = formatDateInput(date ?? null);
@@ -6961,8 +6960,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     setDeadlineDate(nextDate);
                                     setDeadlinePopoverOpen(false);
                                   }}
-                                  initialFocus
-                                />
+                                              />
                                 <DateQuickActions
                                   onSelect={(date) => {
                                     const nextDate = formatDateInput(date ?? null);
@@ -7071,8 +7069,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     setDesignDeadlineDate(nextDate);
                                     setDesignDeadlinePopoverOpen(false);
                                   }}
-                                  initialFocus
-                                />
+                                              />
                                 <DateQuickActions
                                   onSelect={(date) => {
                                     const nextDate = formatDateInput(date ?? null);

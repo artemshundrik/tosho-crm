@@ -206,19 +206,21 @@ function PickerPanel({
           selected={selected}
           defaultMonth={selected}
           onSelect={(date) => onPickDate(date ?? null)}
-          captionLayout="dropdown-buttons"
-          fromYear={Math.min(currentYear - 80, selectedYear)}
-          toYear={Math.max(currentYear + 10, selectedYear)}
+          // v10: «dropdown-buttons» більше немає — випадайки й стрілки тепер
+          // разом за замовчуванням, а межі років задаються через startMonth/endMonth.
+          captionLayout="dropdown"
+          startMonth={new Date(Math.min(currentYear - 80, selectedYear), 0)}
+          endMonth={new Date(Math.max(currentYear + 10, selectedYear), 11)}
           locale={uk}
-          initialFocus
+          autoFocus
           classNames={{
             // «Сьогодні» — лише крапка під числом, без заливки й обводки: обводка
             // сперечалась із заливкою обраного дня, коли це один і той самий день.
-            day_today:
-              "font-semibold text-primary relative after:absolute after:bottom-1.5 after:left-0 after:right-0 after:mx-auto after:h-1 after:w-1 after:rounded-full after:bg-current after:content-[''] aria-selected:!bg-primary aria-selected:!text-primary-foreground aria-selected:after:bg-primary-foreground",
+            today:
+              "[&>button]:font-semibold [&>button]:text-primary [&>button]:relative [&>button]:after:absolute [&>button]:after:bottom-1.5 [&>button]:after:left-0 [&>button]:after:right-0 [&>button]:after:mx-auto [&>button]:after:h-1 [&>button]:after:w-1 [&>button]:after:rounded-full [&>button]:after:bg-current [&>button]:after:content-['']",
             // Недоступний день закреслюємо: бліде в календарі вже означає
             // «інший місяць», два різні сенси одним прийомом читались би як помилка.
-            day_disabled: "text-muted-foreground/60 line-through",
+            disabled: "[&>button]:text-muted-foreground/60 [&>button]:line-through",
           }}
         />
 
