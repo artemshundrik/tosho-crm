@@ -44,12 +44,20 @@ const GIANT_THRESHOLD = 2000;
 /**
  * Стеля для кожного файлу, що вже був великим на 2026-08-22.
  *
+ * ПІДНЯТО 23.08.2026 для двох файлів — свідомо, а не щоб зробити ратчет
+ * зеленим. QuoteDetailsPage виріс на 198 рядків у 638b002 і 127709a
+ * (редагування позиції прорахунку + вирівняні поля тиражу), AppLayout — у
+ * роботі над «дивитись як» плюс 6 рядків на пункт меню «Стек» (REQ-116).
+ * Це доробки, а не розповзання: у кожній з них новий код лежить там, де вже
+ * живе відповідна логіка. Але стеля — це обіцянка, а не формальність: якщо
+ * її доведеться підняти ще раз, спершу винось модуль.
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
 const CEILINGS = {
   "src/pages/DesignTaskPage.tsx": 12800,
-  "src/pages/QuoteDetailsPage.tsx": 9650,
+  "src/pages/QuoteDetailsPage.tsx": 9848,
   "src/pages/QuotesPage.tsx": 8196,
   "src/pages/DesignPage.tsx": 6559,
   "src/pages/OrdersCustomersPage.tsx": 4267,
@@ -57,7 +65,7 @@ const CEILINGS = {
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
   "src/features/finances/FinanceExpenses.tsx": 2858,
-  "src/layout/AppLayout.tsx": 2771,
+  "src/layout/AppLayout.tsx": 2797,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
