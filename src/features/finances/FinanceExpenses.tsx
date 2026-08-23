@@ -1783,6 +1783,7 @@ const EXPENSE_KIND_OPTIONS: {
 ];
 
 // Один рядок батч-вводу регулярних платежів.
+let recurRowSeq = 0; // у модулі, а не в ref: makeRow кличеться під час рендера
 type RecurRow = {
   id: string;
   categoryId: string; // існуюча стаття, або "" якщо нова
@@ -1952,10 +1953,9 @@ function ExpenseDialog({
 
   // Батч-режим — лише при СТВОРЕННІ регулярних платежів. Редагування завжди одиночне.
   const batchMode = !editing && expenseKind === "recurring";
-  const rowIdRef = React.useRef(0);
   const makeRow = React.useCallback(
     (): RecurRow => ({
-      id: String(++rowIdRef.current),
+      id: String(++recurRowSeq),
       categoryId: "",
       categoryName: "",
       name: "",

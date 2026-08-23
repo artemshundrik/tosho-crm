@@ -67,6 +67,8 @@ export default [
       "react-hooks/purity": "error",
       "react-hooks/immutability": "error",
       "react-hooks/set-state-in-effect": "error",
+      "react-hooks/refs": "error",
+      "react-hooks/preserve-manual-memoization": "error",
     },
   },
 ];

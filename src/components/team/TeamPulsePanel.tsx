@@ -159,8 +159,22 @@ export function TeamPulsePanel({
   const totalMinutes = totalMinutesState ?? pulseCache?.totalMinutes ?? 0;
   const [minutesByUserState, setMinutesByUser] = useState<Map<string, number> | null>(null);
   const minutesByUser = minutesByUserState ?? pulseCache?.minutesByUser ?? EMPTY_MINUTES;
-  const memberIdsRef = useRef<Set<string>>(new Set());
-  memberIdsRef.current = new Set(people.map((p) => p.userId));
+  /**
+   * Хто в команді — ЗНАЧЕННЯМ, а не через ref.
+   *
+   * Доти це був ref, який переписувався на кожному рендері, і обидва обчислення
+   * нижче читали його під час рендера. Для `rankedPeople` це минало безкарно —
+   * там `people` і так у залежностях. А от головне обчислення (groups) залежало
+   * лише від `[rows, bucket]`, тобто НЕ перераховувалось, коли список команди
+   * змінювався.
+   *
+   * Наслідок був видимий: список подій і список людей вантажаться незалежно, і
+   * якщо події приїжджали ПЕРШИМИ, фільтр «лишити тільки своїх» відпрацьовував
+   * по порожньому набору — Пульс показував нуль активності й лишався порожнім,
+   * бо ні `rows`, ні `bucket` більше не мінялись. Оновлення сторінки «лагодило»
+   * це випадково, коли порядок відповідей був інший.
+   */
+  const memberIds = useMemo(() => new Set(people.map((p) => p.userId)), [people]);
 
   const periodLabel = formatPulsePeriod(range, periodOffset, period.start, period.end);
   const bucket = bucketOf(range);
@@ -275,7 +289,6 @@ export function TeamPulsePanel({
   }, [workspaceId, teamId, period.start, period.end]);
 
   const { groups, totalActions, trend } = useMemo(() => {
-    const memberIds = memberIdsRef.current;
     const scoped = rows.filter(
       (row) =>
         (row.user_id ?? "") &&
@@ -340,7 +353,7 @@ export function TeamPulsePanel({
       totalActions: scoped.length,
       trend: trendData,
     };
-  }, [rows, bucket]);
+  }, [rows, bucket, memberIds]);
 
   const onlineNow = people.filter((person) => person.online).length;
 
@@ -368,7 +381,7 @@ export function TeamPulsePanel({
       });
     }
     for (const [userId, minutes] of minutesByUser) {
-      if (minutes <= 0 || byId.has(userId) || !memberIdsRef.current.has(userId)) continue;
+      if (minutes <= 0 || byId.has(userId) || !memberIds.has(userId)) continue;
       byId.set(userId, { userId, actions: 0, minutes, lastActiveAt: "", byCategory: [] });
     }
     // Заходив, але не набрав ані дії, ані хвилини — усе одно в списку.
@@ -391,7 +404,7 @@ export function TeamPulsePanel({
     return Array.from(byId.values()).sort(
       (a, b) => b.actions - a.actions || b.minutes - a.minutes
     );
-  }, [groups, minutesByUser, people, period]);
+  }, [groups, minutesByUser, memberIds, people, period]);
 
   const maxGroupTotal = rankedPeople[0]?.actions ?? 0;
 

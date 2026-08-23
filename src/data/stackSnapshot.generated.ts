@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T16:43:42.615Z",
+  "generatedAt": "2026-08-23T17:48:05.415Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -136,7 +136,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "2.112.3",
       "layer": "data",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T19:46:50+03:00",
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -297,7 +297,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "eslint-plugin-react-hooks",
-      "version": "7.0.1",
+      "version": "7.1.1",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -518,5 +518,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 232353
+  "sourceLines": 232366
 };

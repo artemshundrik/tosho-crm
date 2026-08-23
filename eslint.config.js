@@ -44,6 +44,12 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/purity': 'off',
       'react-hooks/immutability': 'off',
+      // Обидва зʼявились у плагіні 7.1 і одразу дали 49 зауважень. Тут вимкнені
+      // з тієї ж причини, що й три вище: червоний `npm run lint` не дає
+      // працювати. Але не забуті — їх рахує ратчет у scripts/check-compiler-debt.mjs,
+      // тож борг може лише зменшуватись.
+      'react-hooks/refs': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/exhaustive-deps': 'error',
 
       // --- ГЕЙТ ДИЗАЙН-СИСТЕМИ ---
