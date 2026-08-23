@@ -21,7 +21,6 @@ import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { DictationButton } from "@/components/dictation/DictationButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { InlineLoading } from "@/components/app/loading-primitives";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Loader2, CheckCircle2, Paperclip, MoreVertical, Trash2, Plus, User, Calendar as CalendarIcon, Check, RefreshCw, Package, Link2, Copy, UserPlus, UserMinus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -39,18 +38,11 @@ import {
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
-import { designStatusBadgeClass } from "@/lib/statusTones";
 import { DESIGN_STATUS_ICON_BY_STATUS, DESIGN_STATUS_ICON_COLOR_BY_STATUS } from "@/lib/designStatusIcons";
 import { notifyDesignTaskCollaboratorsOnStatusChange, notifyQuoteInitiatorOnDesignStatusChange } from "@/lib/workflowNotifications";
 import {
-  DESIGN_TASK_TIMER_UPDATED_EVENT,
-  createEmptyTimerSummary,
-  formatElapsedSeconds,
-  getDesignTasksTimerSummaryMap,
-  getTimerElapsedSeconds,
   pauseDesignTaskTimer,
   startDesignTaskTimer,
-  type DesignTaskTimerSummary,
 } from "@/lib/designTaskTimer";
 import {
   pickNewestChangeRequestId,
@@ -126,7 +118,7 @@ import { useDraftPersist } from "@/hooks/useDraftPersist";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, CalendarRange, Clock3, ExternalLink, Gauge, LayoutGrid, Layers3, ListFilter, PencilLine, Target, Users } from "lucide-react";
+import { Clock3, ExternalLink, LayoutGrid, ListFilter, PencilLine, Users } from "lucide-react";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 
 type DesignTask = {
@@ -176,40 +168,11 @@ type DesignTaskListActivityRow = {
 
 type CustomerOption = CustomerLeadOption;
 
-type DesignViewMode = "kanban" | "timeline" | "assignee";
+type DesignViewMode = "kanban" | "assignee";
 type DesignContentView = "all" | "linked" | "standalone";
 type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
 
-/**
- * Таймлайн вимкнено як гіпотезу: перевіряємо, чи ним узагалі користуються.
- * Код НЕ видалено — щоб повернути, достатньо поставити true. Поки false:
- * вкладка прихована, секції не рендеряться, а збережений viewMode="timeline"
- * тихо падає в kanban (інакше ті, хто востаннє був на таймлайні, побачили б
- * порожню сторінку).
- */
-const DESIGN_TIMELINE_ENABLED = false;
-
-/** Порожній таймлайн — стала, щоб мемо не віддавав щоразу новий обʼєкт. */
-const EMPTY_TIMELINE_DATA = {
-  rows: [] as Array<{
-    task: DesignTask;
-    start: Date;
-    end: Date;
-    offset: number;
-    span: number;
-    hasEstimate: boolean;
-    estimateMinutes: number | null;
-    estimateWorkingDays: number;
-    isStartRisk: boolean;
-    isOverdue: boolean;
-  }>,
-  days: [] as Date[],
-  todayOffset: -1,
-  noDeadlineTasks: [] as DesignTask[],
-};
-
 const normalizeDesignViewMode = (value?: DesignViewMode | null): DesignViewMode => {
-  if (value === "timeline" && !DESIGN_TIMELINE_ENABLED) return "kanban";
   return value ?? "kanban";
 };
 
@@ -252,7 +215,6 @@ type DesignPageFiltersState = {
   statusFilter?: DesignStatus | "all";
   designerFilter?: string;
   managerFilter?: string;
-  timelineZoom?: "day" | "week" | "month";
   assigneeSpotlight?: string;
   completedPeriod?: DesignCompletedPeriod;
   cachedAt?: number;
@@ -416,16 +378,6 @@ const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
   { id: "approved", label: DESIGN_STATUS_LABELS.approved },
   { id: "cancelled", label: DESIGN_STATUS_LABELS.cancelled },
 ];
-const STATUS_BADGE_CLASS_BY_STATUS = designStatusBadgeClass;
-const TIMELINE_BAR_CLASS_BY_STATUS: Record<DesignStatus, string> = {
-  new: "design-timeline-bar-new",
-  changes: "design-timeline-bar-changes",
-  in_progress: "design-timeline-bar-in-progress",
-  pm_review: "design-timeline-bar-pm-review",
-  client_review: "design-timeline-bar-client-review",
-  approved: "design-timeline-bar-approved",
-  cancelled: "design-timeline-bar-cancelled",
-};
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
@@ -1113,9 +1065,6 @@ export default function DesignPage() {
   const [defaultManagerFilterApplied, setDefaultManagerFilterApplied] = useState(
     () => (restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER) !== ALL_MANAGERS_FILTER || isQuoteManagerJobRole(jobRole)
   );
-  const [timelineZoom, setTimelineZoom] = useState<"day" | "week" | "month">(
-    () => restoredFilters?.timelineZoom ?? "day"
-  );
   const [assigneeSpotlight, setAssigneeSpotlight] = useState<string>(
     () => restoredFilters?.assigneeSpotlight ?? ALL_ASSIGNEE_SPOTLIGHT
   );
@@ -1135,8 +1084,6 @@ export default function DesignPage() {
   const [designerMembers, setDesignerMembers] = useState<Array<{ id: string; label: string; avatarUrl?: string | null }>>(
     () => initialMemberCache?.designerMembers ?? []
   );
-  const [timerSummaryByTaskId, setTimerSummaryByTaskId] = useState<Record<string, DesignTaskTimerSummary>>({});
-  const [timerNowMs, setTimerNowMs] = useState<number>(() => Date.now());
   const [completedPeriod] = useState<DesignCompletedPeriod>(
     () => restoredFilters?.completedPeriod ?? "30d"
   );
@@ -1289,16 +1236,6 @@ export default function DesignPage() {
         !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
     });
 
-  const getTaskTimerSummary = useCallback((taskId: string): DesignTaskTimerSummary => {
-    return (
-      timerSummaryByTaskId[taskId] ?? createEmptyTimerSummary()
-    );
-  }, [timerSummaryByTaskId]);
-
-  const getTaskTrackedSeconds = useCallback((taskId: string) => {
-    const summary = getTaskTimerSummary(taskId);
-    return getTimerElapsedSeconds(summary, timerNowMs);
-  }, [getTaskTimerSummary, timerNowMs]);
 
   useEffect(() => {
     const loadMembers = async () => {
@@ -2169,20 +2106,6 @@ export default function DesignPage() {
       if (typeof window !== "undefined" && effectiveTeamId) {
         writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
       }
-      try {
-        const timerSummaryMap = await getDesignTasksTimerSummaryMap(
-          effectiveTeamId,
-          parsed.map((task) => task.id)
-        );
-        const timerSummaryObj: Record<string, DesignTaskTimerSummary> = {};
-        timerSummaryMap.forEach((summary, taskId) => {
-          timerSummaryObj[taskId] = summary;
-        });
-        setTimerSummaryByTaskId((current) => (append ? { ...current, ...timerSummaryObj } : timerSummaryObj));
-      } catch (timerError) {
-        console.warn("Failed to load timer summaries", timerError);
-        if (!append) setTimerSummaryByTaskId({});
-      }
       loadTasksCooldownUntilRef.current = 0;
       resourceErrorToastShownRef.current = false;
     } catch (e: unknown) {
@@ -2606,7 +2529,6 @@ export default function DesignPage() {
       statusFilter,
       designerFilter,
       managerFilter,
-      timelineZoom,
       assigneeSpotlight,
       completedPeriod,
       cachedAt: Date.now(),
@@ -2619,7 +2541,6 @@ export default function DesignPage() {
     statusFilter,
     designerFilter,
     managerFilter,
-    timelineZoom,
     assigneeSpotlight,
     completedPeriod,
   ]);
@@ -2637,44 +2558,6 @@ export default function DesignPage() {
     };
   }, [refreshing]);
 
-  useEffect(() => {
-    const hasActive = Object.values(timerSummaryByTaskId).some((summary) => !!summary.activeStartedAt);
-    if (!hasActive) return;
-    const interval = window.setInterval(() => {
-      setTimerNowMs(Date.now());
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [timerSummaryByTaskId]);
-
-  useEffect(() => {
-    if (!effectiveTeamId) return;
-    const refreshTimerSummaries = async (taskIds: string[]) => {
-      if (taskIds.length === 0) return;
-      try {
-        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, taskIds);
-        const timerSummaryObj: Record<string, DesignTaskTimerSummary> = {};
-        timerSummaryMap.forEach((summary, taskId) => {
-          timerSummaryObj[taskId] = summary;
-        });
-        setTimerNowMs(Date.now());
-        setTimerSummaryByTaskId((current) => ({ ...current, ...timerSummaryObj }));
-      } catch (timerError) {
-        console.warn("Failed to sync design timer summaries", timerError);
-      }
-    };
-    const handleTimerUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ teamId?: string | null; taskId?: string | null }>).detail;
-      if (detail?.teamId && detail.teamId !== effectiveTeamId) return;
-      const taskIds = detail?.taskId ? [detail.taskId] : tasksRef.current.map((task) => task.id);
-      void refreshTimerSummaries(taskIds);
-    };
-    window.addEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
-    window.addEventListener("focus", handleTimerUpdated);
-    return () => {
-      window.removeEventListener(DESIGN_TASK_TIMER_UPDATED_EVENT, handleTimerUpdated);
-      window.removeEventListener("focus", handleTimerUpdated);
-    };
-  }, [effectiveTeamId]);
 
   useEffect(() => {
     setTasksFetchLimit(viewMode === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE);
@@ -2797,10 +2680,6 @@ export default function DesignPage() {
     };
   }, [hasMoreTasks, loading, refreshing, viewMode, loadTasks]);
 
-  const handleLoadMoreTasks = useCallback(() => {
-    if (loading || refreshing || !hasMoreTasks) return;
-    void loadTasks({ append: true });
-  }, [hasMoreTasks, loading, refreshing, loadTasks]);
 
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
@@ -2928,217 +2807,7 @@ export default function DesignPage() {
     setEstimateDialogOpen(true);
   };
 
-  const timelineData = useMemo(() => {
-    /**
-     * Не рахуємо діаграму, якої не видно.
-     *
-     * Цей мемо залежав тільки від `filteredTasks`, тобто перераховувався на КОЖНУ
-     * зміну пошуку — навіть на канбані, і навіть попри те, що таймлайн вимкнено
-     * прапорцем DESIGN_TIMELINE_ENABLED і намалювати його зараз неможливо в
-     * принципі. А коштує він дорого: для кожної задачі subtractWorkingDays
-     * відмотує робочі дні НАЗАД по одному дню, створюючи Date на кожній ітерації,
-     * далі сортування й побудова діапазону днів.
-     *
-     * Тому: поки таймлайн вимкнений або відкритий інший вигляд — віддаємо
-     * порожню сталу. Прапорець повернуть у true — гейт лишиться на viewMode, і
-     * діаграма рахуватиметься лише тоді, коли на неї справді дивляться.
-     */
-    if (!DESIGN_TIMELINE_ENABLED || viewMode !== "timeline") return EMPTY_TIMELINE_DATA;
 
-    const normalizeDate = (value: string | null | undefined): Date | null => {
-      if (!value) return null;
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) return null;
-      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-    };
-    const addDays = (base: Date, days: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
-    const isWeekend = (day: Date) => {
-      const w = day.getDay();
-      return w === 0 || w === 6;
-    };
-    const daysDiff = (from: Date, to: Date) =>
-      Math.round(
-        (new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime() -
-          new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) /
-          (1000 * 60 * 60 * 24)
-      );
-    const subtractWorkingDays = (deadline: Date, workingDays: number) => {
-      const safeDays = Math.max(1, workingDays);
-      let cursor = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
-      let remaining = safeDays;
-      while (remaining > 1) {
-        cursor = addDays(cursor, -1);
-        if (!isWeekend(cursor)) remaining -= 1;
-      }
-      return cursor;
-    };
-    const today = normalizeDate(new Date().toISOString()) as Date;
-
-    const timelineTasks = filteredTasks
-      .map((task) => {
-        const deadline = normalizeDate(task.designDeadline ?? null);
-        if (!deadline) return null;
-        const estimateMinutes = getTaskEstimateMinutes(task);
-        const hasEstimate = !!estimateMinutes;
-        const estimateWorkingDays = hasEstimate ? Math.max(1, Math.ceil((estimateMinutes as number) / 480)) : 1;
-        const start = hasEstimate ? subtractWorkingDays(deadline, estimateWorkingDays) : deadline;
-        const isDone = task.status === "approved" || task.status === "cancelled";
-        const isStartRisk = (task.status === "new" || task.status === "changes") && today.getTime() > start.getTime();
-        const isOverdue = !isDone && today.getTime() > deadline.getTime();
-        return {
-          task,
-          start,
-          end: deadline,
-          hasEstimate,
-          estimateMinutes: estimateMinutes ?? null,
-          estimateWorkingDays,
-          isStartRisk,
-          isOverdue,
-        };
-      })
-      .filter(Boolean) as Array<{
-        task: DesignTask;
-        start: Date;
-        end: Date;
-        hasEstimate: boolean;
-        estimateMinutes: number | null;
-        estimateWorkingDays: number;
-        isStartRisk: boolean;
-        isOverdue: boolean;
-      }>;
-
-    const noDeadlineTasks = filteredTasks.filter((task) => !normalizeDate(task.designDeadline ?? null));
-    if (timelineTasks.length === 0) {
-      return {
-        rows: [] as Array<{
-          task: DesignTask;
-          start: Date;
-          end: Date;
-          offset: number;
-          span: number;
-          hasEstimate: boolean;
-          estimateMinutes: number | null;
-          estimateWorkingDays: number;
-          isStartRisk: boolean;
-          isOverdue: boolean;
-        }>,
-        days: [] as Date[],
-        todayOffset: -1,
-        noDeadlineTasks,
-      };
-    }
-
-    const sorted = [...timelineTasks].sort((a, b) => {
-      const byEnd = a.end.getTime() - b.end.getTime();
-      if (byEnd !== 0) return byEnd;
-      return a.start.getTime() - b.start.getTime();
-    });
-
-    const minStart = sorted.reduce(
-      (acc, item) => (item.start.getTime() < acc.getTime() ? item.start : acc),
-      sorted[0].start
-    );
-    const maxEnd = sorted.reduce((acc, item) => (item.end.getTime() > acc.getTime() ? item.end : acc), sorted[0].end);
-    const windowStart = addDays(minStart, -1);
-    const windowEnd = addDays(maxEnd.getTime() < today.getTime() ? today : maxEnd, 1);
-    const totalDays = Math.max(1, daysDiff(windowStart, windowEnd) + 1);
-    const days = Array.from({ length: totalDays }, (_, index) => addDays(windowStart, index));
-    const todayOffset = Math.max(0, Math.min(totalDays - 1, daysDiff(windowStart, today)));
-
-    const rows = sorted.map((item) => {
-      const offset = Math.max(0, daysDiff(windowStart, item.start));
-      const span = Math.max(1, daysDiff(item.start, item.end) + 1);
-      return { ...item, offset, span };
-    });
-
-    return { rows, days, todayOffset, noDeadlineTasks };
-  }, [filteredTasks, viewMode]);
-
-  const timelineAxis = useMemo(() => {
-    const baseDays = timelineData.days;
-    if (baseDays.length === 0) {
-      return {
-        columns: [] as Array<{ start: Date; end: Date; dayCount: number }>,
-        visibleStart: null as Date | null,
-        visibleEnd: null as Date | null,
-        totalDays: 0,
-        todayOffset: -1,
-      };
-    }
-
-    const normalizeDate = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
-    const addDays = (base: Date, days: number) => new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
-    const daysDiff = (from: Date, to: Date) =>
-      Math.round(
-        (Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) /
-          (1000 * 60 * 60 * 24)
-      );
-    const startOfWeek = (value: Date) => {
-      const normalized = normalizeDate(value);
-      const day = normalized.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      return addDays(normalized, diff);
-    };
-    const endOfWeek = (value: Date) => addDays(startOfWeek(value), 6);
-    const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth(), 1);
-    const endOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth() + 1, 0);
-
-    const visibleStart = normalizeDate(baseDays[0]);
-    const visibleEnd = normalizeDate(baseDays[baseDays.length - 1]);
-    const today = normalizeDate(new Date());
-
-    if (timelineZoom === "day") {
-      const columns = baseDays.map((day) => {
-        const start = normalizeDate(day);
-        return { start, end: start, dayCount: 1 };
-      });
-      return {
-        columns,
-        visibleStart,
-        visibleEnd,
-        totalDays: columns.length,
-        todayOffset: Math.max(0, Math.min(columns.length - 1, daysDiff(visibleStart, today))),
-      };
-    }
-
-    if (timelineZoom === "week") {
-      const first = startOfWeek(visibleStart);
-      const last = endOfWeek(visibleEnd);
-      const columns: Array<{ start: Date; end: Date; dayCount: number }> = [];
-      let cursor = first;
-      while (cursor.getTime() <= last.getTime()) {
-        const start = cursor;
-        const end = endOfWeek(start);
-        columns.push({ start, end, dayCount: daysDiff(start, end) + 1 });
-        cursor = addDays(end, 1);
-      }
-      return {
-        columns,
-        visibleStart: first,
-        visibleEnd: last,
-        totalDays: daysDiff(first, last) + 1,
-        todayOffset: Math.max(0, Math.min(daysDiff(first, last), daysDiff(first, today))),
-      };
-    }
-
-    const first = startOfMonth(visibleStart);
-    const last = endOfMonth(visibleEnd);
-    const columns: Array<{ start: Date; end: Date; dayCount: number }> = [];
-    let cursor = first;
-    while (cursor.getTime() <= last.getTime()) {
-      const start = cursor;
-      const end = endOfMonth(start);
-      columns.push({ start, end, dayCount: daysDiff(start, end) + 1 });
-      cursor = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    }
-    return {
-      columns,
-      visibleStart: first,
-      visibleEnd: last,
-      totalDays: daysDiff(first, last) + 1,
-      todayOffset: Math.max(0, Math.min(daysDiff(first, last), daysDiff(first, today))),
-    };
-  }, [timelineData.days, timelineZoom]);
 
   const assigneeGrouped = useMemo(() => {
     const map = new Map<
@@ -3241,36 +2910,6 @@ export default function DesignPage() {
     return map;
   }, [assigneeGrouped]);
 
-  const timelineSummary = useMemo(() => {
-    const today = new Date();
-    const rows = timelineData.rows;
-    const overdue = rows.filter((row) => row.isOverdue).length;
-    const startRisk = rows.filter((row) => row.isStartRisk).length;
-    const noEstimate = rows.filter((row) => !row.hasEstimate).length;
-    const dueToday = rows.filter((row) => {
-      const end = row.end;
-      return (
-        end.getFullYear() === today.getFullYear() &&
-        end.getMonth() === today.getMonth() &&
-        end.getDate() === today.getDate()
-      );
-    }).length;
-    const dueThisWeek = rows.filter((row) => {
-      const diff = row.end.getTime() - today.getTime();
-      const diffDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
-      return diffDays >= 0 && diffDays <= 7;
-    }).length;
-
-    return {
-      scheduled: rows.length,
-      overdue,
-      startRisk,
-      noEstimate,
-      dueToday,
-      dueThisWeek,
-      noDeadline: timelineData.noDeadlineTasks.length,
-    };
-  }, [timelineData.noDeadlineTasks.length, timelineData.rows]);
 
   const sortedDesignerCapacityOptions = useMemo(
     () =>
@@ -3568,16 +3207,6 @@ export default function DesignPage() {
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about design status change", notifyError);
       }
-      try {
-        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, [task.id]);
-        const nextSummary = timerSummaryMap.get(task.id);
-        setTimerSummaryByTaskId((prev) => ({
-          ...prev,
-          [task.id]: nextSummary ?? createEmptyTimerSummary(),
-        }));
-      } catch (timerError) {
-        console.warn("Failed to refresh timer summary after status change", timerError);
-      }
     } catch (e: unknown) {
       setError(getErrorMessage(e, "Не вдалося оновити статус"));
       setTasks((prev) =>
@@ -3745,17 +3374,6 @@ export default function DesignPage() {
         }
       } catch (notifyError) {
         console.warn("Failed to send design task assignment notification", notifyError);
-      }
-
-      try {
-        const timerSummaryMap = await getDesignTasksTimerSummaryMap(effectiveTeamId, [task.id]);
-        const nextSummary = timerSummaryMap.get(task.id);
-        setTimerSummaryByTaskId((prev) => ({
-          ...prev,
-          [task.id]: nextSummary ?? createEmptyTimerSummary(),
-        }));
-      } catch (timerError) {
-        console.warn("Failed to refresh timer summary after assignee change", timerError);
       }
 
       toast.success(nextAssigneeUserId ? `Задача призначена: ${getMemberLabel(nextAssigneeUserId)}` : "Призначення знято");
@@ -5173,18 +4791,6 @@ export default function DesignPage() {
                 <LayoutGrid className="h-3.5 w-3.5" />
                 <span className="hidden xl:inline">Kanban</span>
               </Button>
-              {DESIGN_TIMELINE_ENABLED ? (
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={viewMode === "timeline"}
-                  onClick={() => setViewMode("timeline")}
-                  className={cn(SEGMENTED_TRIGGER, "gap-1.5")}
-                >
-                  <CalendarRange className="h-3.5 w-3.5" />
-                  <span className="hidden xl:inline">Timeline</span>
-                </Button>
-              ) : null}
               <Button
                 variant="segmented"
                 size="xs"
@@ -5504,399 +5110,6 @@ export default function DesignPage() {
         </EstimatesKanbanCanvas>
       ) : null}
 
-      {viewMode === "timeline" ? (
-        <div className="space-y-3">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
-            <div className="rounded-section border border-border/60 bg-card/80 p-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1 text-2xs font-semibold uppercase tracking-caps text-primary">
-                    <CalendarRange className="h-3.5 w-3.5" />
-                    Production Timeline
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold tracking-tight text-foreground">План-графік дизайну по дедлайнах і ризиках</h3>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                      Один екран для черги, дедлайнів і вузьких місць. Акцент на задачах, які треба розрулювати сьогодні, а не просто на списку дат.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-background/80 p-1">
-                  <Button size="sm" variant={timelineZoom === "day" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("day")}>
-                    Дні
-                  </Button>
-                  <Button size="sm" variant={timelineZoom === "week" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("week")}>
-                    Тижні
-                  </Button>
-                  <Button size="sm" variant={timelineZoom === "month" ? "secondary" : "ghost"} onClick={() => setTimelineZoom("month")}>
-                    Місяці
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-inner border border-border/60 bg-background/85 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">В графіку</div>
-                      <div className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{timelineSummary.scheduled}</div>
-                    </div>
-                    <Layers3 className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {timelineSummary.noDeadline > 0 ? `${timelineSummary.noDeadline} задач без дедлайну винесено окремо` : "Усі задачі мають дедлайн"}
-                  </div>
-                </div>
-                <div className="rounded-inner border border-danger-soft-border bg-danger-soft/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-2xs font-medium uppercase tracking-caps text-danger-foreground/80">Ризик зриву</div>
-                      <div className="mt-2 text-2xl font-semibold tabular-nums text-danger-foreground">{timelineSummary.overdue}</div>
-                    </div>
-                    <AlertTriangle className="h-4 w-4 text-danger-foreground" />
-                  </div>
-                  <div className="mt-2 text-xs text-danger-foreground/80">{timelineSummary.startRisk} задач мають вузький запас часу на старт</div>
-                </div>
-                <div className="rounded-inner border border-warning-soft-border bg-warning-soft/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-2xs font-medium uppercase tracking-caps text-warning-foreground/90">Фокус сьогодні</div>
-                      <div className="mt-2 text-2xl font-semibold tabular-nums text-warning-foreground">{timelineSummary.dueToday}</div>
-                    </div>
-                    <Target className="h-4 w-4 text-warning-foreground" />
-                  </div>
-                  <div className="mt-2 text-xs text-warning-foreground/90">{timelineSummary.dueThisWeek} задач треба закрити протягом 7 днів</div>
-                </div>
-                <div className="rounded-inner border border-info-soft-border bg-info-soft/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-2xs font-medium uppercase tracking-caps text-info-foreground/90">Без естімейту</div>
-                      <div className="mt-2 text-2xl font-semibold tabular-nums text-info-foreground">{timelineSummary.noEstimate}</div>
-                    </div>
-                    <Clock3 className="h-4 w-4 text-info-foreground" />
-                  </div>
-                  <div className="mt-2 text-xs text-info-foreground/90">Планування неповне, ці задачі гірше прогнозуються</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-section border border-border/60 bg-card/80 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Орієнтири</div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">Що означає графік</div>
-                </div>
-                <Gauge className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-danger-foreground" />
-                  Вертикальна лінія показує сьогоднішній день.
-                </div>
-                <div className="flex items-center gap-2 rounded-xl border border-warning-soft-border bg-warning-soft/50 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-warning-solid" />
-                  Жовтий контур сигналізує, що часу до дедлайну мало для старту.
-                </div>
-                <div className="flex items-center gap-2 rounded-xl border border-danger-soft-border bg-danger-soft/50 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-danger-foreground" />
-                  Червоний контур означає, що задача вже прострочена.
-                </div>
-                <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/80 px-3 py-2">
-                  <span className="h-2.5 w-2.5 rounded-full border border-border/70 bg-transparent" />
-                  Пунктирна смуга означає відсутній естімейт.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 text-2xs text-muted-foreground">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-danger-foreground" />
-                Лінія сьогодні
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-warning-soft-border bg-warning-soft/40 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-warning-solid" />
-                Ризик старту
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-danger-soft-border bg-danger-soft/40 px-2 py-1">
-                <span className="h-2 w-2 rounded-full bg-danger-foreground" />
-                Прострочено
-              </span>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Масштаб: <span className="font-semibold text-foreground">{timelineZoom === "day" ? "по днях" : timelineZoom === "week" ? "по тижнях" : "по місяцях"}</span>
-            </div>
-          </div>
-
-          {timelineData.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/60 p-4 text-sm text-muted-foreground">Немає задач із дедлайном для Timeline.</div>
-          ) : (
-            <>
-              <div className="grid gap-3 md:hidden">
-                {timelineData.rows.map((row) => {
-                  const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
-                  const trackedSeconds = getTaskTrackedSeconds(row.task.id);
-                  const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
-                  return (
-                    <button
-                      type="button"
-                      key={row.task.id}
-                      className="rounded-section border border-border/60 bg-card/70 p-4 text-left transition-colors hover:bg-card"
-                      onClick={() => openTask(row.task.id)}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(row.task)}</div>
-                          <div className="mt-1 truncate text-xs text-muted-foreground">{row.task.customerName ?? "Не вказано"}</div>
-                        </div>
-                        <Badge variant="outline" className={cn("text-2xs", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
-                          {statusLabel}
-                        </Badge>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="text-2xs">
-                          До {row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}
-                        </Badge>
-                        <Badge variant="outline" className="text-2xs">
-                          {row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-2xs",
-                            row.isOverdue
-                              ? "border-danger-soft-border bg-danger-soft text-danger-foreground"
-                              : row.isStartRisk
-                                ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
-                                : "border-border/60"
-                          )}
-                        >
-                          {row.isOverdue ? "Прострочено" : row.isStartRisk ? "Ризик старту" : "В нормі"}
-                        </Badge>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Прогрес по часу</span>
-                          <span>{formatElapsedSeconds(trackedSeconds)}</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-muted/70">
-                          <div
-                            className={cn(
-                              "h-2 rounded-full transition-all",
-                              row.isOverdue ? "bg-danger-foreground" : row.isStartRisk ? "bg-warning-solid" : "bg-primary/70"
-                            )}
-                            style={{ width: `${Math.max(8, Math.round(progressRatio * 100))}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                          <AvatarBase
-                            src={getTaskAssigneeAvatar(row.task)}
-                            name={getTaskAssigneeLabel(row.task)}
-                            fallback={getInitials(getTaskAssigneeLabel(row.task))}
-                            size={16}
-                            className="border-border/70"
-                            inactive={row.task.assigneeUserId ? (memberInactiveById[row.task.assigneeUserId] ?? false) : false}
-                          />
-                          {getTaskAssigneeLabel(row.task)}
-                        </span>
-                        <span>{row.task.productName ?? "Без товару"}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="hidden overflow-hidden rounded-section border border-border/60 bg-card/70 md:block">
-                <div
-                  className="grid min-w-[1120px]"
-                  style={{
-                    gridTemplateColumns: `360px ${timelineAxis.columns
-                      .map((column) => `minmax(${Math.max(56, column.dayCount * 14)}px, ${column.dayCount}fr)`)
-                      .join(" ")}`,
-                  }}
-                >
-                  <div className="sticky left-0 z-20 border-b border-r border-border/50 bg-card/95 px-4 py-3">
-                    <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Черга задач</div>
-                    <div className="mt-1 text-sm font-semibold text-foreground">Дедлайн, виконавець, естімейт, прогрес</div>
-                  </div>
-                  {timelineAxis.columns.map((column, index) => (
-                    <div
-                      key={`timeline-head-${column.start.toISOString()}-${index}`}
-                      className="border-b border-r border-border/40 bg-background/65 px-1 py-3 text-center text-2xs text-muted-foreground"
-                    >
-                      <div className="font-medium text-foreground">
-                        {timelineZoom === "month"
-                          ? column.start.toLocaleDateString("uk-UA", { month: "short" })
-                          : column.start.toLocaleDateString("uk-UA", {
-                              day: "2-digit",
-                              month: timelineZoom === "day" ? undefined : "short",
-                            })}
-                      </div>
-                      <div className="mt-0.5">
-                        {timelineZoom === "day"
-                          ? column.start.toLocaleDateString("uk-UA", { month: "short" })
-                          : timelineZoom === "week"
-                            ? column.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })
-                            : column.start.toLocaleDateString("uk-UA", { month: "long", year: "numeric" })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {timelineData.rows.map((row) => {
-                    const statusLabel = DESIGN_COLUMNS.find((col) => col.id === row.task.status)?.label ?? row.task.status;
-                    const isAttachedFromStandalone = isTaskAttachedFromStandalone(row.task) && isUuid(row.task.quoteId);
-                    const axisStart = timelineAxis.visibleStart ?? row.start;
-                    const daysDiff = (from: Date, to: Date) =>
-                      Math.round(
-                        (Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) /
-                          (1000 * 60 * 60 * 24)
-                      );
-                    const offsetDays = Math.max(0, daysDiff(axisStart, row.start));
-                    const spanDays = Math.max(1, daysDiff(row.start, row.end) + 1);
-                    const totalDays = Math.max(1, timelineAxis.totalDays);
-                    const barLeft = `calc(${offsetDays} * (100% / ${totalDays}))`;
-                    const barWidth = `calc(${spanDays} * (100% / ${totalDays}))`;
-                    const trackedSeconds = getTaskTrackedSeconds(row.task.id);
-                    const progressRatio = row.hasEstimate ? Math.min(1, trackedSeconds / Math.max(1, (row.estimateMinutes ?? 0) * 60)) : 0;
-                    const progressWidth = `calc(${spanDays * progressRatio} * (100% / ${totalDays}))`;
-                    const barTitle = [
-                      `${isUuid(row.task.quoteId) ? "Прорахунок" : "Задача"}: ${getTaskDisplayNumber(row.task)}`,
-                      `Статус: ${statusLabel}`,
-                      `Естімейт: ${row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "немає"}`,
-                      `Витрачено: ${formatElapsedSeconds(trackedSeconds)}`,
-                      `Дедлайн: ${row.end.toLocaleDateString("uk-UA")}`,
-                    ].join(" • ");
-                    return (
-                      <div key={row.task.id} className="contents">
-                        <button
-                          type="button"
-                          className="sticky left-0 z-10 border-b border-r border-border/40 bg-card/95 px-4 py-3 text-left transition-colors hover:bg-muted/20"
-                          onClick={() => openTask(row.task.id)}
-                          onAuxClick={(event) => {
-                            if (event.button !== 1) return;
-                            event.preventDefault();
-                            openTask(row.task.id, true);
-                          }}
-                          onMouseDown={(event) => {
-                            if ((event.metaKey || event.ctrlKey) && event.button === 0) {
-                              event.preventDefault();
-                              openTask(row.task.id, true);
-                            }
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-foreground">{getTaskDisplayNumber(row.task)}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                                <span className="truncate">{row.task.customerName ?? "Не вказано"}</span>
-                                {isAttachedFromStandalone ? <span className="text-primary">Привʼязано</span> : null}
-                                {row.task.productName ? (
-                                  <>
-                                    <span>·</span>
-                                    <span className="truncate">{row.task.productName}</span>
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-                            <Badge variant="outline" className={cn("text-2xs", STATUS_BADGE_CLASS_BY_STATUS[row.task.status])}>
-                              {statusLabel}
-                            </Badge>
-                          </div>
-                          <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <AvatarBase
-                                src={getTaskAssigneeAvatar(row.task)}
-                                name={getTaskAssigneeLabel(row.task)}
-                                fallback={getInitials(getTaskAssigneeLabel(row.task))}
-                                size={18}
-                                className="shrink-0 border-border/70"
-                                inactive={row.task.assigneeUserId ? (memberInactiveById[row.task.assigneeUserId] ?? false) : false}
-                              />
-                              <span className="truncate">{getTaskAssigneeLabel(row.task)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock3 className="h-3.5 w-3.5 shrink-0" />
-                              <span>{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
-                              <span>·</span>
-                              <span>{formatElapsedSeconds(trackedSeconds)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-                              <span>До {row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</span>
-                            </div>
-                          </div>
-                        </button>
-                        <div
-                          className="relative border-b border-border/40 bg-[linear-gradient(to_right,transparent_0%,transparent_calc(100%_-_1px),hsl(var(--neutral-soft-border)/0.34)_calc(100%_-_1px),hsl(var(--neutral-soft-border)/0.34)_100%)]"
-                          style={{ gridColumn: `2 / span ${timelineAxis.columns.length}` }}
-                        >
-                          <div
-                            className="absolute inset-y-0 border-l-2 border-danger-foreground/80 pointer-events-none"
-                            style={{ left: `calc(${Math.max(0, timelineAxis.todayOffset)} * (100% / ${Math.max(1, timelineAxis.totalDays)}))` }}
-                          />
-                          <div className="absolute inset-y-2 left-0 right-0">
-                            <div className="relative h-full">
-                              <div
-                                className={cn(
-                                  "absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl border",
-                                  row.hasEstimate ? (TIMELINE_BAR_CLASS_BY_STATUS[row.task.status] ?? "bg-primary/20 border-primary/40") : "border-dashed border-border/70 bg-background/70",
-                                  row.isStartRisk && "ring-2 ring-warning-soft-border",
-                                  row.isOverdue && "ring-2 ring-danger-soft-border"
-                                )}
-                                title={barTitle}
-                                style={{
-                                  left: barLeft,
-                                  width: barWidth,
-                                }}
-                              />
-                              {row.hasEstimate ? (
-                                <div
-                                  className="absolute top-1/2 h-11 -translate-y-1/2 rounded-2xl bg-foreground/15"
-                                  style={{
-                                    left: barLeft,
-                                    width: progressWidth,
-                                  }}
-                                />
-                              ) : null}
-                              <div
-                                className="absolute top-1/2 flex h-11 -translate-y-1/2 items-center justify-between gap-3 px-3 text-2xs font-medium text-foreground/95 pointer-events-none"
-                                style={{
-                                  left: barLeft,
-                                  width: barWidth,
-                                }}
-                              >
-                                <span className="truncate">{row.hasEstimate ? formatEstimateMinutes(row.estimateMinutes) : "Без естімейту"}</span>
-                                <span className="shrink-0 opacity-75">{row.end.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {timelineData.noDeadlineTasks.length > 0 ? (
-            <div className="rounded-section border border-border/60 bg-card/70 p-4">
-              <div className="flex flex-col gap-3 border-b border-border/50 pb-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-2xs font-medium uppercase tracking-caps text-muted-foreground">Backlog</div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">Задачі без дедлайну</div>
-                </div>
-                <Badge variant="secondary">{timelineData.noDeadlineTasks.length}</Badge>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {timelineData.noDeadlineTasks.map((task) => <Fragment key={task.id}>{renderTaskCard(task)}</Fragment>)}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       {viewMode === "assignee" ? (
         <DesignersDashboard
@@ -5976,25 +5189,7 @@ export default function DesignPage() {
         </DialogContent>
       </Dialog>
 
-      {viewMode === "timeline" && (((loading && tasks.length === 0) || membersLoading || refreshing)) && (
-        <InlineLoading
-          label={
-            membersLoading
-              ? "Завантажуємо учасників..."
-              : refreshing
-              ? "Оновлюємо задачі..."
-              : "Завантажуємо задачі..."
-          }
-        />
-      )}
 
-      {viewMode === "timeline" && hasMoreTasks && !loading && !membersLoading ? (
-        <div className="flex items-center justify-center px-4 pb-6 pt-2 md:px-6">
-          <Button variant="outline" onClick={handleLoadMoreTasks} disabled={refreshing}>
-            {refreshing ? "Оновлення..." : `Показати ще ${DESIGN_LIST_PAGE_INCREMENT}`}
-          </Button>
-        </div>
-      ) : null}
 
       <Dialog
         open={createDialogOpen}

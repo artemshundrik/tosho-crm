@@ -1273,35 +1273,6 @@
      посилання, і саме тому крапка pm_review встигла розійтись із бейджем
      (синя проти фіолетової), поки ніхто цього не бачив. */
 
-  .design-timeline-bar-new {
-    background-color: hsl(var(--neutral-soft) / 0.75);
-    border-color: hsl(var(--neutral-soft-border));
-  }
-  .design-timeline-bar-changes {
-    background-color: hsl(var(--warning-soft) / 0.75);
-    border-color: hsl(var(--warning-soft-border));
-  }
-  .design-timeline-bar-in-progress {
-    background-color: hsl(var(--info-soft) / 0.75);
-    border-color: hsl(var(--info-soft-border));
-  }
-  .design-timeline-bar-pm-review {
-    background-color: hsl(var(--info-soft) / 0.75);
-    border-color: hsl(var(--info-soft-border));
-  }
-  .design-timeline-bar-client-review {
-    background-color: hsl(var(--warning-soft) / 0.75);
-    border-color: hsl(var(--warning-soft-border));
-  }
-  .design-timeline-bar-approved {
-    background-color: hsl(var(--success-soft) / 0.75);
-    border-color: hsl(var(--success-soft-border));
-  }
-  .design-timeline-bar-cancelled {
-    background-color: hsl(var(--danger-soft) / 0.75);
-    border-color: hsl(var(--danger-soft-border));
-  }
-
   .page-canvas-root {
     @apply w-full;
   }
