@@ -285,6 +285,21 @@ Practical implication:
   - RLS: owner/SEO only, via `tosho.can_read_all_feature_adoption()`
   - tracked schema in [scripts/stack-schema.sql](/Users/artem/Projects/tosho-crm/scripts/stack-schema.sql)
 
+## Trigger-Filled Columns (types gotcha)
+
+Some `NOT NULL` columns are never passed by application code — a `BEFORE INSERT`
+trigger fills them. The type generator cannot see triggers, so such a column
+would be generated as **required** in `Insert` and break `tsc` on working code.
+
+The fact lives on the column itself: its `COMMENT` carries the marker
+`[fills-by-trigger]`, and [scripts/gen-db-types.mjs](/Users/artem/Projects/tosho-crm/scripts/gen-db-types.mjs)
+makes those columns optional on insert while keeping them non-null on read. The
+generator refuses the marker if the table has no `BEFORE INSERT` trigger at all.
+
+- `catalog_methods.directory_id` — bound by `catalog_methods_bind_directory`,
+  which finds or creates the `tosho.method_directory` row by normalized name
+  ([scripts/catalog-methods-trigger-comment.sql](/Users/artem/Projects/tosho-crm/scripts/catalog-methods-trigger-comment.sql))
+
 ## Important Stored Functions And Helpers Seen In Code
 
 - `tosho.my_workspace_id()`

@@ -2,26 +2,6 @@
 // Schema types for `public` + `tosho`. Regenerate after any schema change.
 // Wired into src/lib/supabaseClient.ts (createClient<Database>). If new tables/views
 // are missing here, code that writes them casts `as never` — regenerate to fix.
-//
-// УВАГА (23.08.2026, REQ-116): `stack_versions` і `get_stack_platform` дописані
-// сюди РУКАМИ — байт у байт тим, що видає генератор. Причина: повна
-// регенерація зараз ЛАМАЄ `npx tsc --noEmit` трьома помилками, і жодна з них
-// не про стек.
-//
-// У проді `tosho.catalog_methods.directory_id` став NOT NULL без DEFAULT
-// (міграція довідника методів, REQ-54), а три місця в коді вставляють метод
-// БЕЗ цієї колонки — і мають рацію: її проставляє тригер
-// `catalog_methods_bind_directory` ще до запису рядка. Тригерів генератор
-// типів не бачить, тож у згенерованому `Insert` колонка стає обовʼязковою, і
-// цілком робочий код перестає збиратись.
-//
-// Полагодити можна двома способами (обидва — окрема задача, не в межах REQ-116):
-//   • зняти NOT NULL з колонки — інваріант і так тримає тригер на INSERT і
-//     UPDATE, тобто обмеження нічого не додає понад нього;
-//   • або привести три виклики до згенерованого типу — але вони живуть у
-//     QuotesPage.tsx і useModelEditor.ts, які вже стоять на стелі ратчета
-//     розміру, і будь-який доданий рядок валить pre-push.
-// Доки цього не зробили, повна регенерація потребує ручного огляду.
 
 export type Json =
   | string
@@ -907,6 +887,48 @@ export type Database = {
           },
         ]
       }
+      catalog_method_merges: {
+        Row: {
+          id: string
+          kind_id: string | null
+          loser_id: string
+          loser_name: string
+          merged_at: string
+          moved_model_links: number
+          moved_order_items: number
+          moved_quote_items: number
+          team_id: string | null
+          winner_id: string
+          winner_name: string
+        }
+        Insert: {
+          id?: string
+          kind_id?: string | null
+          loser_id: string
+          loser_name: string
+          merged_at?: string
+          moved_model_links?: number
+          moved_order_items?: number
+          moved_quote_items?: number
+          team_id?: string | null
+          winner_id: string
+          winner_name: string
+        }
+        Update: {
+          id?: string
+          kind_id?: string | null
+          loser_id?: string
+          loser_name?: string
+          merged_at?: string
+          moved_model_links?: number
+          moved_order_items?: number
+          moved_quote_items?: number
+          team_id?: string | null
+          winner_id?: string
+          winner_name?: string
+        }
+        Relationships: []
+      }
       catalog_methods: {
         Row: {
           created_at: string
@@ -940,129 +962,20 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "catalog_methods_kind_id_fkey"
-            columns: ["kind_id"]
-            isOneToOne: false
-            referencedRelation: "catalog_kinds"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "catalog_methods_directory_id_fkey"
             columns: ["directory_id"]
             isOneToOne: false
             referencedRelation: "method_directory"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "catalog_methods_kind_id_fkey"
+            columns: ["kind_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_kinds"
+            referencedColumns: ["id"]
+          },
         ]
-      }
-      commits: {
-        Row: {
-          sha: string
-          committed_at: string
-          committed_local: string
-          type: string
-          scope: string | null
-          subject: string
-          ins: number
-          del: number
-          plain: string | null
-          recorded_at: string
-        }
-        Insert: {
-          sha: string
-          committed_at: string
-          committed_local: string
-          type?: string
-          scope?: string | null
-          subject: string
-          ins?: number
-          del?: number
-          plain?: string | null
-          recorded_at?: string
-        }
-        Update: {
-          sha?: string
-          committed_at?: string
-          committed_local?: string
-          type?: string
-          scope?: string | null
-          subject?: string
-          ins?: number
-          del?: number
-          plain?: string | null
-          recorded_at?: string
-        }
-        Relationships: []
-      }
-      catalog_method_merges: {
-        Row: {
-          id: string
-          team_id: string | null
-          kind_id: string | null
-          loser_id: string
-          loser_name: string
-          winner_id: string
-          winner_name: string
-          moved_model_links: number
-          moved_quote_items: number
-          moved_order_items: number
-          merged_at: string
-        }
-        Insert: {
-          id?: string
-          team_id?: string | null
-          kind_id?: string | null
-          loser_id: string
-          loser_name: string
-          winner_id: string
-          winner_name: string
-          moved_model_links?: number
-          moved_quote_items?: number
-          moved_order_items?: number
-          merged_at?: string
-        }
-        Update: {
-          id?: string
-          team_id?: string | null
-          kind_id?: string | null
-          loser_id?: string
-          loser_name?: string
-          winner_id?: string
-          winner_name?: string
-          moved_model_links?: number
-          moved_quote_items?: number
-          moved_order_items?: number
-          merged_at?: string
-        }
-        Relationships: []
-      }
-      method_directory: {
-        Row: {
-          active: boolean
-          created_at: string
-          id: string
-          name: string
-          normalized_name: string | null
-          team_id: string
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name: string
-          team_id: string
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          name?: string
-          team_id?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       catalog_model_methods: {
         Row: {
@@ -1229,6 +1142,102 @@ export type Database = {
           sort_order?: number
           team_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      commits: {
+        Row: {
+          committed_at: string
+          committed_local: string
+          del: number
+          ins: number
+          plain: string | null
+          recorded_at: string
+          scope: string | null
+          sha: string
+          subject: string
+          type: string
+        }
+        Insert: {
+          committed_at: string
+          committed_local: string
+          del?: number
+          ins?: number
+          plain?: string | null
+          recorded_at?: string
+          scope?: string | null
+          sha: string
+          subject: string
+          type?: string
+        }
+        Update: {
+          committed_at?: string
+          committed_local?: string
+          del?: number
+          ins?: number
+          plain?: string | null
+          recorded_at?: string
+          scope?: string | null
+          sha?: string
+          subject?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      company_pricing_rate_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          field: string
+          id: number
+          new_value: number
+          old_value: number | null
+          workspace_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          field: string
+          id?: never
+          new_value: number
+          old_value?: number | null
+          workspace_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          field?: string
+          id?: never
+          new_value?: number
+          old_value?: number | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      company_pricing_rates: {
+        Row: {
+          created_at: string
+          fixed_cost_rate: number
+          updated_at: string
+          updated_by: string | null
+          vat_rate: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          fixed_cost_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+          vat_rate?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          fixed_cost_rate?: number
+          updated_at?: string
+          updated_by?: string | null
+          vat_rate?: number
+          workspace_id?: string
         }
         Relationships: []
       }
@@ -1593,11 +1602,11 @@ export type Database = {
           released_at: string | null
           status: string
           team_id: string
-          theme: string | null
           tg_chat_id: number | null
           tg_message_id: number | null
           tg_user_id: number | null
           tg_username: string | null
+          theme: string | null
           title: string
           updated_at: string
           workspace_id: string | null
@@ -1623,11 +1632,11 @@ export type Database = {
           released_at?: string | null
           status?: string
           team_id: string
-          theme?: string | null
           tg_chat_id?: number | null
           tg_message_id?: number | null
           tg_user_id?: number | null
           tg_username?: string | null
+          theme?: string | null
           title: string
           updated_at?: string
           workspace_id?: string | null
@@ -1653,11 +1662,11 @@ export type Database = {
           released_at?: string | null
           status?: string
           team_id?: string
-          theme?: string | null
           tg_chat_id?: number | null
           tg_message_id?: number | null
           tg_user_id?: number | null
           tg_username?: string | null
+          theme?: string | null
           title?: string
           updated_at?: string
           workspace_id?: string | null
@@ -2824,6 +2833,36 @@ export type Database = {
           },
         ]
       }
+      method_directory: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string | null
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          normalized_name?: string | null
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          normalized_name?: string | null
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       name_declensions: {
         Row: {
           created_at: string
@@ -2848,6 +2887,39 @@ export type Database = {
           source?: string
           target_case?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      notification_deliveries: {
+        Row: {
+          category: string | null
+          channel: string
+          created_at: string
+          id: number
+          notification_id: string
+          reason: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel: string
+          created_at?: string
+          id?: never
+          notification_id: string
+          reason?: string | null
+          status: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          channel?: string
+          created_at?: string
+          id?: never
+          notification_id?: string
+          reason?: string | null
+          status?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3635,6 +3707,39 @@ export type Database = {
           },
         ]
       }
+      quote_run_income_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          new_income: number
+          old_income: number | null
+          quote_id: string
+          run_id: string
+          team_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_income: number
+          old_income?: number | null
+          quote_id: string
+          run_id: string
+          team_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: never
+          new_income?: number
+          old_income?: number | null
+          quote_id?: string
+          run_id?: string
+          team_id?: string
+        }
+        Relationships: []
+      }
       quote_set_items: {
         Row: {
           created_at: string
@@ -3959,6 +4064,7 @@ export type Database = {
           reserved_quantity: number
           sku: string | null
           specifications: string | null
+          stock_kind: string
           team_id: string
           unit_price: number
           updated_at: string
@@ -3978,6 +4084,7 @@ export type Database = {
           reserved_quantity?: number
           sku?: string | null
           specifications?: string | null
+          stock_kind?: string
           team_id: string
           unit_price?: number
           updated_at?: string
@@ -3997,6 +4104,7 @@ export type Database = {
           reserved_quantity?: number
           sku?: string | null
           specifications?: string | null
+          stock_kind?: string
           team_id?: string
           unit_price?: number
           updated_at?: string
@@ -4464,96 +4572,6 @@ export type Database = {
           previous_employment_status?: string | null
           user_id?: string
           workspace_id?: string
-        }
-        Relationships: []
-      }
-      company_pricing_rate_changes: {
-        Row: {
-          changed_at: string
-          changed_by: string | null
-          field: string
-          id: number
-          new_value: number
-          old_value: number | null
-          workspace_id: string
-        }
-        Insert: {
-          changed_at?: string
-          changed_by?: string | null
-          field: string
-          id?: never
-          new_value: number
-          old_value?: number | null
-          workspace_id: string
-        }
-        Update: {
-          changed_at?: string
-          changed_by?: string | null
-          field?: string
-          id?: never
-          new_value?: number
-          old_value?: number | null
-          workspace_id?: string
-        }
-        Relationships: []
-      }
-      company_pricing_rates: {
-        Row: {
-          created_at: string
-          fixed_cost_rate: number
-          updated_at: string
-          updated_by: string | null
-          vat_rate: number
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          fixed_cost_rate?: number
-          updated_at?: string
-          updated_by?: string | null
-          vat_rate?: number
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          fixed_cost_rate?: number
-          updated_at?: string
-          updated_by?: string | null
-          vat_rate?: number
-          workspace_id?: string
-        }
-        Relationships: []
-      }
-      quote_run_income_changes: {
-        Row: {
-          changed_at: string
-          changed_by: string | null
-          id: number
-          new_income: number
-          old_income: number | null
-          quote_id: string
-          run_id: string
-          team_id: string
-        }
-        Insert: {
-          changed_at?: string
-          changed_by?: string | null
-          id?: never
-          new_income: number
-          old_income?: number | null
-          quote_id: string
-          run_id: string
-          team_id: string
-        }
-        Update: {
-          changed_at?: string
-          changed_by?: string | null
-          id?: never
-          new_income?: number
-          old_income?: number | null
-          quote_id?: string
-          run_id?: string
-          team_id?: string
         }
         Relationships: []
       }
@@ -5233,6 +5251,7 @@ export type Database = {
           reserved_quantity: number
           sku: string | null
           specifications: string | null
+          stock_kind: string
           team_id: string
           unit_price: number
           updated_at: string
@@ -5363,6 +5382,10 @@ export type Database = {
             Args: { p_user_id: string; p_workspace_id: string }
             Returns: boolean
           }
+      merge_catalog_method: {
+        Args: { p_loser: string; p_winner: string }
+        Returns: undefined
+      }
       my_workspace_id: { Args: never; Returns: string }
       next_dev_request_number: { Args: { p_team_id: string }; Returns: number }
       next_document_number: {
@@ -5375,6 +5398,7 @@ export type Database = {
         Returns: number
       }
       next_quote_number: { Args: { _team_id: string }; Returns: string }
+      normalize_method_name: { Args: { p_name: string }; Returns: string }
       recalc_quote_totals: { Args: { p_quote_id: string }; Returns: undefined }
       record_activity_minute: {
         Args: {
@@ -5392,6 +5416,10 @@ export type Database = {
           p_quote_id: string
         }
         Returns: undefined
+      }
+      swap_method_id: {
+        Args: { p_from: string; p_methods: Json; p_to: string }
+        Returns: Json
       }
       team_absence_balances: {
         Args: { p_year: number }
