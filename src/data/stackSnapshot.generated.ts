@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T19:50:59.288Z",
+  "generatedAt": "2026-08-23T20:14:52.941Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -286,10 +286,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.30.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
+      "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "afa07af",
-        "subject": "feat: add contract sections editor and rich text editor components"
+        "sha": "56ce4fc",
+        "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Посилання в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
@@ -301,10 +301,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.30.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
+      "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "afa07af",
-        "subject": "feat: add contract sections editor and rich text editor components"
+        "sha": "56ce4fc",
+        "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Підкреслення в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
@@ -316,11 +316,14 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.30.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-23T22:56:04+03:00",
+      "bumpCommit": {
+        "sha": "56ce4fc",
+        "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
+      },
       "description": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
       "homepage": "https://tiptap.dev",
-      "usedIn": 0,
+      "usedIn": 1,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
@@ -329,10 +332,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.30.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
+      "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "afa07af",
-        "subject": "feat: add contract sections editor and rich text editor components"
+        "sha": "56ce4fc",
+        "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Редактор технічного завдання: жирний, списки, посилання.",
       "homepage": "https://tiptap.dev",
@@ -344,10 +347,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.30.2",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
+      "bumpedAt": "2026-08-23T22:56:04+03:00",
       "bumpCommit": {
-        "sha": "afa07af",
-        "subject": "feat: add contract sections editor and rich text editor components"
+        "sha": "56ce4fc",
+        "subject": "Редактор технічного завдання оновлено, а сторінка «Стек» навчилась не звинувачувати невинних"
       },
       "description": "Базовий набір можливостей редактора ТЗ.",
       "homepage": "https://tiptap.dev",
@@ -974,10 +977,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "note": "Розклад кронів живе в базі й містить адресу функції рядком. Перейменував файл — крон щодня стукає в нікуди, і журнал при цьому показує «успішно»."
     }
   ],
-  "tests": 1119,
+  "tests": 1128,
   "testFiles": 74,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 233117
+  "sourceLines": 233344
 };

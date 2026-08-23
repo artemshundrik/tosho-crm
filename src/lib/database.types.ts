@@ -4195,6 +4195,27 @@ export type Database = {
         }
         Relationships: []
       }
+      stack_watch: {
+        Row: {
+          checked_at: string
+          key: string
+          ready: boolean
+          value: string | null
+        }
+        Insert: {
+          checked_at?: string
+          key: string
+          ready?: boolean
+          value?: string | null
+        }
+        Update: {
+          checked_at?: string
+          key?: string
+          ready?: boolean
+          value?: string | null
+        }
+        Relationships: []
+      }
       support_feedback: {
         Row: {
           created_at: string

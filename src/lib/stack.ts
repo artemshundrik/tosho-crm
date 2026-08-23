@@ -506,6 +506,44 @@ export function layerLag(items: StackItem[]): { layer: StackLayer; behind: numbe
   }).filter((row) => row.total > 0);
 }
 
+/* ────────────────────── чужі умови, які нас блокують ─────────────────── */
+
+/**
+ * Чи пускає діапазон peerDependencies потрібний мажор.
+ *
+ * НАВІЩО. TypeScript 7 утричі швидший, але взяти його не можна: typescript-eslint
+ * тримає межу `>=4.8.4 <6.1.0`. Питання «чи вже можна» зводиться до однієї речі —
+ * де стоїть ВЕРХНЯ межа. Нижня нас не обходить: ми точно вище за неї.
+ *
+ * ПОВНОГО РОЗБОРУ semver тут свідомо немає. Він великий, а відповідь потрібна
+ * груба: якщо верхньої межі не знайшли — вважаємо, що не пускає. Помилятись
+ * безпечніше в цей бік: зайве мовчання коштує тижня очікування, а хибне
+ * «вже можна» — зламаного лінту й витраченого дня.
+ */
+export function rangeAllowsMajor(range: string | null | undefined, major: number): boolean {
+  if (!range) return false;
+  const text = String(range);
+
+  // `<6.1.0` або `<=6.1.0` — беремо найсуворішу з наявних верхніх меж.
+  const uppers = [...text.matchAll(/<(=?)\s*(\d+)/g)].map((m) => ({
+    inclusive: m[1] === "=",
+    major: Number(m[2]),
+  }));
+  if (uppers.length > 0) {
+    return uppers.every((upper) => (upper.inclusive ? major <= upper.major : major < upper.major));
+  }
+
+  // `^7.0.0` чи `~7.1` — межа задана каретою: пускає лише свій мажор.
+  const caret = text.match(/[\^~]\s*(\d+)/);
+  if (caret) return Number(caret[1]) === major;
+
+  // `>=4.8.4` без верхньої межі — пускає будь-що новіше.
+  const lower = text.match(/>=?\s*(\d+)/);
+  if (lower) return major >= Number(lower[1]);
+
+  return false;
+}
+
 /* ─────────────────────────── людські підписи ─────────────────────── */
 
 const DAY_MS = 24 * 60 * 60 * 1000;

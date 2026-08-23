@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { resolveAccessLevel } from "./_lib/assistantAccess";
 import { STACK_SNAPSHOT } from "../../src/data/stackSnapshot.generated";
-import type { StackAdvisory, AdvisorySeverity } from "../../src/lib/stack";
+import { rangeAllowsMajor, type StackAdvisory, type AdvisorySeverity } from "../../src/lib/stack";
 
 // Щоденний обхід npm: яка версія кожного нашого пакета вийшла і чи є на неї
 // дірка безпеки. Результат лягає в tosho.stack_versions, звідки його читає
@@ -195,6 +195,32 @@ async function fetchNodeLts(signal: AbortSignal): Promise<string | null> {
 }
 
 /**
+ * Чи вже можна брати TypeScript 7.
+ *
+ * Питання не про сам TypeScript, а про typescript-eslint: сімка вийшла без
+ * стабільного програмного API, і лінт на ній не працює. Межу вони тримають у
+ * `peerDependencies.typescript` — сьогодні це `>=4.8.4 <6.1.0`.
+ *
+ * Один запит на добу до пакета, який ми й так перевіряємо. Рішення не
+ * ухвалюємо — лише фіксуємо факт; сказати про нього має нічний звіт.
+ */
+async function checkTypescriptGate(signal: AbortSignal): Promise<{ range: string | null; ready: boolean }> {
+  try {
+    const response = await fetch(`${REGISTRY}/typescript-eslint/latest`, {
+      headers: { Accept: "application/json" },
+      signal,
+    });
+    if (!response.ok) return { range: null, ready: false };
+    const data = (await response.json()) as { peerDependencies?: Record<string, unknown> };
+    const raw = data.peerDependencies?.typescript;
+    const range = typeof raw === "string" ? raw : null;
+    return { range, ready: rangeAllowsMajor(range, 7) };
+  } catch {
+    return { range: null, ready: false };
+  }
+}
+
+/**
  * Хто має право запустити перевірку.
  *
  * Дві двері: крон зі спільним секретом і жива людина з розділу Dev (кнопка
@@ -328,6 +354,20 @@ export const handler = async (event: HttpEvent) => {
       if (at) publishedByName.set(entry.name, at);
     }
 
+    // Чужа умова, яка тримає найбільше оновлення в стеку. Пишемо навіть коли
+    // npm не відповів: `range: null` чесно означає «не знаємо», і сигнал у
+    // такому разі мовчить, а не радить оновлюватись.
+    const gate = await checkTypescriptGate(controller.signal);
+    if (gate.range) {
+      await admin
+        .schema("tosho")
+        .from("stack_watch")
+        .upsert(
+          { key: "typescript_eslint_peer", value: gate.range, ready: gate.ready, checked_at: new Date().toISOString() },
+          { onConflict: "key" }
+        );
+    }
+
     const nowIso = new Date().toISOString();
     const rows = [...latest, ...runtimeResults]
       .filter((entry) => entry && entry.version)
@@ -365,6 +405,7 @@ export const handler = async (event: HttpEvent) => {
       skipped: packages.length - rows.length,
       vulnerable: advisories.ok ? Object.keys(advisories.map).length : null,
       publishDates: publishedByName.size,
+      typescriptGate: gate.range,
       advisoriesChecked: advisories.ok,
       ranAt: nowIso,
     });

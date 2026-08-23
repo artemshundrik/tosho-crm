@@ -9,6 +9,7 @@ import {
   layerLag,
   looksUnused,
   parseVersion,
+  rangeAllowsMajor,
   sortItems,
   stackSummaryText,
   stackTotals,
@@ -378,6 +379,37 @@ describe("stackSummaryText", () => {
   it("до першої перевірки не вдає, що знає стан", () => {
     const items = buildStackItems(snapshot([pkg("a", "1.0.0")]), []);
     expect(stackSummaryText(totalsOf(items))).toBe("Стек: 1 залежність, npm ще не питали");
+  });
+});
+
+describe("rangeAllowsMajor", () => {
+  it("нинішня межа typescript-eslint сімку НЕ пускає", () => {
+    // Саме це й блокує REQ-123. Щойно рядок зміниться — сторож має помітити.
+    expect(rangeAllowsMajor(">=4.8.4 <6.1.0", 7)).toBe(false);
+  });
+
+  it("піднята межа сімку пускає", () => {
+    expect(rangeAllowsMajor(">=4.8.4 <8.0.0", 7)).toBe(true);
+  });
+
+  it("включна верхня межа рахується включно", () => {
+    expect(rangeAllowsMajor(">=5 <=7", 7)).toBe(true);
+    expect(rangeAllowsMajor(">=5 <=6", 7)).toBe(false);
+  });
+
+  it("карета пускає лише свій мажор", () => {
+    expect(rangeAllowsMajor("^7.0.0", 7)).toBe(true);
+    expect(rangeAllowsMajor("^6.0.0", 7)).toBe(false);
+  });
+
+  it("без верхньої межі пускає все новіше", () => {
+    expect(rangeAllowsMajor(">=4.8.4", 7)).toBe(true);
+  });
+
+  it("порожнє чи незрозуміле — вважаємо, що НЕ пускає", () => {
+    // Мовчання коштує тижня очікування, хибне «вже можна» — зламаного лінту.
+    expect(rangeAllowsMajor(null, 7)).toBe(false);
+    expect(rangeAllowsMajor("зовсім не діапазон", 7)).toBe(false);
   });
 });
 
