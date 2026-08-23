@@ -38,6 +38,15 @@ const CONCURRENCY = 8;
  */
 const DEADLINE_MS = 8_000;
 
+/**
+ * Скільки пакетів за прохід питаємо про дату останнього релізу.
+ *
+ * Вісім на добу — це повне коло за тиждень. Більше не можна: пошук npm
+ * відповідає 429 уже на десятках запитів, і наполегливість тут дала б не
+ * свіжіші дані, а порожні відповіді.
+ */
+const PUBLISH_BATCH = 8;
+
 type HttpEvent = {
   httpMethod?: string;
   headers?: Record<string, string | undefined>;
@@ -51,7 +60,7 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-type LatestResult = { name: string; version: string | null };
+type LatestResult = { name: string; version: string | null; publishedAt?: string | null };
 
 /** Остання версія пакета. Беремо `/latest` (≈5 КБ), а не повний packument (2–3 МБ). */
 async function fetchLatest(name: string, signal: AbortSignal): Promise<LatestResult> {
@@ -67,6 +76,35 @@ async function fetchLatest(name: string, signal: AbortSignal): Promise<LatestRes
     // Один недоступний пакет не має валити прохід: у рядка просто лишиться
     // попереднє значення, а checked_at не зсунеться.
     return { name, version: null };
+  }
+}
+
+/**
+ * Коли пакет востаннє щось випускав.
+ *
+ * Питаємо пошуковий ендпоінт, а не повний packument: там ця дата лежить у
+ * відповіді на ≈1 КБ, тоді як packument важить 2–3 МБ на пакет. Відповідь на
+ * питання «чи живий проєкт» не варта 90 МБ трафіку за прохід.
+ *
+ * ЗАМІРЯНО 23.08.2026: цей ендпоінт обмежує запити ЖОРСТКО. Спроба спитати про
+ * всі 58 пакетів дала 48 відмов 429 навіть послідовно, без паралелі. Тому за
+ * один прохід питаємо лише жменю (PUBLISH_BATCH) — дата релізу міняється раз
+ * на місяці, і заповнити таблицю за тиждень цілком достатньо.
+ */
+async function fetchPublishedAt(name: string, signal: AbortSignal): Promise<string | null> {
+  try {
+    const response = await fetch(`${REGISTRY}/-/v1/search?text=${encodeURIComponent(name)}&size=1`, {
+      headers: { Accept: "application/json" },
+      signal,
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { objects?: Array<{ package?: { name?: unknown; date?: unknown } }> };
+    const hit = data.objects?.[0]?.package;
+    // Пошук може віддати схожий пакет замість точного — звіряємо ім'я.
+    if (!hit || hit.name !== name) return null;
+    return typeof hit.date === "string" ? hit.date : null;
+  } catch {
+    return null;
   }
 }
 
@@ -257,15 +295,38 @@ export const handler = async (event: HttpEvent) => {
     const { data: previousRows } = await admin
       .schema("tosho")
       .from("stack_versions")
-      .select("name,latest_version,latest_seen_at,advisories,advisories_version");
+      .select("name,latest_version,latest_seen_at,advisories,advisories_version,latest_published_at");
     type PreviousRow = {
       name: string;
       latest_version: string | null;
       latest_seen_at: string | null;
       advisories: StackAdvisory[] | null;
       advisories_version: string | null;
+      latest_published_at: string | null;
     };
     const previous = new Map(((previousRows as PreviousRow[]) ?? []).map((row) => [row.name, row]));
+
+    /**
+     * Порція для дат релізу: спершу ті, про кого ще не питали, далі — найдавніші.
+     *
+     * Найдавніша дата і є найцікавішою: саме там імовірність, що проєкт
+     * покинули, найвища, тож переперевіряти варто саме її.
+     */
+    const publishOrder = [...packages]
+      .map((pkg) => ({ name: pkg.name, known: previous.get(pkg.name)?.latest_published_at ?? null }))
+      .sort((a, b) => {
+        if (!a.known && !b.known) return a.name.localeCompare(b.name);
+        if (!a.known) return -1;
+        if (!b.known) return 1;
+        return a.known.localeCompare(b.known);
+      })
+      .slice(0, PUBLISH_BATCH);
+
+    const publishedByName = new Map<string, string>();
+    for (const entry of publishOrder) {
+      const at = await fetchPublishedAt(entry.name, controller.signal);
+      if (at) publishedByName.set(entry.name, at);
+    }
 
     const nowIso = new Date().toISOString();
     const rows = [...latest, ...runtimeResults]
@@ -285,6 +346,7 @@ export const handler = async (event: HttpEvent) => {
           // Версія, про яку питали, їде разом з відповіддю: без неї сторінка не
           // знає, чи стосуються дірки того, що встановлено ЗАРАЗ, — і після
           // оновлення пакета показувала б стару вразливість як чинну.
+          latest_published_at: publishedByName.get(entry.name) ?? before?.latest_published_at ?? null,
           advisories_version: advisories.ok
             ? (installed[entry.name]?.[0] ?? null)
             : (before?.advisories_version ?? null),
@@ -302,6 +364,7 @@ export const handler = async (event: HttpEvent) => {
       checked: rows.length,
       skipped: packages.length - rows.length,
       vulnerable: advisories.ok ? Object.keys(advisories.map).length : null,
+      publishDates: publishedByName.size,
       advisoriesChecked: advisories.ok,
       ranAt: nowIso,
     });

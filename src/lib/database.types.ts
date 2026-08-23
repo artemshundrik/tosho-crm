@@ -4170,6 +4170,7 @@ export type Database = {
           advisories: Json
           advisories_version: string | null
           checked_at: string
+          latest_published_at: string | null
           latest_seen_at: string | null
           latest_version: string | null
           name: string
@@ -4178,6 +4179,7 @@ export type Database = {
           advisories?: Json
           advisories_version?: string | null
           checked_at?: string
+          latest_published_at?: string | null
           latest_seen_at?: string | null
           latest_version?: string | null
           name: string
@@ -4186,6 +4188,7 @@ export type Database = {
           advisories?: Json
           advisories_version?: string | null
           checked_at?: string
+          latest_published_at?: string | null
           latest_seen_at?: string | null
           latest_version?: string | null
           name?: string

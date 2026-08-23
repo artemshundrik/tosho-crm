@@ -11,6 +11,7 @@ import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { STACK_SNAPSHOT } from "@/data/stackSnapshot.generated";
 import {
   LAYER_META,
+  layerLag,
   LAYER_ORDER,
   SEVERITY_LABEL,
   URGENCY_META,
@@ -18,11 +19,11 @@ import {
   formatAgoCoarse,
   groupByLayer,
   looksUnused,
+  monthsSincePublish,
+  STALE_PUBLISH_MONTHS,
   groupByUrgency,
-  layerLag,
   stackTotals,
   type StackItem,
-  type StackLayer,
   type StackTotals,
   type StackUrgency,
 } from "@/lib/stack";
@@ -133,8 +134,7 @@ export function StackOverview() {
         </div>
 
         <aside className="grid gap-3.5 lg:sticky lg:top-2">
-          <LagCard items={items} />
-          <BumpHeatmap items={items} />
+          <EffortCard items={items} />
           <GuardsCard />
         </aside>
       </div>
@@ -676,6 +676,9 @@ function StackRow({ item }: { item: StackItem }) {
 function StackRowPopover({ item }: { item: StackItem }) {
   const bumped = formatAgoCoarse(item.bumpedAt);
   const unused = looksUnused(item);
+  const published = formatAgoCoarse(item.publishedAt);
+  const months = monthsSincePublish(item);
+  const stale = months !== null && months >= STALE_PUBLISH_MONTHS;
 
   return (
     <Popover>
@@ -724,6 +727,13 @@ function StackRowPopover({ item }: { item: StackItem }) {
               <dd className="figure font-medium">{item.latest}</dd>
             </div>
           ) : null}
+
+          {published ? (
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="shrink-0 text-muted-foreground">Останній реліз</dt>
+              <dd className={cn("figure truncate font-medium", stale && "text-warning-foreground")}>{published}</dd>
+            </div>
+          ) : null}
         </dl>
 
         {item.bumpCommit ? (
@@ -761,100 +771,68 @@ function StackRowPopover({ item }: { item: StackItem }) {
 
 const ASIDE_TITLE = "text-3xs font-bold uppercase tracking-widest text-muted-foreground";
 
-/** «Наскільки відстаємо» — смужки-треки по шарах, як у «Релізах». */
-function LagCard({ items }: { items: StackItem[] }) {
-  const rows = layerLag(items);
-  return (
-    <section className={cn(CARD, "p-3.5")}>
-      <h3 className={ASIDE_TITLE}>Наскільки відстаємо</h3>
-      <div className="mt-2.5 grid gap-2">
-        {rows.map((row) => {
-          const share = row.total === 0 ? 0 : Math.round((row.behind / row.total) * 100);
-          return (
-            <div key={row.layer} className="grid gap-1">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{LAYER_META[row.layer as StackLayer].label}</span>
-                <span className="figure font-medium text-foreground">
-                  {row.behind} з {row.total}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full",
-                    share === 0 ? "bg-success-solid" : share >= 25 ? "bg-destructive" : "bg-warning-solid"
-                  )}
-                  style={{ width: `${Math.max(share, share > 0 ? 4 : 0)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-const MONTHS_SHORT = ["січ", "лют", "бер", "кві", "тра", "чер", "лип", "сер", "вер", "жов", "лис", "гру"];
-
 /**
- * «Коли оновлювали за рік» — теплова карта по місяцях.
+ * «Скільки це роботи» — замість смужок «наскільки відстаємо».
  *
- * Дані — з історії package.json (у знімку), а не з npm: питання тут про НАШУ
- * дисципліну, а не про чужі релізи. Порожній місяць — це місяць, коли жодну
- * залежність не рухали, і саме довгі світлі смуги тут інформативні.
+ * ЧОМУ ЗАМІНЕНО. Смужки показували частку відсталих пакетів у кожному шарі, і
+ * майже всі були червоні: 6 з 32, 7 з 15, 1 з 8. Коли червоне скрізь, колір
+ * перестає щось означати — а головне, з нього не випливає жодної дії.
+ *
+ * Питання, яке насправді ставлять, — «скільки це часу». Відповідь виводиться
+ * з двох речей, які ми вже знаємо: наскільки болісний стрибок і скільки коду
+ * за пакет тримається.
+ *
+ * Оцінка навмисно груба — три кошики замість годин. Точні години тут були б
+ * вигадкою: скільки займе переїзд, видно лише коли за нього беруться.
  */
-function BumpHeatmap({ items }: { items: StackItem[] }) {
-  const cells = useMemo(() => {
-    const now = new Date();
-    const buckets: Array<{ key: string; label: string; count: number }> = [];
-    for (let back = 11; back >= 0; back -= 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - back, 1);
-      buckets.push({
-        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-        label: MONTHS_SHORT[date.getMonth()],
-        count: 0,
-      });
-    }
-    const index = new Map(buckets.map((bucket, position) => [bucket.key, position]));
+function EffortCard({ items }: { items: StackItem[] }) {
+  const buckets = useMemo(() => {
+    const project: StackItem[] = [];
+    const evening: StackItem[] = [];
+    const batch: StackItem[] = [];
     for (const item of items) {
-      if (!item.bumpedAt) continue;
-      const position = index.get(item.bumpedAt.slice(0, 7));
-      if (position !== undefined) buckets[position].count += 1;
+      if (item.state === "major") {
+        // Мажор у пакеті, за який тримаються десятки файлів, — це не вечір.
+        if ((item.usedIn ?? 0) >= 20) project.push(item);
+        else evening.push(item);
+      } else if (item.state === "minor" || item.state === "patch") {
+        batch.push(item);
+      }
     }
-    return buckets;
+    return { project, evening, batch };
   }, [items]);
 
-  const max = Math.max(1, ...cells.map((cell) => cell.count));
+  const rows: Array<{ key: string; label: string; list: StackItem[]; dot: string }> = [
+    { key: "project", label: "Окремий проєкт", list: buckets.project, dot: "bg-destructive" },
+    { key: "evening", label: "На вечір кожне", list: buckets.evening, dot: "bg-warning-solid" },
+    { key: "batch", label: "Однією пачкою", list: buckets.batch, dot: "bg-success-solid" },
+  ];
 
   return (
     <section className={cn(CARD, "p-3.5")}>
-      <h3 className={ASIDE_TITLE}>Коли оновлювали за рік</h3>
-      <div className="mt-2.5 grid grid-cols-12 gap-[3px]">
-        {cells.map((cell) => (
-          <i
-            key={cell.key}
-            title={`${cell.label}: ${cell.count} ${pluralWordUk(cell.count, "пакет", "пакети", "пакетів")}`}
-            className={cn(
-              "aspect-square rounded-[3px]",
-              cell.count === 0
-                ? "bg-muted"
-                : cell.count >= max * 0.66
-                  ? "bg-success-solid"
-                  : cell.count >= max * 0.33
-                    ? "bg-success-solid/60"
-                    : "bg-success-solid/30"
-            )}
-          />
+      <h3 className={ASIDE_TITLE}>Скільки це роботи</h3>
+      <div className="mt-2.5 grid gap-2.5">
+        {rows.map((row) => (
+          <div key={row.key} className="grid gap-0.5">
+            <div className="flex items-baseline gap-2">
+              <span className={cn("h-2 w-2 shrink-0 translate-y-[-1px] rounded-[2px]", row.dot)} />
+              <span className="text-xs font-medium">{row.label}</span>
+              <span className="figure ml-auto text-xs font-medium">{row.list.length}</span>
+            </div>
+            <p className="pl-4 text-3xs text-muted-foreground">
+              {row.list.length === 0
+                ? "нічого"
+                : row.list
+                    .slice(0, 3)
+                    .map((item) => item.label ?? item.name)
+                    .join(", ") + (row.list.length > 3 ? ` й ще ${row.list.length - 3}` : "")}
+            </p>
+          </div>
         ))}
       </div>
-      <div className="mt-1 flex justify-between text-3xs text-muted-foreground">
-        {cells
-          .filter((_, index) => index % 3 === 0)
-          .map((cell) => (
-            <span key={cell.key}>{cell.label}</span>
-          ))}
-      </div>
+      <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
+        Оцінка з двох речей: наскільки болісний стрибок і скільки коду за пакет тримається. Груба навмисно.
+      </p>
     </section>
   );
 }

@@ -118,6 +118,8 @@ export type StackVersionRow = {
    * попередню версію.
    */
   advisories_version: string | null;
+  /** Коли в npm востаннє публікували будь-яку версію цього пакета. */
+  latest_published_at: string | null;
 };
 
 /* ──────────────────────────── стан пакета ─────────────────────────── */
@@ -139,6 +141,8 @@ export type StackItem = StackPackageSnapshot & {
   latest: string | null;
   /** Коли МИ вперше побачили цю нову версію — «висить третій місяць». */
   latestSeenAt: string | null;
+  /** Коли в npm востаннє щось випускали — відповідь «чи живий проєкт». */
+  publishedAt: string | null;
   checkedAt: string | null;
   state: StackState;
   advisories: StackAdvisory[];
@@ -324,6 +328,7 @@ export function buildStackItems(snapshot: StackSnapshot, rows: StackVersionRow[]
       ...pkg,
       latest: row?.latest_version ?? null,
       latestSeenAt: row?.latest_seen_at ?? null,
+      publishedAt: row?.latest_published_at ?? null,
       checkedAt: row?.checked_at ?? null,
       state: resolveState(pkg, row?.latest_version ?? null, installed),
       advisories,
@@ -371,6 +376,24 @@ export const URGENCY_META: Record<StackUrgency, { label: string; dot: string; ti
 export function looksUnused(item: StackItem): boolean {
   return item.usedIn === 0 && (item.layer === "screen" || item.layer === "data");
 }
+
+/**
+ * Скільки місяців пакет не бачив жодного релізу.
+ *
+ * СВІДОМО НЕ НАЗИВАЄМО ЦЕ «ПОКИНУТИЙ». Дрібна утиліта на кшталт `clsx` може
+ * бути просто дописаною: вона робить одну річ і робить її повністю. Сторінка
+ * показує ФАКТ (останній реліз тоді-то), а висновок лишає людині — інакше вона
+ * лякала б там, де все гаразд.
+ */
+export function monthsSincePublish(item: StackItem, now: Date = new Date()): number | null {
+  if (!item.publishedAt) return null;
+  const then = new Date(item.publishedAt).getTime();
+  if (Number.isNaN(then)) return null;
+  return Math.floor((now.getTime() - then) / (30.4 * 24 * 60 * 60 * 1000));
+}
+
+/** Два роки без релізів — уже привід подивитись, чи проєкт живий. */
+export const STALE_PUBLISH_MONTHS = 24;
 
 export function urgencyOf(item: StackItem): StackUrgency {
   if (item.state === "major") return "breaking";

@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T18:42:40.429Z",
+  "generatedAt": "2026-08-23T19:11:47.225Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -21,7 +21,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "ESLint JavaScript language implementation",
+      "description": "Базовий набір правил лінту.",
       "homepage": "https://eslint.org",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=eslint.org&sz=128"
@@ -36,7 +36,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e4f87bc",
         "subject": "perf(fonts): self-host Inter замість Google Fonts CDN"
       },
-      "description": "Self-host the Inter font in a neatly bundled NPM package.",
+      "description": "Шрифт Inter, покладений у наш бандл, щоб не тягнути його з чужого сервера.",
       "homepage": "https://fontsource.org/fonts/inter",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=fontsource.org&sz=128"
@@ -51,7 +51,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Вікна підтвердження — «Точно видалити?».",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -66,7 +66,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Аватарка з відкотом на монограму, коли фото не завантажилось.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -81,7 +81,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Галочки у формах і списках.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -96,7 +96,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Модальні вікна: діалог замовника, форма прорахунку, палітра команд.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -111,7 +111,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Випадні меню: три крапки на картках і в рядках таблиць.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -126,7 +126,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Підписи до полів, привʼязані до самого поля.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -141,7 +141,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Спливні картки біля елемента — як пояснення пакета на цій сторінці.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -156,7 +156,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Випадні списки вибору у формах.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -171,7 +171,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Лінії-роздільники між блоками.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -186,7 +186,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Дозволяє кнопці прикинутись посиланням, не дублюючи стилі.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -201,7 +201,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": null,
+      "description": "Вкладки — як «За шарами» / «За терміновістю» вгорі.",
       "homepage": "https://radix-ui.com/primitives",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=radix-ui.com&sz=128"
@@ -216,7 +216,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Create PDF files on the browser and server",
+      "description": "Збирає PDF-документи — рахунки, специфікації, договори.",
       "homepage": null,
       "usedIn": 3,
       "iconUrl": "https://github.com/diegomura.png?size=64"
@@ -231,7 +231,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "6a560ae",
         "subject": "Статус прорахунку більше не можна зіпсувати невідомим значенням"
       },
-      "description": "Isomorphic Javascript SDK for Supabase",
+      "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
       "usedIn": 85,
       "iconUrl": "https://github.com/supabase.png?size=64"
@@ -246,7 +246,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "7a272fe",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
-      "description": "A utility-first CSS framework for rapidly building custom user interfaces.",
+      "description": "Підключає Tailwind до складальника: збирає CSS під час збірки.",
       "homepage": "https://tailwindcss.com",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
@@ -261,7 +261,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
+      "description": "Памʼятає, що вже завантажено, і не питає базу двічі. Через нього ходять майже всі запити.",
       "homepage": "https://tanstack.com/query",
       "usedIn": 14,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
@@ -276,7 +276,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "080ba8a",
         "subject": "perf(дизайн): дошка тримає в браузері лише видимі картки — на третину менше роботи для сторінки"
       },
-      "description": "Headless UI for virtualizing scrollable elements in React",
+      "description": "Малює лише видимі рядки довгих списків. Без нього дошка з сотнями карток гальмувала б.",
       "homepage": "https://tanstack.com/virtual",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
@@ -291,7 +291,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "afa07af",
         "subject": "feat: add contract sections editor and rich text editor components"
       },
-      "description": "link extension for tiptap",
+      "description": "Посилання в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
@@ -306,7 +306,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "afa07af",
         "subject": "feat: add contract sections editor and rich text editor components"
       },
-      "description": "underline extension for tiptap",
+      "description": "Підкреслення в редакторі ТЗ.",
       "homepage": "https://tiptap.dev",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
@@ -321,7 +321,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "afa07af",
         "subject": "feat: add contract sections editor and rich text editor components"
       },
-      "description": "React components for tiptap",
+      "description": "Редактор технічного завдання: жирний, списки, посилання.",
       "homepage": "https://tiptap.dev",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
@@ -336,7 +336,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "afa07af",
         "subject": "feat: add contract sections editor and rich text editor components"
       },
-      "description": "starter kit for tiptap",
+      "description": "Базовий набір можливостей редактора ТЗ.",
       "homepage": "https://tiptap.dev",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
@@ -351,7 +351,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "TypeScript definitions for node",
+      "description": "Опис типів Node для коду, що працює на сервері.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64",
@@ -370,7 +370,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "9aa6579",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
-      "description": "TypeScript definitions for react",
+      "description": "Опис типів React для перевірки типів.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
@@ -385,7 +385,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "9aa6579",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
-      "description": "TypeScript definitions for react-dom",
+      "description": "Опис типів react-dom.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
@@ -400,7 +400,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "af67210",
         "subject": "fix(finance): полагодити нагадування про платежі + тести на резолвер"
       },
-      "description": "TypeScript definitions for web-push",
+      "description": "Опис типів бібліотеки пуш-сповіщень.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
@@ -415,7 +415,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "7a272fe",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
-      "description": "The default Vite plugin for React projects",
+      "description": "Навчає складальник розуміти React.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/vitejs.png?size=64"
@@ -430,7 +430,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "ae13e6c",
         "subject": "chore(надійність): борг перед React Compiler більше не може рости непомітно"
       },
-      "description": "Babel plugin for React Compiler.",
+      "description": "React Compiler: сам розставляє оптимізації, які раніше писали руками.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/facebook.png?size=64"
@@ -445,7 +445,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "Class Variance Authority 🧬",
+      "description": "Описує варіанти вигляду компонента (розмір, тон) без каші з умов у класах.",
       "homepage": null,
       "usedIn": 6,
       "iconUrl": "https://github.com/joe-bell.png?size=64"
@@ -460,7 +460,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "A tiny (239B) utility for constructing className strings conditionally.",
+      "description": "Крихітний помічник: склеює класи, пропускаючи порожні й вимкнені.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/lukeed.png?size=64"
@@ -475,7 +475,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": null,
+      "description": "Рушій палітри команд — того вікна, що відкривається на Cmd+K.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/pacocoursey.png?size=64"
@@ -490,7 +490,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "Modern JavaScript date utility library",
+      "description": "Робота з датами: дедлайни, періоди, «3 дні тому».",
       "homepage": null,
       "usedIn": 10,
       "iconUrl": "https://github.com/date-fns.png?size=64"
@@ -505,7 +505,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "DOMPurify is a DOM-only, super-fast, uber-tolerant XSS sanitizer for HTML, MathML and SVG. It runs as JavaScript and works in all modern browsers, as well as in Node.js (via jsdom). DOMPurify is writt",
+      "description": "Чистить HTML від чужого коду перед показом — захист від підстановки скриптів.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/cure53.png?size=64"
@@ -520,7 +520,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "An AST-based pattern checker for JavaScript.",
+      "description": "Лінт: шукає підозрілі місця в коді за правилами.",
       "homepage": "https://eslint.org",
       "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=eslint.org&sz=128"
@@ -535,7 +535,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "83e0b10",
         "subject": "Пульс команди більше не буває порожнім, коли події встигають раніше за список людей"
       },
-      "description": "ESLint rules for React Hooks",
+      "description": "Правила про React-хуки — саме він знайшов порожній Пульс.",
       "homepage": "https://react.dev/",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
@@ -550,7 +550,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "Validate that your components can safely be updated with Fast Refresh",
+      "description": "Стежить, щоб компоненти можна було оновлювати без перезавантаження сторінки.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": null
@@ -565,7 +565,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "Global identifiers from different JavaScript environments",
+      "description": "Список глобальних імен різних середовищ, щоб лінт не лаявся на window чи process.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/sindresorhus.png?size=64"
@@ -580,7 +580,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "14dfafe",
         "subject": "build(deps): jsdom — залежність тесту, який я закомітив без неї"
       },
-      "description": "A JavaScript implementation of many web standards",
+      "description": "Підроблений браузер для тестів, які працюють із розміткою.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/jsdom.png?size=64"
@@ -595,7 +595,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "06cefd1",
         "subject": "Іконки соцмереж у списку «звідки прийшов клієнт» тепер свої, а не чужі"
       },
-      "description": "A Lucide icon library package for React applications.",
+      "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
       "usedIn": 182,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
@@ -610,7 +610,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "4a3714f",
         "subject": "dropbox"
       },
-      "description": "Netlify command line tool",
+      "description": "Інструмент Netlify: піднімає функції локально, щоб перевіряти їх до викочування.",
       "homepage": null,
       "usedIn": 0,
       "iconUrl": "https://github.com/netlify.png?size=64"
@@ -625,7 +625,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "3bc001d",
         "subject": "Закрито дві дірки безпеки: присланий PDF більше не виконує чужий код у вкладці"
       },
-      "description": "Generic build of Mozilla's PDF.js library.",
+      "description": "Малює прев'ю PDF-вкладень прямо в браузері.",
       "homepage": "https://mozilla.github.io/pdf.js/",
       "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=mozilla.github.io&sz=128"
@@ -640,7 +640,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "9aa6579",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
-      "description": "React is a JavaScript library for building user interfaces.",
+      "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
       "usedIn": 239,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
@@ -655,7 +655,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "Customizable Date Picker for React",
+      "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
       "homepage": "http://react-day-picker.js.org",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react-day-picker.js.org&sz=128"
@@ -670,7 +670,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "9aa6579",
         "subject": "feat(швидкість): CRM працює на React 19 — фундамент для автоматичного прискорення"
       },
-      "description": "React package for working with the DOM.",
+      "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
       "usedIn": 9,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
@@ -685,7 +685,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "65745f4",
         "subject": "user menu"
       },
-      "description": "A React component to crop images/videos with easy interactions",
+      "description": "Обрізання картинки при завантаженні аватарки чи лого.",
       "homepage": "https://ValentinH.github.io/react-easy-crop/",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=valentinh.github.io&sz=128"
@@ -700,7 +700,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Declarative routing for React web applications",
+      "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
       "usedIn": 47,
       "iconUrl": "https://github.com/remix-run.png?size=64"
@@ -715,7 +715,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "React charts",
+      "description": "Графіки: стовпчики й площі на сторінках аналітики.",
       "homepage": null,
       "usedIn": 2,
       "iconUrl": "https://github.com/recharts.png?size=64"
@@ -730,7 +730,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "0032436",
         "subject": "perf(швидкість): перший вхід у CRM став легшим на 43 кБ — палітра пошуку більше не вантажиться всім"
       },
-      "description": null,
+      "description": "Малює карту бандла: що саме займає місце. Вмикається тільки вручну.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/btd.png?size=64"
@@ -745,7 +745,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "3bc001d",
         "subject": "Закрито дві дірки безпеки: присланий PDF більше не виконує чужий код у вкладці"
       },
-      "description": "High performance Node.js image processing, the fastest module to resize JPEG, PNG, WebP, GIF, AVIF and TIFF images",
+      "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
       "usedIn": 7,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
@@ -760,7 +760,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "An opinionated toast component for React.",
+      "description": "Спливні повідомлення в кутку: «Збережено», «Не вийшло».",
       "homepage": "https://sonner.emilkowal.ski/",
       "usedIn": 54,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sonner.emilkowal.ski&sz=128"
@@ -775,7 +775,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Merge Tailwind CSS classes without style conflicts",
+      "description": "Розв'язує суперечки між класами Tailwind, коли їх складають із кількох джерел.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": "https://github.com/dcastil.png?size=64"
@@ -790,7 +790,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "7a272fe",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
-      "description": "A utility-first CSS framework for rapidly building custom user interfaces.",
+      "description": "Спосіб писати стилі короткими класами прямо в розмітці. Уся зовнішність CRM тримається на ньому.",
       "homepage": "https://tailwindcss.com",
       "usedIn": 2,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
@@ -805,7 +805,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "A Tailwind CSS plugin for creating beautiful animations.",
+      "description": "Готові анімації для Tailwind: появи, зникнення, плавні переходи панелей.",
       "homepage": null,
       "usedIn": 1,
       "iconUrl": null
@@ -820,7 +820,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "414eedf",
         "subject": "Initial commit"
       },
-      "description": "TypeScript is a language for application scale JavaScript development",
+      "description": "Перевіряє типи: ловить помилки до запуску, а не в проді.",
       "homepage": "https://www.typescriptlang.org/",
       "usedIn": 0,
       "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
@@ -835,7 +835,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Tooling which enables you to use TypeScript with ESLint",
+      "description": "Дає лінту розуміти TypeScript.",
       "homepage": "https://typescript-eslint.io/packages/typescript-eslint",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=typescript-eslint.io&sz=128"
@@ -850,7 +850,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "7a272fe",
         "subject": "Збірка застосунку стала швидшою в шість разів"
       },
-      "description": "Native-ESM powered web dev build tool",
+      "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
       "homepage": "https://vite.dev",
       "usedIn": 3,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
@@ -865,7 +865,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Next generation testing framework powered by Vite",
+      "description": "Тести. Ті самі 1119, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
       "usedIn": 75,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
@@ -880,7 +880,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "2f16f21",
         "subject": "notifications"
       },
-      "description": "Web Push library for Node.js",
+      "description": "Надсилає пуш-сповіщення в браузер.",
       "homepage": null,
       "usedIn": 2,
       "iconUrl": "https://github.com/web-push-libs.png?size=64"
@@ -916,5 +916,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 232806
+  "sourceLines": 233001
 };

@@ -57,6 +57,7 @@ const row = (
   checked_at: "2026-08-23T03:10:00.000Z",
   advisories,
   advisories_version: advisoriesVersion,
+  latest_published_at: null,
 });
 
 describe("parseVersion", () => {
