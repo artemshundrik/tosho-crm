@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T19:38:05.462Z",
+  "generatedAt": "2026-08-23T19:50:59.288Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -283,7 +283,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/extension-link",
-      "version": "3.23.5",
+      "version": "3.30.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
@@ -298,7 +298,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/extension-underline",
-      "version": "3.23.5",
+      "version": "3.30.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
@@ -312,8 +312,21 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
     },
     {
+      "name": "@tiptap/pm",
+      "version": "3.30.2",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
+      "homepage": "https://tiptap.dev",
+      "usedIn": 0,
+      "peerRequired": true,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
+    },
+    {
       "name": "@tiptap/react",
-      "version": "3.23.5",
+      "version": "3.30.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
@@ -328,7 +341,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tiptap/starter-kit",
-      "version": "3.23.5",
+      "version": "3.30.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
@@ -354,6 +367,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Опис типів Node для коду, що працює на сервері.",
       "homepage": null,
       "usedIn": 1,
+      "peerRequired": true,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64",
       "pinned": {
         "to": "node",
@@ -373,6 +387,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Опис типів React для перевірки типів.",
       "homepage": null,
       "usedIn": 0,
+      "peerRequired": true,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
     },
     {
@@ -388,6 +403,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Опис типів react-dom.",
       "homepage": null,
       "usedIn": 0,
+      "peerRequired": true,
       "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
     },
     {
@@ -433,6 +449,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "React Compiler: сам розставляє оптимізації, які раніше писали руками.",
       "homepage": null,
       "usedIn": 0,
+      "peerRequired": true,
       "iconUrl": "https://github.com/facebook.png?size=64"
     },
     {
@@ -523,6 +540,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Лінт: шукає підозрілі місця в коді за правилами.",
       "homepage": "https://eslint.org",
       "usedIn": 2,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=eslint.org&sz=128"
     },
     {
@@ -583,6 +601,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Підроблений браузер для тестів, які працюють із розміткою.",
       "homepage": null,
       "usedIn": 0,
+      "peerRequired": true,
       "iconUrl": "https://github.com/jsdom.png?size=64"
     },
     {
@@ -643,6 +662,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
       "usedIn": 239,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
@@ -650,10 +670,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "10.0.1",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T22:41:44+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "9d3adbf",
+        "subject": "Календар переїхав на нову версію, і React 19 більше не тримається силою"
       },
       "description": "Календар вибору дати — той, що випадає в полях дедлайнів.",
       "homepage": "https://daypicker.dev",
@@ -673,6 +693,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Частина React, яка власне малює в браузері.",
       "homepage": "https://react.dev/",
       "usedIn": 9,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
@@ -793,6 +814,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Спосіб писати стилі короткими класами прямо в розмітці. Уся зовнішність CRM тримається на ньому.",
       "homepage": "https://tailwindcss.com",
       "usedIn": 2,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
     },
     {
@@ -823,6 +845,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Перевіряє типи: ловить помилки до запуску, а не в проді.",
       "homepage": "https://www.typescriptlang.org/",
       "usedIn": 0,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=www.typescriptlang.org&sz=128"
     },
     {
@@ -853,6 +876,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "description": "Складальник: перетворює сотні файлів коду на кілька, які розуміє браузер. Він же тримає локальний сервер для перевірок.",
       "homepage": "https://vite.dev",
       "usedIn": 3,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
     },
     {
@@ -955,5 +979,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 233097
+  "sourceLines": 233117
 };

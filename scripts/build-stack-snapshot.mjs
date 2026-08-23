@@ -70,6 +70,7 @@ const LAYERS = {
     "@tiptap/extension-underline",
     "@tiptap/react",
     "@tiptap/starter-kit",
+    "@tiptap/pm",
     "@fontsource-variable/inter",
     "tailwindcss",
     "@tailwindcss/vite",
@@ -148,6 +149,7 @@ const EXPLAINED = {
   "@fontsource-variable/inter": "Шрифт Inter, покладений у наш бандл, щоб не тягнути його з чужого сервера.",
   "@tiptap/react": "Редактор технічного завдання: жирний, списки, посилання.",
   "@tiptap/starter-kit": "Базовий набір можливостей редактора ТЗ.",
+  "@tiptap/pm": "Рушій ProseMirror, на якому побудований редактор ТЗ. У коді не викликається — його вимагають самі розширення tiptap.",
   "@tiptap/extension-link": "Посилання в редакторі ТЗ.",
   "@tiptap/extension-underline": "Підкреслення в редакторі ТЗ.",
   "@radix-ui/react-dialog": "Модальні вікна: діалог замовника, форма прорахунку, палітра команд.",
@@ -318,6 +320,31 @@ const ROOT_CONFIGS = [
   "eslint.compiler.config.mjs",
   "netlify.toml",
 ].filter((file) => existsSync(join(ROOT, file)));
+
+/**
+ * Пакети, яких вимагають ІНШІ залежності як peer.
+ *
+ * Такий пакет у нашому коді не згадується жодного разу — і саме тому правило
+ * «нуль згадок = мертвий» дало б хибне спрацювання. Перший же випадок:
+ * @tiptap/pm ставиться руками, бо його просять розширення tiptap, але
+ * імпортується лише всередині них.
+ *
+ * Рахуємо це за використання: пакет потрібен, просто потрібен не нам напряму.
+ */
+function peerRequiredNames() {
+  const required = new Set();
+  const all = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+  for (const name of all) {
+    let meta;
+    try {
+      meta = JSON.parse(readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8"));
+    } catch {
+      continue;
+    }
+    for (const peer of Object.keys(meta.peerDependencies ?? {})) required.add(peer);
+  }
+  return required;
+}
 
 function usageOf(name) {
   try {
@@ -557,6 +584,7 @@ function sourceLines() {
 /* ───────────────────────── збирання ───────────────────────── */
 
 const bumps = lastBumpDates();
+const peerRequired = peerRequiredNames();
 const guessed = [];
 const missing = [];
 
@@ -577,6 +605,7 @@ const packages = declared
       bumpCommit: bumps.get(name)?.sha ? { sha: bumps.get(name).sha, subject: bumps.get(name).subject } : null,
       ...metaFor(name),
       usedIn: usageOf(name),
+      ...(peerRequired.has(name) ? { peerRequired: true } : {}),
       iconUrl: iconUrlFor(name),
       ...(PINNED[name] ? { pinned: PINNED[name] } : {}),
       // Позначка їде В ЗНІМОК, а не лише в консоль: попередження, яке нічого не

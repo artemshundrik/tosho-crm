@@ -42,6 +42,12 @@ export type StackPackageSnapshot = {
    * нормальний: складальники й типи не імпортуються в код ніколи.
    */
   usedIn?: number;
+  /**
+   * Пакет вимагають ІНШІ залежності як peer — тобто він потрібен, просто не
+   * нам напряму. Без цієї позначки правило «нуль згадок = мертвий» помилково
+   * оголосило б мертвим @tiptap/pm, який ставиться саме заради розширень.
+   */
+  peerRequired?: boolean;
   /** Коміт, у якому версію рухали востаннє: відповідь «чому саме тоді». */
   bumpCommit?: { sha: string; subject: string | null } | null;
   /**
@@ -378,6 +384,7 @@ export const URGENCY_META: Record<StackUrgency, { label: string; dot: string; ti
  * визначенням, і нуль там — не сигнал, а норма.
  */
 export function looksUnused(item: StackItem): boolean {
+  if (item.peerRequired) return false;
   return item.usedIn === 0 && (item.layer === "screen" || item.layer === "data");
 }
 

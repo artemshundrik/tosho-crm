@@ -7,6 +7,7 @@ import {
   groupByLayer,
   groupByUrgency,
   layerLag,
+  looksUnused,
   parseVersion,
   sortItems,
   stackSummaryText,
@@ -212,6 +213,32 @@ describe("buildStackItems", () => {
     ]);
     expect(items[0].advisories).toEqual([]);
     expect(items[0].worstSeverity).toBeNull();
+  });
+});
+
+describe("мертві залежності", () => {
+  const pack = (name: string, layer: "screen" | "build", usedIn: number, peerRequired?: boolean) => ({
+    ...pkg(name, "1.0.0", layer),
+    usedIn,
+    ...(peerRequired ? { peerRequired: true } : {}),
+  });
+
+  it("рантайм-пакет без жодної згадки — мертвий", () => {
+    // Саме так знайшлись framer-motion і @radix-ui/react-switch.
+    const items = buildStackItems(snapshot([pack("framer-motion", "screen", 0)]), []);
+    expect(looksUnused(items[0])).toBe(true);
+  });
+
+  it("складальник без згадок — НЕ мертвий: він і не мав би імпортуватись", () => {
+    const items = buildStackItems(snapshot([pack("vite", "build", 0)]), []);
+    expect(looksUnused(items[0])).toBe(false);
+  });
+
+  it("пакет, якого вимагають інші як peer, — НЕ мертвий", () => {
+    // @tiptap/pm ставиться руками заради розширень tiptap і в коді не
+    // згадується жодного разу. Без цієї гілки сторінка радила б його викинути.
+    const items = buildStackItems(snapshot([pack("@tiptap/pm", "screen", 0, true)]), []);
+    expect(looksUnused(items[0])).toBe(false);
   });
 });
 
