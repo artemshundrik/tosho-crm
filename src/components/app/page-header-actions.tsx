@@ -9,38 +9,56 @@ export type PageHeaderActionsState = {
   surfaceId: string | null;
 };
 
-type PageHeaderActionsContextValue = {
-  actions: PageHeaderActionsState | null;
-  setActions: React.Dispatch<React.SetStateAction<PageHeaderActionsState | null>>;
-};
+type PageHeaderActionsSetter = React.Dispatch<React.SetStateAction<PageHeaderActionsState | null>>;
 
-const PageHeaderActionsContext = React.createContext<PageHeaderActionsContextValue | null>(null);
+/**
+ * ДВА КОНТЕКСТИ, А НЕ ОДИН — І ЦЕ НЕ ПРИКРАСА.
+ *
+ * Доти значення й сеттер їхали одним об'єктом `{ actions, setActions }`. Об'єкт
+ * створювався новим на кожен рендер провайдера, тобто на кожну зміну дій, — і
+ * перемальовувались УСІ, хто підписаний на контекст. А підписані на нього не
+ * лише шапка: `usePageHeaderActions` теж читає контекст, тож кожна сторінка,
+ * яка віддає туди свої кнопки, підписана на власні ж оновлення.
+ *
+ * Заміряно на дошці дизайну 24.08.2026: серія з 14 літер у пошуку давала ~55
+ * рендерів сторінки, тобто ЧОТИРИ на літеру замість очікуваних двох (одне на
+ * введене значення, друге на відкладене через useDeferredValue).
+ *
+ * Тепер сеттер живе в окремому контексті. Він приходить із useState і стабільний
+ * назавжди, тож його контекст не міняється НІКОЛИ — і сторінки більше не
+ * перемальовуються від того, що самі ж оновили шапку. Значення читає лише
+ * AppLayout.
+ */
+const PageHeaderActionsValueContext = React.createContext<PageHeaderActionsState | null>(null);
+const PageHeaderActionsSetterContext = React.createContext<PageHeaderActionsSetter | null>(null);
 
 export function PageHeaderActionsProvider({ children }: { children: React.ReactNode }) {
   const [actions, setActions] = React.useState<PageHeaderActionsState | null>(null);
 
   return (
-    <PageHeaderActionsContext.Provider value={{ actions, setActions }}>
-      {children}
-    </PageHeaderActionsContext.Provider>
+    <PageHeaderActionsSetterContext.Provider value={setActions}>
+      <PageHeaderActionsValueContext.Provider value={actions}>
+        {children}
+      </PageHeaderActionsValueContext.Provider>
+    </PageHeaderActionsSetterContext.Provider>
   );
 }
 
 /**
  * Віддати вузол дій у шапку сторінки.
  *
- * ЧОМУ `ctx` БІЛЬШЕ НЕ В ЗАЛЕЖНОСТЯХ. Провайдер створює `{ actions, setActions }`
- * новим об'єктом на кожен свій рендер, а рендериться він саме тоді, коли
- * `setActions` міняє його стан. Виходило коло: `setActions` → провайдер
- * перерендерився → новий `ctx` → ефект спрацював знову → `setActions`. Коло
- * розривалось лише випадково — тим, що більшість сторінок мемоїзує свій вузол,
- * і React глушив однаковий стан через Object.is. Сторінці, яка забула `useMemo`
- * (а це були «Замовлення»), діставався нескінченний цикл із «Maximum update
- * depth exceeded» — по 9 разів на кожне відкриття.
+ * ЧОМУ ПРИБИРАННЯ ТІЛЬКИ ПРИ ДЕМОНТАЖІ. Доти ефект на кожну зміну залежностей
+ * спершу гасив дії (`setActions(null)` у прибиранні), а потім ставив нові. Це
+ * ДВА оновлення стану провайдера там, де досить одного, і кожне з них тягло за
+ * собою рендер. Гасити дії треба лише тоді, коли сторінка справді йде зі сцени,
+ * — а це демонтаж, і для нього є окремий ефект без залежностей.
  *
- * Сеттер із `useState` стабільний сам по собі, тож тримати його в залежностях
- * не було потреби взагалі. Ref потрібен лише щоб ефект бачив свіжий контекст,
- * не перезапускаючись через його ідентичність.
+ * ЧОМУ `ctx` НЕ В ЗАЛЕЖНОСТЯХ. Історична причина, яка лишається чинною: раніше
+ * провайдер віддавав новий об'єкт на кожен свій рендер, і виходило коло
+ * `setActions` → рендер провайдера → новий контекст → ефект знову. Сторінці, яка
+ * забула `useMemo` на своєму вузлі (це були «Замовлення»), діставався
+ * нескінченний цикл із «Maximum update depth exceeded» по 9 разів на відкриття.
+ * Тепер кола немає й за побудовою: контекст сеттера незмінний.
  *
  * ЧОМУ ПОРУЧ ЇДЕ ПОВЕРХНЯ (REQ-19). Дії знімає прибирання ефекту, а воно
  * виконується вже ПІСЛЯ того, як адреса змінилась і новий маршрут відрендерився.
@@ -51,23 +69,26 @@ export function PageHeaderActionsProvider({ children }: { children: React.ReactN
  * однієї поверхні адреса міняється (інший `:id`), а сторінка лишається та сама.
  */
 export function usePageHeaderActions(actions: React.ReactNode, deps: React.DependencyList = []) {
-  const ctx = React.useContext(PageHeaderActionsContext);
+  const setActions = React.useContext(PageHeaderActionsSetterContext);
   const location = useLocation();
-  const setActionsRef = React.useRef(ctx?.setActions);
-  setActionsRef.current = ctx?.setActions;
+  const setActionsRef = React.useRef(setActions);
+  setActionsRef.current = setActions;
   const surfaceIdRef = React.useRef<string | null>(null);
   surfaceIdRef.current = resolvePageSurface(location.pathname)?.id ?? null;
 
   React.useEffect(() => {
-    const setActions = setActionsRef.current;
-    if (!setActions) return;
-    setActions({ node: actions, surfaceId: surfaceIdRef.current });
-    return () => setActions(null);
-// eslint-disable-next-line react-hooks/exhaustive-deps
+    setActionsRef.current?.({ node: actions, surfaceId: surfaceIdRef.current });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+
+  React.useEffect(
+    () => () => {
+      setActionsRef.current?.(null);
+    },
+    []
+  );
 }
 
 export function usePageHeaderActionsValue() {
-  const ctx = React.useContext(PageHeaderActionsContext);
-  return ctx?.actions ?? null;
+  return React.useContext(PageHeaderActionsValueContext);
 }
