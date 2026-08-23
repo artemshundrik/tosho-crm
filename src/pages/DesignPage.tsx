@@ -189,6 +189,25 @@ type DesignCompletedPeriod = "7d" | "30d" | "month" | "quarter";
  */
 const DESIGN_TIMELINE_ENABLED = false;
 
+/** Порожній таймлайн — стала, щоб мемо не віддавав щоразу новий обʼєкт. */
+const EMPTY_TIMELINE_DATA = {
+  rows: [] as Array<{
+    task: DesignTask;
+    start: Date;
+    end: Date;
+    offset: number;
+    span: number;
+    hasEstimate: boolean;
+    estimateMinutes: number | null;
+    estimateWorkingDays: number;
+    isStartRisk: boolean;
+    isOverdue: boolean;
+  }>,
+  days: [] as Date[],
+  todayOffset: -1,
+  noDeadlineTasks: [] as DesignTask[],
+};
+
 const normalizeDesignViewMode = (value?: DesignViewMode | null): DesignViewMode => {
   if (value === "timeline" && !DESIGN_TIMELINE_ENABLED) return "kanban";
   return value ?? "kanban";
@@ -2910,6 +2929,22 @@ export default function DesignPage() {
   };
 
   const timelineData = useMemo(() => {
+    /**
+     * Не рахуємо діаграму, якої не видно.
+     *
+     * Цей мемо залежав тільки від `filteredTasks`, тобто перераховувався на КОЖНУ
+     * зміну пошуку — навіть на канбані, і навіть попри те, що таймлайн вимкнено
+     * прапорцем DESIGN_TIMELINE_ENABLED і намалювати його зараз неможливо в
+     * принципі. А коштує він дорого: для кожної задачі subtractWorkingDays
+     * відмотує робочі дні НАЗАД по одному дню, створюючи Date на кожній ітерації,
+     * далі сортування й побудова діапазону днів.
+     *
+     * Тому: поки таймлайн вимкнений або відкритий інший вигляд — віддаємо
+     * порожню сталу. Прапорець повернуть у true — гейт лишиться на viewMode, і
+     * діаграма рахуватиметься лише тоді, коли на неї справді дивляться.
+     */
+    if (!DESIGN_TIMELINE_ENABLED || viewMode !== "timeline") return EMPTY_TIMELINE_DATA;
+
     const normalizeDate = (value: string | null | undefined): Date | null => {
       if (!value) return null;
       const parsed = new Date(value);
@@ -3017,7 +3052,7 @@ export default function DesignPage() {
     });
 
     return { rows, days, todayOffset, noDeadlineTasks };
-  }, [filteredTasks]);
+  }, [filteredTasks, viewMode]);
 
   const timelineAxis = useMemo(() => {
     const baseDays = timelineData.days;
