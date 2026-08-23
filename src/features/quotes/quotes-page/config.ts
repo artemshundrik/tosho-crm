@@ -102,16 +102,31 @@ export const VAT_OPTIONS: VatOption[] = [
   { value: "20", label: "20%", rate: 20 },
 ];
 
-export const normalizeStatus = (value?: string | null) => {
+/** Статуси, якими оперує інтерфейс. Решта переліку з бази — історична. */
+const UI_QUOTE_STATUSES = ["new", "estimating", "estimated", "awaiting_approval", "approved", "cancelled"] as const;
+
+/**
+ * Приводить статус до того, що інтерфейс уміє показати.
+ *
+ * ГОЛОВНЕ — ОСТАННІЙ РЯДОК. Доти невідоме значення проходило НАСКРІЗЬ: функція
+ * повертала його як є, воно потрапляло у форму, а звідти в update — і база
+ * відбивала запис невиразною помилкою вже в рантаймі. Тепер незнайоме чесно
+ * стає «new»: колонка NOT NULL з переліком, і зберегти туди сміття все одно не
+ * вийде, тож краще показати зрозумілий стан, ніж зламати збереження.
+ */
+export const normalizeStatus = (value?: string | null): (typeof UI_QUOTE_STATUSES)[number] => {
   if (!value) return "new";
-  const legacy: Record<string, string> = {
+  const legacy: Record<string, (typeof UI_QUOTE_STATUSES)[number]> = {
     draft: "new",
     in_progress: "estimating",
     sent: "estimated",
     rejected: "cancelled",
     completed: "approved",
   };
-  return legacy[value] ?? value;
+  const mapped = legacy[value] ?? value;
+  return (UI_QUOTE_STATUSES as readonly string[]).includes(mapped)
+    ? (mapped as (typeof UI_QUOTE_STATUSES)[number])
+    : "new";
 };
 
 export type PrintConfig = {

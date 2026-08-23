@@ -108,7 +108,7 @@ const QUOTE_STATUSES = [
   { value: "awaiting_approval", label: "На погодженні", icon: Hourglass, iconClass: "text-primary" },
   { value: "approved", label: "Затверджено", icon: CheckCircle2, iconClass: "tone-text-success" },
   { value: "cancelled", label: "Скасовано", icon: XCircle, iconClass: "tone-text-danger" },
-];
+] as const;
 
 /**
  * Currencies
@@ -522,7 +522,7 @@ export interface NewQuoteDialogProps {
  * Form data structure
  */
 export type NewQuoteFormData = {
-  status: string;
+  status: (typeof QUOTE_STATUSES)[number]["value"];
   comment?: string;
   notes?: string;
   customerId?: string;
@@ -588,7 +588,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
 }) => {
   const isEditMode = mode === "edit";
   // Form state
-  const [status, setStatus] = React.useState("new");
+  const [status, setStatus] = React.useState<(typeof QUOTE_STATUSES)[number]["value"]>("new");
   const [comment, setComment] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
@@ -985,7 +985,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
     draftRestoredForRef.current = draftKey;
     const draft = readDraft<QuoteDraftPayload>(draftKey)?.value;
     if (!draft) return;
-    if (typeof draft.status === "string") setStatus(draft.status);
+    if (QUOTE_STATUSES.some((o) => o.value === draft.status)) setStatus(draft.status as typeof status); // чернетка з localStorage
     if (typeof draft.comment === "string") setComment(draft.comment);
     if (typeof draft.notes === "string") setNotes(draft.notes);
     if (typeof draft.customerId === "string") setCustomerId(draft.customerId);

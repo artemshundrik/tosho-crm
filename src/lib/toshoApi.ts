@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { Database } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 import { removeAttachmentWithVariants } from "@/lib/attachmentPreview";
 import {
   buildCompanySearchVariants,
@@ -1621,13 +1621,13 @@ export async function updateQuote(params: {
   deadlineNote?: string | null;
   deadlineReminderOffsetMinutes?: number | null;
   deadlineReminderComment?: string | null;
-  status?: string | null;
+  status?: Database["tosho"]["Enums"]["quote_status"];
   quoteType?: string | null;
   deliveryType?: string | null;
-  deliveryDetails?: Record<string, unknown> | null;
+  deliveryDetails?: Json | null;
   notes?: string | null;
 }) {
-  const payload: Record<string, unknown> = {};
+  const payload: Database["tosho"]["Tables"]["quotes"]["Update"] = {};
   if (params.customerId !== undefined) payload.customer_id = params.customerId;
   if (params.customerName !== undefined) payload.customer_name = params.customerName;
   if (params.customerLogoUrl !== undefined) payload.customer_logo_url = params.customerLogoUrl;
@@ -1651,7 +1651,7 @@ export async function updateQuote(params: {
   if (params.deliveryDetails !== undefined) payload.delivery_details = params.deliveryDetails;
   if (params.notes !== undefined) payload.notes = params.notes;
 
-  const executeUpdate = async (nextPayload: Record<string, unknown>) => {
+  const executeUpdate = async (nextPayload: Database["tosho"]["Tables"]["quotes"]["Update"]) => {
     const { data, error } = await supabase
       .schema("tosho")
       .from("quotes")

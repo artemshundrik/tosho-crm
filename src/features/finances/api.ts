@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
+import type { TableUpdate } from "@/lib/dbTables";
 import { loadDerivedOrders } from "@/features/orders/orderRecords";
 import { isFxCurrency, type FxCurrency } from "@/lib/fxRates";
 import type {
@@ -985,7 +986,7 @@ export async function updateExpenseEntry(
     note?: string | null;
   }
 ): Promise<void> {
-  const update: Record<string, unknown> = {};
+  const update: TableUpdate<"finance_expense_monthly_amounts"> = {};
   if (patch.entryDate !== undefined) {
     update.entry_date = patch.entryDate;
     update.period = periodOf(patch.entryDate);
@@ -1057,9 +1058,7 @@ export async function addExpenseVendorOption(teamId: string, expenseId: string, 
   if (error) throw error;
   const current = ((data as unknown as { vendor_options: string[] | null } | null)?.vendor_options ?? []).filter(Boolean);
   if (current.some((v) => v.trim().toLowerCase() === clean.toLowerCase())) return;
-  // Record<string, unknown>, а не літерал: у згенерованих типах finance_expenses
-  // немає vendor_options (як і решти нових колонок) — той самий патерн, що вище.
-  const payload: Record<string, unknown> = { vendor_options: [...current, clean] };
+  const payload: TableUpdate<"finance_expenses"> = { vendor_options: [...current, clean] };
   const { error: updateError } = await supabase
     .schema("tosho")
     .from("finance_expenses")

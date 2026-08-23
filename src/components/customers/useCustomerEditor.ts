@@ -25,6 +25,7 @@ import { parseCustomerDeliveryPoints, serializeCustomerDeliveryPoints } from "@/
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import type { TableUpdate } from "@/lib/dbTables";
 
 type CustomerRecord = {
   id: string;
@@ -376,7 +377,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
       return;
     }
 
-    const payload: Record<string, unknown> = {
+    const payload: TableUpdate<"customers"> = {
       name: form.name.trim(),
       payment_type: form.paymentType,
       source: form.source.trim() || null,

@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T15:57:53.193Z",
+  "generatedAt": "2026-08-23T16:43:42.615Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -133,7 +133,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@supabase/supabase-js",
-      "version": "2.87.1",
+      "version": "2.112.3",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -513,10 +513,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     "версія Node",
     "адреси кронів"
   ],
-  "tests": 1113,
+  "tests": 1119,
   "testFiles": 74,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 232179
+  "sourceLines": 232353
 };

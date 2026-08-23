@@ -60,7 +60,10 @@ const CEILINGS = {
   "src/pages/QuoteDetailsPage.tsx": 9848,
   "src/pages/QuotesPage.tsx": 8196,
   "src/pages/DesignPage.tsx": 6559,
-  "src/pages/OrdersCustomersPage.tsx": 4267,
+  // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
+  // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
+  // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
+  "src/pages/OrdersCustomersPage.tsx": 4268,
   "src/pages/TeamMembersPage.tsx": 3986,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,

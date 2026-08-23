@@ -92,6 +92,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Building2, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Loader2, MoreHorizontal, PlusCircle, Trash2, Unlink, Users } from "lucide-react";
 import { OWNERSHIP_OPTIONS, VAT_OPTIONS } from "@/features/quotes/quotes-page/config";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
+import type { TableInsert } from "@/lib/dbTables";
 import { toast } from "sonner";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 
@@ -2695,7 +2696,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       return;
     }
 
-    const payload: Record<string, unknown> = {
+    const payload: TableInsert<"customers"> = {
       team_id: teamId,
       name: form.name.trim(),
       legal_name: primaryLegalEntity?.legal_name ?? null,
@@ -2940,7 +2941,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       ? memberById.get(leadForm.managerId)?.label ?? managerValue
       : selectedManagerMember?.label ?? managerValue;
     const selectedManagerUserId = selectedManagerMember?.userId ?? (leadForm.managerId.trim() || null);
-    const payload: Record<string, unknown> = {
+    const payload: TableInsert<"leads"> = {
       team_id: teamId,
       company_name: leadForm.companyName.trim(),
       payment_type: leadForm.paymentType,

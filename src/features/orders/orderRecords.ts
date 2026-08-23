@@ -2,7 +2,7 @@ import { DESIGN_STATUS_LABELS, type DesignStatus } from "@/lib/designTaskStatus"
 import { parseDesignTaskType, type DesignTaskType } from "@/lib/designTaskType";
 import { getNextDesignTaskNumber } from "@/lib/designTaskNumber";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
-import type { Json } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 import {
   formatCustomerLegalEntityTitle,
   parseCustomerLegalEntities,
@@ -2328,7 +2328,7 @@ export async function updateOrderStatuses(params: {
   paymentStatus?: string;
   deliveryStatus?: string;
 }) {
-  const payload: Record<string, unknown> = {
+  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
     updated_at: new Date().toISOString(),
   };
   if (params.orderStatus !== undefined) payload.order_status = params.orderStatus;
@@ -2355,7 +2355,7 @@ export async function updateOrderNovaPoshtaTtn(params: {
   orderId: string;
   ttn: { number: string; ref: string; cost: number; estimatedDelivery: string } | null;
 }) {
-  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = { updated_at: new Date().toISOString() };
   if (params.ttn) {
     payload.np_ttn_number = params.ttn.number;
     payload.np_ttn_ref = params.ttn.ref || null;
@@ -2406,7 +2406,7 @@ export async function updateOrderDocumentSettings(params: {
   contractProductionDays?: number | null;
   contractAutoProlongation?: boolean;
 }) {
-  const payload: Record<string, unknown> = {
+  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
     updated_at: new Date().toISOString(),
   };
   if (params.paymentMethodId !== undefined) payload.payment_method_id = params.paymentMethodId;
@@ -2444,7 +2444,7 @@ export async function markOrderDocumentCreated(params: {
   documentKind: "contract" | "specification";
 }) {
   const nowIso = new Date().toISOString();
-  const payload: Record<string, unknown> = {
+  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
     updated_at: nowIso,
   };
   if (params.documentKind === "contract") {
@@ -2536,7 +2536,7 @@ export async function assignOrderInvoiceNumber(params: { teamId: string; orderId
   if (!invoiceNumber) return null;
 
   const nowIso = new Date().toISOString();
-  const payload: Record<string, unknown> = {
+  const payload: Database["tosho"]["Tables"]["orders"]["Update"] = {
     invoice_number: invoiceNumber,
     invoice_created_at: nowIso,
     updated_at: nowIso,
