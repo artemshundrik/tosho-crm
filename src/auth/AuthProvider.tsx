@@ -604,8 +604,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ownFallback = () => defaultModuleAccess({ accessRole, jobRole });
     const targetFallback = () =>
       defaultModuleAccess({ accessRole: effectiveAccessRole, jobRole: effectiveJobRole });
+    /**
+     * СТЕЛЯ можливостей — не те саме, що власне меню.
+     *
+     * У режимі перетин має обрізати ціль тим, що людина в принципі здатна
+     * відкрити, а owner відкриває будь-яку сторінку повз галочки (гейт пускає
+     * його за `isSuperAdmin`, Rule 0). Але саме МЕНЮ поза режимом лишається
+     * тим, що людина собі обрала: Артем свідомо зняв «Огляд» і «До
+     * відвантаження», і стеля не має їх повертати. Тому дві різні величини.
+     */
+    const ceilingOf = (own: ModuleAccess) =>
+      realPermissions.isSuperAdmin ? fullModuleAccess() : own;
     const effective = (own: ModuleAccess, target: ModuleAccess) =>
-      activeViewAs ? intersectModuleAccess(own, target) : own;
+      activeViewAs ? intersectModuleAccess(ceilingOf(own), target) : own;
 
     if (!userId) {
       setModuleAccess(effective(ownFallback(), targetFallback()));
@@ -632,17 +643,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const ownEntry = await getCurrentWorkspaceMemberDirectoryEntry();
         writeCachedModuleAccess(userId, ownEntry?.moduleAccess ?? null);
-        /**
-         * «Свої» доступи — це те, що людина відкриває НАСПРАВДІ, а не галочки
-         * в її картці. У owner галочки бувають зняті (в Артема, наприклад,
-         * `overview: false`), бо гейт маршруту пропускає його повз них за
-         * `isSuperAdmin` (Rule 0). Без цієї поправки перетин закривав owner'у
-         * власний «Огляд» щойно він заходив у режим — сторінка, яку поза
-         * режимом він відкриває щодня.
-         */
-        const own = realPermissions.isSuperAdmin
-          ? fullModuleAccess()
-          : ownEntry?.moduleAccess ?? ownFallback();
+        const own = ownEntry?.moduleAccess ?? ownFallback();
 
         if (!activeViewAs) {
           if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, own) ? prev : own));
@@ -658,7 +659,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const next = intersectModuleAccess(own, target);
+        const next = intersectModuleAccess(ceilingOf(own), target);
         if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, next) ? prev : next));
       } catch (error) {
         console.error('Failed to resolve module access', error);
