@@ -61,7 +61,38 @@ export const handler = async (event: HttpEvent) => {
   const teamId = adminRow.workspace_id;
 
   try {
-    // 1) Учасники воркспейсу.
+    /**
+     * 1) Хто в команді.
+     *
+     * Джерело — членства, а не картки співробітників. Раніше список будувався
+     * з `team_member_profiles`, і це давало розбіжність у два боки одночасно:
+     *  • людина з РОЛЛЮ, але без заведеної картки, зникала зі списку зовсім —
+     *    заміряно на проді 23.08.2026: двоє таких, і один із них бота вже
+     *    прив'язав, тож картка показувала «7 з 18» замість «8 з 19»;
+     *  • картка БЕЗ ролі (людина, якій доступ так і не видали) навпаки
+     *    потрапляла в «не прив'язали бота» й псувала знаменник.
+     *
+     * Роль — це і є ознака «працює в CRM»: без неї людина в застосунок не
+     * зайде, тож і в звіті про адопцію їй місця немає.
+     */
+    const { data: roleRows } = await admin
+      .schema("tosho")
+      .from("memberships_view")
+      .select("user_id,access_role,job_role,email")
+      .eq("workspace_id", teamId)
+      .limit(5000);
+
+    const roleByUser = new Map<string, { accessRole: string | null; jobRole: string | null; email: string | null }>();
+    for (const r of ((roleRows ?? []) as Array<{
+      user_id: string;
+      access_role: string | null;
+      job_role: string | null;
+      email: string | null;
+    }>)) {
+      if (r.user_id) roleByUser.set(r.user_id, { accessRole: r.access_role, jobRole: r.job_role, email: r.email });
+    }
+
+    // Картки потрібні лише заради імен і статусу зайнятості.
     const { data: profiles } = await admin
       .schema("tosho")
       .from("team_member_profiles")
@@ -69,27 +100,37 @@ export const handler = async (event: HttpEvent) => {
       .eq("workspace_id", teamId)
       .limit(5000);
 
-    const memberRows = ((profiles ?? []) as Array<{
+    const profileByUser = new Map<string, {
+      first_name?: string | null;
+      last_name?: string | null;
+      employment_status?: string | null;
+    }>();
+    for (const p of ((profiles ?? []) as Array<{
       user_id: string;
       first_name?: string | null;
       last_name?: string | null;
       employment_status?: string | null;
-    }>).filter((p) => {
-      const s = (p.employment_status ?? "").trim().toLowerCase();
-      return s !== "inactive" && s !== "rejected";
-    });
-    const memberIds = memberRows.map((m) => m.user_id);
-
-    // Ролі учасників.
-    const { data: roleRows } = await admin
-      .schema("tosho")
-      .from("memberships_view")
-      .select("user_id,access_role,job_role")
-      .eq("workspace_id", teamId);
-    const roleByUser = new Map<string, { accessRole: string | null; jobRole: string | null }>();
-    for (const r of ((roleRows ?? []) as Array<{ user_id: string; access_role: string | null; job_role: string | null }>)) {
-      roleByUser.set(r.user_id, { accessRole: r.access_role, jobRole: r.job_role });
+    }>)) {
+      profileByUser.set(p.user_id, p);
     }
+
+    // Звільнених не рахуємо; відсутня картка — не привід викидати людину,
+    // бо роль у неї є (див. коментар вище).
+    const memberRows = Array.from(roleByUser.entries())
+      .filter(([userId]) => {
+        const status = (profileByUser.get(userId)?.employment_status ?? "").trim().toLowerCase();
+        return status !== "inactive" && status !== "rejected";
+      })
+      .map(([userId, role]) => {
+        const profile = profileByUser.get(userId);
+        return {
+          user_id: userId,
+          first_name: profile?.first_name ?? null,
+          last_name: profile?.last_name ?? null,
+          email: role.email ?? null,
+        };
+      });
+    const memberIds = memberRows.map((m) => m.user_id);
 
     // 2) Telegram-налаштування учасників.
     const { data: settings } = await admin
@@ -132,7 +173,9 @@ export const handler = async (event: HttpEvent) => {
       const enabled = linked && s?.telegram_enabled !== false;
       return {
         userId: m.user_id,
-        name: fullName(m.first_name, m.last_name, m.user_id.slice(0, 8)),
+        // Без картки імені немає — тоді пошта: вона одразу каже, що картку
+        // цій людині так і не завели.
+        name: fullName(m.first_name, m.last_name, m.email ?? m.user_id.slice(0, 8)),
         accessRole: roleByUser.get(m.user_id)?.accessRole ?? null,
         jobRole: roleByUser.get(m.user_id)?.jobRole ?? null,
         linked,
