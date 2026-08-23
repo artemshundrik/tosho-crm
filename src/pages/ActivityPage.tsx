@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { AvatarBase } from "@/components/app/avatar-kit";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
   formatActivityClock,
   formatActivityDayLabel,

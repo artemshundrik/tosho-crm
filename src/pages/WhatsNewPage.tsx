@@ -4,7 +4,7 @@ import { ArrowRight, SearchX } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarMeta } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { WhatsNewTabs } from "@/components/app/WhatsNewTabs";
 import { useVisibleUpdates } from "@/features/features/useVisibleUpdates";
 import { useMarkUpdatesRead } from "@/features/features/updateQueries";

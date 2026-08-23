@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { WhatsNewTabs } from "@/components/app/WhatsNewTabs";
 import { SEGMENTED_GROUP, SEGMENTED_TRIGGER } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";

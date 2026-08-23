@@ -22,7 +22,7 @@ import {
   type CustomerFormState,
   type LeadFormState,
 } from "@/components/customers";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { usePageCache } from "@/hooks/usePageCache";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";

@@ -38,7 +38,7 @@ import {
   getNotificationInitials as getInitials,
 } from "@/lib/notificationAvatar";
 import { playNotificationSound } from "@/lib/notificationSound";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";

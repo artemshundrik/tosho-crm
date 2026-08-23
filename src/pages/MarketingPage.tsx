@@ -49,7 +49,7 @@ import {
 import { normalizeCustomerLogoUrl } from "@/lib/customerLogo";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { StackHoverPreview } from "@/components/app/StackHoverPreview";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";

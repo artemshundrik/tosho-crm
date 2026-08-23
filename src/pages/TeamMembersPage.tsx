@@ -93,7 +93,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { TeamPulsePanel, type PulsePerson } from "@/components/team/TeamPulsePanel";
 import { useAuth } from "@/auth/AuthProvider";
 import { useTeamLastSeen } from "@/hooks/useTeamLastSeen";

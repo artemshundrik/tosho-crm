@@ -32,7 +32,7 @@ import { formatJobRole } from "@/lib/jobRoles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,

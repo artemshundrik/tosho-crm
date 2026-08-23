@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -42,16 +42,14 @@ import { TelegramPromoModal } from "@/components/app/TelegramPromoModal";
 
 /** Плаваюча кнопка AI-помічника: приховано візуально, функціонал лишається. */
 const SHOW_AI_LAUNCHER = false;
+import { PageHeaderActionsProvider } from "@/components/app/PageHeaderActionsProvider";
 import {
-  PageHeaderActionsProvider,
-  usePageHeaderActionsValue,
-} from "@/components/app/page-header-actions";
-import { PageToolbarSkeleton } from "@/components/app/page-loading";
-import { useSkeletonVisible } from "@/components/app/loadingHandoff";
-import { useTimeoutFlag } from "@/hooks/useTimeoutFlag";
+  PageHeaderInlineActionsSlot,
+  PageHeaderToolbarSlot,
+} from "@/components/app/PageHeaderActionsSlot";
+import { usePageHeaderActionsPresence } from "@/components/app/pageHeaderActionsContext";
 import { resolvePageSurface, type PageToolbarKind } from "@/layout/pageSurfaces";
 import { RouteProgressBar, RouteProgressProvider } from "@/layout/routeProgress";
-import { recallToolbarHeight, rememberToolbarHeight } from "@/layout/toolbarHeights";
 import { preloadRoute } from "@/routes/routePreload";
 import { SidebarFeaturePlate } from "@/features/features/SidebarFeaturePlate";
 import { ProductUpdateModal } from "@/features/features/ProductUpdateModal";
@@ -845,56 +843,28 @@ function AppLayoutInner({ children }: AppLayoutProps) {
    * Факт із реєстру, а не спостереження за тим, що вже встигло з'явитись.
    */
   const pageSurface = useMemo(() => resolvePageSurface(location.pathname), [location.pathname]);
-  const headerActionsState = usePageHeaderActionsValue();
   /**
-   * Чужі дії не показуємо. Прибирання ефекту попередньої сторінки виконується
-   * після рендера нового маршруту, тож без цієї звірки смуга встигала блимнути
-   * тулбаром сторінки, з якої ми щойно пішли.
+   * Оболонці потрібен ФАКТ наявності дій, а не сам вузол (REQ-135). Вузол
+   * створюється новий на кожну літеру в пошуку; поки його читали тут, разом із
+   * оболонкою перемальовувалась і сторінка — 24 зайві рендери з 60 на серії з
+   * 14 літер, і так на всіх 15 сторінках, які реєструють дії. Сам вузол разом
+   * із резервом висоти й каркасом тулбара малює `PageHeaderToolbarSlot`.
+   *
+   * Чужі дії не рахуються: прибирання ефекту попередньої сторінки виконується
+   * після рендера нового маршруту, тож без звірки поверхні смуга встигала
+   * блимнути тулбаром сторінки, з якої ми щойно пішли.
    */
-  const headerActions =
-    headerActionsState && headerActionsState.surfaceId === (pageSurface?.id ?? null)
-      ? headerActionsState.node
-      : null;
+  const surfaceId = pageSurface?.id ?? null;
+  const hasHeaderActions = usePageHeaderActionsPresence(surfaceId);
   /**
    * Невідомий макету маршрут (їх у реєстрі немає — 404, службові адреси) і далі
    * поводиться як раніше: смуга є рівно тоді, коли є що в неї покласти.
    */
   const toolbarKind: PageToolbarKind = pageSurface
     ? pageSurface.toolbar
-    : headerActions
+    : hasHeaderActions
       ? "compact"
       : "none";
-  const toolbarPending = toolbarKind !== "none" && !headerActions;
-  /**
-   * Каркас тулбара живе за тими самими правилами, що й каркас вмісту: перший в
-   * естафеті чекає 150 мс, наступні підхоплюють миттєво. Інакше на холодному
-   * вході смуга встигала проявитись і згаснути між двома фазами завантаження.
-   */
-  const showToolbarSkeleton = useSkeletonVisible(toolbarPending);
-  /**
-   * Сторінка може й не змонтуватись зовсім: гейт доступу покаже «потрібен
-   * доступ», обгортка — «немає команди». Кнопок у такому разі не буде ніколи,
-   * тож через кілька секунд резерв знімаємо — інакше над повідомленням вічно
-   * мерехтів би каркас тулбара.
-   */
-  const toolbarAbandoned = useTimeoutFlag(toolbarPending, 6000);
-  /**
-   * Перший показ тулбара — це замір. Далі резервуємо рівно стільки, скільки він
-   * справді займає на цій сторінці й при цій ширині вікна.
-   */
-  const toolbarNodeRef = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const node = toolbarNodeRef.current;
-    if (!node || !headerActions || !pageSurface) return;
-    rememberToolbarHeight(pageSurface.id, node.offsetHeight);
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      rememberToolbarHeight(pageSurface.id, node.offsetHeight);
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [headerActions, pageSurface]);
-  const reservedToolbarHeight = recallToolbarHeight(pageSurface?.id);
   const toshoAiContext = useMemo(
     () =>
       buildToShoAiRouteContext({
@@ -2417,49 +2387,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           {/* Анонс релізу при вході. Сам вирішує, показуватись чи ні, і
               тримає інваріант «одна модалка за сеанс». */}
           <ProductUpdateModal />
-          {/* Смуга шапки з дивайдером — на всю ширину контентної колонки (від сайдбара
-              до правого краю). Бічні падінги живуть на внутрішніх обгортках, а не на
-              <main>, інакше роздільник обрізався б по краях max-width. */}
           {/*
-            РЕЗЕРВ ВИСОТИ (REQ-19). Смуга стоїть від першого кадру маршруту, а не
-            з'являється тоді, коли сторінка нарешті віддала кнопки. Раніше умова
-            була «showPageHeader === false && є actions» — тобто смуга з'являлась
-            після монтування сторінки, і весь контент під нею стрибав униз;
-            на переході стрибок був подвійний, бо стара смуга спершу зникала.
-
-            Поки кнопок немає, місце тримає каркас тулбара: він рахує ту саму
-            висоту, тож нічого підбирати в пікселях не треба. Перші 150 мс він
-            прозорий — при швидкому переході людина не бачить ні порожнечі, ні
-            зайвого сірого кадру, лише готовий тулбар.
+            Смуга дій живе у власному компоненті (REQ-135). Вузол дій новий на
+            кожну літеру в пошуку, і поки його читала ця оболонка, разом із нею
+            перемальовувалась сторінка: 24 зайві рендери з 60 на серії з 14
+            літер. Тут лишився факт наявності дій, вузол малює слот.
           */}
-          {toolbarKind !== "none" && !(toolbarAbandoned && !headerActions) ? (
-            <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
-              <div
-                className={cn(
-                  "min-w-0",
-                  isCanvasMode
-                    ? "px-4 py-3 md:px-5 lg:px-6"
-                    : "mx-auto w-full max-w-[1600px] px-4 pb-4 md:px-5 lg:px-6"
-                )}
-              >
-                {headerActions ? (
-                  <div ref={toolbarNodeRef}>{headerActions}</div>
-                ) : (
-                  <div
-                    className={cn(
-                      "transition-opacity duration-200",
-                      showToolbarSkeleton ? "opacity-100" : "opacity-0"
-                    )}
-                    // Заміряна висота цієї ж поверхні, якщо ми її вже бачили;
-                    // інакше працює оцінка за класом тулбара.
-                    style={reservedToolbarHeight ? { minHeight: reservedToolbarHeight } : undefined}
-                  >
-                    <PageToolbarSkeleton kind={toolbarKind} />
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : null}
+          <PageHeaderToolbarSlot
+            surfaceId={surfaceId}
+            kind={toolbarKind}
+            canvasMode={isCanvasMode}
+          />
 
           <div className={cn(isCanvasMode ? "" : "px-4 md:px-5 lg:px-6")}>
             <div
@@ -2469,7 +2407,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             >
               {/* Заголовок у контентній колонці: тільки коли немає окремої смуги дій. */}
               {header.showPageHeader === false ? (
-                headerActions ? null : header.eyebrow ? (
+                hasHeaderActions ? null : header.eyebrow ? (
                   <div className="hidden md:flex">
                     <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
                       {header.eyebrow}
@@ -2482,9 +2420,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
                     <p className="text-sm text-muted-foreground">{header.subtitle}</p>
                   </div>
-                  {headerActions ? (
-                    <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div>
-                  ) : null}
+                  <PageHeaderInlineActionsSlot surfaceId={surfaceId} />
                 </div>
               )}
 

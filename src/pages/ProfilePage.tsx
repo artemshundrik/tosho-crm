@@ -46,7 +46,7 @@ import {
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge } from "@/components/app/headers/toolbarPrimitives";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import {
   SEGMENTED_GROUP,

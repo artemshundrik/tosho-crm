@@ -4,7 +4,7 @@ import { Archive, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "l
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { usePageHeaderActions } from "@/components/app/page-header-actions";
+import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
