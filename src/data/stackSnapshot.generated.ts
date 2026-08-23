@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T18:05:39.351Z",
+  "generatedAt": "2026-08-23T18:35:18.658Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -144,7 +144,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "4.3.3",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T21:10:41+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
     },
     {
@@ -236,7 +236,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "6.1.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T21:10:41+03:00",
       "iconUrl": "https://github.com/vitejs.png?size=64"
     },
     {
@@ -329,7 +329,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "lucide-react",
-      "version": "0.560.0",
+      "version": "1.33.0",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -436,7 +436,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "4.3.3",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": "2026-03-12T16:43:11+02:00",
+      "bumpedAt": "2026-08-23T21:10:41+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=tailwindcss.com&sz=128"
     },
     {
@@ -468,7 +468,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "8.2.2",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-07-20T23:24:45+03:00",
+      "bumpedAt": "2026-08-23T21:10:41+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=vite.dev&sz=128"
     },
     {
@@ -518,5 +518,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 232366
+  "sourceLines": 232408
 };

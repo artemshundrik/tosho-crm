@@ -73,7 +73,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "dompurify": "^3.4.14",
-    "lucide-react": "^0.560.0",
+    "lucide-react": "^1.33.0",
     "pdfjs-dist": "^6.2.108",
     "react": "19.2.8",
     "react-day-picker": "^8.10.1",

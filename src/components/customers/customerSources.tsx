@@ -1,8 +1,11 @@
 import * as React from "react";
-import { Facebook, Globe, Instagram, Linkedin, Megaphone, Presentation, ThumbsUp, UserCheck } from "lucide-react";
+import { Globe, Megaphone, Presentation, ThumbsUp, UserCheck } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TikTokIcon } from "@/components/icons/TikTokIcon";
 import { ThreadsIcon } from "@/components/icons/ThreadsIcon";
+import { InstagramIcon } from "@/components/icons/InstagramIcon";
+import { LinkedinIcon } from "@/components/icons/LinkedinIcon";
+import { FacebookIcon } from "@/components/icons/FacebookIcon";
 
 type SourceIcon = React.ComponentType<{ className?: string }>;
 
@@ -13,9 +16,9 @@ type SourceIcon = React.ComponentType<{ className?: string }>;
  * in {@link SourceSelect}).
  */
 export const CUSTOMER_LEAD_SOURCES: ReadonlyArray<{ value: string; label: string; Icon: SourceIcon }> = [
-  { value: "Instagram", label: "Instagram", Icon: Instagram },
-  { value: "LinkedIn", label: "LinkedIn", Icon: Linkedin },
-  { value: "Facebook", label: "Facebook", Icon: Facebook },
+  { value: "Instagram", label: "Instagram", Icon: InstagramIcon },
+  { value: "LinkedIn", label: "LinkedIn", Icon: LinkedinIcon },
+  { value: "Facebook", label: "Facebook", Icon: FacebookIcon },
   { value: "TikTok", label: "TikTok", Icon: TikTokIcon },
   { value: "Threads", label: "Threads", Icon: ThreadsIcon },
   { value: "Рекомендація", label: "Рекомендація", Icon: ThumbsUp },
