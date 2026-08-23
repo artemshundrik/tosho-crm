@@ -61,7 +61,7 @@ export function FeatureHint({
   actLabel,
   className,
 }: Props) {
-  const { viewUserId } = useAuth();
+  const { viewUserId, viewAs } = useAuth();
   const { data: adoption } = useMyFeatureAdoption(viewUserId);
   const [state, setState] = useState<HintState | null | undefined>(undefined);
   const [visible, setVisible] = useState(false);
@@ -148,7 +148,13 @@ export function FeatureHint({
 
   const write = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!viewUserId) return;
+      /**
+       * У режимі «Дивитись як» `viewUserId` — це ЧУЖИЙ ідентифікатор: рядок
+       * feature_hints пішов би тій людині, чиїми очима дивишся, і забрав у неї
+       * одноразовий показ (а зараховується він просто за монтування). Тому в
+       * чужій шкірі підказка нічого не запам'ятовує — ні за неї, ні за тебе.
+       */
+      if (!viewUserId || viewAs) return;
       await supabase
         .schema("tosho")
         .from("feature_hints")
@@ -162,7 +168,7 @@ export function FeatureHint({
           { onConflict: "user_id,feature_key" }
         );
     },
-    [viewUserId, featureKey]
+    [viewUserId, viewAs, featureKey]
   );
 
   // Показ зараховуємо один раз за монтування.

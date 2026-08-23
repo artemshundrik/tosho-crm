@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import type { ModuleKey } from "@/lib/moduleAccess";
 import type { ProductUpdate } from "@/lib/productUpdates";
@@ -77,10 +78,18 @@ export function useMyUpdateReads(userId: string | null | undefined) {
 
 export function useMarkUpdatesRead(userId: string | null | undefined) {
   const queryClient = useQueryClient();
+  const { viewAs } = useAuth();
 
   const mutation = useMutation({
     mutationFn: async ({ ids, source }: { ids: string[]; source: "modal" | "feed" }) => {
       if (!userId || ids.length === 0) return;
+      /**
+       * У режимі «Дивитись як» сюди приходить `viewUserId` — чужий
+       * ідентифікатор. Записавши позначку, ми забрали б у людини анонс
+       * назавжди: вона його не бачила, а система вважала б, що бачила.
+       * Бейдж усе одно гасне локально (onSuccess нижче), у базу нічого не йде.
+       */
+      if (viewAs) return;
       // ignoreDuplicates: людина могла бачити анонс і в модалці, і в стрічці —
       // перший показ важливіший, перезаписувати джерело не треба.
       const { error } = await supabase
