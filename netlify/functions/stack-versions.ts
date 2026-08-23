@@ -222,12 +222,13 @@ export const handler = async (event: HttpEvent) => {
     const { data: previousRows } = await admin
       .schema("tosho")
       .from("stack_versions")
-      .select("name,latest_version,latest_seen_at,advisories");
+      .select("name,latest_version,latest_seen_at,advisories,advisories_version");
     type PreviousRow = {
       name: string;
       latest_version: string | null;
       latest_seen_at: string | null;
       advisories: StackAdvisory[] | null;
+      advisories_version: string | null;
     };
     const previous = new Map(((previousRows as PreviousRow[]) ?? []).map((row) => [row.name, row]));
 
@@ -246,6 +247,12 @@ export const handler = async (event: HttpEvent) => {
           // «чисто» можна ЛИШЕ коли реєстр справді відповів — інакше лишаємо
           // попереднє значення, щоб збій мережі не оголосив стек безпечним.
           advisories: advisories.ok ? (advisories.map[entry.name] ?? []) : (before?.advisories ?? []),
+          // Версія, про яку питали, їде разом з відповіддю: без неї сторінка не
+          // знає, чи стосуються дірки того, що встановлено ЗАРАЗ, — і після
+          // оновлення пакета показувала б стару вразливість як чинну.
+          advisories_version: advisories.ok
+            ? (installed[entry.name]?.[0] ?? null)
+            : (before?.advisories_version ?? null),
           checked_at: nowIso,
         };
       });

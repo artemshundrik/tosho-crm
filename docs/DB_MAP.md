@@ -278,6 +278,9 @@ Practical implication:
 - `stack_versions`
   - what npm knows about each dependency: `latest_version`, `latest_seen_at`
     (when *we* first saw that version, not its publish date) and `advisories`
+  - `advisories` are only valid for `advisories_version` — the installed version
+    they were fetched for; a mismatch means the check is stale and the page must
+    not show them (see [scripts/stack-advisories-version.sql](/Users/artem/Projects/tosho-crm/scripts/stack-advisories-version.sql))
   - written daily by `netlify/functions/stack-versions.ts` (pg_cron job
     `stack-versions`), read by Dev → Стек and by the nightly system digest
   - installed versions are NOT here — they live in the committed snapshot

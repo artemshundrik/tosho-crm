@@ -498,7 +498,7 @@ async function stackSignal(admin: SupabaseClient): Promise<Signal> {
     const { data, error } = await admin
       .schema("tosho")
       .from("stack_versions")
-      .select("name,latest_version,latest_seen_at,checked_at,advisories");
+      .select("name,latest_version,latest_seen_at,checked_at,advisories,advisories_version");
     if (error) throw error;
 
     const totals = stackTotals(buildStackItems(STACK_SNAPSHOT, (data as StackVersionRow[]) ?? []));

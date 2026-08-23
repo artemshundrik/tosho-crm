@@ -4168,6 +4168,7 @@ export type Database = {
       stack_versions: {
         Row: {
           advisories: Json
+          advisories_version: string | null
           checked_at: string
           latest_seen_at: string | null
           latest_version: string | null
@@ -4175,6 +4176,7 @@ export type Database = {
         }
         Insert: {
           advisories?: Json
+          advisories_version?: string | null
           checked_at?: string
           latest_seen_at?: string | null
           latest_version?: string | null
@@ -4182,6 +4184,7 @@ export type Database = {
         }
         Update: {
           advisories?: Json
+          advisories_version?: string | null
           checked_at?: string
           latest_seen_at?: string | null
           latest_version?: string | null

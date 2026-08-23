@@ -41,12 +41,22 @@ const pkg = (name: string, version: string, layer: StackSnapshot["packages"][num
   bumpedAt: "2026-08-01T00:00:00.000Z",
 });
 
-const row = (name: string, latest: string | null, advisories: StackVersionRow["advisories"] = []): StackVersionRow => ({
+/**
+ * Помічник навмисно вимагає версію, ПРО ЯКУ питали дірки: без неї тест
+ * повторив би ту саму помилку, що й код, — вважав би відповідь npm вічною.
+ */
+const row = (
+  name: string,
+  latest: string | null,
+  advisories: StackVersionRow["advisories"] = [],
+  advisoriesVersion: string | null = null
+): StackVersionRow => ({
   name,
   latest_version: latest,
   latest_seen_at: "2026-08-20T00:00:00.000Z",
   checked_at: "2026-08-23T03:10:00.000Z",
   advisories,
+  advisories_version: advisoriesVersion,
 });
 
 describe("parseVersion", () => {
@@ -123,24 +133,61 @@ describe("buildStackItems", () => {
 
   it("бере найгіршу з кількох дірок безпеки", () => {
     const items = buildStackItems(snapshot([pkg("lodash", "4.17.20")]), [
-      row("lodash", "4.17.21", [
-        { title: "ReDoS", severity: "moderate" },
-        { title: "Command injection", severity: "high" },
-      ]),
+      row(
+        "lodash",
+        "4.17.21",
+        [
+          { title: "ReDoS", severity: "moderate" },
+          { title: "Command injection", severity: "high" },
+        ],
+        "4.17.20"
+      ),
     ]);
     expect(items[0].worstSeverity).toBe("high");
   });
 
   it("найважча дірка стає першою: чипс і підпис під ним мають описувати одну й ту саму", () => {
     const items = buildStackItems(snapshot([pkg("vite", "7.2.7")]), [
-      row("vite", "8.2.2", [
-        { title: "NTLMv2 disclosure", severity: "moderate" },
-        { title: "Arbitrary file read", severity: "high" },
-        { title: "Minor leak", severity: "low" },
-      ]),
+      row(
+        "vite",
+        "8.2.2",
+        [
+          { title: "NTLMv2 disclosure", severity: "moderate" },
+          { title: "Arbitrary file read", severity: "high" },
+          { title: "Minor leak", severity: "low" },
+        ],
+        "7.2.7"
+      ),
     ]);
     expect(items[0].worstSeverity).toBe("high");
     expect(items[0].advisories[0].title).toBe("Arbitrary file read");
+  });
+
+  it("після оновлення пакета стара дірка ЗНИКАЄ, а не висить поруч із «свіже»", () => {
+    // Саме це побачив Артем на скріншоті: pdfjs оновили до 6.2.108, чипс став
+    // «свіже» — і поруч лишився червоний «діра безпеки · висока» з відповіді
+    // npm про 5.6.205. Дві половини рядка суперечили одна одній, і червона
+    // була неправдою.
+    const items = buildStackItems(snapshot([pkg("pdfjs-dist", "6.2.108")]), [
+      row("pdfjs-dist", "6.2.108", [{ title: "Arbitrary JS execution", severity: "high" }], "5.6.205"),
+    ]);
+    expect(items[0].state).toBe("fresh");
+    expect(items[0].advisories).toEqual([]);
+    expect(items[0].worstSeverity).toBeNull();
+  });
+
+  it("дірка про ПОТОЧНУ версію показується як була", () => {
+    const items = buildStackItems(snapshot([pkg("pdfjs-dist", "5.6.205")]), [
+      row("pdfjs-dist", "6.2.108", [{ title: "Arbitrary JS execution", severity: "high" }], "5.6.205"),
+    ]);
+    expect(items[0].worstSeverity).toBe("high");
+  });
+
+  it("рядок без позначки версії вважається застарілим — мовчимо, а не лякаємо", () => {
+    const items = buildStackItems(snapshot([pkg("pdfjs-dist", "5.6.205")]), [
+      row("pdfjs-dist", "6.2.108", [{ title: "Arbitrary JS execution", severity: "high" }]),
+    ]);
+    expect(items[0].worstSeverity).toBeNull();
   });
 
   it("сміття замість масиву дірок не валить сторінку", () => {
@@ -175,7 +222,7 @@ describe("групування", () => {
   it("пакет із дірою безпеки піднімається над мажором", () => {
     const withHole = buildStackItems(
       snapshot([pkg("a-major", "1.0.0"), pkg("z-hole", "1.0.0")]),
-      [row("a-major", "2.0.0"), row("z-hole", "1.0.1", [{ title: "RCE", severity: "critical" }])]
+      [row("a-major", "2.0.0"), row("z-hole", "1.0.1", [{ title: "RCE", severity: "critical" }], "1.0.0")]
     );
     expect(sortItems(withHole)[0].name).toBe("z-hole");
   });
@@ -193,7 +240,7 @@ describe("stackTotals", () => {
       row("a", "2.0.0"),
       row("b", "1.1.0"),
       row("c", "1.0.0"),
-      row("d", "1.0.1", [{ title: "XSS", severity: "high" }]),
+      row("d", "1.0.1", [{ title: "XSS", severity: "high" }], "1.0.0"),
     ]
   );
 
@@ -244,7 +291,7 @@ describe("stackSummaryText", () => {
 
   it("дірка безпеки називає найгіршу важкість", () => {
     const items = buildStackItems(snapshot([pkg("a", "1.0.0")]), [
-      row("a", "1.0.1", [{ title: "RCE", severity: "critical" }]),
+      row("a", "1.0.1", [{ title: "RCE", severity: "critical" }], "1.0.0"),
     ]);
     expect(stackSummaryText(totalsOf(items))).toBe("Стек: 1 оновлення, 1 діра безпеки (критична)");
   });

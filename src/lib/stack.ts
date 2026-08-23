@@ -68,6 +68,15 @@ export type StackVersionRow = {
   latest_seen_at: string | null;
   checked_at: string | null;
   advisories: StackAdvisory[] | null;
+  /**
+   * Версія, про яку питали npm, складаючи `advisories`.
+   *
+   * Без неї дірки безпеки — це відповідь невідомо про що. Саме так сторінка
+   * один раз і збрехала: після оновлення pdfjs чипс «свіже» стояв поруч із
+   * червоним «діра безпеки · висока», бо в рядку лежала відповідь про
+   * попередню версію.
+   */
+  advisories_version: string | null;
 };
 
 /* ──────────────────────────── стан пакета ─────────────────────────── */
@@ -182,7 +191,18 @@ export function buildStackItems(snapshot: StackSnapshot, rows: StackVersionRow[]
   const byName = new Map(rows.map((row) => [row.name, row]));
   return snapshot.packages.map((pkg) => {
     const row = byName.get(pkg.name);
-    const advisories = sortAdvisories(Array.isArray(row?.advisories) ? row.advisories : []);
+    /**
+     * Дірки показуємо ЛИШЕ якщо їх питали саме про цю версію.
+     *
+     * Оновили пакет — попередня відповідь npm стосується вже неіснуючого в нас
+     * стану, і показувати її означає лякати даремно. Мовчання тут чесніше:
+     * наступний прохід крона перепитає й покаже правду. Рядок без
+     * `advisories_version` (записаний до появи колонки) теж вважаємо застарілим.
+     */
+    const advisoriesMatchVersion = Boolean(row?.advisories_version) && row?.advisories_version === pkg.version;
+    const advisories = advisoriesMatchVersion
+      ? sortAdvisories(Array.isArray(row?.advisories) ? row.advisories : [])
+      : [];
     return {
       ...pkg,
       latest: row?.latest_version ?? null,

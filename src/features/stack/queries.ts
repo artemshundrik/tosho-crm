@@ -23,7 +23,7 @@ export function useStackVersions() {
       const { data, error } = await supabase
         .schema("tosho")
         .from("stack_versions")
-        .select("name,latest_version,latest_seen_at,checked_at,advisories");
+        .select("name,latest_version,latest_seen_at,checked_at,advisories,advisories_version");
       if (error) throw error;
       return (data ?? []) as StackVersionRow[];
     },
