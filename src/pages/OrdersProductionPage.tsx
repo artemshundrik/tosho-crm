@@ -631,6 +631,28 @@ export default function OrdersProductionPage() {
     [selectedSpecificationRecords]
   );
 
+  /**
+   * Яка САМЕ гілка зараз тримає вузол канбану.
+   *
+   * `desktopKanbanViewportRef` вішається на різні вузли: на обгортку скелета
+   * поки вантажимо, і на дошку після. Гілки з помилкою та з порожнім
+   * результатом рефа не мають узагалі. Тобто спостерігача треба перечіпляти
+   * тоді, коли МІНЯЄТЬСЯ ГІЛКА, — і тільки тоді.
+   *
+   * Раніше в залежностях ефекту нижче стояла `filteredRecords.length`. Вона це
+   * робила побічно (0 → 44 таки міняє число), але заразом перезапускала весь
+   * ефект на КОЖНУ зміну кількості — тобто на кожну літеру в пошуку: зняти
+   * слухача, зібрати новий ResizeObserver, повісити його на два вузли,
+   * отримати негайний перший виклик, а з нього rAF із getBoundingClientRect по
+   * всьому дереву дошки. Пошук цю кількість міняє безперервно, гілку — ні.
+   *
+   * Заразом лікується давніша дірка: `loading` і `error` у залежностях не було
+   * взагалі, тож перечеплення після завантаження працювало лише випадково —
+   * через те, що разом із гілкою мінялось і число.
+   */
+  const kanbanViewportBranch =
+    viewTab !== "queue" ? "off" : loading ? "loading" : error ? "error" : filteredRecords.length === 0 ? "empty" : "board";
+
   useEffect(() => {
     if (viewTab !== "queue") return;
     if (typeof window === "undefined") return;
@@ -670,7 +692,7 @@ export default function OrdersProductionPage() {
       if (frameId) window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
     };
-  }, [filteredRecords.length, viewTab]);
+  }, [kanbanViewportBranch, viewTab]);
 
   // useMemo обов'язковий: без нього це новий вузол на кожен рендер, і шапка
   // сторінки перезаписується по колу (див. usePageHeaderActions).
