@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageLoading } from "@/components/app/page-loading";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { STACK_SNAPSHOT } from "@/data/stackSnapshot.generated";
@@ -106,6 +107,7 @@ export function StackOverview() {
             ? groupByLayer(items).map((group, index) => (
                 <StackGroup
                   key={group.key}
+                  storageKey={`layer_${group.key}`}
                   first={index === 0}
                   dot={LAYER_META[group.key].dot}
                   label={LAYER_META[group.key].label}
@@ -117,6 +119,7 @@ export function StackOverview() {
             : groupByUrgency(items).map((group, index) => (
                 <StackGroup
                   key={group.key}
+                  storageKey={`urgency_${group.key}`}
                   first={index === 0}
                   dot={URGENCY_META[group.key].dot}
                   label={URGENCY_META[group.key].label}
@@ -389,11 +392,40 @@ function urgencySummary(key: StackUrgency, items: StackItem[]) {
   );
 }
 
+const GROUP_OPEN_PREFIX = "tosho_stack_group_";
+
+/** За замовчуванням група РОЗГОРНУТА: ховати дані мовчки не можна. */
+function readGroupOpen(key: string) {
+  try {
+    return window.localStorage.getItem(`${GROUP_OPEN_PREFIX}${key}`) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeGroupOpen(key: string, open: boolean) {
+  try {
+    window.localStorage.setItem(`${GROUP_OPEN_PREFIX}${key}`, open ? "1" : "0");
+  } catch {
+    /* приватний режим — просто не запамʼятаємо, це не привід ламати клік */
+  }
+}
+
 /**
  * Група = кольоровий квадратик + назва + лічильник + підсумок праворуч.
  * Той самий рядок, що над секціями «Витрат», — щоб не заводити другу мову.
+ *
+ * ЗГОРТАЄТЬСЯ РІЗКО. Вміст просто зникає й зʼявляється — жодної анімації
+ * висоти. Це не економія: розкриття 34 рядків через плавну висоту дає ривок на
+ * кожному кадрі, бо браузер переміряє весь список. Крутиться лише стрілка, і
+ * саме вона робить дію зрозумілою. Той самий рецепт, що в секціях «Витрат».
+ *
+ * Стан памʼятається між сесіями: згорнув «Платформу» — вона лишиться згорнутою
+ * і завтра. Розділ відкривають, щоб подивитись конкретне, і щоразу згортати
+ * решту було б роботою замість відповіді.
  */
 function StackGroup({
+  storageKey,
   first,
   dot,
   label,
@@ -401,6 +433,7 @@ function StackGroup({
   summary,
   items,
 }: {
+  storageKey: string;
   first: boolean;
   dot: string;
   label: string;
@@ -408,7 +441,15 @@ function StackGroup({
   summary: React.ReactNode;
   items: StackItem[];
 }) {
+  const [open, setOpen] = useState(() => readGroupOpen(storageKey));
   const [expanded, setExpanded] = useState(false);
+
+  const toggle = () => {
+    setOpen((prev) => {
+      writeGroupOpen(storageKey, !prev);
+      return !prev;
+    });
+  };
 
   /**
    * Свіжі пакети НЕ показуємо рядками.
@@ -423,37 +464,52 @@ function StackGroup({
 
   return (
     <section>
-      <div className={cn("flex items-center gap-2.5 px-4 pb-2 pt-3.5 sm:px-5", !first && "border-t border-border/40")}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-2.5 px-4 pb-2 pt-3.5 text-left transition-colors hover:bg-muted/40 sm:px-5",
+          !first && "border-t border-border/40"
+        )}
+      >
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", dot)} />
         <span className="text-[13.5px] font-semibold">{label}</span>
         <span className="figure text-2xs text-muted-foreground">{count}</span>
         <span className="ml-auto text-xs text-muted-foreground">{summary}</span>
-      </div>
+        <ChevronDown
+          className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
+        />
+      </button>
 
-      {attention.map((item) => (
-        <StackRow key={item.name} item={item} />
-      ))}
+      {!open ? null : (
+        <>
+          {attention.map((item) => (
+            <StackRow key={item.name} item={item} />
+          ))}
 
-      {fresh.length > 0 ? (
-        expanded ? (
-          fresh.map((item) => <StackRow key={item.name} item={item} />)
-        ) : (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="flex w-full items-center gap-2 border-t border-border/40 px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
-          >
-            <span className="min-w-0 flex-1 truncate">
-              {fresh
-                .slice(0, 6)
-                .map((item) => `${item.name} ${item.version}`)
-                .join(" · ")}
-              {fresh.length > 6 ? ` · і ще ${fresh.length - 6}` : ""}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-          </button>
-        )
-      ) : null}
+          {fresh.length > 0 ? (
+            expanded ? (
+              fresh.map((item) => <StackRow key={item.name} item={item} />)
+            ) : (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="flex w-full items-center gap-2 border-t border-border/40 px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {fresh
+                    .slice(0, 6)
+                    .map((item) => `${item.name} ${item.version}`)
+                    .join(" · ")}
+                  {fresh.length > 6 ? ` · і ще ${fresh.length - 6}` : ""}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            )
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
@@ -480,9 +536,15 @@ function daysSince(iso: string | null | undefined) {
 
 const STATE_CHIP: Record<string, { label: string; className: string }> = {
   major: { label: "major", className: "bg-destructive/10 text-destructive" },
-  minor: { label: "minor", className: "bg-warning-soft text-warning-foreground" },
+  minor: {
+    label: "minor",
+    className: "bg-warning-soft text-warning-foreground",
+  },
   patch: { label: "патч", className: "bg-muted text-muted-foreground" },
-  fresh: { label: "свіже", className: "bg-success-soft text-success-foreground" },
+  fresh: {
+    label: "свіже",
+    className: "bg-success-soft text-success-foreground",
+  },
   unknown: { label: "не питали", className: "bg-muted text-muted-foreground" },
 };
 
@@ -505,15 +567,27 @@ function StackRow({ item }: { item: StackItem }) {
 
   return (
     <div className="flex items-center gap-3 border-t border-border/40 px-4 py-2.5 sm:px-5">
-      <span
-        className={cn(
-          "figure grid h-8 w-8 shrink-0 place-items-center rounded-[9px] text-[13px] font-semibold",
-          item.worstSeverity ? "bg-destructive/10 text-destructive" : LAYER_META[item.layer].tile
-        )}
-        aria-hidden="true"
+      {/* Лого пакета, якщо його є звідки взяти, інакше монограма. Avatar тут не
+          прикраса: він сам перемикається на fallback, коли картинка не
+          завантажилась, — тобто відсутній інтернет чи заблокований фавікон
+          дають монограму, а не порожню діру. Плитка квадратна зі скругленням,
+          як у Витратах: це пакет, а не людина. */}
+      <Avatar
+        className={cn("h-8 w-8 rounded-[9px] border", item.iconUrl ? "border-border/60 bg-card" : "border-transparent")}
       >
-        {monogram(item.name)}
-      </span>
+        {item.iconUrl ? (
+          // object-contain — лого не обрізається; padding, щоб воно не впиралось у краї.
+          <AvatarImage src={item.iconUrl} alt="" className="object-contain p-1" />
+        ) : null}
+        <AvatarFallback
+          className={cn(
+            "figure rounded-[9px] text-[13px] font-semibold",
+            item.worstSeverity ? "bg-destructive/10 text-destructive" : LAYER_META[item.layer].tile
+          )}
+        >
+          {monogram(item.name)}
+        </AvatarFallback>
+      </Avatar>
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-1.5">
@@ -525,7 +599,9 @@ function StackRow({ item }: { item: StackItem }) {
               діра безпеки · {SEVERITY_LABEL[item.worstSeverity]}
             </span>
           ) : null}
-          {item.dev ? <span className="rounded-md bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">dev</span> : null}
+          {item.dev ? (
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">dev</span>
+          ) : null}
         </span>
         <span className="figure truncate text-2xs text-muted-foreground">
           {/* Дірки вже відсортовані за важкістю (buildStackItems), тож перша —

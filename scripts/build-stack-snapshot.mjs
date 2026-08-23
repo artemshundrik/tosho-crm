@@ -130,6 +130,65 @@ function layerOf(name, isDev) {
   return { layer: "platform", guessed: true };
 }
 
+/* ──────────────────────────── іконки ──────────────────────────── */
+
+/**
+ * Звідки в пакета лого.
+ *
+ * Той самий трюк, що для логотипів клієнтів і сервісів-підписок: фавікон
+ * домену. Нічого не тягне в бандл, працює для будь-якого пакета й акуратно
+ * вироджується — не завантажилось, значить лишається монограма.
+ *
+ * ДВА ДЖЕРЕЛА, І ПОРЯДОК ВАЖЛИВИЙ. Спершу `homepage`: у більшості пакетів це
+ * власний сайт проєкту (react.dev, tailwindcss.com, radix-ui.com), і його
+ * фавікон — це саме лого. Але в частини пакетів homepage веде на GitHub, і
+ * фавікон github.com у всіх однаковий — плитка перестала б розрізняти рядки.
+ * Для таких беремо аватарку ОРГАНІЗАЦІЇ (github.com/supabase.png): вона в
+ * кожної своя, тобто відповідає на те саме питання «чий це пакет».
+ *
+ * Читаємо з `node_modules/<name>/package.json` — там ці поля вже лежать
+ * розібрані, і жодного мережевого запиту для цього не потрібно.
+ */
+const ICONLESS_HOSTS = new Set(["github.com", "www.github.com", "npmjs.com", "www.npmjs.com", "gitlab.com"]);
+
+function hostOf(url) {
+  try {
+    return new URL(String(url).replace(/^git\+/, "").replace(/^git:\/\//, "https://")).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function githubOwner(repository) {
+  if (!repository) return null;
+  const raw = typeof repository === "string" ? repository : repository.url;
+  if (!raw) return null;
+  // Трапляється коротка форма «eslint/eslint» без схеми — вона теж валідна.
+  const short = String(raw).match(/^([\w.-]+)\/[\w.-]+$/);
+  if (short) return short[1];
+  const match = String(raw).match(/github\.com[/:]([\w.-]+)\//);
+  return match ? match[1] : null;
+}
+
+function iconUrlFor(name) {
+  let meta;
+  try {
+    meta = JSON.parse(readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8"));
+  } catch {
+    return null;
+  }
+
+  const host = hostOf(meta.homepage);
+  if (host && !ICONLESS_HOSTS.has(host)) {
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`;
+  }
+
+  const owner = githubOwner(meta.repository);
+  if (owner) return `https://github.com/${owner}.png?size=64`;
+
+  return null;
+}
+
 /* ─────────────────────── версії з лока ─────────────────────── */
 
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
@@ -302,6 +361,11 @@ const packages = declared
       layer,
       dev,
       bumpedAt: bumps.get(name) ?? null,
+      iconUrl: iconUrlFor(name),
+      // Позначка їде В ЗНІМОК, а не лише в консоль: попередження, яке нічого не
+      // зупиняє, помічають рівно доти, доки читають вивід. Далі pre-push не
+      // пустить пакет із вгаданим шаром — і рішення ухвалить людина.
+      ...(isGuess ? { layerGuessed: true } : {}),
     };
   })
   .sort((a, b) => a.name.localeCompare(b.name));
@@ -347,4 +411,9 @@ if (missing.length > 0) {
 if (guessed.length > 0) {
   console.log("[стек] ⚠ шар вгадано евристикою — впиши явно в LAYERS у цьому файлі:");
   for (const line of guessed) console.log(`[стек]     ${line}`);
+  console.log("[стек]   Доки не вписано, pre-push не пустить: сторінка не має вгадувати будову.");
+}
+const withoutIcon = packages.filter((entry) => !entry.iconUrl).length;
+if (withoutIcon > 0) {
+  console.log(`[стек] без лого: ${withoutIcon} — покажуться монограмою (це нормально).`);
 }
