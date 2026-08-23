@@ -82,8 +82,12 @@ export type StackSnapshot = {
   packages: StackPackageSnapshot[];
   /** Node і подібне — показується рядками нарівні з пакетами. */
   runtimes?: StackRuntime[];
-  /** Назви перевірок з гака pre-push, у порядку запуску. */
-  guards: string[];
+  /**
+   * Перевірки з гака pre-push, у порядку запуску — з поясненням, що саме кожна
+   * не пускає в прод. Сам перелік назв нічого не пояснює: «заглушки правил
+   * хуків» — це набір слів для будь-кого, хто цю перевірку не писав.
+   */
+  guards: Array<{ name: string; note: string | null }>;
   tests: number | null;
   testFiles: number | null;
   lintStubs: number | null;

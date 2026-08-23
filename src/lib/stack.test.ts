@@ -24,7 +24,7 @@ import {
 const snapshot = (packages: StackSnapshot["packages"]): StackSnapshot => ({
   generatedAt: "2026-08-23T00:00:00.000Z",
   packages,
-  guards: ["типи застосунку"],
+  guards: [{ name: "типи застосунку", note: null }],
   tests: 1083,
   testFiles: 73,
   lintStubs: 29,

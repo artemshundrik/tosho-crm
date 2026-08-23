@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ExternalLink, RefreshCw, ShieldAlert } from "lucide-react";
+import { BookOpen, ChevronDown, ExternalLink, Package, RefreshCw, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -497,7 +497,7 @@ function StackGroup({
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
-                className="flex w-full items-center gap-2 border-t border-border/40 px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
+                className="flex w-full cursor-pointer items-center gap-2 border-t border-border/40 px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
               >
                 <span className="min-w-0 flex-1 truncate">
                   {fresh
@@ -685,7 +685,10 @@ function StackRowPopover({ item }: { item: StackItem }) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="truncate rounded text-left text-[13.5px] font-medium underline-offset-4 hover:underline"
+          /* Курсор-ручка навмисно: це не посилання, але поводиться як
+             клікабельне, і рука — єдиний натяк, який людина читає без
+             підказки. Підкреслення при наведенні дублює той самий сигнал. */
+          className="cursor-pointer truncate rounded text-left text-[13.5px] font-medium underline-offset-4 hover:underline"
         >
           {item.label ?? item.name}
         </button>
@@ -745,20 +748,33 @@ function StackRowPopover({ item }: { item: StackItem }) {
           </p>
         ) : null}
 
-        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 pt-2.5 text-2xs">
+        {/* Посилання підписані так, щоб не треба було знати, що таке npm:
+            «сторінка пакета» і «документація» кажуть, куди саме потрапиш.
+            Рядками на всю ширину, а не двома словами в кутку — так вони
+            читаються як дії, а не як дрібний підпис. */}
+        <div className="mt-2.5 grid gap-0.5 border-t border-border/40 pt-2">
           {item.name !== "node" ? (
             <a
               href={`https://www.npmjs.com/package/${item.name}`}
               target="_blank"
               rel="noreferrer"
-              className="text-chart-1 hover:underline"
+              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60"
             >
-              npm
+              <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span>Сторінка пакета</span>
+              <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
             </a>
           ) : null}
           {item.homepage ? (
-            <a href={item.homepage} target="_blank" rel="noreferrer" className="text-chart-1 hover:underline">
-              сайт проєкту
+            <a
+              href={item.homepage}
+              target="_blank"
+              rel="noreferrer"
+              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60"
+            >
+              <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span>Документація</span>
+              <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
             </a>
           ) : null}
         </div>
@@ -846,6 +862,20 @@ function EffortCard({ items }: { items: StackItem[] }) {
  */
 function GuardsCard() {
   const { guards, tests, testFiles, lintStubs } = STACK_SNAPSHOT;
+
+  /**
+   * Число живе НА СВОЄМУ чипсі, а не поруч окремим.
+   *
+   * Доти «заглушки лінта: 29» стояли окремим чипсом біля «заглушки правил
+   * хуків» — двома різними назвами того самого. Артем спитав, що це таке, і
+   * питання було справедливе: сторінка сама себе дублювала.
+   */
+  const labelOf = (name: string) => {
+    if (name === "тести" && tests) return `${tests} тестів`;
+    if (name === "заглушки правил хуків" && lintStubs) return `${name}: ${lintStubs}`;
+    return name;
+  };
+
   return (
     <section className={cn(CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Сторожа перед пушем</h3>
@@ -853,18 +883,33 @@ function GuardsCard() {
           не табло стану. Зелений означав би «щойно пройшло», а сторінка цього
           не знає — перевірки живуть у гаку на машині, і фарбувати їх зеленим
           означало б обіцяти захист, якого в цю мить може й не бути. */}
-      <p className="mt-0.5 text-3xs text-muted-foreground">Не пустять зламане в прод — кожна перед кожним пушем.</p>
+      <p className="mt-0.5 text-3xs text-muted-foreground">
+        Кожна стоїть між тобою й продом. Натисни, щоб дізнатись, що саме вона ловить.
+      </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {guards.map((guard) => (
-          <span key={guard} className="rounded-md bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
-            {guard === "тести" && tests ? `${tests} тестів` : guard}
-          </span>
+          <Popover key={guard.name}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "cursor-pointer rounded-md px-1.5 py-0.5 text-2xs transition-colors",
+                  guard.name === "заглушки правил хуків" && lintStubs
+                    ? "bg-warning-soft text-warning-foreground hover:bg-warning-soft/70"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                )}
+              >
+                {labelOf(guard.name)}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-3">
+              <p className="text-[13px] font-semibold">{guard.name}</p>
+              {guard.note ? (
+                <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{guard.note}</p>
+              ) : null}
+            </PopoverContent>
+          </Popover>
         ))}
-        {lintStubs ? (
-          <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-2xs text-warning-foreground">
-            заглушки лінта: {lintStubs}
-          </span>
-        ) : null}
       </div>
       <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
         {testFiles ? `${pluralUk(testFiles, "файл", "файли", "файлів")} тестів · ` : ""}
