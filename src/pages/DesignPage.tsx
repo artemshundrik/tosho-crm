@@ -2481,10 +2481,59 @@ export default function DesignPage() {
     userId,
   ]);
 
+  /**
+   * Покажчик для пошуку: усе дороге рахуємо ОДИН раз на набір задач.
+   *
+   * НАВІЩО. Фільтр нижче бігає по всіх задачах на кожну зміну запиту. Доти він
+   * для КОЖНОЇ задачі розбирав метадані чотири рази — окремо ids, окремо мітки,
+   * окремо аватарки (усе всередині resolveDesignTaskCollaborators), плюс ще раз
+   * getDesignTaskCollaboratorIds на самому початку, — і щоразу наново склеював
+   * рядок для пошуку. Це марна робота: від набраних літер вона не залежить.
+   *
+   * ЧЕСНО ПРО МАСШТАБ. Це НЕ оголошення перемоги над блокуванням. На дошці
+   * дизайну заміряно 24.08.2026 на проді: 14 символів дають 14 довгих задач,
+   * 1098 мс, найдовша 205 мс, і атрибуція кадрів показує чистий JS у
+   * планувальнику React при нулі верстки й малювання. Але перебір 267 задач із
+   * операціями над масивами коштує помітно менше за ті 60-90 мс на літеру, тож
+   * головний споживач майже напевно в іншому місці — найімовірніше в самому
+   * перерендері дошки. Знайти його можна лише замірами з розміткою всередині
+   * збірки; доти картку не закривати.
+   *
+   * Ключ мемо — `visibleTasks`, а не запит: від набору літер вміст покажчика не
+   * залежить, тож на набір він не перебудовується. `getTaskCollaborators`
+   * тримається на useCallback із залежностями від довідника людей, який під час
+   * набору не міняється.
+   *
+   * Міряти повторно: scripts/measure-search-blocking.js.
+   */
+  const taskSearchIndex = useMemo(() => {
+    const index = new Map<string, { collaboratorIds: string[]; haystack: string }>();
+    visibleTasks.forEach((task) => {
+      index.set(task.id, {
+        collaboratorIds: getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId),
+        haystack: [
+          task.designTaskNumber,
+          task.quoteNumber,
+          task.title,
+          task.customerName,
+          task.productName,
+          ...getTaskCollaborators(task).map((entry) => entry.label),
+          task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      });
+    });
+    return index;
+  }, [getTaskCollaborators, visibleTasks]);
+
   const filteredTasks = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
     return visibleTasks.filter((task) => {
-      const collaboratorIds = getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId);
+      const indexed = taskSearchIndex.get(task.id);
+      const collaboratorIds =
+        indexed?.collaboratorIds ?? getDesignTaskCollaboratorIds(task.metadata, task.assigneeUserId);
       const isLinkedTask = isUuid(task.quoteId);
       if (contentView === "linked" && !isLinkedTask) return false;
       if (contentView === "standalone" && isLinkedTask) return false;
@@ -2508,22 +2557,9 @@ export default function DesignPage() {
 
       if (!query) return true;
 
-      const haystack = [
-        task.designTaskNumber,
-        task.quoteNumber,
-        task.title,
-        task.customerName,
-        task.productName,
-        ...getTaskCollaborators(task).map((entry) => entry.label),
-        task.designTaskType ? DESIGN_TASK_TYPE_LABELS[task.designTaskType] : null,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(query);
+      return (indexed?.haystack ?? "").includes(query);
     });
-  }, [contentView, deferredSearch, effectiveDesignerFilter, getTaskCollaborators, isManagerUser, managerFilter, statusFilter, visibleTasks]);
+  }, [contentView, deferredSearch, effectiveDesignerFilter, isManagerUser, managerFilter, statusFilter, taskSearchIndex, visibleTasks]);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
