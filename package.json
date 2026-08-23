@@ -61,7 +61,7 @@
     "@radix-ui/react-tabs": "^1.1.21",
     "@react-pdf/renderer": "^4.7.0",
     "@supabase/supabase-js": "^2.112.3",
-    "@tailwindcss/vite": "^4.1.17",
+    "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.102.1",
     "@tanstack/react-virtual": "^3.14.10",
     "@tiptap/extension-link": "^3.23.5",
@@ -84,7 +84,7 @@
     "sharp": "^0.35.3",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.1.17",
+    "tailwindcss": "^4.3.3",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -93,7 +93,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/web-push": "^3.6.4",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^6.1.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -105,7 +105,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.67.0",
-    "vite": "^7.2.4",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }

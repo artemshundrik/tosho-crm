@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T17:48:05.415Z",
+  "generatedAt": "2026-08-23T18:05:39.351Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -141,7 +141,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tailwindcss/vite",
-      "version": "4.1.18",
+      "version": "4.3.3",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -233,7 +233,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@vitejs/plugin-react",
-      "version": "5.1.2",
+      "version": "6.1.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -300,7 +300,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "7.1.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-23T20:50:06+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
@@ -433,7 +433,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "tailwindcss",
-      "version": "4.1.18",
+      "version": "4.3.3",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2026-03-12T16:43:11+02:00",
@@ -465,7 +465,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "vite",
-      "version": "7.2.7",
+      "version": "8.2.2",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-07-20T23:24:45+03:00",
