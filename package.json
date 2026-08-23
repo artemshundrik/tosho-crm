@@ -37,7 +37,8 @@
     "export:orphan-attachment-summary": "node scripts/export-orphan-attachment-summary.mjs",
     "generate:vapid": "node scripts/generate-vapid-keys.mjs",
     "stack:snapshot": "node scripts/build-stack-snapshot.mjs",
-    "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs"
+    "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs",
+    "check:node-version": "node scripts/check-node-version.mjs"
   },
   "overrides": {
     "react-day-picker": {

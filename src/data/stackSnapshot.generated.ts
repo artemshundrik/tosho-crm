@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T15:11:10.883Z",
+  "generatedAt": "2026-08-23T15:38:09.659Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -344,7 +344,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "6.2.108",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": "2026-04-06T00:17:23+03:00",
+      "bumpedAt": "2026-08-23T18:14:42+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=mozilla.github.io&sz=128"
     },
     {
@@ -408,7 +408,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "0.35.3",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": "2026-04-06T02:16:50+03:00",
+      "bumpedAt": "2026-08-23T18:14:42+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -496,12 +496,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     "заглушки правил хуків",
     "розростання файлів",
     "знімок стеку",
+    "версія Node",
     "адреси кронів"
   ],
-  "tests": 1110,
+  "tests": 1113,
   "testFiles": 74,
   "lintStubs": 29,
-  "node": "20",
+  "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 231990
+  "sourceLines": 232067
 };
