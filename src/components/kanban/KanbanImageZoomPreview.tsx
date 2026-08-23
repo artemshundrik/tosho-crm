@@ -159,11 +159,30 @@ export function KanbanImageZoomPreview({
     return () => observer.disconnect();
   }, [loadStrategy, shouldLoad]);
 
-  useEffect(() => {
+  /**
+   * Скидання при зміні картинки — під час рендеру, а не в ефекті.
+   *
+   * ЧОМУ НЕ ЕФЕКТ. Ефекти виконуються згори вниз, тож цей стирав результат
+   * того, що вище: перевірка видимості встигала поставити `shouldLoad = true`
+   * і вийти БЕЗ спостерігача (він їй уже не потрібен), а цей ефект тут-таки
+   * повертав `false`. Стан у тому ж пакеті ставав знову хибним, залежність
+   * `shouldLoad` не мінялась — і верхній ефект більше не запускався. Мініатюра
+   * не вантажилась ніколи, аж поки на неї не наведеш курсор (`onMouseEnter`
+   * ставить прапорець сам). Найгірше саме для карток, ВИДИМИХ на екрані: ті,
+   * що внизу колонки, рятував спостерігач.
+   *
+   * Тепер скидаємо лише тоді, коли картинка справді змінилась (рекомендований
+   * React спосіб — «підправити стан під час рендеру»), і монтування нічого не
+   * затирає.
+   */
+  const resetKey = `${imageUrl}|${isEager}`;
+  const [trackedKey, setTrackedKey] = useState(resetKey);
+  if (trackedKey !== resetKey) {
+    setTrackedKey(resetKey);
     setShouldLoad(isEager || warmedKanbanImageUrls.has(imageUrl));
     setIsLoaded(warmedKanbanImageUrls.has(imageUrl));
     setHasFailed(false);
-  }, [imageUrl, isEager]);
+  }
 
   const shouldRenderImage = isEager || shouldLoad;
 
