@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T15:38:09.659Z",
+  "generatedAt": "2026-08-23T15:57:53.193Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -201,7 +201,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "layer": "platform",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
-      "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
+      "iconUrl": "https://github.com/DefinitelyTyped.png?size=64",
+      "pinned": {
+        "to": "node",
+        "why": "мажор має збігатися з Node, інакше типи описують API, якого в рантаймі немає"
+      }
     },
     {
       "name": "@types/react",
@@ -484,6 +488,16 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://github.com/web-push-libs.png?size=64"
     }
   ],
+  "runtimes": [
+    {
+      "name": "node",
+      "label": "Node.js",
+      "version": "24",
+      "layer": "platform",
+      "iconUrl": "https://www.google.com/s2/favicons?domain=nodejs.org&sz=128",
+      "note": "рантайм збірки й усіх функцій · з netlify.toml"
+    }
+  ],
   "guards": [
     "типи застосунку",
     "лінт + борг компілятора",
@@ -504,5 +518,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 232067
+  "sourceLines": 232179
 };

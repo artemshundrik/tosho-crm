@@ -131,6 +131,32 @@ async function fetchAdvisories(
 }
 
 /**
+ * Остання LTS Node — саме LTS, а не «найновіша».
+ *
+ * У стрічці релізів nodejs.org найсвіжіша версія майже завжди належить
+ * Current-гілці (зараз це 26), яку в прод не ставлять: вона живе пів року й
+ * ламає сумісність. Порівнювати наш рантайм із нею означало б вічно радити
+ * переїзд, якого робити не треба. Порівнюємо з тим, на чому справді
+ * тримають продакшн.
+ */
+async function fetchNodeLts(signal: AbortSignal): Promise<string | null> {
+  try {
+    const response = await fetch("https://nodejs.org/dist/index.json", {
+      headers: { Accept: "application/json" },
+      signal,
+    });
+    if (!response.ok) return null;
+    const releases = (await response.json()) as Array<{ version?: unknown; lts?: unknown }>;
+    if (!Array.isArray(releases)) return null;
+    // Стрічка відсортована від найновішого, тож перший LTS — він і є актуальний.
+    const lts = releases.find((entry) => entry.lts && typeof entry.version === "string");
+    return lts ? String(lts.version).replace(/^v/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Хто має право запустити перевірку.
  *
  * Дві двері: крон зі спільним секретом і жива людина з розділу Dev (кнопка
@@ -209,10 +235,19 @@ export const handler = async (event: HttpEvent) => {
     const installed: Record<string, string[]> = {};
     for (const pkg of packages) installed[pkg.name] = [pkg.version];
 
-    const [latest, advisories] = await Promise.all([
+    const [latest, advisories, nodeLts] = await Promise.all([
       mapWithLimit(packages, CONCURRENCY, (pkg) => fetchLatest(pkg.name, controller.signal)),
       fetchAdvisories(installed, controller.signal),
+      fetchNodeLts(controller.signal),
     ]);
+
+    /**
+     * Рантайми питаються не в npm, тож ідуть окремим джерелом — але лягають у
+     * ту саму таблицю: для сторінки Node такий самий рядок, як будь-який пакет.
+     */
+    const runtimeResults: LatestResult[] = (STACK_SNAPSHOT.runtimes ?? [])
+      .filter((runtime) => runtime.name === "node")
+      .map((runtime) => ({ name: runtime.name, version: nodeLts }));
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
@@ -233,7 +268,7 @@ export const handler = async (event: HttpEvent) => {
     const previous = new Map(((previousRows as PreviousRow[]) ?? []).map((row) => [row.name, row]));
 
     const nowIso = new Date().toISOString();
-    const rows = latest
+    const rows = [...latest, ...runtimeResults]
       .filter((entry) => entry && entry.version)
       .map((entry) => {
         const before = previous.get(entry.name);

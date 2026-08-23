@@ -61,7 +61,12 @@ const row = (
 
 describe("parseVersion", () => {
   it("розбирає звичайну версію", () => {
-    expect(parseVersion("19.2.8")).toEqual({ parts: [19, 2, 8], pre: null });
+    expect(parseVersion("19.2.8")).toEqual({ parts: [19, 2, 8], pre: null, precision: 3 });
+  });
+
+  it("приймає версію, оголошену лише гілкою: у netlify.toml стоїть саме «24»", () => {
+    expect(parseVersion("24")).toEqual({ parts: [24, 0, 0], pre: null, precision: 1 });
+    expect(parseVersion("24.19")).toEqual({ parts: [24, 19, 0], pre: null, precision: 2 });
   });
 
   it("зрізає діапазонні префікси, бо в лок вони не потрапляють, а в package.json — так", () => {
@@ -109,6 +114,16 @@ describe("classifyState", () => {
     // мінорі. Назвати це «minor» означало б обіцяти безпечне оновлення.
     expect(classifyState("0.560.0", "0.561.0")).toBe("major");
     expect(classifyState("0.560.0", "0.560.3")).toBe("patch");
+  });
+
+  it("гілку порівнюємо з гілкою: Node «24» проти LTS 24.19.0 — це свіже, а не відставання", () => {
+    // NODE_VERSION = "24" означає «тримаємось гілки 24», точний мінор обирає
+    // Netlify. Без окремої гілки порівняння рантайм вічно виглядав би відсталим
+    // від власної ж LTS — і на сторінці стояло б «оновись» там, де нічого
+    // робити не треба.
+    expect(classifyState("24", "24.19.0")).toBe("fresh");
+    expect(classifyState("24", "26.7.0")).toBe("major");
+    expect(classifyState("24", "24.0.0")).toBe("fresh");
   });
 
   it("без відповіді реєстру стан невідомий, а не свіжий", () => {
@@ -196,6 +211,42 @@ describe("buildStackItems", () => {
     ]);
     expect(items[0].advisories).toEqual([]);
     expect(items[0].worstSeverity).toBeNull();
+  });
+});
+
+describe("рантайми й прив'язані пакети", () => {
+  const withNode = (nodeVersion: string, typesVersion: string) => ({
+    ...snapshot([{ ...pkg("@types/node", typesVersion, "platform"), dev: true, pinned: { to: "node", why: "мажор має збігатися з Node" } }]),
+    runtimes: [
+      { name: "node", label: "Node.js", version: nodeVersion, layer: "platform" as const, note: "з netlify.toml" },
+    ],
+  });
+
+  it("Node показується рядком нарівні з пакетами — інакше мертвий рантайм не видно ніде", () => {
+    const items = buildStackItems(withNode("24", "24.10.3"), [row("node", "24.19.0")]);
+    const node = items.find((item) => item.name === "node");
+    expect(node).toBeDefined();
+    expect(node?.label).toBe("Node.js");
+    expect(node?.state).toBe("fresh");
+  });
+
+  it("мертвий рантайм видно як major", () => {
+    const items = buildStackItems(withNode("20", "20.1.0"), [row("node", "24.19.0")]);
+    expect(items.find((item) => item.name === "node")?.state).toBe("major");
+  });
+
+  it("@types/node прив'язані до Node, а не до «найновішого в npm»", () => {
+    // Взяти типи 26 на Node 24 означає описати API, якого в рантаймі немає:
+    // збереться, а впаде в проді. Сторінка не має цього радити.
+    const items = buildStackItems(withNode("24", "24.10.3"), [row("@types/node", "26.2.0"), row("node", "24.19.0")]);
+    const types = items.find((item) => item.name === "@types/node");
+    expect(types?.state).toBe("pinned");
+    expect(urgencyOf(types!)).toBe("fresh");
+  });
+
+  it("прив'язаний пакет, що відстав ВІД NODE, знову стає відсталим", () => {
+    const items = buildStackItems(withNode("24", "20.1.0"), [row("@types/node", "26.2.0"), row("node", "24.19.0")]);
+    expect(items.find((item) => item.name === "@types/node")?.state).toBe("major");
   });
 });
 

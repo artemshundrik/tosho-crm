@@ -541,6 +541,9 @@ const STATE_CHIP: Record<string, { label: string; className: string }> = {
     className: "bg-warning-soft text-warning-foreground",
   },
   patch: { label: "патч", className: "bg-muted text-muted-foreground" },
+  // Прив'язана версія — не «відстала» й не «свіжа»: вона правильна за
+  // визначенням, і колір має це показувати окремим тоном, а не зеленим.
+  pinned: { label: "прив'язано", className: "bg-chart-1/12 text-chart-1" },
   fresh: {
     label: "свіже",
     className: "bg-success-soft text-success-foreground",
@@ -591,7 +594,7 @@ function StackRow({ item }: { item: StackItem }) {
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[13.5px] font-medium">{item.name}</span>
+          <span className="truncate text-[13.5px] font-medium">{item.label ?? item.name}</span>
           <span className={cn("rounded-md px-1.5 py-0.5 text-2xs", chip.className)}>{chip.label}</span>
           {item.worstSeverity ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-2xs text-destructive">
@@ -610,9 +613,12 @@ function StackRow({ item }: { item: StackItem }) {
             ? `${item.advisories[0]?.title ?? ""}${
                 item.advisories.length > 1 ? ` · і ще ${item.advisories.length - 1}` : ""
               }`
-            : [bumped ? `оновлювали ${bumped}` : null, waiting ? `нова версія ${waiting}` : null]
-                .filter(Boolean)
-                .join(" · ")}
+            : (item.note ??
+              (item.state === "pinned"
+                ? item.pinned?.why
+                : [bumped ? `оновлювали ${bumped}` : null, waiting ? `нова версія ${waiting}` : null]
+                    .filter(Boolean)
+                    .join(" · ")))}
         </span>
       </span>
 
@@ -621,6 +627,8 @@ function StackRow({ item }: { item: StackItem }) {
         <span className="block text-2xs text-muted-foreground">
           {item.state === "fresh" ? (
             "найновіша"
+          ) : item.state === "pinned" ? (
+            "за Node"
           ) : item.state === "unknown" ? (
             "невідомо"
           ) : (

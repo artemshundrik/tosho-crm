@@ -117,6 +117,22 @@ const LAYERS = {
   ],
 };
 
+/**
+ * Пакети, чию версію диктує НЕ npm, а щось інше в проєкті.
+ *
+ * `@types/node` — це опис API конкретного Node, і його мажор МУСИТЬ збігатися з
+ * тим Node, на якому ми працюємо. Взяти «найновіші» типи 26, сидячи на Node 24,
+ * означає описати функції, яких у рантаймі немає: код збереться, а впаде вже в
+ * проді. Тобто звична порада «оновись до найновішого» тут шкідлива, і сторінка
+ * не має її давати.
+ */
+const PINNED = {
+  "@types/node": {
+    to: "node",
+    why: "мажор має збігатися з Node, інакше типи описують API, якого в рантаймі немає",
+  },
+};
+
 /** Пакет → шар. Незнайомий отримує здогад і потрапляє в список попереджень. */
 function layerOf(name, isDev) {
   for (const [layer, names] of Object.entries(LAYERS)) {
@@ -362,6 +378,7 @@ const packages = declared
       dev,
       bumpedAt: bumps.get(name) ?? null,
       iconUrl: iconUrlFor(name),
+      ...(PINNED[name] ? { pinned: PINNED[name] } : {}),
       // Позначка їде В ЗНІМОК, а не лише в консоль: попередження, яке нічого не
       // зупиняє, помічають рівно доти, доки читають вивід. Далі pre-push не
       // пустить пакет із вгаданим шаром — і рішення ухвалить людина.
@@ -372,9 +389,34 @@ const packages = declared
 
 const stats = testStats();
 
+/**
+ * Рантайми — те, на чому все крутиться, але чого немає в package.json.
+ *
+ * НАВІЩО ОКРЕМИМ СПИСКОМ. Node не встановлюється як залежність, тож у переліку
+ * пакетів його бути не може — і саме тому він півроку прожив мертвим
+ * (двадцятка померла 30 квітня 2026), не потрапивши на жоден екран. Сторінка
+ * про те, «з чого зроблена CRM», без двигуна, на якому вона працює, показує
+ * все, крім найважливішого.
+ *
+ * Версію беремо звідти ж, звідки її бере прод, — із netlify.toml. Нову питає
+ * крон у nodejs.org, і питає саме LTS: «найновіша» там означає Current-гілку,
+ * яку в прод не ставлять.
+ */
+const runtimes = [
+  {
+    name: "node",
+    label: "Node.js",
+    version: nodeVersion(),
+    layer: "platform",
+    iconUrl: "https://www.google.com/s2/favicons?domain=nodejs.org&sz=128",
+    note: "рантайм збірки й усіх функцій · з netlify.toml",
+  },
+];
+
 const snapshot = {
   generatedAt: new Date().toISOString(),
   packages,
+  runtimes,
   guards: guardsFromPrePush(),
   tests: stats.tests,
   testFiles: stats.files,
@@ -401,7 +443,7 @@ export const STACK_SNAPSHOT: StackSnapshot = ${JSON.stringify(snapshot, null, 2)
 
 writeFileSync(OUT, file, "utf8");
 
-console.log(`[стек] знімок оновлено: ${packages.length} пакетів, ${snapshot.tests ?? "?"} тестів.`);
+console.log(`[стек] знімок оновлено: ${packages.length} пакетів + ${runtimes.length} рантайм, ${snapshot.tests ?? "?"} тестів.`);
 for (const layer of Object.keys(LAYERS)) {
   console.log(`[стек]   ${layer}: ${packages.filter((p) => p.layer === layer).length}`);
 }

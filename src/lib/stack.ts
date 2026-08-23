@@ -35,12 +35,39 @@ export type StackPackageSnapshot = {
    * pre-push: сторінка про будову CRM не має цю будову вигадувати.
    */
   layerGuessed?: boolean;
+  /**
+   * Версію диктує не npm, а щось інше в проєкті (у нас — Node для його типів).
+   * Такий пакет НЕ вважається відсталим: «оновись до найновішого» для нього
+   * шкідлива порада.
+   */
+  pinned?: { to: string; why: string };
+  /** Людська назва — лише в рантаймів («Node.js» замість «node»). */
+  label?: string;
+  /** Звідки взялась версія — підпис під рядком рантайму. */
+  note?: string;
+};
+
+/**
+ * Рантайм — те, на чому все крутиться, але чого немає в package.json.
+ *
+ * Живе окремим списком саме тому, що не є залежністю: у переліку пакетів Node
+ * бути не може, і рівно через це стара двадцятка прожила мертвою чотири місяці,
+ * не потрапивши на жоден екран.
+ */
+export type StackRuntime = Omit<StackPackageSnapshot, "dev" | "bumpedAt"> & {
+  label: string;
+  note: string;
+  /** Рантайм не є залежністю розробки і не має історії в package.json. */
+  dev?: boolean;
+  bumpedAt?: string | null;
 };
 
 /** Те, що знає про себе репозиторій. Генерує scripts/build-stack-snapshot.mjs. */
 export type StackSnapshot = {
   generatedAt: string;
   packages: StackPackageSnapshot[];
+  /** Node і подібне — показується рядками нарівні з пакетами. */
+  runtimes?: StackRuntime[];
   /** Назви перевірок з гака pre-push, у порядку запуску. */
   guards: string[];
   tests: number | null;
@@ -85,7 +112,14 @@ export type StackVersionRow = {
  * Наскільки ми відстали. Слово «unknown» — це не помилка, а чесна відповідь:
  * крон ще не питав про цей пакет (щойно додали) або npm не відповів.
  */
-export type StackState = "fresh" | "patch" | "minor" | "major" | "unknown";
+export type StackState =
+  | "fresh"
+  | "patch"
+  | "minor"
+  | "major"
+  | "unknown"
+  /** Версія прив'язана до іншої частини проєкту — оновлювати «до найновішого» не можна. */
+  | "pinned";
 
 export type StackItem = StackPackageSnapshot & {
   latest: string | null;
@@ -109,7 +143,18 @@ export const SEVERITY_LABEL: Record<AdvisorySeverity, string> = {
 
 /* ───────────────────────── порівняння версій ──────────────────────── */
 
-type Parsed = { parts: number[]; pre: string | null };
+type Parsed = {
+  parts: number[];
+  pre: string | null;
+  /**
+   * Скільки складників було в рядку насправді.
+   *
+   * «24» і «24.0.0» — це різні твердження. Перше означає «тримаємось гілки 24, а
+   * точну версію обирає Netlify», друге — конкретну збірку. Без цієї різниці
+   * рантайм, оголошений мажором, вічно виглядав би відсталим від 24.19.0.
+   */
+  precision: number;
+};
 
 /**
  * Розбір версії без залежності від `semver`.
@@ -119,12 +164,19 @@ type Parsed = { parts: number[]; pre: string | null };
  */
 export function parseVersion(value: string | null | undefined): Parsed | null {
   if (!value) return null;
+  // Мінор і патч НЕ обовʼязкові: «24» у netlify.toml — це теж версія, просто
+  // оголошена з точністю до гілки.
   const match = String(value)
     .trim()
     .replace(/^[v=^~]+/, "")
-    .match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
+    .match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?/);
   if (!match) return null;
-  return { parts: [Number(match[1]), Number(match[2]), Number(match[3])], pre: match[4] ?? null };
+  const given = [match[1], match[2], match[3]].filter((part) => part !== undefined).length;
+  return {
+    parts: [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)],
+    pre: match[4] ?? null,
+    precision: given,
+  };
 }
 
 /** −1 / 0 / 1. Передрелізна версія завжди молодша за таку саму фінальну. */
@@ -154,6 +206,19 @@ export function classifyState(current: string | null | undefined, latest: string
   const from = parseVersion(current);
   const to = parseVersion(latest);
   if (!from || !to) return "unknown";
+
+  /**
+   * Версія, оголошена лише мажором, порівнюється лише за мажором.
+   *
+   * У netlify.toml стоїть NODE_VERSION = "24" — точний мінор обирає Netlify
+   * сам, і питання «24.10 у нас чи 24.19» не має відповіді й не має сенсу.
+   * Значення має одне: чи не з'їхала гілка. Без цієї гілки Node назавжди
+   * лишався б «відсталим на мінор» від власної ж LTS.
+   */
+  if (from.precision === 1 || to.precision === 1) {
+    return from.parts[0] >= to.parts[0] ? "fresh" : "major";
+  }
+
   if (compareVersions(current, latest) >= 0) return "fresh";
   if (from.parts[0] !== to.parts[0]) return "major";
   if (from.parts[0] === 0 && from.parts[1] !== to.parts[1]) return "major";
@@ -175,6 +240,26 @@ function sortAdvisories(advisories: StackAdvisory[]): StackAdvisory[] {
   );
 }
 
+/**
+ * Стан пакета з урахуванням прив'язки.
+ *
+ * Прив'язаний пакет (у нас `@types/node`) правильний тоді, коли його мажор
+ * дорівнює мажору того, до чого його прив'язали, — а не тоді, коли він
+ * найновіший у npm. Без цієї гілки сторінка радила б взяти типи 26 на Node 24:
+ * код зібрався б, а впав уже в проді.
+ */
+function resolveState(
+  pkg: StackPackageSnapshot,
+  latest: string | null,
+  installed: Map<string, string>
+): StackState {
+  if (pkg.pinned) {
+    const target = installed.get(pkg.pinned.to);
+    if (target && majorOf(pkg.version) === majorOf(target)) return "pinned";
+  }
+  return classifyState(pkg.version, latest);
+}
+
 function worstOf(advisories: StackAdvisory[]): AdvisorySeverity | null {
   let worst: AdvisorySeverity | null = null;
   for (const advisory of advisories) {
@@ -186,10 +271,28 @@ function worstOf(advisories: StackAdvisory[]): AdvisorySeverity | null {
   return worst;
 }
 
+/** Мажор із версії — для порівняння прив'язаних пакетів із тим, до чого їх прив'язали. */
+function majorOf(value: string | null | undefined): number | null {
+  const parsed = parseVersion(value);
+  return parsed ? parsed.parts[0] : null;
+}
+
 /** Знімок репозиторію + відповідь npm → рядки, які малює сторінка. */
 export function buildStackItems(snapshot: StackSnapshot, rows: StackVersionRow[]): StackItem[] {
   const byName = new Map(rows.map((row) => [row.name, row]));
-  return snapshot.packages.map((pkg) => {
+  /**
+   * Рантайми йдуть тими самими рядками, що й пакети: для людини Node — така
+   * сама частина стеку, як React, і ділити їх на два різні списки означало б
+   * питати «а де ще подивитись?».
+   */
+  const everything: StackPackageSnapshot[] = [
+    ...snapshot.packages,
+    ...(snapshot.runtimes ?? []).map((runtime) => ({ dev: false, bumpedAt: null, ...runtime })),
+  ];
+  /** Встановлені версії за іменем — щоб прив'язаний пакет знав, до чого прив'язаний. */
+  const installed = new Map(everything.map((entry) => [entry.name, entry.version]));
+
+  return everything.map((pkg) => {
     const row = byName.get(pkg.name);
     /**
      * Дірки показуємо ЛИШЕ якщо їх питали саме про цю версію.
@@ -208,7 +311,7 @@ export function buildStackItems(snapshot: StackSnapshot, rows: StackVersionRow[]
       latest: row?.latest_version ?? null,
       latestSeenAt: row?.latest_seen_at ?? null,
       checkedAt: row?.checked_at ?? null,
-      state: classifyState(pkg.version, row?.latest_version),
+      state: resolveState(pkg, row?.latest_version ?? null, installed),
       advisories,
       worstSeverity: worstOf(advisories),
     };
@@ -247,6 +350,8 @@ export const URGENCY_META: Record<StackUrgency, { label: string; dot: string; ti
 export function urgencyOf(item: StackItem): StackUrgency {
   if (item.state === "major") return "breaking";
   if (item.state === "minor" || item.state === "patch") return "available";
+  // «pinned» і «unknown» — не робота: перше правильне за визначенням, друге ще
+  // не з'ясоване. Обидва в «свіже», щоб не роздувати список справ вигаданим.
   return "fresh";
 }
 
@@ -255,7 +360,7 @@ export function urgencyOf(item: StackItem): StackUrgency {
  * і аж тоді за абеткою. Пакет із дірою не має ховатись у хвості списку через
  * те, що його назва починається на «w».
  */
-const STATE_WEIGHT: Record<StackState, number> = { major: 0, minor: 1, patch: 2, unknown: 3, fresh: 4 };
+const STATE_WEIGHT: Record<StackState, number> = { major: 0, minor: 1, patch: 2, unknown: 3, pinned: 4, fresh: 5 };
 
 export function sortItems(items: StackItem[]): StackItem[] {
   return [...items].sort((a, b) => {
@@ -289,6 +394,8 @@ export type StackTotals = {
   patch: number;
   fresh: number;
   unknown: number;
+  /** Прив'язані до іншої частини проєкту — правильні за визначенням. */
+  pinned: number;
   /** Скільки пакетів мають хоч одну відкриту дірку безпеки. */
   vulnerable: number;
   worstSeverity: AdvisorySeverity | null;
@@ -304,6 +411,7 @@ export function stackTotals(items: StackItem[]): StackTotals {
     patch: 0,
     fresh: 0,
     unknown: 0,
+    pinned: 0,
     vulnerable: 0,
     worstSeverity: null,
     checkedAt: null,
