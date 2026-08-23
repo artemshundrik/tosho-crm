@@ -1,19 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Search } from "lucide-react";
+import { Briefcase, Eye, Search } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { writeViewAs, type ViewAsTarget } from "@/auth/viewAs";
+import { JOB_ROLE_NAMES } from "@/lib/jobRoles";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { AvatarBase } from "@/components/app/avatar-kit";
+import { Button } from "@/components/ui/button";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
+import { SEGMENTED_GROUP_SM, SEGMENTED_TRIGGER_SM } from "@/components/ui/controlStyles";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /**
- * Вибір співробітника для режиму «Дивитись як» (тільки owner).
- * Показує реальних людей із довідника — так у режимі одразу видно живі дані
- * (ставка, візуали, задачі), а не порожні екрани.
+ * Вибір цілі для режиму «Дивитись як» — два різні входи, а не два списки
+ * одного й того самого.
+ *
+ * «Людина» (owner) показує реальних людей із довідника: сенс саме в живих
+ * даних — ставка, візуали, задачі, — тому екрани не порожні. Через це вхід і
+ * закритий для решти, і через це він лише для перегляду.
+ *
+ * «Посада» (owner і SEO) не показує нічиїх даних узагалі — тільки інтерфейс
+ * ролі. Тому тут можна працювати: діє людина від свого імені й у межах своїх
+ * прав, просто екранами тієї посади.
  */
+
+type Tab = "person" | "role";
 
 const getInitials = (name: string) =>
   name
@@ -33,14 +46,26 @@ type Member = {
   inactive: boolean;
 };
 
+const ROLE_OPTIONS = Object.entries(JOB_ROLE_NAMES)
+  .map(([key, label]) => ({ key, label }))
+  .sort((a, b) => a.label.localeCompare(b.label, "uk"));
+
 export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { userId, canUseViewAs, viewAs } = useAuth();
+  const { userId, canViewAsPerson, canViewAsRole, viewAs } = useAuth();
+  const [tab, setTab] = useState<Tab>(canViewAsPerson ? "person" : "role");
   const [members, setMembers] = useState<Member[]>([]);
   const [query, setQuery] = useState("");
 
+  // Вхід «людина» є не в усіх: відкриваємо на тій вкладці, яка людині доступна.
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setTab(canViewAsPerson ? "person" : "role");
+  }, [open, canViewAsPerson]);
+
   useEffect(() => {
     let cancelled = false;
-    if (!open || !userId || !canUseViewAs) return;
+    if (!open || !userId || !canViewAsPerson || tab !== "person") return;
     (async () => {
       const workspaceId = await resolveWorkspaceId(userId);
       if (!workspaceId || cancelled) return;
@@ -64,33 +89,37 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     return () => {
       cancelled = true;
     };
-  }, [open, userId, canUseViewAs]);
+  }, [open, userId, canViewAsPerson, tab]);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+  const needle = query.trim().toLowerCase();
+
+  const filteredMembers = useMemo(() => {
     if (!needle) return members;
     return members.filter(
       (member) =>
         member.label.toLowerCase().includes(needle) || (member.jobRole ?? "").toLowerCase().includes(needle)
     );
-  }, [members, query]);
+  }, [members, needle]);
 
-  const pick = (member: Member) => {
-    const target: ViewAsTarget = {
-      userId: member.userId,
-      label: member.label,
-      jobRole: member.jobRole,
-      accessRole: member.accessRole,
-    };
+  const filteredRoles = useMemo(() => {
+    if (!needle) return ROLE_OPTIONS;
+    return ROLE_OPTIONS.filter(
+      (role) => role.label.toLowerCase().includes(needle) || role.key.includes(needle)
+    );
+  }, [needle]);
+
+  const pick = (target: ViewAsTarget) => {
     writeViewAs(target);
     onOpenChange(false);
   };
 
-  if (!canUseViewAs) return null;
+  if (!canViewAsPerson && !canViewAsRole) return null;
+
+  const showTabs = canViewAsPerson && canViewAsRole;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Вибір людини, а не форма: клік по рядку вмикає режим і закриває вікно,
+      {/* Вибір, а не форма: клік по рядку вмикає режим і закриває вікно,
           зберігати нема чого. Без опт-ауту набране в пошуку рахувалось «змінами»
           і вихід питав «Закрити без збереження?». */}
       <DialogContent dismissible className="max-w-[460px]">
@@ -100,53 +129,116 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             Дивитись як
           </DialogTitle>
           <DialogDescription>
-            Інтерфейс і дані показуватимуться так, як їх бачить обрана людина. Ваші права в базі не змінюються —
-            це режим перегляду, а не перевірка доступів.
+            {tab === "person"
+              ? "Інтерфейс і дані показуватимуться так, як їх бачить обрана людина. Це режим перегляду: дії вимкнені, щоб ви нічого не зробили від її імені."
+              : "Інтерфейс посади без конкретної людини — чужих даних тут немає. Працювати можна: дії підуть від вашого імені й у межах ваших прав."}
           </DialogDescription>
         </DialogHeader>
+
+        {showTabs ? (
+          <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full")}>
+            {(
+              [
+                { value: "person" as const, label: "Людина", icon: Eye },
+                { value: "role" as const, label: "Посада", icon: Briefcase },
+              ]
+            ).map(({ value, label, icon: Icon }) => (
+              <Button
+                key={value}
+                type="button"
+                variant="segmented"
+                size="xs"
+                aria-pressed={tab === value}
+                data-state={tab === value ? "on" : "off"}
+                onClick={() => setTab(value)}
+                className={cn(SEGMENTED_TRIGGER_SM, "flex-1")}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
+          </SegmentedGroup>
+        ) : null}
 
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Пошук за іменем або посадою"
+            placeholder={tab === "person" ? "Пошук за іменем або посадою" : "Пошук посади"}
             className="pl-9"
             autoFocus
           />
         </div>
 
         <div className="-mx-1 max-h-[320px] overflow-y-auto px-1">
-          {filtered.length === 0 ? (
-            <div className="rounded-section border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-              Нікого не знайдено.
-            </div>
+          {tab === "person" ? (
+            filteredMembers.length === 0 ? (
+              <EmptyRow>Нікого не знайдено.</EmptyRow>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {filteredMembers.map((member) => (
+                  <button
+                    key={member.userId}
+                    type="button"
+                    onClick={() =>
+                      pick({
+                        kind: "person",
+                        userId: member.userId,
+                        label: member.label,
+                        jobRole: member.jobRole,
+                        accessRole: member.accessRole,
+                      })
+                    }
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/40",
+                      viewAs?.kind === "person" &&
+                        viewAs.userId === member.userId &&
+                        "bg-primary/5 ring-1 ring-primary/25"
+                    )}
+                  >
+                    <AvatarBase
+                      src={member.avatarUrl}
+                      name={member.label}
+                      fallback={member.initials}
+                      size={32}
+                      className="shrink-0 border-border/70"
+                      inactive={member.inactive}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-foreground">
+                        {member.label}
+                      </span>
+                      <span className="block truncate text-2xs text-muted-foreground">
+                        {member.jobRole ?? member.accessRole ?? "—"}
+                        {member.inactive ? " · неактивний" : ""}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : filteredRoles.length === 0 ? (
+            <EmptyRow>Такої посади немає.</EmptyRow>
           ) : (
             <div className="flex flex-col gap-0.5">
-              {filtered.map((member) => (
+              {filteredRoles.map((role) => (
                 <button
-                  key={member.userId}
+                  key={role.key}
                   type="button"
-                  onClick={() => pick(member)}
+                  onClick={() => pick({ kind: "role", jobRole: role.key, label: role.label })}
                   className={cn(
                     "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/40",
-                    viewAs?.userId === member.userId && "bg-primary/5 ring-1 ring-primary/25"
+                    viewAs?.kind === "role" && viewAs.jobRole === role.key && "bg-primary/5 ring-1 ring-primary/25"
                   )}
                 >
-                  <AvatarBase
-                    src={member.avatarUrl}
-                    name={member.label}
-                    fallback={member.initials}
-                    size={32}
-                    className="shrink-0 border-border/70"
-                    inactive={member.inactive}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold text-foreground">{member.label}</span>
-                    <span className="block truncate text-2xs text-muted-foreground">
-                      {member.jobRole ?? member.accessRole ?? "—"}
-                      {member.inactive ? " · неактивний" : ""}
-                    </span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/40">
+                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+                  </span>
+                  {/* Без підпису під назвою: він однаковий у всіх рядках, тож
+                      нічого не розрізняє — це сказано один раз в описі вікна. */}
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">
+                    {role.label}
                   </span>
                 </button>
               ))}
@@ -155,5 +247,13 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EmptyRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-section border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+      {children}
+    </div>
   );
 }

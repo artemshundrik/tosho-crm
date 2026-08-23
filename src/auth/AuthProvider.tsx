@@ -2,15 +2,36 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import { invalidateWorkspaceResolution, resolveWorkspaceId, resolveWorkspaceMembership } from '@/lib/workspace';
-import { buildPermissions, mapAccessRoleToTeamRole, type AccessRole, type AppPermissions, type JobRole, type TeamRole } from '@/lib/permissions';
-import { readViewAs, VIEW_AS_CHANGED_EVENT, type ViewAsTarget } from '@/auth/viewAs';
+import {
+  buildPermissions,
+  mapAccessRoleToTeamRole,
+  permissionsForViewAs,
+  type AccessRole,
+  type AppPermissions,
+  type JobRole,
+  type TeamRole,
+} from '@/lib/permissions';
+import {
+  isViewAsPerson,
+  readViewAs,
+  VIEW_AS_CHANGED_EVENT,
+  viewAsModeOf,
+  type ViewAsMode,
+  type ViewAsTarget,
+} from '@/auth/viewAs';
+import { setViewOnlyMode } from '@/lib/viewOnlyGuard';
 import {
   clearCachedTeamContext,
   readCachedTeamContext,
   writeCachedModuleAccess,
   writeCachedTeamContext,
 } from '@/auth/teamContextCache';
-import { defaultModuleAccess, type ModuleAccess } from '@/lib/moduleAccess';
+import {
+  defaultModuleAccess,
+  fullModuleAccess,
+  intersectModuleAccess,
+  type ModuleAccess,
+} from '@/lib/moduleAccess';
 import {
   getCachedCurrentWorkspaceMemberDirectoryEntry,
   getCurrentWorkspaceMemberDirectoryEntry,
@@ -41,10 +62,20 @@ type AuthState = {
    * дизайнера. Тепер підміна одна на весь застосунок, тут.
    */
   moduleAccess: ModuleAccess | undefined;
-  /** Активна ціль режиму «Дивитись як» (лише owner); null — звичайний режим. */
+  /** Активна ціль режиму «Дивитись як»; null — звичайний режим. */
   viewAs: ViewAsTarget | null;
-  /** Чи має право вмикати режим (owner). */
+  /**
+   * Що це за режим: `observe` — очима конкретної людини, дії вимкнені;
+   * `act` — приміряна посада, працювати можна (від свого імені й у межах
+   * власних прав). `null` — звичайний режим.
+   */
+  viewAsMode: ViewAsMode | null;
+  /** Чи має право вмикати режим бодай якимось входом. */
   canUseViewAs: boolean;
+  /** Дивитись очима конкретної людини — лише owner. */
+  canViewAsPerson: boolean;
+  /** Приміряти посаду — owner і SEO. */
+  canViewAsRole: boolean;
   /**
    * Чиї дані ПОКАЗУВАТИ. У режимі «Дивитись як» — id обраної людини, інакше
    * власний. Навмисно окремо від `userId`: той лишається справжнім, бо на ньому
@@ -492,33 +523,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => buildPermissions({ role, accessRole, jobRole }),
     [role, accessRole, jobRole],
   );
-  // Вмикати може лише owner — інакше режим став би дірою в правах.
-  const activeViewAs = realPermissions.isSuperAdmin ? viewAs : null;
+  /**
+   * Кому який вхід дозволено.
+   *
+   * «Очима людини» — тільки owner: там живі дані конкретного співробітника, аж
+   * до його заробітку. «Приміряти посаду» — ще й SEO: посада без людини чужих
+   * особистих даних не показує взагалі, а йому потрібне саме це — побути в
+   * шкірі продакта чи менеджера, проклацати й одразу щось підправити.
+   *
+   * Рахується від РЕАЛЬНИХ прав, а не від підмінених: інакше, увійшовши «як
+   * дизайнер», людина втратила б разом із правами й вихід із режиму.
+   */
+  const canViewAsPerson = realPermissions.isSuperAdmin;
+  const canViewAsRole = realPermissions.isSuperAdmin || realPermissions.isSeo;
+  const activeViewAs =
+    viewAs && (isViewAsPerson(viewAs) ? canViewAsPerson : canViewAsRole) ? viewAs : null;
+  const viewAsMode = viewAsModeOf(activeViewAs);
 
-  const effectiveRole = activeViewAs ? mapAccessRoleToTeamRole(activeViewAs.accessRole) : role;
-  const effectiveAccessRole = (activeViewAs ? activeViewAs.accessRole : accessRole) as AccessRole | null;
+  /**
+   * Посада без людини навмисно не несе `accessRole`: «приміряв роль» ніколи не
+   * видає owner-ських чи адмінських прапорців, хоч би яку посаду обрали.
+   */
+  const targetAccessRole = activeViewAs
+    ? isViewAsPerson(activeViewAs)
+      ? activeViewAs.accessRole
+      : null
+    : accessRole;
+  const effectiveRole = activeViewAs ? mapAccessRoleToTeamRole(targetAccessRole) : role;
+  const effectiveAccessRole = targetAccessRole as AccessRole | null;
   const effectiveJobRole = (activeViewAs ? activeViewAs.jobRole : jobRole) as JobRole | null;
 
   const permissions = useMemo(
     () =>
       activeViewAs
-        ? buildPermissions({
-            role: effectiveRole,
-            accessRole: effectiveAccessRole,
-            jobRole: effectiveJobRole,
-          })
+        ? permissionsForViewAs(
+            realPermissions,
+            buildPermissions({
+              role: effectiveRole,
+              accessRole: effectiveAccessRole,
+              jobRole: effectiveJobRole,
+            }),
+          )
         : realPermissions,
     [activeViewAs, effectiveRole, effectiveAccessRole, effectiveJobRole, realPermissions],
   );
 
   /**
-   * Дозволені модулі тієї людини, чиїми очима дивимось.
+   * Гальмо на записи — рівно в режимі ПЕРЕГЛЯДУ.
    *
-   * У звичайному режимі це власний запис із довідника; у режимі «Дивитись як» —
-   * запис обраної людини, який доводиться шукати в повному списку, бо
-   * `getCurrentWorkspaceMemberDirectoryEntry` вміє лише «поточного».
+   * «Приміряв посаду» лишається робочим: SEO для того й заходить, щоб щось
+   * підправити, і робить це від свого імені й у межах своїх прав. А от «очима
+   * людини» існує, щоб ПОДИВИТИСЬ, тож усе, що пише, там вимкнено (див.
+   * lib/viewOnlyGuard.ts).
    */
-  const targetUserId = activeViewAs?.userId ?? userId;
+  useEffect(() => {
+    setViewOnlyMode(viewAsMode === "observe");
+    return () => setViewOnlyMode(false);
+  }, [viewAsMode]);
+
+  /**
+   * Дозволені модулі — вже з урахуванням режиму.
+   *
+   * У звичайному режимі це власний запис із довідника. У режимі — ПЕРЕТИН
+   * власних із доступами цілі: доступи в CRM персональні, а RLS у таблицях
+   * командна (по team_id), тож «побачив пункт меню» означає «прочитав дані».
+   * Отже режим має тільки звужувати, як і права.
+   *
+   * Запис обраної людини доводиться шукати в повному списку, бо
+   * `getCurrentWorkspaceMemberDirectoryEntry` вміє лише «поточного»; для посади
+   * без людини беремо дефолти цієї посади.
+   */
+  const viewAsPersonId = isViewAsPerson(activeViewAs) ? activeViewAs.userId : null;
   const [moduleAccess, setModuleAccess] = useState<ModuleAccess | undefined>(() =>
     activeViewAs ? undefined : getCachedCurrentWorkspaceMemberDirectoryEntry()?.moduleAccess,
   );
@@ -526,11 +601,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     // Немає запису в довіднику — беремо дефолти за роллю, а не «нічого».
-    const fallback = () =>
+    const ownFallback = () => defaultModuleAccess({ accessRole, jobRole });
+    const targetFallback = () =>
       defaultModuleAccess({ accessRole: effectiveAccessRole, jobRole: effectiveJobRole });
+    const effective = (own: ModuleAccess, target: ModuleAccess) =>
+      activeViewAs ? intersectModuleAccess(own, target) : own;
 
-    if (!targetUserId) {
-      setModuleAccess(fallback());
+    if (!userId) {
+      setModuleAccess(effective(ownFallback(), targetFallback()));
       return () => {
         cancelled = true;
       };
@@ -544,7 +622,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * питаючи всі свої дані.
      */
     if (!activeViewAs) {
-      const cachedAccess = readCachedTeamContext(targetUserId)?.moduleAccess ?? undefined;
+      const cachedAccess = readCachedTeamContext(userId)?.moduleAccess ?? undefined;
       if (cachedAccess) {
         setModuleAccess((prev) => (sameModuleAccess(prev, cachedAccess) ? prev : cachedAccess));
       }
@@ -552,25 +630,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const load = async () => {
       try {
+        const ownEntry = await getCurrentWorkspaceMemberDirectoryEntry();
+        writeCachedModuleAccess(userId, ownEntry?.moduleAccess ?? null);
+        /**
+         * «Свої» доступи — це те, що людина відкриває НАСПРАВДІ, а не галочки
+         * в її картці. У owner галочки бувають зняті (в Артема, наприклад,
+         * `overview: false`), бо гейт маршруту пропускає його повз них за
+         * `isSuperAdmin` (Rule 0). Без цієї поправки перетин закривав owner'у
+         * власний «Огляд» щойно він заходив у режим — сторінка, яку поза
+         * режимом він відкриває щодня.
+         */
+        const own = realPermissions.isSuperAdmin
+          ? fullModuleAccess()
+          : ownEntry?.moduleAccess ?? ownFallback();
+
         if (!activeViewAs) {
-          const entry = await getCurrentWorkspaceMemberDirectoryEntry();
-          writeCachedModuleAccess(targetUserId, entry?.moduleAccess ?? null);
-          const next = entry?.moduleAccess ?? fallback();
-          if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, next) ? prev : next));
+          if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, own) ? prev : own));
           return;
         }
-        const workspaceId = await resolveWorkspaceId(userId!);
-        if (!workspaceId) {
-          if (!cancelled) setModuleAccess(fallback());
-          return;
+
+        let target = targetFallback();
+        if (viewAsPersonId) {
+          const workspaceId = await resolveWorkspaceId(userId);
+          if (workspaceId) {
+            const rows = await listWorkspaceMemberDirectory(workspaceId);
+            target = rows.find((row) => row.userId === viewAsPersonId)?.moduleAccess ?? target;
+          }
         }
-        const rows = await listWorkspaceMemberDirectory(workspaceId);
-        const entry = rows.find((row) => row.userId === targetUserId);
-        const next = entry?.moduleAccess ?? fallback();
+
+        const next = intersectModuleAccess(own, target);
         if (!cancelled) setModuleAccess((prev) => (sameModuleAccess(prev, next) ? prev : next));
       } catch (error) {
         console.error('Failed to resolve module access', error);
-        if (!cancelled) setModuleAccess(fallback());
+        if (!cancelled) setModuleAccess(effective(ownFallback(), targetFallback()));
       }
     };
 
@@ -579,14 +671,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Змінили комусь доступи — перечитуємо, не чекаючи перезавантаження.
     const handleDirectoryUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ userId?: string }>).detail;
-      if (!detail?.userId || detail.userId === targetUserId) void load();
+      if (!detail?.userId || detail.userId === userId || detail.userId === viewAsPersonId) void load();
     };
     window.addEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate);
     return () => {
       cancelled = true;
       window.removeEventListener(WORKSPACE_MEMBER_DIRECTORY_UPDATED_EVENT, handleDirectoryUpdate);
     };
-  }, [activeViewAs, effectiveAccessRole, effectiveJobRole, targetUserId, userId]);
+  }, [
+    activeViewAs,
+    accessRole,
+    jobRole,
+    effectiveAccessRole,
+    effectiveJobRole,
+    realPermissions.isSuperAdmin,
+    viewAsPersonId,
+    userId,
+  ]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -603,8 +704,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshTeamContext,
       signOut,
       viewAs: activeViewAs,
-      canUseViewAs: realPermissions.isSuperAdmin,
-      viewUserId: activeViewAs?.userId ?? userId,
+      viewAsMode,
+      canUseViewAs: canViewAsPerson || canViewAsRole,
+      canViewAsPerson,
+      canViewAsRole,
+      // Приміряна посада — це не чужі дані: показуємо свої, але чужим інтерфейсом.
+      viewUserId: viewAsPersonId ?? userId,
     }),
     [
       session,
@@ -619,7 +724,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       backendUnavailable,
       refreshTeamContext,
       activeViewAs,
-      realPermissions.isSuperAdmin,
+      viewAsMode,
+      canViewAsPerson,
+      canViewAsRole,
+      viewAsPersonId,
     ],
   );
 

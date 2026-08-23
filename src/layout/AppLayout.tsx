@@ -815,7 +815,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId, teamId, session, permissions, accessRole, jobRole, viewUserId, moduleAccess } = useAuth();
+  const { userId, teamId, session, permissions, accessRole, jobRole, viewAs, viewUserId, moduleAccess } =
+    useAuth();
   const isFinanceJobRole = ["seo", "accountant", "chief_accountant"].includes((jobRole ?? "").trim().toLowerCase());
   const showDesignerTimerWidget = Boolean(permissions.isDesigner && teamId && userId);
   const designerTimerController = useDesignerTimerController({
@@ -1957,7 +1958,27 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[232px]"
         )}
       >
-        <div>
+        <div
+          /*
+           * Висота смуги режиму «Дивитись як» — одним числом на весь застосунок.
+           * Від неї залежать: сама смуга, зсув фіксованої шапки, падінг <main>
+           * і межа липких шапок таблиць (--app-header-height рахується з неї).
+           */
+          style={
+            viewAs
+              ? ({
+                  "--view-as-offset": "32px",
+                  // Оголошуємо ТУТ, а не на :root: var() у значенні змінної
+                  // рахується на елементі оголошення, тож на :root зсув завжди
+                  // був би нульовим, і липкі шапки таблиць заповзли б під смугу.
+                  "--app-header-height": "calc(var(--app-header-base-height) + 32px)",
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
+        {/* Нагадування про режим — НАД шапкою й фіксоване: усередині <main> воно
+            їхало геть при першій же прокрутці. */}
+        <ViewAsBar className={cn("left-0", sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]")} />
         {/* HEADER */}
         <header
           key={theme}
@@ -1966,7 +1987,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // тримається її нижнього краю: `fixed` уже є позиціонованим
             // предком, тож окремий `relative` тут не потрібен (і не можна —
             // два класи позиції сперечались би).
-            "fixed top-0 right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
+            "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
             "left-0"
@@ -2381,13 +2402,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <main
           className={cn(
             "w-full overflow-x-clip pb-[calc(var(--tabbar-height)+var(--tabbar-inset-bottom)+16px)] md:pb-0",
-            isCanvasMode ? "px-0 pt-14 md:px-0 lg:px-0" : "pt-[76px]"
+            isCanvasMode
+              ? "px-0 pt-[calc(56px+var(--view-as-offset,0px))] md:px-0 lg:px-0"
+              : "pt-[calc(76px+var(--view-as-offset,0px))]"
           )}
           data-canvas-mode={isCanvasMode ? "on" : "off"}
         >
-          {/* Нагадування про режим «Дивитись як» — над усім контентом, щоб
-              випадково не сплутати чужий вигляд зі своїм. */}
-          <ViewAsBar />
           {/* Анонс релізу при вході. Сам вирішує, показуватись чи ні, і
               тримає інваріант «одна модалка за сеанс». */}
           <ProductUpdateModal />

@@ -103,6 +103,39 @@ export function buildPermissions({
   };
 }
 
+/**
+ * Права в режимі «Дивитись як»: вміння обраної посади, але НІКОЛИ не вище
+ * власних.
+ *
+ * Прапорці діляться на два ґатунки:
+ *  • «хто я» (`isSuperAdmin`, `isAdmin`, `isSeo`, `isManagerJob`, `isDesigner`)
+ *    беруться з ЦІЛІ — інакше owner, дивлячись очима дизайнера, не побачив би
+ *    жодного дизайнерського екрана, бо `isDesigner` у нього хибний;
+ *  • «що я можу» (решта, усі `can*`) — перетин: `власне && цільове`.
+ *
+ * Перетин потрібен не для owner (у нього і так усе true, тож режим лишається
+ * точно таким, як був), а для решти тих, кому режим дозволено. Сесія в базі
+ * лишається їхньою, тож кнопка, домальована «бо я приміряв старшу роль», за
+ * відсутності серверної перевірки виконала б справжню дію. Режим має тільки
+ * ЗВУЖУВАТИ.
+ */
+const VIEW_AS_IDENTITY_KEYS: ReadonlySet<keyof AppPermissions> = new Set([
+  "isSuperAdmin",
+  "isAdmin",
+  "isSeo",
+  "isManagerJob",
+  "isDesigner",
+]);
+
+export function permissionsForViewAs(real: AppPermissions, target: AppPermissions): AppPermissions {
+  const result = { ...target };
+  (Object.keys(result) as (keyof AppPermissions)[]).forEach((key) => {
+    if (VIEW_AS_IDENTITY_KEYS.has(key)) return;
+    result[key] = real[key] && target[key];
+  });
+  return result;
+}
+
 const normalizeId = (value?: string | null) => (value ?? "").trim();
 
 export function canOpenQuoteDetails({

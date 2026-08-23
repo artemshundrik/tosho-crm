@@ -1,6 +1,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
 import { fetchWithReadTimeout } from "./requestTimeout";
+import {
+  blockedRpc,
+  guardPostgrestClient,
+  guardStorageBucket,
+  guardTableBuilder,
+  installViewOnlyFetchGuard,
+  isBlockedRpc,
+  isViewOnly,
+} from "./viewOnlyGuard";
 
 // Typed against the generated schema (./database.types.ts): column names, row shapes, and
 // insert/update payloads are checked at compile time.
@@ -54,6 +63,43 @@ export function getDbClient(): AnyPostgrestClient {
 }
 
 /**
+ * Режим перегляду («Дивитись як → очима людини») не має права нічого писати.
+ *
+ * Перехоплюємо тут, бо це єдине місце, крізь яке проходять УСІ запити: обходити
+ * кнопки по сторінках означало б мовчки пропустити частину з них. Поза режимом
+ * `isViewOnly()` хибний і жодної обгортки не створюється — звичайний шлях
+ * лишається байт-у-байт тим самим.
+ */
+function withViewOnlyGuard<T extends object>(client: T, prop: string | symbol, value: unknown): unknown {
+  if (!isViewOnly() || typeof value !== "function") return value;
+
+  if (prop === "from") {
+    return (...args: unknown[]) => {
+      const builder = (value as (...a: unknown[]) => unknown).apply(client, args);
+      return guardTableBuilder(builder, String(args[0] ?? "таблиця"));
+    };
+  }
+
+  if (prop === "rpc") {
+    return (...args: unknown[]) => {
+      const name = String(args[0] ?? "");
+      if (isBlockedRpc(name)) return blockedRpc(name);
+      return (value as (...a: unknown[]) => unknown).apply(client, args);
+    };
+  }
+
+  // `supabase.schema("tosho")` — окремий клієнт, який інакше пройшов би повз.
+  if (prop === "schema") {
+    return (...args: unknown[]) =>
+      guardPostgrestClient((value as (...a: unknown[]) => unknown).apply(client, args));
+  }
+
+  return value;
+}
+
+installViewOnlyFetchGuard();
+
+/**
  * Сумісний експорт, щоб НЕ ламати існуючі імпорти:
  * import { supabase } from "@/lib/supabaseClient"
  *
@@ -63,7 +109,22 @@ export const supabase: AnySupabaseClient = new Proxy({} as AnySupabaseClient, {
   get(_target, prop) {
     const client = getSupabaseClient();
     const value = Reflect.get(client as object, prop);
-    return typeof value === "function" ? value.bind(client) : value;
+
+    if (prop === "storage" && isViewOnly() && value && typeof value === "object") {
+      const storage = value as { from: (bucket: string) => unknown };
+      return new Proxy(storage, {
+        get(target, key) {
+          const inner = Reflect.get(target, key);
+          if (key !== "from" || typeof inner !== "function") {
+            return typeof inner === "function" ? inner.bind(target) : inner;
+          }
+          return (bucket: string) => guardStorageBucket(inner.call(target, bucket), bucket);
+        },
+      });
+    }
+
+    const bound = typeof value === "function" ? value.bind(client) : value;
+    return withViewOnlyGuard(client as object, prop, bound);
   },
 }) as AnySupabaseClient;
 
@@ -81,7 +142,8 @@ export const db: AnyPostgrestClient = new Proxy({} as AnyPostgrestClient, {
   get(_target, prop) {
     const client = getDbClient();
     const value = Reflect.get(client as object, prop);
-    return typeof value === "function" ? value.bind(client) : value;
+    const bound = typeof value === "function" ? value.bind(client) : value;
+    return withViewOnlyGuard(client as object, prop, bound);
   },
 }) as AnyPostgrestClient;
 

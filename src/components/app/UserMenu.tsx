@@ -340,6 +340,13 @@ export function UserMenu({ mobile = false, onNavigate, compact = false }: UserMe
           }
           items={menuItems}
         />
+        {/*
+         * Діалог мусить бути і тут. Гілка зі згорнутим сайдбаром виходила
+         * раніше, ніж рендериться <ViewAsDialog> нижче, тож пункт «Дивитись
+         * як…» ставив стан — і не відкривав нічого. Мовчки: помилки немає,
+         * просто нічого не відбувається.
+         */}
+        <ViewAsDialog open={viewAsOpen} onOpenChange={setViewAsOpen} />
       </div>
     );
   }

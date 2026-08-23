@@ -186,6 +186,31 @@ export const MODULE_GROUPS: Array<{ group: ModuleGroup; label: string; modules: 
  * Доступи «за замовчуванням» для ролі — коли в module_access порожньо.
  * Використовується і як база для нормалізації, і для нових запрошень.
  */
+/**
+ * Перетин доступів для режиму «Дивитись як»: показуємо модулі обраної посади,
+ * але жодного, якого немає у власних.
+ *
+ * Без цього режим ставав би обхідним шляхом до чужих даних: доступи в CRM
+ * персональні, а RLS у таблицях — командна (по team_id). Тобто відкривши
+ * «Фінанси», яких у тебе немає, ти справді прочитав би їх із бази.
+ */
+/** Усі модулі відкриті — те, що фактично має owner (Rule 0). */
+export function fullModuleAccess(): ModuleAccess {
+  const result = {} as ModuleAccess;
+  MODULE_KEYS.forEach((key) => {
+    result[key] = true;
+  });
+  return result;
+}
+
+export function intersectModuleAccess(own: ModuleAccess, target: ModuleAccess): ModuleAccess {
+  const result = {} as ModuleAccess;
+  MODULE_KEYS.forEach((key) => {
+    result[key] = Boolean(own[key]) && Boolean(target[key]);
+  });
+  return result;
+}
+
 export function defaultModuleAccess(ctx: RoleContext = {}): ModuleAccess {
   const result = {} as ModuleAccess;
   MODULE_DEFINITIONS.forEach((item) => {

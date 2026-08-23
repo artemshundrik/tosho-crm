@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPermissions,
   canEditQuoteDelivery,
+  permissionsForViewAs,
   resolveQuoteRunPriceFieldAccess,
 } from "./permissions";
 
@@ -83,5 +84,49 @@ describe("canEditQuoteDelivery", () => {
         })
       ).toBe(true);
     }
+  });
+});
+
+/**
+ * Режим «Дивитись як» не має бути обхідним шляхом до чужих прав. Сесія в базі
+ * лишається власною, тож кнопка, домальована «бо я приміряв старшу роль», за
+ * відсутності серверної перевірки виконала б справжню дію. Тому інваріант
+ * один: режим ЗВУЖУЄ, ніколи не розширює.
+ */
+describe("permissionsForViewAs", () => {
+  const owner = buildPermissions({ accessRole: "owner", jobRole: "it_specialist" });
+  const seo = buildPermissions({ accessRole: "member", jobRole: "seo" });
+  const designer = buildPermissions({ accessRole: "member", jobRole: "designer" });
+
+  it("owner нічого не втрачає й нічого не додає — бачить рівно те, що ціль", () => {
+    const asDesigner = permissionsForViewAs(owner, designer);
+    expect(asDesigner).toEqual(designer);
+  });
+
+  it("прапорці «хто я» беруться з цілі, інакше рольових екранів не побачити", () => {
+    const asDesigner = permissionsForViewAs(owner, designer);
+    expect(asDesigner.isDesigner).toBe(true);
+    expect(asDesigner.isSuperAdmin).toBe(false);
+  });
+
+  it("не додає вміння, якого немає у справжніх правах", () => {
+    // SEO не редагує ролі учасників; приміряна посада не має цього змінити.
+    expect(seo.canEditMemberRoles).toBe(false);
+    const seoAsOwner = permissionsForViewAs(seo, owner);
+    expect(seoAsOwner.canEditMemberRoles).toBe(false);
+  });
+
+  it("жодне вміння не стає true, якщо воно було false у власних правах", () => {
+    const seoAsOwner = permissionsForViewAs(seo, owner);
+    (Object.keys(seoAsOwner) as (keyof typeof seoAsOwner)[]).forEach((key) => {
+      if (["isSuperAdmin", "isAdmin", "isSeo", "isManagerJob", "isDesigner"].includes(key)) return;
+      if (!seo[key]) expect(seoAsOwner[key]).toBe(false);
+    });
+  });
+
+  it("звужує до цілі: те, чого немає в посади, вимкнено навіть в owner", () => {
+    const asDesigner = permissionsForViewAs(owner, designer);
+    expect(owner.canManageDesignStatuses).toBe(true);
+    expect(asDesigner.canManageDesignStatuses).toBe(false);
   });
 });
