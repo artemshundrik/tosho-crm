@@ -53,3 +53,9 @@ ds-bundle/
 
 # Дерево типів для design-sync (генерується tsconfig.types.json)
 types/
+
+# Замок Deno. Його переписує netlify dev: CLI тягне bootstrap edge-функцій і
+# заразом дзеркалить сюди залежності з package.json. Edge-функцій у нас немає
+# жодної, збірка цей файл не читає — лишався тільки шум у git status і фальшиві
+# зміни в комітах. З'явиться перша edge-функція — повернути під git.
+deno.lock
