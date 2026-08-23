@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T13:40:41.687Z",
+  "generatedAt": "2026-08-23T14:40:43.773Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -37,7 +37,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-avatar",
-      "version": "1.1.11",
+      "version": "1.2.6",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -45,7 +45,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-checkbox",
-      "version": "1.3.3",
+      "version": "1.3.11",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -69,7 +69,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-label",
-      "version": "2.1.8",
+      "version": "2.1.15",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -93,7 +93,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-separator",
-      "version": "1.1.8",
+      "version": "1.1.15",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -101,7 +101,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-slot",
-      "version": "1.2.4",
+      "version": "1.3.3",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -109,7 +109,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-switch",
-      "version": "1.2.6",
+      "version": "1.3.7",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -117,7 +117,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@radix-ui/react-tabs",
-      "version": "1.1.13",
+      "version": "1.1.21",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -125,7 +125,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@react-pdf/renderer",
-      "version": "4.5.1",
+      "version": "4.7.0",
       "layer": "platform",
       "dev": false,
       "bumpedAt": "2026-06-24T12:19:38+03:00",
@@ -149,7 +149,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "@tanstack/react-query",
-      "version": "5.90.18",
+      "version": "5.102.1",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2026-01-17T11:04:55+02:00",
@@ -194,14 +194,6 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
       "iconUrl": "https://www.google.com/s2/favicons?domain=tiptap.dev&sz=128"
-    },
-    {
-      "name": "@types/dompurify",
-      "version": "3.0.5",
-      "layer": "data",
-      "dev": false,
-      "bumpedAt": "2026-05-20T10:11:28+03:00",
-      "iconUrl": "https://github.com/DefinitelyTyped.png?size=64"
     },
     {
       "name": "@types/node",
@@ -285,7 +277,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "dompurify",
-      "version": "3.4.5",
+      "version": "3.4.14",
       "layer": "data",
       "dev": false,
       "bumpedAt": "2026-05-20T10:11:28+03:00",
@@ -314,14 +306,6 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
       "iconUrl": null
-    },
-    {
-      "name": "framer-motion",
-      "version": "13.1.0",
-      "layer": "screen",
-      "dev": false,
-      "bumpedAt": "2026-08-15T01:07:20+03:00",
-      "iconUrl": "https://github.com/motiondivision.png?size=64"
     },
     {
       "name": "globals",
@@ -397,7 +381,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "react-router-dom",
-      "version": "7.10.1",
+      "version": "7.18.2",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -405,7 +389,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "recharts",
-      "version": "3.6.0",
+      "version": "3.10.1",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -429,7 +413,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "sonner",
-      "version": "2.0.7",
+      "version": "2.0.8",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-29T18:05:12+02:00",
@@ -437,7 +421,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "tailwind-merge",
-      "version": "3.4.0",
+      "version": "3.6.0",
       "layer": "screen",
       "dev": false,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -469,7 +453,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "typescript-eslint",
-      "version": "8.49.0",
+      "version": "8.67.0",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -485,7 +469,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "vitest",
-      "version": "4.1.10",
+      "version": "4.1.11",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2026-07-20T23:24:45+03:00",
@@ -519,5 +503,5 @@ export const STACK_SNAPSHOT: StackSnapshot = {
   "lintStubs": 29,
   "node": "20",
   "netlifyFunctions": 42,
-  "sourceLines": 231835
+  "sourceLines": 232002
 };

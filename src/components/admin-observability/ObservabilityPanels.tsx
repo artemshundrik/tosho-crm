@@ -381,7 +381,9 @@ function TrendCard({
                 boxShadow: "0 24px 60px -28px hsl(var(--foreground) / 0.25)",
               }}
               labelStyle={{ color: "hsl(var(--muted-foreground))", marginBottom: 6 }}
-              formatter={(value: number | undefined) => formatter(value)}
+              // recharts 3.10 звузив тип: значення приходить як ValueType (число, рядок
+              // або масив), тож звужуємо самі, а не обіцяємо число.
+              formatter={(value) => formatter(typeof value === "number" ? value : undefined)}
             />
             <Area
               type="monotone"
@@ -1338,7 +1340,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                         tickFormatter={(v: number) => formatUsd(v)}
                       />
                       <Tooltip
-                        formatter={(v: number | undefined) => [formatUsd(v ?? 0), "Вартість"]}
+                        formatter={(v) => [formatUsd(typeof v === "number" ? v : 0), "Вартість"]}
                         contentStyle={{
                           borderRadius: 12,
                           border: "1px solid hsl(var(--border))",
