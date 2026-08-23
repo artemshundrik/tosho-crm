@@ -37,26 +37,44 @@ function Calendar({
       locale={locale}
       showOutsideDays={showOutsideDays}
       className={cn("w-full p-2", className)}
+      // Підписи для читалок екрана — українською. DayPicker має власні рядки, і
+      // локаль date-fns на них не впливає: без цього кнопки представлялись як
+      // «Go to the Previous Month» посеред повністю українського застосунку.
+      labels={{
+        labelPrevious: () => "Попередній місяць",
+        labelNext: () => "Наступний місяць",
+        labelMonthDropdown: () => "Місяць",
+        labelYearDropdown: () => "Рік",
+      }}
       classNames={{
-        months: "flex flex-col w-full",
-        // relative — щоб навігація могла лягти поверх рядка з місяцем і роком.
-        month: "space-y-3 w-full relative",
-        month_caption: "flex items-center justify-center w-full pt-0.5 px-9",
-        caption_label: "text-sm font-medium hidden",
         /**
-         * У восьмій навігація жила ВСЕРЕДИНІ рядка з підписом місяця, тож
-         * вистачало `contents` і порядку flex. У десятій це окремий блок —
-         * і той самий прийом розкидав стрілки: одна над сіткою, друга під нею.
-         * Тому кладемо навігацію поверх рядка підпису й розводимо по краях.
+         * ШАПКА КАЛЕНДАРЯ.
+         *
+         * У десятій версії `nav` — це СУСІД місяця, а не частина рядка з
+         * підписом. Тобто позиціонувати його можна лише відносно спільного
+         * батька, і саме тому попередня спроба поїхала: `months` не був
+         * `relative`, стрілки чіплялись до самого попапа й обрізались об його
+         * край.
+         *
+         * Тепер `months` — точка відліку, а навігація лягає рівно на висоту
+         * рядка підпису й розводиться по краях. `px-10` на підписі тримає для
+         * стрілок місце, щоб довга назва місяця в них не впиралась.
          */
-        nav: "absolute inset-x-0 top-0 flex items-center justify-between pointer-events-none",
+        months: "relative flex flex-col w-full",
+        month: "space-y-3 w-full",
+        month_caption: "flex h-9 items-center justify-center w-full px-10",
+        // Назву місяця ВИДНО. Доти вона була прихована, і в календарі без
+        // випадайок (картка прорахунку) шапка складалась із двох стрілок і
+        // порожнечі між ними — подивившись на сітку, місяць доводилось вгадувати.
+        caption_label: "text-sm font-medium",
+        nav: "absolute inset-x-0 top-0 flex h-9 items-center justify-between",
         button_previous: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0 pointer-events-auto"
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 shrink-0 cursor-pointer p-0 text-muted-foreground hover:text-foreground"
         ),
         button_next: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 shrink-0 pointer-events-auto"
+          buttonVariants({ variant: "ghost" }),
+          "h-9 w-9 shrink-0 cursor-pointer p-0 text-muted-foreground hover:text-foreground"
         ),
         month_grid: "w-full border-collapse space-y-0.5",
         weekdays: "flex w-full",
@@ -77,7 +95,7 @@ function Calendar({
         range_middle: "[&>button]:!bg-accent [&>button]:!text-accent-foreground",
         range_end: "day-range-end",
         hidden: "invisible",
-        dropdowns: "flex items-center gap-2 flex-1 justify-center mx-2",
+        dropdowns: "flex items-center gap-2 justify-center",
         ...classNames,
       }}
       components={{
