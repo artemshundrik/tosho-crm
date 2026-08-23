@@ -27,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -186,6 +186,80 @@ function githubOwner(repository) {
   return match ? match[1] : null;
 }
 
+/**
+ * Опис пакета своїми словами автора — з node_modules, а не з мережі.
+ *
+ * Те саме поле, що показує npm на сторінці пакета. Лежить локально, тож нічого
+ * питати не треба: рядок «що це взагалі таке» коштує нам нуль запитів.
+ */
+function metaFor(name) {
+  let meta;
+  try {
+    meta = JSON.parse(readFileSync(join(ROOT, "node_modules", name, "package.json"), "utf8"));
+  } catch {
+    return { description: null, homepage: null };
+  }
+  const description = typeof meta.description === "string" ? meta.description.trim().slice(0, 200) : null;
+  const host = hostOf(meta.homepage);
+  return {
+    description: description || null,
+    // Сайт проєкту, а не посилання на репозиторій: у попапі це «дізнатись
+    // більше», і документація корисніша за перелік комітів.
+    homepage: host && !ICONLESS_HOSTS.has(host) ? String(meta.homepage) : null,
+  };
+}
+
+/**
+ * Скільки файлів у репозиторії справді згадують пакет.
+ *
+ * НАВІЩО. Двічі за один день знайшлись залежності, які нікому не потрібні:
+ * framer-motion не імпортувався ніде, а @radix-ui/react-switch лишився після
+ * того, як перемикач переписали власноруч. Обидва знайшлись випадково, очима.
+ * Число в знімку робить із випадкової знахідки постійну властивість сторінки.
+ *
+ * ЛОВИМО ВСІ ФОРМИ, не лише `import ... from`: є ще `require()`, динамічний
+ * `import()` і згадки в CSS та конфігах. Шукаємо просто ім'я в лапках або
+ * дужках — грубо, але в цей бік помилятись безпечніше: зайва згадка лише
+ * зробить пакет «живим», а не навпаки.
+ *
+ * ЧОМУ НУЛЬ — ПРИВІД ЛИШЕ ДЛЯ ДВОХ ШАРІВ. Складальники й типи не імпортуються
+ * в код ніколи (vite, eslint, @types/*), і для них нуль — норма. Сторінка
+ * позначає «не використовується» тільки для «Екрана» й «Даних».
+ */
+/**
+ * Конфіги в корені теж рахуються за використання.
+ *
+ * `tailwindcss-animate` підключений рівно одним рядком у tailwind.config.js — і
+ * без цього списку сторінка оголосила б його мертвим. Плагіни складальників
+ * саме так і живуть: жодного імпорту в коді, одна згадка в конфігу.
+ */
+const ROOT_CONFIGS = [
+  "vite.config.ts",
+  "vitest.config.ts",
+  "tailwind.config.js",
+  "eslint.config.js",
+  "eslint.compiler.config.mjs",
+  "netlify.toml",
+].filter((file) => existsSync(join(ROOT, file)));
+
+function usageOf(name) {
+  try {
+    const out = execFileSync(
+      "grep",
+      ["-rlE", `["'(]${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'/]`,
+       "src", "netlify", "scripts", "index.html", ...ROOT_CONFIGS],
+      { cwd: ROOT, encoding: "utf8" }
+    );
+    return out
+      .split("\n")
+      .filter((line) => line && !line.includes("stackSnapshot") && !line.includes("build-stack-snapshot"))
+      .length;
+  } catch {
+    // grep виходить з кодом 1, коли нічого не знайшов, — це відповідь «нуль».
+    return 0;
+  }
+}
+
 function iconUrlFor(name) {
   let meta;
   try {
@@ -244,7 +318,7 @@ function lastBumpDates() {
   try {
     // Маркер саме такий: рядок патчу може починатись із «+», «−» чи «@@», але
     // не з «===COMMIT», тож власний заголовок ніколи не сплутається з діффом.
-    log = execFileSync("git", ["log", "-p", "--format====COMMIT %aI", "--", "package.json"], {
+    log = execFileSync("git", ["log", "-p", "--format====COMMIT %aI\u0001%h\u0001%s", "--", "package.json"], {
       cwd: ROOT,
       encoding: "utf8",
       maxBuffer: 32 * 1024 * 1024,
@@ -257,7 +331,8 @@ function lastBumpDates() {
   let currentDate = null;
   for (const line of log.split("\n")) {
     if (line.startsWith("===COMMIT ")) {
-      currentDate = line.slice("===COMMIT ".length).trim() || null;
+      const [at, sha, subject] = line.slice("===COMMIT ".length).split("\u0001");
+      currentDate = at?.trim() ? { at: at.trim(), sha: sha ?? null, subject: subject ?? null } : null;
       continue;
     }
     if (!currentDate || !line.startsWith("+")) continue;
@@ -376,7 +451,12 @@ const packages = declared
       version: version ?? "?",
       layer,
       dev,
-      bumpedAt: bumps.get(name) ?? null,
+      bumpedAt: bumps.get(name)?.at ?? null,
+      // Коміт, у якому версію рухали востаннє: у попапі це відповідь «чому
+      // саме тоді», і вона в темі коміта, а не в даті.
+      bumpCommit: bumps.get(name)?.sha ? { sha: bumps.get(name).sha, subject: bumps.get(name).subject } : null,
+      ...metaFor(name),
+      usedIn: usageOf(name),
       iconUrl: iconUrlFor(name),
       ...(PINNED[name] ? { pinned: PINNED[name] } : {}),
       // Позначка їде В ЗНІМОК, а не лише в консоль: попередження, яке нічого не

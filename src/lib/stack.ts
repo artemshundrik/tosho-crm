@@ -30,6 +30,20 @@ export type StackPackageSnapshot = {
    * null — покажемо монограму, це нормальний, а не поламаний стан.
    */
   iconUrl?: string | null;
+  /** Опис своїми словами автора — те саме поле, що показує npm. */
+  description?: string | null;
+  /** Сайт проєкту, якщо він не GitHub: посилання «дізнатись більше». */
+  homepage?: string | null;
+  /**
+   * У скількох файлах репозиторію пакет узагалі згадується.
+   *
+   * Нуль у шарах «Екран» і «Дані» означає мертву залежність — так знайшлись
+   * framer-motion і @radix-ui/react-switch. У «Збірці» й «Платформі» нуль
+   * нормальний: складальники й типи не імпортуються в код ніколи.
+   */
+  usedIn?: number;
+  /** Коміт, у якому версію рухали востаннє: відповідь «чому саме тоді». */
+  bumpCommit?: { sha: string; subject: string | null } | null;
   /**
    * Шар вгадано евристикою, а не вписано явно. Присутність цього поля валить
    * pre-push: сторінка про будову CRM не має цю будову вигадувати.
@@ -346,6 +360,17 @@ export const URGENCY_META: Record<StackUrgency, { label: string; dot: string; ti
   available: { label: "Є нове, не ламає", dot: "bg-warning-solid", tile: "bg-warning-soft text-warning-foreground" },
   fresh: { label: "Свіже", dot: "bg-success-solid", tile: "bg-success-soft text-success-foreground" },
 };
+
+/**
+ * Чи схоже, що пакет висить дарма.
+ *
+ * Лише для шарів, де відсутність згадок справді щось означає: складальники
+ * («Збірка») і серверні речі («Платформа») в код не імпортуються за
+ * визначенням, і нуль там — не сигнал, а норма.
+ */
+export function looksUnused(item: StackItem): boolean {
+  return item.usedIn === 0 && (item.layer === "screen" || item.layer === "data");
+}
 
 export function urgencyOf(item: StackItem): StackUrgency {
   if (item.state === "major") return "breaking";

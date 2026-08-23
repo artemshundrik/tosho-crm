@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageLoading } from "@/components/app/page-loading";
 import { pluralUk, pluralWordUk } from "@/lib/lastSeen";
 import { STACK_SNAPSHOT } from "@/data/stackSnapshot.generated";
@@ -16,6 +17,7 @@ import {
   buildStackItems,
   formatAgoCoarse,
   groupByLayer,
+  looksUnused,
   groupByUrgency,
   layerLag,
   stackTotals,
@@ -594,12 +596,17 @@ function StackRow({ item }: { item: StackItem }) {
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-[13.5px] font-medium">{item.label ?? item.name}</span>
+          <StackRowPopover item={item} />
           <span className={cn("rounded-md px-1.5 py-0.5 text-2xs", chip.className)}>{chip.label}</span>
           {item.worstSeverity ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-2xs text-destructive">
               <ShieldAlert className="h-3 w-3" />
               діра безпеки · {SEVERITY_LABEL[item.worstSeverity]}
+            </span>
+          ) : null}
+          {looksUnused(item) ? (
+            <span className="rounded-md bg-destructive/10 px-1.5 py-0.5 text-2xs text-destructive">
+              не використовується
             </span>
           ) : null}
           {item.dev ? (
@@ -652,6 +659,101 @@ function StackRow({ item }: { item: StackItem }) {
         <ExternalLink className="h-3.5 w-3.5" />
       </a>
     </div>
+  );
+}
+
+/**
+ * Картка пакета — відповідь на «а що це взагалі таке».
+ *
+ * У рядку є місце рівно на назву, версію й стан. Але дивлячись на
+ * «@tanstack/react-virtual», людина зазвичай питає інше: що воно робить, чи
+ * потрібне нам і коли ми його чіпали. Три відповіді не влазять у рядок і не
+ * варті окремої сторінки — отже попап.
+ *
+ * Відкривається кліком, а не наведенням: миша, що проїхала повз, не має
+ * розкривати картку, а на дотику наведення не існує взагалі.
+ */
+function StackRowPopover({ item }: { item: StackItem }) {
+  const bumped = formatAgoCoarse(item.bumpedAt);
+  const unused = looksUnused(item);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="truncate rounded text-left text-[13.5px] font-medium underline-offset-4 hover:underline"
+        >
+          {item.label ?? item.name}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-3.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[13.5px] font-semibold">{item.label ?? item.name}</span>
+          <span className="figure text-2xs text-muted-foreground">{item.version}</span>
+        </div>
+
+        {item.description ? (
+          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{item.description}</p>
+        ) : item.note ? (
+          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{item.note}</p>
+        ) : null}
+
+        <dl className="mt-3 grid gap-1.5 border-t border-border/40 pt-2.5 text-2xs">
+          {typeof item.usedIn === "number" ? (
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted-foreground">Використовується</dt>
+              <dd className={cn("figure font-medium", unused && "text-destructive")}>
+                {unused
+                  ? "ніде — можна прибрати"
+                  : `${item.usedIn} ${pluralWordUk(item.usedIn, "файл", "файли", "файлів")}`}
+              </dd>
+            </div>
+          ) : null}
+
+          {bumped ? (
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="shrink-0 text-muted-foreground">Востаннє чіпали</dt>
+              <dd className="figure truncate font-medium">{bumped}</dd>
+            </div>
+          ) : null}
+
+          {item.state !== "fresh" && item.state !== "pinned" && item.latest ? (
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted-foreground">У npm зараз</dt>
+              <dd className="figure font-medium">{item.latest}</dd>
+            </div>
+          ) : null}
+        </dl>
+
+        {item.bumpCommit ? (
+          /* Тема коміта відповідає на «чому саме тоді» — дата сама по собі не
+             пояснює нічого, а тема майже завжди пояснює. */
+          <p className="mt-2 border-t border-border/40 pt-2 text-2xs text-muted-foreground">
+            <span className="figure">{item.bumpCommit.sha}</span>
+            {item.bumpCommit.subject ? ` · ${item.bumpCommit.subject}` : ""}
+          </p>
+        ) : null}
+
+        <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 pt-2.5 text-2xs">
+          {item.name !== "node" ? (
+            <a
+              href={`https://www.npmjs.com/package/${item.name}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-chart-1 hover:underline"
+            >
+              npm
+            </a>
+          ) : null}
+          {item.homepage ? (
+            <a href={item.homepage} target="_blank" rel="noreferrer" className="text-chart-1 hover:underline">
+              сайт проєкту
+            </a>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
