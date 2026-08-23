@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { CurrencyAmountInput } from "@/features/quotes/components/CurrencyAmountInput";
 import { TimeInput } from "@/components/ui/picker-input";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -5918,7 +5919,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                       <div className="rounded-xl border border-border/60 bg-muted/[0.03] p-4">
                                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                            <span className="h-2.5 w-2.5 rounded-full bg-foreground" />
+                                            <span className="h-2.5 w-2.5 rounded-full bg-primary" />
                                             <span className="text-sm font-semibold text-foreground">Активний тираж</span>
                                             <span className="text-sm text-muted-foreground">·</span>
                                             <div className="relative h-8 w-32">
@@ -5951,77 +5952,62 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                           <div className="space-y-2">
-                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               Собівартість / од.
                                             </Label>
-                                            <div className="relative">
-                                              <NumberInput
-                                                value={activeItemRun.unit_price_model}
-                                                disabled={!runPriceFieldAccess.unit_price_model}
-                                                title={runFieldLockHint(runPriceFieldAccess.unit_price_model, "менеджер")}
-                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_model", next)}
-                                                min={0}
-                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
-                                                aria-label="Собівартість за одиницю"
-                                              />
-                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
-                                                {quote.currency}
-                                              </span>
-                                            </div>
+                                            <CurrencyAmountInput
+                                              value={activeItemRun.unit_price_model}
+                                              disabled={!runPriceFieldAccess.unit_price_model}
+                                              title={runFieldLockHint(runPriceFieldAccess.unit_price_model, "менеджер")}
+                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_model", next)}
+                                              min={0}
+                                              aria-label="Собівартість за одиницю"
+                                              currency={quote.currency}
+                                            />
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               В-ть нанесення
                                             </Label>
-                                            <div className="relative">
-                                              <NumberInput
-                                                value={activeItemRun.unit_price_print}
-                                                disabled={!runPriceFieldAccess.unit_price_print}
-                                                title={runFieldLockHint(runPriceFieldAccess.unit_price_print, "проєктний менеджер")}
-                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_print", next)}
-                                                min={0}
-                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
-                                                aria-label="Вартість нанесення"
-                                              />
-                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
-                                                {quote.currency}
-                                              </span>
-                                            </div>
+                                            <CurrencyAmountInput
+                                              value={activeItemRun.unit_price_print}
+                                              disabled={!runPriceFieldAccess.unit_price_print}
+                                              title={runFieldLockHint(runPriceFieldAccess.unit_price_print, "проєктний менеджер")}
+                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "unit_price_print", next)}
+                                              min={0}
+                                              aria-label="Вартість нанесення"
+                                              currency={quote.currency}
+                                            />
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="text-2xs uppercase tracking-wide text-muted-foreground">
+                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               Логістика
                                             </Label>
-                                            <div className="relative">
-                                              <NumberInput
-                                                value={activeItemRun.logistics_cost}
-                                                disabled={!runPriceFieldAccess.logistics_cost}
-                                                title={runFieldLockHint(runPriceFieldAccess.logistics_cost, "проєктний менеджер або логіст")}
-                                                onValueChange={(next) => updateRunValue(activeItemRunIndex, "logistics_cost", next)}
-                                                min={0}
-                                                className="h-11 rounded-xl bg-background pr-14 font-mono text-lg tabular-nums"
-                                                aria-label="Логістика"
-                                              />
-                                              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold text-muted-foreground">
-                                                {quote.currency}
-                                              </span>
-                                            </div>
+                                            <CurrencyAmountInput
+                                              value={activeItemRun.logistics_cost}
+                                              disabled={!runPriceFieldAccess.logistics_cost}
+                                              title={runFieldLockHint(runPriceFieldAccess.logistics_cost, "проєктний менеджер або логіст")}
+                                              onValueChange={(next) => updateRunValue(activeItemRunIndex, "logistics_cost", next)}
+                                              min={0}
+                                              aria-label="Логістика"
+                                              currency={quote.currency}
+                                            />
                                           </div>
                                           <div className="space-y-2">
-                                            <Label className="block text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
+                                            <Label className="block min-h-7 text-2xs uppercase leading-tight tracking-wide text-muted-foreground">
                                               Бажаний особистий заробіток
                                             </Label>
-                                            <NumberInput
+                                            <CurrencyAmountInput
                                               value={activeItemRun.desired_manager_income}
                                               disabled={!runPriceFieldAccess.desired_manager_income}
                                               title={runFieldLockHint(runPriceFieldAccess.desired_manager_income, "менеджер")}
                                               onValueChange={(next) => updateRunValue(activeItemRunIndex, "desired_manager_income", next)}
                                               className={cn(
-                                                "h-11 rounded-xl bg-background font-mono text-lg tabular-nums",
                                                 activeRunEconomics && "border-destructive focus-visible:ring-destructive/30"
                                               )}
                                               placeholder="0"
                                               min={0}
+                                              currency={quote.currency}
                                             />
                                             {/* Пояснення важливіше за заборону: менеджер лишав нуль не
                                                 зі злого наміру, а тому що не бачив зв'язку між цим полем
