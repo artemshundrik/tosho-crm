@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageLoading } from "@/components/app/page-loading";
@@ -154,6 +154,7 @@ import {
   Package,
   Image,
   ExternalLink,
+  Lock,
   Calculator,
   TrendingUp,
   Wallet,
@@ -215,6 +216,8 @@ import {
   createOrderFromQuote,
   deleteQuoteById,
   fetchOrderCreationDraft,
+  fetchQuoteOrderRef,
+  type QuoteOrderRef,
   deleteQuoteAttachmentRow,
   fetchDesignTasksLinkedToQuote,
   updateActivityMetadata,
@@ -1095,6 +1098,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [createOrderLoading, setCreateOrderLoading] = useState(false);
   const [createOrderSubmitting, setCreateOrderSubmitting] = useState(false);
   const [createOrderError, setCreateOrderError] = useState<string | null>(null);
+  // Замовлення, зроблене з цього прорахунку. Поки його немає, позиції можна
+  // правити й видаляти; щойно зʼявилось — прорахунок стає архівним документом.
+  const [quoteOrderRef, setQuoteOrderRef] = useState<QuoteOrderRef | null>(null);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<QuoteItem | null>(null);
+  const [deleteItemBusy, setDeleteItemBusy] = useState(false);
   const [partyCardOpen, setPartyCardOpen] = useState(false);
 
   const getAttachmentStorageKey = useCallback((
@@ -2265,6 +2273,45 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ),
     [canEditQuoteContent, currentStatus]
   );
+
+  // Чи стало вже замовлення з цього прорахунку. Питаємо один раз на відкриття:
+  // назад цей перехід не буває, а поки відповідь не прийшла, поводимось як із
+  // вільним прорахунком — інакше мережева затримка виглядала б як заборона.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!teamId || !quoteId) {
+        if (!cancelled) setQuoteOrderRef(null);
+        return;
+      }
+      const found = await fetchQuoteOrderRef(teamId, quoteId);
+      if (cancelled) return;
+      if (found.ok) {
+        setQuoteOrderRef(found.data);
+        return;
+      }
+      // Замок, що клацнув від збою запиту, зупинив би роботу на рівному місці.
+      // Тому невдала перевірка лишає позиції відкритими й тільки шумить у консоль.
+      console.error("Не вдалося перевірити замовлення прорахунку", found.message);
+      setQuoteOrderRef(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, quoteId]);
+
+  // Позиції прорахунку: додавати, правити й видаляти можна доти, доки з нього не
+  // зробили замовлення. Після замовлення в ньому лежить копія позицій, і зміна
+  // прорахунку розвела б документи — тому далі це вже читання.
+  const quoteConvertedToOrder = quoteOrderRef !== null;
+  const canManageItems = canEditQuoteContent && !quoteConvertedToOrder;
+  // «На погодженні» й «Затверджено» правити не забороняємо, але кожну таку
+  // зміну лишаємо в стрічці подій: цифру вже бачив замовник.
+  const itemChangeNeedsTrace =
+    currentStatus === "awaiting_approval" || currentStatus === "approved";
+  const itemsLockedHint = quoteConvertedToOrder
+    ? `Замовлення${quoteOrderRef?.quoteNumber ? ` ${quoteOrderRef.quoteNumber}` : ""} вже зберегло копію позицій. Зміна прорахунку розвела б документи, тому позиції тут закриті.`
+    : null;
   // Разове попередження про новий поріг заробітку (СЕО 19.08: «попередь
   // команду — при вході в прорахунок вікно по центру екрану»). Прапорець у
   // localStorage, а не в базі: це оголошення, а не право. Побачив ще раз —
@@ -2497,6 +2544,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             : source === "quote_deadline"
             ? "status"
             : "other";
+        const itemTitle = typeof metadata?.item_title === "string" ? metadata.item_title : null;
         const actorLabel =
           row.user_id && memberById.has(row.user_id)
             ? memberById.get(row.user_id) ?? row.actor_name ?? "Користувач"
@@ -2520,10 +2568,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             ? deadlineTitle
             : row.title?.trim() || `${actorLabel} ${row.action ?? "оновив"}`.trim();
         const description =
-          typeof metadata?.note === "string" ? metadata.note : undefined;
+          typeof metadata?.note === "string"
+            ? metadata.note
+            : source === "quote_items" && itemTitle
+            ? `Позиція: ${itemTitle}`
+            : undefined;
         const Icon: ActivityIcon =
           source === "quote_runs"
             ? Calculator
+            : source === "quote_items"
+            ? Package
             : source === "quote_status" && toStatus
             ? (statusIcons[toStatus] as ActivityIcon) ?? Clock
             : source === "quote_deadline"
@@ -2532,6 +2586,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         const accentClass =
           source === "quote_runs"
             ? "quote-activity-accent-runs"
+            : source === "quote_items"
+            ? "quote-activity-accent-items"
             : source === "quote_status" && toStatus
             ? statusClasses[toStatus] ?? statusClasses.new
             : source === "quote_deadline"
@@ -4565,7 +4621,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setLastAutoTitle("");
     setItemModalOpen(true);
   };
-  void openEditItem;
 
   const handleTypeChange = (value: string) => {
     setItemTypeId(value);
@@ -4789,6 +4844,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       setItems((prev) =>
         prev.map((item) => (item.id === editingItemId ? newItem : item))
       );
+      await logItemChange("update", newItem);
     } else {
       const newId = crypto.randomUUID();
       const nextPosition =
@@ -4844,12 +4900,83 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setItemModalOpen(false);
   };
 
-  const handleDeleteItem = async (itemId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== itemId));
-    const removed = await deleteQuoteItemRow(itemId);
-    if (!removed.ok) setItemsError(removed.message);
+  /**
+   * Слід у стрічці подій про зміну позиції.
+   *
+   * Пишемо лише на «На погодженні» й «Затверджено» — до них правки це звичайна
+   * робота, і журнал з них перетворився б на шум. Подробиці кожного поля веде
+   * тригер audit_quote_items у базі; сюди йде рядок, який видно всій команді,
+   * бо саму tosho.audit_log читають лише власник і СЕО.
+   */
+  const logItemChange = async (kind: "update" | "delete", item: QuoteItem) => {
+    if (!teamId || !itemChangeNeedsTrace) return;
+    const verb = kind === "delete" ? "Видалив" : "Змінив";
+    const logged = await logQuoteActivity(
+      {
+        teamId,
+        action: kind === "delete" ? "видалив позицію" : "змінив позицію",
+        entityType: "quotes",
+        entityId: quoteId,
+        title: `${verb} позицію «${item.title}» у статусі «${formatStatusLabel(currentStatus)}»`,
+        href: `/orders/estimates/${quoteId}`,
+        metadata: {
+          source: "quote_items",
+          op: kind,
+          item_id: item.id,
+          item_title: item.title,
+          status: currentStatus,
+        },
+      },
+      "Не вдалося записати зміну позиції у стрічку подій."
+    );
+    if (!logged.ok) {
+      // Запис у журнал не скасовує вже збережену зміну — інакше позиція і база
+      // розійшлись би через дрібницю. Просто кажемо про це вголос.
+      toast.error(logged.message);
+      return;
+    }
+    await loadActivityLog();
   };
-  void handleDeleteItem;
+
+  const requestDeleteItem = (item: QuoteItem) => {
+    setDeleteItemTarget(item);
+  };
+
+  const confirmDeleteItem = async () => {
+    const target = deleteItemTarget;
+    if (!target || deleteItemBusy) return;
+    setDeleteItemBusy(true);
+    setItemsError(null);
+
+    // Тиражі позиції зникають разом із нею каскадом у базі. Виняток — старі
+    // рядки без quote_item_id: їх тримає лише правило «тиражі єдиної позиції»,
+    // тож коли ця позиція остання, прибираємо їх окремим запитом.
+    const orphanRunIds =
+      items.length === 1
+        ? runs.filter((run) => !run.quote_item_id && run.id).map((run) => run.id as string)
+        : [];
+
+    const removed = await deleteQuoteItemRow(target.id);
+    if (!removed.ok) {
+      setItemsError(removed.message);
+      toast.error(removed.message);
+      setDeleteItemBusy(false);
+      return;
+    }
+    if (orphanRunIds.length > 0) {
+      const removedRuns = await deleteQuoteRunsByIds(orphanRunIds);
+      if (!removedRuns.ok) setItemsError(removedRuns.message);
+    }
+
+    setItems((prev) => prev.filter((item) => item.id !== target.id));
+    setRuns((prev) =>
+      prev.filter((run) => (run.quote_item_id ? run.quote_item_id !== target.id : items.length !== 1))
+    );
+    setDeleteItemTarget(null);
+    setDeleteItemBusy(false);
+    toast.success("Позицію видалено");
+    await logItemChange("delete", target);
+  };
 
   const handleAddComment = () => {
     if (!commentText.trim() || commentSaving) return;
@@ -5421,6 +5548,8 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={!canManageItems}
+                      title={itemsLockedHint ?? undefined}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -5435,6 +5564,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </div>
               </div>
 
+              {itemsLockedHint ? (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {itemsLockedHint}{" "}
+                    <Link
+                      to={`/orders/production/${quoteOrderRef?.id ?? ""}`}
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      Відкрити замовлення
+                    </Link>
+                  </span>
+                </div>
+              ) : null}
+
               {quoteSectionsBootstrapping ? (
                 <AppSectionLoader label="Завантаження..." />
               ) : itemsLoading ? (
@@ -5448,7 +5592,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     <p className="font-medium">Модель не обрана</p>
                     <p className="text-sm text-muted-foreground">Оберіть модель для розрахунку</p>
                   </div>
-                  <Button size="sm" onClick={openNewItem} className="gap-2">
+                  <Button
+                    size="sm"
+                    onClick={openNewItem}
+                    disabled={!canManageItems}
+                    title={itemsLockedHint ?? undefined}
+                    className="gap-2"
+                  >
                     <Plus className="h-4 w-4" />
                     Обрати модель
                   </Button>
@@ -5736,6 +5886,49 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     </>
                                   );
                                 })()}
+                                {canEditQuoteContent ? (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        aria-label={`Дії з позицією «${item.title}»`}
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {/* Без preventDefault: меню має згорнутись саме,
+                                          інакше воно лишається розкритим під вікном
+                                          підтвердження. */}
+                                      <DropdownMenuItem
+                                        disabled={!canManageItems}
+                                        onSelect={() => openEditItem(item)}
+                                      >
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Редагувати
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        disabled={!canManageItems}
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={() => requestDeleteItem(item)}
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Видалити
+                                      </DropdownMenuItem>
+                                      {itemsLockedHint ? (
+                                        <>
+                                          <DropdownMenuSeparator />
+                                          <div className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
+                                            {itemsLockedHint}
+                                          </div>
+                                        </>
+                                      ) : null}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : null}
                               </div>
                             </div>
 
@@ -8882,6 +9075,25 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
         onConfirm={confirmDeleteAttachment}
         loading={!!attachmentsDeletingId}
+      />
+
+      <ConfirmDialog
+        open={deleteItemTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteItemBusy) setDeleteItemTarget(null);
+        }}
+        title="Видалити позицію?"
+        description={
+          deleteItemTarget
+            ? `«${deleteItemTarget.title}» зникне з прорахунку разом зі своїми тиражами. Відновити не вийде.`
+            : undefined
+        }
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        confirmLabel="Видалити"
+        cancelLabel="Скасувати"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => void confirmDeleteItem()}
+        loading={deleteItemBusy}
       />
 
       <Dialog open={createDesignTaskDialogOpen} onOpenChange={setCreateDesignTaskDialogOpen}>

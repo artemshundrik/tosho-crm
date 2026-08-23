@@ -1584,6 +1584,11 @@
     border-color: hsl(var(--warning-soft-border));
     color: hsl(var(--warning-foreground));
   }
+  .quote-activity-accent-items {
+    background-color: hsl(var(--warning-soft));
+    border-color: hsl(var(--warning-soft-border));
+    color: hsl(var(--warning-foreground));
+  }
   .quote-activity-accent-default {
     @apply bg-muted/40 text-muted-foreground border-border;
   }

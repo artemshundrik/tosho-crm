@@ -1686,6 +1686,39 @@ export async function insertQuoteItemRow(
   }
 }
 
+/** Замовлення, зроблене з прорахунку: id для посилання, номер для тексту. */
+export type QuoteOrderRef = { id: string; quoteNumber: string | null };
+
+/**
+ * Замовлення, створене з цього прорахунку, якщо воно вже є.
+ *
+ * Позиції замовлення — копія, знята в момент створення. Саме тому після нього
+ * прорахунок уже не правлять: документи розійшлись би з тим, що поїхало у
+ * виробництво. Порожньо — прорахунок ще вільний.
+ */
+export async function fetchQuoteOrderRef(
+  teamId: string,
+  quoteId: string
+): Promise<QueryResult<QuoteOrderRef | null>> {
+  try {
+    const { data, error } = await supabase
+      .schema("tosho")
+      .from("orders")
+      .select("id, quote_number")
+      .eq("team_id", teamId)
+      .eq("quote_id", quoteId)
+      .limit(1)
+      .maybeSingle<{ id: string; quote_number: string | null }>();
+    if (error) throw error;
+    return {
+      ok: true,
+      data: data ? { id: data.id, quoteNumber: data.quote_number ?? null } : null,
+    };
+  } catch (error: unknown) {
+    return { ok: false, message: getErrorMessage(error, "Не вдалося перевірити замовлення.") };
+  }
+}
+
 /** Видалити позицію прорахунку. */
 export async function deleteQuoteItemRow(itemId: string): Promise<QueryResult<null>> {
   try {
