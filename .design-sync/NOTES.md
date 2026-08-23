@@ -125,3 +125,15 @@ node .ds-sync/package-build.mjs --config .design-sync/config.json \
      --node-modules ./node_modules --out ./ds-bundle
 node .ds-sync/package-validate.mjs ./ds-bundle
 ```
+
+## Дрібне, 23.08.2026
+
+- **Вікно картки за замовчуванням 900×700.** Для вузьких компонентів (календар
+  ~250px) це купа порожнечі, і картка виглядає «маленькою». Лікується
+  `cfg.overrides.<Name>.viewport` рядком `"520x560"`. Заразом сам прев'ю варто
+  показувати в природному контексті: календар — усередині панелі вибору з
+  `DateQuickActions`, а не голим.
+- **Самопосилання `node_modules/tosho-crm` зникло вдруге** (передбачено в
+  «Re-sync risks»). Симптом той самий: `ENOENT … node_modules/tosho-crm/package.json`.
+  Лікується `ln -s .. node_modules/tosho-crm`. Варто перевіряти першим ділом,
+  якщо збірка падає одразу після старту.

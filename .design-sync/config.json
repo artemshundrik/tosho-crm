@@ -129,11 +129,13 @@
     },
     "UnsavedChangesPrompt": {
       "cardMode": "single",
-      "primaryStory": "Opened"
+      "primaryStory": "Opened",
+      "viewport": "640x420"
     },
     "Calendar": {
       "cardMode": "single",
-      "primaryStory": "Basic"
+      "primaryStory": "Panel",
+      "viewport": "520x560"
     }
   },
   "dtsPropsFor": {
