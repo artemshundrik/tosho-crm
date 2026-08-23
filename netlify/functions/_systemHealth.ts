@@ -14,6 +14,7 @@ import {
   isSettledCronIncident,
   classifyDeadTuples,
   classifyDeadlocks,
+  classifyRuntimeErrors,
   classifyStorageUsage,
   worstHealthTone,
   type HealthTone,
@@ -45,6 +46,7 @@ export type SignalCode =
   | "ai_cost"
   | "attachments"
   | "audit_trigger"
+  | "runtime_errors"
   | "dropbox";
 
 export type Signal = { tone: Tone; text: string; code?: SignalCode };
@@ -466,7 +468,61 @@ export async function collectSystemSignals(
   // 8. Зв'язок CRM ↔ Dropbox.
   signals.push(await dropboxSignal(admin));
 
+  // 9. Падіння інтерфейсу в людей.
+  signals.push(await runtimeErrorsSignal(admin, options.teamIds ?? [], now));
+
   return signals;
+}
+
+/**
+ * Скільки разів за добу в когось зламався екран.
+ *
+ * Навіщо рядок, якщо є щогодинний алерт. Алерт мовчить про все, що вже
+ * траплялось за останні 30 днів, — і це правильно, інакше та сама поломка
+ * будила б щогодини. Але наслідок: мовчання бота однаково означає і «все
+ * добре», і «поломка триває третій тиждень», і «ланцюжок сповіщень зламався».
+ * Рядок у нічному звіті прибирає цю двозначність: він є ЗАВЖДИ, тож «жодної
+ * за добу» — це доказ, що механізм живий, а не здогад.
+ *
+ * Журнал більше не збирає шум розробки (REQ-100), тож кожен рядок тут —
+ * зламаний екран у живої людини.
+ */
+async function runtimeErrorsSignal(
+  admin: SupabaseClient,
+  teamIds: string[],
+  now: Date
+): Promise<Signal> {
+  if (teamIds.length === 0) {
+    return { tone: "neutral", code: "runtime_errors", text: "Помилки браузера: команду не визначено" };
+  }
+  try {
+    const fromIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await admin
+      .schema("tosho")
+      .from("runtime_errors")
+      .select("user_id")
+      .in("team_id", teamIds)
+      .gte("created_at", fromIso)
+      .limit(1000);
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<{ user_id: string | null }>;
+    if (rows.length === 0) {
+      return { tone: "good", code: "runtime_errors", text: "Помилки браузера: жодної за добу" };
+    }
+    const people = new Set(rows.map((row) => row.user_id).filter(Boolean)).size;
+    const peopleLabel = people === 1 ? "в однієї людини" : `у ${people} людей`;
+    return {
+      tone: classifyRuntimeErrors(rows.length),
+      code: "runtime_errors",
+      text: `Помилки браузера: ${rows.length} за добу ${peopleLabel}`,
+    };
+  } catch (error) {
+    // Той самий принцип, що з Dropbox: недоступність однієї перевірки не має
+    // права зробити весь звіт неправдою.
+    const message = error instanceof Error ? error.message : "невідома помилка";
+    return { tone: "neutral", code: "runtime_errors", text: `Помилки браузера: стан недоступний (${message})` };
+  }
 }
 
 /**
