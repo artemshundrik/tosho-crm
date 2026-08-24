@@ -30,6 +30,14 @@ export type ViewAsPerson = {
   label: string;
   jobRole: string | null;
   accessRole: string | null;
+  /**
+   * Готовий URL аватарки, а не посилання на об'єкт у сховищі.
+   *
+   * Смуга режиму живе поза списком учасників і довантажити картинку сама не
+   * може — тож несемо її разом із ціллю. Без цього в кружечку завжди стояли
+   * ініціали, і «дивлюсь очима Мар'яни» виглядало так само, як «очима когось».
+   */
+  avatarUrl: string | null;
 };
 
 export type ViewAsRole = {
@@ -80,6 +88,8 @@ function normalize(raw: unknown): ViewAsTarget | null {
     label: label || userId.slice(0, 8),
     jobRole: typeof value.jobRole === "string" ? value.jobRole : null,
     accessRole: typeof value.accessRole === "string" ? value.accessRole : null,
+    // Запис зі старої вкладки аватарки не має — читаємо як «немає».
+    avatarUrl: typeof value.avatarUrl === "string" ? value.avatarUrl : null,
   };
 }
 

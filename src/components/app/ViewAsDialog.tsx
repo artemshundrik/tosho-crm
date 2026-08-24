@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Eye, Search } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { writeViewAs, type ViewAsTarget } from "@/auth/viewAs";
-import { JOB_ROLE_NAMES } from "@/lib/jobRoles";
+import { formatJobRole, JOB_ROLE_NAMES } from "@/lib/jobRoles";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { listWorkspaceMembersForDisplay } from "@/lib/workspaceMemberDirectory";
 import { AvatarBase } from "@/components/app/avatar-kit";
@@ -79,7 +79,10 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             label: row.fullName || row.email || row.userId.slice(0, 8),
             jobRole: row.jobRole ?? null,
             accessRole: row.accessRole ?? null,
-            avatarUrl: row.avatarUrl ?? null,
+            // avatarDisplayUrl, а НЕ avatarUrl: друге — посилання на об'єкт у
+            // сховищі, і <img> його не покаже. Через це аватарка була видна
+            // лише в тих, хто зберіг її повним URL, — звідси «не всі мають».
+            avatarUrl: row.avatarDisplayUrl ?? null,
             initials: row.initials || getInitials(row.fullName || row.email || ""),
             inactive: (row.employmentStatus ?? "").toLowerCase() !== "active",
           }))
@@ -188,6 +191,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         label: member.label,
                         jobRole: member.jobRole,
                         accessRole: member.accessRole,
+                        avatarUrl: member.avatarUrl,
                       })
                     }
                     className={cn(
@@ -197,11 +201,17 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         "bg-primary/5 ring-1 ring-primary/25"
                     )}
                   >
+                    {/* loading="eager": аватарки зі сховища AvatarBase резолвить
+                        ліниво, через IntersectionObserver, а в модалці той не
+                        спрацьовує — і фото лишалось видно тільки в тих, у кого
+                        воно збережене повним URL. Список тут короткий і
+                        відкривається за дією, тож чекати нема на що. */}
                     <AvatarBase
                       src={member.avatarUrl}
                       name={member.label}
                       fallback={member.initials}
                       size={32}
+                      loading="eager"
                       className="shrink-0 border-border/70"
                       inactive={member.inactive}
                     />
@@ -210,7 +220,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         {member.label}
                       </span>
                       <span className="block truncate text-2xs text-muted-foreground">
-                        {member.jobRole ?? member.accessRole ?? "—"}
+                        {formatJobRole(member.jobRole) || member.accessRole || "—"}
                         {member.inactive ? " · неактивний" : ""}
                       </span>
                     </span>

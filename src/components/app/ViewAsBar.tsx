@@ -3,7 +3,7 @@ import { Briefcase, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { writeViewAs } from "@/auth/viewAs";
-import { EntityAvatar } from "@/components/app/avatar-kit";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { Button } from "@/components/ui/button";
 import { VIEW_ONLY_MESSAGE, VIEW_ONLY_BLOCKED_EVENT } from "@/lib/viewOnlyGuard";
 import { cn } from "@/lib/utils";
@@ -54,8 +54,17 @@ export function ViewAsBar({ className }: { className?: string }) {
         className
       )}
     >
+      {/* AvatarBase, а не EntityAvatar: другий показує лише готові URL, а
+          аватарки людей лежать у сховищі й потребують резолву. EntityAvatar
+          тут малював ініціали завжди, навіть коли фото було. */}
       {observing ? (
-        <EntityAvatar name={viewAs.label} size={18} />
+        <AvatarBase
+          src={viewAs.kind === "person" ? viewAs.avatarUrl : null}
+          name={viewAs.label}
+          size={18}
+          loading="eager"
+          fallbackClassName="text-3xs font-semibold"
+        />
       ) : (
         <Briefcase className="h-3.5 w-3.5 shrink-0" />
       )}
