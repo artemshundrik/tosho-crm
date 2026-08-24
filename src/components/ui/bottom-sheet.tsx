@@ -25,14 +25,24 @@ export function BottomSheet({
   onOpenChange,
   title,
   description,
+  header,
   children,
   className,
   contentClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Назва аркуша. З власною шапкою лишається доступною назвою для читалок. */
   title: string;
   description?: ReactNode;
+  /**
+   * Власна шапка замість типової «назва + опис».
+   *
+   * Потрібна там, де згори живе не заголовок, а свій вміст — як логотип
+   * ToSho AI. Ручка й хрестик лишаються ті самі, тож аркуш не перестає бути
+   * тим самим аркушем.
+   */
+  header?: ReactNode;
   children: ReactNode;
   className?: string;
   /** Клас на прокрутному тілі — коли потрібні власні відступи. */
@@ -95,14 +105,21 @@ export function BottomSheet({
           <X className="h-4 w-4" />
         </SheetClose>
 
-        <div className="shrink-0 px-4 pt-5">
-          <SheetHeader className="space-y-0 pb-2 pr-12 text-left">
-            <SheetTitle className="text-base">{title}</SheetTitle>
-            {description ? (
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-            ) : null}
-          </SheetHeader>
-        </div>
+        {header ? (
+          <div className="shrink-0 pt-4">
+            <SheetTitle className="sr-only">{title}</SheetTitle>
+            {header}
+          </div>
+        ) : (
+          <div className="shrink-0 px-4 pt-5">
+            <SheetHeader className="space-y-0 pb-2 pr-12 text-left">
+              <SheetTitle className="text-base">{title}</SheetTitle>
+              {description ? (
+                <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+              ) : null}
+            </SheetHeader>
+          </div>
+        )}
 
         <div
           className={cn(

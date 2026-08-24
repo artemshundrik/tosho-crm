@@ -20,7 +20,10 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:pointer-events-none notranslate duration-200",
+      // Тривалості — рівно ті самі, що в самої панелі (див. sheetVariants).
+      // Доти підкладка згасала за 200 мс, а панель їхала 300: сотню мілісекунд
+      // вона повзла по вже яскравій сторінці, і це читалось як спалах.
+      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:pointer-events-none notranslate data-[state=closed]:duration-200 data-[state=open]:duration-300",
       className
     )}
     translate="no"
@@ -41,7 +44,15 @@ SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
  * Прокручується лише середина — див. `SheetBody`.
  */
 const sheetVariants = cva(
-  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-elevated-panel transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  /*
+   * 200 мс на закриття й 300 на відкриття — замість 300/500.
+   *
+   * Панель і підкладка мусять жити одним тактом: доти вони розходились, і
+   * найпомітніше це було на довгих світлих списках, де сторінка встигала
+   * спалахнути під панеллю, яка ще їхала. Заразом закриття стало відчутно
+   * жвавішим — півсекунди на зникнення вікна це задовго.
+   */
+  "fixed z-50 flex flex-col gap-4 overflow-hidden bg-background p-6 shadow-elevated-panel transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {

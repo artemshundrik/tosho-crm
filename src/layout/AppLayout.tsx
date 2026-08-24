@@ -124,6 +124,8 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { PageReveal } from "@/components/app/PageReveal";
 import { TabBar } from "@/components/app/TabBar";
 import { TabBarSettingsSheet } from "@/components/app/TabBarSettingsSheet";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 
 type AppLayoutProps = {
   children?: ReactNode;
@@ -1126,6 +1128,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   }, [accessRole, jobRole, location.pathname]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [tabBarSettingsOpen, setTabBarSettingsOpen] = useState(false);
+  const isNarrowViewport = useIsNarrowViewport();
   const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -1859,6 +1862,90 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const unreadNotifications = notifications.filter((n) => !n.read);
   const hideToShoAiLauncher = toshoAiOpen || mobileMenuOpen || cmdkOpen || floatingLauncherBlocked;
 
+  /** Вміст помічника — один на обидві поверхні, щоб вони не розходились. */
+  const toshoAiBody = (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Завантаження ToSho AI…
+        </div>
+      }
+    >
+      <ToShoAiConsole
+        // Питання входить у ключ: інакше друге питання поспіль потрапило б у
+        // вже змонтовану консоль і не відправилось.
+        key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}:${toshoAiInitialQuestion ?? ""}`}
+        active={toshoAiOpen}
+        surface="sheet"
+        initialContext={toshoAiContext}
+        initialRequestId={toshoAiRequestedThreadId}
+        initialQuestion={toshoAiInitialQuestion}
+      />
+    </Suspense>
+  );
+
+  /**
+   * Помічник на телефоні — аркуш, що ВИЇЖДЖАЄ знизу, а не з'являється.
+   *
+   * Доти це була панель на весь екран: вона просто виникала поверх усього й
+   * читалась як новий розділ застосунку, а не як тимчасове вікно поверх
+   * поточної сторінки. Тепер це той самий BottomSheet, що й фільтри та
+   * налаштування смуги, — з ручкою згори, заокругленням і рухом знизу вгору.
+   * На десктопі лишається бічна панель: там знизу їхати нема куди.
+   */
+  const toshoAiPanel = isNarrowViewport ? (
+    <BottomSheet
+      open={toshoAiOpen}
+      onOpenChange={handleToShoAiOpenChange}
+      title="Шо треба?"
+      className="h-[92dvh] max-h-[92dvh] bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))]"
+      contentClassName="min-h-0 flex-1 overflow-hidden overscroll-none p-0"
+      header={
+        <div className="border-b border-border/70 bg-background/82 px-4 pb-3 backdrop-blur-xl">
+          <ToShoAiWordmark />
+        </div>
+      }
+    >
+      {toshoAiBody}
+    </BottomSheet>
+  ) : (
+    <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
+      <SheetContent
+        side="right"
+        hideClose
+        // Розмова, а не форма: усе надіслане вже збережено на сервері, а
+        // ненадісланий рядок у полі — не робота, яку шкода втратити. Без цього
+        // спрацьовував типовий захист і питав «Закрити без збереження?» навіть
+        // із порожнім полем: позначку «щось міняли» ставить сам факт набору,
+        // і відправлене питання її не знімає.
+        dismissible
+        // `sm:` тут обов'язкові: базовий варіант бічної панелі має власні
+        // `sm:w-3/4 sm:max-w-sm`, і без префікса вони перемагають на широкому
+        // екрані — панель звужувалась із 620 до 384px.
+        className="z-overlay inset-y-0 left-auto right-0 h-[100dvh] max-h-[100dvh] w-full overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:w-full sm:max-w-[620px]"
+      >
+        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-border/70 bg-background/82 px-4 py-4 backdrop-blur-xl md:px-5">
+            <SheetHeader>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <ToShoAiWordmark />
+                  <SheetTitle className="sr-only">Шо треба?</SheetTitle>
+                </div>
+                <SheetClose asChild>
+                  <Button type="button" variant="ghost" size="iconSm" className="h-9 w-9 rounded-full" aria-label="Закрити ToSho AI">
+                    <CloseIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </div>
+            </SheetHeader>
+          </div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-0">{toshoAiBody}</div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
   const markAllRead = async () => {
     if (!userId || unreadCount === 0) return;
     const { error } = await supabase
@@ -2527,59 +2614,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         onOpenChange={setTabBarSettingsOpen}
         links={visibleSidebarLinks}
       />
-      <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
-        <SheetContent
-          side="right"
-          hideClose
-          // Розмова, а не форма: усе надіслане вже збережено на сервері, а
-          // ненадісланий рядок у полі — не робота, яку шкода втратити. Без цього
-          // спрацьовував типовий захист і питав «Закрити без збереження?» навіть
-          // із порожнім полем: позначку «щось міняли» ставить сам факт набору,
-          // і відправлене питання її не знімає.
-          dismissible
-          className="inset-0 z-overlay h-[100dvh] max-h-[100dvh] w-[100dvw] max-w-[100dvw] overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-[620px]"
-        >
-          <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-border/70 bg-background/82 px-3 py-3 backdrop-blur-xl sm:px-4 sm:py-4 md:px-5">
-              <SheetHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <ToShoAiWordmark />
-                    <SheetTitle className="sr-only">Шо треба?</SheetTitle>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <SheetClose asChild>
-                      <Button type="button" variant="ghost" size="iconSm" className="h-9 w-9 rounded-full" aria-label="Закрити ToSho AI">
-                        <CloseIcon className="h-4 w-4" />
-                      </Button>
-                    </SheetClose>
-                  </div>
-                </div>
-              </SheetHeader>
-            </div>
-            <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-0">
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Завантаження ToSho AI…
-                  </div>
-                }
-              >
-                <ToShoAiConsole
-                  // Питання входить у ключ: інакше друге питання поспіль
-                  // потрапило б у вже змонтовану консоль і не відправилось.
-                  key={`${toshoAiContext.href}:${toshoAiRequestedThreadId ?? "new"}:${toshoAiInitialQuestion ?? ""}`}
-                  active={toshoAiOpen}
-                  surface="sheet"
-                  initialContext={toshoAiContext}
-                  initialRequestId={toshoAiRequestedThreadId}
-                  initialQuestion={toshoAiInitialQuestion}
-                />
-              </Suspense>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {toshoAiPanel}
 
       {/* Плаваючу кнопку AI-помічника сховано на прохання CEO (2026-08-03).
           Сам помічник працює: відкривається з командної палітри (Cmd+K) і з
