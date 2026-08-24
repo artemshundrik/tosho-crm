@@ -32,6 +32,7 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,6 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useTheme } from "@/hooks/useTheme";
 import { useWorkspacePresenceState } from "@/hooks/useWorkspacePresenceState";
 import { WorkspacePresenceProvider } from "@/components/app/workspace-presence-context";
-import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { buildUserNameFromMetadata } from "@/lib/userName";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
@@ -123,6 +123,7 @@ import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
 import { TabBar } from "@/components/app/TabBar";
+import { TabBarSettingsSheet } from "@/components/app/TabBarSettingsSheet";
 
 type AppLayoutProps = {
   children?: ReactNode;
@@ -653,9 +654,12 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
     };
   if (pathname.startsWith(ROUTES.ordersEstimates))
     return {
-      title: "Прорахунки замовлень",
+      // «Прорахунки», а не «Прорахунки замовлень»: у сайдбарі, у смузі вкладок
+      // і в розмові розділ зветься одним словом, і на телефоні довга назва
+      // з'їдала пів шапки.
+      title: "Прорахунки",
       subtitle: "Підготовка розрахунків і комерційних пропозицій.",
-      breadcrumbLabel: "Прорахунки замовлень",
+      breadcrumbLabel: "Прорахунки",
       breadcrumbTo: ROUTES.ordersEstimates,
       showPageHeader: false,
     };
@@ -1121,6 +1125,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     ).question;
   }, [accessRole, jobRole, location.pathname]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [tabBarSettingsOpen, setTabBarSettingsOpen] = useState(false);
   const [floatingLauncherBlocked, setFloatingLauncherBlocked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -2191,7 +2196,24 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                             onToggleGroup={() => toggleGroup("dev")}
                           />
                         </div>
+                        {/* Налаштування смуги живуть тут, а не в самій смузі:
+                            вона й так тісна, а міняють її склад раз на місяць.
+                            Гамбургер — місце, де вже лежить «усе інше». */}
                         <div className="mt-6 border-t border-border/70 pt-4">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              setTabBarSettingsOpen(true);
+                            }}
+                            className="flex w-full items-center gap-3 rounded-[var(--radius-lg)] px-4 py-2.5 text-left text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                          >
+                            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">Налаштувати смугу вкладок</span>
+                          </button>
+                        </div>
+
+                        <div className="mt-2 border-t border-border/70 pt-4">
                           <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} />
                         </div>
                       </div>
@@ -2292,21 +2314,12 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
-              {/* ПЕРШИЙ У ГРУПІ — і це не про красу, а про REQ-25.
-                  Група має ml-auto й shrink-0: коли елемент усередині росте,
-                  вона розширюється ВЛІВО, штовхаючи все, що стоїть лівіше.
-                  Кнопка онлайну — єдина тут із мінливою шириною (аватарок то
-                  одна, то дванадцять), і поки вона стояла після курсу, курс
-                  їздив на 51 px сам собою, без жодної дії людини. Тепер ліворуч
-                  від неї лишається сам пошук — а він гнучкий і стискається без
-                  наслідків. Ширину кнопки фіксувати не треба: хай аватарок буде
-                  скільки є. Не переставляйте її назад. */}
-              <OnlineNowDropdown
-                entries={workspacePresence.onlineEntries}
-                loading={workspacePresence.loading}
-                compact
-              />
-
+              {/* Кнопка «онлайн» звідси прибрана (картка 146): шапка мусила
+                  вміщати назву сторінки й дії, а список присутніх з'їдав місце
+                  мінливою шириною — аватарок то одна, то дванадцять. Хто зараз
+                  на місці, видно в «Пульсі команди», де це й є темою сторінки.
+                  Разом із нею пішла й причина тримати групу в жорсткому
+                  порядку (REQ-25): решта елементів тут сталої ширини. */}
               {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
                   (рендерить null, якщо в людини немає чинної ставки). */}
               {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={viewUserId} /> : null}
@@ -2506,11 +2519,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           лягала просто поверх її поля вводу. */}
       <TabBar
         links={visibleSidebarLinks}
-        hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen}
+        hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen || tabBarSettingsOpen}
         onAsk={() => setCmdkOpen(true)}
-        // Слот меню поки відкриває той самий дровер, що й гамбургер: попап
-        // з розділами — наступний пункт картки 146, а шлях «усе знизу» вже є.
-        onMenu={() => setMobileMenuOpen(true)}
+      />
+      <TabBarSettingsSheet
+        open={tabBarSettingsOpen}
+        onOpenChange={setTabBarSettingsOpen}
+        links={visibleSidebarLinks}
       />
       <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent

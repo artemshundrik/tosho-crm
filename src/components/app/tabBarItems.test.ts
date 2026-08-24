@@ -21,21 +21,40 @@ const ownerLinks: TabSourceLink[] = [
 ];
 
 describe("resolveTabItems", () => {
-  it("за замовчуванням 3 слоти: AI і меню займають решту смуги", () => {
+  it("за замовчуванням 4 вкладки — п'ятий слот тримає кружечок AI", () => {
     expect(resolveTabItems(ownerLinks).map((t) => t.to)).toEqual([
-      "/orders/estimates",
-      "/orders/customers",
-      "/orders/production",
-    ]);
-  });
-
-  it("без AI слотів 4 — четвертим заходить наступний за пріоритетом", () => {
-    expect(resolveTabItems(ownerLinks, 4).map((t) => t.to)).toEqual([
       "/orders/estimates",
       "/orders/customers",
       "/orders/production",
       "/design",
     ]);
+  });
+
+  it("без AI слотів п'ять — заходить наступний за пріоритетом", () => {
+    expect(resolveTabItems(ownerLinks, 5).map((t) => t.to)).toEqual([
+      "/orders/estimates",
+      "/orders/customers",
+      "/orders/production",
+      "/design",
+      "/finances",
+    ]);
+  });
+
+  it("обране людиною перемагає пріоритет і тримає її порядок", () => {
+    expect(resolveTabItems(ownerLinks, 4, ["design", "quotes"]).map((t) => t.to)).toEqual([
+      "/design",
+      "/orders/estimates",
+    ]);
+  });
+
+  it("обраний модуль без доступу випадає зі смуги", () => {
+    const noFinance = ownerLinks.filter((l) => l.moduleKey !== "finance");
+    expect(resolveTabItems(noFinance, 4, ["finance", "design"]).map((t) => t.to)).toEqual(["/design"]);
+  });
+
+  it("обраних більше, ніж слотів — беремо перші, решту відрізаємо", () => {
+    const chosen = ["quotes", "customers", "orders", "design", "finance"];
+    expect(resolveTabItems(ownerLinks, 4, chosen)).toHaveLength(4);
   });
 
   it("замість вимкненого модуля підставляє наступний доступний, а не мертву вкладку", () => {

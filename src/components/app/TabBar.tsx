@@ -1,42 +1,49 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronsUpDown, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import { createPortal } from "react-dom";
 import { preloadRoute } from "@/routes/routePreload";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { isTabActive, resolveTabItems, type TabSourceLink } from "@/components/app/tabBarItems";
+import {
+  getServerTabBarPrefs,
+  getTabBarPrefs,
+  subscribeTabBarPrefs,
+  tabSlotCount,
+} from "@/components/app/tabBarSettings";
 
 /**
  * Пружний слайд капсули між вкладками (картка 146, «як у нового iOS-таббара»):
  * капсула не перемальовується на новому місці, а ПЕРЕЇЖДЖАЄ. 260ms — у межах
  * рекомендованих 150–300 для мікровзаємодій; крива з легким овершутом.
  */
-const CAPSULE_TRANSITION = "transform 260ms cubic-bezier(0.3, 0.8, 0.3, 1), width 260ms cubic-bezier(0.3, 0.8, 0.3, 1)";
+const CAPSULE_TRANSITION =
+  "transform 260ms cubic-bezier(0.3, 0.8, 0.3, 1), width 260ms cubic-bezier(0.3, 0.8, 0.3, 1)";
 
 export function TabBar({
   links,
   hidden = false,
   onAsk,
-  onMenu,
 }: {
   /** Пункти сайдбару після фільтра доступів — смуга не має власного реєстру. */
   links: readonly TabSourceLink[];
   hidden?: boolean;
   onAsk?: () => void;
-  /** Тап по слоту меню. Поки що відкриває наявний дровер; далі — попап (картка 146). */
-  onMenu?: () => void;
 }) {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const isNarrow = useIsNarrowViewport();
+  const prefs = useSyncExternalStore(subscribeTabBarPrefs, getTabBarPrefs, getServerTabBarPrefs);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const items = useMemo(() => resolveTabItems(links), [links]);
+  const items = useMemo(
+    () => resolveTabItems(links, tabSlotCount(prefs.ai), prefs.tabs),
+    [links, prefs.ai, prefs.tabs]
+  );
 
   const activeIndex = useMemo(
     () => items.findIndex((tab) => isTabActive(location.pathname, tab.to)),
@@ -45,9 +52,8 @@ export function TabBar({
 
   /**
    * Капсула позиціюється заміром активної вкладки, а не арифметикою індексів:
-   * вкладки можуть стискатись на вузьких екранах, і тільки замір дає точні
-   * «розміри й заокруглення». null — капсули немає (сторінка поза вкладками
-   * або ще не заміряли після монтування).
+   * вкладки тягнуться по доступній ширині, і тільки замір дає точні розміри.
+   * null — капсули немає (сторінка поза вкладками або ще не заміряли).
    */
   const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const [capsule, setCapsule] = useState<{ x: number; w: number } | null>(null);
@@ -76,12 +82,6 @@ export function TabBar({
   if (!isNarrow || items.length === 0) return null;
   if (!mounted || typeof document === "undefined") return null;
 
-  const itemBaseClass = cn(
-    "relative z-base flex h-[44px] w-16 min-w-0 shrink flex-col items-center justify-center gap-0.5",
-    "rounded-full text-2xs font-medium",
-    "transition-colors duration-[var(--tabbar-transition)] ease-out"
-  );
-
   const content = (
     <div
       className={cn(
@@ -92,10 +92,10 @@ export function TabBar({
       aria-hidden={hidden}
     >
       <div
-        // Док і кружечок AI — сусіди в одному рядку, а не одна смуга: AI це
-        // дія, а не розділ. Увесь кластер центрований, док обіймає вміст —
-        // «коротка» піґулка, як у Linear, а не смуга на всю ширину.
-        className="flex items-center justify-center gap-2"
+        // Смуга тягнеться по всій доступній ширині, а не обіймає вміст: що
+        // ширші вкладки, то більше вміщає підпис — «Прорахунки» й «До
+        // відвантаження» мусять читатись, а не обриватись трьома крапками.
+        className="flex w-full items-center justify-center gap-1.5"
         style={{
           paddingLeft: "var(--tabbar-inset-x)",
           paddingRight: "var(--tabbar-inset-x)",
@@ -105,7 +105,7 @@ export function TabBar({
         <nav
           aria-label="Primary"
           className={cn(
-            "relative flex max-w-full items-center gap-[var(--tabbar-gap)]",
+            "relative flex min-w-0 flex-1 items-center gap-[var(--tabbar-gap)]",
             // Прихована смуга мусить і кліки пропускати крізь себе — інакше
             // поверх відкритої палітри вона ловила дотики замість поля вводу.
             hidden ? "pointer-events-none" : "pointer-events-auto"
@@ -118,19 +118,23 @@ export function TabBar({
             boxShadow: "var(--tabbar-shadow)",
             backdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
             WebkitBackdropFilter: "blur(var(--tabbar-backdrop-blur)) saturate(var(--tabbar-backdrop-saturate))",
-            // 6px = (висота смуги 56 − висота вкладки 44) / 2: капсула стоїть
-            // на однаковій відстані зверху, знизу й від країв.
-            padding: "0 6px",
+            // 4px, а не 6: капсула мусить майже сягати країв смуги — вузька
+            // рамка навколо неї і є тим «щільним» виглядом нового таббара.
+            padding: "0 4px",
           }}
         >
           {/* Капсула активної вкладки: ледь сіра підкладка, що переїжджає. */}
           {capsule ? (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 h-[44px] rounded-full motion-reduce:transition-none"
+              className="pointer-events-none absolute top-1/2 rounded-full motion-reduce:transition-none"
               style={{
                 left: 0,
                 width: capsule.w,
+                // 48 із 56 висоти смуги: зверху й знизу лишається по 4px —
+                // рівно стільки ж, скільки з боків. Капсула читається як
+                // щільна вставка, а не як маленька пігулка посеред порожнечі.
+                height: 48,
                 transform: `translate(${capsule.x}px, -50%)`,
                 backgroundColor: "hsl(var(--tabbar-active-bg) / var(--tabbar-active-bg-alpha))",
                 transition: CAPSULE_TRANSITION,
@@ -153,11 +157,15 @@ export function TabBar({
                 onFocus={() => preloadRoute(tab.to)}
                 onTouchStart={() => preloadRoute(tab.to)}
                 aria-current={active ? "page" : undefined}
-                className={itemBaseClass}
+                className={cn(
+                  "relative z-base flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5",
+                  "rounded-full px-0.5 text-2xs font-medium",
+                  "transition-colors duration-[var(--tabbar-transition)] ease-out"
+                )}
               >
                 <Icon
                   className={cn(
-                    "h-5 w-5",
+                    "h-5 w-5 shrink-0",
                     active ? "text-[hsl(var(--tabbar-icon-active))]" : "text-[hsl(var(--tabbar-icon))]"
                   )}
                 />
@@ -174,31 +182,13 @@ export function TabBar({
               </Link>
             );
           })}
-
-          {/* Слот меню — завжди останній (картка 146): подвійна стрілочка
-              обіцяє перемикач. Підпис є, як і в вкладок, — без підпису лишається
-              тільки кружечок AI. */}
-          {onMenu ? (
-            <button
-              type="button"
-              onClick={onMenu}
-              aria-label="Усі розділи"
-              aria-haspopup="menu"
-              className={cn(itemBaseClass, "text-[hsl(var(--tabbar-label))]")}
-            >
-              <span className="flex items-center gap-0.5">
-                <Menu className="h-5 w-5 text-[hsl(var(--tabbar-icon))]" />
-                <ChevronsUpDown className="h-3 w-3 text-[hsl(var(--tabbar-icon))] opacity-60" />
-              </span>
-              <span className="h-4 leading-4 opacity-70">Меню</span>
-            </button>
-          ) : null}
         </nav>
 
         {/* Кружечок AI: єдиний елемент без підпису — це ДІЯ, а не розділ.
             Суцільний градієнт бренду замість «рідкого скла»: напівпрозорі
-            нашарування поруч із матовим доком читались як дешевий стікер. */}
-        {onAsk ? (
+            нашарування поруч із матовою смугою читались як дешевий стікер.
+            Вимикається в налаштуваннях смуги — тоді слот іде під п'яту вкладку. */}
+        {onAsk && prefs.ai ? (
           <button
             type="button"
             onClick={onAsk}
@@ -210,8 +200,10 @@ export function TabBar({
               "active:scale-95"
             )}
             style={{
-              height: "var(--tabbar-height)",
-              width: "var(--tabbar-height)",
+              // 48, а не на всю висоту смуги: вісім зекономлених пікселів ідуть
+              // у підписи вкладок. Тач-таргет лишається в нормі (мінімум 44).
+              height: 48,
+              width: 48,
               backgroundColor: "hsl(var(--ai-accent))",
               backgroundImage: "linear-gradient(180deg, hsl(0 0% 100% / 0.28), hsl(0 0% 100% / 0) 58%)",
               border: "1px solid hsl(0 0% 100% / 0.5)",

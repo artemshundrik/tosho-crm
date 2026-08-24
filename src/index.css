@@ -324,13 +324,16 @@
      * на :root він завжди нульовий.
      */
     --app-header-height: var(--app-header-base-height);
-    /* Вужчі поля з боків — щоб плашка з чотирма розділами була ширшою. */
-    --tabbar-inset-x: 10px;
+    /* Вужчі поля з боків — щоб плашка з чотирма розділами була ширшою.
+       6px, а не 10: заміряно в браузері — підпис «Прорахунки» потребує 67px,
+       а вкладка давала 58. Ці 4px з кожного боку разом із вужчими проміжками
+       й меншим кружечком AI і є тим, що вміщає повні назви. */
+    --tabbar-inset-x: 6px;
     /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
        впритул до краю. Значення додається до системної безпечної зони,
        тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
-    --tabbar-gap: 6px;
+    --tabbar-gap: 2px;
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (LIGHT) --- */
@@ -587,12 +590,12 @@
     --tabbar-backdrop-saturate: 1.5;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
-    --tabbar-inset-x: 10px;
+    --tabbar-inset-x: 6px;
     /* 20px, а не 10: на живому телефоні смуга сиділа надто низько — майже
        впритул до краю. Значення додається до системної безпечної зони,
        тож на айфоні з домашньою смужкою це ~54px, на андроїді без неї — 20. */
     --tabbar-inset-bottom: calc(env(safe-area-inset-bottom) + 20px);
-    --tabbar-gap: 6px;
+    --tabbar-gap: 2px;
     --tabbar-transition: 140ms;
 
     /* --- CANVAS TOKENS (DARK) --- */

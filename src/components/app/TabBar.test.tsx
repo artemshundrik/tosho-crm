@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TabBar } from "./TabBar";
 import type { TabSourceLink } from "./tabBarItems";
+import { setTabBarPrefs } from "./tabBarSettings";
 
 /**
  * Смуга вкладок на телефоні (картка 146).
@@ -22,13 +23,15 @@ const links: TabSourceLink[] = [
   { label: "Замовники", to: "/orders/customers", icon: Icon, moduleKey: "customers" },
   { label: "Прорахунки", to: "/orders/estimates", icon: Icon, moduleKey: "quotes" },
   { label: "Замовлення", to: "/orders/production", icon: Icon, moduleKey: "orders" },
+  { label: "До відвантаження", to: "/orders/ready-to-ship", icon: Icon, moduleKey: "shipping" },
   { label: "Дизайн", to: "/design", icon: Icon, moduleKey: "design" },
+  { label: "Фінанси", to: "/finances", icon: Icon, moduleKey: "finance" },
 ];
 
 function renderAt(pathname: string) {
   return render(
     <MemoryRouter initialEntries={[pathname]}>
-      <TabBar links={links} onAsk={() => {}} onMenu={() => {}} />
+      <TabBar links={links} onAsk={() => {}} />
     </MemoryRouter>
   );
 }
@@ -76,19 +79,60 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  // Скидаємо кеш налаштувань між тестами: він живе в модулі й інакше протік
+  // би з попереднього тесту в наступний.
+  setTabBarPrefs({ tabs: null, ai: true });
 });
 
 describe("TabBar", () => {
-  it("показує підписи під іконками — і у вкладок, і в «Меню»", () => {
+  it("показує чотири підписані вкладки — п'ятий слот за кружечком AI", () => {
     renderAt("/orders/estimates");
     const nav = screen.getByRole("navigation", { name: "Primary" });
 
-    // Три вкладки за замовчуванням: AI і «Меню» займають решту з п'яти слотів.
     expect(within(nav).getByText("Прорахунки")).toBeInTheDocument();
     expect(within(nav).getByText("Замовники")).toBeInTheDocument();
     expect(within(nav).getByText("Замовлення")).toBeInTheDocument();
-    expect(within(nav).getByText("Меню")).toBeInTheDocument();
-    expect(within(nav).queryByText("Дизайн")).not.toBeInTheDocument();
+    expect(within(nav).getByText("Дизайн")).toBeInTheDocument();
+  });
+
+  it("кнопки «Меню» у смузі немає — до решти розділів веде гамбургер", () => {
+    renderAt("/orders/estimates");
+    expect(screen.queryByRole("button", { name: "Усі розділи" })).not.toBeInTheDocument();
+  });
+
+  it("вимкнений AI звільняє слот під п'яту вкладку", () => {
+    setTabBarPrefs({ tabs: null, ai: false });
+    renderAt("/orders/estimates");
+
+    // П'ятою за пріоритетом іде «Фінанси» — саме вона займає звільнений слот.
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getAllByRole("link")).toHaveLength(5);
+    expect(within(nav).getByText("Фінанси")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Знайти або спитати ToSho AI" })).not.toBeInTheDocument();
+  });
+
+  it("обраний людиною склад смуги перемагає порядок за замовчуванням", () => {
+    setTabBarPrefs({ tabs: ["design", "finance"], ai: true });
+    renderAt("/design");
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByText("Дизайн")).toBeInTheDocument();
+    expect(within(nav).getByText("Фінанси")).toBeInTheDocument();
+    expect(within(nav).queryByText("Прорахунки")).not.toBeInTheDocument();
+  });
+
+  it("обрана вкладка без доступу зникає, а не веде в порожній екран", () => {
+    setTabBarPrefs({ tabs: ["design", "finance"], ai: true });
+    render(
+      <MemoryRouter initialEntries={["/design"]}>
+        <TabBar links={links.filter((l) => l.moduleKey !== "finance")} onAsk={() => {}} />
+      </MemoryRouter>
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByText("Дизайн")).toBeInTheDocument();
+    expect(within(nav).queryByText("Фінанси")).not.toBeInTheDocument();
   });
 
   it("кружечок AI — єдиний без підпису, лише доступна назва", () => {
@@ -130,11 +174,4 @@ describe("TabBar", () => {
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 
-  it("слот «Меню» — кнопка з попапом, а не посилання", () => {
-    renderAt("/orders/estimates");
-    const menu = screen.getByRole("button", { name: "Усі розділи" });
-
-    expect(menu).toHaveAttribute("aria-haspopup", "menu");
-    expect(menu.tagName).toBe("BUTTON");
-  });
 });

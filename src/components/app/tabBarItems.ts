@@ -37,25 +37,51 @@ const DEFAULT_TAB_PRIORITY: ModuleKey[] = [
 ];
 
 /**
- * Слотів під вкладки за замовчуванням.
+ * Слотів під вкладки, коли про налаштування ще нічого не відомо.
  *
- * Правило смуги (картка 146): максимум 5 елементів, кружечок ToSho AI та
- * кнопка меню займають по слоту. AI поки що є завжди, тож вкладок — 3.
- * Кастомізація (вимкнути AI → 4 вкладки) передасть сюди інше число.
+ * Чотири — бо кружечок ToSho AI за замовчуванням увімкнений і займає п'ятий
+ * (правило смуги в [[tabBarSettings]]). Кнопки меню в смузі немає: до решти
+ * розділів веде гамбургер у шапці.
  */
-const DEFAULT_TAB_SLOTS = 3;
+const DEFAULT_TAB_SLOTS = 4;
 
-/** Топ доступних модулів за пріоритетом. Чиста функція — крита тестами. */
-export function resolveTabItems(
-  links: readonly TabSourceLink[],
-  slots: number = DEFAULT_TAB_SLOTS
-): TabSourceLink[] {
+/** Пункт, доступний людині, за ключем модуля. */
+function indexByModule(links: readonly TabSourceLink[]) {
   const byModule = new Map<ModuleKey, TabSourceLink>();
   for (const link of links) {
     if (link.moduleKey && !byModule.has(link.moduleKey)) {
       byModule.set(link.moduleKey, link);
     }
   }
+  return byModule;
+}
+
+/**
+ * Вкладки смуги: обране людиною, інакше — топ доступних за пріоритетом.
+ *
+ * `chosen` фільтрується по доступах навмисно: якщо модуль колись обрали, а
+ * потім забрали доступ, вкладка мусить зникнути — інакше людина тапала б у
+ * порожній екран. Порожній результат вибору (усе поховалось) чесно
+ * повертається порожнім, а не підмінюється дефолтом: смугу без обраного
+ * краще показати короткою, ніж підсунути чуже.
+ */
+export function resolveTabItems(
+  links: readonly TabSourceLink[],
+  slots: number = DEFAULT_TAB_SLOTS,
+  chosen?: readonly string[] | null
+): TabSourceLink[] {
+  const byModule = indexByModule(links);
+
+  if (chosen) {
+    const items: TabSourceLink[] = [];
+    for (const key of chosen) {
+      const link = byModule.get(key as ModuleKey);
+      if (link && !items.includes(link)) items.push(link);
+      if (items.length === slots) break;
+    }
+    return items;
+  }
+
   const items: TabSourceLink[] = [];
   for (const key of DEFAULT_TAB_PRIORITY) {
     const link = byModule.get(key);
@@ -63,6 +89,11 @@ export function resolveTabItems(
     if (items.length === slots) break;
   }
   return items;
+}
+
+/** Усі доступні розділи в порядку сайдбару — для екрана налаштувань смуги. */
+export function availableTabChoices(links: readonly TabSourceLink[]): TabSourceLink[] {
+  return links.filter((link) => Boolean(link.moduleKey));
 }
 
 /**
