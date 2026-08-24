@@ -850,58 +850,82 @@ const ASIDE_TITLE = "text-3xs font-bold uppercase tracking-widest text-muted-for
  * Оцінка навмисно груба — три кошики замість годин. Точні години тут були б
  * вигадкою: скільки займе переїзд, видно лише коли за нього беруться.
  */
+/**
+ * Вердикт по оновленнях: чи горить щось ПРЯМО ЗАРАЗ.
+ *
+ * ТРЕТЯ РЕДАКЦІЯ ЦІЄЇ КАРТКИ, і дві попередні відповідали не на те питання.
+ *
+ * Спершу тут стояли три рядки про ОБСЯГ РОБОТИ: «Окремий проєкт / На вечір
+ * кожне / Однією пачкою», далі — «Планувати окремо / Братись по одному /
+ * Оновити разом». Артем не зрозумів жодної з двох, і був правий одразу в двох
+ * місцях:
+ *
+ * 1. КОЛІР БРЕХАВ. Він чекав, що червоний — це «страшно», а закодовано було
+ *    «багато роботи». Через це червоний і жовтий насправді означали те саме
+ *    «мажорна версія», просто різної ваги, — таке не читається ніколи.
+ * 2. ДВА РЯДКИ З ТРЬОХ ДУБЛЮВАЛИ ВКЛАДКУ. «За терміновістю» ділить рівно ті
+ *    самі пакети: «Ламкі» = колишні червоний + жовтий, «Доступні» = зелений.
+ *    Підсумок переказував сусідній перемикач іншими словами.
+ *
+ * А те, що справді означає «кидай усе», у картці було відсутнє: дірки безпеки.
+ *
+ * ЩО ЗАРАЗ. Один рядок відповіді й три числа під ним. Червоне тут одне —
+ * вразливості; поки їх нуль (0 із 63 пакетів на 24.08.2026), картка так і
+ * каже: термінового немає. Коли нуль стане одиницею, це буде видно з порога.
+ */
 function EffortCard({ items }: { items: StackItem[] }) {
-  const buckets = useMemo(() => {
-    const project: StackItem[] = [];
-    const evening: StackItem[] = [];
-    const batch: StackItem[] = [];
+  const counts = useMemo(() => {
+    let security = 0;
+    let breaking = 0;
+    let rest = 0;
     for (const item of items) {
-      if (item.state === "major") {
-        // Мажор у пакеті, за який тримаються десятки файлів, — це не вечір.
-        if ((item.usedIn ?? 0) >= 20) project.push(item);
-        else evening.push(item);
-      } else if (item.state === "minor" || item.state === "patch") {
-        batch.push(item);
-      }
+      if (item.worstSeverity) security += 1;
+      if (item.state === "major") breaking += 1;
+      else if (item.state === "minor" || item.state === "patch") rest += 1;
     }
-    return { project, evening, batch };
+    return { security, breaking, rest };
   }, [items]);
 
-  /**
-   * ТІЛЬКИ ЧИСЛА — за прямою вимогою Артема 24.08.2026.
-   *
-   * Тут послідовно було зайве, і він тицьнув у кожне: спершу перелік пакетів
-   * («@eslint/js, date-fns, eslint й ще 7») — незрозуміло, що це за сімка й
-   * навіщо вона в підсумку; потім рядок-пояснення під кожним заголовком і
-   * абзац про те, як рахується розкладка. Слова його: «просто скільки штуки —
-   * все, більше нічого не треба».
-   *
-   * Що лишилось: колір, дія й число. Самі пакети з їхніми версіями видно
-   * поруч, у списку — дублювати їх у підсумку означало питати те саме двічі.
-   */
-  const rows: Array<{ key: string; label: string; count: number; dot: string }> = [
-    { key: "project", label: "Планувати окремо", count: buckets.project.length, dot: "bg-destructive" },
-    { key: "evening", label: "Братись по одному", count: buckets.evening.length, dot: "bg-warning-solid" },
-    { key: "batch", label: "Оновити разом", count: buckets.batch.length, dot: "bg-success-solid" },
-  ];
+  const alarming = counts.security > 0;
 
   return (
     <section className={cn(CARD, "p-3.5")}>
-      <h3 className={ASIDE_TITLE}>Що робити з оновленнями</h3>
-      <div className="mt-2.5 grid gap-2">
-        {rows.map((row) => (
+      <h3 className={ASIDE_TITLE}>Оновлення</h3>
+      <p
+        className={cn(
+          "mt-1.5 text-sm font-semibold",
+          alarming ? "text-destructive" : "text-foreground"
+        )}
+      >
+        {alarming
+          ? `Дірки безпеки — ${counts.security}`
+          : counts.breaking > 0
+            ? "Термінового немає"
+            : "Усе свіже"}
+      </p>
+      <p className="mt-0.5 text-3xs text-muted-foreground">
+        {alarming
+          ? "Це єдине, що варте того, щоб кинути справи."
+          : "Ламке можна брати тоді, коли є час. Дірок безпеки немає."}
+      </p>
+      <div className="mt-2.5 grid gap-1.5 border-t border-border/40 pt-2">
+        {[
+          { key: "security", label: "дірки безпеки", value: counts.security, dot: "bg-destructive" },
+          { key: "breaking", label: "ламкі", value: counts.breaking, dot: "bg-warning-solid" },
+          { key: "rest", label: "решта", value: counts.rest, dot: "bg-success-solid" },
+        ].map((row) => (
           <div key={row.key} className="flex items-baseline gap-2">
             <span className={cn("h-2 w-2 shrink-0 translate-y-[-1px] rounded-[2px]", row.dot)} />
-            <span className={cn("text-xs", row.count === 0 ? "text-muted-foreground" : "font-medium")}>
+            <span className={cn("text-xs", row.value === 0 ? "text-muted-foreground" : "font-medium")}>
               {row.label}
             </span>
             <span
               className={cn(
                 "figure ml-auto text-xs",
-                row.count === 0 ? "text-muted-foreground" : "font-medium"
+                row.value === 0 ? "text-muted-foreground" : "font-medium"
               )}
             >
-              {row.count}
+              {row.value}
             </span>
           </div>
         ))}
@@ -910,13 +934,6 @@ function EffortCard({ items }: { items: StackItem[] }) {
   );
 }
 
-/**
- * «Сторожа перед пушем» — чипси з реального гака.
- *
- * Перелік не написаний тут руками, а вичитаний зі scripts/hooks/pre-push у
- * момент знімка: другий список розійшовся б із першим, і картка обіцяла б
- * захист, якого немає.
- */
 /**
  * Групи сторожів. Живуть у знімку (GUARD_GROUPS у генераторі), тут лише
  * підпис та іконка — щоб перелік не роздвоївся на код і на сторінку.
