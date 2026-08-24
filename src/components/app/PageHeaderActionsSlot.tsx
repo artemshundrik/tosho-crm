@@ -85,13 +85,18 @@ export function PageHeaderToolbarSlot({
   if (kind === "none" || (abandoned && !actions)) return null;
 
   return (
-    <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] supports-[backdrop-filter]:backdrop-blur-md">
+    // На телефоні смуга тулбара — це один рядок «пошук + фільтри + дія», і
+    // відбивати його ще й лінією нема від чого: далі одразу йде смуга
+    // статусів, яка й так читається окремим шаром. Відступи там же вужчі:
+    // ряд порожнечі над списком коштував екранного місця ні за що
+    // (картка 146). Десктоп лишається як був.
+    <div className="border-b border-[hsl(var(--app-structure-divider))] bg-[hsl(var(--page-underlay-bg)/0.72)] max-md:border-b-0 supports-[backdrop-filter]:backdrop-blur-md">
       <div
         className={cn(
           "min-w-0",
           canvasMode
-            ? "px-4 py-3 md:px-5 lg:px-6"
-            : "mx-auto w-full max-w-[1600px] px-4 pb-4 md:px-5 lg:px-6"
+            ? "px-4 py-3 max-md:py-2 md:px-5 lg:px-6"
+            : "mx-auto w-full max-w-[1600px] px-4 pb-4 max-md:pb-2 md:px-5 lg:px-6"
         )}
       >
         {actions ? (

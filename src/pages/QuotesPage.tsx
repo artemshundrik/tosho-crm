@@ -5793,7 +5793,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </SegmentedGroup>
                 ) : null}
-                <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                {isNarrowViewport ? null : (
+                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
+                     на телефоні присутність нічого не фільтрує (картка 146). */
+                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                )}
               </>
             ) : (
               <>
@@ -5829,7 +5833,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <CountBadge value={quoteSetSetCount} className="ml-1" />
                   </Button>
                 </SegmentedGroup>
-                <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                {isNarrowViewport ? null : (
+                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
+                     на телефоні присутність нічого не фільтрує (картка 146). */
+                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                )}
               </>
             )}
           </>
@@ -5872,6 +5880,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     viewMode,
     filteredQuoteSets.length,
     workspacePresence.activeHereEntries,
+    isNarrowViewport,
   ]);
 
   usePageHeaderActions(estimatesHeaderActions, [estimatesHeaderActions]);
@@ -6631,7 +6640,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ) : (
             <>
             {isNarrowViewport ? (
-            <div className="space-y-3 px-4 py-3">
+            <div className="space-y-3 px-4 pb-3 pt-1">
               {/* Та сама смуга статусів, що й на дошці: у списку вона працює
                   фільтром. Без неї список був єдиним місцем, де статус
                   доводилось шукати в аркуші фільтрів (картка 146). */}
@@ -7241,7 +7250,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
              * вбік (картка 146). Картку малює та сама функція, що й колонку на
              * десктопі, тож вигляд не розходиться.
              */
-            <div className="px-4 py-3">
+            <div className="px-4 pb-3 pt-1">
               <MobileStatusBoard
                 columns={KANBAN_COLUMNS.map((column) => ({
                   key: column.id,

@@ -5024,7 +5024,11 @@ export default function DesignPage() {
               />
             )}
 
-            <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+            {isNarrowViewport ? null : (
+                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
+                     на телефоні присутність нічого не фільтрує (картка 146). */
+                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                )}
           </>
         }
         meta={
@@ -5065,6 +5069,7 @@ export default function DesignPage() {
       userId,
       viewMode,
       workspacePresence.activeHereEntries,
+    isNarrowViewport,
     ]
   );
 
@@ -5193,7 +5198,7 @@ export default function DesignPage() {
                  * `md:hidden` на цей самий тернарник.
                  */
                 <MobileStatusBoard
-                  className="px-4 py-3"
+                  className="px-4 pb-3 pt-1"
                   columns={DESIGN_COLUMNS.map((col) => ({
                     key: col.id,
                     label: col.label,

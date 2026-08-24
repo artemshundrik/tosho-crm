@@ -46,8 +46,16 @@ const sheetVariants = cva(
     variants: {
       side: {
         top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+        /**
+         * Нижній аркуш: тіні НЕМАЄ жодної.
+         *
+         * Базова `shadow-elevated-panel` розрахована на бічну панель заввишки
+         * в екран — під аркушем, що прилипає до низу, вона перетворювалась на
+         * широку сіру пляму вздовж усього верхнього краю. Межу тримає рамка
+         * зверху, і цього досить.
+         */
         bottom:
-          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+          "inset-x-0 bottom-0 border-x-0 border-b-0 border-t shadow-none data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
         left: "inset-y-0 left-0 h-full w-full border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:w-3/4 sm:max-w-sm",
         right:
           "inset-y-0 right-0 h-full w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:w-3/4 sm:max-w-sm",
@@ -84,12 +92,14 @@ interface SheetContentProps
    * автовизначення перестраховується, а точність важлива.
    */
   isDirty?: boolean
+  /** Класи для підкладки — нижній аркуш затемнює й розмиває тло по-своєму. */
+  overlayClassName?: string
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, hideClose = false, dismissible = false, isDirty, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
+>(({ side = "right", className, children, hideClose = false, dismissible = false, isDirty, overlayClassName, onInteractOutside, onEscapeKeyDown, ...props }, ref) => {
   const guard = useUnsavedGuard({ enabled: !dismissible, isDirty })
   // Закрити дровер «по-справжньому» з-під вікна підтвердження. Radix не дає
   // дотягнутись до `onOpenChange` з контенту, а класти сюди `SheetPrimitive.Close`
@@ -99,7 +109,7 @@ const SheetContent = React.forwardRef<
 
   return (
   <SheetPortal>
-    <SheetOverlay />
+    <SheetOverlay className={overlayClassName} />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}

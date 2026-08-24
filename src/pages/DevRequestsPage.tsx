@@ -18,6 +18,7 @@ import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { cn } from "@/lib/utils";
 import { KanbanSkeleton } from "@/components/kanban/KanbanSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { DevRequestBoard } from "@/features/devRequests/DevRequestBoard";
 import {
   BoardFilters,
@@ -77,6 +78,7 @@ export default function DevRequestsPage() {
   const { accessRole, jobRole, teamId, userId } = useAuth();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<BoardView>("board");
+  const isNarrowViewport = useIsNarrowViewport();
   const [dialogOpen, setDialogOpen] = useState(false);
   /**
    * Картка, яку правимо. null при відкритому вікні = «новий запит».
@@ -478,6 +480,35 @@ export default function DevRequestsPage() {
           роботи вони не є, і стовпчик у ряду з рештою читався б саме так.
           Розгорнуто над BOARD_COLUMNS у features/devRequests/types.ts. */}
       {view === "board" ? (
+        isNarrowViewport ? (
+          /*
+           * Телефон: БЕЗ обгортки фіксованої висоти.
+           *
+           * Вона тримає горизонтальну дошку, колонки якої прокручуються
+           * всередині себе. Мобільний вигляд — звичайний вертикальний список,
+           * і той самий `overflow-hidden` просто відрізав його по висоті
+           * вікна: картки обривались, а прокрутки не було (картка 146).
+           */
+          showBoardSkeleton ? (
+            <div className="space-y-2 px-4 py-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-24 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : (
+            <DevRequestBoard
+              requests={requests}
+              onMove={handleMove}
+              onSelect={setSelected}
+              onEdit={openEdit}
+              onDelete={setPendingDelete}
+              onCopyCard={setReleaseCardFor}
+              viewerId={userId}
+              groupBy={groupBy}
+              canManage={canSee}
+            />
+          )
+        ) : (
         <div
           ref={kanbanViewportRef}
           className="min-h-0 overflow-hidden"
@@ -510,6 +541,7 @@ export default function DevRequestsPage() {
             />
           )}
         </div>
+        )
       ) : (
         /* Списку полотно ні до чого — це читомий стовпчик рядків, а не дошка,
            яку прокручують убік. Відступи, що їх у режимі полотна не дає

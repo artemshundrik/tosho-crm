@@ -53,11 +53,14 @@ export function BottomSheet({
         // дотик повз має закривати, а не питати.
         dismissible
         hideClose
+        // Та сама підкладка, що в палітри ToSho AI: розмиття замість щільного
+        // затемнення — застосунок позаду видно, і аркуш читається як тимчасове
+        // вікно, а не як новий екран.
+        overlayClassName="bg-background/60 backdrop-blur-md"
         className={cn(
-          "gap-0 rounded-t-3xl border-t p-0",
-          // Тінь угору й вужча за типову панельну: аркуш прилипає до низу, і
-          // розсіяний ореол з усіх боків тут читався б як брудна пляма.
-          "shadow-[0_-10px_30px_-12px_hsl(var(--foreground)/0.18)]",
+          // 28px і рамка лише згори — рівно як у палітри ToSho AI, з якої цей
+          // вигляд і взято. Тіні немає: див. `sheetVariants`, варіант bottom.
+          "gap-0 rounded-b-none rounded-t-[28px] p-0",
           "max-h-[88dvh]",
           /*
            * Тривалість закриття — рівно як у підкладки (200ms).
@@ -71,32 +74,33 @@ export function BottomSheet({
           className
         )}
       >
-        <div className="shrink-0 px-4 pt-2.5">
-          <div className="mx-auto h-1 w-9 rounded-full bg-border" aria-hidden="true" />
-          {/* items-start, а не center: біля довгого опису хрестик з'їжджав на
-              його середину й губив зв'язок із заголовком. */}
-          <SheetHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-2 pt-3 text-left">
-            <div className="min-w-0">
-              <SheetTitle className="text-base">{title}</SheetTitle>
-              {description ? (
-                <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-              ) : null}
-            </div>
-            <SheetClose
-              data-unsaved-ignore
-              aria-label="Закрити"
-              // Коло з підкладкою: сам по собі значок губився в порожньому
-              // кутку й не читався як кнопка. 36px — у межах тач-таргета для
-              // другорядної дії поруч із заголовком.
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                "bg-muted/70 text-muted-foreground transition-colors",
-                "hover:bg-muted hover:text-foreground",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              )}
-            >
-              <X className="h-4 w-4" />
-            </SheetClose>
+        {/* Смужка-ручка: звичний знак «це аркуш». Абсолютна, як у палітри, —
+            інакше вона з'їдала б рядок і зсувала заголовок униз. */}
+        <span
+          aria-hidden="true"
+          className="absolute left-1/2 top-2 z-20 h-1 w-9 -translate-x-1/2 rounded-full bg-border"
+        />
+        <SheetClose
+          data-unsaved-ignore
+          aria-label="Закрити"
+          // Коло з підкладкою, як у палітри: сам по собі значок губився в
+          // порожньому кутку й не читався як кнопка.
+          className={cn(
+            "absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full",
+            "bg-muted/70 text-muted-foreground transition-colors",
+            "hover:bg-muted hover:text-foreground",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+          )}
+        >
+          <X className="h-4 w-4" />
+        </SheetClose>
+
+        <div className="shrink-0 px-4 pt-5">
+          <SheetHeader className="space-y-0 pb-2 pr-12 text-left">
+            <SheetTitle className="text-base">{title}</SheetTitle>
+            {description ? (
+              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            ) : null}
           </SheetHeader>
         </div>
 

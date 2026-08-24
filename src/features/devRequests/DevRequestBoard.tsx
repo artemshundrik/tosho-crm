@@ -283,7 +283,7 @@ export function DevRequestBoard({
   // не `md:hidden`: інакше React будує й комітить обидві дошки.
   if (isNarrowViewport) {
     return (
-      <div className="px-4 py-3">
+      <div className="px-4 pb-3 pt-1">
         <MobileStatusBoard
           columns={BOARD_COLUMNS.map((column) => ({
             key: column.status,

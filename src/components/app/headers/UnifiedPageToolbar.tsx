@@ -74,7 +74,7 @@ export function UnifiedPageToolbar({
   // Тернарник, а не `md:hidden`: React комітить обидві гілки, і десктопний
   // стос контролів жив би в DOM телефона (принцип картки 146).
   if (mobileCompact && isNarrow) {
-    const hasSheetContent = Boolean(topLeft || filters || meta || mobileViewSwitch);
+    const hasSheetContent = Boolean(topLeft || filters || mobileViewSwitch);
 
     return (
       <div className={cn("space-y-2", className)}>
@@ -113,7 +113,12 @@ export function UnifiedPageToolbar({
               ) : null}
               {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
               {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
-              {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
+              {/*
+               * `meta` (лічильник знайденого + скидання) в аркуші НЕ показуємо.
+               * Скільки всього знайшлось, видно на самій сторінці — у смузі
+               * статусів і в списку; дублювати це в панелі фільтрів означало
+               * додати рядок, який нічого не вирішує.
+               */}
             </div>
           </BottomSheet>
         ) : null}

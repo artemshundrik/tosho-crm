@@ -839,7 +839,11 @@ export default function OrdersProductionPage() {
             ]}
           />
 
-          <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+          {isNarrowViewport ? null : (
+                  /* «Хто на цій сторінці» — десктопна річ: в аркуші фільтрів
+                     на телефоні присутність нічого не фільтрує (картка 146). */
+                  <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
+                )}
         </>
       }
       meta={<ToolbarMeta count={filteredRecords.length} countLabel="знайдено" />}
@@ -858,6 +862,7 @@ export default function OrdersProductionPage() {
     selectedSpecificationBlocker,
     selectedSpecificationIds,
     workspacePresence.activeHereEntries,
+    isNarrowViewport,
   ]);
 
   usePageHeaderActions(headerActions, [headerActions]);
@@ -1286,7 +1291,7 @@ export default function OrdersProductionPage() {
                * Телефон: статуси й картки замість трьох колонок по третині
                * екрана — на 375px колонка виходила ~125px завширшки (картка 146).
                */
-              <div className="px-4 py-3">
+              <div className="px-4 pb-3 pt-1">
                 <MobileStatusBoard
                   columns={ORDER_READINESS_COLUMNS.map((column) => ({
                     key: column.id,
