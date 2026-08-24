@@ -11,9 +11,20 @@ type PresenceAvatarStackProps = {
   entries: WorkspacePresenceEntry[];
   max?: number;
   size?: number;
+  /** Щільніше накладання — для шапки, де кожен піксель на рахунку. */
+  tight?: boolean;
 };
 
-export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAvatarStackProps) {
+/**
+ * `tight` — щільна посадка для шапки.
+ *
+ * У шапці аватарку впізнають не за ініціалами (на 19 px їх уже не прочитати), а
+ * за кольоровою плямою — тож обличчя там працюють, і прибирати їх не треба.
+ * Але кожне коштує місця, а місце в шапці спірне: сильніше накладання віддає
+ * ~20 px на тих самих трьох людях. Окремої зеленої крапки поруч теж немає
+ * навмисно — показані обличчя вже означають, що люди онлайн.
+ */
+export function PresenceAvatarStack({ entries, max = 5, size = 24, tight = false }: PresenceAvatarStackProps) {
   const visible = entries.slice(0, max);
   const hidden = entries.length - visible.length;
 
@@ -23,7 +34,7 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
 
   return (
     <div className="flex items-center">
-      <div className="flex -space-x-2">
+      <div className={cn("flex", tight ? "-space-x-2.5" : "-space-x-2")}>
         {visible.map((entry) => (
           <div key={entry.userId} className="relative">
             <AvatarBase
@@ -39,7 +50,14 @@ export function PresenceAvatarStack({ entries, max = 5, size = 24 }: PresenceAva
         ))}
       </div>
       {hidden > 0 ? (
-        <span className="ml-2 text-xs font-semibold text-muted-foreground">+{hidden}</span>
+        <span
+          className={cn(
+            "text-xs font-semibold tabular-nums text-muted-foreground",
+            tight ? "ml-1.5" : "ml-2"
+          )}
+        >
+          +{hidden}
+        </span>
       ) : null}
     </div>
   );
@@ -144,7 +162,14 @@ export function OnlineNowDropdown({ entries, loading, compact = false }: OnlineN
           aria-label="Хто онлайн"
         >
           {!compact ? <Users className="h-4.5 w-4.5" /> : null}
-          <PresenceAvatarStack entries={entries} max={compact ? 2 : 3} size={compact ? 18 : 20} />
+          {/* Три обличчя, а не два: щільна посадка звільнила рівно стільки
+              місця, тож третя людина тепер видна безкоштовно. */}
+          <PresenceAvatarStack
+            entries={entries}
+            max={3}
+            size={compact ? 19 : 20}
+            tight={compact}
+          />
         </Button>
       }
       content={

@@ -285,6 +285,105 @@ function FxCurrencyBadge({
   );
 }
 
+/**
+ * Курс у шапці: знак валюти дрібно, число велике, зміна за день поруч.
+ *
+ * Рамки й коду валюти навмисно немає. Плашка несла чотири однакові за вагою
+ * елементи — два бейджі й два коди, — а читають з них лише число: «USD» поруч
+ * зі знаком «$» дублює сам себе. Натомість з'явилось те, чого бракувало
+ * найбільше — куди курс рухається, видно без відкривання поповера.
+ *
+ * Кольори знаків ті самі, що в FxCurrencyBadge (info для долара, warning для
+ * євро): у шапці й у поповері валюта має впізнаватись однаково.
+ */
+function FxTickerItem({
+  code,
+  rate,
+  delta,
+}: {
+  code: FxCurrencyCode;
+  rate: number | null;
+  delta: number | null;
+}) {
+  const sign = code === "USD" ? "$" : "€";
+  const signClassName = code === "USD" ? "text-info-foreground" : "text-warning-foreground";
+  const deltaText = delta !== null && delta !== 0 ? formatFxDelta(delta) : null;
+
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span aria-hidden="true" className={cn("text-2xs font-bold leading-none", signClassName)}>
+        {sign}
+      </span>
+      <span className="text-[13px] font-semibold leading-none tabular-nums text-foreground">
+        {rate ? rate.toFixed(2) : "—"}
+      </span>
+      {deltaText && delta !== null ? (
+        <span
+          className={cn(
+            "text-2xs font-semibold leading-none tabular-nums",
+            delta > 0 ? "text-success-foreground" : "text-danger-foreground"
+          )}
+        >
+          {delta > 0 ? "+" : "−"}
+          {deltaText}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Рядок валюти в поповері.
+ *
+ * Рядками, а не картками в дві колонки: у картках назва валюти й курс стояли
+ * один під одним, тож око читало їх як два окремі стовпчики. У рядку назва
+ * ліворуч, число праворуч — і два курси порівнюються по вертикалі самі собою.
+ */
+function FxPopoverRow({
+  code,
+  title,
+  rate,
+  delta,
+  withDivider,
+}: {
+  code: FxCurrencyCode;
+  title: string;
+  rate: number | null;
+  delta: number | null;
+  withDivider?: boolean;
+}) {
+  const deltaText = delta !== null && delta !== 0 ? formatFxDelta(delta) : null;
+
+  return (
+    <div
+      className={cn(
+        "flex items-baseline justify-between gap-3 py-2.5",
+        withDivider && "border-b border-border/60"
+      )}
+    >
+      <span className="inline-flex items-baseline gap-2">
+        <FxCurrencyBadge code={code} className="h-4 w-4 translate-y-0.5" />
+        <span className="text-[13px] text-muted-foreground">{title}</span>
+      </span>
+      <span className="inline-flex items-baseline gap-2">
+        <span className="text-[17px] font-semibold leading-none tabular-nums text-foreground">
+          {rate ? rate.toFixed(2) : "Не вказано"}
+        </span>
+        {deltaText && delta !== null ? (
+          <span
+            className={cn(
+              "text-xs font-semibold tabular-nums",
+              delta > 0 ? "text-success-foreground" : "text-danger-foreground"
+            )}
+          >
+            {delta > 0 ? "↑" : "↓"} {deltaText}
+          </span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 async function fetchMinfinFxRates(signal?: AbortSignal) {
   const endpoints = ["/.netlify/functions/fx-rates", "/api/fx-rates"];
   let lastError: Error | null = null;
@@ -2199,6 +2298,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
+              {/* ПЕРШИЙ У ГРУПІ — і це не про красу, а про REQ-25.
+                  Група має ml-auto й shrink-0: коли елемент усередині росте,
+                  вона розширюється ВЛІВО, штовхаючи все, що стоїть лівіше.
+                  Кнопка онлайну — єдина тут із мінливою шириною (аватарок то
+                  одна, то дванадцять), і поки вона стояла після курсу, курс
+                  їздив на 51 px сам собою, без жодної дії людини. Тепер ліворуч
+                  від неї лишається сам пошук — а він гнучкий і стискається без
+                  наслідків. Ширину кнопки фіксувати не треба: хай аватарок буде
+                  скільки є. Не переставляйте її назад. */}
+              <OnlineNowDropdown
+                entries={workspacePresence.onlineEntries}
+                loading={workspacePresence.loading}
+                compact
+              />
+
               {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
                   (рендерить null, якщо в людини немає чинної ставки). */}
               {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={viewUserId} /> : null}
@@ -2218,35 +2332,32 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   trigger={
                     <button
                       type="button"
-                      className="hidden lg:inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-xl border border-border/50 bg-muted/40 px-3 text-xs transition-all duration-200 hover:bg-muted/60 cursor-pointer"
-                      aria-label="Курси валют"
+                      className="hidden lg:inline-flex h-10 items-center gap-3 whitespace-nowrap rounded-xl px-2.5 transition-colors duration-200 hover:bg-muted/50 cursor-pointer"
+                      aria-label={
+                        usdUahRate || eurUahRate
+                          ? `Курси валют: долар ${usdUahRate ? usdUahRate.toFixed(2) : "не вказано"}, євро ${eurUahRate ? eurUahRate.toFixed(2) : "не вказано"}`
+                          : "Курси валют"
+                      }
                       title={fxError ?? fxStaleWarning ?? "Мінфін міжбанк · продаж"}
                     >
                       {fxError || fxStaleWarning ? (
-                        <ShieldAlert className="h-3.5 w-3.5 text-danger-foreground" />
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-danger-foreground" />
                       ) : null}
-                      <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground/90">
-                        <FxCurrencyBadge code="USD" />
-                        USD {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
-                      </span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-foreground/90">
-                        <FxCurrencyBadge code="EUR" />
-                        EUR {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
-                      </span>
+                      <FxTickerItem code="USD" rate={usdUahRate} delta={usdUahDelta} />
+                      {/* Волосяна лінія замість крапки: роздільник має розділяти,
+                          а не читатись як ще один символ у ряду цифр. */}
+                      <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+                      <FxTickerItem code="EUR" rate={eurUahRate} delta={eurUahDelta} />
                     </button>
                   }
                   content={
-                    <div className="space-y-2 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3.5">
                         <div className="text-sm font-semibold text-foreground">Курси валют</div>
                         {usdUahLoading ? <CircleDot className="h-3.5 w-3.5 animate-pulse text-muted-foreground" /> : null}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {getFxSourceText(usdUahSourceLabel, Boolean(usdUahRate || eurUahRate))}
-                      </div>
                       {fxError ? (
-                        <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger-foreground">
+                        <div className="mx-4 mb-2 rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger-foreground">
                           <div className="font-semibold">Курс не оновився</div>
                           <div className="mt-1">{fxError}</div>
                           <div className="mt-1 text-2xs opacity-90">
@@ -2255,83 +2366,49 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         </div>
                       ) : null}
                       {!fxError && fxStaleWarning ? (
-                        <div className="rounded-md tone-warning-subtle border px-3 py-2 text-xs">
+                        <div className="mx-4 mb-2 rounded-md tone-warning-subtle border px-3 py-2 text-xs">
                           <div className="font-semibold">Потрібна перевірка джерела</div>
                           <div className="mt-1">{fxStaleWarning}</div>
                         </div>
                       ) : null}
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                          <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-                            <FxCurrencyBadge code="USD" className="h-4 w-7" />
-                            Долар США
-                          </div>
-                          <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
-                            <div className="text-[17px] font-semibold tabular-nums text-foreground">
-                              {usdUahRate ? usdUahRate.toFixed(2) : "Не вказано"}
-                            </div>
-                            {usdUahDelta !== null && usdUahDelta !== 0 ? (
-                              <div
-                                className={cn(
-                                  "text-[13px] font-medium tabular-nums",
-                                  usdUahDelta > 0 ? "text-success-foreground" : "text-danger-foreground"
-                                )}
-                              >
-                                {usdUahDelta > 0 ? "↑" : "↓"} {formatFxDelta(usdUahDelta)}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-2.5">
-                          <div className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-                            <FxCurrencyBadge code="EUR" className="h-4 w-7" />
-                            Євро
-                          </div>
-                          <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap pr-0.5">
-                            <div className="text-[17px] font-semibold tabular-nums text-foreground">
-                              {eurUahRate ? eurUahRate.toFixed(2) : "Не вказано"}
-                            </div>
-                            {eurUahDelta !== null && eurUahDelta !== 0 ? (
-                              <div
-                                className={cn(
-                                  "text-[13px] font-medium tabular-nums",
-                                  eurUahDelta > 0 ? "text-success-foreground" : "text-danger-foreground"
-                                )}
-                              >
-                                {eurUahDelta > 0 ? "↑" : "↓"} {formatFxDelta(eurUahDelta)}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
+                      <div className="px-4">
+                        <FxPopoverRow
+                          code="USD"
+                          title="Долар США"
+                          rate={usdUahRate}
+                          delta={usdUahDelta}
+                          withDivider
+                        />
+                        <FxPopoverRow code="EUR" title="Євро" rate={eurUahRate} delta={eurUahDelta} />
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => void loadUsdUahRate({ showToast: true })}
-                        disabled={usdUahLoading}
-                      >
-                        Оновити
-                      </Button>
-                      <a
-                        href={MINFIN_MB_URL}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                      >
-                        Відкрити джерело на Мінфіні
-                      </a>
+                      {/* Джерело внизу, а не під заголовком: звідки взялись цифри —
+                          питання, яке виникає ПІСЛЯ того, як їх прочитали. */}
+                      <div className="px-4 pb-3 pt-2.5 text-2xs text-muted-foreground">
+                        {getFxSourceText(usdUahSourceLabel, Boolean(usdUahRate || eurUahRate))}
+                      </div>
+                      <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void loadUsdUahRate({ showToast: true })}
+                          disabled={usdUahLoading}
+                        >
+                          Оновити
+                        </Button>
+                        <a
+                          href={MINFIN_MB_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-auto text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                        >
+                          Джерело
+                        </a>
+                      </div>
                     </div>
                   }
                 />
               )}
-
-              <OnlineNowDropdown
-                entries={workspacePresence.onlineEntries}
-                loading={workspacePresence.loading}
-                compact
-              />
 
               {/* Theme toggle */}
               <ThemeSwitcher className="hidden md:inline-flex" />
