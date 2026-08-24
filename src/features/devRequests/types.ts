@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { MODULE_DEFINITIONS } from "@/lib/moduleAccess";
+import { offBoardStatuses, onBoardColumns } from "@/lib/kanbanBoards";
 import { parseChecklist, type ChecklistItem } from "./checklist";
 import { isKnownModuleKey } from "@/lib/projectMap";
 import type { Tone } from "@/lib/statusTones";
@@ -198,7 +199,7 @@ export const BOARD_COLUMNS: Array<{
   label: string;
   icon: ComponentType<{ className?: string }>;
   toneClassName?: string;
-}> = [
+}> = onBoardColumns("devRequests", [
   // Підписи беруться зі STATUS_LABELS — див. коментар там, зокрема про те,
   // чому колонка називається «Вхідні», а не «Треба уточнити».
   { status: "triage", label: STATUS_LABELS.triage, icon: STATUS_ICONS.triage, toneClassName: "tone-text-warning" },
@@ -209,15 +210,23 @@ export const BOARD_COLUMNS: Array<{
   // тобто рівно навпаки, і плутав саме там, де різниця найважливіша.
   { status: "done_local", label: STATUS_LABELS.done_local, icon: STATUS_ICONS.done_local, toneClassName: "tone-text-accent" },
   { status: "released", label: STATUS_LABELS.released, icon: STATUS_ICONS.released, toneClassName: "tone-text-success" },
-];
+  // Склад стовпчиків тепер відсіює реєстр канбанів (@/lib/kanbanBoards) — той
+  // самий, що й на прорахунках, дизайні й замовленнях. Дописати сюди «Ідеї» чи
+  // «Не робимо» вже недосить: у реєстрі вони в offBoard, і на дошку не пройдуть.
+], (column) => column.status);
 
 /**
  * Стани поза дошкою: кожен показується власним СПИСКОМ за перемиканням у
  * тулбарі, а не колонкою (чому саме так — розгорнуто над BOARD_COLUMNS).
  * Порядок тут = порядок кнопок перемикача після «Дошки».
  */
-export const OFF_BOARD_STATUSES = ["someday", "wont_do"] as const;
-export type OffBoardStatus = (typeof OFF_BOARD_STATUSES)[number];
+export const OFF_BOARD_STATUSES = offBoardStatuses("devRequests") as readonly RequestStatus[];
+/**
+ * Тип лишається явним переліком: масив вище приходить із реєстру як рядки, і
+ * звузити його назад до літералів без дублювання значень не вийде. Те, що ці
+ * два джерела не розійшлись, стереже тест у kanbanBoards.test.ts.
+ */
+export type OffBoardStatus = "someday" | "wont_do";
 
 /**
  * ВІДКРИТА ЧЕРГА — те, що справді попереду.

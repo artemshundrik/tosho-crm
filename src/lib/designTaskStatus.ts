@@ -1,3 +1,4 @@
+import { onBoardColumns } from "./kanbanBoards";
 import type { DesignTaskType } from "./designTaskType";
 
 export type DesignStatus =
@@ -28,6 +29,21 @@ export const DESIGN_ALL_STATUSES: DesignStatus[] = [
   "approved",
   "cancelled",
 ];
+
+/**
+ * Колонки дошки дизайну. Склад бере реєстр канбанів — @/lib/kanbanBoards:
+ * «Скасовано» стовпчиком НЕ стає, воно живе окремим списком за перемикачем у
+ * тулбарі (на проді це було 71 картка з 569).
+ *
+ * DESIGN_ALL_STATUSES вище лишається повним і саме з нього збирається меню
+ * «Змінити статус»: скасувати задачу можна й далі, з дошки пішла КОЛОНКА, а не
+ * стан. Не беріть цей масив для переліку переходів — там потрібні всі сім.
+ */
+export const DESIGN_BOARD_COLUMNS: { id: DesignStatus; label: string }[] = onBoardColumns(
+  "design",
+  DESIGN_ALL_STATUSES.map((id) => ({ id, label: DESIGN_STATUS_LABELS[id] })),
+  (column) => column.id
+);
 
 export const DESIGN_STATUS_QUICK_ACTIONS: Partial<Record<DesignStatus, Array<{ next: DesignStatus; label: string }>>> = {
   new: [{ next: "in_progress", label: "Почати роботу" }],

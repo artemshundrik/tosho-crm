@@ -184,7 +184,8 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanOffBoardList, KanbanSkeleton } from "@/components/kanban";
+import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
 
@@ -4538,6 +4539,55 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   };
 
+  /**
+   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА.
+   *
+   * Стан вигляду не заводимо навмисно: «що зараз показано» вже описує фільтр
+   * статусу, і другий прапорець поруч із ним неминуче з ним би розійшовся —
+   * скидання фільтрів, відновлення з sessionStorage і перехід із таблиці
+   * довелося б синхронізувати руками в трьох місцях. Тут одна вісь: обрано
+   * виведений з дошки статус (@/lib/kanbanBoards) — показуємо список.
+   *
+   * У таблиці цей самий фільтр лишається звичайним фільтром: список рядків
+   * кладовищем не стає, бо там колонок-етапів немає.
+   */
+  const offBoardQuoteStatus = offBoardStatuses("quotes")[0] ?? "cancelled";
+  const showCancelledQuotes = viewMode === "kanban" && isOffBoardStatus("quotes", status);
+  const [restoringQuoteId, setRestoringQuoteId] = useState<string | null>(null);
+
+  /**
+   * Дорога назад зі списку. Повертаємо в ПЕРШУ колонку дошки, а не в той стан,
+   * у якому прорахунок був до скасування: попереднього статусу ми не зберігаємо
+   * (і не збираємось — це було б поле, яке хтось має вчасно проставити), тож
+   * чесніше покласти картку на початок, де людина сама вирішить, куди далі.
+   */
+  const handleRestoreQuote = useCallback(
+    async (quoteId: string) => {
+      const nextStatus = boardColumnStatuses("quotes")[0];
+      if (!nextStatus) return;
+      setRestoringQuoteId(quoteId);
+      try {
+        await setQuoteStatus({ quoteId, status: nextStatus });
+        try {
+          await notifyQuoteInitiatorOnStatusChange({
+            quoteId,
+            toStatus: nextStatus,
+            actorUserId: currentUserId ?? null,
+          });
+        } catch (notifyError) {
+          console.warn("Failed to notify quote initiator about status change", notifyError);
+        }
+        setRows((prev) => prev.map((row) => (row.id === quoteId ? { ...row, status: nextStatus } : row)));
+        toast.success(`Прорахунок повернуто в «${statusLabels[nextStatus] ?? nextStatus}»`);
+      } catch (e: unknown) {
+        toast.error("Не вдалося повернути прорахунок", { description: getErrorMessage(e, "") });
+      } finally {
+        setRestoringQuoteId(null);
+      }
+    },
+    [currentUserId]
+  );
+
   const toggleSelectAll = () => {
     const allIds = filteredAndSortedRows.map((row) => row.id).filter(Boolean);
     setSelectedIds((prev) => {
@@ -5618,20 +5668,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           <>
             {contentView !== "sets" ? (
               <>
-                <ToolbarFilterSelect
-                  value={status}
-                  onValueChange={setStatusFilter}
-                  neutralValue="all"
-                  className="sm:w-[170px]"
-                  options={[
-                    { value: "all", label: "Всі статуси", icon: ListFilter },
-                    ...STATUS_OPTIONS.map((s) => ({
-                      value: s,
-                      label: formatStatusLabel(s),
-                      icon: statusIcons[s],
-                    })),
-                  ]}
-                />
+                {/*
+                  У списку скасованих фільтр статусу зайвий: там усе одного
+                  стану. На дошці він пропонує лише стани-колонки — «Скасовано»
+                  переїхало в перемикач нижче, і два різні шляхи до одного й
+                  того самого вигляду плутали б.
+                */}
+                {showCancelledQuotes ? null : (
+                  <ToolbarFilterSelect
+                    value={status}
+                    onValueChange={setStatusFilter}
+                    neutralValue="all"
+                    className="sm:w-[170px]"
+                    options={[
+                      { value: "all", label: "Всі статуси", icon: ListFilter },
+                      ...(viewMode === "kanban" ? boardColumnStatuses("quotes") : STATUS_OPTIONS).map((s) => ({
+                        value: s,
+                        label: formatStatusLabel(s),
+                        icon: statusIcons[s],
+                      })),
+                    ]}
+                  />
+                )}
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -5692,7 +5750,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       Групи
                     </Button>
                   </SegmentedGroup>
-                ) : null}
+                ) : (
+                  /*
+                    Скасовані живуть тут, а не шостою колонкою: на проді їх було
+                    159 із 285, тобто більше половини дошки, і жодна з них нікуди
+                    не рухається. Числа на кнопці немає свідомо — прорахунки
+                    вантажаться сторінками, тож будь-яке число тут показувало б
+                    розмір завантаженого шматка, а не скільки їх насправді.
+                  */
+                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={!showCancelledQuotes}
+                      onClick={() => setStatusFilter("all")}
+                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
+                    >
+                      Дошка
+                    </Button>
+                    <Button
+                      variant="segmented"
+                      size="xs"
+                      aria-pressed={showCancelledQuotes}
+                      onClick={() => setStatusFilter(offBoardQuoteStatus)}
+                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
+                    >
+                      Скасовані
+                    </Button>
+                  </SegmentedGroup>
+                )}
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             ) : (
@@ -5768,6 +5854,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     search,
     showRefreshIndicator,
     status,
+    showCancelledQuotes,
+    offBoardQuoteStatus,
     viewMode,
     filteredQuoteSets.length,
     workspacePresence.activeHereEntries,
@@ -6845,6 +6933,53 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <div className="text-destructive mb-2 text-2xl">⚠️</div>
               <p className="text-sm text-destructive font-medium">{error}</p>
             </div>
+          ) : showCancelledQuotes ? (
+            /* Скасовані — списком, а не шостою колонкою: чому саме так,
+               розгорнуто в @/lib/kanbanBoards і в KanbanOffBoardList. */
+            <KanbanOffBoardList
+              busyId={restoringQuoteId}
+              emptyText="Скасованих прорахунків немає."
+              entries={filteredAndSortedRows.map((row) => {
+                const canOpen = canOpenQuoteRow(row);
+                return {
+                  id: row.id,
+                  code: row.number ?? "—",
+                  title: row.customer_name?.trim() || "Не вказано",
+                  // Назва прорахунку часто дорівнює назві замовника — тоді
+                  // другий рядок повторював би перший. Показуємо тип.
+                  subtitle:
+                    row.title?.trim() && row.title.trim() !== row.customer_name?.trim()
+                      ? row.title.trim()
+                      : quoteTypeLabel(row.quote_type),
+                  meta: (
+                    <>
+                      <span className="max-w-[150px] truncate">{getManagerLabel(row.assigned_to)}</span>
+                      <span className="tabular-nums">{formatDateTime(row.created_at)}</span>
+                    </>
+                  ),
+                  onOpen: canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined,
+                  // Повертає той, хто взагалі має доступ до картки: гейт «лише
+                  // свої» діє тут так само, як на дошці.
+                  restore: canOpen
+                    ? { label: "Повернути", onSelect: () => void handleRestoreQuote(row.id) }
+                    : null,
+                };
+              })}
+              footer={
+                hasMoreQuotes ? (
+                  <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>
+                    {refreshing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Завантаження...
+                      </>
+                    ) : (
+                      "Показати ще"
+                    )}
+                  </Button>
+                ) : null
+              }
+            />
           ) : filteredAndSortedRows.length === 0 ? (
             <div className="p-12 text-center">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />

@@ -1,3 +1,5 @@
+import { onBoardColumns } from "@/lib/kanbanBoards";
+
 export const ORDER_PAYMENT_METHOD_OPTIONS = [
   {
     id: "cash",
@@ -56,7 +58,16 @@ export const ORDER_DOCUMENT_EXECUTOR = {
   signatureLabel: "О.В. Борщ",
 } as const;
 
-export const ORDER_READINESS_COLUMNS = [
+/**
+ * Колонки дошки готовності. Склад бере реєстр канбанів — @/lib/kanbanBoards.
+ *
+ * Виводити звідси поки нічого: ці колонки описують не статус замовлення, а
+ * те, чого бракує, щоб його створити, і скасованого стану серед них немає.
+ * Реєстр тут не для сьогоднішнього ефекту, а щоб наступний стан довелося
+ * покласти в один із двох переліків свідомо — інакше дошки знову розійдуться,
+ * кожна зі своїм уявленням про те, що таке колонка.
+ */
+const ORDER_READINESS_COLUMN_DEFS = [
   {
     id: "counterparty",
     label: "Лід / реквізити",
@@ -76,6 +87,12 @@ export const ORDER_READINESS_COLUMNS = [
     dotClass: "tone-dot-success",
   },
 ] as const;
+
+export const ORDER_READINESS_COLUMNS = onBoardColumns(
+  "orders",
+  ORDER_READINESS_COLUMN_DEFS,
+  (column) => column.id
+);
 
 export const ORDER_STATUS_SECTIONS = [
   {

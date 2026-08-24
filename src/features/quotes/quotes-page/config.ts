@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { onBoardColumns } from "@/lib/kanbanBoards";
 import {
   quoteStatusBadgeClass,
   quoteStatusDotClass,
@@ -53,11 +54,24 @@ export const statusIcons: Record<string, ComponentType<{ className?: string }>> 
 export const statusClasses = quoteStatusBadgeClass;
 export const statusColorClass = quoteStatusTextClass;
 
-export const KANBAN_COLUMNS = STATUS_OPTIONS.map((id) => ({
-  id,
-  label: statusLabels[id],
-  dotClass: quoteStatusDotClass[id],
-}));
+/**
+ * Колонки дошки прорахунків. Склад бере реєстр канбанів — @/lib/kanbanBoards:
+ * «Скасовано» стовпчиком НЕ стає, воно живе окремим списком за перемикачем у
+ * тулбарі. Чому саме так (і чим це краще за ковзне вікно чи архів у базі) —
+ * розгорнуто в самому реєстрі.
+ *
+ * STATUS_OPTIONS вище лишається повним: у таблиці й у фільтрі статусів
+ * «Скасовано» — законне значення. З дошки виводиться саме КОЛОНКА, а не стан.
+ */
+export const KANBAN_COLUMNS = onBoardColumns(
+  "quotes",
+  STATUS_OPTIONS.map((id) => ({
+    id,
+    label: statusLabels[id],
+    dotClass: quoteStatusDotClass[id],
+  })),
+  (column) => column.id
+);
 
 export type OwnershipOption = {
   value: string;

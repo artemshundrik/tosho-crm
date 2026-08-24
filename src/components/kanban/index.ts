@@ -4,4 +4,5 @@ export { KanbanColumnHeader } from "./KanbanColumnHeader";
 export { KanbanVirtualList } from "./KanbanVirtualList";
 export { KanbanCard } from "./KanbanCard";
 export { KanbanImageZoomPreview } from "./KanbanImageZoomPreview";
+export { KanbanOffBoardList, type KanbanOffBoardEntry } from "./KanbanOffBoardList";
 export { KanbanSkeleton } from "./KanbanSkeleton";

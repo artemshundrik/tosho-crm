@@ -35,6 +35,8 @@ import {
   canChangeDesignStatus,
   getApprovalBlockers,
   getDesignStatusActionLabel,
+  DESIGN_ALL_STATUSES,
+  DESIGN_BOARD_COLUMNS,
   DESIGN_STATUS_LABELS,
   type DesignStatus,
 } from "@/lib/designTaskStatus";
@@ -65,10 +67,13 @@ import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanOffBoardList, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
+import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
 import {
   SEGMENTED_GROUP,
+  SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
+  SEGMENTED_TRIGGER_SM,
   TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
@@ -374,15 +379,21 @@ const readHasLayoutOutputs = (
   );
 };
 
-const DESIGN_COLUMNS: { id: DesignStatus; label: string }[] = [
-  { id: "new", label: DESIGN_STATUS_LABELS.new },
-  { id: "changes", label: DESIGN_STATUS_LABELS.changes },
-  { id: "in_progress", label: DESIGN_STATUS_LABELS.in_progress },
-  { id: "pm_review", label: DESIGN_STATUS_LABELS.pm_review },
-  { id: "client_review", label: DESIGN_STATUS_LABELS.client_review },
-  { id: "approved", label: DESIGN_STATUS_LABELS.approved },
-  { id: "cancelled", label: DESIGN_STATUS_LABELS.cancelled },
-];
+/**
+ * Колонки дошки. Склад бере реєстр канбанів (@/lib/kanbanBoards) — той самий,
+ * що й прорахунки, замовлення та запити на доробку: «Скасовано» стовпчиком не
+ * стоїть, воно живе окремим списком за перемикачем у тулбарі.
+ *
+ * УВАГА: це НЕ перелік станів задачі. Скасувати задачу можна й далі — меню
+ * «Змінити статус» збирається з DESIGN_ALL_STATUSES. Якщо взяти для нього цей
+ * масив, «Скасувати» тихо зникне з меню, і дошка стане пасткою в один бік.
+ */
+const DESIGN_COLUMNS = DESIGN_BOARD_COLUMNS;
+/** Усі стани разом зі скасованим — для меню, підписів та історії. */
+const DESIGN_STATUS_ENTRIES: { id: DesignStatus; label: string }[] = DESIGN_ALL_STATUSES.map((id) => ({
+  id,
+  label: DESIGN_STATUS_LABELS[id],
+}));
 const DESIGN_FILES_BUCKET =
   (import.meta.env.VITE_SUPABASE_ITEM_VISUAL_BUCKET as string | undefined) || "attachments";
 const STORAGE_CACHE_CONTROL = "31536000, immutable";
@@ -866,6 +877,20 @@ const formatDeadlineShort = (value: string) => {
   return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
 };
 
+/**
+ * Дата створення задачі коротким рядком.
+ *
+ * НЕ через formatDeadlineShort: той бере перші 10 символів як настінний день —
+ * правильно для дедлайну, який настінним і є, — а `createdAt` це позначка часу
+ * в UTC. Ввечері за Києвом такий розбір давав учорашню дату.
+ */
+const formatCreatedShort = (value?: string | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "Europe/Kiev" });
+};
+
 const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
   const qtyValue = Number(qty ?? 0);
   if (!Number.isFinite(qtyValue) || qtyValue <= 0) return null;
@@ -1296,8 +1321,10 @@ export default function DesignPage() {
         .join("|"),
     [tasks]
   );
+  // З УСІХ станів, а не з колонок дошки: «Скасувати» — теж перехід, і зникнути
+  // з меню разом зі стовпчиком воно не має.
   const getAllowedStatusTransitions = (task: DesignTask) =>
-    DESIGN_COLUMNS.filter((column) =>
+    DESIGN_STATUS_ENTRIES.filter((column) =>
       canChangeDesignStatus({
         currentStatus: task.status,
         nextStatus: column.id,
@@ -3072,6 +3099,19 @@ export default function DesignPage() {
     void handleStatusChange(draggedTask, nextStatus);
   };
 
+  /**
+   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА.
+   *
+   * Окремого стану вигляду не заводимо: «що зараз показано» вже описує фільтр
+   * статусу, і другий прапорець поруч із ним неминуче б із ним розійшовся —
+   * скидання фільтрів і відновлення з sessionStorage довелося б синхронізувати
+   * руками. Тут одна вісь: обрано виведений з дошки статус — показуємо список.
+   */
+  const offBoardDesignStatus = (offBoardStatuses("design")[0] ?? "cancelled") as DesignStatus;
+  const restoreDesignStatus = (boardColumnStatuses("design")[0] ?? "new") as DesignStatus;
+  const showCancelledTasks = viewMode === "kanban" && isOffBoardStatus("design", statusFilter);
+  const [restoringTaskId, setRestoringTaskId] = useState<string | null>(null);
+
   const handleStatusChange = async (task: DesignTask, next: DesignStatus, options?: { estimateMinutes?: number }) => {
     if (!effectiveTeamId || task.status === next) return;
     if (
@@ -3230,7 +3270,7 @@ export default function DesignPage() {
           userId,
           actorName: actorLabel,
           action: "design_task_status",
-          title: `Статус: ${DESIGN_COLUMNS.find((c) => c.id === previousStatus)?.label ?? previousStatus} → ${DESIGN_COLUMNS.find((c) => c.id === next)?.label ?? next}`,
+          title: `Статус: ${DESIGN_STATUS_LABELS[previousStatus] ?? previousStatus} → ${DESIGN_STATUS_LABELS[next] ?? next}`,
           metadata: {
             source: "design_task_status",
             from_status: previousStatus,
@@ -4886,20 +4926,56 @@ export default function DesignPage() {
         }
         filters={
           <>
-            <ToolbarFilterSelect
-              value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
-              neutralValue="all"
-              className="sm:w-[180px]"
-              options={[
-                { value: "all", label: "Всі статуси", icon: ListFilter },
-                ...DESIGN_COLUMNS.map((column) => ({
-                  value: column.id,
-                  label: column.label,
-                  icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
-                })),
-              ]}
-            />
+            {/*
+              У списку скасованих фільтр статусу зайвий — там усе одного стану.
+              На дошці він пропонує рівно стани-колонки: «Скасовано» переїхало в
+              перемикач поруч, і два шляхи до одного вигляду плутали б.
+            */}
+            {showCancelledTasks ? null : (
+              <ToolbarFilterSelect
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
+                neutralValue="all"
+                className="sm:w-[180px]"
+                options={[
+                  { value: "all", label: "Всі статуси", icon: ListFilter },
+                  ...(viewMode === "kanban" ? DESIGN_COLUMNS : DESIGN_STATUS_ENTRIES).map((column) => ({
+                    value: column.id,
+                    label: column.label,
+                    icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
+                  })),
+                ]}
+              />
+            )}
+
+            {/*
+              Скасовані живуть тут, а не сьомою колонкою: на проді їх було 71 із
+              569, і жодна нікуди не рухається. Числа на кнопці немає свідомо —
+              задачі вантажаться сторінками, тож воно показувало б розмір
+              завантаженого шматка, а не скільки їх насправді.
+            */}
+            {viewMode === "kanban" ? (
+              <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={!showCancelledTasks}
+                  onClick={() => setStatusFilter("all")}
+                  className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
+                >
+                  Дошка
+                </Button>
+                <Button
+                  variant="segmented"
+                  size="xs"
+                  aria-pressed={showCancelledTasks}
+                  onClick={() => setStatusFilter(offBoardDesignStatus)}
+                  className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
+                >
+                  Скасовані
+                </Button>
+              </SegmentedGroup>
+            ) : null}
 
             {viewMode !== "assignee" ? (
               <ToolbarFilterSelect
@@ -4993,6 +5069,8 @@ export default function DesignPage() {
       renderManagerFilterValue,
       search,
       showRefreshIndicator,
+      showCancelledTasks,
+      offBoardDesignStatus,
       standaloneTasksCount,
       statusFilter,
       userId,
@@ -5075,6 +5153,64 @@ export default function DesignPage() {
               </div>
               )}
             </div>
+          ) : showCancelledTasks ? (
+            /* Скасовані — списком, а не сьомою колонкою: чому саме так,
+               розгорнуто в @/lib/kanbanBoards і в KanbanOffBoardList. */
+            <KanbanOffBoardList
+              busyId={restoringTaskId}
+              emptyText="Скасованих дизайн-задач немає."
+              entries={filteredTasks.map((task) => {
+                const canRestore = canChangeDesignStatus({
+                  currentStatus: task.status,
+                  nextStatus: restoreDesignStatus,
+                  canManageAssignments: canManageDesignStatuses,
+                  isAssignedToCurrentUser:
+                    !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
+                });
+                return {
+                  id: task.id,
+                  code: task.designTaskNumber ?? task.quoteNumber ?? "—",
+                  title: task.title?.trim() || task.productName?.trim() || "Без назви",
+                  subtitle: task.customerName?.trim() || null,
+                  meta: (
+                    <>
+                      <span className="max-w-[150px] truncate">{getTaskAssigneeLabel(task)}</span>
+                      <span className="tabular-nums">{formatCreatedShort(task.createdAt)}</span>
+                    </>
+                  ),
+                  onOpen: () => openTask(task.id),
+                  restore: canRestore
+                    ? {
+                        label: "Повернути",
+                        onSelect: () => {
+                          setRestoringTaskId(task.id);
+                          void handleStatusChange(task, restoreDesignStatus).finally(() =>
+                            setRestoringTaskId(null)
+                          );
+                        },
+                      }
+                    : null,
+                };
+              })}
+              footer={
+                hasMoreTasks ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => void loadTasks({ append: true, force: true })}
+                    disabled={loading || refreshing}
+                  >
+                    {refreshing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Завантаження...
+                      </>
+                    ) : (
+                      "Показати ще"
+                    )}
+                  </Button>
+                ) : null
+              }
+            />
           ) : (
             <>
               {isNarrowViewport ? (
