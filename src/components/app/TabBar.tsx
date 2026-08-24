@@ -1,57 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Calculator, Factory, Palette, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import { createPortal } from "react-dom";
 import { preloadRoute } from "@/routes/routePreload";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { isTabActive, resolveTabItems, type TabSourceLink } from "@/components/app/tabBarItems";
 
-type TabItem = {
-  label: string;
-  to: string;
-  icon: React.ComponentType<{ className?: string }>;
-  isActive: (pathname: string) => boolean;
-};
-
-const TAB_ITEMS: TabItem[] = [
-  {
-    label: "Прорахунки",
-    to: "/orders/estimates",
-    icon: Calculator,
-    isActive: (pathname) => pathname.startsWith("/orders/estimates"),
-  },
-  {
-    label: "Замовники",
-    to: "/orders/customers",
-    icon: Users,
-    isActive: (pathname) => pathname.startsWith("/orders/customers"),
-  },
-  {
-    label: "Замовлення",
-    to: "/orders/production",
-    icon: Factory,
-    isActive: (pathname) => pathname.startsWith("/orders/production"),
-  },
-  {
-    label: "Дизайн",
-    to: "/design",
-    icon: Palette,
-    isActive: (pathname) => pathname.startsWith("/design"),
-  },
-];
-
-export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: () => void }) {
+export function TabBar({
+  links,
+  hidden = false,
+  onAsk,
+}: {
+  /** Пункти сайдбару після фільтра доступів — смуга не має власного реєстру. */
+  links: readonly TabSourceLink[];
+  hidden?: boolean;
+  onAsk?: () => void;
+}) {
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
+  const isNarrow = useIsNarrowViewport();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const items = useMemo(() => resolveTabItems(links), [links]);
+
   const activeKey = useMemo(() => {
-    const found = TAB_ITEMS.find((tab) => tab.isActive(location.pathname));
+    const found = items.find((tab) => isTabActive(location.pathname, tab.to));
     return found?.to ?? null;
-  }, [location.pathname]);
+  }, [items, location.pathname]);
+
+  // Широкий екран: смугу не будуємо взагалі — жодних прихованих мобільних
+  // гілок (принцип картки 146; md:hidden нижче лишається ременем безпеки).
+  // Порожній список означає, що доступи ще вантажаться: краще з'явитися разом
+  // із пунктами сайдбару, ніж блимнути не тими вкладками.
+  if (!isNarrow || items.length === 0) return null;
+  if (!mounted || typeof document === "undefined") return null;
 
   const content = (
     <div
@@ -97,7 +83,7 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
             padding: "0 6px",
           }}
         >
-          {TAB_ITEMS.map((tab) => {
+          {items.map((tab) => {
             const active = activeKey === tab.to;
             const Icon = tab.icon;
 
@@ -186,6 +172,5 @@ export function TabBar({ hidden = false, onAsk }: { hidden?: boolean; onAsk?: ()
     </div>
   );
 
-  if (!mounted || typeof document === "undefined") return null;
   return createPortal(content, document.body);
 }

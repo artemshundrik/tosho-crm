@@ -2504,7 +2504,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
       {/* cmdkOpen теж ховає смугу: на телефоні палітра — аркуш знизу, і смуга
           лягала просто поверх її поля вводу. */}
-      <TabBar hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen} onAsk={() => setCmdkOpen(true)} />
+      <TabBar
+        links={visibleSidebarLinks}
+        hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen}
+        onAsk={() => setCmdkOpen(true)}
+      />
       <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent
           side="right"
