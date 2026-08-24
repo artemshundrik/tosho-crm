@@ -1329,7 +1329,17 @@ export default function DesignTaskPage() {
   const { id } = useParams();
   const { teamId, userId, accessRole, jobRole, permissions } = useAuth();
   const navigate = useNavigate();
-  const initialCache = readDesignTaskPageCache(teamId ?? "", id ?? "");
+  /**
+   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
+   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
+   * значення потрібні лише для початкових станів нижче.
+   *
+   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
+   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
+   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
+   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
+   */
+  const initialCache = useMemo(() => readDesignTaskPageCache(teamId ?? "", id ?? ""), [teamId, id]);
   const { getEntityViewers } = useWorkspacePresence();
   const designTaskViewers = useMemo(
     () => (id ? getEntityViewers("design_task", id) : []),

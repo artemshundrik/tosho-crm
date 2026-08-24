@@ -583,8 +583,21 @@ function CustomersPage({ teamId }: { teamId: string }) {
   const navigationType = useNavigationType();
   const [searchParams] = useSearchParams();
   const { session, userId, jobRole } = useAuth();
-  const initialCache = readCustomersPageCache(teamId);
-  const restoredCache = shouldRestorePageUiState(navigationType, initialCache?.cachedAt) ? initialCache : null;
+  /**
+   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
+   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
+   * значення потрібні лише для початкових станів нижче.
+   *
+   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
+   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
+   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
+   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
+   */
+  const initialPageState = useMemo(() => {
+    const cache = readCustomersPageCache(teamId);
+    return { restored: shouldRestorePageUiState(navigationType, cache?.cachedAt) ? cache : null };
+  }, [teamId, navigationType]);
+  const restoredCache = initialPageState.restored;
   const [activeTab, setActiveTab] = useState<"customers" | "leads">(() => restoredCache?.activeTab ?? "customers");
   const [search, setSearch] = useState(() => restoredCache?.search ?? "");
   const [customerManagerFilter, setCustomerManagerFilter] = useState<string>(

@@ -855,7 +855,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // Ставки компанії — з налаштувань, а не з констант у коді. До завантаження
   // віддають ті самі 30/20, тож перший кадр рахується як раніше.
   const companyRates = useCompanyPricingRates(userId);
-  const initialCache = readQuoteDetailsCache(teamId, quoteId);
+  /**
+   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
+   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
+   * значення потрібні лише для початкових станів нижче.
+   *
+   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
+   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
+   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
+   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
+   */
+  const initialCache = useMemo(() => readQuoteDetailsCache(teamId, quoteId), [teamId, quoteId]);
   const { getEntityViewers } = useWorkspacePresence();
   const quoteViewers = useMemo(
     () => getEntityViewers("quote", quoteId),

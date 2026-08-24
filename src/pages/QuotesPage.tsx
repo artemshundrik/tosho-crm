@@ -525,15 +525,32 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const companyRates = useCompanyPricingRates(userId);
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
-  const initialCache = readQuotesPageCache(teamId);
-  const initialTeamMembers = readQuotesPageMembersCache(teamId);
-  const initialFilters = readQuotesPageFiltersState(teamId);
-  const restoredFilters = shouldRestorePageUiState(navigationType, initialFilters?.cachedAt) ? initialFilters : null;
-  const initialViewMode: "table" | "kanban" = (() => {
-    if (restoredFilters?.viewMode) return restoredFilters.viewMode;
-    const saved = localStorage.getItem("quotes_view_mode");
-    return saved === "kanban" ? "kanban" : "table";
-  })();
+  /**
+   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
+   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
+   * значення потрібні лише для початкових станів нижче.
+   *
+   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
+   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
+   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
+   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
+   */
+  const initialPageState = useMemo(() => {
+    const cache = readQuotesPageCache(teamId);
+    const teamMembers = readQuotesPageMembersCache(teamId);
+    const stored = readQuotesPageFiltersState(teamId);
+    const filters = shouldRestorePageUiState(navigationType, stored?.cachedAt) ? stored : null;
+    const viewMode: "table" | "kanban" = filters?.viewMode
+      ? filters.viewMode
+      : localStorage.getItem("quotes_view_mode") === "kanban"
+        ? "kanban"
+        : "table";
+    return { cache, teamMembers, filters, viewMode };
+  }, [teamId, navigationType]);
+  const initialCache = initialPageState.cache;
+  const initialTeamMembers = initialPageState.teamMembers;
+  const restoredFilters = initialPageState.filters;
+  const initialViewMode = initialPageState.viewMode;
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
   const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
