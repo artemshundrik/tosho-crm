@@ -4860,7 +4860,9 @@ export default function DesignPage() {
           </SegmentedGroup>
         }
         mobilePrimary={
-          <Button onClick={createDialog.open} size="icon" aria-label="Нова дизайн-задача" className="h-11 w-11 shrink-0">
+          // Стрілка, а не `createDialog.open` напряму: обгортка тримає стан у
+          // ref, і читання методу під час рендера додає борг компілятора.
+          <Button onClick={() => createDialog.open()} size="icon" aria-label="Нова дизайн-задача" className="h-11 w-11 shrink-0">
             <Plus className="h-5 w-5" />
           </Button>
         }
@@ -5045,7 +5047,7 @@ export default function DesignPage() {
       clearFilters,
       contentView,
       allTasksCount,
-      createDialog.open,
+      createDialog,
       currentUserDisplayName,
       designerFilter,
       designerFilterOptions,
