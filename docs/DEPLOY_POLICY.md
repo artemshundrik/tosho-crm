@@ -215,5 +215,7 @@ npx netlify api listSiteDeploys --data '{"site_id":"7f7dfcfc-ffcc-4702-a0e6-3a8e
 - [ ] `npm run lint` без **нових** помилок (базова лінія червона, див. `docs/AUDIT-2026-07-11.md`)
 - [ ] Зміни переглянуті локально на `npm run dev`
 - [ ] Пачка логічно завершена — не «половина фічі»
-- [ ] Якщо є SQL у `scripts/*.sql` — міграція вже застосована в прод-БД
+- [ ] Якщо є SQL у `scripts/*.sql` — застосований через `npm run db:apply scripts/файл.sql`
+      (записує в журнал `tosho.schema_migrations` і смикає PostgREST). Пуш із незастосованим
+      SQL блокує перевірка «SQL-журнал» у pre-push — REQ-104
 - [ ] Якщо чіпали RLS / Netlify-функції / auth / secrets — прогнано `/security-review`

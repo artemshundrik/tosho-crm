@@ -16,6 +16,8 @@
     "check:file-growth": "node scripts/check-file-growth.mjs",
     "check:hook-disables": "node scripts/check-hook-disables.mjs",
     "check:functions": "node scripts/check-netlify-functions.mjs",
+    "check:db-guards": "node scripts/check-db-guards.mjs",
+    "check:sql-journal": "node scripts/check-sql-journal.mjs",
     "check:page-surfaces": "node scripts/check-page-surfaces.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
@@ -38,7 +40,9 @@
     "generate:vapid": "node scripts/generate-vapid-keys.mjs",
     "stack:snapshot": "node scripts/build-stack-snapshot.mjs",
     "check:stack-snapshot": "node scripts/check-stack-snapshot.mjs",
-    "check:node-version": "node scripts/check-node-version.mjs"
+    "check:node-version": "node scripts/check-node-version.mjs",
+    "db:apply": "node scripts/db-apply.mjs",
+    "db:backfill-journal": "node scripts/backfill-sql-journal.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
