@@ -259,34 +259,31 @@ function getFxErrorMessage(error: unknown) {
 
 type FxCurrencyCode = "USD" | "EUR";
 
-function FxCurrencyBadge({
-  code,
-  className,
-}: {
-  code: FxCurrencyCode;
-  className?: string;
-}) {
-  const accentClassName = code === "USD"
-    ? "border-info-soft-border bg-info-soft text-info-foreground"
-    : "border-warning-soft-border bg-warning-soft text-warning-foreground";
-  const label = code === "USD" ? "$" : "€";
-
+/**
+ * Код валюти — спільна мітка для шапки й поповера.
+ *
+ * ЛІТЕРАМИ, А НЕ ЗНАКОМ. «$» на 10 px поруч із числом на 14 px оптично висів:
+ * базова лінія в них спільна, але в Inter у долара інші пропорції, ніж у цифр,
+ * а «€» ще й сидить нижче. У «USD» і «EUR» немає ні хвостів, ні перекладин, що
+ * вилазять за межі рядка, — вирівнювання перестає бути питанням узагалі.
+ * Заразом зникає плутанина «$ — це який саме долар», а в CRM з цінами
+ * постачальників це не дрібниця.
+ */
+function FxCurrencyCode({ code, className }: { code: FxCurrencyCode; className?: string }) {
   return (
     <span
-      aria-hidden="true"
       className={cn(
-        "inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-3xs font-semibold leading-none",
-        accentClassName,
+        "text-3xs font-bold leading-none tracking-[0.06em] text-muted-foreground",
         className
       )}
     >
-      {label}
+      {code}
     </span>
   );
 }
 
 /**
- * Курс у шапці: знак валюти дрібно, число велике, зміна за день поруч.
+ * Курс у шапці: код валюти дрібно, число велике, зміна за день поруч.
  *
  * Рамки й коду валюти навмисно немає. Плашка несла чотири однакові за вагою
  * елементи — два бейджі й два коди, — а читають з них лише число: «USD» поруч
@@ -305,15 +302,11 @@ function FxTickerItem({
   rate: number | null;
   delta: number | null;
 }) {
-  const sign = code === "USD" ? "$" : "€";
-  const signClassName = code === "USD" ? "text-info-foreground" : "text-warning-foreground";
   const deltaText = delta !== null && delta !== 0 ? formatFxDelta(delta) : null;
 
   return (
     <span className="inline-flex items-baseline gap-1.5">
-      <span aria-hidden="true" className={cn("text-2xs font-bold leading-none", signClassName)}>
-        {sign}
-      </span>
+      <FxCurrencyCode code={code} />
       <span className="text-[13px] font-semibold leading-none tabular-nums text-foreground">
         {rate ? rate.toFixed(2) : "—"}
       </span>
@@ -361,8 +354,9 @@ function FxPopoverRow({
         withDivider && "border-b border-border/60"
       )}
     >
-      <span className="inline-flex items-baseline gap-2">
-        <FxCurrencyBadge code={code} className="h-4 w-4 translate-y-0.5" />
+      <span className="inline-flex items-baseline gap-2.5">
+        {/* Фіксована ширина — щоб назви валют стали в одну колонку. */}
+        <FxCurrencyCode code={code} className="inline-block w-7 shrink-0" />
         <span className="text-[13px] text-muted-foreground">{title}</span>
       </span>
       <span className="inline-flex items-baseline gap-2">
