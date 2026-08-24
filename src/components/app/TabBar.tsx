@@ -64,7 +64,10 @@ export function TabBar({
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [activeIndex, items]);
+    // `mounted` у залежностях обов'язковий: до монтування порталу вкладок у
+    // DOM ще немає, замір дає null — і без переміру після монтування капсула
+    // не з'являлась би до першої зміни розділу чи повороту екрана.
+  }, [activeIndex, items, mounted]);
 
   // Широкий екран: смугу не будуємо взагалі — жодних прихованих мобільних
   // гілок (принцип картки 146; md:hidden нижче лишається ременем безпеки).

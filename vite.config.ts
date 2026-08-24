@@ -292,7 +292,21 @@ export default defineConfig(({ command, mode }) => {
     return undefined;
   };
 
+  /**
+   * Порт дев-сервера: спершу PORT із оточення, інакше звичні 5199.
+   *
+   * Навіщо. Паралельні сесії Claude Code піднімають кожна свій дев-сервер, і
+   * жорсткий `--port 5199 --strictPort` у launch.json означав, що другий чат
+   * просто не стартував: «Port 5199 is in use by another chat». Vite сам
+   * змінну PORT НЕ читає (перевірено grep-ом по його cli), тож призначений
+   * харнесом порт треба підставити тут — інакше зняття прапорців кинуло б
+   * сервер на дефолтні 5173 повз призначення.
+   */
+  const devPort = Number(process.env.PORT) || 5199;
+
   return ({
+  server: { port: devPort },
+  preview: { port: devPort },
   plugins: [
     react(),
     tailwindcss(),
