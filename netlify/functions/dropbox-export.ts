@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { dropboxService } from "./_lib/dropbox.service";
 
@@ -7,23 +11,36 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
 };
 
-type ExportFilePayload = {
-  sourceUrl?: string;
-  storageBucket?: string;
-  storagePath?: string;
-  targetPath?: string;
-  sourceFileId?: string;
-  fileName?: string;
-  outputKind?: string;
-  role?: string;
-};
+/**
+ * Форма запиту — і перевірка, і тип (REQ-137).
+ *
+ * Стеля на список файлів навмисна: кожен елемент — це викачування й
+ * вивантаження в Dropbox, тож без межі один запит міг би тягнути скільки
+ * завгодно.
+ */
+const exportFileSchema = z
+  .object({
+    sourceUrl: z.string().optional(),
+    storageBucket: z.string().optional(),
+    storagePath: z.string().optional(),
+    targetPath: z.string().optional(),
+    sourceFileId: z.string().optional(),
+    fileName: z.string().optional(),
+    outputKind: z.string().optional(),
+    role: z.string().optional(),
+  })
+  .strict();
 
-type RequestPayload = {
-  teamId?: string;
-  taskId?: string;
-  projectPath?: string;
-  files?: ExportFilePayload[];
-};
+const requestSchema = z
+  .object({
+    teamId: z.string().optional(),
+    taskId: z.string().optional(),
+    projectPath: z.string().optional(),
+    files: z.array(exportFileSchema).max(100).optional(),
+  })
+  .strict();
+
+type RequestPayload = z.infer<typeof requestSchema>;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -39,19 +56,15 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-function readPayload(event: HttpEvent): RequestPayload {
-  try {
-    return JSON.parse(event.body ?? "{}") as RequestPayload;
-  } catch {
-    return {};
-  }
-}
-
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
 
-  const payload = readPayload(event);
+  // Доти помилка розбору тіла ковталась і функція йшла далі з порожнім
+  // запитом — тепер клієнт отримує 400 з поясненням і жодної дії (REQ-137).
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestPayload = parsed.data;
   const teamId = payload.teamId?.trim();
   const taskId = payload.taskId?.trim();
   const projectPath = payload.projectPath?.trim();

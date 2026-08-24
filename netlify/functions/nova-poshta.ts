@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 // Проксі до API Нової Пошти (Phase 1 — довідник адрес).
@@ -70,11 +74,21 @@ const resolveWorkspaceId = async (
   return data?.workspace_id ?? null;
 };
 
-type NovaPoshtaRequest = {
-  modelName?: string;
-  calledMethod?: string;
-  methodProperties?: Record<string, unknown>;
-};
+/**
+ * Форма запиту — і перевірка, і тип (REQ-137).
+ *
+ * Це проксі до чужого API, тож `modelName` і `calledMethod` мають бути рядками
+ * без варіантів: нижче вони звіряються з білим списком дозволених методів.
+ */
+const requestSchema = z
+  .object({
+    modelName: z.string().optional(),
+    calledMethod: z.string().optional(),
+    methodProperties: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+type NovaPoshtaRequest = z.infer<typeof requestSchema>;
 
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
@@ -106,12 +120,9 @@ export const handler = async (event: HttpEvent) => {
   const workspaceId = await resolveWorkspaceId(userClient, userData.user.id);
   if (!workspaceId) return jsonResponse(403, { error: "Workspace not found" });
 
-  let payload: NovaPoshtaRequest;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: NovaPoshtaRequest = parsed.data;
 
   const calledMethod = (payload.calledMethod ?? "").trim();
   const modelName = (payload.modelName ?? "").trim() || LEGACY_METHOD_MODEL[calledMethod] || "";

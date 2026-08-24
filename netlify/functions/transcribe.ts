@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { logAiUsage } from "./_aiUsageLog";
 import { transcriptionCostUsd, chatCostUsd } from "./_aiPricing";
@@ -17,14 +21,19 @@ type HttpEvent = {
 
 type DictationContext = "brief" | "comment";
 
-type RequestBody = {
-  audioBase64?: string;
-  mimeType?: string | null;
-  context?: DictationContext;
-  clean?: boolean;
-  /** Recording length in ms (from the client) — used to price transcription. */
-  durationMs?: number;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Обсяг аудіо дожимає MAX_AUDIO_BYTES нижче. */
+const requestSchema = z
+  .object({
+    audioBase64: z.string().optional(),
+    mimeType: z.string().nullable().optional(),
+    context: z.enum(["brief", "comment"]).optional(),
+    clean: z.boolean().optional(),
+    /** Recording length in ms (from the client) — used to price transcription. */
+    durationMs: z.number().nonnegative().optional(),
+  })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 // Netlify sync functions cap the request body at 6 MB; base64 inflates the raw
 // audio by ~33%, so ~4.4 MB of actual audio. At webm/opus ~1 MB/min that is a few
@@ -213,12 +222,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let body: RequestBody;
-  try {
-    body = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const body: RequestBody = parsed.data;
 
   // Verify the caller is an authenticated user before spending OpenAI credits.
   const userClient = createClient(supabaseUrl, anonKey, {

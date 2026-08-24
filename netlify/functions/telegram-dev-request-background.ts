@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 import { chatCostUsd } from "./_aiPricing";
@@ -29,23 +33,28 @@ type HttpEvent = {
   body?: string | null;
 };
 
-type Payload = {
-  chatId?: number;
-  messageId?: number;
-  /** Резолвлений користувач CRM — автор картки. */
-  userId?: string;
-  /** Операційний team_id: RLS-ключ картки й ключ лічильника номерів. */
-  teamId?: string;
-  /** Не для політик — лише щоб історія картки читалась через get_audit_log. */
-  workspaceId?: string | null;
-  actorName?: string | null;
-  tgUserId?: number | null;
-  tgUsername?: string | null;
-  displayName?: string | null;
-  text?: string;
-  forwarded?: boolean;
-  forwardedFrom?: string | null;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). */
+const requestSchema = z
+  .object({
+    chatId: z.number().optional(),
+    messageId: z.number().optional(),
+    /** Резолвлений користувач CRM — автор картки. */
+    userId: z.string().optional(),
+    /** Операційний team_id: RLS-ключ картки й ключ лічильника номерів. */
+    teamId: z.string().optional(),
+    /** Не для політик — лише щоб історія картки читалась через get_audit_log. */
+    workspaceId: z.string().nullable().optional(),
+    actorName: z.string().nullable().optional(),
+    tgUserId: z.number().nullable().optional(),
+    tgUsername: z.string().nullable().optional(),
+    displayName: z.string().nullable().optional(),
+    text: z.string().optional(),
+    forwarded: z.boolean().optional(),
+    forwardedFrom: z.string().nullable().optional(),
+  })
+  .strict();
+
+type Payload = z.infer<typeof requestSchema>;
 
 function json(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -68,12 +77,9 @@ export const handler = async (event: HttpEvent) => {
   const denial = assertCronAuthorized(event);
   if (denial) return denial;
 
-  let payload: Payload;
-  try {
-    payload = JSON.parse(event.body ?? "{}") as Payload;
-  } catch {
-    return json(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return json(400, { error: parsed.error });
+  const payload: Payload = parsed.data;
 
   const { chatId, messageId, userId, teamId } = payload;
   const text = clampDraftText(payload.text);

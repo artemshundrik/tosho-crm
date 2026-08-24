@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { promises as fs } from "node:fs";
 import os from "node:os";
@@ -10,10 +14,12 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
 };
 
-type RequestBody = {
-  bucket?: string;
-  storagePath?: string;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). */
+const requestSchema = z
+  .object({ bucket: z.string().optional(), storagePath: z.string().optional() })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -52,12 +58,9 @@ export const handler = async (event: HttpEvent) => {
       : null;
   if (!token) return jsonResponse(401, { error: "Missing Authorization token" });
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   const bucket = (payload.bucket ?? "").trim();
   const storagePath = (payload.storagePath ?? "").trim();

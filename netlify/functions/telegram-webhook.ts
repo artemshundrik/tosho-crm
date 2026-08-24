@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -87,6 +91,26 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
   body?: string | null;
 };
+
+/**
+ * Форма оновлення від Telegram — і перевірка, і тип (REQ-137).
+ *
+ * ЧОМУ М'ЯКА, А НЕ СУВОРА. Форму тут диктує чужий сервіс, і Telegram регулярно
+ * додає поля. Сувора схема відхиляла б цілком нормальні оновлення просто тому,
+ * що в них зʼявилось щось нове. Тому невідомі поля ПРОПУСКАЮТЬСЯ як є, а
+ * перевіряється лише те, що ми справді читаємо. Користь усе одно є: сміття
+ * замість обʼєкта відсікається на межі, а не десь усередині обробки.
+ */
+const telegramUpdateSchema = z.looseObject({
+  message: z.looseObject({}).optional(),
+  callback_query: z
+    .looseObject({
+      id: z.string(),
+      data: z.string().optional(),
+      message: z.looseObject({}).optional(),
+    })
+    .optional(),
+});
 
 type TelegramUpdate = {
   message?: TelegramMessage;
@@ -1152,12 +1176,11 @@ export const handler = async (event: HttpEvent) => {
     return { statusCode: 401, body: "unauthorized" };
   }
 
-  let update: TelegramUpdate;
-  try {
-    update = JSON.parse(event.body ?? "{}") as TelegramUpdate;
-  } catch {
-    return ok();
-  }
+  // Відповідаємо 200 і на сміття: Telegram повторює доставку на будь-яку іншу
+  // відповідь, а повторювати розбір непридатного тіла немає сенсу.
+  const parsed = parseBody(event.body, telegramUpdateSchema);
+  if (!parsed.ok) return ok();
+  const update = parsed.data as TelegramUpdate;
 
   // Ранній вихід для груп і каналів. Бот там не працює й не має працювати:
   // зв'язка людини тримається на chat_id, а в групі це id ГРУПИ, тож кожен

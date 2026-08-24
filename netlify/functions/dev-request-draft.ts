@@ -1,8 +1,12 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
-import { clampDraftText, draftDevRequest, type OpenTitleInput } from "./_lib/devRequestDraft";
+import { clampDraftText, draftDevRequest } from "./_lib/devRequestDraft";
 
 // Надиктований запит → охайна картка розділу «Запити». На вхід приходить сирий
 // текст розпізнавання (клієнт свідомо кличе диктування з clean: false — чистку
@@ -25,10 +29,25 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
 };
 
-type RequestBody = {
-  text?: string;
-  openTitles?: OpenTitleInput[];
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Стеля на список назв — щоб промпт не роздувся. */
+const requestSchema = z
+  .object({
+    text: z.string().optional(),
+    openTitles: z
+      .array(
+        z
+          .object({
+            label: z.string().nullable().optional(),
+            title: z.string().nullable().optional(),
+          })
+          .strict()
+      )
+      .max(500)
+      .optional(),
+  })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   return {
@@ -76,12 +95,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let body: RequestBody;
-  try {
-    body = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const body: RequestBody = parsed.data;
 
   // Гейт користувача — до витрат на OpenAI.
   const userClient = createClient(supabaseUrl, anonKey, {

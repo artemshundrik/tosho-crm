@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 type HttpEvent = {
@@ -6,9 +10,10 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
 };
 
-type RequestBody = {
-  url?: string;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Адресу нижче ще звіряють із дозволеним доменом. */
+const requestSchema = z.object({ url: z.string().optional() }).strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 type ParsedVariant = {
   name: string;
@@ -514,12 +519,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   let url: string;
   try {

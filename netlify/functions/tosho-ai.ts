@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 import { logAiUsage } from "./_aiUsageLog";
@@ -29,59 +33,103 @@ type ToShoAiDomain =
   | "team"
   | "admin";
 
-type RequestBody = {
-  action?:
-    | "bootstrap"
-    | "send"
-    | "feedback"
-    | "update_request"
-    | "upsert_knowledge"
-    | "delete_knowledge"
-    | "mention_suggestions";
-  requestId?: string;
-  messageId?: string;
-  message?: string;
-  mode?: ToShoAiMode;
-  routeContext?: {
-    pathname?: string;
-    search?: string;
-    href?: string;
-    title?: string;
-    routeLabel?: string;
-    domainHint?: ToShoAiDomain;
-    entityType?: string | null;
-    entityId?: string | null;
-  };
-  includeHistory?: boolean;
-  includeKnowledge?: boolean;
-  mention?: {
-    query?: string;
-    kind?: "customer" | "lead" | "manager" | "designer" | "employee" | null;
-  };
-  feedback?: "helpful" | "not_helpful";
-  status?: ToShoAiStatus;
-  priority?: ToShoAiPriority;
-  knowledge?: {
-    id?: string;
-    title?: string;
-    slug?: string;
-    summary?: string | null;
-    body?: string;
-    tags?: string[];
-    keywords?: string[];
-    status?: "active" | "draft" | "archived";
-    sourceLabel?: string | null;
-    sourceHref?: string | null;
-  };
-  attachments?: Array<{
-    id?: string;
-    fileName?: string;
-    mimeType?: string | null;
-    fileSize?: number | null;
-    storageBucket?: string;
-    storagePath?: string;
-  }>;
-};
+/**
+ * Форма запиту — і перевірка, і тип (REQ-137).
+ *
+ * Стелі на списки й вкладення не косметичні: кожне вкладення читається й
+ * потрапляє в промпт, а теги з ключовими словами йдуть у базу знань.
+ */
+const requestSchema = z
+  .object({
+    action: z
+      .enum([
+        "bootstrap",
+        "send",
+        "feedback",
+        "update_request",
+        "upsert_knowledge",
+        "delete_knowledge",
+        "mention_suggestions",
+      ])
+      .optional(),
+    requestId: z.string().optional(),
+    messageId: z.string().optional(),
+    message: z.string().optional(),
+    mode: z.enum(["ask", "fix", "route", "resolve"]).optional(),
+    routeContext: z
+      .object({
+        pathname: z.string().optional(),
+        search: z.string().optional(),
+        href: z.string().optional(),
+        title: z.string().optional(),
+        routeLabel: z.string().optional(),
+        domainHint: z
+          .enum([
+            "general",
+            "overview",
+            "orders",
+            "design",
+            "logistics",
+            "catalog",
+            "contractors",
+            "team",
+            "admin",
+          ])
+          .optional(),
+        entityType: z.string().nullable().optional(),
+        entityId: z.string().nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    includeHistory: z.boolean().optional(),
+    includeKnowledge: z.boolean().optional(),
+    mention: z
+      .object({
+        query: z.string().optional(),
+        kind: z
+          .enum(["customer", "lead", "manager", "designer", "employee"])
+          .nullable()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    feedback: z.enum(["helpful", "not_helpful"]).optional(),
+    status: z.enum(["open", "in_progress", "waiting_user", "resolved"]).optional(),
+    priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+    knowledge: z
+      .object({
+        id: z.string().optional(),
+        title: z.string().optional(),
+        slug: z.string().optional(),
+        summary: z.string().nullable().optional(),
+        body: z.string().optional(),
+        tags: z.array(z.string()).max(100).optional(),
+        keywords: z.array(z.string()).max(100).optional(),
+        status: z.enum(["active", "draft", "archived"]).optional(),
+        sourceLabel: z.string().nullable().optional(),
+        sourceHref: z.string().nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    attachments: z
+      .array(
+        z
+          .object({
+            id: z.string().optional(),
+            fileName: z.string().optional(),
+            mimeType: z.string().nullable().optional(),
+            fileSize: z.number().nullable().optional(),
+            storageBucket: z.string().optional(),
+            storagePath: z.string().optional(),
+          })
+          .strict()
+      )
+      .max(20)
+      .optional(),
+  })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 type AuthContext = {
   userId: string;
@@ -8071,12 +8119,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let body: RequestBody;
-  try {
-    body = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const body: RequestBody = parsed.data;
 
   const userClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false },

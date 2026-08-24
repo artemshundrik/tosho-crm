@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 // Друк маркування (наліпки 100×100) для вже створеної ТТН.
@@ -50,6 +54,9 @@ const resolveWorkspaceId = async (
   return data?.workspace_id ?? null;
 };
 
+/** Форма запиту — і перевірка, і тип (REQ-137). Формат ref дожимає UUID_RE нижче. */
+const requestSchema = z.object({ ref: z.string().optional() }).strict();
+
 export const handler = async (event: HttpEvent) => {
   if (event.httpMethod === "OPTIONS") return jsonResponse(204, {});
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
@@ -75,12 +82,9 @@ export const handler = async (event: HttpEvent) => {
   const workspaceId = await resolveWorkspaceId(userClient, userData.user.id);
   if (!workspaceId) return jsonResponse(403, { error: "Workspace not found" });
 
-  let payload: { ref?: string };
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload = parsed.data;
 
   // Ref підставляється в URL, тож формат перевіряємо суворо — жодних скісних
   // рисок і крапок, інакше можна було б увести шлях у запит до my.novaposhta.ua.

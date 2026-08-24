@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 // Інтеграція з «Вчасно.ЕДО» — Фаза 1 (вихідний потік).
@@ -31,23 +35,28 @@ const TOKEN_ENV_BY_COMPANY_KEY: Record<string, string> = {
   avanprint: "VCHASNO_TOKEN_AVANPRINT",
 };
 
-type VchasnoUploadRequest = {
-  legalEntityId?: string; // юрособа-відправник (Фаза 1: ФОП В.О.)
-  customerId?: string | null; // контрагент (для ЄДРПОУ/email отримувача)
-  recipientEdrpou?: string | null; // явний ЄДРПОУ отримувача (переважає над customerId)
-  recipientEmail?: string | null; // явний email отримувача
-  docType?: string; // invoice | debit_note | annex | contract
-  category?: number | null; // ручний override category
-  crmDocId?: string | null; // наш id документа → vendor_id у «Вчасно»
-  orderId?: string | null;
-  quoteId?: string | null;
-  number?: string | null; // номер документа
-  title?: string | null; // назва документа
-  issueDate?: string | null; // YYYY-MM-DD
-  amountKopecks?: number | null; // сума, копійки
-  fileBase64?: string; // байти PDF (base64)
-  send?: boolean; // також надіслати контрагенту (потребує vchasno_send)
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Документи їдуть у зовнішній сервіс. */
+const requestSchema = z
+  .object({
+    legalEntityId: z.string().optional(), // юрособа-відправник (Фаза 1: ФОП В.О.)
+    customerId: z.string().nullable().optional(), // контрагент (для ЄДРПОУ/email отримувача)
+    recipientEdrpou: z.string().nullable().optional(), // явний ЄДРПОУ отримувача
+    recipientEmail: z.string().nullable().optional(), // явний email отримувача
+    docType: z.string().optional(), // invoice | debit_note | annex | contract
+    category: z.number().int().nullable().optional(), // ручний override category
+    crmDocId: z.string().nullable().optional(), // наш id документа → vendor_id у «Вчасно»
+    orderId: z.string().nullable().optional(),
+    quoteId: z.string().nullable().optional(),
+    number: z.string().nullable().optional(), // номер документа
+    title: z.string().nullable().optional(), // назва документа
+    issueDate: z.string().nullable().optional(), // YYYY-MM-DD
+    amountKopecks: z.number().int().nullable().optional(), // сума, копійки
+    fileBase64: z.string().optional(), // байти PDF (base64)
+    send: z.boolean().optional(), // також надіслати контрагенту (потребує vchasno_send)
+  })
+  .strict();
+
+type VchasnoUploadRequest = z.infer<typeof requestSchema>;
 
 type HttpEvent = {
   httpMethod?: string;
@@ -146,12 +155,9 @@ export const handler = async (event: HttpEvent) => {
       : null;
   if (!token) return jsonResponse(401, { error: "Missing Authorization token" });
 
-  let payload: VchasnoUploadRequest;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: VchasnoUploadRequest = parsed.data;
 
   const legalEntityId = payload.legalEntityId?.trim();
   const docType = (payload.docType ?? "").trim();

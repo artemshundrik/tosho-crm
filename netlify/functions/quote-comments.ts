@@ -1,16 +1,25 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 import { isDeliverable } from "./_lib/teamMembers";
 import { quoteRefFromThreadKey } from "../../src/lib/taskThread";
 
-type RequestBody = {
-  mode?: "list" | "add" | "notify_mentions" | "notify_thread";
-  quoteId?: string;
-  /** Ключ нитки виду `quote:<ref>`; для самостійних задач ref = `standalone-<uuid>`. */
-  threadKey?: string;
-  body?: string;
-  mentionedUserIds?: string[];
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). */
+const requestSchema = z
+  .object({
+    mode: z.enum(["list", "add", "notify_mentions", "notify_thread"]).optional(),
+    quoteId: z.string().optional(),
+    /** Ключ нитки виду `quote:<ref>`; для самостійних задач ref = `standalone-<uuid>`. */
+    threadKey: z.string().optional(),
+    body: z.string().optional(),
+    mentionedUserIds: z.array(z.string()).max(200).optional(),
+  })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 type TeamMemberIdentity = {
   user_id: string;
@@ -99,12 +108,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   const quoteId = payload.quoteId?.trim();
   /**

@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { chatCostUsd } from "./_aiPricing";
@@ -47,20 +51,25 @@ type HttpEvent = {
   body?: string | null;
 };
 
-type Payload = {
-  chatId?: number;
-  userId?: string;
-  workspaceId?: string;
-  teamId?: string;
-  actorName?: string | null;
-  question?: string;
-  /** true — власник; лише йому доступні адмін-інтенти. */
-  isOwner?: boolean;
-  /** Кнопка-заготовка: інтент відомий, модель не потрібна (і не оплачується). */
-  directIntent?: string;
-  /** Рівень доступу; за замовчуванням найвужчий — помилка не має відкривати зайве. */
-  access?: AccessLevel;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Викликається лише кроном, але вхід усе одно звіряємо. */
+const requestSchema = z
+  .object({
+    chatId: z.number().optional(),
+    userId: z.string().optional(),
+    workspaceId: z.string().optional(),
+    teamId: z.string().optional(),
+    actorName: z.string().nullable().optional(),
+    question: z.string().optional(),
+    /** true — власник; лише йому доступні адмін-інтенти. */
+    isOwner: z.boolean().optional(),
+    /** Кнопка-заготовка: інтент відомий, модель не потрібна (і не оплачується). */
+    directIntent: z.string().optional(),
+    /** Рівень доступу; за замовчуванням найвужчий — помилка не має відкривати зайве. */
+    access: z.enum(["full", "sales", "design", "basic"]).optional(),
+  })
+  .strict();
+
+type Payload = z.infer<typeof requestSchema>;
 
 /** Інтенти, які стосуються конкретної людини — їх звужуємо до себе. */
 const PERSON_INTENTS = new Set(["designer_workload", "designer_summary", "person_summary", "time_spent"]);
@@ -301,12 +310,9 @@ export const handler = async (event: HttpEvent) => {
   const denial = assertCronAuthorized(event);
   if (denial) return denial;
 
-  let payload: Payload;
-  try {
-    payload = JSON.parse(event.body ?? "{}") as Payload;
-  } catch {
-    return json(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return json(400, { error: parsed.error });
+  const payload: Payload = parsed.data;
 
   const { chatId, userId, workspaceId, teamId } = payload;
   const question = payload.question?.trim() ?? "";

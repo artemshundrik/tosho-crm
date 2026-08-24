@@ -34,8 +34,17 @@ export function parseBody<T>(rawBody: string | null | undefined, schema: z.ZodTy
   } catch {
     return { ok: false, error: "Invalid JSON body" };
   }
+  return validateBody(json, schema);
+}
 
-  const result = schema.safeParse(json);
+/**
+ * Те саме, але для значення, яке вже зібрали самі.
+ *
+ * Потрібно там, де функція приймає і POST з тілом, і GET з параметрами адреси
+ * (`dropbox-manage`): форма в обох випадках одна, тож і перевірка має бути одна.
+ */
+export function validateBody<T>(value: unknown, schema: z.ZodType<T>): ParsedBody<T> {
+  const result = schema.safeParse(value);
   if (result.success) return { ok: true, data: result.data };
 
   const details = result.error.issues

@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 
 type HttpEvent = {
@@ -6,10 +10,12 @@ type HttpEvent = {
   headers?: Record<string, string | undefined>;
 };
 
-type DeclineRequest = {
-  source?: string;
-  case?: string;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). */
+const requestSchema = z
+  .object({ source: z.string().optional(), case: z.string().optional() })
+  .strict();
+
+type DeclineRequest = z.infer<typeof requestSchema>;
 
 type OpenAiResponseShape = {
   output?: Array<{
@@ -142,12 +148,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let payload: DeclineRequest;
-  try {
-    payload = JSON.parse(event.body ?? "{}") as DeclineRequest;
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: DeclineRequest = parsed.data;
 
   const source = normalizeWhitespace(normalizeText(payload.source));
   const targetCase = normalizeText(payload.case) || "genitive";

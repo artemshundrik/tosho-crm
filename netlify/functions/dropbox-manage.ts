@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody, validateBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { dropboxService } from "./_lib/dropbox.service";
 import { collectDropboxHealth } from "./_lib/dropboxHealth";
@@ -23,30 +27,38 @@ function jsonResponse(statusCode: number, body: Record<string, unknown>) {
   };
 }
 
-type RequestPayload = {
-  action?: string;
-  clientName?: string;
-  clientPath?: string;
-  projectName?: string;
-  path?: string;
-};
+/** Форма запиту — і перевірка, і тип (REQ-137). Однакова для POST і для GET. */
+const requestSchema = z
+  .object({
+    action: z.string().optional(),
+    clientName: z.string().optional(),
+    clientPath: z.string().optional(),
+    projectName: z.string().optional(),
+    path: z.string().optional(),
+  })
+  .strict();
 
-function readPayload(event: HttpEvent): RequestPayload {
+type RequestPayload = z.infer<typeof requestSchema>;
+
+/**
+ * GET несе поля в адресі, POST — у тілі. Форма одна, тож і перевірка одна:
+ * доти помилка розбору тіла ковталась і функція йшла далі з порожнім
+ * запитом (REQ-137).
+ */
+function readPayload(event: HttpEvent) {
   if (event.httpMethod === "GET") {
-    return {
-      action: event.queryStringParameters?.action,
-      clientName: event.queryStringParameters?.clientName,
-      clientPath: event.queryStringParameters?.clientPath,
-      projectName: event.queryStringParameters?.projectName,
-      path: event.queryStringParameters?.path,
-    };
+    return validateBody(
+      {
+        action: event.queryStringParameters?.action,
+        clientName: event.queryStringParameters?.clientName,
+        clientPath: event.queryStringParameters?.clientPath,
+        projectName: event.queryStringParameters?.projectName,
+        path: event.queryStringParameters?.path,
+      },
+      requestSchema
+    );
   }
-
-  try {
-    return JSON.parse(event.body ?? "{}") as RequestPayload;
-  } catch {
-    return {};
-  }
+  return parseBody(event.body, requestSchema);
 }
 
 export const handler = async (event: HttpEvent) => {
@@ -77,7 +89,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Unauthorized" });
   }
 
-  const payload = readPayload(event);
+  const parsed = readPayload(event);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestPayload = parsed.data;
   const action = payload.action?.trim() || "inspect";
 
   try {
