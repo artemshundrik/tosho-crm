@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -930,6 +930,26 @@ export default function DesignPage() {
   const restoredFilters = initialPageState.filters;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
+  /**
+   * Перший кадр маршруту — дешевий, важке тіло домальовується перехідно (REQ-136).
+   *
+   * Клік по сайдбару React Router загортає в transition: СТАРА сторінка лишається
+   * на екрані, доки нова не відрендериться повністю. Перший рендер цієї сторінки
+   * коштує сотні мілісекунд (на деві — секунди), тож людина натискала й бачила
+   * завмерлу попередню сторінку. Заміряно 24.08.2026 на деві, гарячі переходи
+   * сайдбаром: дизайн — 2.1 с до перемикання, прорахунки — 0.65 с, тоді як
+   * підрядники — 45-160 мс.
+   *
+   * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
+   * прапорець нижче перемикається у transition: React рендерить важке тіло
+   * шматками, не блокуючи ні перемикання маршруту, ні кліки.
+   */
+  const [heavySurfaceReady, setHeavySurfaceReady] = useState(false);
+  useEffect(() => {
+    startTransition(() => {
+      setHeavySurfaceReady(true);
+    });
+  }, []);
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
@@ -1524,7 +1544,10 @@ export default function DesignPage() {
     if (customers.length === 0 || tasks.length === 0) return;
     const next = applyCustomerLogosToTasks(tasks, customers);
     if (next === tasks) return;
-    setTasks(next);
+    // Той самий повний рендер дошки, що й у loadTasks, — тому теж transition.
+    startTransition(() => {
+      setTasks(next);
+    });
     if (typeof window !== "undefined" && effectiveTeamId) {
       writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(next));
     }
@@ -2151,7 +2174,17 @@ export default function DesignPage() {
           ]
         : parsed;
 
-      setTasks(nextTasks);
+      /**
+       * Transition, бо це найдорожчий рендер сторінки (REQ-136): повна дошка на
+       * сотні карток. Автодовантаження кличе loadTasks кілька разів поспіль, і
+       * кожен такий рендер у звичайному пріоритеті блокував головний потік —
+       * заміряно на деві: перехід на «Підрядники» одразу після відкриття дошки
+       * чекав 2.8 с, поки дошка домальовує чергову порцію. У transition React
+       * рендерить шматками й пропускає кліки та навігацію вперед.
+       */
+      startTransition(() => {
+        setTasks(nextTasks);
+      });
       if (typeof window !== "undefined" && effectiveTeamId) {
         writeDesignSessionCache(`design-page-cache:${effectiveTeamId}`, buildDesignPageCachePayload(nextTasks));
       }
@@ -4958,7 +4991,7 @@ export default function DesignPage() {
         }
         meta={
           <ToolbarMeta
-            count={loading && tasks.length === 0 ? "…" : filteredTasks.length}
+            count={!heavySurfaceReady || (loading && tasks.length === 0) ? "…" : filteredTasks.length}
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}
@@ -4973,6 +5006,7 @@ export default function DesignPage() {
       currentUserDisplayName,
       designerFilter,
       designerFilterOptions,
+      heavySurfaceReady,
       filteredTasks.length,
       getMemberAvatar,
       hasMoreTasks,
@@ -5009,7 +5043,7 @@ export default function DesignPage() {
 
       {viewMode === "kanban" ? (
         <EstimatesKanbanCanvas>
-          {loading && tasks.length === 0 ? (
+          {!heavySurfaceReady || (loading && tasks.length === 0) ? (
             <>
               <div className="space-y-3 md:hidden">
                 {DESIGN_COLUMNS.map((col) => {

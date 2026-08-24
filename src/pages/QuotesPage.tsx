@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -554,6 +554,26 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const initialViewMode = initialPageState.viewMode;
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
+  /**
+   * Перший кадр маршруту — дешевий, важке тіло домальовується перехідно (REQ-136).
+   *
+   * Клік по сайдбару React Router загортає в transition: СТАРА сторінка лишається
+   * на екрані, доки нова не відрендериться повністю. Перший рендер цієї сторінки
+   * коштує сотні мілісекунд (на деві — секунди), тож людина натискала й бачила
+   * завмерлу попередню сторінку. Заміряно 24.08.2026 на деві, гарячі переходи
+   * сайдбаром: дизайн — 2.1 с до перемикання, прорахунки — 0.65 с, тоді як
+   * підрядники — 45-160 мс.
+   *
+   * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
+   * прапорець нижче перемикається у transition: React рендерить важке тіло
+   * шматками, не блокуючи ні перемикання маршруту, ні кліки.
+   */
+  const [heavySurfaceReady, setHeavySurfaceReady] = useState(false);
+  useEffect(() => {
+    startTransition(() => {
+      setHeavySurfaceReady(true);
+    });
+  }, []);
   const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
   const fullFetchCompletedKeyRef = useRef<string | null>(null);
   const [quotesFetchLimit, setQuotesFetchLimit] = useState(() =>
@@ -6131,7 +6151,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
-          {loading ? (
+          {loading || !heavySurfaceReady ? (
             <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
           ) : error ? (
             <div className="p-12 text-center">
@@ -6805,7 +6825,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </EstimatesTableCanvas>
       ) : (
         <EstimatesKanbanCanvas>
-          {loading ? (
+          {loading || !heavySurfaceReady ? (
             <div
               ref={desktopKanbanViewportRef}
               className="min-h-0 overflow-hidden"
