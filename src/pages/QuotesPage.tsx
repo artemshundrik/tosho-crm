@@ -7248,10 +7248,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           if (batchCreating) return;
           setBatchOpen(open);
           if (!open) {
-            startTransition(() => {
-              setBatchBuilderError(null);
-              setCustomerSearch("");
-            });
+            // БЕЗ transition: на закритті ніхто не чекає кадру, а окремий
+            // рендер, що прилітає посеред анімації зникання, видно як блимання.
+            setBatchBuilderError(null);
+            setCustomerSearch("");
           }
         }}
         onSubmit={handleBatchBuilderSubmit}

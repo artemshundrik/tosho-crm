@@ -5272,7 +5272,8 @@ export default function DesignPage() {
         onOpenChange={(open) => {
           setCreateOpen(open);
           if (!open) {
-            startTransition(() => {
+            // БЕЗ transition: на закритті ніхто не чекає кадру, а окремий
+            // рендер, що прилітає посеред анімації зникання, видно як блимання.
             setCreateSaving(false);
             setCreateCustomerId(null);
             setCreateCustomerLogoUrl(null);
@@ -5287,7 +5288,6 @@ export default function DesignPage() {
             setCreateManagerPopoverOpen(false);
             setCreateDeadlinePopoverOpen(false);
             setCreateFilesDragActive(false);
-            });
           }
         }}
       >
