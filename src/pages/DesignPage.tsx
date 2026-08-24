@@ -67,9 +67,9 @@ import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList, OffBoardViewSwitch } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
 import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
-import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
+import { boardColumnStatuses, isOffBoardStatus } from "@/lib/kanbanBoards";
 import {
   SEGMENTED_GROUP,
   SEGMENTED_TRIGGER,
@@ -3085,14 +3085,14 @@ export default function DesignPage() {
   };
 
   /**
-   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА.
+   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА (REQ-138).
    *
-   * Окремого стану вигляду не заводимо: «що зараз показано» вже описує фільтр
-   * статусу, і другий прапорець поруч із ним неминуче б із ним розійшовся —
-   * скидання фільтрів і відновлення з sessionStorage довелося б синхронізувати
-   * руками. Тут одна вісь: обрано виведений з дошки статус — показуємо список.
+   * Показуємо його рівно тоді, коли у фільтрі статусів обрано «Скасовано»:
+   * інакше на дошці, з якої колонку прибрано, лишилась би порожнеча. Окремої
+   * кнопки під це в тулбарі немає — перша спроба поставила туди перемикач, і
+   * він займав місце щодня заради дії раз на рік, дублював фільтр і на кожне
+   * натискання перезавантажував дошку.
    */
-  const offBoardDesignStatus = (offBoardStatuses("design")[0] ?? "cancelled") as DesignStatus;
   const restoreDesignStatus = (boardColumnStatuses("design")[0] ?? "new") as DesignStatus;
   const showCancelledTasks = viewMode === "kanban" && isOffBoardStatus("design", statusFilter);
   const [restoringTaskId, setRestoringTaskId] = useState<string | null>(null);
@@ -4912,38 +4912,25 @@ export default function DesignPage() {
         filters={
           <>
             {/*
-              У списку скасованих фільтр статусу зайвий — там усе одного стану.
-              На дошці він пропонує рівно стани-колонки: «Скасовано» переїхало в
-              перемикач поруч, і два шляхи до одного вигляду плутали б.
+              ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
+              шлях до скасованих задач. Окремої кнопки під них у тулбарі немає:
+              постійне місце на екрані за дію раз на рік — це податок на всіх
+              щодня, а фільтр робить те саме й нічого не коштує.
             */}
-            {showCancelledTasks ? null : (
-              <ToolbarFilterSelect
-                value={statusFilter}
-                onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
-                neutralValue="all"
-                className="sm:w-[180px]"
-                options={[
-                  { value: "all", label: "Всі статуси", icon: ListFilter },
-                  ...(viewMode === "kanban" ? DESIGN_COLUMNS : DESIGN_STATUS_ENTRIES).map((column) => ({
-                    value: column.id,
-                    label: column.label,
-                    icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
-                  })),
-                ]}
-              />
-            )}
-
-            {/* Скасовані живуть тут, а не сьомою колонкою: на проді їх було 71
-                із 569, і жодна нікуди не рухається. Перемикач спільний із
-                дошкою прорахунків. */}
-            {viewMode === "kanban" ? (
-              <OffBoardViewSwitch
-                active={showCancelledTasks}
-                label="Скасовані"
-                onShowBoard={() => setStatusFilter("all")}
-                onShowOffBoard={() => setStatusFilter(offBoardDesignStatus)}
-              />
-            ) : null}
+            <ToolbarFilterSelect
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as DesignStatus | "all")}
+              neutralValue="all"
+              className="sm:w-[180px]"
+              options={[
+                { value: "all", label: "Всі статуси", icon: ListFilter },
+                ...DESIGN_STATUS_ENTRIES.map((column) => ({
+                  value: column.id,
+                  label: column.label,
+                  icon: DESIGN_STATUS_ICON_BY_STATUS[column.id],
+                })),
+              ]}
+            />
 
             {viewMode !== "assignee" ? (
               <ToolbarFilterSelect
@@ -5037,8 +5024,6 @@ export default function DesignPage() {
       renderManagerFilterValue,
       search,
       showRefreshIndicator,
-      showCancelledTasks,
-      offBoardDesignStatus,
       standaloneTasksCount,
       statusFilter,
       userId,

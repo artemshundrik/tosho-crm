@@ -184,10 +184,10 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, OffBoardViewSwitch } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
-import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
+import { isOffBoardStatus } from "@/lib/kanbanBoards";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
 
@@ -4542,18 +4542,21 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   };
 
   /**
-   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА.
+   * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА (REQ-138).
    *
-   * Стан вигляду не заводимо навмисно: «що зараз показано» вже описує фільтр
-   * статусу, і другий прапорець поруч із ним неминуче з ним би розійшовся —
-   * скидання фільтрів, відновлення з sessionStorage і перехід із таблиці
-   * довелося б синхронізувати руками в трьох місцях. Тут одна вісь: обрано
-   * виведений з дошки статус (@/lib/kanbanBoards) — показуємо список.
+   * Показуємо його рівно тоді, коли у фільтрі статусів обрано «Скасовано», —
+   * інакше на дошці, з якої колонку прибрано, лишилась би порожнеча.
+   *
+   * ОКРЕМОЇ КНОПКИ ПІД ЦЕ НЕМАЄ І НЕ ТРЕБА. Перша спроба поставила в тулбар
+   * перемикач «Дошка / Скасовані» — і це було помилкою одразу з трьох боків:
+   * постійне місце на екрані за дію раз на рік, зайвий шлях до того самого
+   * вигляду поруч із фільтром, і повне перезавантаження дошки на кожне
+   * натискання (кнопка смикала той самий фільтр статусу, тобто нову вибірку).
+   * Фільтр робить те саме, стоїть на екрані однаково і нічого не коштує.
    *
    * У таблиці цей самий фільтр лишається звичайним фільтром: список рядків
    * кладовищем не стає, бо там колонок-етапів немає.
    */
-  const offBoardQuoteStatus = offBoardStatuses("quotes")[0] ?? "cancelled";
   const showCancelledQuotes = viewMode === "kanban" && isOffBoardStatus("quotes", status);
   const [restoringQuoteId, setRestoringQuoteId] = useState<string | null>(null);
 
@@ -5655,27 +5658,28 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             {contentView !== "sets" ? (
               <>
                 {/*
-                  У списку скасованих фільтр статусу зайвий: там усе одного
-                  стану. На дошці він пропонує лише стани-колонки — «Скасовано»
-                  переїхало в перемикач нижче, і два різні шляхи до одного й
-                  того самого вигляду плутали б.
+                  ФІЛЬТР ЛИШАЄТЬСЯ ПОВНИМ, зі «Скасовано» включно, — і це єдиний
+                  шлях до скасованих прорахунків. Окремої кнопки в тулбарі під
+                  них НЕМАЄ і бути не має: постійний контроль за те, чим
+                  користуються раз на рік, — це податок на всіх щодня.
+                  Тут же він нічого не коштує: список статусів однаково стоїть
+                  на екрані, і «Скасовано» в ньому саме там, куди людина й
+                  полізе, шукаючи скасований прорахунок.
                 */}
-                {showCancelledQuotes ? null : (
-                  <ToolbarFilterSelect
-                    value={status}
-                    onValueChange={setStatusFilter}
-                    neutralValue="all"
-                    className="sm:w-[170px]"
-                    options={[
-                      { value: "all", label: "Всі статуси", icon: ListFilter },
-                      ...(viewMode === "kanban" ? boardColumnStatuses("quotes") : STATUS_OPTIONS).map((s) => ({
-                        value: s,
-                        label: formatStatusLabel(s),
-                        icon: statusIcons[s],
-                      })),
-                    ]}
-                  />
-                )}
+                <ToolbarFilterSelect
+                  value={status}
+                  onValueChange={setStatusFilter}
+                  neutralValue="all"
+                  className="sm:w-[170px]"
+                  options={[
+                    { value: "all", label: "Всі статуси", icon: ListFilter },
+                    ...STATUS_OPTIONS.map((s) => ({
+                      value: s,
+                      label: formatStatusLabel(s),
+                      icon: statusIcons[s],
+                    })),
+                  ]}
+                />
                 {isManagerUser ? (
                   <div
                     className={cn(
@@ -5736,17 +5740,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       Групи
                     </Button>
                   </SegmentedGroup>
-                ) : (
-                  /* Скасовані живуть тут, а не шостою колонкою: на проді їх було
-                     159 із 285, тобто більше половини дошки, і жодна нікуди не
-                     рухається. Перемикач спільний із дошкою дизайну. */
-                  <OffBoardViewSwitch
-                    active={showCancelledQuotes}
-                    label="Скасовані"
-                    onShowBoard={() => setStatusFilter("all")}
-                    onShowOffBoard={() => setStatusFilter(offBoardQuoteStatus)}
-                  />
-                )}
+                ) : null}
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
             ) : (
@@ -5822,8 +5816,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     search,
     showRefreshIndicator,
     status,
-    showCancelledQuotes,
-    offBoardQuoteStatus,
     viewMode,
     filteredQuoteSets.length,
     workspacePresence.activeHereEntries,
