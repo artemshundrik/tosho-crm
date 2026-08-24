@@ -771,7 +771,7 @@ export default function ContractorsPage() {
         .order("name", { ascending: true, nullsFirst: false });
 
       if (queryError) throw queryError;
-      const nextRows = (((data ?? []) as unknown) as ContractorRow[]) ?? [];
+      const nextRows = ((data ?? []) as unknown) as ContractorRow[];
       setRows(nextRows);
       setCache(nextRows);
       hasCacheRef.current = true;

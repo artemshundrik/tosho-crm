@@ -694,7 +694,7 @@ async function listCatalogMethodNamesByIds(ids: string[]) {
     .in("id", uniqueIds);
   if (error) throw error;
   return new Map(
-    (((data ?? []) as Array<{ id?: string | null; name?: string | null }>) ?? [])
+    ((data ?? []) as Array<{ id?: string | null; name?: string | null }>)
       .filter((row): row is { id: string; name?: string | null } => Boolean(row.id))
       .map((row) => [row.id, row.name?.trim() || "Метод нанесення"])
   );
@@ -793,7 +793,7 @@ async function listStoredOrders(teamId: string): Promise<StoredOrderRow[]> {
     throw error;
   }
 
-  return (((data ?? []) as unknown) as StoredOrderRow[]) ?? [];
+  return ((data ?? []) as unknown) as StoredOrderRow[];
 }
 
 async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise<StoredOrderItemRow[]> {
@@ -821,7 +821,7 @@ async function listStoredOrderItems(teamId: string, orderIds: string[]): Promise
     throw error;
   }
 
-  return (((data ?? []) as unknown) as StoredOrderItemRow[]) ?? [];
+  return ((data ?? []) as unknown) as StoredOrderItemRow[];
 }
 
 async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | null): Promise<DerivedOrderRecord[]> {
@@ -904,7 +904,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
   const quoteItemById = new Map<string, QuoteItemExportRow>();
   const catalogModelIds = new Set<string>();
   const quoteMethodIds = new Set<string>();
-  (((itemRows ?? []) as QuoteItemExportRow[]) ?? []).forEach((item) => {
+  ((itemRows ?? []) as QuoteItemExportRow[]).forEach((item) => {
     const quoteId = item.quote_id;
     if (!quoteId) return;
     quoteItemById.set(item.id, item);
@@ -941,7 +941,7 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
   });
 
   const customerById = new Map<string, CustomerRecord>();
-  ((((customersResult.data ?? []) as unknown) as CustomerRecord[]) ?? []).forEach((customer) => {
+  (((customersResult.data ?? []) as unknown) as CustomerRecord[]).forEach((customer) => {
     customerById.set(customer.id, customer);
   });
 
@@ -961,10 +961,10 @@ async function loadApprovedQuoteDerivedOrders(teamId: string, userId?: string | 
   );
 
   const designTasksByQuoteId = new Map<string, DesignTaskSnapshot[]>();
-  for (const row of ((((activityRows.data ?? []) as unknown) as Array<{
+  for (const row of (((activityRows.data ?? []) as unknown) as Array<{
     entity_id?: string | null;
     metadata?: Record<string, unknown> | null;
-  }>) ?? [])) {
+  }>)) {
     const metadata = row.metadata ?? {};
     const quoteId =
       typeof metadata.quote_id === "string" && metadata.quote_id.trim()
@@ -1376,7 +1376,7 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
     const linkedQuoteById = new Map(linkedQuotes.map((quote) => [quote.id, quote]));
     const linkedRunsByQuoteId = new Map(linkedQuoteRuns.map((entry) => [entry.quoteId, entry.runs]));
     const storedCustomerById = new Map<string, CustomerRecord>();
-    ((((storedCustomersResult.data ?? []) as unknown) as CustomerRecord[]) ?? []).forEach((customer) => {
+    (((storedCustomersResult.data ?? []) as unknown) as CustomerRecord[]).forEach((customer) => {
       storedCustomerById.set(customer.id, customer);
     });
     const storedLeadByLookup = new Map<string, LeadRecord>();
@@ -1387,10 +1387,10 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
       if (legalKey) storedLeadByLookup.set(legalKey, lead);
     });
     const designAssetsByQuoteId = new Map<string, { visualization: OrderDesignAsset[]; layout: OrderDesignAsset[] }>();
-    for (const row of ((((designTaskRows.data ?? []) as unknown) as Array<{
+    for (const row of (((designTaskRows.data ?? []) as unknown) as Array<{
       entity_id?: string | null;
       metadata?: Record<string, unknown> | null;
-    }>) ?? [])) {
+    }>)) {
       const metadata = row.metadata ?? {};
       const quoteId =
         typeof metadata.quote_id === "string" && metadata.quote_id.trim()
@@ -1414,10 +1414,10 @@ export async function loadDerivedOrders(teamId: string, userId?: string | null):
     // єдине джерело правди про дизайн для ручних замовлень: колонки has_approved_* пишуться
     // лише при створенні й після погодження задачі не оновлюються.
     const designTaskByLinkId = new Map<string, DesignTaskSnapshot>();
-    for (const row of ((((linkedDesignTaskRows.data ?? []) as unknown) as Array<{
+    for (const row of (((linkedDesignTaskRows.data ?? []) as unknown) as Array<{
       id?: string | null;
       metadata?: Record<string, unknown> | null;
-    }>) ?? [])) {
+    }>)) {
       const taskId = typeof row.id === "string" ? row.id.trim() : "";
       if (!taskId) continue;
       designTaskByLinkId.set(taskId, await buildDesignTaskSnapshot(row.metadata ?? {}));
@@ -2133,7 +2133,7 @@ export async function listCustomerDesignTasks(teamId: string, customerId: string
     .eq("customer_id", customerId);
   if (quotesResult.error) throw quotesResult.error;
   const customerQuoteIds = new Set(
-    (((quotesResult.data ?? []) as Array<{ id?: string | null }>) ?? [])
+    ((quotesResult.data ?? []) as Array<{ id?: string | null }>)
       .map((row) => row.id ?? "")
       .filter(Boolean)
   );
@@ -2202,11 +2202,11 @@ export async function listCustomerDesignTasks(teamId: string, customerId: string
         .order("position", { ascending: true });
       if (!itemsResult.error) {
         const itemRows =
-          (((itemsResult.data ?? []) as unknown) as Array<{
+          ((itemsResult.data ?? []) as unknown) as Array<{
             quote_id?: string | null;
             name?: string | null;
             catalog_model_id?: string | null;
-          }>) ?? [];
+          }>;
         const modelIds = Array.from(
           new Set(itemRows.map((item) => item.catalog_model_id ?? "").filter(Boolean))
         );

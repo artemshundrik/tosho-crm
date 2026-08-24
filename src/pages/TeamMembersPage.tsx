@@ -1281,7 +1281,7 @@ export function TeamMembersPage() {
   ];
 
   const panelMember =
-    (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) ?? null : null) ??
+    (selectedMemberId ? members.find((m) => m.user_id === selectedMemberId) : null) ??
     filteredMembers[0] ??
     null;
   // "pulse" is owner/SEO-only; anyone else falls back to the panel view (the

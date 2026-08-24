@@ -1034,8 +1034,8 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
               : null) ??
             (customerId
               ? customerType === "lead"
-                ? (leadLogoById.get(customerId) ?? null)
-                : (customerLogoById.get(customerId) ?? null)
+                ? leadLogoById.get(customerId)
+                : customerLogoById.get(customerId)
               : null) ??
             (quoteId ? (quoteLogoById.get(quoteId) ?? null) : null);
           const description = [customerName, quoteNumber || quoteTitle || model].filter(Boolean).join(" · ") || model;

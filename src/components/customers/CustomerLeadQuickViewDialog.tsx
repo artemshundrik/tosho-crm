@@ -614,7 +614,7 @@ export function CustomerLeadQuickViewDialog({
   const managerLabel = customer?.manager ?? lead?.manager ?? null;
   const managerUserId = customer?.manager_user_id ?? lead?.manager_user_id ?? null;
   const managerAvatarUrl =
-    (managerUserId ? memberAvatarById[managerUserId] ?? null : null) ??
+    (managerUserId ? memberAvatarById[managerUserId] : null) ??
     (managerLabel ? memberAvatarByLabel[normalizeMemberKey(managerLabel)] ?? null : null);
 
   const renderRelationCard = React.useCallback(

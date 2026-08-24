@@ -772,8 +772,7 @@ function resolveTaskCustomerLogo(
       ? logoByPartyAndLabel.get(`${partyType}:${label}`) ??
         logoByPartyAndCompactLabel.get(`${partyType}:${compactLabel}`) ??
         logoByLabel.get(label) ??
-        logoByCompactLabel.get(compactLabel) ??
-        null
+        logoByCompactLabel.get(compactLabel)
       : null) ?? normalizeLogoUrl(task.customerLogoUrl ?? null)
   );
 }
@@ -2130,7 +2129,7 @@ export default function DesignPage() {
         quoteNumber: t.quoteNumber ?? quoteMap.get(t.quoteId)?.number ?? null,
         customerName:
           (t.customerId
-            ? customerMap.get(t.customerId)?.name ?? leadMap.get(t.customerId)?.name ?? null
+            ? customerMap.get(t.customerId)?.name ?? leadMap.get(t.customerId)?.name
             : null) ??
           quoteMap.get(t.quoteId)?.customerName ??
           t.customerName ??
@@ -2138,8 +2137,7 @@ export default function DesignPage() {
         customerLogoUrl:
           (t.customerId
             ? sanitizeImageReference(normalizeLogoUrl(customerMap.get(t.customerId)?.logoUrl ?? null)) ??
-              sanitizeImageReference(normalizeLogoUrl(leadMap.get(t.customerId)?.logoUrl ?? null)) ??
-              null
+              sanitizeImageReference(normalizeLogoUrl(leadMap.get(t.customerId)?.logoUrl ?? null))
             : null) ??
           sanitizeImageReference(normalizeLogoUrl(quoteMap.get(t.quoteId)?.customerLogoUrl ?? null)) ??
           sanitizeImageReference(normalizeLogoUrl(t.customerLogoUrl)) ??

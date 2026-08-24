@@ -550,7 +550,7 @@ export default function SampleStockPage() {
       }
 
       if (queryError) throw queryError;
-      const nextRows = (((data ?? []) as unknown) as SampleStockItemRow[]) ?? [];
+      const nextRows = ((data ?? []) as unknown) as SampleStockItemRow[];
       setRows(nextRows);
       setCache(nextRows);
       hasCacheRef.current = true;

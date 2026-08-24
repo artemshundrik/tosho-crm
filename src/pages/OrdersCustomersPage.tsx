@@ -1552,7 +1552,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         });
       };
       if (quotesByName.status === "fulfilled") {
-        mergeNamedQuotes((((quotesByName.value.data ?? []) as unknown) as Array<{
+        mergeNamedQuotes(((quotesByName.value.data ?? []) as unknown) as Array<{
           id: string;
           number?: string | null;
           status?: string | null;
@@ -1561,10 +1561,10 @@ function CustomersPage({ teamId }: { teamId: string }) {
           customer_id?: string | null;
           customer_name?: string | null;
           title?: string | null;
-        }>) ?? []);
+        }>);
       }
       if (quotesByTitle.status === "fulfilled") {
-        mergeNamedQuotes((((quotesByTitle.value.data ?? []) as unknown) as Array<{
+        mergeNamedQuotes(((quotesByTitle.value.data ?? []) as unknown) as Array<{
           id: string;
           number?: string | null;
           status?: string | null;
@@ -1573,7 +1573,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           customer_id?: string | null;
           customer_name?: string | null;
           title?: string | null;
-        }>) ?? []);
+        }>);
       }
       const rows = Array.from(quoteMap.values()).sort(
         (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
@@ -1612,7 +1612,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         setLinkedOrders([]);
       }
       if (designTasksResult.status === "fulfilled") {
-        const taskRows = (((designTasksResult.value.data ?? []) as unknown) as Array<{
+        const taskRows = ((designTasksResult.value.data ?? []) as unknown) as Array<{
           id: string;
           title?: string | null;
           created_at?: string | null;
@@ -1623,7 +1623,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           customer_name?: string | null;
           quote_id?: string | null;
           entity_id?: string | null;
-        }>) ?? [];
+        }>;
         setLinkedDesignTasks(
           taskRows
             .filter((row) => {
@@ -1673,7 +1673,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         .limit(200);
       const { data: rawQuotes, error: quotesError } = await quotesQuery;
       if (quotesError) throw quotesError;
-      const quoteRows = (((rawQuotes ?? []) as unknown) as Array<{
+      const quoteRows = ((rawQuotes ?? []) as unknown) as Array<{
         id: string;
         number?: string | null;
         status?: string | null;
@@ -1681,7 +1681,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         created_at?: string | null;
         customer_name?: string | null;
         title?: string | null;
-      }>) ?? [];
+      }>;
       const matchingQuotes = quoteRows.filter((row) =>
         normalizedNames.has(normalizePartyMatch(row.customer_name ?? row.title ?? null))
       );
@@ -1718,7 +1718,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
         setLinkedOrders([]);
       }
       if (designTasksResult.status === "fulfilled") {
-        const taskRows = (((designTasksResult.value.data ?? []) as unknown) as Array<{
+        const taskRows = ((designTasksResult.value.data ?? []) as unknown) as Array<{
           id: string;
           title?: string | null;
           created_at?: string | null;
@@ -1728,7 +1728,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           customer_name?: string | null;
           quote_id?: string | null;
           entity_id?: string | null;
-        }>) ?? [];
+        }>;
         setLinkedDesignTasks(
           taskRows
             .filter((row) => {
