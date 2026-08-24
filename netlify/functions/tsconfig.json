@@ -17,6 +17,7 @@
   },
   "files": [
     "_lib/parseBody.ts",
+    "_lib/parseBody.test.ts",
     "_aiPricing.ts",
     "_aiUsageLog.ts",
     "_adminAssistant.ts",

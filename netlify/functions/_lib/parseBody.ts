@@ -28,9 +28,13 @@ import type { z } from "zod";
 export type ParsedBody<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export function parseBody<T>(rawBody: string | null | undefined, schema: z.ZodType<T>): ParsedBody<T> {
+  // `?? "{}"` замало: Netlify віддає тіло відсутнього POST то як null, то як
+  // ПОРОЖНІЙ РЯДОК, а `JSON.parse("")` кидає. Це знайшов тест — доти обидва
+  // випадки поводились по-різному без жодної на те причини.
+  const trimmed = (rawBody ?? "").trim();
   let json: unknown;
   try {
-    json = JSON.parse(rawBody ?? "{}");
+    json = trimmed ? JSON.parse(trimmed) : {};
   } catch {
     return { ok: false, error: "Invalid JSON body" };
   }
