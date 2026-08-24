@@ -911,6 +911,9 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 };
 
+/** Чи вже монтувалось важке тіло цієї сторінки в цій сесії (див. heavySurfaceReady). */
+let designBodyMountedThisSession = false;
+
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
   const navigationType = useNavigationType();
@@ -944,13 +947,24 @@ export default function DesignPage() {
    * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
    * прапорець нижче перемикається у transition: React рендерить важке тіло
    * шматками, не блокуючи ні перемикання маршруту, ні кліки.
+   *
+   * ЛИШЕ ПЕРШЕ МОНТУВАННЯ ЗА СЕСІЮ. На гарячих повторних заходах тіло монтується
+   * одним заходом, як і до правки: transition там закінчується за ~200 мс (шторм
+   * дозавантажень полагоджено окремо), а «дешевий перший кадр» на швидкому
+   * переході давав видиму ваду — тулбар уже стоїть, зона дошки на кадр порожня
+   * і стрибає висотою, поки не впригне вміст. Артем зловив це 24.08.2026:
+   * «канбан на мілісекунду мигає, такого раніше не було». Тож відкладання
+   * вмикається рівно там, де воно рятує (перший дорогий mount із виконанням
+   * модулів), і не з'являється там, де шкодить.
    */
-  const [heavySurfaceReady, setHeavySurfaceReady] = useState(false);
+  const [heavySurfaceReady, setHeavySurfaceReady] = useState(() => designBodyMountedThisSession);
   useEffect(() => {
+    if (heavySurfaceReady) return;
+    designBodyMountedThisSession = true;
     startTransition(() => {
       setHeavySurfaceReady(true);
     });
-  }, []);
+  }, [heavySurfaceReady]);
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);

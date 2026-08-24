@@ -521,6 +521,9 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
   }
 }
 
+/** Чи вже монтувалось важке тіло цієї сторінки в цій сесії (див. heavySurfaceReady). */
+let quotesBodyMountedThisSession = false;
+
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
   // Ставки компанії — з налаштувань (Фінанси → Налаштування → Ставки).
@@ -568,13 +571,24 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
    * прапорець нижче перемикається у transition: React рендерить важке тіло
    * шматками, не блокуючи ні перемикання маршруту, ні кліки.
+   *
+   * ЛИШЕ ПЕРШЕ МОНТУВАННЯ ЗА СЕСІЮ. На гарячих повторних заходах тіло монтується
+   * одним заходом, як і до правки: transition там закінчується за ~200 мс (шторм
+   * дозавантажень полагоджено окремо), а «дешевий перший кадр» на швидкому
+   * переході давав видиму ваду — тулбар уже стоїть, зона дошки на кадр порожня
+   * і стрибає висотою, поки не впригне вміст. Артем зловив це 24.08.2026:
+   * «канбан на мілісекунду мигає, такого раніше не було». Тож відкладання
+   * вмикається рівно там, де воно рятує (перший дорогий mount із виконанням
+   * модулів), і не з'являється там, де шкодить.
    */
-  const [heavySurfaceReady, setHeavySurfaceReady] = useState(false);
+  const [heavySurfaceReady, setHeavySurfaceReady] = useState(() => quotesBodyMountedThisSession);
   useEffect(() => {
+    if (heavySurfaceReady) return;
+    quotesBodyMountedThisSession = true;
     startTransition(() => {
       setHeavySurfaceReady(true);
     });
-  }, []);
+  }, [heavySurfaceReady]);
   const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
   const fullFetchCompletedKeyRef = useRef<string | null>(null);
   const [quotesFetchLimit, setQuotesFetchLimit] = useState(() =>
