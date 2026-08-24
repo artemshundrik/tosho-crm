@@ -57,6 +57,7 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
@@ -4430,6 +4431,12 @@ export default function DesignPage() {
           if (suppressCardClick) return;
           openTask(task.id);
         }}
+        // Чанк сторінки задачі (294 кБ) починає їхати на наведенні, а не в мить
+        // кліку (REQ-136). Обробник сталий, тож у списку карток нічого не
+        // створюється щорендер.
+        onMouseEnter={preloadDesignTaskRoute}
+        onFocus={preloadDesignTaskRoute}
+        onTouchStart={preloadDesignTaskRoute}
         onAuxClick={(event) => {
           if (event.button !== 1) return;
           event.preventDefault();

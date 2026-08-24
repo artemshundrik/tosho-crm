@@ -137,6 +137,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -6180,6 +6181,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
                         )}
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                        onMouseEnter={preloadQuoteDetailsRoute}
+                        onTouchStart={preloadQuoteDetailsRoute}
                       >
                         <div className="min-w-0">
                           <HoverCopyText
@@ -6233,6 +6236,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70"
                         )}
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                        onMouseEnter={preloadQuoteDetailsRoute}
+                        onTouchStart={preloadQuoteDetailsRoute}
                       >
                         <div className="min-w-0">
                           <HoverCopyText
@@ -6288,6 +6293,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       canOpen ? "cursor-pointer" : "cursor-not-allowed opacity-70"
                     )}
                     onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                    onMouseEnter={preloadQuoteDetailsRoute}
+                    onTouchStart={preloadQuoteDetailsRoute}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -6521,6 +6528,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           isSelected && "bg-primary/5"
                         )}
                         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                        // Чанк картки прорахунку їде на наведенні, а не в мить
+                        // кліку (REQ-136).
+                        onMouseEnter={preloadQuoteDetailsRoute}
+                        onFocus={preloadQuoteDetailsRoute}
+                        onTouchStart={preloadQuoteDetailsRoute}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(event) => {
@@ -6954,6 +6966,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                                     setDragPlaceholder(null);
                                   }}
                                   onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+                                  // Чанк картки прорахунку їде на наведенні, а не
+                                  // в мить кліку (REQ-136).
+                                  onMouseEnter={preloadQuoteDetailsRoute}
+                                  onFocus={preloadQuoteDetailsRoute}
+                                  onTouchStart={preloadQuoteDetailsRoute}
                                   interactive={canOpen}
                                   disabled={!canOpen}
                                   className={cn(
