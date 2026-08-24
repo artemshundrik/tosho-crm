@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   checklistProgress,
+  isPartlyShipped,
   waitingDays,
   groupChecklist,
   nextState,
@@ -147,5 +148,40 @@ describe("waitingDays", () => {
   it("сьогоднішнє очікування — нуль, а не мінус", () => {
     expect(waitingDays(item({ state: "waiting", since: "2026-08-09" }), now)).toBe(0);
     expect(waitingDays(item({ state: "waiting", since: "2026-08-20" }), now)).toBe(0);
+  });
+});
+
+describe("isPartlyShipped", () => {
+  const shas = ["dfe481f"];
+
+  /**
+   * Підпис відповідає на питання «чому картка стоїть у Готово локально, а не
+   * поїхала»: деплой не забрав її свідомо, бо хвіст відкритий.
+   */
+  it("частина зроблена, частина ні — підпис є", () => {
+    expect(isPartlyShipped("done_local", [item({ state: "done" }), item({ state: "todo" })], shas)).toBe(true);
+  });
+
+  it("усе закрито — картка просто чекає найближчого деплою", () => {
+    expect(isPartlyShipped("done_local", [item({ state: "done" })], shas)).toBe(false);
+  });
+
+  /** Нічого ще не закрито — це початок роботи, а не «частина в проді». */
+  it("жодного готового пункту — підпису немає", () => {
+    expect(isPartlyShipped("done_local", [item({ state: "todo" }), item({ state: "doing" })], shas)).toBe(false);
+  });
+
+  it("немає комітів — нічого поїхати не могло", () => {
+    expect(isPartlyShipped("done_local", [item({ state: "done" }), item({ state: "todo" })], [])).toBe(false);
+  });
+
+  it("інші колонки підпису не отримують", () => {
+    const items = [item({ state: "done" }), item({ state: "todo" })];
+    expect(isPartlyShipped("in_progress", items, shas)).toBe(false);
+    expect(isPartlyShipped("released", items, shas)).toBe(false);
+  });
+
+  it("картка без пунктів — звичайна, підпису немає", () => {
+    expect(isPartlyShipped("done_local", [], shas)).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import { CardActionsMenu } from "./CardActionsMenu";
 import { CARD_MENU_ATTR, buildCardMeta, isCardMenuTarget, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
+import { isPartlyShipped } from "./checklist";
 import { GroupHeading } from "./GroupHeading";
 import {
   collapsedKey,
@@ -247,7 +248,11 @@ export function DevRequestBoard({
         {/* ── Пункти великої задачі ──
             Одразу під назвою, а не в ряду міток: це не властивість картки, а її
             стан. Рендерить null, коли пунктів немає. */}
-        <ChecklistBar items={request.checklist} className="mt-2" />
+        <ChecklistBar
+          items={request.checklist}
+          partlyShipped={isPartlyShipped(request.status, request.checklist, request.commitShas)}
+          className="mt-2"
+        />
 
         {/* ── Пріоритет, напрямок, автор, «просили N», «закрита» ── */}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

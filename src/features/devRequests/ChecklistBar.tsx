@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { Clock, Rocket } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { checklistProgress, type ChecklistItem } from "./checklist";
@@ -17,9 +17,12 @@ import { checklistProgress, type ChecklistItem } from "./checklist";
  */
 export function ChecklistBar({
   items,
+  partlyShipped = false,
   className,
 }: {
   items: ChecklistItem[];
+  /** Код уже поїхав, а хвіст лишився — див. isPartlyShipped. */
+  partlyShipped?: boolean;
   className?: string;
 }) {
   if (items.length === 0) return null;
@@ -33,7 +36,10 @@ export function ChecklistBar({
     : null;
 
   return (
-    <span className={cn("inline-flex items-center gap-2", className)}>
+    // flex-wrap: на вузькій колонці смуга, «частина в проді» й «чекає N дн» в
+    // один рядок не влазять — без переносу останній чіп просто зрізається краєм
+    // картки, і зникає рівно те, заради чого підпис і малюють.
+    <span className={cn("inline-flex flex-wrap items-center gap-x-2 gap-y-1", className)}>
       <span
         className="inline-flex h-1.5 w-[70px] shrink-0 overflow-hidden rounded-full bg-border"
         role="img"
@@ -49,6 +55,15 @@ export function ChecklistBar({
       <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
         {progress.done}/{progress.total}
       </span>
+      {partlyShipped ? (
+        // Пояснює, чому картка стоїть у «Готово локально» замість «Викочено»:
+        // деплой її не забрав СВІДОМО, бо хвіст відкритий. Без цього підпису
+        // вона читається як така, що от-от поїде.
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-tone-soft px-2 py-0.5 text-2xs font-medium text-accent-tone-foreground">
+          <Rocket className="h-3 w-3" />
+          частина в проді
+        </span>
+      ) : null}
       {stuckLabel ? (
         // Підпис лише про очікування: скільки зроблено, вже видно зі смуги, а
         // повторення тим самим кеглем поруч перетворює обидва числа на шум.

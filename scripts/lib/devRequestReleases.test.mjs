@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  commitIsInHistory,
+  hasOpenChecklist,
   markCardsReleased,
+  pickCardsToCatchUp,
   pickCardsToRelease,
   RELEASABLE_STATUSES,
   releaseDevRequests,
@@ -20,9 +23,13 @@ function card(overrides = {}) {
     title: "Дошка не оновлюється",
     status: "done_local",
     commit_shas: ["dfe481f"],
+    checklist: [],
     ...overrides,
   };
 }
+
+/** Пункт чекліста — рівно ті поля, які тут щось вирішують. */
+const item = (state) => ({ id: "c1", kind: "task", text: "пункт", state });
 
 describe("shaMatches", () => {
   /**
@@ -45,6 +52,117 @@ describe("shaMatches", () => {
     expect(shaMatches("dfe", "dfe481f")).toBe(false);
     expect(shaMatches("", "")).toBe(false);
     expect(shaMatches(null, "dfe481f")).toBe(false);
+  });
+});
+
+
+describe("hasOpenChecklist", () => {
+  it("порожній список — звичайна картка, хвоста немає", () => {
+    expect(hasOpenChecklist(card({ checklist: [] }))).toBe(false);
+    expect(hasOpenChecklist(card({ checklist: null }))).toBe(false);
+    expect(hasOpenChecklist({})).toBe(false);
+  });
+
+  it("усі пункти закриті — хвоста немає", () => {
+    expect(hasOpenChecklist(card({ checklist: [item("done"), item("done")] }))).toBe(false);
+  });
+
+  /**
+   * Усі чотири стани, а не лише «не почато»: саме «чекає» тут головний. Пункт,
+   * що чекає СЕО, зроблено не буде ніколи, поки СЕО не відповість, — і саме
+   * такий хвіст найлегше не помітити, бо він виглядає як робота, що йде.
+   */
+  it.each(["todo", "doing", "waiting"])("хоч один пункт у стані «%s» — хвіст живий", (state) => {
+    expect(hasOpenChecklist(card({ checklist: [item("done"), item(state)] }))).toBe(true);
+  });
+});
+
+describe("гейт на деплої", () => {
+  /**
+   * Через це й завели гейт: у REQ-36 поїхала половина, картка стала
+   * «Викочено», зникла з черги й потягла в архів 14 незакритих пунктів разом
+   * із питанням, що чекало СЕО тринадцятий день.
+   */
+  it("картку з незакритим хвостом реліз НЕ закриває", () => {
+    const cards = [card({ checklist: [item("done"), item("todo")] })];
+    expect(pickCardsToRelease(cards, ["dfe481f2"])).toEqual([]);
+  });
+
+  it("хвіст закритий — картка їде у «Викочено» як завжди", () => {
+    const cards = [card({ checklist: [item("done"), item("done")] })];
+    expect(pickCardsToRelease(cards, ["dfe481f2"])).toEqual(cards);
+  });
+
+  it("картка без чекліста поводиться як раніше", () => {
+    const cards = [card({ checklist: [] })];
+    expect(pickCardsToRelease(cards, ["dfe481f2"])).toEqual(cards);
+  });
+});
+
+describe("pickCardsToCatchUp", () => {
+  const inProd = () => true;
+  const notInProd = () => false;
+
+  /**
+   * Головний сенс наздоганяючого проходу: хвіст великої задачі закривається
+   * переважно БЕЗ коду — відповів СЕО, проклацали, домовились. Нового коміта
+   * немає, у свіжий діапазон релізу картка не потрапляє, і без цього кроку
+   * вона висіла б у «Готово локально» довіку.
+   */
+  it("затриману картку дозакрили без жодного коміта — наступний деплой її забирає", () => {
+    const cards = [card({ checklist: [item("done")], commit_shas: ["aaa1234"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], inProd)).toEqual(cards);
+  });
+
+  it("хвіст ще живий — картка лишається затриманою", () => {
+    const cards = [card({ checklist: [item("waiting")], commit_shas: ["aaa1234"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], inProd)).toEqual([]);
+  });
+
+  /**
+   * Без цієї умови сюди провалилась би будь-яка щойно закомічена, але ще НЕ
+   * ЗАПУШЕНА картка — і поїхала б у «Викочено» першим-ліпшим чужим деплоєм.
+   * Гейт таких карток не затримує, тож і наздоганяти їм нічого.
+   */
+  it("картку без чекліста не чіпаємо — вона гейтом і не затримувалась", () => {
+    const cards = [card({ checklist: [], commit_shas: ["aaa1234"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], inProd)).toEqual([]);
+  });
+
+  it("те, що приїхало цим релізом, лишаємо основному проходу — двічі не беремо", () => {
+    const cards = [card({ checklist: [item("done")], commit_shas: ["dfe481f"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], inProd)).toEqual([]);
+  });
+
+  it("git не підтвердив коміт у проді — картка чекає далі", () => {
+    const cards = [card({ checklist: [item("done")], commit_shas: ["aaa1234"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], notInProd)).toEqual([]);
+  });
+
+  it("наздоганяємо лише «Готово локально» — решту статусів веде основний прохід", () => {
+    const cards = [card({ status: "in_progress", checklist: [item("done")], commit_shas: ["aaa1234"] })];
+    expect(pickCardsToCatchUp(cards, ["dfe481f2"], inProd)).toEqual([]);
+  });
+});
+
+describe("commitIsInHistory", () => {
+  it("git відповів без помилки — коміт у проді", () => {
+    expect(commitIsInHistory("dfe481f2", () => "")).toBe(true);
+  });
+
+  /**
+   * Netlify клонує неглибоко, і старого sha в історії може не бути. «Ні» лишає
+   * картку видимою на дошці; «так» навмання відправило б у «Викочено» те, чого
+   * в проді може не бути.
+   */
+  it("git упав — читаємо як «ні», а не як «так»", () => {
+    expect(commitIsInHistory("dfe481f2", () => { throw new Error("unknown revision"); })).toBe(false);
+  });
+
+  it("огризок sha до git навіть не доходить", () => {
+    let called = false;
+    expect(commitIsInHistory("dfe", () => { called = true; return ""; })).toBe(false);
+    expect(called).toBe(false);
   });
 });
 

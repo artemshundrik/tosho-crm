@@ -192,6 +192,30 @@ export function waitingDays(item: ChecklistItem, now = new Date()): number | nul
   return Math.max(0, Math.floor((now.getTime() - started) / 86_400_000));
 }
 
+/**
+ * Чи картку затримав гейт релізу: код уже поїхав, а задача не закінчена.
+ *
+ * ЗВІДКИ ВОНА ВЗЯЛАСЬ. Раніше деплой закривав картку за фактом коміта, не
+ * дивлячись на пункти. Велика задача їхала шматками, після першого ж деплою
+ * ставала «Викочено», зникала з відкритої черги й через місяць ішла в архів —
+ * разом із хвостом. Тепер картку з незакритим хвостом деплой не бере
+ * (scripts/lib/devRequestReleases.mjs), і вона лишається тут, на видноті.
+ *
+ * МЕЖА ТОЧНОСТІ. «Готово локально» ставить КОМІТ, а не деплой, тож у день між
+ * комітом і найближчим пушем підпис забігає наперед. Свідомо: деплої тут
+ * щоденні, а помилка на день дешевша за ще одне поле в базі, яке хтось мав би
+ * вчасно проставляти. Вимагаємо хоча б один готовий пункт — інакше це не
+ * «частина в проді», а просто початок роботи.
+ */
+export function isPartlyShipped(
+  status: string,
+  items: ChecklistItem[],
+  commitShas: readonly string[]
+): boolean {
+  if (status !== "done_local" || commitShas.length === 0 || items.length === 0) return false;
+  return items.some((item) => item.state === "done") && items.some((item) => item.state !== "done");
+}
+
 /** Сьогодні в YYYY-MM-DD — для позначки, відколи чекаємо. */
 export function today(now = new Date()): string {
   return now.toISOString().slice(0, 10);
