@@ -184,7 +184,7 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
@@ -3486,6 +3486,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
 
+  /**
+   * Скільки фільтрів застосовано — бейдж на кнопці «Фільтри» в мобільному
+   * тулбарі. Пошук не рахуємо: його поле стоїть на екрані, і людина й так
+   * бачить, що в ньому написано (картка 146).
+   */
+  const mobileFilterCount = useMemo(() => {
+    if (contentView === "sets") return quoteSetKindFilter !== "all" ? 1 : 0;
+    let count = 0;
+    if (status !== "all") count += 1;
+    if (managerFilter !== ALL_MANAGERS_FILTER) count += 1;
+    return count;
+  }, [contentView, managerFilter, quoteSetKindFilter, status]);
+
   useEffect(() => {
     const relevantIds = Array.from(
       new Set([
@@ -5614,6 +5627,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const estimatesHeaderActions = useMemo(() => (
       <UnifiedPageToolbar
+        // Телефон: поруч із пошуком лишаються тільки «Фільтри» й «+», решта
+        // контролів переїжджає в аркуш (картка 146).
+        mobileCompact
+        mobileFilterCount={mobileFilterCount}
+        mobileViewSwitch={<EstimatesModeSwitch viewMode={viewMode} onChange={setViewMode} />}
+        mobilePrimary={
+          <Button onClick={openBatchBuilder} size="icon" aria-label="Новий прорахунок" className="h-11 w-11 shrink-0">
+            <PlusIcon className="h-5 w-5" />
+          </Button>
+        }
         topLeft={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
@@ -5805,6 +5828,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     loading,
     managerFilter,
     managerFilterOptions,
+    mobileFilterCount,
     openBatchBuilder,
     quoteListMode,
     quoteSetKindFilter,
@@ -5822,6 +5846,249 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   ]);
 
   usePageHeaderActions(estimatesHeaderActions, [estimatesHeaderActions]);
+
+  /**
+   * Картка прорахунку на дошці — одна на десктопну колонку й на мобільний
+   * список статусів (картка 146). Раніше цей вміст жив інлайном усередині
+   * колонки, і мобільна гілка не мала чим малювати картку, не подвоївши 250
+   * рядків розмітки.
+   *
+   * `index` потрібен лише для стратегії завантаження прев'ю: перші картки
+   * колонки тягнуть зображення одразу, решта — коли з'являться в полі зору.
+   */
+  const renderQuoteKanbanCard = (row: QuoteListRow, columnId: string, index: number) => {
+    const badge = getDeadlineBadge(row.deadline_at ?? null);
+    const ColumnStatusIcon = statusIcons[columnId] ?? Clock;
+    const Icon = quoteTypeIcon(row.quote_type);
+    const membership = quoteMembershipByQuoteId.get(row.id);
+    const productPreview = kanbanProductByQuoteId[row.id];
+    const manager = resolveManagerMember(row.assigned_to);
+    const managerLabel = getManagerLabel(row.assigned_to);
+    const canOpen = canOpenQuoteRow(row);
+
+    return (
+      <KanbanCard
+        draggable={canOpen}
+        onDragStart={canOpen ? () => handleDragStart(row.id) : undefined}
+        onDragEnd={() => {
+          setDraggingId(null);
+          setDragOverColumnId(null);
+          setDragPlaceholder(null);
+        }}
+        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+        // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
+        onMouseEnter={preloadQuoteDetailsRoute}
+        onFocus={preloadQuoteDetailsRoute}
+        onTouchStart={preloadQuoteDetailsRoute}
+        interactive={canOpen}
+        disabled={!canOpen}
+        className={cn(draggingId === row.id && "ring-2 ring-primary/30 opacity-90")}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <ColumnStatusIcon
+              className={cn("h-4 w-4 shrink-0", statusColorClass[columnId] ?? "text-muted-foreground/80")}
+            />
+            <HoverCopyText
+              value={row.number}
+              textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
+              successMessage="Номер прорахунку скопійовано"
+              copyLabel="Скопіювати номер прорахунку"
+            >
+              {row.number ?? "Не вказано"}
+            </HoverCopyText>
+          </div>
+          <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
+            <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
+              {Icon ? <Icon className="h-3 w-3" /> : null}
+              {quoteTypeLabel(row.quote_type)}
+            </div>
+            {membership?.kp_count ? (
+              <Badge
+                variant="outline"
+                title={membership.kp_names.join(", ")}
+                className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
+              >
+                <FileText className="h-3 w-3" />
+                КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
+              </Badge>
+            ) : null}
+            {membership?.set_count ? (
+              <Badge
+                variant="outline"
+                title={membership.set_names.join(", ")}
+                className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
+              >
+                <Layers className="h-3 w-3" />
+                Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
+              </Badge>
+            ) : null}
+            {!canOpen ? (
+              <div
+                className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
+                title="Лише свої"
+                aria-label="Лише свої"
+              >
+                <Lock className="h-3 w-3" />
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-3 space-y-3">
+          <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
+            <PartyHoverCard
+              target={
+                row.customer_id || row.lead_id
+                  ? {
+                      kind: row.customer_id ? ("customer" as const) : ("lead" as const),
+                      id: (row.customer_id ?? row.lead_id) as string,
+                      name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
+                      logoUrl: row.customer_logo_url ?? null,
+                      managerLabel: getManagerLabel(row.assigned_to),
+                      managerAvatarUrl: resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
+                    }
+                  : null
+              }
+            >
+              <EntityAvatar
+                src={row.customer_logo_url ?? null}
+                name={row.customer_name ?? "Замовник / Лід"}
+                fallback={getInitials(row.customer_name)}
+                size={32}
+              />
+            </PartyHoverCard>
+            <div className="min-w-0">
+              <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">{getPartyLabel(row)}</div>
+              <div className="truncate text-[14px] font-semibold">{row.customer_name ?? "Не вказано"}</div>
+            </div>
+          </div>
+        </div>
+
+        {productPreview || kanbanPreviewsLoading ? (
+          <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
+            <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
+              <Package className="h-3.5 w-3.5" />
+              {productPreview && productPreview.itemCount > 1 ? "Товари" : "Товар"}
+            </div>
+            <div className="divide-y divide-border/50">
+              {(productPreview?.products?.length
+                ? productPreview.products
+                : [
+                    {
+                      id: "loading",
+                      name: productPreview?.itemName ?? "Завантаження товару...",
+                      sku: null,
+                      variantName: null,
+                      variantImageUrl: null,
+                      qtyLabel: productPreview?.qtyLabel ?? " ",
+                      runLabels: [],
+                      imageUrl: productPreview?.imageUrl ?? null,
+                      zoomImageUrl: productPreview?.zoomImageUrl ?? null,
+                    },
+                  ]
+              ).map((product, productIndex) => {
+                const displayName = product.variantName
+                  ? `${product.name} · ${product.variantName}`
+                  : product.name;
+                return (
+                  <div
+                    key={product.id}
+                    className={cn(
+                      "flex items-center gap-2.5",
+                      productIndex > 0 && "pt-2",
+                      productIndex < (productPreview?.products?.length ?? 1) - 1 && "pb-2"
+                    )}
+                  >
+                    {product.imageUrl ? (
+                      <KanbanImageZoomPreview
+                        imageUrl={product.imageUrl}
+                        zoomImageUrl={product.zoomImageUrl ?? undefined}
+                        alt={displayName}
+                        loadStrategy={
+                          index <
+                          (kanbanPreviewVisibleCountByColumn[columnId] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
+                            ? "eager"
+                            : "visible"
+                        }
+                      />
+                    ) : (
+                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
+                        {kanbanPreviewsLoading ? (
+                          // Каркас на весь квадрат, а не крапка посередині: крапка
+                          // читалась як зламане зображення, а не як очікування.
+                          <Skeleton className="h-full w-full rounded-lg" />
+                        ) : (
+                          <div className="grid h-full w-full place-items-center text-muted-foreground/60">
+                            <Package className="h-4 w-4" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[14px] font-medium" title={displayName}>
+                        {displayName}
+                      </div>
+                      {product.sku ? (
+                        <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
+                          Артикул: {product.sku}
+                        </div>
+                      ) : null}
+                      {product.runLabels?.length ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          {product.runLabels.map((runLabel) => (
+                            <span
+                              key={runLabel.id}
+                              className={cn(
+                                "inline-flex h-5 items-center rounded-full border px-2 text-2xs leading-none",
+                                runLabel.active
+                                  ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
+                                  : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
+                              )}
+                            >
+                              {runLabel.label}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">{product.qtyLabel}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+          <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
+            <PersonHoverCardMaybe person={row.assigned_to ? buildPersonCard(row.assigned_to) : null}>
+              <AvatarBase
+                src={manager?.avatarUrl ?? null}
+                name={managerLabel}
+                fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
+                size={26}
+                className="text-3xs font-semibold"
+                availability={manager?.availabilityStatus ?? null}
+                absence={manager?.absence ?? null}
+                suppressNativeTitle
+                presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
+                inactive={isManagerInactive(row.assigned_to)}
+              />
+            </PersonHoverCardMaybe>
+            <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
+          </div>
+          {row.deadline_at
+            ? (() => {
+                const shortLabel = formatDeadlineShort(row.deadline_at!);
+                if (!shortLabel) return null;
+                return <QuoteDeadlineBadge tone={badge.tone} label={shortLabel} compact />;
+              })()
+            : null}
+        </div>
+      </KanbanCard>
+    );
+  };
 
   return (
     <PageCanvas>
@@ -6930,6 +7197,25 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </Button>
               )}
             </div>
+          ) : isNarrowViewport ? (
+            /*
+             * Телефон: статуси й картки замість дошки, яку доводилось гортати
+             * вбік (картка 146). Картку малює та сама функція, що й колонку на
+             * десктопі, тож вигляд не розходиться.
+             */
+            <div className="px-4 py-3">
+              <MobileStatusBoard
+                columns={KANBAN_COLUMNS.map((column) => ({
+                  key: column.id,
+                  label: column.label,
+                  icon: statusIcons[column.id] ?? Clock,
+                  items: groupedByStatus[column.id] ?? [],
+                }))}
+                getItemKey={(row) => row.id}
+                renderCard={(row) => renderQuoteKanbanCard(row, String(row.status ?? ""), 0)}
+                emptyLabel="Немає прорахунків у цьому статусі"
+              />
+            </div>
           ) : (
             <>
             <div
@@ -7032,249 +7318,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           )
                         ) : (
                           items.map((row, index) => {
-                            const badge = getDeadlineBadge(row.deadline_at ?? null);
-                            const ColumnStatusIcon = statusIcons[column.id] ?? Clock;
-                            const Icon = quoteTypeIcon(row.quote_type);
-                            const membership = quoteMembershipByQuoteId.get(row.id);
-                            const productPreview = kanbanProductByQuoteId[row.id];
-                            const manager = resolveManagerMember(row.assigned_to);
-                            const managerLabel = getManagerLabel(row.assigned_to);
-                            const canOpen = canOpenQuoteRow(row);
                             return (
                               <div key={row.id}>
                                 {draggingId && dragPlaceholder?.columnId === column.id && dragPlaceholder.index === index ? (
                                   <div className="kanban-drop-placeholder-inline" />
                                 ) : null}
-                                <KanbanCard
-                                  draggable={canOpen}
-                                  onDragStart={canOpen ? () => handleDragStart(row.id) : undefined}
-                                  onDragEnd={() => {
-                                    setDraggingId(null);
-                                    setDragOverColumnId(null);
-                                    setDragPlaceholder(null);
-                                  }}
-                                  onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
-                                  // Чанк картки прорахунку їде на наведенні, а не
-                                  // в мить кліку (REQ-136).
-                                  onMouseEnter={preloadQuoteDetailsRoute}
-                                  onFocus={preloadQuoteDetailsRoute}
-                                  onTouchStart={preloadQuoteDetailsRoute}
-                                  interactive={canOpen}
-                                  disabled={!canOpen}
-                                  className={cn(
-                                    // Вигляд перетягування поки свій на кожній
-                                    // дошці — зводимо після звірки в дизайн-системі.
-                                    draggingId === row.id && "ring-2 ring-primary/30 opacity-90"
-                                  )}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <ColumnStatusIcon
-                                        className={cn(
-                                          "h-4 w-4 shrink-0",
-                                          statusColorClass[column.id] ?? "text-muted-foreground/80"
-                                        )}
-                                      />
-                                      <HoverCopyText
-                                        value={row.number}
-                                        textClassName="font-mono text-[13px] font-medium text-muted-foreground tracking-wide whitespace-nowrap"
-                                        successMessage="Номер прорахунку скопійовано"
-                                        copyLabel="Скопіювати номер прорахунку"
-                                      >
-                                        {row.number ?? "Не вказано"}
-                                      </HoverCopyText>
-                                    </div>
-                                    <div className="flex max-w-[150px] flex-wrap items-center justify-end gap-1.5 shrink-0">
-                                      <div className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-2 text-3xs font-semibold">
-                                        {Icon ? <Icon className="h-3 w-3" /> : null}
-                                        {quoteTypeLabel(row.quote_type)}
-                                      </div>
-                                      {membership?.kp_count ? (
-                                        <Badge
-                                          variant="outline"
-                                          title={membership.kp_names.join(", ")}
-                                          className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-kp"
-                                        >
-                                          <FileText className="h-3 w-3" />
-                                          КП{membership.kp_count > 1 ? ` +${membership.kp_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
-                                      {membership?.set_count ? (
-                                        <Badge
-                                          variant="outline"
-                                          title={membership.set_names.join(", ")}
-                                          className="h-6 px-1.5 text-3xs inline-flex items-center gap-1 quote-kind-badge-set"
-                                        >
-                                          <Layers className="h-3 w-3" />
-                                          Набір{membership.set_count > 1 ? ` +${membership.set_count - 1}` : ""}
-                                        </Badge>
-                                      ) : null}
-                                      {!canOpen ? (
-                                        <div
-                                          className="inline-flex h-6 items-center justify-center rounded-[var(--radius-md)] border border-border/60 bg-secondary px-2 text-3xs font-semibold text-muted-foreground"
-                                          title="Лише свої"
-                                          aria-label="Лише свої"
-                                        >
-                                          <Lock className="h-3 w-3" />
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                  <div className="mt-3 space-y-3">
-                                    <div className="flex items-center gap-2.5 text-[15px] font-medium min-w-0">
-                                      <PartyHoverCard
-                                        target={
-                                          row.customer_id || row.lead_id
-                                            ? {
-                                                kind: row.customer_id ? ("customer" as const) : ("lead" as const),
-                                                id: (row.customer_id ?? row.lead_id) as string,
-                                                name: row.customer_name ?? (row.customer_id ? "Замовник" : "Лід"),
-                                                logoUrl: row.customer_logo_url ?? null,
-                                                managerLabel: getManagerLabel(row.assigned_to),
-                                                managerAvatarUrl:
-                                                  resolveManagerMember(row.assigned_to)?.avatarUrl ?? null,
-                                              }
-                                            : null
-                                        }
-                                      >
-                                        <EntityAvatar
-                                          src={row.customer_logo_url ?? null}
-                                          name={row.customer_name ?? "Замовник / Лід"}
-                                          fallback={getInitials(row.customer_name)}
-                                          size={32}
-                                        />
-                                      </PartyHoverCard>
-                                      <div className="min-w-0">
-                                        <div className="text-3xs uppercase tracking-caps text-muted-foreground/70">
-                                          {getPartyLabel(row)}
-                                        </div>
-                                        <div className="truncate text-[14px] font-semibold">
-                                          {row.customer_name ?? "Не вказано"}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {productPreview || kanbanPreviewsLoading ? (
-                                    <div className="mt-3 rounded-inner border border-border/60 bg-secondary px-3 py-2.5">
-                                      <div className="mb-2 inline-flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
-                                        <Package className="h-3.5 w-3.5" />
-                                        {productPreview && productPreview.itemCount > 1 ? "Товари" : "Товар"}
-                                      </div>
-                                      <div className="divide-y divide-border/50">
-                                        {(productPreview?.products?.length
-                                          ? productPreview.products
-                                          : [
-                                              {
-                                                id: "loading",
-                                                name: productPreview?.itemName ?? "Завантаження товару...",
-                                                sku: null,
-                                                variantName: null,
-                                                variantImageUrl: null,
-                                                qtyLabel: productPreview?.qtyLabel ?? " ",
-                                                runLabels: [],
-                                                imageUrl: productPreview?.imageUrl ?? null,
-                                                zoomImageUrl: productPreview?.zoomImageUrl ?? null,
-                                              },
-                                            ]
-                                        ).map((product, productIndex) => {
-                                          const displayName = product.variantName
-                                            ? `${product.name} · ${product.variantName}`
-                                            : product.name;
-                                          return (
-                                          <div
-                                            key={product.id}
-                                            className={cn("flex items-center gap-2.5", productIndex > 0 && "pt-2", productIndex < (productPreview?.products?.length ?? 1) - 1 && "pb-2")}
-                                          >
-                                            {product.imageUrl ? (
-                                              <KanbanImageZoomPreview
-                                                imageUrl={product.imageUrl}
-                                                zoomImageUrl={product.zoomImageUrl ?? undefined}
-                                                alt={displayName}
-                                                loadStrategy={
-                                                  index < (kanbanPreviewVisibleCountByColumn[column.id] ?? QUOTES_KANBAN_EAGER_PRODUCT_PREVIEW_COUNT)
-                                                    ? "eager"
-                                                    : "visible"
-                                                }
-                                              />
-                                            ) : (
-                                              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-secondary">
-                                                {kanbanPreviewsLoading ? (
-                                                  // Каркас на весь квадрат, а не крапка посередині: крапка
-                                                  // читалась як зламане зображення, а не як очікування.
-                                                  <Skeleton className="h-full w-full rounded-lg" />
-                                                ) : (
-                                                  <div className="grid h-full w-full place-items-center text-muted-foreground/60">
-                                                    <Package className="h-4 w-4" />
-                                                  </div>
-                                                )}
-                                              </div>
-                                            )}
-                                            <div className="min-w-0 flex-1">
-                                              <div className="truncate text-[14px] font-medium" title={displayName}>
-                                                {displayName}
-                                              </div>
-                                              {product.sku ? (
-                                                <div className="mt-0.5 truncate text-[12px] font-medium text-muted-foreground">
-                                                  Артикул: {product.sku}
-                                                </div>
-                                              ) : null}
-                                              {product.runLabels?.length ? (
-                                                <div className="mt-1 flex flex-wrap items-center gap-1">
-                                                  {product.runLabels.map((runLabel) => (
-                                                    <span
-                                                      key={runLabel.id}
-                                                      className={cn(
-                                                        "inline-flex h-5 items-center rounded-full border px-2 text-2xs leading-none",
-                                                        runLabel.active
-                                                          ? "border-foreground/25 bg-foreground/10 font-semibold text-foreground"
-                                                          : "border-border/60 bg-muted/20 font-medium text-muted-foreground"
-                                                      )}
-                                                    >
-                                                      {runLabel.label}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              ) : (
-                                                <div className="mt-0.5 text-[13px] font-normal text-muted-foreground">
-                                                  {product.qtyLabel}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ) : null}
-
-                                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
-                                    <div className="flex items-center gap-2 min-w-0 text-[13px] text-muted-foreground">
-                                      <PersonHoverCardMaybe person={row.assigned_to ? buildPersonCard(row.assigned_to) : null}>
-                                      <AvatarBase
-                                        src={manager?.avatarUrl ?? null}
-                                        name={managerLabel}
-                                        fallback={row.assigned_to ? getInitials(managerLabel) : "Не вказано"}
-                                        size={26}
-                                        className="text-3xs font-semibold"
-                                        availability={manager?.availabilityStatus ?? null}
-                                        absence={manager?.absence ?? null}
-                                        suppressNativeTitle
-                                        presence={row.assigned_to && onlineMemberIds.has(row.assigned_to) ? "online" : "offline"}
-                                        inactive={isManagerInactive(row.assigned_to)}
-                                      />
-                                      </PersonHoverCardMaybe>
-                                      <span className="truncate font-medium text-foreground/90">{managerLabel}</span>
-                                    </div>
-                                    {row.deadline_at ? (
-                                      (() => {
-                                        const shortLabel = formatDeadlineShort(row.deadline_at!);
-                                        if (!shortLabel) return null;
-                                        return <QuoteDeadlineBadge tone={badge.tone} label={shortLabel} compact />;
-                                      })()
-                                    ) : null}
-                                  </div>
-                                </KanbanCard>
+                                {renderQuoteKanbanCard(row, column.id, index)}
                               </div>
                             );
                           })

@@ -324,6 +324,14 @@ export default function DevRequestsPage() {
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
+        // Телефон: пошук і «Фільтри», решта — в аркуші (картка 146).
+        mobileCompact
+        mobileFilterCount={filters.zones.size + filters.themes.size}
+        mobilePrimary={
+          <Button onClick={openCreate} size="icon" aria-label="Новий запит" className="h-11 w-11 shrink-0">
+            <PlusCircle className="h-5 w-5" />
+          </Button>
+        }
         topLeft={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button

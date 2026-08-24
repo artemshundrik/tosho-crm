@@ -5,6 +5,8 @@ import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
+import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
@@ -66,6 +68,7 @@ export function DevRequestBoard({
 }: DevRequestBoardProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverStatus, setHoverStatus] = useState<RequestStatus | null>(null);
+  const isNarrowViewport = useIsNarrowViewport();
   const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsedGroups);
   // Після drop браузер стріляє click по картці-джерелу — без паузи кожне
   // перетягування відкривало б обговорення. Той самий прийом, що й на дошці
@@ -274,6 +277,27 @@ export function DevRequestBoard({
       </KanbanCard>
     );
   };
+
+  // Телефон: статуси й картки замість п'яти колонок по 300px, які на екрані
+  // 375px давали 1596px горизонтальної прокрутки (картка 146). Тернарник, а
+  // не `md:hidden`: інакше React будує й комітить обидві дошки.
+  if (isNarrowViewport) {
+    return (
+      <div className="px-4 py-4">
+        <MobileStatusBoard
+          columns={BOARD_COLUMNS.map((column) => ({
+            key: column.status,
+            label: column.label,
+            icon: column.icon,
+            items: byStatus.get(column.status) ?? [],
+          }))}
+          getItemKey={(request) => String(request.id)}
+          renderCard={(request) => renderCard(request)}
+          emptyLabel="Порожньо"
+        />
+      </div>
+    );
+  }
 
   return (
     // h-full + items-stretch: колонки тягнуться на всю висоту дошки, а не на

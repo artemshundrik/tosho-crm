@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 
 type UnifiedPageToolbarProps = {
   topLeft?: ReactNode;
@@ -15,6 +19,34 @@ type UnifiedPageToolbarProps = {
   searchClassName?: string;
   filtersClassName?: string;
   metaClassName?: string;
+  /**
+   * Компактний тулбар на телефоні (картка 146).
+   *
+   * Десктопні слоти стають вертикальним стосом контролів на всю ширину, і на
+   * сторінці прорахунків це давало 461px обв'язки до першої картки — понад
+   * половину екрана 812px. У компактному режимі поруч лишаються тільки пошук
+   * і кнопка «Фільтри»; `topLeft`, `filters` і `meta` переїжджають в аркуш.
+   *
+   * Вмикається сторінкою свідомо: решті сторінок мобільний вигляд не
+   * змінюється, поки їх не перевірять окремо.
+   */
+  mobileCompact?: boolean;
+  /**
+   * Що лишається в компактному рядку поруч із пошуком — зазвичай головна дія
+   * («Новий прорахунок») в іконковому вигляді. `topRight` на телефоні при
+   * цьому НЕ рендериться взагалі: інакше та сама кнопка стояла б двічі.
+   */
+  mobilePrimary?: ReactNode;
+  /** Скільки фільтрів застосовано — бейдж на кнопці «Фільтри». */
+  mobileFilterCount?: number;
+  /**
+   * Перемикач вигляду (Список / Канбан) для аркуша.
+   *
+   * На десктопі він живе всередині `topRight`, який на телефоні не
+   * рендериться; передається окремо, щоб вибір вигляду не зник на мобільному.
+   * Той самий вузол можна віддати в обидва слоти — одночасно вони не існують.
+   */
+  mobileViewSwitch?: ReactNode;
 };
 
 export function UnifiedPageToolbar({
@@ -31,7 +63,69 @@ export function UnifiedPageToolbar({
   searchClassName,
   filtersClassName,
   metaClassName,
+  mobileCompact = false,
+  mobilePrimary,
+  mobileFilterCount = 0,
+  mobileViewSwitch,
 }: UnifiedPageToolbarProps) {
+  const isNarrow = useIsNarrowViewport();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Тернарник, а не `md:hidden`: React комітить обидві гілки, і десктопний
+  // стос контролів жив би в DOM телефона (принцип картки 146).
+  if (mobileCompact && isNarrow) {
+    const hasSheetContent = Boolean(topLeft || filters || meta || mobileViewSwitch);
+
+    return (
+      <div className={cn("space-y-2", className)}>
+        <div className="flex items-center gap-2">
+          {search ? <div className="min-w-0 flex-1">{search}</div> : null}
+          {hasSheetContent ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFiltersOpen(true)}
+              aria-label="Фільтри та вигляд"
+              // h-11 = 44px: мінімальний тач-таргет.
+              className="relative h-11 shrink-0 gap-2 px-3"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {mobileFilterCount > 0 ? (
+                <span className="min-w-5 rounded-full bg-primary px-1.5 text-2xs font-semibold leading-5 text-primary-foreground">
+                  {mobileFilterCount}
+                </span>
+              ) : null}
+            </Button>
+          ) : null}
+          {mobilePrimary}
+        </div>
+
+        {hasSheetContent ? (
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetContent side="bottom" dismissible className="max-h-[88dvh] overflow-y-auto p-0">
+              <SheetHeader className="px-4 pb-2 pt-4 text-left">
+                <SheetTitle>Фільтри та вигляд</SheetTitle>
+              </SheetHeader>
+              <div className="space-y-4 px-4 pb-[calc(env(safe-area-inset-bottom)+20px)]">
+                {mobileViewSwitch ? (
+                  <div className="min-w-0">
+                    <p className="pb-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      Вигляд
+                    </p>
+                    {mobileViewSwitch}
+                  </div>
+                ) : null}
+                {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
+                {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
+                {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-3", className)}>
       {(topLeft || topRight) ? (

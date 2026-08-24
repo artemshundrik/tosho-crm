@@ -1,4 +1,4 @@
-import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
@@ -67,7 +67,7 @@ import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList, MobileStatusBoard } from "@/components/kanban";
 import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
 import { boardColumnStatuses, isOffBoardStatus } from "@/lib/kanbanBoards";
 import {
@@ -4828,6 +4828,42 @@ export default function DesignPage() {
   const designHeaderActions = useMemo(
     () => (
       <UnifiedPageToolbar
+        // Телефон: пошук і «Фільтри», решта — в аркуші (картка 146).
+        mobileCompact
+        mobileFilterCount={
+          (statusFilter !== "all" ? 1 : 0) +
+          (designerFilter !== ALL_DESIGNERS_FILTER ? 1 : 0) +
+          (managerFilter !== ALL_MANAGERS_FILTER ? 1 : 0)
+        }
+        mobileViewSwitch={
+          <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full")}>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={viewMode === "kanban"}
+              onClick={() => setViewMode("kanban")}
+              className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Kanban
+            </Button>
+            <Button
+              variant="segmented"
+              size="xs"
+              aria-pressed={viewMode === "assignee"}
+              onClick={() => setViewMode("assignee")}
+              className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Дизайнери
+            </Button>
+          </SegmentedGroup>
+        }
+        mobilePrimary={
+          <Button onClick={createDialog.open} size="icon" aria-label="Нова дизайн-задача" className="h-11 w-11 shrink-0">
+            <Plus className="h-5 w-5" />
+          </Button>
+        }
         topLeft={
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
@@ -5150,34 +5186,23 @@ export default function DesignPage() {
           ) : (
             <>
               {isNarrowViewport ? (
-              <div className="space-y-3">
-            {DESIGN_COLUMNS.map((col) => {
-              const items = grouped[col.id] ?? [];
-              const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
-              return (
-                <section key={col.id} className="rounded-inner border border-border/60 bg-card/60">
-                  <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
-                      <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-                        {col.label}
-                      </span>
-                    </div>
-                    <span className="text-2xs font-semibold tabular-nums text-muted-foreground/80">{items.length}</span>
-                  </div>
-                  <div className="space-y-2 p-2.5">
-                    {items.length === 0 ? (
-                      <div className="rounded-[var(--radius-md)] border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
-                        Немає задач
-                      </div>
-                    ) : (
-                      items.map((task) => <Fragment key={task.id}>{renderTaskCard(task)}</Fragment>)
-                    )}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+                /*
+                 * Статуси й картки замість стосу всіх колонок (картка 146).
+                 * Стос тримав у DOM картки ВСІХ статусів одразу — на дошці це
+                 * та сама зайва робота, від якої свого часу позбулись, замінивши
+                 * `md:hidden` на цей самий тернарник.
+                 */
+                <MobileStatusBoard
+                  columns={DESIGN_COLUMNS.map((col) => ({
+                    key: col.id,
+                    label: col.label,
+                    icon: DESIGN_STATUS_ICON_BY_STATUS[col.id],
+                    items: grouped[col.id] ?? [],
+                  }))}
+                  getItemKey={(task) => task.id}
+                  renderCard={(task) => renderTaskCard(task)}
+                  emptyLabel="Немає задач у цьому статусі"
+                />
               ) : (
               <div
                 ref={desktopKanbanViewportRef}

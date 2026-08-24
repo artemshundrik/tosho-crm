@@ -9,7 +9,8 @@ import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/ap
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -375,6 +376,7 @@ export default function OrdersProductionPage() {
     () => restoredFilters?.managerFilter ?? ALL_MANAGERS_FILTER
   );
   const [viewTab, setViewTab] = useState<"queue" | "register">(() => restoredFilters?.viewTab ?? "register");
+  const isNarrowViewport = useIsNarrowViewport();
   const [selectedSpecificationIds, setSelectedSpecificationIds] = useState<string[]>([]);
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
 
@@ -707,6 +709,45 @@ export default function OrdersProductionPage() {
   // сторінки перезаписується по колу (див. usePageHeaderActions).
   const headerActions = useMemo(() => (
     <UnifiedPageToolbar
+      // Телефон: пошук і «Фільтри», решта — в аркуші (картка 146).
+      mobileCompact
+      mobileFilterCount={
+        (headerFilter !== "all" ? 1 : 0) + (managerFilter !== ALL_MANAGERS_FILTER ? 1 : 0)
+      }
+      mobileViewSwitch={
+        <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full")}>
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={viewTab === "register"}
+            onClick={() => setViewTab("register")}
+            className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
+          >
+            <List className="h-3.5 w-3.5" />
+            Список
+          </Button>
+          <Button
+            variant="segmented"
+            size="xs"
+            aria-pressed={viewTab === "queue"}
+            onClick={() => setViewTab("queue")}
+            className={cn(SEGMENTED_TRIGGER, "flex-1 gap-2")}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Kanban
+          </Button>
+        </SegmentedGroup>
+      }
+      mobilePrimary={
+        <Button
+          onClick={() => setCreateOrderOpen(true)}
+          size="icon"
+          aria-label="Створити замовлення"
+          className="h-11 w-11 shrink-0"
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      }
       topLeft={
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
@@ -836,11 +877,122 @@ export default function OrdersProductionPage() {
     );
   }
 
+  /**
+   * Картка замовлення — одна на десктопну колонку й на мобільний список
+   * статусів (картка 146). Доти вона жила інлайном у колонці, і мобільна
+   * гілка не мала чим малювати картку, не подвоївши розмітку.
+   */
+  const renderOrderCard = (record: DerivedOrderRecord) => (
+      <KanbanCard
+        surface="raised"
+        density="roomy"
+        className="overflow-hidden"
+        onClick={() => openRecord(record)}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <EntityAvatar
+              src={record.customerLogoUrl}
+              name={record.customerName}
+              fallback={getInitials(record.customerName)}
+              size={40}
+            />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-foreground">
+                {record.customerName}
+              </div>
+              <div className="truncate text-xs text-muted-foreground">
+                <HoverCopyText
+                  value={record.quoteNumber}
+                  textClassName="font-medium"
+                  successMessage="Номер замовлення скопійовано"
+                  copyLabel="Скопіювати номер замовлення"
+                >
+                  {record.quoteNumber}
+                </HoverCopyText>{" "}
+                • {formatOrderMoney(record.total, record.currency)}
+              </div>
+            </div>
+          </div>
+          <Badge
+            variant="outline"
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold",
+              record.readinessColumn === "ready"
+                ? "tone-success"
+                : record.readinessColumn === "design"
+                  ? "tone-info"
+                  : "tone-warning"
+            )}
+          >
+            {record.readinessColumn === "ready" ? "Готово" : "Увага"}
+          </Badge>
+        </div>
+
+        <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <AvatarBase
+              src={record.managerAvatarUrl ?? null}
+              name={record.managerLabel}
+              fallback={getInitials(record.managerLabel)}
+              size={20}
+              className="border-border/60 shrink-0"
+              fallbackClassName="text-3xs font-semibold"
+            />
+            <span className="truncate">{record.managerLabel.trim() || "Менеджер не призначений"}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Wallet className="h-3.5 w-3.5" />
+            <span className="truncate">{record.paymentRail}</span>
+          </div>
+          <div>{record.itemCount} позицій для переносу в замовлення</div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span className="truncate">
+              {!record.requiresDesignApproval
+                ? "Товар без нанесення — дизайн не потрібен"
+                : record.hasApprovedVisualization && record.hasApprovedLayout
+                  ? "Візуал і макет погоджені"
+                  : "Дизайн потребує підтвердження"}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {renderDocBadge("Договір", record.docs.contract)}
+          {renderDocBadge("Рахунок", record.docs.invoice)}
+          {renderDocBadge("СП", record.docs.specification)}
+          {renderDocBadge("Техкарта", record.docs.techCard)}
+        </div>
+
+        {record.blockers.length > 0 ? (
+          <div className="tone-warning-subtle mt-4 rounded-xl border p-3">
+            <div className="tone-text-warning mb-2 flex items-center gap-2 text-xs font-semibold">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Що блокує переведення у замовлення
+            </div>
+            <div className="tone-text-warning space-y-1 text-xs leading-5">
+              {record.blockers.slice(0, 3).map((blocker) => (
+                <div key={blocker}>{blocker}</div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="tone-success-subtle tone-text-success mt-4 rounded-xl border p-3 text-xs font-medium">
+            Умови виконані. Можна створювати пакет документів і переводити в замовлення.
+          </div>
+        )}
+      </KanbanCard>
+  );
+
   return (
     <PageCanvas>
       {viewTab === "register" ? (
         <PageCanvasBody className="space-y-6 py-3 pb-20 md:pb-6">
-          <div className="grid gap-4 px-5 xl:grid-cols-4">
+          {/* На телефоні плитки стають парами: чотири на всю ширину займали
+              цілий екран до першої картки (картка 146). `max-md:` торкається
+              лише вузьких екранів — десктопна сітка не змінюється. */}
+          <div className="grid gap-4 px-5 max-md:grid-cols-2 max-md:gap-3 max-md:px-4 xl:grid-cols-4">
             <Card className="overflow-hidden border-border/70 bg-card/95 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -911,6 +1063,19 @@ export default function OrdersProductionPage() {
                   <Card className="border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
                     Немає записів для відображення у таблиці.
                   </Card>
+                </div>
+              ) : isNarrowViewport ? (
+                /*
+                 * Телефон: картки замість таблиці (картка 146). Таблиця має
+                 * жорсткі ширини колонок на ~1230px і свідомо позбавлена
+                 * `overflow-x-auto` (він гасив липку шапку) — на екрані 375px
+                 * вона просто розпирала сторінку вбік. Картка тут та сама, що
+                 * й на дошці, тож два вигляди не розходяться.
+                 */
+                <div className="space-y-2 px-4">
+                  {filteredRecords.map((record) => (
+                    <div key={record.id}>{renderOrderCard(record)}</div>
+                  ))}
                 </div>
               ) : (
                 // overflow-x-auto знято: він гасив липку шапку таблиці.
@@ -1103,6 +1268,23 @@ export default function OrdersProductionPage() {
               <Card className="mx-5 border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
                 У затверджених прорахунках поки немає записів для формування замовлень.
               </Card>
+            ) : isNarrowViewport ? (
+              /*
+               * Телефон: статуси й картки замість трьох колонок по третині
+               * екрана — на 375px колонка виходила ~125px завширшки (картка 146).
+               */
+              <div className="px-4">
+                <MobileStatusBoard
+                  columns={ORDER_READINESS_COLUMNS.map((column) => ({
+                    key: column.id,
+                    label: column.label,
+                    items: recordsByColumn.get(column.id) ?? [],
+                  }))}
+                  getItemKey={(record) => String(record.id)}
+                  renderCard={(record) => renderOrderCard(record)}
+                  emptyLabel="Тут поки порожньо"
+                />
+              </div>
             ) : (
               <div
                 ref={desktopKanbanViewportRef}
@@ -1143,107 +1325,7 @@ export default function OrdersProductionPage() {
                           </div>
                         ) : (
                           columnRecords.map((record) => (
-                            <KanbanCard
-                              key={record.id}
-                              surface="raised"
-                              density="roomy"
-                              className="overflow-hidden"
-                              onClick={() => openRecord(record)}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex min-w-0 items-center gap-3">
-                                  <EntityAvatar
-                                    src={record.customerLogoUrl}
-                                    name={record.customerName}
-                                    fallback={getInitials(record.customerName)}
-                                    size={40}
-                                  />
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-foreground">
-                                      {record.customerName}
-                                    </div>
-                                    <div className="truncate text-xs text-muted-foreground">
-                                      <HoverCopyText
-                                        value={record.quoteNumber}
-                                        textClassName="font-medium"
-                                        successMessage="Номер замовлення скопійовано"
-                                        copyLabel="Скопіювати номер замовлення"
-                                      >
-                                        {record.quoteNumber}
-                                      </HoverCopyText>{" "}
-                                      • {formatOrderMoney(record.total, record.currency)}
-                                    </div>
-                                  </div>
-                                </div>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold",
-                                    record.readinessColumn === "ready"
-                                      ? "tone-success"
-                                      : record.readinessColumn === "design"
-                                        ? "tone-info"
-                                        : "tone-warning"
-                                  )}
-                                >
-                                  {record.readinessColumn === "ready" ? "Готово" : "Увага"}
-                                </Badge>
-                              </div>
-
-                              <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                  <AvatarBase
-                                    src={record.managerAvatarUrl ?? null}
-                                    name={record.managerLabel}
-                                    fallback={getInitials(record.managerLabel)}
-                                    size={20}
-                                    className="border-border/60 shrink-0"
-                                    fallbackClassName="text-3xs font-semibold"
-                                  />
-                                  <span className="truncate">{record.managerLabel.trim() || "Менеджер не призначений"}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Wallet className="h-3.5 w-3.5" />
-                                  <span className="truncate">{record.paymentRail}</span>
-                                </div>
-                                <div>{record.itemCount} позицій для переносу в замовлення</div>
-                                <div className="flex items-center gap-2">
-                                  <ShieldCheck className="h-3.5 w-3.5" />
-                                  <span className="truncate">
-                                    {!record.requiresDesignApproval
-                                      ? "Товар без нанесення — дизайн не потрібен"
-                                      : record.hasApprovedVisualization && record.hasApprovedLayout
-                                        ? "Візуал і макет погоджені"
-                                        : "Дизайн потребує підтвердження"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {renderDocBadge("Договір", record.docs.contract)}
-                                {renderDocBadge("Рахунок", record.docs.invoice)}
-                                {renderDocBadge("СП", record.docs.specification)}
-                                {renderDocBadge("Техкарта", record.docs.techCard)}
-                              </div>
-
-                              {record.blockers.length > 0 ? (
-                                <div className="tone-warning-subtle mt-4 rounded-xl border p-3">
-                                  <div className="tone-text-warning mb-2 flex items-center gap-2 text-xs font-semibold">
-                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                    Що блокує переведення у замовлення
-                                  </div>
-                                  <div className="tone-text-warning space-y-1 text-xs leading-5">
-                                    {record.blockers.slice(0, 3).map((blocker) => (
-                                      <div key={blocker}>{blocker}</div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="tone-success-subtle tone-text-success mt-4 rounded-xl border p-3 text-xs font-medium">
-                                  Умови виконані. Можна створювати пакет документів і переводити в замовлення.
-                                </div>
-                              )}
-                            </KanbanCard>
+                            <div key={record.id}>{renderOrderCard(record)}</div>
                           ))
                         )}
                       </KanbanColumn>

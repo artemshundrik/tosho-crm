@@ -6,3 +6,4 @@ export { KanbanCard } from "./KanbanCard";
 export { KanbanImageZoomPreview } from "./KanbanImageZoomPreview";
 export { KanbanOffBoardList, type KanbanOffBoardEntry } from "./KanbanOffBoardList";
 export { KanbanSkeleton } from "./KanbanSkeleton";
+export { MobileStatusBoard, type MobileStatusColumn } from "./MobileStatusBoard";
