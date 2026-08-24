@@ -792,6 +792,56 @@ function applyCustomerLogosToTasks(
   return changed ? next : tasks;
 }
 
+type InitialDesignPageState = {
+  logoCache: DesignCustomerLogoCachePayload | null;
+  memberCache: DesignMemberCachePayload | null;
+  cache: DesignPageCachePayload | null;
+  cacheIsFresh: boolean;
+  filters: DesignPageFiltersState | null;
+};
+
+/**
+ * Знімок кешів, з якого сторінка стартує.
+ *
+ * ЧОМУ ЦЕ ОКРЕМА ФУНКЦІЯ, А НЕ ДЕСЯТЬ РЯДКІВ У ТІЛІ КОМПОНЕНТА. Доти вони
+ * стояли просто в тілі й виконувались на КОЖЕН рендер: три читання сховища з
+ * `JSON.parse` усього списку задач і повний перебір задач у
+ * `applyCustomerLogosToTasks`. Потрібні ці значення лише при монтуванні — з них
+ * беруться початкові стани через ліниві ініціалізатори `useState`, — але
+ * платили за них щоразу.
+ *
+ * ЗАМІРЯНО 24.08.2026 (зібраний прод локально, серія з 14 літер у пошуку,
+ * 37 рендерів сторінки): ці десять рядків коштували 1348 мс із 1379 мс УСЬОГО
+ * тіла компонента. Тобто 97% ціни одного рендера сторінки на 5800 рядків — не
+ * її розмір, а читання кешу вгорі. Створення розмітки, для порівняння, коштує
+ * 20 мс на всю серію.
+ *
+ * КЛЮЧ ПЕРЕРАХУНКУ — КОМАНДА, А НЕ МОНТУВАННЯ. На першому рендері `teamId` ще
+ * може бути порожній (права їдуть асинхронно), і кеш прочитався б за порожнім
+ * ключем — тобто ніяк. Тому рахуємо заново, коли команда змінилась: інакше
+ * холодний вхід завжди тягнув би повний список із мережі замість кешу.
+ */
+function readInitialDesignPageState(
+  teamId: string,
+  navigationType: "POP" | "PUSH" | "REPLACE"
+): InitialDesignPageState {
+  const logoCache = readDesignCustomerLogoCache(teamId);
+  const memberCache = readDesignMemberCache(teamId);
+  const raw = readDesignPageCache(teamId);
+  const storedFilters = readDesignPageFiltersState(teamId);
+  const filters = shouldRestorePageUiState(navigationType, storedFilters?.cachedAt)
+    ? storedFilters
+    : null;
+  const cache =
+    raw && logoCache?.entries?.length
+      ? { ...raw, tasks: applyCustomerLogosToTasks(raw.tasks, logoCache.entries) }
+      : raw;
+  const cacheIsFresh = Boolean(
+    cache?.tasks?.length && Date.now() - Number(cache.cachedAt ?? 0) < DESIGN_PAGE_CACHE_FRESH_MS
+  );
+  return { logoCache, memberCache, cache, cacheIsFresh, filters };
+}
+
 const getDeadlineBadge = (value?: string | null) => {
   if (!value) return { label: "Не вказано", tone: "none" as const };
   const date = parseDateOnly(value);
@@ -864,21 +914,19 @@ export default function DesignPage() {
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
   const effectiveTeamId = teamId;
-  const initialLogoCache = readDesignCustomerLogoCache(effectiveTeamId ?? "");
-  const initialMemberCache = readDesignMemberCache(effectiveTeamId ?? "");
-  const initialCacheRaw = readDesignPageCache(effectiveTeamId ?? "");
-  const initialFilters = readDesignPageFiltersState(effectiveTeamId ?? "");
-  const restoredFilters = shouldRestorePageUiState(navigationType, initialFilters?.cachedAt) ? initialFilters : null;
-  const initialCache =
-    initialCacheRaw && initialLogoCache?.entries?.length
-      ? {
-          ...initialCacheRaw,
-          tasks: applyCustomerLogosToTasks(initialCacheRaw.tasks, initialLogoCache.entries),
-        }
-      : initialCacheRaw;
-  const initialCacheIsFresh = Boolean(
-    initialCache?.tasks?.length && Date.now() - Number(initialCache.cachedAt ?? 0) < DESIGN_PAGE_CACHE_FRESH_MS
+  /**
+   * Кеші читаються ОДИН раз на команду, а не на кожен рендер — див.
+   * `readInitialDesignPageState`. Там-таки записано, скільки це коштувало.
+   */
+  const initialPageState = useMemo(
+    () => readInitialDesignPageState(effectiveTeamId ?? "", navigationType),
+    [effectiveTeamId, navigationType]
   );
+  const initialLogoCache = initialPageState.logoCache;
+  const initialMemberCache = initialPageState.memberCache;
+  const initialCache = initialPageState.cache;
+  const initialCacheIsFresh = initialPageState.cacheIsFresh;
+  const restoredFilters = initialPageState.filters;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
   const [refreshing, setRefreshing] = useState(false);
