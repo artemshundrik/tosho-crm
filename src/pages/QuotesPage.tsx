@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
@@ -529,6 +530,14 @@ const markQuotesBodyMounted = () => {
   quotesBodyMountedThisSession = true;
 };
 
+/**
+ * Один порожній масив на весь модуль, а не новий літерал на кожен виклик.
+ * `setCustomers([])` із новим масивом ЗАВЖДИ планує рендер сторінки, навіть
+ * коли список і так порожній; зі спільною сталою React бачить те саме значення
+ * й нічого не рендерить (REQ-75).
+ */
+const EMPTY_PARTY_OPTIONS: QuotePartyOption[] = [];
+
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
   // Ставки компанії — з налаштувань (Фінанси → Налаштування → Ставки).
@@ -617,10 +626,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  /**
+   * ДЗЕРКАЛО прапорця білдера, не сам прапорець (REQ-75). Справжній живе в
+   * `<ModalMount>` нижче, щоб натиск кнопки не перемальовував сторінку зі
+   * списком; сюди він приїжджає в transition — уже після того, як вікно
+   * намальоване. Тримаємо його заради ефектів, які на ньому висять: пошук
+   * замовників і довантаження каталогу.
+   */
   const [batchBuilderOpen, setBatchBuilderOpen] = useState(false);
+  const batchBuilder = useModalMount();
   const [batchBuilderError, setBatchBuilderError] = useState<string | null>(null);
   const [batchCreating, setBatchCreating] = useState(false);
-  const [customers, setCustomers] = useState<QuotePartyOption[]>([]);
+  const [customers, setCustomers] = useState<QuotePartyOption[]>(EMPTY_PARTY_OPTIONS);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
@@ -1270,7 +1287,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         }));
         setCustomers([...customerOptions, ...leadOptions]);
       } catch {
-        setCustomers([]);
+        setCustomers(EMPTY_PARTY_OPTIONS);
       } finally {
         setCustomersLoading(false);
       }
@@ -2234,16 +2251,22 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
 
   const openBatchBuilder = useCallback(() => {
-    setBatchBuilderOpen(true);
-    setBatchBuilderError(null);
-    setCustomerSearch("");
-    setCustomers([]);
-    setAttachmentsError(null);
-  }, []);
+    // Спершу — саме вікно, без жодного стану сторінки: інакше клік тягне за
+    // собою перемальовку списку (REQ-75, +100 мс на 100 рядків).
+    batchBuilder.open();
+    // Решта — підготовка ДАНИХ сторінки, а не того, що людина зараз побачить.
+    // У transition, щоб React нарізав її й не з'їв анімацію відкриття.
+    startTransition(() => {
+      setBatchBuilderError(null);
+      setCustomerSearch("");
+      setCustomers(EMPTY_PARTY_OPTIONS);
+      setAttachmentsError(null);
+    });
+  }, [batchBuilder]);
 
   const handleCustomerSearchChange = async (search: string) => {
     if (!search.trim()) {
-      setCustomers([]);
+      setCustomers(EMPTY_PARTY_OPTIONS);
       return;
     }
     setCustomersLoading(true);
@@ -2267,7 +2290,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }));
       setCustomers([...customerOptions, ...leadOptions]);
     } catch {
-      setCustomers([]);
+      setCustomers(EMPTY_PARTY_OPTIONS);
     } finally {
       setCustomersLoading(false);
     }
@@ -2711,7 +2734,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       }
 
       completed = true;
-      setBatchBuilderOpen(false);
+      batchBuilder.close();
       setBatchBuilderError(null);
       setSelectedIds(new Set());
 
@@ -7216,15 +7239,19 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </div>
       )}
 
+      <ModalMount ref={batchBuilder.ref} onOpenChange={setBatchBuilderOpen}>
+        {(batchOpen, setBatchOpen) => (
       <QuoteBatchBuilderDialog
-        open={batchBuilderOpen}
+        open={batchOpen}
         teamId={teamId}
         onOpenChange={(open) => {
           if (batchCreating) return;
-          setBatchBuilderOpen(open);
+          setBatchOpen(open);
           if (!open) {
-            setBatchBuilderError(null);
-            setCustomerSearch("");
+            startTransition(() => {
+              setBatchBuilderError(null);
+              setCustomerSearch("");
+            });
           }
         }}
         onSubmit={handleBatchBuilderSubmit}
@@ -7246,6 +7273,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         restrictPartySelectionToOwn={isManagerUser}
         currentManagerLabel={currentUserManagerLabel}
       />
+        )}
+      </ModalMount>
 
       {/* Old multi-step form removed - using NewQuoteDialog instead */}
 

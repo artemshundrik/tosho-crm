@@ -58,6 +58,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
+import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { useKanbanViewportHeight } from "@/hooks/useKanbanViewportHeight";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
@@ -974,7 +975,17 @@ export default function DesignPage() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<string | null>(null);
+  /**
+   * ДЗЕРКАЛО прапорця вікна, не сам прапорець (REQ-75). Справжній живе в
+   * `<ModalMount>` нижче: інакше натиск кнопки перемальовує всю дошку
+   * (заміряно 24.08.2026 на зібраному проді — 120 мс однією довгою задачею на
+   * вікно, яке додає 89 вузлів до 6446). Сюди прапорець приїжджає в transition,
+   * уже після того, як вікно намальоване, — його чекають шість ефектів:
+   * чернетка, автозбереження, типовий виконавець, пошук замовників і
+   * клавіатурні обробники. Усі асинхронні, кадр затримки їм нічого не коштує.
+   */
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const createDialog = useModalMount();
   const [createTitle, setCreateTitle] = useState("");
   const [createBrief, setCreateBrief] = useState("");
   const createBriefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -3902,7 +3913,7 @@ export default function DesignPage() {
       const createdTaskLabel = createdTask.designTaskNumber ?? "Без номера";
 
       clearDraft(createDraftKey);
-      setCreateDialogOpen(false);
+      createDialog.close();
       setCreateTitle("");
       setCreateBrief("");
       setCreateCustomer("");
@@ -4854,7 +4865,7 @@ export default function DesignPage() {
             </SegmentedGroup>
             <Button
               className={cn(TOOLBAR_ACTION_BUTTON, "w-full gap-2 sm:w-auto")}
-              onClick={() => setCreateDialogOpen(true)}
+              onClick={createDialog.open}
             >
               <Plus className="h-4 w-4" />
               Нова дизайн-задача
@@ -4965,6 +4976,7 @@ export default function DesignPage() {
       clearFilters,
       contentView,
       allTasksCount,
+      createDialog.open,
       currentUserDisplayName,
       designerFilter,
       designerFilterOptions,
@@ -5253,11 +5265,14 @@ export default function DesignPage() {
 
 
 
+      <ModalMount ref={createDialog.ref} onOpenChange={setCreateDialogOpen}>
+        {(createOpen, setCreateOpen) => (
       <Dialog
-        open={createDialogOpen}
+        open={createOpen}
         onOpenChange={(open) => {
-          setCreateDialogOpen(open);
+          setCreateOpen(open);
           if (!open) {
+            startTransition(() => {
             setCreateSaving(false);
             setCreateCustomerId(null);
             setCreateCustomerLogoUrl(null);
@@ -5272,6 +5287,7 @@ export default function DesignPage() {
             setCreateManagerPopoverOpen(false);
             setCreateDeadlinePopoverOpen(false);
             setCreateFilesDragActive(false);
+            });
           }
         }}
       >
@@ -5775,7 +5791,7 @@ export default function DesignPage() {
             </div>
           </div>
           <DialogFooter className="px-4 py-4 pt-0">
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={createSaving}>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createSaving}>
               Скасувати
             </Button>
             <Button
@@ -5789,6 +5805,8 @@ export default function DesignPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        )}
+      </ModalMount>
 
       {customerLeadCreate.dialogs}
 

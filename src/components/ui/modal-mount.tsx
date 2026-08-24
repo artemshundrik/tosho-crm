@@ -1,0 +1,101 @@
+import * as React from "react";
+
+/**
+ * Прапорець «вікно відкрите» ПОЗА тілом сторінки.
+ *
+ * ЩО ЛІКУЄ (REQ-75). «Прорахунки» й «Дизайн» підвисали на відкритті великих
+ * вікон. Ціна виявилась не у вікні, а в тому, ЧИЙ це стан: `useState` на
+ * прапорець стояв у тілі сторінки-гіганта, тож натиск кнопки перемальовував
+ * усю сторінку разом зі списком.
+ *
+ * ЗАМІРЯНО 24.08.2026 (зібраний прод локально, порт 5200, «Новий прорахунок»):
+ *
+ *   список зі 100 рядків    142 мс блокування, довга задача 132-162 мс
+ *   той самий клік, 0 рядків 39 мс, жодної довгої задачі
+ *   вміст самого вікна       305 вузлів (на дизайні — 89)
+ *
+ * Тобто ~100 мс із 142 давав перемальований СПИСОК, а не вікно. Те саме на
+ * дизайні: 140 мс на вікно, яке додає 89 вузлів до 6446 наявних.
+ *
+ * ЯК. Прапорець живе у власному крихітному компоненті. Кнопка смикає його
+ * імперативно через `useModalMount()`, стан сторінки не змінюється — отже
+ * сторінка не рендериться, і React комітить лише піддерево вікна.
+ *
+ * ПРО ДРУГИЙ ПРАПОРЕЦЬ. Сторінці свій прапорець усе одно потрібен: на ньому
+ * висять ефекти (пошук замовників, довантаження каталогу, чернетки). Він
+ * лишається, але оновлюється через `onOpenChange` У TRANSITION — тобто після
+ * того, як вікно вже намальоване, і нарізаними шматками, щоб 100+ мс не
+ * впали посеред анімації відкриття. Ефекти від цього нічого не втрачають:
+ * усі до одного асинхронні, а пошук замовників ще й із дебаунсом 250 мс.
+ *
+ * ЧОГО ЦЕ НЕ РОБИТЬ. Не прискорює сам рендер сторінки — 100 мс на 100 рядків
+ * нікуди не діваються й далі коштують при фільтрах і пошуку. Це REQ-69
+ * (віртуалізація списків), окрема робота.
+ */
+export type ModalMountHandle = {
+  open: () => void;
+  close: () => void;
+};
+
+type ModalMountProps = {
+  /**
+   * Вміст вікна. Функція, а не вузол: прапорець живе всередині `ModalMount`,
+   * і тільки так сторінка може лишити розмітку вікна в себе, не тримаючи
+   * його стан.
+   */
+  children: (open: boolean, setOpen: (next: boolean) => void) => React.ReactNode;
+  /**
+   * Дзеркало прапорця для сторінки — викликається В TRANSITION. Сюди йде
+   * `setState` сторінки, від якого залежать її ефекти.
+   */
+  onOpenChange?: (open: boolean) => void;
+};
+
+export const ModalMount = React.forwardRef<ModalMountHandle, ModalMountProps>(
+  ({ children, onOpenChange }, ref) => {
+    const [open, setOpen] = React.useState(false);
+
+    // Через ref, а не напряму: `setOpen` має лишатись стабільним, інакше кожен
+    // рендер сторінки міняв би `onOpenChange` вікна й тягнув зайвий рендер.
+    const notifyRef = React.useRef(onOpenChange);
+    React.useLayoutEffect(() => {
+      notifyRef.current = onOpenChange;
+    }, [onOpenChange]);
+
+    const setOpenAndNotify = React.useCallback((next: boolean) => {
+      setOpen(next);
+      const notify = notifyRef.current;
+      if (!notify) return;
+      React.startTransition(() => {
+        notify(next);
+      });
+    }, []);
+
+    React.useImperativeHandle(
+      ref,
+      () => ({
+        open: () => setOpenAndNotify(true),
+        close: () => setOpenAndNotify(false),
+      }),
+      [setOpenAndNotify]
+    );
+
+    return <>{children(open, setOpenAndNotify)}</>;
+  }
+);
+ModalMount.displayName = "ModalMount";
+
+/**
+ * Ручка до вікна для сторінки: `ref` — у `<ModalMount>`, `open`/`close` — у
+ * кнопки. Обидві функції стабільні між рендерами, тож не псують пропси кнопок.
+ */
+export function useModalMount() {
+  const ref = React.useRef<ModalMountHandle>(null);
+  const open = React.useCallback(() => {
+    ref.current?.open();
+  }, []);
+  const close = React.useCallback(() => {
+    ref.current?.close();
+  }, []);
+  return React.useMemo(() => ({ ref, open, close }), [open, close]);
+}
