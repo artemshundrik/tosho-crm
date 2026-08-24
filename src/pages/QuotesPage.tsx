@@ -608,6 +608,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   // 400 мс, а не типові 150: гарячий transition займає ~200 мс на проді й до
   // ~600 на деві, і з порогом 150 каркас встигав проявитись на кадр-другий.
   const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
+  /** Див. DesignPage: каркас — окремий вузол, ефект вимірювання йде за ним. */
+  const boardSkeletonShown = loading || !heavySurfaceReady;
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -4515,11 +4517,38 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (!viewport) return;
 
     let frameId = 0;
+    let verifyFrame = 0;
+    let verifyLeft = 0;
+    /**
+     * САМОПЕРЕВІРКА ПІСЛЯ КАДРУ (REQ-136).
+     *
+     * Висота дошки рахується як «від верху вікна дошки до низу екрана». Один
+     * замір цьому вірити не можна: заміряно на холодному вході — у мить, коли
+     * вміст заступає каркас, `rect.top` віддавав 0 замість 177, висота
+     * виходила 974 замість 797, і дошка на дві з половиною секунди вилазила на
+     * 165 px за нижній край екрана.
+     *
+     * Замість гри в «а тепер точно вчасно» перевіряємо результат: якщо після
+     * кадру нижній край дошки опинився за межами вікна, міряємо ще раз. Три
+     * спроби — стеля, щоб ніколи не крутитись у циклі.
+     */
     const measure = () => {
       frameId = 0;
+      // Вузол міг від'єднатись (каркас замінили вмістом) — у відчепленого
+      // getBoundingClientRect() віддає нулі, і висота вийшла б на весь екран.
+      if (!viewport.isConnected) return;
       const rect = viewport.getBoundingClientRect();
       const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
       setDesktopKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+      if (verifyLeft <= 0) verifyLeft = 3;
+      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
+      verifyFrame = window.requestAnimationFrame(() => {
+        verifyFrame = 0;
+        verifyLeft -= 1;
+        const after = viewport.getBoundingClientRect();
+        if (after.bottom > window.innerHeight + 1 && verifyLeft > 0) measure();
+        else verifyLeft = 0;
+      });
     };
     const scheduleMeasure = () => {
       if (frameId) window.cancelAnimationFrame(frameId);
@@ -4530,6 +4559,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     // final board height instead of collapsing to the intrinsic card height and
     // then jumping once the rAF measurement lands.
     measure();
+    /**
+     * ...і ОДРАЗУ перевіряємо на наступному кадрі (REQ-136). Синхронний замір
+     * усередині layout-ефекту іноді ловить проміжну верстку: заміряно на
+     * холодному вході — `rect.top` віддавав 0 замість 177, і висота виходила
+     * 974 замість 797, тобто колонки вилазили на 165 px за нижній край екрана
+     * й лишались такими. Наступний кадр бачить уже усталену верстку, а якщо
+     * значення збіглося — стан не оновлюється взагалі.
+     */
+    scheduleMeasure();
     window.addEventListener("resize", scheduleMeasure);
 
     const resizeObserver =
@@ -4544,12 +4582,41 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       resizeObserver?.observe(viewport.parentElement);
     }
 
+    /**
+     * ДОМІРЮВАННЯ НА ХОЛОДНОМУ ВХОДІ (REQ-136).
+     *
+     * Висота рахується від `rect.top`, а смуга дій приїжджає ПІЗНІШЕ за перший
+     * замір: сторінка віддає кнопки в шапку ефектом, тобто вже після того, як
+     * висоту пораховано. Через це на холодному вході колонки спершу вилізали
+     * нижче екрана, а потім стрибали назад.
+     *
+     * ResizeObserver цього не ловить: у вікна дошки не міняється ні власний
+     * розмір, ні розмір батька — міняється лише ПОЗИЦІЯ. Тому перші пів секунди
+     * після монтування стежимо за `rect.top` на кожному кадрі й переміряємо
+     * лише тоді, коли він справді зрушив.
+     */
+    let settleFrame = 0;
+    const settleUntil = performance.now() + 500;
+    let lastTop = viewport.getBoundingClientRect().top;
+    const settle = () => {
+      const top = viewport.getBoundingClientRect().top;
+      if (top !== lastTop) {
+        lastTop = top;
+        measure();
+      }
+      if (performance.now() < settleUntil) settleFrame = window.requestAnimationFrame(settle);
+      else settleFrame = 0;
+    };
+    settleFrame = window.requestAnimationFrame(settle);
+
     return () => {
       window.removeEventListener("resize", scheduleMeasure);
       if (frameId) window.cancelAnimationFrame(frameId);
+      if (settleFrame) window.cancelAnimationFrame(settleFrame);
+      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
       resizeObserver?.disconnect();
     };
-  }, [filteredAndSortedRows.length, viewMode]);
+  }, [filteredAndSortedRows.length, viewMode, boardSkeletonShown]);
 
   useEffect(() => {
     if (quoteListMode === "grouped" && selectedIds.size > 0) {
@@ -6178,7 +6245,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {/* Views */}
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
-          {loading || !heavySurfaceReady ? (
+          {boardSkeletonShown ? (
             <div
               data-deferred-body-skeleton
               className={cn(
@@ -6860,7 +6927,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         </EstimatesTableCanvas>
       ) : (
         <EstimatesKanbanCanvas>
-          {loading || !heavySurfaceReady ? (
+          {boardSkeletonShown ? (
             <div
               ref={desktopKanbanViewportRef}
               data-deferred-body-skeleton
