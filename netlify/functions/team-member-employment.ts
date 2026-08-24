@@ -1,12 +1,19 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 
-type Decision = "inactive" | "reactivate";
+/** Форма запиту — і перевірка, і тип (REQ-137). Тут вирішується доля людини в команді. */
+const requestSchema = z
+  .object({
+    userId: z.string().min(1).optional(),
+    decision: z.enum(["inactive", "reactivate"]).optional(),
+  })
+  .strict();
 
-type RequestBody = {
-  userId?: string;
-  decision?: Decision;
-};
+type RequestBody = z.infer<typeof requestSchema>;
 
 type HttpEvent = {
   httpMethod?: string;
@@ -65,12 +72,9 @@ export const handler = async (event: HttpEvent) => {
   const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) return jsonResponse(401, { error: "Missing Authorization token" });
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   const targetUserId = payload.userId?.trim();
   const decision = payload.decision;

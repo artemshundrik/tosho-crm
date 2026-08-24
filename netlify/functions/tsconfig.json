@@ -16,6 +16,7 @@
     "isolatedModules": true
   },
   "files": [
+    "_lib/parseBody.ts",
     "_aiPricing.ts",
     "_aiUsageLog.ts",
     "_adminAssistant.ts",

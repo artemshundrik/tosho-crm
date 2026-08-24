@@ -1,15 +1,29 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "./_notificationDelivery";
 
-type RequestBody = {
-  userIds?: string[];
-  title?: string;
-  body?: string | null;
-  href?: string | null;
-  type?: "info" | "success" | "warning";
-  dedupeByHref?: boolean;
-  category?: string;
-};
+/**
+ * Форма запиту — і перевірка, і тип (REQ-137).
+ *
+ * Стеля на `userIds` не косметична: функція розсилає сповіщення всім
+ * переліченим, тож без межі один запит міг би засипати всю команду.
+ */
+const requestSchema = z
+  .object({
+    userIds: z.array(z.string().min(1)).max(200).optional(),
+    title: z.string().optional(),
+    body: z.string().nullable().optional(),
+    href: z.string().nullable().optional(),
+    type: z.enum(["info", "success", "warning"]).optional(),
+    dedupeByHref: z.boolean().optional(),
+    category: z.string().optional(),
+  })
+  .strict();
+
+type RequestBody = z.infer<typeof requestSchema>;
 
 type HttpEvent = {
   httpMethod?: string;
@@ -54,12 +68,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   const title = (payload.title ?? "").trim();
   if (!title) {

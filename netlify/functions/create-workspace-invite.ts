@@ -1,36 +1,59 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-type InviteDelivery = "email" | "link";
+/**
+ * Форма запиту — джерело правди для перевірки й для типу (REQ-137).
+ *
+ * Доти тут стояв самий лише тип, а тіло приймалось як є: `JSON.parse(...)`
+ * без звірки. Для функції, яка роздає ролі й доступи до модулів, це найгірше
+ * місце для довіри — саме тут аудит 08.2026 знаходив підняття привілеїв.
+ *
+ * `strict()` навмисно: невідоме поле — це або друкарська помилка клієнта, або
+ * спроба підсунути щось зайве. І те, і те краще відхилити з поясненням, ніж
+ * мовчки зігнорувати.
+ */
+const inviteRequestSchema = z
+  .object({
+    mode: z
+      .enum([
+        "create_invite",
+        "deliver_invite",
+        "update_member_roles",
+        "list_workspace_member_profiles",
+        "update_member_profile",
+      ])
+      .optional(),
+    email: z.string().email().optional(),
+    accessRole: z.string().optional(),
+    jobRole: z.string().nullable().optional(),
+    expiresInDays: z.number().int().positive().max(365).optional(),
+    /** email — Supabase шле лист; link — повертаємо посилання, адмін передає його сам. */
+    delivery: z.enum(["email", "link"]).optional(),
+    /** Для mode=deliver_invite: рядок tosho.workspace_invites, який перевидаємо. */
+    inviteId: z.string().optional(),
+    userId: z.string().optional(),
+    firstName: z.string().nullable().optional(),
+    lastName: z.string().nullable().optional(),
+    birthDate: z.string().nullable().optional(),
+    phone: z.string().nullable().optional(),
+    availabilityStatus: z
+      .enum(["available", "vacation", "sick_leave", "offline"])
+      .nullable()
+      .optional(),
+    startDate: z.string().nullable().optional(),
+    probationEndDate: z.string().nullable().optional(),
+    managerUserId: z.string().nullable().optional(),
+    // Ключі модулів не перелічуємо: реєстр живе у src/lib/moduleAccess.ts, а тут
+    // ми лише пересилаємо те, що надіслав клієнт, нічого не втрачаючи.
+    moduleAccess: z.record(z.string(), z.boolean()).nullable().optional(),
+  })
+  .strict();
 
-type InviteRequest = {
-  mode?:
-    | "create_invite"
-    | "deliver_invite"
-    | "update_member_roles"
-    | "list_workspace_member_profiles"
-    | "update_member_profile";
-  email?: string;
-  accessRole?: string;
-  jobRole?: string | null;
-  expiresInDays?: number;
-  /** email — Supabase шле лист; link — повертаємо посилання, адмін передає його сам. */
-  delivery?: InviteDelivery;
-  /** Для mode=deliver_invite: рядок tosho.workspace_invites, який перевидаємо. */
-  inviteId?: string;
-  userId?: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  birthDate?: string | null;
-  phone?: string | null;
-  availabilityStatus?: "available" | "vacation" | "sick_leave" | "offline" | null;
-  startDate?: string | null;
-  probationEndDate?: string | null;
-  managerUserId?: string | null;
-  // Ключі модулів не перелічуємо: реєстр живе у src/lib/moduleAccess.ts, а тут
-  // ми лише пересилаємо те, що надіслав клієнт, нічого не втрачаючи.
-  moduleAccess?: Record<string, boolean> | null;
-};
+type InviteRequest = z.infer<typeof inviteRequestSchema>;
 type HttpEvent = {
   httpMethod?: string;
   body?: string | null;
@@ -301,12 +324,9 @@ export const handler = async (event: HttpEvent) => {
     return jsonResponse(401, { error: "Missing Authorization token" });
   }
 
-  let payload: InviteRequest;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, inviteRequestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: InviteRequest = parsed.data;
 
   const userClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false },

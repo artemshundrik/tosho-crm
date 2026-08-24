@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+import { parseBody } from "./_lib/parseBody";
+
 import { createClient } from "@supabase/supabase-js";
 import { decideAbsenceRequest } from "./_lib/absenceDecision";
 import {
@@ -24,25 +28,28 @@ import {
  * заявку самого SEO вирішує лише owner — щоб ніхто не погоджував себе.
  */
 
-type Decision = "approved" | "declined";
+/** Форма запиту — і перевірка, і тип (REQ-137). */
+const requestSchema = z
+  .object({
+    /**
+     * `submit` — подати власну заявку;
+     * `record` / `revise` / `revoke` — керівництво веде запис ЗА людину;
+     * без action — рішення по заявці (як було).
+     */
+    action: z.enum(["submit", "decide", "record", "revise", "revoke"]).optional(),
+    absenceId: z.string().min(1).optional(),
+    decision: z.enum(["approved", "declined"]).optional(),
+    comment: z.string().optional(),
+    kind: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    /** Кого стосується запис — лише для record/revise (owner/SEO). */
+    userId: z.string().min(1).optional(),
+    status: z.string().optional(),
+  })
+  .strict();
 
-type RequestBody = {
-  /**
-   * `submit` — подати власну заявку;
-   * `record` / `revise` / `revoke` — керівництво веде запис ЗА людину;
-   * без action — рішення по заявці (як було).
-   */
-  action?: "submit" | "decide" | "record" | "revise" | "revoke";
-  absenceId?: string;
-  decision?: Decision;
-  comment?: string;
-  kind?: string;
-  startDate?: string;
-  endDate?: string;
-  /** Кого стосується запис — лише для record/revise (owner/SEO). */
-  userId?: string;
-  status?: string;
-};
+type RequestBody = z.infer<typeof requestSchema>;
 
 type HttpEvent = {
   httpMethod?: string;
@@ -78,12 +85,9 @@ export const handler = async (event: HttpEvent) => {
   const token = typeof authHeader === "string" && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) return jsonResponse(401, { error: "Missing Authorization token" });
 
-  let payload: RequestBody;
-  try {
-    payload = JSON.parse(event.body ?? "{}");
-  } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
-  }
+  const parsed = parseBody(event.body, requestSchema);
+  if (!parsed.ok) return jsonResponse(400, { error: parsed.error });
+  const payload: RequestBody = parsed.data;
 
   const action = payload.action ?? "decide";
   const comment = payload.comment?.trim().slice(0, 500) || null;
