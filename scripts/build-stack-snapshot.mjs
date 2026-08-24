@@ -497,6 +497,10 @@ const GUARD_NOTES = {
     "Версія Node записана у трьох місцях: прод, ця машина й GitHub Actions. Розійдуться — локально збереться одне, а в проді запуститься інше.",
   "адреси кронів":
     "Розклад кронів живе в базі й містить адресу функції рядком. Перейменував файл — крон щодня стукає в нікуди, і журнал при цьому показує «успішно».",
+  "захист БД":
+    "Дивиться в живу базу: чи не з'явилось таблиці без захисту рядків, зайвого доступу для анонімів, в'юхи, що читає повз захист, або функції з плавучим пошуком схем. Падає лише на НОВОМУ — знімок відомого боргу лежить поруч.",
+  "SQL-журнал":
+    "Звіряє, чи поїхав на прод той SQL, який їде в цьому пуші. Код і схема ходять різними дорогами й розходяться мовчки: одного разу так нагадування мовчали добу при зелених приладах.",
 };
 
 /**
@@ -505,12 +509,75 @@ const GUARD_NOTES = {
  * Другий список розійшовся б із першим при найближчій правці, і сторінка
  * почала б обіцяти захист, якого немає, — а це гірше за відсутність картки.
  */
+/**
+ * До чого належить кожна сторожа. Група живе ТУТ, а не на сторінці: інакше
+ * перелік розійшовся б із гаком — рівно та вада, від якої нас лікує REQ-107.
+ */
+const GUARD_GROUPS = {
+  "типи застосунку": "code",
+  "лінт + борг компілятора": "code",
+  "тести": "code",
+  "типи функцій": "code",
+  "реєстр функцій": "registry",
+  "ключі фіч": "registry",
+  "реєстр поверхонь": "registry",
+  "копії спільних модулів": "registry",
+  "заглушки правил хуків": "registry",
+  "розростання файлів": "registry",
+  "знімок стеку": "registry",
+  "версія Node": "registry",
+  "адреси кронів": "db",
+  "захист БД": "db",
+  "SQL-журнал": "db",
+};
+
+/**
+ * Що в проєкті працює САМО, без людини.
+ *
+ * НАВІЩО НА СТОРІНЦІ. «Стек» відповідає на питання «з чого це зроблено», і
+ * досі відповідав лише про npm-пакети. Але половина того, що тримає проєкт, —
+ * не пакети: перевірки перед пушем, роботи в GitHub, плагіни збірки й
+ * розклади в самій базі. Їх не видно ніде, тож про них просто забувають.
+ *
+ * ЧОМУ ЧИТАЄМО З ФАЙЛІВ, А НЕ ПИШЕМО СПИСКОМ. Список рукою протух би за
+ * тиждень — сьогодні я сам додав дві перевірки, і README про них не знав.
+ * Тут усе вичитується з .github/workflows, netlify.toml і теки гаків.
+ */
+function automationFromRepo() {
+  const workflows = [];
+  const dir = join(ROOT, ".github/workflows");
+  if (existsSync(dir)) {
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))) {
+      const body = readFileSync(join(dir, file), "utf8");
+      const name = body.match(/^name:\s*(.+)$/m)?.[1]?.trim().replace(/^["']|["']$/g, "") ?? file;
+      const cron = body.match(/cron:\s*["']([^"']+)["']/)?.[1] ?? null;
+      const triggers = [];
+      if (/^\s*push:/m.test(body)) triggers.push("на пуш");
+      if (/^\s*pull_request:/m.test(body)) triggers.push("на PR");
+      if (cron) triggers.push(`за розкладом ${cron}`);
+      workflows.push({ file, name, cron, trigger: triggers.join(", ") || "вручну" });
+    }
+  }
+
+  const hooks = existsSync(join(ROOT, "scripts/hooks"))
+    ? readdirSync(join(ROOT, "scripts/hooks")).filter((f) => !f.endsWith(".md"))
+    : [];
+
+  const netlifyToml = existsSync(join(ROOT, "netlify.toml"))
+    ? readFileSync(join(ROOT, "netlify.toml"), "utf8")
+    : "";
+  const plugins = [...netlifyToml.matchAll(/package\s*=\s*"([^"]+)"/g)].map((m) => m[1]);
+
+  return { workflows, hooks, plugins };
+}
+
 function guardsFromPrePush() {
   const hook = readFileSync(join(ROOT, "scripts/hooks/pre-push"), "utf8");
   const body = hook.slice(hook.indexOf("for check in"), hook.indexOf("do\n"));
   return [...body.matchAll(/"([^"|]+)\|/g)].map((m) => ({
     name: m[1],
     note: GUARD_NOTES[m[1]] ?? null,
+    group: GUARD_GROUPS[m[1]] ?? "registry",
   }));
 }
 
@@ -662,6 +729,7 @@ const snapshot = {
   node: nodeVersion(),
   netlifyFunctions: netlifyFunctionCount(),
   sourceLines: sourceLines(),
+  automation: automationFromRepo(),
 };
 
 const banner = `// ЗГЕНЕРОВАНО. Руками не правити — перезапише scripts/build-stack-snapshot.mjs.

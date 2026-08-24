@@ -1,5 +1,21 @@
 import { useMemo, useState } from "react";
-import { BookOpen, ChevronDown, ExternalLink, Package, RefreshCw, ShieldAlert } from "lucide-react";
+import {
+  Binary,
+  BookOpen,
+  Braces,
+  ChevronDown,
+  Cloud,
+  Database,
+  ExternalLink,
+  HardDrive,
+  ListChecks,
+  Package,
+  RefreshCw,
+  ShieldAlert,
+  Table2,
+  Timer,
+  Webhook,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -136,6 +152,7 @@ export function StackOverview() {
         <aside className="grid gap-3.5 lg:sticky lg:top-2">
           <EffortCard items={items} />
           <GuardsCard />
+          <AutomationCard platform={platform.data ?? null} />
         </aside>
       </div>
     </div>
@@ -331,31 +348,56 @@ function formatBytesUk(bytes: number | null | undefined) {
   return `${Math.round(bytes / 1024)} КБ`;
 }
 
+/**
+ * Один факт про платформу: іконка, ЧИСЛО і підпис.
+ *
+ * ЧОМУ НЕ РІВНИЙ СІРИЙ РЯДОК, ЯК БУЛО. Досі тут стояло вісім однакових сірих
+ * речень поспіль, і око не чіплялось ні за що: «Postgres 17.6 · 97 таблиць у
+ * схемі tosho · 82 функції…». Це не смуга даних, а абзац, набраний дрібним.
+ *
+ * ЩО ЗМІНИЛОСЬ. Число — кольору тексту й моноширинне (клас figure), підпис
+ * лишається приглушеним, попереду іконка. Ієрархія робить усю роботу: спершу
+ * видно ЧИСЛА, потім, за потреби, про що вони.
+ */
+function PlatformFact({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <Icon className="h-3.5 w-3.5 shrink-0 translate-y-[2px] text-muted-foreground/70" aria-hidden />
+      <span className="figure font-medium text-foreground">{value}</span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
 function PlatformFootnote({ platform }: { platform: StackPlatform | null }) {
   if (!platform) return <span>Платформа: дані ще їдуть</span>;
   const storage = formatBytesUk(platform.storage_bytes);
   const database = formatBytesUk(platform.database_bytes);
+  const tables = platform.schema_tables ?? 0;
+  const functions = platform.schema_functions ?? 0;
+  const crons = platform.cron_jobs ?? 0;
   return (
     <>
-      <span>Postgres {platform.postgres_version ?? "?"}</span>
-      <span>
-        {platform.schema_tables ?? "?"}{" "}
-        {pluralWordUk(platform.schema_tables ?? 0, "таблиця", "таблиці", "таблиць")} у схемі tosho
-      </span>
-      <span>
-        {platform.schema_functions ?? "?"}{" "}
-        {pluralWordUk(platform.schema_functions ?? 0, "функція", "функції", "функцій")}
-      </span>
-      <span>
-        {platform.cron_jobs ?? "?"} {pluralWordUk(platform.cron_jobs ?? 0, "крон", "крони", "кронів")}
-      </span>
-      {database ? <span>база {database}</span> : null}
-      {storage ? <span>Storage {storage}</span> : null}
-      <span>Node {STACK_SNAPSHOT.node}</span>
-      <span>
-        {STACK_SNAPSHOT.netlifyFunctions}{" "}
-        {pluralWordUk(STACK_SNAPSHOT.netlifyFunctions, "функція", "функції", "функцій")} Netlify
-      </span>
+      <PlatformFact icon={Database} value={`Postgres ${platform.postgres_version ?? "?"}`} label="" />
+      <PlatformFact icon={Table2} value={tables} label={`${pluralWordUk(tables, "таблиця", "таблиці", "таблиць")} у tosho`} />
+      <PlatformFact icon={Braces} value={functions} label={pluralWordUk(functions, "функція", "функції", "функцій")} />
+      <PlatformFact icon={Timer} value={crons} label={pluralWordUk(crons, "крон", "крони", "кронів")} />
+      {database ? <PlatformFact icon={HardDrive} value={database} label="база" /> : null}
+      {storage ? <PlatformFact icon={Cloud} value={storage} label="Storage" /> : null}
+      <PlatformFact icon={Binary} value={`Node ${STACK_SNAPSHOT.node}`} label="" />
+      <PlatformFact
+        icon={Webhook}
+        value={STACK_SNAPSHOT.netlifyFunctions}
+        label={`${pluralWordUk(STACK_SNAPSHOT.netlifyFunctions, "функція", "функції", "функцій")} Netlify`}
+      />
     </>
   );
 }
@@ -818,15 +860,43 @@ function EffortCard({ items }: { items: StackItem[] }) {
     return { project, evening, batch };
   }, [items]);
 
-  const rows: Array<{ key: string; label: string; list: StackItem[]; dot: string }> = [
-    { key: "project", label: "Окремий проєкт", list: buckets.project, dot: "bg-destructive" },
-    { key: "evening", label: "На вечір кожне", list: buckets.evening, dot: "bg-warning-solid" },
-    { key: "batch", label: "Однією пачкою", list: buckets.batch, dot: "bg-success-solid" },
+  /**
+   * Підписи кажуть, ЩО РОБИТИ, а не якою мірою це важко.
+   *
+   * Було «Окремий проєкт / На вечір кожне / Однією пачкою» — і Артем спитав, що
+   * це взагалі означає. Питання справедливе: назви описували відчуття, а не
+   * дію, і жодна з них не казала, що з цими пакетами робити далі.
+   */
+  const rows: Array<{ key: string; label: string; hint: string; list: StackItem[]; dot: string }> = [
+    {
+      key: "project",
+      label: "Планувати окремо",
+      hint: "мажорна версія, і за пакет тримаються десятки файлів",
+      list: buckets.project,
+      dot: "bg-destructive",
+    },
+    {
+      key: "evening",
+      label: "Братись по одному",
+      hint: "мажорна версія, але код тримається слабко",
+      list: buckets.evening,
+      dot: "bg-warning-solid",
+    },
+    {
+      key: "batch",
+      label: "Оновити разом",
+      hint: "мінори й латки — їдуть однією пачкою",
+      list: buckets.batch,
+      dot: "bg-success-solid",
+    },
   ];
 
   return (
     <section className={cn(CARD, "p-3.5")}>
-      <h3 className={ASIDE_TITLE}>Скільки це роботи</h3>
+      <h3 className={ASIDE_TITLE}>Що робити з оновленнями</h3>
+      <p className="mt-0.5 text-3xs text-muted-foreground">
+        Пакети, які просять уваги, розкладені за тим, як їх брати.
+      </p>
       <div className="mt-2.5 grid gap-2.5">
         {rows.map((row) => (
           <div key={row.key} className="grid gap-0.5">
@@ -835,6 +905,7 @@ function EffortCard({ items }: { items: StackItem[] }) {
               <span className="text-xs font-medium">{row.label}</span>
               <span className="figure ml-auto text-xs font-medium">{row.list.length}</span>
             </div>
+            <p className="pl-4 text-3xs leading-snug text-muted-foreground/80">{row.hint}</p>
             <p className="pl-4 text-3xs text-muted-foreground">
               {row.list.length === 0
                 ? "нічого"
@@ -847,7 +918,8 @@ function EffortCard({ items }: { items: StackItem[] }) {
         ))}
       </div>
       <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
-        Оцінка з двох речей: наскільки болісний стрибок і скільки коду за пакет тримається. Груба навмисно.
+        Розкладка з двох речей: наскільки болісний стрибок версії і скільки коду за
+        пакет тримається. Груба навмисно — це підказка, з чого починати, а не план.
       </p>
     </section>
   );
@@ -860,6 +932,16 @@ function EffortCard({ items }: { items: StackItem[] }) {
  * момент знімка: другий список розійшовся б із першим, і картка обіцяла б
  * захист, якого немає.
  */
+/**
+ * Групи сторожів. Живуть у знімку (GUARD_GROUPS у генераторі), тут лише
+ * підпис та іконка — щоб перелік не роздвоївся на код і на сторінку.
+ */
+const GUARD_GROUP_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  code: { label: "Код", icon: Braces },
+  registry: { label: "Наші реєстри", icon: ListChecks },
+  db: { label: "Жива база", icon: Database },
+};
+
 function GuardsCard() {
   const { guards, tests, testFiles, lintStubs } = STACK_SNAPSHOT;
 
@@ -876,45 +958,157 @@ function GuardsCard() {
     return name;
   };
 
+  const groups = useMemo(() => {
+    const order: Array<"code" | "registry" | "db"> = ["code", "registry", "db"];
+    return order
+      .map((key) => ({ key, list: guards.filter((guard) => (guard.group ?? "registry") === key) }))
+      .filter((group) => group.list.length > 0);
+  }, [guards]);
+
   return (
     <section className={cn(CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Сторожа перед пушем</h3>
-      {/* Чипси НЕЙТРАЛЬНІ навмисно: це перелік того, що стоїть перед пушем, а
-          не табло стану. Зелений означав би «щойно пройшло», а сторінка цього
-          не знає — перевірки живуть у гаку на машині, і фарбувати їх зеленим
-          означало б обіцяти захист, якого в цю мить може й не бути. */}
+      {/*
+        ПРО КОЛІР. Тон каже, ЩО ЦЕ ЗА СТОРОЖА, а не «щойно пройшла»: сторінка
+        цього знати не може — перевірки живуть у гаку на машині, і зелений
+        обіцяв би захист, якого в цю мить може й не бути. Тому лише два тони:
+        синій — просто стоїть на варті; жовтий — несе борг, і число видно
+        просто на чипсі. Червоного немає навмисно: чесного джерела для «зараз
+        погано» в сторінки немає, а вигаданий червоний — та сама брехня, від
+        якої нас беріг сірий.
+      */}
       <p className="mt-0.5 text-3xs text-muted-foreground">
         Кожна стоїть між тобою й продом. Натисни, щоб дізнатись, що саме вона ловить.
       </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {guards.map((guard) => (
-          <Popover key={guard.name}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "cursor-pointer rounded-md px-1.5 py-0.5 text-2xs transition-colors",
-                  guard.name === "заглушки правил хуків" && lintStubs
-                    ? "bg-warning-soft text-warning-foreground hover:bg-warning-soft/70"
-                    : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                )}
-              >
-                {labelOf(guard.name)}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-3">
-              <p className="text-[13px] font-semibold">{guard.name}</p>
-              {guard.note ? (
-                <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{guard.note}</p>
-              ) : null}
-            </PopoverContent>
-          </Popover>
-        ))}
+      <div className="mt-2.5 grid gap-2.5">
+        {groups.map((group) => {
+          const meta = GUARD_GROUP_META[group.key];
+          const Icon = meta.icon;
+          return (
+            <div key={group.key} className="grid gap-1.5">
+              <div className="flex items-center gap-1.5 text-3xs uppercase tracking-caps text-muted-foreground">
+                <Icon className="h-3 w-3 shrink-0" aria-hidden />
+                {meta.label}
+                <span className="figure ml-auto normal-case tracking-normal">{group.list.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.list.map((guard) => {
+                  const carriesDebt = guard.name === "заглушки правил хуків" && Boolean(lintStubs);
+                  return (
+                    <Popover key={guard.name}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "cursor-pointer rounded-md border px-1.5 py-0.5 text-2xs transition-colors",
+                            carriesDebt
+                              ? "tone-warning hover:brightness-[0.97]"
+                              : "tone-info-subtle border-info-soft-border text-info-foreground hover:brightness-[0.97]"
+                          )}
+                        >
+                          {labelOf(guard.name)}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-72 p-3">
+                        <p className="text-[13px] font-semibold">{guard.name}</p>
+                        {guard.note ? (
+                          <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{guard.note}</p>
+                        ) : null}
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
       <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
         {testFiles ? `${pluralUk(testFiles, "файл", "файли", "файлів")} тестів · ` : ""}
         {STACK_SNAPSHOT.sourceLines.toLocaleString("uk-UA")} рядків коду · знімок{" "}
         {formatAgoCoarse(STACK_SNAPSHOT.generatedAt) ?? "щойно"}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * «Що працює само» — автоматика, якої на сторінці не було видно взагалі.
+ *
+ * НАВІЩО. «Стек» відповідає на питання «з чого це зроблено», але досі відповідав
+ * лише про npm-пакети. Половина того, що тримає проєкт, — не пакети: роботи в
+ * GitHub, розклади в самій базі, гаки на машині, плагін збірки. Про них не
+ * пам'ятають саме тому, що їх ніде не видно.
+ *
+ * ДАНІ ВИЧИТАНІ, А НЕ ВПИСАНІ. Роботи, гаки й плагіни бере генератор знімка з
+ * файлів; кількість кронів — жива, з бази. Список рукою протух би за тиждень:
+ * 24.08.2026 я сам додав дві перевірки, і README про них не знав.
+ */
+function AutomationCard({ platform }: { platform: StackPlatform | null }) {
+  const automation = STACK_SNAPSHOT.automation;
+  if (!automation) return null;
+
+  const rows: Array<{
+    key: string;
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    count: number | null;
+    detail: string;
+  }> = [
+    {
+      key: "workflows",
+      icon: Cloud,
+      label: "Роботи в GitHub",
+      count: automation.workflows.length,
+      detail: automation.workflows.map((flow) => `${flow.name} — ${flow.trigger}`).join(" · "),
+    },
+    {
+      key: "cron",
+      icon: Timer,
+      label: "Розклади в базі",
+      count: platform?.cron_jobs ?? null,
+      detail: "дайджести, нагадування, алерти, знімки здоров'я, версії стеку",
+    },
+    {
+      key: "hooks",
+      icon: ShieldAlert,
+      label: "Гаки на машині",
+      count: automation.hooks.length,
+      detail: automation.hooks.join(", "),
+    },
+    {
+      key: "plugins",
+      icon: Package,
+      label: "Плагіни збірки",
+      count: automation.plugins.length,
+      detail: automation.plugins.map((name) => name.replace(/^\/plugins\//, "")).join(", "),
+    },
+  ];
+
+  return (
+    <section className={cn(CARD, "p-3.5")}>
+      <h3 className={ASIDE_TITLE}>Що працює само</h3>
+      <p className="mt-0.5 text-3xs text-muted-foreground">
+        Крутиться без людини — і саме тому про це забувають.
+      </p>
+      <div className="mt-2.5 grid gap-2">
+        {rows.map((row) => {
+          const Icon = row.icon;
+          return (
+            <div key={row.key} className="grid gap-0.5">
+              <div className="flex items-baseline gap-2">
+                <Icon className="h-3.5 w-3.5 shrink-0 translate-y-[2px] text-muted-foreground/70" aria-hidden />
+                <span className="text-xs font-medium">{row.label}</span>
+                <span className="figure ml-auto text-xs font-medium">{row.count ?? "—"}</span>
+              </div>
+              <p className="pl-[22px] text-3xs leading-snug text-muted-foreground">{row.detail}</p>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
+        Хмарних рутин тут немає навмисно: вони живуть поза репозиторієм, і чесно
+        порахувати їх звідси неможливо.
       </p>
     </section>
   );

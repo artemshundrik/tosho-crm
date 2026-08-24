@@ -93,13 +93,27 @@ export type StackSnapshot = {
    * не пускає в прод. Сам перелік назв нічого не пояснює: «заглушки правил
    * хуків» — це набір слів для будь-кого, хто цю перевірку не писав.
    */
-  guards: Array<{ name: string; note: string | null }>;
+  guards: Array<{ name: string; note: string | null; group?: StackGuardGroup }>;
   tests: number | null;
   testFiles: number | null;
   lintStubs: number | null;
   node: string;
   netlifyFunctions: number;
   sourceLines: number;
+  /**
+   * Те, що працює САМО: роботи в GitHub, гаки, плагіни збірки. Вичитується з
+   * файлів, а не пишеться списком — рукописний перелік протухає за тиждень.
+   */
+  automation?: StackAutomation;
+};
+
+/** До чого належить сторожа: код, наші реєстри чи жива база. */
+export type StackGuardGroup = "code" | "registry" | "db";
+
+export type StackAutomation = {
+  workflows: Array<{ file: string; name: string; cron: string | null; trigger: string }>;
+  hooks: string[];
+  plugins: string[];
 };
 
 /* ────────────────────── типи того, що знає npm ────────────────────── */
