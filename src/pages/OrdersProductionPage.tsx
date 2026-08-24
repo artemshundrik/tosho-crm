@@ -352,16 +352,8 @@ export default function OrdersProductionPage() {
   const { teamId, session, userId } = useAuth();
   const workspacePresence = useWorkspacePresence();
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
-  /**
-   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
-   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
-   * значення потрібні лише для початкових станів нижче.
-   *
-   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
-   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
-   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
-   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
-   */
+  // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
+  // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
   const initialPageState = useMemo(() => {
     const cache = readOrdersProductionPageCache(teamId ?? "");
     const stored = readOrdersProductionPageFiltersState(teamId ?? "");

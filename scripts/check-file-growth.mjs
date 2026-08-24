@@ -52,18 +52,27 @@ const GIANT_THRESHOLD = 2000;
  * живе відповідна логіка. Але стеля — це обіцянка, а не формальність: якщо
  * її доведеться підняти ще раз, спершу винось модуль.
  *
+ * ПЕРЕРАХОВАНО 24.08.2026 після роботи над швидкістю дошок (картка 136).
+ * Спершу винесено модулі, як і вимагає рядок вище: `useKanbanViewportHeight`
+ * і `useDeferredHeavySurface` забрали з обох дошок по вісімдесят рядків
+ * дослівно однакового вимірювання й відкладеного першого кадру. Тому
+ * DesignPage не піднято, а ОПУЩЕНО: 6559 -> 5887. Решта — залишок, який у
+ * спільний модуль не виноситься: розведення мобільної й десктопної гілок
+ * (+28 у QuotesPage) і по два-пʼять рядків пояснень там, де читання кешу
+ * переїхало в useMemo.
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
 const CEILINGS = {
-  "src/pages/DesignTaskPage.tsx": 12800,
-  "src/pages/QuoteDetailsPage.tsx": 9845,
-  "src/pages/QuotesPage.tsx": 8196,
-  "src/pages/DesignPage.tsx": 6559,
+  "src/pages/DesignTaskPage.tsx": 12802,
+  "src/pages/QuoteDetailsPage.tsx": 9847,
+  "src/pages/QuotesPage.tsx": 8224,
+  "src/pages/DesignPage.tsx": 5887,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
-  "src/pages/OrdersCustomersPage.tsx": 4268,
+  "src/pages/OrdersCustomersPage.tsx": 4273,
   "src/pages/TeamMembersPage.tsx": 3986,
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,

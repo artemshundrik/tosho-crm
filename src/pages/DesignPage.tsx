@@ -57,7 +57,8 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
-import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
+import { useKanbanViewportHeight } from "@/hooks/useKanbanViewportHeight";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -912,8 +913,11 @@ const getCompletedPeriodStart = (period: DesignCompletedPeriod) => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 };
 
-/** Чи вже монтувалось важке тіло цієї сторінки в цій сесії (див. heavySurfaceReady). */
+/** Чи монтувалось важке тіло цієї сторінки в цій сесії — див. useDeferredHeavySurface. */
 let designBodyMountedThisSession = false;
+const markDesignBodyMounted = () => {
+  designBodyMountedThisSession = true;
+};
 
 export default function DesignPage() {
   const { teamId, userId, permissions, session, jobRole, viewUserId } = useAuth();
@@ -935,60 +939,15 @@ export default function DesignPage() {
   const restoredFilters = initialPageState.filters;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.tasks.length > 0));
-  /**
-   * Перший кадр маршруту — дешевий, важке тіло домальовується перехідно (REQ-136).
-   *
-   * Клік по сайдбару React Router загортає в transition: СТАРА сторінка лишається
-   * на екрані, доки нова не відрендериться повністю. Перший рендер цієї сторінки
-   * коштує сотні мілісекунд (на деві — секунди), тож людина натискала й бачила
-   * завмерлу попередню сторінку. Заміряно 24.08.2026 на деві, гарячі переходи
-   * сайдбаром: дизайн — 2.1 с до перемикання, прорахунки — 0.65 с, тоді як
-   * підрядники — 45-160 мс.
-   *
-   * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
-   * прапорець нижче перемикається у transition: React рендерить важке тіло
-   * шматками, не блокуючи ні перемикання маршруту, ні кліки.
-   *
-   * ЛИШЕ ПЕРШЕ МОНТУВАННЯ ЗА СЕСІЮ. На гарячих повторних заходах тіло монтується
-   * одним заходом, як і до правки: transition там закінчується за ~200 мс (шторм
-   * дозавантажень полагоджено окремо), а «дешевий перший кадр» на швидкому
-   * переході давав видиму ваду — тулбар уже стоїть, зона дошки на кадр порожня
-   * і стрибає висотою, поки не впригне вміст. Артем зловив це 24.08.2026:
-   * «канбан на мілісекунду мигає, такого раніше не було». Тож відкладання
-   * вмикається рівно там, де воно рятує (перший дорогий mount із виконанням
-   * модулів), і не з'являється там, де шкодить.
-   */
-  const [heavySurfaceReady, setHeavySurfaceReady] = useState(() => designBodyMountedThisSession);
-  useEffect(() => {
-    if (heavySurfaceReady) return;
-    designBodyMountedThisSession = true;
-    startTransition(() => {
-      setHeavySurfaceReady(true);
-    });
-  }, [heavySurfaceReady]);
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
-  /**
-   * Каркас відкладеного тіла живе за правилами естафети REQ-19: перші 150 мс
-   * він прозорий. Без цього на ГАРЯЧОМУ переході (дані вже в кеші, transition
-   * закінчується за ~100-300 мс) людина бачила блимання каркаса там, де раніше
-   * вміст стояв одразу, — Артем зловив це 24.08.2026 і мав рацію: на дошці
-   * беклогу такого блимання немає. Справжнє завантаження (даних ще немає)
-   * показує каркас одразу, як і до правки.
-   */
-  const deferredBodyOnly = !heavySurfaceReady && !(loading && tasks.length === 0);
-  // 400 мс, а не типові 150: гарячий transition займає ~200 мс на проді й до
-  // ~600 на деві, і з порогом 150 каркас встигав проявитись на кадр-другий.
-  const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
-  /**
-   * Чи показано зараз каркас замість дошки. Це ОКРЕМИЙ вузол DOM, тож ефект
-   * вимірювання мусить перезапуститись на його заміні — інакше він далі тримає
-   * відчеплений вузол і міряє нулі (заміряно: дошка вилазила на 165 px за екран
-   * і лишалась такою 2.5 с).
-   */
-  const boardSkeletonShown = !heavySurfaceReady || (loading && tasks.length === 0);
+  const { skeletonShown: boardSkeletonShown, skeletonOpaque } = useDeferredHeavySurface({
+    alreadyMounted: designBodyMountedThisSession,
+    markMounted: markDesignBodyMounted,
+    dataPending: loading && tasks.length === 0,
+  });
   /**
    * Мобільна й десктопна дошки — РІЗНІ дерева, і ховати зайве класами замало:
    * React будує й комітить обидва. Мобільний список малює всі картки поспіль,
@@ -1212,7 +1171,6 @@ export default function DesignPage() {
   const currentUserDisplayNameRef = useRef("");
   const currentUserAvatarUrlRef = useRef<string | null>(null);
   const initialLogoEntriesRef = useRef<CustomerOption[]>(initialLogoCache?.entries ?? []);
-  const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
   const tasksKanbanAutoloadLockRef = useRef(false);
   const tasksKanbanAutoloadTimerRef = useRef<number | null>(null);
   const fullFetchCompletedKeyRef = useRef<string | null>(null);
@@ -2704,114 +2662,6 @@ export default function DesignPage() {
     }
   }, [viewMode]);
 
-  useLayoutEffect(() => {
-    if (viewMode !== "kanban") return;
-    if (typeof window === "undefined") return;
-
-    const viewport = desktopKanbanViewportRef.current;
-    if (!viewport) return;
-
-    let frameId = 0;
-    let verifyFrame = 0;
-    let verifyLeft = 0;
-    /**
-     * САМОПЕРЕВІРКА ПІСЛЯ КАДРУ (REQ-136).
-     *
-     * Висота дошки рахується як «від верху вікна дошки до низу екрана». Один
-     * замір цьому вірити не можна: заміряно на холодному вході — у мить, коли
-     * вміст заступає каркас, `rect.top` віддавав 0 замість 177, висота
-     * виходила 974 замість 797, і дошка на дві з половиною секунди вилазила на
-     * 165 px за нижній край екрана.
-     *
-     * Замість гри в «а тепер точно вчасно» перевіряємо результат: якщо після
-     * кадру нижній край дошки опинився за межами вікна, міряємо ще раз. Три
-     * спроби — стеля, щоб ніколи не крутитись у циклі.
-     */
-    const measure = () => {
-      frameId = 0;
-      // Вузол міг від'єднатись (каркас замінили вмістом) — у відчепленого
-      // getBoundingClientRect() віддає нулі, і висота вийшла б на весь екран.
-      if (!viewport.isConnected) return;
-      const rect = viewport.getBoundingClientRect();
-      const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
-      setDesktopKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
-      if (verifyLeft <= 0) verifyLeft = 3;
-      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
-      verifyFrame = window.requestAnimationFrame(() => {
-        verifyFrame = 0;
-        verifyLeft -= 1;
-        const after = viewport.getBoundingClientRect();
-        if (after.bottom > window.innerHeight + 1 && verifyLeft > 0) measure();
-        else verifyLeft = 0;
-      });
-    };
-    const scheduleMeasure = () => {
-      if (frameId) window.cancelAnimationFrame(frameId);
-      frameId = window.requestAnimationFrame(measure);
-    };
-
-    // Measure synchronously before first paint so the skeleton renders at the
-    // final board height instead of collapsing to the intrinsic card height and
-    // then jumping once the rAF measurement lands.
-    measure();
-    /**
-     * ...і ОДРАЗУ перевіряємо на наступному кадрі (REQ-136). Синхронний замір
-     * усередині layout-ефекту іноді ловить проміжну верстку: заміряно на
-     * холодному вході — `rect.top` віддавав 0 замість 177, і висота виходила
-     * 974 замість 797, тобто колонки вилазили на 165 px за нижній край екрана
-     * й лишались такими. Наступний кадр бачить уже усталену верстку, а якщо
-     * значення збіглося — стан не оновлюється взагалі.
-     */
-    scheduleMeasure();
-    window.addEventListener("resize", scheduleMeasure);
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            scheduleMeasure();
-          })
-        : null;
-
-    resizeObserver?.observe(viewport);
-    if (viewport.parentElement) {
-      resizeObserver?.observe(viewport.parentElement);
-    }
-
-    /**
-     * ДОМІРЮВАННЯ НА ХОЛОДНОМУ ВХОДІ (REQ-136).
-     *
-     * Висота рахується від `rect.top`, а смуга дій приїжджає ПІЗНІШЕ за перший
-     * замір: сторінка віддає кнопки в шапку ефектом, тобто вже після того, як
-     * висоту пораховано. Через це на холодному вході колонки спершу вилізали
-     * нижче екрана, а потім стрибали назад.
-     *
-     * ResizeObserver цього не ловить: у вікна дошки не міняється ні власний
-     * розмір, ні розмір батька — міняється лише ПОЗИЦІЯ. Тому перші пів секунди
-     * після монтування стежимо за `rect.top` на кожному кадрі й переміряємо
-     * лише тоді, коли він справді зрушив.
-     */
-    let settleFrame = 0;
-    const settleUntil = performance.now() + 500;
-    let lastTop = viewport.getBoundingClientRect().top;
-    const settle = () => {
-      const top = viewport.getBoundingClientRect().top;
-      if (top !== lastTop) {
-        lastTop = top;
-        measure();
-      }
-      if (performance.now() < settleUntil) settleFrame = window.requestAnimationFrame(settle);
-      else settleFrame = 0;
-    };
-    settleFrame = window.requestAnimationFrame(settle);
-
-    return () => {
-      window.removeEventListener("resize", scheduleMeasure);
-      if (frameId) window.cancelAnimationFrame(frameId);
-      if (settleFrame) window.cancelAnimationFrame(settleFrame);
-      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
-      resizeObserver?.disconnect();
-    };
-  }, [viewMode, filteredTasks.length, boardSkeletonShown]);
 
   useEffect(() => {
     if (viewMode !== "kanban") return;
@@ -2870,6 +2720,11 @@ export default function DesignPage() {
   }, [hasMoreTasks, loading, refreshing, viewMode, loadTasks]);
 
 
+  const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
+    enabled: viewMode === "kanban",
+    skeletonShown: boardSkeletonShown,
+    itemCount: filteredTasks.length,
+  });
   const grouped = useMemo(() => {
     const bucket: Record<DesignStatus, DesignTask[]> = {
       new: [],
@@ -5098,7 +4953,7 @@ export default function DesignPage() {
         }
         meta={
           <ToolbarMeta
-            count={!heavySurfaceReady || (loading && tasks.length === 0) ? "…" : filteredTasks.length}
+            count={boardSkeletonShown ? "…" : filteredTasks.length}
             onReset={clearFilters}
             showReset={hasActiveFilters}
             loading={loading || showRefreshIndicator}
@@ -5113,7 +4968,7 @@ export default function DesignPage() {
       currentUserDisplayName,
       designerFilter,
       designerFilterOptions,
-      heavySurfaceReady,
+      boardSkeletonShown,
       filteredTasks.length,
       getMemberAvatar,
       hasMoreTasks,
@@ -5130,7 +4985,6 @@ export default function DesignPage() {
       showRefreshIndicator,
       standaloneTasksCount,
       statusFilter,
-      tasks.length,
       userId,
       viewMode,
       workspacePresence.activeHereEntries,
@@ -5155,7 +5009,7 @@ export default function DesignPage() {
               data-deferred-body-skeleton
               className={cn(
                 "transition-opacity duration-200",
-                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+                !skeletonOpaque && "opacity-0"
               )}
             >
               {isNarrowViewport ? (

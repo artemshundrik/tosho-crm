@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -137,7 +137,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
-import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
+import { useKanbanViewportHeight } from "@/hooks/useKanbanViewportHeight";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
@@ -522,8 +523,11 @@ function readQuotesPageMembersCache(teamId: string): TeamMemberRow[] {
   }
 }
 
-/** Чи вже монтувалось важке тіло цієї сторінки в цій сесії (див. heavySurfaceReady). */
+/** Чи монтувалось важке тіло цієї сторінки в цій сесії — див. useDeferredHeavySurface. */
 let quotesBodyMountedThisSession = false;
+const markQuotesBodyMounted = () => {
+  quotesBodyMountedThisSession = true;
+};
 
 export function QuotesPage({ teamId }: QuotesPageProps) {
   const { userId, jobRole, permissions } = useAuth();
@@ -531,16 +535,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const companyRates = useCompanyPricingRates(userId);
   const navigationType = useNavigationType();
   const workspacePresence = useWorkspacePresence();
-  /**
-   * Кеш читається ОДИН раз, а не на кожен рендер. Доти ці рядки стояли просто в
-   * тілі компонента, а `JSON.parse` усього списку виконувався щоразу, хоча
-   * значення потрібні лише для початкових станів нижче.
-   *
-   * ЧЕСНО ПРО ВИГРАШ: на дошці дизайну така сама пара рядків давала 97% ціни
-   * одного рендера, бо поруч ішов повний перебір задач. Тут заміряно менше —
-   * на «Прорахунках» різниця 1.4-1.6 → 1.2-1.5 мс, тобто в межах шуму. Правка
-   * лишається, бо робота однаково марна, а її ціна росте разом із кешем.
-   */
+  // Кеш читається ОДИН раз, а не на кожен рендер: значення потрібні лише для
+  // початкових станів нижче. Чому це важливо — див. readInitialDesignPageState.
   const initialPageState = useMemo(() => {
     const cache = readQuotesPageCache(teamId);
     const teamMembers = readQuotesPageMembersCache(teamId);
@@ -559,37 +555,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const initialViewMode = initialPageState.viewMode;
   const navigate = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>(() => initialCache?.rows ?? []);
-  /**
-   * Перший кадр маршруту — дешевий, важке тіло домальовується перехідно (REQ-136).
-   *
-   * Клік по сайдбару React Router загортає в transition: СТАРА сторінка лишається
-   * на екрані, доки нова не відрендериться повністю. Перший рендер цієї сторінки
-   * коштує сотні мілісекунд (на деві — секунди), тож людина натискала й бачила
-   * завмерлу попередню сторінку. Заміряно 24.08.2026 на деві, гарячі переходи
-   * сайдбаром: дизайн — 2.1 с до перемикання, прорахунки — 0.65 с, тоді як
-   * підрядники — 45-160 мс.
-   *
-   * Тому перший коміт малює лише тулбар і каркас (він уже існує — REQ-19), а
-   * прапорець нижче перемикається у transition: React рендерить важке тіло
-   * шматками, не блокуючи ні перемикання маршруту, ні кліки.
-   *
-   * ЛИШЕ ПЕРШЕ МОНТУВАННЯ ЗА СЕСІЮ. На гарячих повторних заходах тіло монтується
-   * одним заходом, як і до правки: transition там закінчується за ~200 мс (шторм
-   * дозавантажень полагоджено окремо), а «дешевий перший кадр» на швидкому
-   * переході давав видиму ваду — тулбар уже стоїть, зона дошки на кадр порожня
-   * і стрибає висотою, поки не впригне вміст. Артем зловив це 24.08.2026:
-   * «канбан на мілісекунду мигає, такого раніше не було». Тож відкладання
-   * вмикається рівно там, де воно рятує (перший дорогий mount із виконанням
-   * модулів), і не з'являється там, де шкодить.
-   */
-  const [heavySurfaceReady, setHeavySurfaceReady] = useState(() => quotesBodyMountedThisSession);
-  useEffect(() => {
-    if (heavySurfaceReady) return;
-    quotesBodyMountedThisSession = true;
-    startTransition(() => {
-      setHeavySurfaceReady(true);
-    });
-  }, [heavySurfaceReady]);
   const rowsRef = useRef<QuoteListRow[]>(initialCache?.rows ?? []);
   const fullFetchCompletedKeyRef = useRef<string | null>(null);
   const [quotesFetchLimit, setQuotesFetchLimit] = useState(() =>
@@ -597,20 +562,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
-  /**
-   * Каркас відкладеного тіла живе за правилами естафети REQ-19: перші 150 мс
-   * він прозорий. Без цього на ГАРЯЧОМУ переході (дані вже в кеші, transition
-   * закінчується за ~100-300 мс) людина бачила блимання каркаса там, де раніше
-   * вміст стояв одразу, — Артем зловив це 24.08.2026 і мав рацію: на дошці
-   * беклогу такого блимання немає. Справжнє завантаження (даних ще немає)
-   * показує каркас одразу, як і до правки.
-   */
-  const deferredBodyOnly = !heavySurfaceReady && !loading;
-  // 400 мс, а не типові 150: гарячий transition займає ~200 мс на проді й до
-  // ~600 на деві, і з порогом 150 каркас встигав проявитись на кадр-другий.
-  const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
-  /** Див. DesignPage: каркас — окремий вузол, ефект вимірювання йде за ним. */
-  const boardSkeletonShown = loading || !heavySurfaceReady;
+  const { skeletonShown: boardSkeletonShown, skeletonOpaque } = useDeferredHeavySurface({
+    alreadyMounted: quotesBodyMountedThisSession,
+    markMounted: markQuotesBodyMounted,
+    dataPending: loading,
+  });
   /**
    * Мобільні картки й десктопна таблиця — РІЗНІ дерева, і `md:hidden` ховає
    * зайве лише візуально: React будує й комітить обидва. У прорахунках мобільна
@@ -693,7 +649,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => initialViewMode);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
-  const [desktopKanbanViewportHeight, setDesktopKanbanViewportHeight] = useState<number | null>(null);
+
   const quotesKanbanAutoloadLockRef = useRef(false);
   const quotesKanbanAutoloadTimerRef = useRef<number | null>(null);
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -3496,6 +3452,12 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     quoteSetDetailsTarget,
     quoteSetDetailsItems,
   });
+  const desktopKanbanViewportHeight = useKanbanViewportHeight(desktopKanbanViewportRef, {
+    enabled: viewMode === "kanban",
+    skeletonShown: boardSkeletonShown,
+    itemCount: filteredAndSortedRows.length,
+  });
+
   const hasActiveFilters = hasActiveViewFilters || managerFilter !== ALL_MANAGERS_FILTER;
 
   useEffect(() => {
@@ -4517,114 +4479,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   }, [viewMode]);
 
-  useLayoutEffect(() => {
-    if (viewMode !== "kanban") return;
-    if (typeof window === "undefined") return;
-
-    const viewport = desktopKanbanViewportRef.current;
-    if (!viewport) return;
-
-    let frameId = 0;
-    let verifyFrame = 0;
-    let verifyLeft = 0;
-    /**
-     * САМОПЕРЕВІРКА ПІСЛЯ КАДРУ (REQ-136).
-     *
-     * Висота дошки рахується як «від верху вікна дошки до низу екрана». Один
-     * замір цьому вірити не можна: заміряно на холодному вході — у мить, коли
-     * вміст заступає каркас, `rect.top` віддавав 0 замість 177, висота
-     * виходила 974 замість 797, і дошка на дві з половиною секунди вилазила на
-     * 165 px за нижній край екрана.
-     *
-     * Замість гри в «а тепер точно вчасно» перевіряємо результат: якщо після
-     * кадру нижній край дошки опинився за межами вікна, міряємо ще раз. Три
-     * спроби — стеля, щоб ніколи не крутитись у циклі.
-     */
-    const measure = () => {
-      frameId = 0;
-      // Вузол міг від'єднатись (каркас замінили вмістом) — у відчепленого
-      // getBoundingClientRect() віддає нулі, і висота вийшла б на весь екран.
-      if (!viewport.isConnected) return;
-      const rect = viewport.getBoundingClientRect();
-      const nextHeight = Math.max(320, Math.floor(window.innerHeight - rect.top - 12));
-      setDesktopKanbanViewportHeight((current) => (current === nextHeight ? current : nextHeight));
-      if (verifyLeft <= 0) verifyLeft = 3;
-      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
-      verifyFrame = window.requestAnimationFrame(() => {
-        verifyFrame = 0;
-        verifyLeft -= 1;
-        const after = viewport.getBoundingClientRect();
-        if (after.bottom > window.innerHeight + 1 && verifyLeft > 0) measure();
-        else verifyLeft = 0;
-      });
-    };
-    const scheduleMeasure = () => {
-      if (frameId) window.cancelAnimationFrame(frameId);
-      frameId = window.requestAnimationFrame(measure);
-    };
-
-    // Measure synchronously before first paint so the skeleton renders at the
-    // final board height instead of collapsing to the intrinsic card height and
-    // then jumping once the rAF measurement lands.
-    measure();
-    /**
-     * ...і ОДРАЗУ перевіряємо на наступному кадрі (REQ-136). Синхронний замір
-     * усередині layout-ефекту іноді ловить проміжну верстку: заміряно на
-     * холодному вході — `rect.top` віддавав 0 замість 177, і висота виходила
-     * 974 замість 797, тобто колонки вилазили на 165 px за нижній край екрана
-     * й лишались такими. Наступний кадр бачить уже усталену верстку, а якщо
-     * значення збіглося — стан не оновлюється взагалі.
-     */
-    scheduleMeasure();
-    window.addEventListener("resize", scheduleMeasure);
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            scheduleMeasure();
-          })
-        : null;
-
-    resizeObserver?.observe(viewport);
-    if (viewport.parentElement) {
-      resizeObserver?.observe(viewport.parentElement);
-    }
-
-    /**
-     * ДОМІРЮВАННЯ НА ХОЛОДНОМУ ВХОДІ (REQ-136).
-     *
-     * Висота рахується від `rect.top`, а смуга дій приїжджає ПІЗНІШЕ за перший
-     * замір: сторінка віддає кнопки в шапку ефектом, тобто вже після того, як
-     * висоту пораховано. Через це на холодному вході колонки спершу вилізали
-     * нижче екрана, а потім стрибали назад.
-     *
-     * ResizeObserver цього не ловить: у вікна дошки не міняється ні власний
-     * розмір, ні розмір батька — міняється лише ПОЗИЦІЯ. Тому перші пів секунди
-     * після монтування стежимо за `rect.top` на кожному кадрі й переміряємо
-     * лише тоді, коли він справді зрушив.
-     */
-    let settleFrame = 0;
-    const settleUntil = performance.now() + 500;
-    let lastTop = viewport.getBoundingClientRect().top;
-    const settle = () => {
-      const top = viewport.getBoundingClientRect().top;
-      if (top !== lastTop) {
-        lastTop = top;
-        measure();
-      }
-      if (performance.now() < settleUntil) settleFrame = window.requestAnimationFrame(settle);
-      else settleFrame = 0;
-    };
-    settleFrame = window.requestAnimationFrame(settle);
-
-    return () => {
-      window.removeEventListener("resize", scheduleMeasure);
-      if (frameId) window.cancelAnimationFrame(frameId);
-      if (settleFrame) window.cancelAnimationFrame(settleFrame);
-      if (verifyFrame) window.cancelAnimationFrame(verifyFrame);
-      resizeObserver?.disconnect();
-    };
-  }, [filteredAndSortedRows.length, viewMode, boardSkeletonShown]);
 
   useEffect(() => {
     if (quoteListMode === "grouped" && selectedIds.size > 0) {
@@ -6261,7 +6115,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               data-deferred-body-skeleton
               className={cn(
                 "transition-opacity duration-200",
-                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+                !skeletonOpaque && "opacity-0"
               )}
             >
               <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
@@ -6947,7 +6801,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               data-deferred-body-skeleton
               className={cn(
                 "min-h-0 overflow-hidden transition-opacity duration-200",
-                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+                !skeletonOpaque && "opacity-0"
               )}
               style={
                 desktopKanbanViewportHeight
