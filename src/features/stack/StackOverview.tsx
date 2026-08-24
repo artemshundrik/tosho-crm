@@ -149,7 +149,14 @@ export function StackOverview() {
               ))}
         </div>
 
-        <aside className="grid gap-3.5 lg:sticky lg:top-2">
+        {/*
+          БЕЗ sticky — навмисно (24.08.2026). Липка колонка працює, лише поки
+          вона нижча за екран: інакше браузер прибиває її верх, нижня картка
+          стає недосяжною, а дві колонки їдуть із різною швидкістю — Артем
+          назвав це «асинхронним скролом», і це рівно воно. Третя картка
+          «Що працює само» перетнула висоту екрана й зробила ваду видимою.
+          Тепер сторінка прокручується як одне ціле, як і решта сторінок. */}
+        <aside className="grid gap-3.5">
           <EffortCard items={items} />
           <GuardsCard />
           <AutomationCard platform={platform.data ?? null} />
@@ -861,66 +868,44 @@ function EffortCard({ items }: { items: StackItem[] }) {
   }, [items]);
 
   /**
-   * Підписи кажуть, ЩО РОБИТИ, а не якою мірою це важко.
+   * ТІЛЬКИ ЧИСЛА — за прямою вимогою Артема 24.08.2026.
    *
-   * Було «Окремий проєкт / На вечір кожне / Однією пачкою» — і Артем спитав, що
-   * це взагалі означає. Питання справедливе: назви описували відчуття, а не
-   * дію, і жодна з них не казала, що з цими пакетами робити далі.
+   * Тут послідовно було зайве, і він тицьнув у кожне: спершу перелік пакетів
+   * («@eslint/js, date-fns, eslint й ще 7») — незрозуміло, що це за сімка й
+   * навіщо вона в підсумку; потім рядок-пояснення під кожним заголовком і
+   * абзац про те, як рахується розкладка. Слова його: «просто скільки штуки —
+   * все, більше нічого не треба».
+   *
+   * Що лишилось: колір, дія й число. Самі пакети з їхніми версіями видно
+   * поруч, у списку — дублювати їх у підсумку означало питати те саме двічі.
    */
-  const rows: Array<{ key: string; label: string; hint: string; list: StackItem[]; dot: string }> = [
-    {
-      key: "project",
-      label: "Планувати окремо",
-      hint: "мажорна версія, і за пакет тримаються десятки файлів",
-      list: buckets.project,
-      dot: "bg-destructive",
-    },
-    {
-      key: "evening",
-      label: "Братись по одному",
-      hint: "мажорна версія, але код тримається слабко",
-      list: buckets.evening,
-      dot: "bg-warning-solid",
-    },
-    {
-      key: "batch",
-      label: "Оновити разом",
-      hint: "мінори й латки — їдуть однією пачкою",
-      list: buckets.batch,
-      dot: "bg-success-solid",
-    },
+  const rows: Array<{ key: string; label: string; count: number; dot: string }> = [
+    { key: "project", label: "Планувати окремо", count: buckets.project.length, dot: "bg-destructive" },
+    { key: "evening", label: "Братись по одному", count: buckets.evening.length, dot: "bg-warning-solid" },
+    { key: "batch", label: "Оновити разом", count: buckets.batch.length, dot: "bg-success-solid" },
   ];
 
   return (
     <section className={cn(CARD, "p-3.5")}>
       <h3 className={ASIDE_TITLE}>Що робити з оновленнями</h3>
-      <p className="mt-0.5 text-3xs text-muted-foreground">
-        Пакети, які просять уваги, розкладені за тим, як їх брати.
-      </p>
-      <div className="mt-2.5 grid gap-2.5">
+      <div className="mt-2.5 grid gap-2">
         {rows.map((row) => (
-          <div key={row.key} className="grid gap-0.5">
-            <div className="flex items-baseline gap-2">
-              <span className={cn("h-2 w-2 shrink-0 translate-y-[-1px] rounded-[2px]", row.dot)} />
-              <span className="text-xs font-medium">{row.label}</span>
-              <span className="figure ml-auto text-xs font-medium">{row.list.length}</span>
-            </div>
-            <p className="pl-4 text-3xs leading-snug text-muted-foreground/80">{row.hint}</p>
-            <p className="pl-4 text-3xs text-muted-foreground">
-              {row.list.length === 0
-                ? "нічого"
-                : row.list
-                    .slice(0, 3)
-                    .map((item) => item.label ?? item.name)
-                    .join(", ") + (row.list.length > 3 ? ` й ще ${row.list.length - 3}` : "")}
-            </p>
+          <div key={row.key} className="flex items-baseline gap-2">
+            <span className={cn("h-2 w-2 shrink-0 translate-y-[-1px] rounded-[2px]", row.dot)} />
+            <span className={cn("text-xs", row.count === 0 ? "text-muted-foreground" : "font-medium")}>
+              {row.label}
+            </span>
+            <span
+              className={cn(
+                "figure ml-auto text-xs",
+                row.count === 0 ? "text-muted-foreground" : "font-medium"
+              )}
+            >
+              {row.count}
+            </span>
           </div>
         ))}
       </div>
-      <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
-        Розкладка з двох речей: наскільки болісний стрибок версії і скільки коду за
-        пакет тримається. Груба навмисно — це підказка, з чого починати, а не план.
-      </p>
     </section>
   );
 }
