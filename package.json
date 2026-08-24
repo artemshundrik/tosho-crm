@@ -23,6 +23,10 @@
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test --project=checks",
+    "e2e:login": "E2E_LOGIN=1 playwright test --project=login --headed",
+    "e2e:report": "playwright show-report",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "preview": "vite preview",
     "migrate:avatars": "node scripts/migrate-avatar-storage.mjs",
     "migrate:avatar-variants": "node scripts/migrate-avatar-variants.mjs",
@@ -90,6 +94,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",

@@ -66,6 +66,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm run typecheck:functions
 
+      # Сценарії наскрізних перевірок (REQ-140) не входять у кореневий tsconfig.
+      # Тут перевіряються лише ТИПИ — сам прогін живе в окремому робочому
+      # процесі (e2e.yml) і пушів не блокує.
+      - name: Типи наскрізних перевірок
+        if: ${{ !cancelled() }}
+        run: npm run typecheck:e2e
+
       - name: Реєстр Netlify-функцій
         if: ${{ !cancelled() }}
         run: npm run check:functions

@@ -1,0 +1,22 @@
+{
+  "//": "Наскрізні перевірки (REQ-140) не входять у кореневий tsconfig — той включає лише src. Без окремого проєкту теку e2e не перевіряв би ніхто, а мовчазні помилки типів у сценаріях виглядають як «набір чомусь падає». Запуск: npm run typecheck:e2e",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}

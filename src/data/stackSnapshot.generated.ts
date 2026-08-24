@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-24T14:16:46.071Z",
+  "generatedAt": "2026-08-24T18:06:04.010Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -40,6 +40,18 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "homepage": "https://fontsource.org/fonts/inter",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=fontsource.org&sz=128"
+    },
+    {
+      "name": "@playwright/test",
+      "version": "1.62.1",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Ганяє зібраний застосунок у справжньому браузері й клацає по ньому, як людина: відкриває дошки, закриває вікна, шукає. Ловить те, чого не бачить жоден тест коду, — наприклад блимання сторінки при закритті вікна.",
+      "homepage": "https://playwright.dev",
+      "usedIn": 0,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=playwright.dev&sz=128"
     },
     {
       "name": "@radix-ui/react-alert-dialog",
@@ -308,7 +320,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 3,
+      "usedIn": 4,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -323,7 +335,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
       "homepage": null,
-      "usedIn": 3,
+      "usedIn": 4,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -664,7 +676,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 182,
+      "usedIn": 183,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -709,7 +721,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 249,
+      "usedIn": 250,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -939,7 +951,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 81,
+      "usedIn": 83,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1061,12 +1073,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "group": "db"
     }
   ],
-  "tests": 1190,
-  "testFiles": 79,
+  "tests": 1226,
+  "testFiles": 82,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 234369,
+  "sourceLines": 235545,
   "automation": {
     "workflows": [
       {
@@ -1074,6 +1086,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "name": "Перевірки",
         "cron": null,
         "trigger": "на пуш, на PR"
+      },
+      {
+        "file": "e2e.yml",
+        "name": "Наскрізні перевірки",
+        "cron": "20 4 * * *",
+        "trigger": "за розкладом 20 4 * * *"
       },
       {
         "file": "watchdog.yml",

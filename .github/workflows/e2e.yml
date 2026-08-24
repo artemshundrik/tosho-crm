@@ -1,0 +1,89 @@
+# Наскрізні перевірки застосунку в браузері (REQ-140).
+#
+# НАВІЩО ОКРЕМИЙ ФАЙЛ, А НЕ КРОК У «Перевірки». Цей набір піднімає справжню
+# збірку, ходить у продівський Supabase і триває хвилини, а не секунди. У
+# спільному робочому процесі він зробив би червоним будь-який PR щоразу, коли
+# база повільна або хтось саме зараз міняє дані. Картка просила прямо: не
+# блокувати пуші, доки набір не стабілізується.
+#
+# ЧОМУ НЕ НА КОЖЕН PUSH. Поки набір молодий, його червоне ще не означає
+# «застосунок зламаний». Запускаємо руками (workflow_dispatch) і раз на добу
+# вночі — цього досить, щоб побачити регресію наступного ранку, і замало, щоб
+# привчити себе не читати результат.
+#
+# ЗАПИСІВ НЕ БУВАЄ. Сценарії тільки читають, а гальмо в e2e/writeGuard.ts глушить
+# будь-який запит, що змінює дані, на рівні браузера. Спроба запису валить тест.
+
+name: Наскрізні перевірки
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:20 UTC — 07:20 за Києвом: результат готовий до початку робочого дня.
+    - cron: "20 4 * * *"
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Застосунок у браузері
+    runs-on: ubuntu-latest
+    # Збірка + прогін проти живої бази. Півгодини — це стеля, а не очікування.
+    timeout-minutes: 30
+    # Секрети не можна питати прямо в `if` кроку — контекст `secrets` там
+    # недоступний. Тому переносимо відповідь «вони є?» у змінну оточення.
+    env:
+      HAS_SECRETS: ${{ secrets.E2E_EMAIL != '' && secrets.VITE_SUPABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Версія МАЄ збігатися з NODE_VERSION у netlify.toml і з ci.yml: інакше
+      # перевіряється не те, на чому збирається прод.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # Червоне з поясненням краще за зелене з нічого: без секретів набір не
+      # перевіряє нічого, і мовчазний успіх у такому стані читався б як «усе
+      # гаразд».
+      - name: Немає секретів — далі йти нема сенсу
+        if: env.HAS_SECRETS != 'true'
+        run: |
+          echo "::error::Наскрізні перевірки не налаштовані."
+          echo "Заведи окремий тестовий обліковий запис і додай секрети репозиторію:"
+          echo "  E2E_EMAIL, E2E_PASSWORD, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY"
+          exit 1
+
+      - name: Залежності
+        run: npm ci
+
+      # Тільки chromium: три браузери качаються втричі довше, а перевіряємо ми
+      # поведінку застосунку, а не сумісність рушіїв.
+      - name: Браузер
+        run: npx playwright install --with-deps chromium
+
+      - name: Прогін
+        run: npm run e2e
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_AVATAR_BUCKET: avatars
+          VITE_SUPABASE_ITEM_VISUAL_BUCKET: attachments
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+
+      # Звіт зі слідами й відео потрібен саме тоді, коли впало: без нього
+      # «сценарій 3 червоний» не каже нічого, і доводиться відтворювати руками.
+      - name: Звіт
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

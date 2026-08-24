@@ -707,9 +707,19 @@ function LoginPage() {
 
 
         <form onSubmit={onLogin} className="space-y-4">
+          {/*
+            htmlFor/id тут не косметика: без звʼязку підпис і поле лишаються
+            двома чужими елементами. Читалка каже «поле для введення» без назви,
+            клік по слову «Email» не ставить курсор у поле, а наскрізні
+            перевірки не можуть знайти його інакше, ніж за текстом-заповнювачем
+            (e2e/globalSetup.ts саме сюди й вводить пошту з паролем).
+          */}
           <div>
-            <label className="text-sm font-medium text-foreground">Email</label>
+            <label htmlFor="login-email" className="text-sm font-medium text-foreground">
+              Email
+            </label>
             <input
+              id="login-email"
               className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -720,8 +730,11 @@ function LoginPage() {
 
           {mode === "password" && (
             <div>
-              <label className="text-sm font-medium text-foreground">Пароль</label>
+              <label htmlFor="login-password" className="text-sm font-medium text-foreground">
+                Пароль
+              </label>
               <PasswordInput
+                id="login-password"
                 wrapperClassName="mt-1.5"
                 inputClassName="w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-foreground/20"
                 value={password}
