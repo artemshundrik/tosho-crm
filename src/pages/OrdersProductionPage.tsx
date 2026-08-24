@@ -9,7 +9,7 @@ import { ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/ap
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1073,6 +1073,19 @@ export default function OrdersProductionPage() {
                  * й на дошці, тож два вигляди не розходяться.
                  */
                 <div className="space-y-2 px-4">
+                  {/* Та сама смуга статусів, що на дошці, — у списку працює
+                      фільтром готовності (картка 146). */}
+                  <MobileStatusChips
+                    chips={[
+                      { key: "all", label: "Всі", count: summary.total },
+                      { key: "ready", label: "Готово", count: summary.ready },
+                      { key: "counterparty", label: "Лід / реквізити", count: summary.counterparty },
+                      { key: "design", label: "Макет / візуал", count: summary.design },
+                    ]}
+                    activeKey={headerFilter}
+                    onSelect={(key) => setHeaderFilter(key as HeaderFilter)}
+                    className="pb-1"
+                  />
                   {filteredRecords.map((record) => (
                     <div key={record.id}>{renderOrderCard(record)}</div>
                   ))}
@@ -1273,7 +1286,7 @@ export default function OrdersProductionPage() {
                * Телефон: статуси й картки замість трьох колонок по третині
                * екрана — на 375px колонка виходила ~125px завширшки (картка 146).
                */
-              <div className="px-4">
+              <div className="px-4 py-3">
                 <MobileStatusBoard
                   columns={ORDER_READINESS_COLUMNS.map((column) => ({
                     key: column.id,

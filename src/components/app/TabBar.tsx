@@ -5,6 +5,7 @@ import { ToShoAiMark } from "@/features/tosho-ai/ToShoAiWordmark";
 import { createPortal } from "react-dom";
 import { preloadRoute } from "@/routes/routePreload";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { useOverlayOpen } from "@/components/ui/overlayPresence";
 import { isTabActive, resolveTabItems, type TabSourceLink } from "@/components/app/tabBarItems";
 import {
   getServerTabBarPrefs,
@@ -34,6 +35,10 @@ export function TabBar({
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const isNarrow = useIsNarrowViewport();
+  // Будь-який нижній аркуш ховає смугу — інакше вона висить поверх його
+  // нижніх пунктів і ловить дотики замість них.
+  const overlayOpen = useOverlayOpen();
+  const isHidden = hidden || overlayOpen;
   const prefs = useSyncExternalStore(subscribeTabBarPrefs, getTabBarPrefs, getServerTabBarPrefs);
 
   useEffect(() => {
@@ -87,9 +92,9 @@ export function TabBar({
       className={cn(
         "fixed inset-x-0 bottom-0 z-floating flex justify-center md:hidden pointer-events-none transform-gpu",
         "transition-[opacity,transform] duration-150 ease-out",
-        hidden ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
+        isHidden ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
       )}
-      aria-hidden={hidden}
+      aria-hidden={isHidden}
     >
       <div
         // Смуга тягнеться по всій доступній ширині, а не обіймає вміст: що
@@ -108,7 +113,7 @@ export function TabBar({
             "relative flex min-w-0 flex-1 items-center gap-[var(--tabbar-gap)]",
             // Прихована смуга мусить і кліки пропускати крізь себе — інакше
             // поверх відкритої палітри вона ловила дотики замість поля вводу.
-            hidden ? "pointer-events-none" : "pointer-events-auto"
+            isHidden ? "pointer-events-none" : "pointer-events-auto"
           )}
           style={{
             height: "var(--tabbar-height)",
@@ -195,7 +200,7 @@ export function TabBar({
             aria-label="Знайти або спитати ToSho AI"
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full text-white",
-              hidden ? "pointer-events-none" : "pointer-events-auto",
+              isHidden ? "pointer-events-none" : "pointer-events-auto",
               "transition-[background-color,border-color,color,box-shadow,transform] duration-[var(--tabbar-transition)] ease-out",
               "active:scale-95"
             )}

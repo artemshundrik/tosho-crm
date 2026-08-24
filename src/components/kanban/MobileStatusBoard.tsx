@@ -27,6 +27,96 @@ export type MobileStatusColumn<T> = {
  * тримає в DOM усі картки всіх статусів; тут живе рівно один статус. Це та
  * сама економія, що дала 8167 → 2068 вузлів на дошках ([[project_hidden_mobile_branch]]).
  */
+export type MobileStatusChip = {
+  key: string;
+  label: string;
+  icon?: ElementType;
+  tone?: Tone;
+  count: number;
+};
+
+/**
+ * Смуга статусів — окремо від дошки, бо потрібна й спискам.
+ *
+ * У канбані вона перемикає видиму колонку, у списку — фільтр статусу. Для
+ * людини це одне й те саме питання «покажи мені ось цей статус», тож і
+ * виглядати воно мусить однаково.
+ */
+export function MobileStatusChips({
+  chips,
+  activeKey,
+  onSelect,
+  className,
+}: {
+  chips: readonly MobileStatusChip[];
+  activeKey: string | null;
+  onSelect: (key: string) => void;
+  className?: string;
+}) {
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Обраний чип має бути видимим: після зміни фільтра він може опинитись за
+  // краєм смуги, і тоді здається, що нічого не вибрано.
+  useEffect(() => {
+    if (!activeKey) return;
+    refs.current[activeKey]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeKey]);
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Статуси"
+      className={cn(
+        // -mx-4/px-4: смуга гортається від краю до краю, а перший і останній
+        // чипи стоять на тій самій вертикалі, що й пошук та картки.
+        "-mx-4 flex gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className
+      )}
+    >
+      {chips.map((chip) => {
+        const Icon = chip.icon;
+        const isActive = chip.key === activeKey;
+        return (
+          <button
+            key={chip.key}
+            ref={(el) => {
+              refs.current[chip.key] = el;
+            }}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onSelect(chip.key)}
+            // h-11 = 44px: мінімальний тач-таргет; touch-manipulation прибирає
+            // 300ms затримку тапу.
+            className={cn(
+              "flex h-11 shrink-0 touch-manipulation items-center gap-2 rounded-full border px-3.5 text-sm font-medium",
+              "transition-colors duration-150 ease-out",
+              isActive
+                ? "border-foreground/10 bg-foreground text-background"
+                : "border-border bg-card text-muted-foreground"
+            )}
+          >
+            {Icon ? (
+              <Icon className={cn("h-4 w-4 shrink-0", !isActive && chip.tone ? toneTextClass[chip.tone] : undefined)} />
+            ) : chip.tone ? (
+              <span className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[chip.tone])} />
+            ) : null}
+            <span className="whitespace-nowrap">{chip.label}</span>
+            <span
+              className={cn(
+                "min-w-5 rounded-full px-1.5 text-2xs font-semibold leading-5 tabular-nums",
+                isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
+              )}
+            >
+              {chip.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MobileStatusBoard<T>({
   columns,
   renderCard,
@@ -41,7 +131,6 @@ export function MobileStatusBoard<T>({
   className?: string;
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   /**
    * Активний статус: обраний людиною, інакше перший НЕПОРОЖНІЙ.
@@ -56,65 +145,22 @@ export function MobileStatusBoard<T>({
 
   const active = columns.find((column) => column.key === resolvedKey) ?? null;
 
-  // Обраний чип має бути видимим: після зміни фільтра він може опинитись за
-  // краєм смуги, і тоді здається, що нічого не вибрано.
-  useEffect(() => {
-    if (!resolvedKey) return;
-    chipRefs.current[resolvedKey]?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [resolvedKey]);
-
   if (!columns.length) return null;
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
-      {/* Смуга статусів. Прокрутка живе всередині неї (overscroll-contain),
-          тож сторінка вбік не їде. */}
-      <div
-        role="tablist"
-        aria-label="Статуси"
-        className="-mx-4 flex gap-2 overflow-x-auto overscroll-x-contain px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {columns.map((column) => {
-          const Icon = column.icon;
-          const isActive = column.key === resolvedKey;
-          return (
-            <button
-              key={column.key}
-              ref={(el) => {
-                chipRefs.current[column.key] = el;
-              }}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveKey(column.key)}
-              // h-11 = 44px: мінімальний тач-таргет; touch-manipulation прибирає
-              // 300ms затримку тапу.
-              className={cn(
-                "flex h-11 shrink-0 touch-manipulation items-center gap-2 rounded-full border px-3.5 text-sm font-medium",
-                "transition-colors duration-150 ease-out",
-                isActive
-                  ? "border-foreground/10 bg-foreground text-background"
-                  : "border-border bg-card text-muted-foreground"
-              )}
-            >
-              {Icon ? (
-                <Icon className={cn("h-4 w-4 shrink-0", !isActive && column.tone ? toneTextClass[column.tone] : undefined)} />
-              ) : column.tone ? (
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[column.tone])} />
-              ) : null}
-              <span className="whitespace-nowrap">{column.label}</span>
-              <span
-                className={cn(
-                  "min-w-5 rounded-full px-1.5 text-2xs font-semibold leading-5 tabular-nums",
-                  isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
-                )}
-              >
-                {column.items.length}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <MobileStatusChips
+        chips={columns.map((column) => ({
+          key: column.key,
+          label: column.label,
+          icon: column.icon,
+          tone: column.tone,
+          count: column.items.length,
+        }))}
+        activeKey={resolvedKey}
+        onSelect={setActiveKey}
+        className="pb-3"
+      />
 
       {/* Картки лише активного статусу. */}
       <div className="flex min-h-0 flex-col gap-2">

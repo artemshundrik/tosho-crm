@@ -184,7 +184,7 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, MobileStatusBoard, MobileStatusChips } from "@/components/kanban";
 import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
 import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { isOffBoardStatus } from "@/lib/kanbanBoards";
@@ -3491,6 +3491,35 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
    * тулбарі. Пошук не рахуємо: його поле стоїть на екрані, і людина й так
    * бачить, що в ньому написано (картка 146).
    */
+  /**
+   * Скільки прорахунків у кожному статусі — для смуги статусів на телефоні.
+   *
+   * Рахуємо ДО фільтра статусу (від `filteredRowsByManager`), інакше при
+   * обраному статусі решта чипів показувала б нулі й смуга виглядала б
+   * зламаною.
+   */
+  const mobileStatusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    filteredRowsByManager.forEach((row) => {
+      const key = normalizeStatus(row.status);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    return counts;
+  }, [filteredRowsByManager]);
+
+  const mobileStatusChips = useMemo(
+    () => [
+      { key: "all", label: "Всі", count: filteredRowsByManager.length },
+      ...KANBAN_COLUMNS.map((column) => ({
+        key: column.id,
+        label: column.label,
+        icon: statusIcons[column.id] ?? Clock,
+        count: mobileStatusCounts.get(column.id) ?? 0,
+      })),
+    ],
+    [filteredRowsByManager.length, mobileStatusCounts]
+  );
+
   const mobileFilterCount = useMemo(() => {
     if (contentView === "sets") return quoteSetKindFilter !== "all" ? 1 : 0;
     let count = 0;
@@ -6602,7 +6631,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           ) : (
             <>
             {isNarrowViewport ? (
-            <div className="space-y-3">
+            <div className="space-y-3 px-4 py-3">
+              {/* Та сама смуга статусів, що й на дошці: у списку вона працює
+                  фільтром. Без неї список був єдиним місцем, де статус
+                  доводилось шукати в аркуші фільтрів (картка 146). */}
+              <MobileStatusChips
+                chips={mobileStatusChips}
+                activeKey={status}
+                onSelect={setStatusFilter}
+                className="pb-1"
+              />
               {filteredAndSortedRows.map((row) => {
                 const membership = quoteMembershipByQuoteId.get(row.id);
                 const normalizedStatus = normalizeStatus(row.status);

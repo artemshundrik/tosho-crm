@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { ArrowDown, ArrowUp, Plus, Sparkles, X } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -77,17 +77,15 @@ export function TabBarSettingsSheet({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" dismissible className="max-h-[88dvh] overflow-y-auto p-0">
-        <SheetHeader className="px-4 pb-2 pt-4 text-left">
-          <SheetTitle>Смуга вкладок</SheetTitle>
-          <p className="text-sm text-muted-foreground">
-            Розділи, які лишаються під рукою внизу екрана. Максимум {slots}
-            {prefs.ai ? " — бо кружечок ToSho AI займає свій слот" : ""}.
-          </p>
-        </SheetHeader>
-
-        <div className="space-y-4 px-4 pb-[calc(env(safe-area-inset-bottom)+20px)]">
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Смуга вкладок"
+      description={`Розділи, які лишаються під рукою внизу екрана. Максимум ${slots}${
+        prefs.ai ? " — бо кружечок ToSho AI займає свій слот" : ""
+      }.`}
+    >
+        <div className="space-y-4">
           {/* div, а не label: Switch — це кнопка з role="switch", і загорнута
               в <label> вона ловила б клік двічі. */}
           <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border bg-card p-3">
@@ -188,7 +186,6 @@ export function TabBarSettingsSheet({
             })}
           </section>
         </div>
-      </SheetContent>
-    </Sheet>
+    </BottomSheet>
   );
 }

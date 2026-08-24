@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 
 type UnifiedPageToolbarProps = {
@@ -101,26 +101,21 @@ export function UnifiedPageToolbar({
         </div>
 
         {hasSheetContent ? (
-          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <SheetContent side="bottom" dismissible className="max-h-[88dvh] overflow-y-auto p-0">
-              <SheetHeader className="px-4 pb-2 pt-4 text-left">
-                <SheetTitle>Фільтри та вигляд</SheetTitle>
-              </SheetHeader>
-              <div className="space-y-4 px-4 pb-[calc(env(safe-area-inset-bottom)+20px)]">
-                {mobileViewSwitch ? (
-                  <div className="min-w-0">
-                    <p className="pb-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      Вигляд
-                    </p>
-                    {mobileViewSwitch}
-                  </div>
-                ) : null}
-                {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
-                {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
-                {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
-              </div>
-            </SheetContent>
-          </Sheet>
+          <BottomSheet open={filtersOpen} onOpenChange={setFiltersOpen} title="Фільтри та вигляд">
+            <div className="space-y-4">
+              {mobileViewSwitch ? (
+                <div className="min-w-0">
+                  <p className="pb-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Вигляд
+                  </p>
+                  {mobileViewSwitch}
+                </div>
+              ) : null}
+              {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
+              {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
+              {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
+            </div>
+          </BottomSheet>
         ) : null}
       </div>
     );

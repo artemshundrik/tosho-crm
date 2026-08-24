@@ -5193,6 +5193,7 @@ export default function DesignPage() {
                  * `md:hidden` на цей самий тернарник.
                  */
                 <MobileStatusBoard
+                  className="px-4 py-3"
                   columns={DESIGN_COLUMNS.map((col) => ({
                     key: col.id,
                     label: col.label,
