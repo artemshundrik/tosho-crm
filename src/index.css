@@ -283,25 +283,23 @@
     --entity-avatar-6-fallback: 188 78% 74%;
 
     /* --- TAB BAR TOKENS (LIGHT) --- */
-    /* Нижня смуга в стилі матового скла: сильне розмиття, підвищена
-       насиченість і напівпрозоре тло, крізь яке видно контент під смугою.
-       Активна вкладка — світла «піднята» пігулка з майже чорним написом:
-       доти й іконка, і підпис були БІЛИМИ на світлому тлі, тобто активний
-       розділ читався гірше за неактивні. */
+    /* Нижня смуга — «фрост-док» (картка 146, ітерація 3): скло у світлій темі
+       непрозоре на 90%, бо напівпрозоре на 62% і виглядало «кривим Liquid
+       Glass». Тінь двома шарами: контактна 1px + глибока амбієнтна. Активна
+       вкладка — ЛЕДЬ СІРА капсула (чорнило на 6%), що переїжджає між
+       вкладками; біла піднята пігулка з бордером пішла разом зі склом. */
     --tabbar-bg: var(--card);
-    --tabbar-bg-alpha: 0.62;
+    --tabbar-bg-alpha: 0.9;
     --tabbar-border: var(--border);
-    --tabbar-shadow: 0 10px 30px -14px hsl(0 0% 0% / 0.3);
+    --tabbar-shadow: 0 1px 2px hsl(0 0% 0% / 0.05), 0 16px 40px -16px hsl(0 0% 0% / 0.28);
     --tabbar-icon: var(--muted-foreground);
     --tabbar-icon-active: var(--foreground);
     --tabbar-label: var(--muted-foreground);
     --tabbar-label-active: var(--foreground);
-    --tabbar-active-bg: 0 0% 100%;
-    --tabbar-active-bg-alpha: 0.92;
-    --tabbar-active-border: 0 0% 0%;
-    --tabbar-active-border-alpha: 0.06;
-    --tabbar-backdrop-blur: 30px;
-    --tabbar-backdrop-saturate: 1.8;
+    --tabbar-active-bg: 240 6% 10%;
+    --tabbar-active-bg-alpha: 0.06;
+    --tabbar-backdrop-blur: 16px;
+    --tabbar-backdrop-saturate: 1.5;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
     /*
@@ -573,22 +571,20 @@
     --entity-avatar-6-fallback: 188 30% 34%;
 
     /* --- TAB BAR TOKENS (DARK) --- */
-    /* Те саме матове скло, але темне: активна вкладка — біла іконка й білий
-       підпис на ледь світлішій підкладці. */
+    /* Той самий фрост-док, але темний: активна вкладка — біла іконка й білий
+       підпис на ледь світлішій капсулі (білий на 10%), що переїжджає. */
     --tabbar-bg: var(--card);
-    --tabbar-bg-alpha: 0.55;
+    --tabbar-bg-alpha: 0.85;
     --tabbar-border: var(--border);
-    --tabbar-shadow: 0 12px 34px -14px hsl(0 0% 0% / 0.7);
+    --tabbar-shadow: 0 1px 2px hsl(0 0% 0% / 0.4), 0 16px 40px -16px hsl(0 0% 0% / 0.7);
     --tabbar-icon: var(--muted-foreground);
     --tabbar-icon-active: 0 0% 100%;
     --tabbar-label: var(--muted-foreground);
     --tabbar-label-active: 0 0% 100%;
     --tabbar-active-bg: 0 0% 100%;
-    --tabbar-active-bg-alpha: 0.16;
-    --tabbar-active-border: 0 0% 100%;
-    --tabbar-active-border-alpha: 0.18;
-    --tabbar-backdrop-blur: 30px;
-    --tabbar-backdrop-saturate: 1.8;
+    --tabbar-active-bg-alpha: 0.1;
+    --tabbar-backdrop-blur: 16px;
+    --tabbar-backdrop-saturate: 1.5;
     --tabbar-radius: 999px;
     --tabbar-height: 56px;
     --tabbar-inset-x: 10px;

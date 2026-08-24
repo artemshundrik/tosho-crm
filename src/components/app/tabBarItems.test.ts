@@ -21,8 +21,16 @@ const ownerLinks: TabSourceLink[] = [
 ];
 
 describe("resolveTabItems", () => {
-  it("власнику дає ті самі чотири вкладки, що були захардкоджені", () => {
+  it("за замовчуванням 3 слоти: AI і меню займають решту смуги", () => {
     expect(resolveTabItems(ownerLinks).map((t) => t.to)).toEqual([
+      "/orders/estimates",
+      "/orders/customers",
+      "/orders/production",
+    ]);
+  });
+
+  it("без AI слотів 4 — четвертим заходить наступний за пріоритетом", () => {
+    expect(resolveTabItems(ownerLinks, 4).map((t) => t.to)).toEqual([
       "/orders/estimates",
       "/orders/customers",
       "/orders/production",
@@ -32,7 +40,7 @@ describe("resolveTabItems", () => {
 
   it("замість вимкненого модуля підставляє наступний доступний, а не мертву вкладку", () => {
     const withoutDesign = ownerLinks.filter((l) => l.moduleKey !== "design");
-    expect(resolveTabItems(withoutDesign).map((t) => t.to)).toEqual([
+    expect(resolveTabItems(withoutDesign, 4).map((t) => t.to)).toEqual([
       "/orders/estimates",
       "/orders/customers",
       "/orders/production",
@@ -40,7 +48,7 @@ describe("resolveTabItems", () => {
     ]);
   });
 
-  it("коли доступних менше за чотири — віддає скільки є, без вигаданих", () => {
+  it("коли доступних менше за слоти — віддає скільки є, без вигаданих", () => {
     const two = [link("design", "/design"), link("team", "/team")];
     expect(resolveTabItems(two).map((t) => t.to)).toEqual(["/design", "/team"]);
   });

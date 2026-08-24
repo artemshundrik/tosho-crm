@@ -2508,6 +2508,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         links={visibleSidebarLinks}
         hidden={mobileMenuOpen || toshoAiOpen || cmdkOpen}
         onAsk={() => setCmdkOpen(true)}
+        // Слот меню поки відкриває той самий дровер, що й гамбургер: попап
+        // з розділами — наступний пункт картки 146, а шлях «усе знизу» вже є.
+        onMenu={() => setMobileMenuOpen(true)}
       />
       <Sheet open={toshoAiOpen} onOpenChange={handleToShoAiOpenChange}>
         <SheetContent

@@ -36,11 +36,20 @@ const DEFAULT_TAB_PRIORITY: ModuleKey[] = [
   "team",
 ];
 
-/** Слотів у смузі за замовчуванням; кастомізація кількості — питання картки 146. */
-const TAB_SLOTS = 4;
+/**
+ * Слотів під вкладки за замовчуванням.
+ *
+ * Правило смуги (картка 146): максимум 5 елементів, кружечок ToSho AI та
+ * кнопка меню займають по слоту. AI поки що є завжди, тож вкладок — 3.
+ * Кастомізація (вимкнути AI → 4 вкладки) передасть сюди інше число.
+ */
+const DEFAULT_TAB_SLOTS = 3;
 
-/** Топ-4 доступних модулів за пріоритетом. Чиста функція — крита тестами. */
-export function resolveTabItems(links: readonly TabSourceLink[]): TabSourceLink[] {
+/** Топ доступних модулів за пріоритетом. Чиста функція — крита тестами. */
+export function resolveTabItems(
+  links: readonly TabSourceLink[],
+  slots: number = DEFAULT_TAB_SLOTS
+): TabSourceLink[] {
   const byModule = new Map<ModuleKey, TabSourceLink>();
   for (const link of links) {
     if (link.moduleKey && !byModule.has(link.moduleKey)) {
@@ -51,7 +60,7 @@ export function resolveTabItems(links: readonly TabSourceLink[]): TabSourceLink[
   for (const key of DEFAULT_TAB_PRIORITY) {
     const link = byModule.get(key);
     if (link) items.push(link);
-    if (items.length === TAB_SLOTS) break;
+    if (items.length === slots) break;
   }
   return items;
 }
