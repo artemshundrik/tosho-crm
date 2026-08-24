@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-23T20:14:52.941Z",
+  "generatedAt": "2026-08-24T12:48:23.311Z",
   "packages": [
     {
       "name": "@eslint/js",
@@ -280,6 +280,42 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "homepage": "https://tanstack.com/virtual",
       "usedIn": 1,
       "iconUrl": "https://www.google.com/s2/favicons?domain=tanstack.com&sz=128"
+    },
+    {
+      "name": "@testing-library/jest-dom",
+      "version": "7.0.1",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Додає до тестів зрозумілі перевірки про розмітку: «видно на екрані», «поле має таке значення».",
+      "homepage": null,
+      "usedIn": 1,
+      "iconUrl": "https://github.com/testing-library.png?size=64"
+    },
+    {
+      "name": "@testing-library/react",
+      "version": "16.3.2",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
+      "homepage": null,
+      "usedIn": 3,
+      "iconUrl": "https://github.com/testing-library.png?size=64"
+    },
+    {
+      "name": "@testing-library/user-event",
+      "version": "14.6.6",
+      "layer": "build",
+      "dev": true,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Клікає й друкує в тестах так, як це робить людина, — з наведенням, фокусом і клавіатурою, а не одним синтетичним кліком.",
+      "homepage": null,
+      "usedIn": 3,
+      "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
       "name": "@tiptap/extension-link",
@@ -603,7 +639,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Підроблений браузер для тестів, які працюють із розміткою.",
       "homepage": null,
-      "usedIn": 0,
+      "usedIn": 1,
       "peerRequired": true,
       "iconUrl": "https://github.com/jsdom.png?size=64"
     },
@@ -664,7 +700,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 239,
+      "usedIn": 249,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -892,9 +928,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
         "sha": "e9a6e23",
         "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
       },
-      "description": "Тести. Ті самі 1119, що ганяються перед кожним пушем.",
+      "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 75,
+      "usedIn": 79,
+      "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
     {
@@ -902,15 +939,30 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "3.6.7",
       "layer": "platform",
       "dev": false,
-      "bumpedAt": "2026-03-12T16:43:11+02:00",
+      "bumpedAt": "2026-08-24T13:52:17+03:00",
       "bumpCommit": {
-        "sha": "2f16f21",
-        "subject": "notifications"
+        "sha": "2cc0887",
+        "subject": "Функції доступів і кадрових рішень тепер перевіряють, що їм прислали"
       },
       "description": "Надсилає пуш-сповіщення в браузер.",
       "homepage": null,
       "usedIn": 2,
       "iconUrl": "https://github.com/web-push-libs.png?size=64"
+    },
+    {
+      "name": "zod",
+      "version": "4.4.3",
+      "layer": "platform",
+      "dev": false,
+      "bumpedAt": "2026-08-24T13:52:17+03:00",
+      "bumpCommit": {
+        "sha": "2cc0887",
+        "subject": "Функції доступів і кадрових рішень тепер перевіряють, що їм прислали"
+      },
+      "description": "Перевіряє, що дані, які прийшли ззовні, справді такі, як ми чекаємо: серверні функції звіряють із нею тіло запиту.",
+      "homepage": "https://zod.dev",
+      "usedIn": 24,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=zod.dev&sz=128"
     }
   ],
   "runtimes": [
@@ -977,10 +1029,10 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "note": "Розклад кронів живе в базі й містить адресу функції рядком. Перейменував файл — крон щодня стукає в нікуди, і журнал при цьому показує «успішно»."
     }
   ],
-  "tests": 1128,
-  "testFiles": 74,
+  "tests": 1178,
+  "testFiles": 78,
   "lintStubs": 29,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 233344
+  "sourceLines": 234237
 };
