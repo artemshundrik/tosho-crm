@@ -184,7 +184,9 @@ import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { EstimatesModeSwitch } from "@/features/quotes/components/EstimatesModeSwitch";
 import { EstimatesTableCanvas } from "@/features/quotes/components/EstimatesTableCanvas";
 import { EstimatesKanbanCanvas } from "@/features/quotes/components/EstimatesKanbanCanvas";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanOffBoardList, KanbanSkeleton } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, OffBoardViewSwitch } from "@/components/kanban";
+import { CancelledQuotesList } from "@/features/quotes/components/CancelledQuotesList";
+import { restoreQuoteToBoard } from "@/features/quotes/quotes-page/restoreQuote";
 import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
 import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { getCurrentUserId } from "@/lib/currentUser";
@@ -4555,30 +4557,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const showCancelledQuotes = viewMode === "kanban" && isOffBoardStatus("quotes", status);
   const [restoringQuoteId, setRestoringQuoteId] = useState<string | null>(null);
 
-  /**
-   * Дорога назад зі списку. Повертаємо в ПЕРШУ колонку дошки, а не в той стан,
-   * у якому прорахунок був до скасування: попереднього статусу ми не зберігаємо
-   * (і не збираємось — це було б поле, яке хтось має вчасно проставити), тож
-   * чесніше покласти картку на початок, де людина сама вирішить, куди далі.
-   */
+  /** Дія цілком живе у restoreQuote.ts — тут лише знімок стану й тост. */
   const handleRestoreQuote = useCallback(
     async (quoteId: string) => {
-      const nextStatus = boardColumnStatuses("quotes")[0];
-      if (!nextStatus) return;
       setRestoringQuoteId(quoteId);
       try {
-        await setQuoteStatus({ quoteId, status: nextStatus });
-        try {
-          await notifyQuoteInitiatorOnStatusChange({
-            quoteId,
-            toStatus: nextStatus,
-            actorUserId: currentUserId ?? null,
-          });
-        } catch (notifyError) {
-          console.warn("Failed to notify quote initiator about status change", notifyError);
-        }
+        const { status: nextStatus, label } = await restoreQuoteToBoard(quoteId, currentUserId ?? null);
         setRows((prev) => prev.map((row) => (row.id === quoteId ? { ...row, status: nextStatus } : row)));
-        toast.success(`Прорахунок повернуто в «${statusLabels[nextStatus] ?? nextStatus}»`);
+        toast.success(`Прорахунок повернуто в «${label}»`);
       } catch (e: unknown) {
         toast.error("Не вдалося повернути прорахунок", { description: getErrorMessage(e, "") });
       } finally {
@@ -5751,33 +5737,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </SegmentedGroup>
                 ) : (
-                  /*
-                    Скасовані живуть тут, а не шостою колонкою: на проді їх було
-                    159 із 285, тобто більше половини дошки, і жодна з них нікуди
-                    не рухається. Числа на кнопці немає свідомо — прорахунки
-                    вантажаться сторінками, тож будь-яке число тут показувало б
-                    розмір завантаженого шматка, а не скільки їх насправді.
-                  */
-                  <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={!showCancelledQuotes}
-                      onClick={() => setStatusFilter("all")}
-                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                    >
-                      Дошка
-                    </Button>
-                    <Button
-                      variant="segmented"
-                      size="xs"
-                      aria-pressed={showCancelledQuotes}
-                      onClick={() => setStatusFilter(offBoardQuoteStatus)}
-                      className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                    >
-                      Скасовані
-                    </Button>
-                  </SegmentedGroup>
+                  /* Скасовані живуть тут, а не шостою колонкою: на проді їх було
+                     159 із 285, тобто більше половини дошки, і жодна нікуди не
+                     рухається. Перемикач спільний із дошкою дизайну. */
+                  <OffBoardViewSwitch
+                    active={showCancelledQuotes}
+                    label="Скасовані"
+                    onShowBoard={() => setStatusFilter("all")}
+                    onShowOffBoard={() => setStatusFilter(offBoardQuoteStatus)}
+                  />
                 )}
                 <ActiveHereCard entries={workspacePresence.activeHereEntries} variant="minimal" />
               </>
@@ -6934,37 +6902,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               <p className="text-sm text-destructive font-medium">{error}</p>
             </div>
           ) : showCancelledQuotes ? (
-            /* Скасовані — списком, а не шостою колонкою: чому саме так,
-               розгорнуто в @/lib/kanbanBoards і в KanbanOffBoardList. */
-            <KanbanOffBoardList
+            <CancelledQuotesList
+              rows={filteredAndSortedRows}
               busyId={restoringQuoteId}
-              emptyText="Скасованих прорахунків немає."
-              entries={filteredAndSortedRows.map((row) => {
-                const canOpen = canOpenQuoteRow(row);
-                return {
-                  id: row.id,
-                  code: row.number ?? "—",
-                  title: row.customer_name?.trim() || "Не вказано",
-                  // Назва прорахунку часто дорівнює назві замовника — тоді
-                  // другий рядок повторював би перший. Показуємо тип.
-                  subtitle:
-                    row.title?.trim() && row.title.trim() !== row.customer_name?.trim()
-                      ? row.title.trim()
-                      : quoteTypeLabel(row.quote_type),
-                  meta: (
-                    <>
-                      <span className="max-w-[150px] truncate">{getManagerLabel(row.assigned_to)}</span>
-                      <span className="tabular-nums">{formatDateTime(row.created_at)}</span>
-                    </>
-                  ),
-                  onOpen: canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined,
-                  // Повертає той, хто взагалі має доступ до картки: гейт «лише
-                  // свої» діє тут так само, як на дошці.
-                  restore: canOpen
-                    ? { label: "Повернути", onSelect: () => void handleRestoreQuote(row.id) }
-                    : null,
-                };
-              })}
+              canOpen={canOpenQuoteRow}
+              onOpen={(row) => navigate(`/orders/estimates/${row.id}`)}
+              onRestore={(row) => void handleRestoreQuote(row.id)}
+              managerLabel={getManagerLabel}
               footer={
                 hasMoreQuotes ? (
                   <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>

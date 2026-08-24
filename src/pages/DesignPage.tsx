@@ -67,13 +67,12 @@ import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
-import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanOffBoardList, KanbanSkeleton, KanbanVirtualList } from "@/components/kanban";
+import { KanbanBoard, KanbanCard, KanbanColumn, KanbanColumnHeader, KanbanImageZoomPreview, KanbanSkeleton, KanbanVirtualList, OffBoardViewSwitch } from "@/components/kanban";
+import { CancelledDesignTasksList } from "@/components/design/CancelledDesignTasksList";
 import { boardColumnStatuses, isOffBoardStatus, offBoardStatuses } from "@/lib/kanbanBoards";
 import {
   SEGMENTED_GROUP,
-  SEGMENTED_GROUP_SM,
   SEGMENTED_TRIGGER,
-  SEGMENTED_TRIGGER_SM,
   TOOLBAR_ACTION_BUTTON,
   TOOLBAR_CONTROL,
 } from "@/components/ui/controlStyles";
@@ -875,20 +874,6 @@ const formatDeadlineShort = (value: string) => {
   const date = parseDateOnly(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short" });
-};
-
-/**
- * Дата створення задачі коротким рядком.
- *
- * НЕ через formatDeadlineShort: той бере перші 10 символів як настінний день —
- * правильно для дедлайну, який настінним і є, — а `createdAt` це позначка часу
- * в UTC. Ввечері за Києвом такий розбір давав учорашню дату.
- */
-const formatCreatedShort = (value?: string | null) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("uk-UA", { day: "numeric", month: "short", timeZone: "Europe/Kiev" });
 };
 
 const formatQtyLabel = (qty: number | null | undefined, unit: string | null | undefined) => {
@@ -4948,33 +4933,16 @@ export default function DesignPage() {
               />
             )}
 
-            {/*
-              Скасовані живуть тут, а не сьомою колонкою: на проді їх було 71 із
-              569, і жодна нікуди не рухається. Числа на кнопці немає свідомо —
-              задачі вантажаться сторінками, тож воно показувало б розмір
-              завантаженого шматка, а не скільки їх насправді.
-            */}
+            {/* Скасовані живуть тут, а не сьомою колонкою: на проді їх було 71
+                із 569, і жодна нікуди не рухається. Перемикач спільний із
+                дошкою прорахунків. */}
             {viewMode === "kanban" ? (
-              <SegmentedGroup className={cn(SEGMENTED_GROUP_SM, "w-full sm:w-auto")}>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={!showCancelledTasks}
-                  onClick={() => setStatusFilter("all")}
-                  className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                >
-                  Дошка
-                </Button>
-                <Button
-                  variant="segmented"
-                  size="xs"
-                  aria-pressed={showCancelledTasks}
-                  onClick={() => setStatusFilter(offBoardDesignStatus)}
-                  className={cn(SEGMENTED_TRIGGER_SM, "px-4")}
-                >
-                  Скасовані
-                </Button>
-              </SegmentedGroup>
+              <OffBoardViewSwitch
+                active={showCancelledTasks}
+                label="Скасовані"
+                onShowBoard={() => setStatusFilter("all")}
+                onShowOffBoard={() => setStatusFilter(offBoardDesignStatus)}
+              />
             ) : null}
 
             {viewMode !== "assignee" ? (
@@ -5154,44 +5122,27 @@ export default function DesignPage() {
               )}
             </div>
           ) : showCancelledTasks ? (
-            /* Скасовані — списком, а не сьомою колонкою: чому саме так,
-               розгорнуто в @/lib/kanbanBoards і в KanbanOffBoardList. */
-            <KanbanOffBoardList
+            <CancelledDesignTasksList
+              tasks={filteredTasks}
               busyId={restoringTaskId}
-              emptyText="Скасованих дизайн-задач немає."
-              entries={filteredTasks.map((task) => {
-                const canRestore = canChangeDesignStatus({
+              onOpen={(task) => openTask(task.id)}
+              assigneeLabel={getTaskAssigneeLabel}
+              restoreOf={(task) =>
+                canChangeDesignStatus({
                   currentStatus: task.status,
                   nextStatus: restoreDesignStatus,
                   canManageAssignments: canManageDesignStatuses,
                   isAssignedToCurrentUser:
                     !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
-                });
-                return {
-                  id: task.id,
-                  code: task.designTaskNumber ?? task.quoteNumber ?? "—",
-                  title: task.title?.trim() || task.productName?.trim() || "Без назви",
-                  subtitle: task.customerName?.trim() || null,
-                  meta: (
-                    <>
-                      <span className="max-w-[150px] truncate">{getTaskAssigneeLabel(task)}</span>
-                      <span className="tabular-nums">{formatCreatedShort(task.createdAt)}</span>
-                    </>
-                  ),
-                  onOpen: () => openTask(task.id),
-                  restore: canRestore
-                    ? {
-                        label: "Повернути",
-                        onSelect: () => {
-                          setRestoringTaskId(task.id);
-                          void handleStatusChange(task, restoreDesignStatus).finally(() =>
-                            setRestoringTaskId(null)
-                          );
-                        },
-                      }
-                    : null,
-                };
-              })}
+                })
+                  ? () => {
+                      setRestoringTaskId(task.id);
+                      void handleStatusChange(task, restoreDesignStatus).finally(() =>
+                        setRestoringTaskId(null)
+                      );
+                    }
+                  : null
+              }
               footer={
                 hasMoreTasks ? (
                   <Button
