@@ -58,6 +58,7 @@ import { useWorkspacePresence } from "@/components/app/workspace-presence-contex
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -988,6 +989,13 @@ export default function DesignPage() {
    * і лишалась такою 2.5 с).
    */
   const boardSkeletonShown = !heavySurfaceReady || (loading && tasks.length === 0);
+  /**
+   * Мобільна й десктопна дошки — РІЗНІ дерева, і ховати зайве класами замало:
+   * React будує й комітить обидва. Мобільний список малює всі картки поспіль,
+   * без віртуалізації, що є в десктопній колонці, — саме він давав дев'ять
+   * підряд коммітів по ~690 мс на відкритті. Тепер малюємо рівно одну гілку.
+   */
+  const isNarrowViewport = useIsNarrowViewport();
   const [teamWorkloadTasks, setTeamWorkloadTasks] = useState<DesignTask[]>([]);
   const [teamWorkloadLoaded, setTeamWorkloadLoaded] = useState(false);
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
@@ -5150,7 +5158,8 @@ export default function DesignPage() {
                 deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
               )}
             >
-              <div className="space-y-3 md:hidden">
+              {isNarrowViewport ? (
+              <div className="space-y-3">
                 {DESIGN_COLUMNS.map((col) => {
                   const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
                   return (
@@ -5181,9 +5190,10 @@ export default function DesignPage() {
                   );
                 })}
               </div>
+              ) : (
               <div
                 ref={desktopKanbanViewportRef}
-                className="hidden min-h-0 overflow-hidden md:block"
+                className="min-h-0 overflow-hidden"
                 style={
                   desktopKanbanViewportHeight
                     ? { height: `${desktopKanbanViewportHeight}px` }
@@ -5199,10 +5209,12 @@ export default function DesignPage() {
                   rowClassName="h-full items-stretch"
                 />
               </div>
+              )}
             </div>
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              {isNarrowViewport ? (
+              <div className="space-y-3">
             {DESIGN_COLUMNS.map((col) => {
               const items = grouped[col.id] ?? [];
               const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
@@ -5230,9 +5242,10 @@ export default function DesignPage() {
               );
             })}
           </div>
+              ) : (
               <div
                 ref={desktopKanbanViewportRef}
-                className="hidden min-h-0 overflow-hidden md:block"
+                className="min-h-0 overflow-hidden"
                 style={
                   desktopKanbanViewportHeight
                     ? { height: `${desktopKanbanViewportHeight}px` }
@@ -5299,6 +5312,7 @@ export default function DesignPage() {
               })}
                 </KanbanBoard>
               </div>
+              )}
             </>
           )}
         </EstimatesKanbanCanvas>

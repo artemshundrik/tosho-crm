@@ -138,6 +138,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useSkeletonVisible } from "@/components/app/loadingHandoff";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -610,6 +611,13 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
   /** Див. DesignPage: каркас — окремий вузол, ефект вимірювання йде за ним. */
   const boardSkeletonShown = loading || !heavySurfaceReady;
+  /**
+   * Мобільні картки й десктопна таблиця — РІЗНІ дерева, і `md:hidden` ховає
+   * зайве лише візуально: React будує й комітить обидва. У прорахунках мобільна
+   * гілка малює ВСІ рядки поспіль, тож на 581 прорахунку це тисячі зайвих
+   * вузлів у кожному коміті. Малюємо рівно одну гілку — див. DesignPage.
+   */
+  const isNarrowViewport = useIsNarrowViewport();
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -6046,7 +6054,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </div>
         ) : (
           <>
-          <div className="space-y-3 p-4 md:hidden">
+          {isNarrowViewport ? (
+          <div className="space-y-3 p-4">
             {filteredQuoteSets.map((set) => (
               <div
                 key={set.id}
@@ -6125,9 +6134,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </div>
             ))}
           </div>
-          {/* overflow-x-auto знято: саме він був контейнером скролу й гасив
-              липку шапку. Колонки без min-width, тож стискаються самі. */}
-          <div className="hidden md:block">
+          ) : (
+          /* overflow-x-auto знято: саме він був контейнером скролу й гасив
+             липку шапку. Колонки без min-width, тож стискаються самі. */
+          <div>
             <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -6237,6 +6247,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </TableBody>
             </Table>
           </div>
+          )}
           </>
         )}
       </EstimatesTableCanvas>
@@ -6398,7 +6409,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
           ) : (
             <>
-            <div className="space-y-3 md:hidden">
+            {isNarrowViewport ? (
+            <div className="space-y-3">
               {filteredAndSortedRows.map((row) => {
                 const membership = quoteMembershipByQuoteId.get(row.id);
                 const normalizedStatus = normalizeStatus(row.status);
@@ -6572,8 +6584,9 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 );
               })}
             </div>
-            {/* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */}
-            <div className="hidden md:block">
+            ) : (
+            /* overflow-x-auto знято: він був контейнером скролу й гасив липку шапку. */
+            <div>
               <Table variant="list" size="md" stickyHeader className="[&_th]:px-5 [&_td]:px-5">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -6908,6 +6921,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 </TableBody>
               </Table>
             </div>
+            )}
             {hasMoreQuotes ? (
               <div className="flex justify-center px-4 pb-4 pt-2 md:px-6">
                 <Button variant="outline" onClick={handleLoadMoreQuotes} disabled={loading || refreshing}>
