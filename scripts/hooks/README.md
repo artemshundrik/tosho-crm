@@ -19,18 +19,32 @@ git config core.hooksPath
 
 ## pre-push — перевірки коду (блокують)
 
-Перед пушем ганяє шість перевірок і **зупиняє пуш**, якщо хоч одна впала:
+Перед пушем ганяє **п'ятнадцять** перевірок і **зупиняє пуш**, якщо хоч одна
+впала. Часи заміряні 24.08.2026 на цій машині:
 
 | Перевірка | Команда | ~час |
 |---|---|---|
-| типи застосунку | `npx tsc --noEmit` | 15 с |
-| лінт | `npm run lint` | 47 с |
-| тести | `npm run test` | 2 с |
-| типи Netlify-функцій | `npm run typecheck:functions` | 1 с |
-| реєстр Netlify-функцій | `npm run check:functions` | <1 с |
-| ключі фіч | `npm run check:feature-keys` | <1 с |
+| типи застосунку | `npx tsc --noEmit` | 16 с |
+| лінт + борг компілятора | `node scripts/check-compiler-debt.mjs` | 88 с |
+| тести | `npm run test` | 2.7 с |
+| типи Netlify-функцій | `npm run typecheck:functions` | 1.3 с |
+| реєстр Netlify-функцій | `npm run check:functions` | 0.1 с |
+| ключі фіч | `npm run check:feature-keys` | 0.1 с |
+| реєстр поверхонь | `npm run check:page-surfaces` | 0.1 с |
+| копії спільних модулів | `npm run check:duplicate-singletons` | 0.1 с |
+| заглушки правил хуків | `node scripts/check-hook-disables.mjs` | 0.1 с |
+| розростання файлів | `node scripts/check-file-growth.mjs` | 0.05 с |
+| знімок стеку | `node scripts/check-stack-snapshot.mjs` | 0.03 с |
+| версія Node | `node scripts/check-node-version.mjs` | 0.02 с |
+| адреси кронів ¹ | `node scripts/check-cron-endpoints.mjs` | 0.7 с |
+| захист БД ¹ | `node scripts/check-db-guards.mjs` | 2.2 с |
+| SQL-журнал ¹ | `node scripts/check-sql-journal.mjs` | 0.6 с |
 
-Разом близько хвилини. Падіння однієї перевірки не зупиняє решту — усі проблеми
+¹ Дивиться в ЖИВУ базу через `BACKUP_DB_URL` із `.env.backup`. Немає доступу
+(CI, свіжий клон, чужа машина) — перевірка мовчки пропускається.
+
+Разом близько двох хвилин, і 88 із них — лінт: він ганяє ESLint двічі, окремо з
+конфігом React Compiler. Падіння однієї перевірки не зупиняє решту — усі проблеми
 видно за один прогін, а не по черзі.
 
 ### Чому тут, а не лише в CI

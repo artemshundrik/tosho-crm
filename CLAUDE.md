@@ -43,7 +43,7 @@ If older docs conflict with current code, current code wins.
 
 ## Large files navigation
 
-`src/pages/QuoteDetailsPage.tsx` (~9560 lines), `DesignTaskPage.tsx` (~9786), `QuotesPage.tsx` (~7990), `DesignPage.tsx` (~6348) — `Read` paginates at 2000 lines. Jump directly using offsets in [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md) instead of re-scanning from line 1.
+`src/pages/QuoteDetailsPage.tsx` (~9850 lines), `DesignTaskPage.tsx` (~12800), `QuotesPage.tsx` (~8250), `DesignPage.tsx` (~5900) — станом на 24.08.2026 — `Read` paginates at 2000 lines. Jump directly using offsets in [docs/LARGE_FILES_MAP.md](docs/LARGE_FILES_MAP.md) instead of re-scanning from line 1.
 
 ## Skills to invoke for this repo
 

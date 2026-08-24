@@ -1,6 +1,7 @@
 # Large files navigation map
 
-The biggest single-file pages in `src/pages/`. `Read` tool reads 2000 lines at a time — use the offsets below to jump directly instead of re-scanning from line 1.
+The biggest single-file pages in `src/pages/`. **All sizes are snapshots — every heading carries
+its own "as of" date, and `npm run check:docs-drift` re-checks them against the tree.** `Read` tool reads 2000 lines at a time — use the offsets below to jump directly instead of re-scanning from line 1.
 
 > Heuristic: every file follows the same shape — top half is **types + module-level helpers**, then `export (default ) function ComponentName(...)` opens the main component, which contains all handlers, effects, and the JSX `return`.
 
@@ -12,7 +13,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~9 560 lines, 425 KB)
+## src/pages/QuoteDetailsPage.tsx (~9 846 lines, 460 KB, as of 2026-08-24)
 
 | Range | Content |
 |---|---|
@@ -30,7 +31,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | ~4377–4598 | Тиражі / runs card |
 | ~4662–4750 | Підсумок card |
 
-## src/pages/DesignTaskPage.tsx (~9 786 lines, 420 KB)
+## src/pages/DesignTaskPage.tsx (~12 801 lines, 579 KB, as of 2026-08-24)
 
 | Range | Content |
 |---|---|
@@ -38,7 +39,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 164–1148 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
 | **1149** | `export default function DesignTaskPage()` — main component starts |
 
-## src/pages/QuotesPage.tsx (~7 990 lines, 332 KB)
+## src/pages/QuotesPage.tsx (~8 252 lines, 357 KB, as of 2026-08-24)
 
 | Range | Content |
 |---|---|
@@ -46,7 +47,7 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 158–465 | types + cache helpers (`readQuotesPageCache`, `readQuotesPageFiltersState`, `readQuotesPageMembersCache`) |
 | **466** | `export function QuotesPage(...)` — main component starts |
 
-## src/pages/DesignPage.tsx (~6 348 lines, 280 KB)
+## src/pages/DesignPage.tsx (~5 902 lines, 252 KB, as of 2026-08-24)
 
 | Range | Content |
 |---|---|
@@ -68,8 +69,8 @@ Single source of truth: **`src/lib/designTaskType.ts`** — exports `DESIGN_TASK
 
 ## Other large files (>100 KB) — no map yet
 
-- `src/pages/TeamMembersPage.tsx` (176 KB)
-- `src/pages/OrdersCustomersPage.tsx` (153 KB)
+- `src/pages/TeamMembersPage.tsx` (181 KB)
+- `src/pages/OrdersCustomersPage.tsx` (178 KB)
 - `src/components/quotes/QuoteBatchBuilderDialog.tsx` (134 KB)
-- `src/features/tosho-ai/ToShoAiConsole.tsx` (109 KB)
-- `src/components/quotes/NewQuoteDialog.tsx` (101 KB)
+- `src/features/tosho-ai/ToShoAiConsole.tsx` (111 KB)
+- `src/components/quotes/NewQuoteDialog.tsx` (113 KB)

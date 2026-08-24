@@ -18,6 +18,7 @@
     "check:functions": "node scripts/check-netlify-functions.mjs",
     "check:db-guards": "node scripts/check-db-guards.mjs",
     "check:sql-journal": "node scripts/check-sql-journal.mjs",
+    "check:docs-drift": "node scripts/check-docs-drift.mjs",
     "check:page-surfaces": "node scripts/check-page-surfaces.mjs",
     "typecheck:functions": "tsc -p netlify/functions/tsconfig.json",
     "test": "vitest run",
