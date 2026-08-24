@@ -315,7 +315,9 @@ export function DesignerEarningsWidget({
     /* Пігулка — контейнер із ДВОМА сусідніми кнопками, а не кнопка в кнопці.
        Раніше око було span[role=button] всередині тригера: невалідний HTML,
        скрінрідер оголошував це як одну кнопку, а Enter міг спрацювати двічі. */
-    <div className="inline-flex h-10 items-center gap-1 rounded-xl border border-border/50 bg-muted/40 pl-3 pr-1">
+    // Без плашки: сума за місяць — довідка, а не стан, що вимагає уваги.
+    // Постійний фон у шапці лишений тільки таймеру, і лише коли він іде.
+    <div className="inline-flex h-10 items-center gap-1 rounded-xl pl-2 pr-1 transition-colors duration-200 hover:bg-muted/40">
       <AppDropdown
         align="end"
         sideOffset={14}

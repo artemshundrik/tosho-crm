@@ -492,11 +492,14 @@ export function DesignerHeaderTimerWidget({
         <div
           className={cn(
             "hidden lg:inline-flex h-10 w-[190px] items-center justify-between gap-1.5 whitespace-nowrap rounded-xl border px-2 transition-all duration-200 cursor-pointer",
+            // Тон = «зараз іде». Спокійний таймер плашки не отримує: сірий
+            // прямокутник ні про що не повідомляв, зате з'їдав різницю з
+            // зеленим — а саме її й треба помітити краєм ока.
             currentRunning
               ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80"
               : currentPaused
                 ? "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80"
-              : "border-border/50 bg-muted/40 text-foreground hover:bg-muted/60"
+              : "border-transparent bg-transparent text-foreground hover:bg-muted/40"
           )}
           aria-label="Таймер дизайнера"
           title={currentTask ? getTimerStateLabel(currentTask) : "Таймер дизайнера"}
