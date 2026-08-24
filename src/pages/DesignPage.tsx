@@ -57,6 +57,7 @@ import {
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { ActiveHereCard } from "@/components/app/workspace-presence-widgets";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { useSkeletonVisible } from "@/components/app/loadingHandoff";
 import { preloadDesignTaskRoute } from "@/routes/routePreload";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -954,6 +955,18 @@ export default function DesignPage() {
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [membersLoading, setMembersLoading] = useState(() => !initialMemberCache);
   const [tasks, setTasks] = useState<DesignTask[]>(() => initialCache?.tasks ?? []);
+  /**
+   * Каркас відкладеного тіла живе за правилами естафети REQ-19: перші 150 мс
+   * він прозорий. Без цього на ГАРЯЧОМУ переході (дані вже в кеші, transition
+   * закінчується за ~100-300 мс) людина бачила блимання каркаса там, де раніше
+   * вміст стояв одразу, — Артем зловив це 24.08.2026 і мав рацію: на дошці
+   * беклогу такого блимання немає. Справжнє завантаження (даних ще немає)
+   * показує каркас одразу, як і до правки.
+   */
+  const deferredBodyOnly = !heavySurfaceReady && !(loading && tasks.length === 0);
+  // 400 мс, а не типові 150: гарячий transition займає ~200 мс на проді й до
+  // ~600 на деві, і з порогом 150 каркас встигав проявитись на кадр-другий.
+  const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
   const [teamWorkloadTasks, setTeamWorkloadTasks] = useState<DesignTask[]>([]);
   const [teamWorkloadLoaded, setTeamWorkloadLoaded] = useState(false);
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
@@ -5044,7 +5057,13 @@ export default function DesignPage() {
       {viewMode === "kanban" ? (
         <EstimatesKanbanCanvas>
           {!heavySurfaceReady || (loading && tasks.length === 0) ? (
-            <>
+            <div
+              data-deferred-body-skeleton
+              className={cn(
+                "transition-opacity duration-200",
+                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+              )}
+            >
               <div className="space-y-3 md:hidden">
                 {DESIGN_COLUMNS.map((col) => {
                   const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
@@ -5094,7 +5113,7 @@ export default function DesignPage() {
                   rowClassName="h-full items-stretch"
                 />
               </div>
-            </>
+            </div>
           ) : (
             <>
               <div className="space-y-3 md:hidden">

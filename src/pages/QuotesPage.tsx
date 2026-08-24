@@ -137,6 +137,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
+import { useSkeletonVisible } from "@/components/app/loadingHandoff";
 import { preloadQuoteDetailsRoute } from "@/routes/routePreload";
 import { SurfaceSkeleton } from "@/components/app/loading-primitives";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
@@ -581,6 +582,18 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   );
   const [hasMoreQuotes, setHasMoreQuotes] = useState(false);
   const [loading, setLoading] = useState(() => !(initialCache && initialCache.rows.length > 0));
+  /**
+   * Каркас відкладеного тіла живе за правилами естафети REQ-19: перші 150 мс
+   * він прозорий. Без цього на ГАРЯЧОМУ переході (дані вже в кеші, transition
+   * закінчується за ~100-300 мс) людина бачила блимання каркаса там, де раніше
+   * вміст стояв одразу, — Артем зловив це 24.08.2026 і мав рацію: на дошці
+   * беклогу такого блимання немає. Справжнє завантаження (даних ще немає)
+   * показує каркас одразу, як і до правки.
+   */
+  const deferredBodyOnly = !heavySurfaceReady && !loading;
+  // 400 мс, а не типові 150: гарячий transition займає ~200 мс на проді й до
+  // ~600 на деві, і з порогом 150 каркас встигав проявитись на кадр-другий.
+  const deferredSkeletonVisible = useSkeletonVisible(deferredBodyOnly, 400);
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshIndicator, setShowRefreshIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -6152,7 +6165,15 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       {contentView !== "sets" && (viewMode === "table" ? (
         <EstimatesTableCanvas>
           {loading || !heavySurfaceReady ? (
-            <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
+            <div
+              data-deferred-body-skeleton
+              className={cn(
+                "transition-opacity duration-200",
+                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+              )}
+            >
+              <AppSectionLoader label="Завантаження прорахунків..." variant="table" />
+            </div>
           ) : error ? (
             <div className="p-12 text-center">
               <XCircle className="h-9 w-9 mx-auto mb-3 text-destructive/80" />
@@ -6828,7 +6849,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           {loading || !heavySurfaceReady ? (
             <div
               ref={desktopKanbanViewportRef}
-              className="min-h-0 overflow-hidden"
+              data-deferred-body-skeleton
+              className={cn(
+                "min-h-0 overflow-hidden transition-opacity duration-200",
+                deferredBodyOnly && !deferredSkeletonVisible && "opacity-0"
+              )}
               style={
                 desktopKanbanViewportHeight
                   ? { height: `${desktopKanbanViewportHeight}px` }
