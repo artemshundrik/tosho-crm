@@ -23,7 +23,11 @@ type UploadedAttachmentResult = {
 // token for its whole TTL keeps URLs stable across reloads, so the browser
 // cache actually gets hits. TTL matches avatars (7 days).
 const SIGNED_URL_TTL_SECONDS = 7 * 24 * 60 * 60;
-const SIGNED_URL_CACHE_STORAGE_KEY = "attachment-signed-url-cache-v1";
+// v2 — у v1 осіли адреси завантаження з подвійно закодованим `download`
+// (див. appendDownloadFileName нижче). Кеш живе у sessionStorage до 7 днів, тож
+// без зміни ключа вкладка, відкрита до виправлення, і далі качала б файли з
+// іменем-абракадаброю.
+const SIGNED_URL_CACHE_STORAGE_KEY = "attachment-signed-url-cache-v2";
 const SIGNED_URL_EXPIRY_SKEW_MS = 5 * 60 * 1000;
 
 type SignedUrlCacheEntry = { url: string; expiresAt: number };
@@ -443,6 +447,24 @@ export async function getSignedAttachmentUrl(
   return null;
 }
 
+/**
+ * `download` до адреси дописуємо самі, а НЕ через опцію supabase-js.
+ *
+ * Там воно збирається як `encodeURI(url + '&' + new URLSearchParams(...))`, а
+ * encodeURI екранує ще й сам знак відсотка — тож уже закодоване «%D0%91»
+ * перетворюється на «%25D0%2591». Storage чесно розкодовує це один раз і кладе
+ * в Content-Disposition текст «%D0%91%D0%BB…», а браузер саме його й пише на
+ * диск. Для латиниці непомітно (кодувати нічого), для кирилиці файл падає
+ * абракадаброю замість «Блокнот_а5_кліше.pdf».
+ *
+ * Атрибут `download` у посилання не рятує: адреса чужого походження, і браузер
+ * його ігнорує — ім'я диктує тільки заголовок.
+ */
+const appendDownloadFileName = (signedUrl: string, fileName: string | null) => {
+  const separator = signedUrl.includes("?") ? "&" : "?";
+  return `${signedUrl}${separator}download=${fileName ? encodeURIComponent(fileName) : ""}`;
+};
+
 export async function getSignedAttachmentDownloadUrl(
   bucket: string,
   storagePath: string,
@@ -456,11 +478,10 @@ export async function getSignedAttachmentDownloadUrl(
 
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(storagePath, ttlSeconds, {
-      download: normalizedFileName || true,
-    });
-  const signedUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
-  if (signedUrl && !error) {
+    .createSignedUrl(storagePath, ttlSeconds);
+  const baseUrl = typeof data?.signedUrl === "string" ? data.signedUrl : null;
+  if (baseUrl && !error) {
+    const signedUrl = appendDownloadFileName(baseUrl, normalizedFileName);
     setCachedSignedUrl(cacheKey, signedUrl, ttlSeconds);
     return signedUrl;
   }
