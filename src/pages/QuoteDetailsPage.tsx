@@ -39,6 +39,10 @@ import {
 import { cn } from "@/lib/utils";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
+import { EconomicsComingSoon } from "@/features/quotes/quote-details/EconomicsComingSoon";
+import { QuotePartyCard } from "@/features/quotes/quote-details/QuotePartyCard";
+import { QuotePriceSummary } from "@/features/quotes/quote-details/QuotePriceSummary";
+import { QuoteStatusControl } from "@/features/quotes/quote-details/QuoteStatusControl";
 import { threadKeyForQuote } from "@/lib/taskThread";
 import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
 import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
@@ -88,7 +92,7 @@ import { notifyDesignTaskStakeholdersOnCreate, notifyQuoteInitiatorOnStatusChang
   notifyQuotesCreated,
 } from "@/lib/workflowNotifications";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
-import { AvatarBase, EntityAvatar } from "@/components/app/avatar-kit";
+import { AvatarBase } from "@/components/app/avatar-kit";
 import { StorageObjectImage } from "@/components/app/StorageObjectImage";
 import { KanbanImageZoomPreview } from "@/components/kanban";
 import { NewQuoteDialog } from "@/components/quotes";
@@ -155,7 +159,6 @@ import {
   Download,
   Search,
   ChevronDown,
-  ChevronRight,
   Loader2,
   Package,
   Image,
@@ -753,7 +756,6 @@ function readQuoteDetailsCache(teamId: string, quoteId: string): QuoteDetailsCac
     return null;
   }
 }
-
 
 /**
  * Мінімум інлайнового поля ТЗ на цій сторінці.
@@ -1889,7 +1891,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [activeRunPricingTotals]
   );
 
-
   /**
    * Частка надцінки в сумі продажу — рівно для підпису біля числа.
    *
@@ -2542,7 +2543,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     loaderInputsRef.current = { memberById, permissions, userId, quote, designTask, canCreateMoreDesignTasks };
   });
 
-
   const runFieldLockHint = (allowed: boolean, who: string) =>
     canEditRuns && !allowed ? `Це поле заповнює ${who}` : undefined;
 
@@ -2936,7 +2936,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       ),
     }));
   }, [catalogTypes]);
-
 
   const computedItemPrice = useMemo(() => {
     if (itemFormMode === "simple") {
@@ -3648,7 +3647,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     toast.success(nextAssigneeUserId ? "Виконавця призначено" : "Призначення знято");
     setDesignTaskSaving(false);
   };
-
 
   const loadItems = useCallback(async () => {
     setItemsLoading(true);
@@ -5549,119 +5547,17 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <span className="truncate max-sm:sr-only">Створити замовлення</span>
                 </Button>
               ) : null}
-              {/*
-                Статус — контрол, а не бейдж поруч із кнопками.
-                Раніше в шапці стояли підряд бейдж статусу, CTA переходу,
-                «Змінити статус» і «Створити дизайн-задачу»: чотири рівноцінні
-                прямокутники, з яких неможливо було зчитати, який стан зараз і
-                яка дія головна. Тепер стан і дія — один елемент: видно, де ти
-                стоїш, а всі переходи лежать під ним.
-
-                Тригер НІКОЛИ не буває disabled. Причина, чому перехід зараз
-                неможливий, має бути читабельною — вона написана всередині меню,
-                а не схована в сірій кнопці, по якій нічого не стається.
-              */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      // На телефоні контрол вужчий: номер прорахунку і статус
-                      // мають стати в один рядок на 375px, інакше шапка росте
-                      // до трьох рядків і з'їдає екран.
-                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:gap-1.5 sm:px-2.5 sm:text-sm",
-                      statusClasses[currentStatus] ?? statusClasses.new
-                    )}
-                    aria-label={`Статус: ${formatStatusLabel(currentStatus)}. Змінити`}
-                  >
-                    {/* Іконку на телефоні ховаємо: статус там і так кольоровий
-                        і підписаний, а 20 px вирішують, чи стане він у рядок
-                        поруч із номером. */}
-                    {createElement(statusIcons[currentStatus] ?? Clock, {
-                      className: "hidden h-3.5 w-3.5 sm:block",
-                    })}
-                    <span className="truncate">{formatStatusLabel(currentStatus)}</span>
-                    {statusBusy ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[268px]">
-                  {statusBlockReason ? (
-                    // Текст стану замість мертвої кнопки: людина бачить, чого
-                    // саме бракує, і де це виправити.
-                    <div className="tone-warning-subtle m-1 flex items-start gap-2 rounded-lg px-2.5 py-2 text-xs leading-relaxed">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                      <span>{statusBlockReason}</span>
-                    </div>
-                  ) : nextAction.nextStatus ? (
-                    <>
-                      <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
-                        Наступний крок
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        className="tone-success-subtle font-semibold focus:tone-success-subtle"
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          handlePrimaryStatusAction();
-                        }}
-                      >
-                        {createElement(statusIcons[nextAction.nextStatus] ?? Clock, {
-                          className: "mr-2 h-4 w-4",
-                        })}
-                        <span className="truncate">{nextAction.ctaLabel}</span>
-                      </DropdownMenuItem>
-                    </>
-                  ) : null}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-3xs uppercase tracking-caps text-muted-foreground">
-                    Змінити статус
-                  </DropdownMenuLabel>
-                  {STATUS_OPTIONS.filter((option) => option !== "cancelled").map((option) => {
-                    const isCurrent = option === currentStatus;
-                    return (
-                      <DropdownMenuItem
-                        key={`status-${option}`}
-                        disabled={Boolean(statusBlockReason) || isCurrent}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          void handleQuickStatusChange(option, "");
-                        }}
-                      >
-                        {createElement(statusIcons[option] ?? Clock, {
-                          className: "mr-2 h-4 w-4 text-muted-foreground",
-                        })}
-                        <span className="truncate">{formatStatusLabel(option)}</span>
-                        {isCurrent ? <Check className="ml-auto h-3.5 w-3.5 text-muted-foreground" /> : null}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={Boolean(statusBlockReason)}
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      openStatusDialog();
-                    }}
-                  >
-                    <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
-                    Змінити з приміткою…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={Boolean(statusBlockReason) || currentStatus === "cancelled"}
-                    className="text-destructive focus:text-destructive"
-                    onSelect={(event) => {
-                      event.preventDefault();
-                      setCancelDialogOpen(true);
-                    }}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Скасувати прорахунок…
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <QuoteStatusControl
+                currentStatus={currentStatus}
+                busy={statusBusy}
+                blockReason={statusBlockReason}
+                nextStatus={nextAction.nextStatus}
+                nextActionLabel={nextAction.ctaLabel}
+                onPrimaryAction={handlePrimaryStatusAction}
+                onPickStatus={(status) => void handleQuickStatusChange(status, "")}
+                onOpenStatusDialog={openStatusDialog}
+                onOpenCancelDialog={() => setCancelDialogOpen(true)}
+              />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -8635,39 +8531,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               рахується рівно так, як рахувалось.
             */}
             <section className={cn("py-2", activeQuoteTab !== "economics" && "hidden")}>
-              <div className="mx-auto flex max-w-[560px] flex-col items-center gap-4 py-10 text-center">
-                <div
-                  className="grid h-12 w-12 place-items-center rounded-2xl border border-border/60 bg-muted text-muted-foreground"
-                  aria-hidden
-                >
-                  <Banknote className="h-5 w-5" />
-                </div>
-                <div className="space-y-1.5">
-                  <h2 className="text-lg font-semibold tracking-tight">Економіка — скоро</h2>
-                  <p className="text-sm leading-relaxed text-muted-foreground">
-                    Тут буде розкладка ціни, фактичні витрати замовлення й порівняння тиражів. Вкладку
-                    ще узгоджують — доки рішення не ухвалені, прорахунок рахує ціну так само, як
-                    рахував.
-                  </p>
-                </div>
-                <div className="grid w-full gap-2 text-left">
-                  <div className="flex items-start gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success-foreground" aria-hidden />
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      <span className="font-medium text-foreground">Розкладка ціни вже працює.</span>{" "}
-                      Собівартість, потрібний ВП, сталі витрати й податки видно в «Активному підсумку»
-                      праворуч.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2.5 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
-                    <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      <span className="font-medium text-foreground">Є відкриті питання.</span> Кілька
-                      рішень щодо вкладки ще не ухвалені, тому тут заглушка, а не вигаданий екран.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <EconomicsComingSoon />
             </section>
           </div>
         </main>
@@ -8687,212 +8551,47 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             заголовками.
           */}
           <div className="flex flex-col gap-2 xl:h-full xl:min-h-0 xl:px-3 xl:pt-3">
-            {/*
-              Варіант Д2 — «ідентичність + доріжка дат».
-              Раніше тут стояли вісім рядків «підпис — значення», і на живій
-              картці чотири з них казали «Не вказано»: половина висоти блока
-              йшла на повідомлення про порожнечу. Тепер зверху те, що
-              відповідає на питання «чия це справа», а знизу — три дедлайни
-              однією доріжкою, де незаповнений це тире завширшки в символ, а
-              не окремий рядок. Доставка й нагадування показуються лише тоді,
-              коли їх справді заповнили (див. sideExtras нижче).
-            */}
-            <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
-              <button
-                type="button"
-                onClick={() => setPartyCardOpen(true)}
-                className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              >
-                {/* 36 px — це рівно висота двох рядків поруч: назва (13.5/16) плюс
-                    рядок менеджера (11/15) із проміжком. Аватар на 28 «висів» проти
-                    них, і блок читався як три різні висоти замість одного рядка. */}
-                <EntityAvatar
-                  src={quote.customer_logo_url ?? null}
-                  name={quote.customer_name ?? "Замовник / Лід"}
-                  fallback={getInitials(quote.customer_name)}
-                  size={36}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] font-semibold leading-tight">
-                    {quote.customer_name ?? "Замовник не вказаний"}
-                  </span>
-                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-                    {quote.assigned_to ? (
-                      <>
-                        <AvatarBase
-                          src={memberAvatarById.get(quote.assigned_to) ?? null}
-                          name={memberById.get(quote.assigned_to) ?? quote.assigned_to}
-                          fallback={getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)}
-                          size={14}
-                          className="shrink-0 border-border/60"
-                          showStatusIndicator={false}
-                        />
-                        <span className="truncate">
-                          {memberById.get(quote.assigned_to) ?? quote.assigned_to}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="truncate">Менеджера не призначено</span>
-                    )}
-                    {quote.created_at ? (
-                      <span className="shrink-0 whitespace-nowrap">
-                        · створено{" "}
-                        {new Date(quote.created_at).toLocaleDateString("uk-UA", {
-                          day: "numeric",
-                          month: "long",
-                        })}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
-              </button>
-
-              <div className="px-1.5 pb-1.5">
-                <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
-                  {[
-                    buildDeadlineTrackItem("Відповідь", quote?.deadline_at ?? null),
-                    buildDeadlineTrackItem("Дизайн", quote?.design_deadline_at ?? null),
-                    buildDeadlineTrackItem("Відвантаження", quote?.customer_deadline_at ?? null),
-                  ].map((item) => (
-                    <button
-                      key={`deadline-track-${item.label}`}
-                      type="button"
-                      onClick={() => setActiveQuoteTab("deadlines")}
-                      title={item.title}
-                      className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-muted/50"
-                    >
-                      <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
-                        {item.label}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-2xs font-semibold tabular-nums",
-                          item.tone === "overdue" && "text-danger-foreground",
-                          item.tone === "today" && "text-warning-foreground",
-                          item.tone === "soon" && "text-warning-foreground",
-                          item.tone === "none" && "font-normal text-muted-foreground/50"
-                        )}
-                      >
-                        {item.short}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {sideExtras.length > 0 ? (
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/40 px-2.5 py-1.5 text-2xs text-muted-foreground">
-                  {sideExtras.map((extra) => (
-                    <span key={extra.label} className="inline-flex items-center gap-1.5">
-                      {extra.label}
-                      <span className="font-medium text-foreground">{extra.value}</span>
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </section>
+            <QuotePartyCard
+              customerName={quote.customer_name}
+              customerLogoUrl={quote.customer_logo_url}
+              customerInitials={getInitials(quote.customer_name)}
+              managerName={quote.assigned_to ? memberById.get(quote.assigned_to) ?? quote.assigned_to : null}
+              managerAvatarUrl={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
+              managerInitials={
+                quote.assigned_to
+                  ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)
+                  : undefined
+              }
+              createdAt={quote.created_at}
+              deadlines={[
+                buildDeadlineTrackItem("Відповідь", quote?.deadline_at ?? null),
+                buildDeadlineTrackItem("Дизайн", quote?.design_deadline_at ?? null),
+                buildDeadlineTrackItem("Відвантаження", quote?.customer_deadline_at ?? null),
+              ]}
+              extras={sideExtras}
+              onOpenParty={() => setPartyCardOpen(true)}
+              onOpenDeadlines={() => setActiveQuoteTab("deadlines")}
+            />
 
             {canViewSummarySection ? (
-              /*
-                Підсумок мовою «Витрат»: число → смуга часток → легенда.
-
-                Заголовка немає навмисно. Підпис «Активний підсумок» над сумою
-                в 26 px нічого не додавав — число й так єдине, чим ця картка
-                може бути, — але коштував рядок у колонці, де кожен рядок
-                віднімається від розмови. Керування згортанням переїхало вниз,
-                під роздільник: там воно не змагається з числом за увагу.
-
-                Жодна величина тут не рахується по-новому — це ті самі
-                `activeRunPricingTotals`, лише показані інакше.
-              */
-              <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
-                <div className="p-2.5">
-                  <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                    <span
-                      className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary"
-                      title={`${hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}: ${formatCurrency(totals.total, quote.currency)} · ставка менеджера ${activeManagerRateLabel}`}
-                    >
-                      {formatCurrencyCompact(totals.total, quote.currency)}
-                    </span>
-                    {activeRunPricingTotals.markupTotal > 0 ? (
-                      <span
-                        className="text-xs font-semibold tabular-nums text-success-foreground"
-                        title={`Надцінка ${formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}`}
-                      >
-                        +{formatCurrencyCompact(activeRunPricingTotals.markupTotal, quote.currency)}
-                        {markupShareLabel ? ` · ${markupShareLabel}` : ""}
-                      </span>
-                    ) : null}
-                    {managerRateNeedsAttention ? (
-                      // Різні ставки в тиражах одного прорахунку — те, що треба
-                      // побачити. Стала ставка лишається в підказці суми.
-                      <span
-                        className="tone-warning inline-flex items-center gap-1 rounded-full border px-1.5 text-3xs font-semibold"
-                        title="Тиражі рахувались за різними ставками менеджера"
-                      >
-                        <AlertTriangle className="h-2.5 w-2.5" aria-hidden />
-                        ставки різні
-                      </span>
-                    ) : null}
-                    {priceBreakdownParts.length > 0 ? (
-                      // Стрілка стоїть у рядку з числом, а не окремою смугою під
-                      // роздільником: там вона забирала повноцінний рядок колонки
-                      // заради одного гліфа. Праворуч від суми вона на тій самій
-                      // висоті, що й те, чим керує.
-                      <button
-                        type="button"
-                        onClick={() => setSideSummaryOpen((open) => !open)}
-                        className="ml-auto grid h-6 w-6 shrink-0 self-center place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        aria-expanded={sideSummaryOpen}
-                        aria-label={sideSummaryOpen ? "Згорнути склад ціни" : "Показати склад ціни"}
-                      >
-                        {/* Розгорнуто — вістря вгору («згорнути»), згорнуто — вниз
-                            («показати ще»). Стрілка описує ДІЮ по кліку, а не стан:
-                            вниз при вже розкритому складі обіцяла те, чого немає. */}
-                        <ChevronDown
-                          className={cn("h-3.5 w-3.5 transition-transform", sideSummaryOpen && "rotate-180")}
-                          aria-hidden
-                        />
-                      </button>
-                    ) : null}
-                  </div>
-
-                  {sideSummaryOpen && priceBreakdownParts.length > 0 ? (
-                    <>
-                      {/* Смуга: `flexGrow` за величиною, `minWidth` щоб дрібна
-                          частка не зникла в нуль і смуга не брехала складом. */}
-                      <div className="mt-3 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
-                        {priceBreakdownParts.map((part) => (
-                          <span
-                            key={`bar-${part.key}`}
-                            className={cn("rounded-[2px]", part.color)}
-                            style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }}
-                          />
-                        ))}
-                      </div>
-                      <dl className="mt-2.5 grid gap-1">
-                        {priceBreakdownParts.map((part) => (
-                          <div key={`legend-${part.key}`} className="flex items-baseline gap-2 text-xs">
-                            <span
-                              className={cn("h-2.5 w-2.5 shrink-0 translate-y-[1px] rounded-[3px]", part.color)}
-                              aria-hidden
-                            />
-                            <dt className="text-muted-foreground">{part.label}</dt>
-                            <dd
-                              className="ml-auto font-mono font-medium tabular-nums"
-                              title={formatCurrency(part.value, quote.currency)}
-                            >
-                              {formatCurrencyCompact(part.value, quote.currency)}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </>
-                  ) : null}
-                </div>
-
-              </section>
+              <QuotePriceSummary
+                totalLabel={formatCurrencyCompact(totals.total, quote.currency)}
+                totalTitle={`${hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}: ${formatCurrency(totals.total, quote.currency)} · ставка менеджера ${activeManagerRateLabel}`}
+                markupLabel={
+                  activeRunPricingTotals.markupTotal > 0
+                    ? formatCurrencyCompact(activeRunPricingTotals.markupTotal, quote.currency)
+                    : null
+                }
+                markupTitle={`Надцінка ${formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}`}
+                markupShareLabel={markupShareLabel}
+                managerRateNeedsAttention={managerRateNeedsAttention}
+                managerRateLabel={activeManagerRateLabel}
+                parts={priceBreakdownParts}
+                formatFull={(value) => formatCurrency(value, quote.currency)}
+                formatCompact={(value) => formatCurrencyCompact(value, quote.currency)}
+                open={sideSummaryOpen}
+                onToggle={() => setSideSummaryOpen((open) => !open)}
+              />
             ) : null}
 
             {/*
@@ -8980,7 +8679,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
       </DialogContent>
 
     </Dialog>
-
 
     <Dialog open={briefEditorOpen} onOpenChange={setBriefEditorOpen}>
       <DialogContent className="h-[min(92dvh,860px)] sm:max-w-[min(920px,92vw)]">

@@ -52,6 +52,18 @@ const GIANT_THRESHOLD = 2000;
  * живе відповідна логіка. Але стеля — це обіцянка, а не формальність: якщо
  * її доведеться підняти ще раз, спершу винось модуль.
  *
+ * ПІДНЯТО 25.08.2026 для двох файлів на +11 і +1 рядок. Обидві зміни — доробки
+ * наявних місць, а не новий код у кінці: у AppLayout це каркас бокового меню
+ * (плашка заголовка тримає висоту справжнього, щоб меню не підстрибувало, поки
+ * доїжджають доступи) плюс крок відступу між пунктами, у toshoApi — розбір
+ * помилки в уже наявному запиті наборів. Виносити тут нічого: розмітка сайдбара
+ * за визначенням живе в AppLayout, а гілка помилки — поруч зі своїм запитом.
+ *
+ * У тій самій роботі QuoteDetailsPage пішов у ІНШИЙ бік: редизайн картки додав
+ * ~300 рядків, і замість підняття стелі з них зробили чотири модулі поруч зі
+ * сторінкою — QuotePartyCard, QuotePriceSummary, QuoteStatusControl і
+ * EconomicsComingSoon. Файл вийшов меншим, ніж був до роботи.
+ *
  * ПЕРЕРАХОВАНО 24.08.2026 після роботи над швидкістю дошок (картка 136).
  * Спершу винесено модулі, як і вимагає рядок вище: `useKanbanViewportHeight`
  * і `useDeferredHeavySurface` забрали з обох дошок по вісімдесят рядків
@@ -138,12 +150,12 @@ const CEILINGS = {
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
   "src/features/finances/FinanceExpenses.tsx": 2858,
-  "src/layout/AppLayout.tsx": 3219,
+  "src/layout/AppLayout.tsx": 3230,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2607,
+  "src/lib/toshoApi.ts": 2608,
   "src/pages/TeamPage.tsx": 2427,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,
