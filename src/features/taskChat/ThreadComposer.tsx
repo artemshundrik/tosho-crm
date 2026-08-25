@@ -185,10 +185,18 @@ export function ThreadComposer({
         </div>
       ) : null}
 
+      {/*
+        Поле вводу — окрема поверхня, а не той самий колір, що під ним.
+        Було bg-card усередині контейнера, який теж bg-card: у світлій темі біле
+        на білому, у темній — 9.8% на 9.8%, і від поля лишалась сама рамка на
+        60% прозорості. Тепер тло бере --muted (у світлій він сіріший за картку,
+        у темній світліший), рамка стоїть на повній насиченості, а у фокусі поле
+        світлішає до чистої картки — стан «пишу» видно без підсвітки кольором.
+      */}
       {isRecording || isTranscribing ? (
         <DictationCapsule dictation={dictation} />
       ) : (
-      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+      <div className="flex min-h-[38px] items-end gap-1 rounded-3xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-primary/60 focus-within:bg-card">
         <input
           ref={fileInputRef}
           type="file"
