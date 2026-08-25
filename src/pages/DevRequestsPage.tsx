@@ -4,8 +4,7 @@ import { Archive, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "l
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { LiveCursors } from "@/components/app/live-cursors";
-import { useDemoCursors } from "@/components/app/useDemoCursors";
+import { LiveCursorsLayer } from "@/components/app/LiveCursorsLayer";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -115,10 +114,9 @@ export default function DevRequestsPage() {
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
     (jobRole ?? "").trim().toLowerCase() === "seo";
 
-  // Показ курсорів колег вмикається рядком в адресі: /dev/backlog?cursors=demo
-  // (REQ-163). У звичайній роботі цього немає — це макет, а не присутність.
+  // Курсори колег (REQ-163): живі, а за ?cursors=demo — привиди для вигляду.
   const [searchParams] = useSearchParams();
-  const demoCursors = useDemoCursors(searchParams.get("cursors") === "demo");
+  const cursorsDemo = searchParams.get("cursors") === "demo";
 
   const board = useDevRequestBoard(teamId);
   /**
@@ -473,7 +471,7 @@ export default function DevRequestsPage() {
     // як на дизайні та прорахунках. Свій padding тут перекрив би це й
     // відрізав би колонки від правого краю.
     <div>
-      <LiveCursors cursors={demoCursors} />
+      <LiveCursorsLayer pageKey="dev-backlog" demo={cursorsDemo} />
       {/* Помилка окремим рядком, а не замість дошки: кеш міг лишитись із
           минулого відкриття, і показати його корисніше за порожній екран. */}
       {board.error ? (
