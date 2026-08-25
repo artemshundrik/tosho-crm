@@ -1,12 +1,11 @@
-import { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { HeroShell, SplitBar } from "@/components/app/bento";
 import { PageLoading } from "@/components/app/page-loading";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { formatLastSeenAgo } from "@/lib/lastSeen";
 import { usePageData } from "@/hooks/usePageData";
 
 import { buildOverview } from "@/features/overview/buildOverview";
@@ -58,13 +57,35 @@ export function OverviewPage() {
 
   const lens = useMemo(() => resolveOverviewLens({ accessRole, jobRole }), [accessRole, jobRole]);
 
-  const { data, loading, showSkeleton, refetch } = usePageData<OverviewData>({
+  /*
+   * Сторінка оновлюється САМА, і саме тому тут немає кнопки «Оновити».
+   *
+   * Вона тут була, і причина була не в інтерфейсі, а в шарі даних: із
+   * `backgroundRefetch: false` протухлий кеш не перечитувався НІКОЛИ — ні при
+   * вході в розділ, ні згодом. Тобто число «6 затиків» могло висіти з учора, і
+   * єдиним способом побачити правду був натиск кнопки. Кнопка закривала діру,
+   * а не давала можливість.
+   *
+   * Тепер: застарілий кеш дочитується мовчки при вході (`backgroundRefetch`) і
+   * при поверненні до вкладки (`refetchOnFocus`) — без каркаса й стрибка, бо
+   * на екрані вже є що показувати. Вік даних видно підписом у шапці, а на
+   * телефоні лишається звичний жест «потягнути вниз».
+   */
+  const { data, loading, showSkeleton, updatedAt } = usePageData<OverviewData>({
     cacheKey: `overview:${teamId ?? "none"}:${userId ?? "none"}:${lens}`,
     loadFn: () => loadOverviewData({ teamId, userId }),
     cacheTTL: 10 * 60 * 1000,
     showSkeletonOnStale: false,
-    backgroundRefetch: false,
+    backgroundRefetch: true,
+    refetchOnFocus: true,
   });
+
+  // Хвилинний тік — щоб підпис «щойно» не залишався «щойно» пів години.
+  const [, forceAgeTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => forceAgeTick((value) => value + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const safeData = data ?? createEmptyOverviewData();
 
@@ -107,20 +128,11 @@ export function OverviewPage() {
             <Badge tone="neutral" size="sm" className="hidden sm:inline-flex">
               {view.lensLabel}
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto h-8 gap-1.5"
-              onClick={() => {
-                void refetch();
-              }}
-            >
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              {/* На телефоні лишається сама іконка: із написом кнопка не влазить
-                  у рядок із привітанням і датою й з'їжджає на власний рядок,
-                  лишаючи під собою смугу порожнечі на всю ширину. */}
-              <span className="hidden sm:inline">Оновити</span>
-            </Button>
+            {updatedAt ? (
+              <span className="ml-auto text-2xs text-muted-foreground/80">
+                {formatLastSeenAgo(new Date(updatedAt).toISOString())}
+              </span>
+            ) : null}
           </header>
 
           <HeroShell

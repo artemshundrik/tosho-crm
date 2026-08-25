@@ -20,6 +20,20 @@ type UsePageDataOptions<T> = {
   backgroundRefetch?: boolean;
   /** Інтервал для background refetch (мс) */
   refetchInterval?: number;
+  /**
+   * Оновлювати мовчки, коли людина повертається до вкладки, а кеш устиг
+   * протухнути.
+   *
+   * НАВІЩО. Без цього сторінка з `backgroundRefetch: false` не оновлюється
+   * НІКОЛИ: гілка «кеш застарів» нічого не робить, і показане число може
+   * висіти годинами. Саме через це на «Огляді» була кнопка «Оновити» — вона
+   * закривала діру в шарі даних кнопкою в інтерфейсі.
+   *
+   * Вимкнено за замовчуванням: сторінки з важким завантаженням (картка
+   * прорахунку, дизайн-задача) не мусять перечитувати все підряд щоразу, коли
+   * людина перемкнулась у пошту й назад.
+   */
+  refetchOnFocus?: boolean;
 };
 
 /**
@@ -50,6 +64,7 @@ export function usePageData<T>({
   showSkeletonOnStale = false,
   backgroundRefetch = true,
   refetchInterval,
+  refetchOnFocus = false,
 }: UsePageDataOptions<T>) {
   const queryClient = useQueryClient();
   const fullCacheKey = ["page-cache", cacheKey];
@@ -184,6 +199,32 @@ export function usePageData<T>({
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundRefetch, refetchInterval, cached, cacheKey]);
 
+  /**
+   * Повернення до вкладки.
+   *
+   * Свіжість рахуємо В МОМЕНТ ПОДІЇ, читаючи кеш напряму, а не з `isStaleRef`:
+   * поки вкладка була у фоні, компонент не перемальовувався, тож збережений
+   * прапорець показував би вік, заміряний до того, як людина пішла.
+   */
+  useEffect(() => {
+    if (!refetchOnFocus || typeof document === "undefined") return;
+
+    const refreshIfStale = () => {
+      if (document.visibilityState === "hidden") return;
+      const entry = queryClient.getQueryData<PageCacheEntry<T>>(["page-cache", activeCacheKeyRef.current]);
+      if (entry && Date.now() - entry.updatedAt <= cacheTTL) return;
+      void loadData(true);
+    };
+
+    document.addEventListener("visibilitychange", refreshIfStale);
+    window.addEventListener("focus", refreshIfStale);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfStale);
+      window.removeEventListener("focus", refreshIfStale);
+    };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchOnFocus, cacheTTL, cacheKey]);
+
   // Функція для ручного оновлення
   const refetch = async () => {
     return loadData(false);
@@ -208,6 +249,8 @@ export function usePageData<T>({
     hasCache: Boolean(cached),
     /** Чи кеш застарів */
     isStale,
+    /** Коли дані востаннє приїхали. Для підпису «оновлено N хв тому». */
+    updatedAt: cached?.updatedAt ?? null,
     /** Чи це перше завантаження (немає кешу) */
     isInitialLoad,
     /** Ручне оновлення даних */
