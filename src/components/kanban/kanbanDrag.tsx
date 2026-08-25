@@ -44,9 +44,15 @@ const DRAG_THRESHOLD_PX = 5;
 const TILT_PER_VELOCITY = 0.4;
 const TILT_MAX_DEG = 5;
 
-/** Посадка з невеликим перельотом — це і є «пружина». */
-const DROP_MS = 260;
-const DROP_EASING = "cubic-bezier(0.34, 1.42, 0.64, 1)";
+/**
+ * Посадка з ледь помітним перельотом.
+ *
+ * Перший підбір (0.34, 1.42, 0.64, 1) плюс масштаб 1.035 → 0.982 читався як
+ * стрибок: картка помітно підскакувала й пружинила. Тут переліт залишено, але
+ * приблизно вчетверо слабший — рух має ЗАКІНЧУВАТИСЬ, а не привертати увагу.
+ */
+const DROP_MS = 220;
+const DROP_EASING = "cubic-bezier(0.22, 1.12, 0.4, 1)";
 
 /** Як швидко сусіди розступаються перед діркою. */
 const GAP_MS = 180;
@@ -283,12 +289,25 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
           `[data-kanban-drop="${CSS.escape(targetColumn ?? "")}"] [data-kanban-row="${CSS.escape(drag.id)}"]`
         ) !== null;
 
-      const waitForLanding = (framesLeft: number) => {
-        if (framesLeft <= 0 || landed()) {
+      /**
+       * Вигляд «мене тягнуть» з картки вже знято.
+       *
+       * Дошки, які працюють із цим рушієм, того вигляду картці не дають зовсім
+       * (місце показує напівпрозора копія), тож умова справджується одразу й
+       * прибирання йде тим самим кроком. Перевірка лишається сторожем на
+       * випадок, коли дошка все ж передасть `dragging`: тоді повертати картці
+       * видимість до того, як React зняв пунктир і приглушення, не можна —
+       * картка проявиться на очах, добираючи свій перехід.
+       */
+      const dragLookCleared = () => drag.sourceRow.querySelector('[data-dragging="true"]') === null;
+
+      /** Чекати ФАКТ, а не час: як тільки настав — прибираємо тим самим кадром. */
+      const waitFor = (ready: () => boolean, framesLeft: number) => {
+        if (framesLeft <= 0 || ready()) {
           cleanUp();
           return;
         }
-        requestAnimationFrame(() => waitForLanding(framesLeft - 1));
+        requestAnimationFrame(() => waitFor(ready, framesLeft - 1));
       };
 
       const done = () => {
@@ -304,14 +323,7 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
         }
         setDraggingId(null);
         setOverColumnId(null);
-
-        // Не переїхали — прибирати можна вже наступним кадром: нової дійсності
-        // тут не буде, чекати нема на що.
-        if (!moved) {
-          requestAnimationFrame(cleanUp);
-          return;
-        }
-        waitForLanding(LANDING_WAIT_FRAMES);
+        waitFor(moved ? landed : dragLookCleared, LANDING_WAIT_FRAMES);
       };
 
       if (prefersReducedMotion()) {
@@ -319,12 +331,29 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
         return;
       }
 
-      // Пружина: картка доїжджає в дірку з невеликим перельотом. Саме тут рух
-      // читається як «сіла», а не «зникла».
+      /**
+       * ПОСАДКА МУСИТЬ ЧИТАТИСЬ І ТОДІ, КОЛИ ЇХАТИ НІКУДИ.
+       *
+       * Перший захід був простим переїздом «звідси — туди», і в одному з двох
+       * випадків його не було видно взагалі. Причина не в анімації, а в
+       * геометрії: дірка відкривається прямо під курсором, тож коли картку
+       * кидають у нову колонку, привид уже стоїть у ній — шлях нульовий, рухати
+       * нічого. Видно було лише повернення на СВОЄ місце, бо звідти курсор
+       * здебільшого встиг відійти.
+       *
+       * Тому садимо картку не шляхом, а масштабом: вона трохи розтискається,
+       * потім піджимається нижче одиниці й повертається — коротке «тук» на
+       * приземленні. Разом із тим гасне тінь: картка опускається з висоти на
+       * дошку. Ці кадри однакові за будь-якої відстані, тож обидва випадки
+       * тепер виглядають однаково.
+       */
+      const landedTransform = `translate3d(${landing.left}px, ${landing.top}px, 0) rotate(0deg)`;
       const animation = drag.ghost.animate(
         [
-          { transform: drag.ghost.style.transform },
-          { transform: `translate3d(${landing.left}px, ${landing.top}px, 0) rotate(0deg) scale(1)` },
+          { transform: drag.ghost.style.transform, boxShadow: "var(--shadow-menu)" },
+          { transform: `${landedTransform} scale(1.012)`, offset: 0.55 },
+          { transform: `${landedTransform} scale(0.996)`, offset: 0.8 },
+          { transform: `${landedTransform} scale(1)`, boxShadow: "0 0 0 0 transparent" },
         ],
         { duration: DROP_MS, easing: DROP_EASING, fill: "forwards" }
       );
