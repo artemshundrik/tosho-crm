@@ -24,13 +24,16 @@ export function SidebarIconTooltip({ label, collapsed, children }: SidebarIconTo
   const close = useCallback(() => setCoords(null), []);
 
   if (!collapsed) {
-    return <div className="relative min-w-0">{children}</div>;
+    // `group/row` — щоб супутні контроли рядка (шпилька) вміли проявлятись на
+    // ховері всього рядка: вони лежать поруч із посиланням, а не всередині
+    // нього, тож його власну `group` не бачать.
+    return <div className="group/row relative min-w-0">{children}</div>;
   }
 
   return (
     <div
       ref={triggerRef}
-      className="relative flex cursor-pointer items-center justify-center"
+      className="group/row relative flex cursor-pointer items-center justify-center"
       onMouseEnter={open}
       onMouseLeave={close}
       onFocusCapture={open}

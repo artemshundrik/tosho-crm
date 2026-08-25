@@ -1,5 +1,5 @@
 // src/layout/AppLayout.tsx
-import React, { ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import React, { ReactNode, Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -31,6 +31,8 @@ import {
   CircleDot,
   Package,
   PanelLeftClose,
+  Pin,
+  PinOff,
   PanelLeftOpen,
   SlidersHorizontal,
 } from "lucide-react";
@@ -59,6 +61,7 @@ import { cn } from "@/lib/utils";
 import { getModuleDefinition, hasModuleAccess, type ModuleKey } from "@/lib/moduleAccess";
 import { DEV_LABELS, DEV_PATHS, DEV_ROOT, resolveDevSurface } from "@/lib/devSection";
 import { readCollapsedGroups, writeCollapsedGroups } from "@/lib/sidebarGroupState";
+import { readPinnedLinks, writePinnedLinks } from "@/lib/sidebarPinnedState";
 import { WHATS_NEW_FEATURES } from "@/components/app/WhatsNewTabs";
 
 import {
@@ -1040,20 +1043,45 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
   /**
+   * Закріплені пункти — маршрути, які людина підняла на верх меню.
+   *
+   * Тримаємо саме порядок із localStorage, але показуємо тільки те, що є у
+   * `visibleSidebarLinks`: доступ могли забрати, модуль — вимкнути, і
+   * закріплений колись пункт не має воскресати повз права.
+   */
+  const [pinnedRoutes, setPinnedRoutes] = useState<string[]>(() => readPinnedLinks());
+  const pinnedSet = useMemo(() => new Set(pinnedRoutes), [pinnedRoutes]);
+  const pinnedLinks = useMemo(
+    () =>
+      pinnedRoutes
+        .map((route) => visibleSidebarLinks.find((link) => link.to === route))
+        .filter((link): link is SidebarLink => Boolean(link)),
+    [pinnedRoutes, visibleSidebarLinks]
+  );
+  /**
    * Наскрізні зсуви каскаду підписів: затримка пункту при згортанні сайдбара
    * рахується від його порядкового номера в усьому меню, а не в межах групи —
    * інакше кожна група стартувала б з нуля і хвиля розсипалась.
    */
   const sidebarStagger = useMemo(() => {
     const order: SidebarGroupKey[] = ["overview", "orders", "operations", "account", "dev"];
-    const offsets = { overview: 0, orders: 0, operations: 0, account: 0, dev: 0 };
-    let acc = 0;
+    const offsets = { pinned: 0, overview: 0, orders: 0, operations: 0, account: 0, dev: 0 };
+    // Закріплені стоять першими, тож хвиля починається з них, а групи нижче
+    // зсуваються рівно на їхню кількість.
+    let acc = pinnedRoutes.filter((route) => visibleSidebarLinks.some((link) => link.to === route)).length;
     for (const key of order) {
       offsets[key] = acc;
-      acc += visibleSidebarLinks.filter((link) => link.group === key).length;
+      acc += visibleSidebarLinks.filter((link) => link.group === key && !pinnedSet.has(link.to)).length;
     }
     return offsets;
-  }, [visibleSidebarLinks]);
+  }, [visibleSidebarLinks, pinnedRoutes, pinnedSet]);
+
+  /** Пункти групи без тих, що вже піднялись у «Закріплене» — щоб не дублювались. */
+  const unpinnedGroupLinks = React.useCallback(
+    (group: SidebarGroupKey) =>
+      visibleSidebarLinks.filter((link) => link.group === group && !pinnedSet.has(link.to)),
+    [visibleSidebarLinks, pinnedSet]
+  );
   /**
    * Згорнуті секції меню. Ключ — SidebarGroupKey, стан у localStorage.
    * Читаємо в ініціалізаторі, щоб на першому кадрі меню вже було таким, яким
@@ -1069,6 +1097,78 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       return next;
     });
   }, []);
+
+  const sidebarNavRef = useRef<HTMLElement | null>(null);
+  /** Позиції рядків перед зміною пінів — половина FLIP: F(irst). */
+  const flipFrom = useRef<Map<string, number> | null>(null);
+  /** Кого саме людина щойно рухала: тільки цей рядок летить із тінню. */
+  const flipTarget = useRef<string | null>(null);
+
+  const togglePin = React.useCallback((route: string) => {
+    // Знімок ДО зміни стану: після ре-рендера рядок уже стоїть на новому місці,
+    // і без цих координат летіти йому не було б звідки.
+    const nav = sidebarNavRef.current;
+    if (nav) {
+      const from = new Map<string, number>();
+      nav.querySelectorAll<HTMLElement>("[data-nav-route]").forEach((el) => {
+        const key = el.dataset.navRoute;
+        if (key) from.set(key, el.getBoundingClientRect().top);
+      });
+      flipFrom.current = from;
+      flipTarget.current = route;
+    }
+    setPinnedRoutes((prev) => {
+      const next = prev.includes(route) ? prev.filter((item) => item !== route) : [...prev, route];
+      writePinnedLinks(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * L(ast) + I(nvert) + P(lay): рядки, що змінили місце, стартують зі старої
+   * позиції і зʼїжджають у нову. Анімуємо transform, а не top — це єдина
+   * властивість, яка не змушує браузер рахувати розкладку на кожному кадрі.
+   *
+   * Через Web Animations API, а не інлайн-стилі з requestAnimationFrame:
+   * WAAPI сам прибирає за собою і не залежить від кадру, який може не настати
+   * (перемкнули вкладку — і рядки лишились би висіти зсунутими назавжди).
+   */
+  useLayoutEffect(() => {
+    const from = flipFrom.current;
+    const movedRoute = flipTarget.current;
+    flipFrom.current = null;
+    flipTarget.current = null;
+    const nav = sidebarNavRef.current;
+    if (!from || !nav) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    nav.querySelectorAll<HTMLElement>("[data-nav-route]").forEach((el) => {
+      const key = el.dataset.navRoute;
+      if (!key) return;
+      const previousTop = from.get(key);
+      if (previousTop === undefined) return;
+      const delta = previousTop - el.getBoundingClientRect().top;
+      if (Math.abs(delta) < 2) return;
+
+      const easing = "cubic-bezier(0.3, 1.15, 0.4, 1)";
+      el.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "translateY(0)" }],
+        { duration: 280, easing }
+      );
+
+      // Тінь — тільки під тим рядком, який людина справді перемістила. Решта
+      // просто посунулась, і піднімати над списком усе меню було б і брудно,
+      // і дорого: drop-shadow рахується для кожного елемента окремо.
+      if (key !== movedRoute) return;
+      el.animate(
+        [
+          { boxShadow: "0 8px 18px -6px hsl(var(--foreground) / 0.28)", zIndex: 1 },
+          { boxShadow: "0 0 0 0 hsl(var(--foreground) / 0)", zIndex: 1 },
+        ],
+        { duration: 280, easing }
+      );
+    });
+  }, [pinnedRoutes]);
 
   const sidebarRoutes = useMemo(() => visibleSidebarLinks.map((link) => link.to), [visibleSidebarLinks]);
   const shouldReveal = useMemo(() => {
@@ -2071,10 +2171,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
         {/* Nav */}
         <nav
+          ref={sidebarNavRef}
           className={cn(
             "min-h-0 flex-1 overflow-y-auto overflow-x-hidden transition-[padding]",
             SB_GEOM_TRANSITION,
-            sidebarCollapsed ? "px-2 py-2" : "px-4 py-3"
+            sidebarCollapsed ? "px-2 py-2" : "px-2.5 py-2.5"
           )}
         >
           {moduleAccess === undefined ? (
@@ -2087,28 +2188,50 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                  першому ж кадрі згортання, поки ширина ще їде. */
               "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70",
               "[&>div+div]:before:transition-opacity [&>div+div]:before:duration-300",
-              sidebarCollapsed ? "[&>div+div]:before:opacity-100" : "space-y-4 [&>div+div]:before:opacity-0"
+              sidebarCollapsed ? "[&>div+div]:before:opacity-100" : "space-y-3 [&>div+div]:before:opacity-0"
             )}
           >
+            {/* «Закріплене» — персональний верх меню. Порожньої секції немає
+                зовсім: місце вона б займала, а сказати їй нічого. Дізнаються
+                про неї зі шпильки, що зʼявляється на ховері будь-якого
+                пункта. */}
+            {pinnedLinks.length > 0 ? (
+              <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
+                <SidebarGroup
+                  label="Закріплене"
+                  links={pinnedLinks}
+                  currentPath={location.pathname}
+                  notificationsUnreadCount={unreadCount}
+                  collapsed={sidebarCollapsed}
+                  stagger={sidebarStagger.pinned}
+                  pinnedRoutes={pinnedSet}
+                  onTogglePin={togglePin}
+                />
+              </div>
+            ) : null}
             <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
               <SidebarGroup
                 label="Головне"
-                links={visibleSidebarLinks.filter((l) => l.group === "overview")}
+                links={unpinnedGroupLinks("overview")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.overview}
+                pinnedRoutes={pinnedSet}
+                onTogglePin={togglePin}
                 hideLabel
               />
             </div>
             <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Збут"
-                links={visibleSidebarLinks.filter((l) => l.group === "orders")}
+                links={unpinnedGroupLinks("orders")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.orders}
+                pinnedRoutes={pinnedSet}
+                onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.orders}
                 onToggleGroup={() => toggleGroup("orders")}
               />
@@ -2116,11 +2239,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Операції"
-                links={visibleSidebarLinks.filter((l) => l.group === "operations")}
+                links={unpinnedGroupLinks("operations")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.operations}
+                pinnedRoutes={pinnedSet}
+                onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.operations}
                 onToggleGroup={() => toggleGroup("operations")}
               />
@@ -2128,11 +2253,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Акаунт"
-                links={visibleSidebarLinks.filter((l) => l.group === "account")}
+                links={unpinnedGroupLinks("account")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.account}
+                pinnedRoutes={pinnedSet}
+                onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.account}
                 onToggleGroup={() => toggleGroup("account")}
               />
@@ -2143,11 +2270,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 pb-0" : "")}>
               <SidebarGroup
                 label="Dev"
-                links={visibleSidebarLinks.filter((l) => l.group === "dev")}
+                links={unpinnedGroupLinks("dev")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
                 stagger={sidebarStagger.dev}
+                pinnedRoutes={pinnedSet}
+                onTogglePin={togglePin}
                 groupCollapsed={collapsedGroups.dev}
                 onToggleGroup={() => toggleGroup("dev")}
               />
@@ -2772,16 +2901,16 @@ function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
   ] as const;
 
   return (
-    <div className={cn("space-y-4", collapsed && "space-y-0")}>
+    <div className={cn("space-y-3", collapsed && "space-y-0")}>
       {groups.map((group, groupIndex) => (
-        <div key={`${group.count}-${groupIndex}`} className="space-y-1">
-          {!collapsed && group.showLabel ? <Skeleton className="mx-3 mb-2 h-2.5 w-12 rounded-md" /> : null}
+        <div key={`${group.count}-${groupIndex}`} className="space-y-px">
+          {!collapsed && group.showLabel ? <Skeleton className="mx-[9px] mb-1 h-2.5 w-12 rounded-md" /> : null}
           {Array.from({ length: group.count }).map((_, itemIndex) => (
             <div
               key={`${groupIndex}-${itemIndex}`}
-              className={cn("flex items-center gap-2.5", collapsed ? "h-9 pl-[19px]" : "h-9 px-3")}
+              className={cn("flex items-center gap-[9px]", collapsed ? "h-8 pl-[19.5px]" : "h-8 px-[9px]")}
             >
-              <Skeleton className="h-[18px] w-[18px] shrink-0 rounded-md" />
+              <Skeleton className="h-[17px] w-[17px] shrink-0 rounded-md" />
               {!collapsed ? <Skeleton className="h-4 w-[100px] max-w-full rounded-md" /> : null}
             </div>
           ))}
@@ -2802,6 +2931,8 @@ function SidebarGroup({
   groupCollapsed = false,
   onToggleGroup,
   stagger = 0,
+  pinnedRoutes,
+  onTogglePin,
 }: {
   label: string;
   links: SidebarLink[];
@@ -2816,6 +2947,10 @@ function SidebarGroup({
   onToggleGroup?: () => void;
   /** Наскрізний номер першого пункта групи — база затримок каскаду підписів. */
   stagger?: number;
+  /** Маршрути, вже закріплені вгорі: від цього залежить вигляд шпильки. */
+  pinnedRoutes?: Set<string>;
+  /** Без обробника шпильки немає — саме так поводиться мобільний дровер. */
+  onTogglePin?: (route: string) => void;
 }) {
   if (links.length === 0) return null;
   const isMobileDrawer = !collapsed && Boolean(onNavigate);
@@ -2844,7 +2979,7 @@ function SidebarGroup({
   const shownLinks = isCollapsed ? links.filter((link) => isActivePath(currentPath, link.to)) : links;
 
   return (
-    <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-2")}>
+    <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-1")}>
       {!hideLabel ? (
         collapsible ? (
           <button
@@ -2859,7 +2994,9 @@ function SidebarGroup({
               "text-muted-foreground/65 hover:text-foreground",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
               headerMorph,
-              isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : "px-3"
+              // Підпис секції стоїть на одній вертикалі з текстом пунктів під
+              // нею, тому падінг той самий, що й лівий падінг рядка.
+              isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : "px-[9px]"
             )}
           >
             {/* Назва притиснута до лівого краю — на одній вертикалі з
@@ -2887,7 +3024,7 @@ function SidebarGroup({
         ) : (
           <h4
             className={cn(
-              "px-3 text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
+              "px-[9px] text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
               headerMorph,
               isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
             )}
@@ -2897,15 +3034,18 @@ function SidebarGroup({
         )
       ) : null}
 
-      <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-1")}>
+      <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-px")}>
         {shownLinks.map((link, index) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
+          const pinned = pinnedRoutes?.has(link.to) ?? false;
+          const showPin = Boolean(onTogglePin) && !collapsed && !isMobileDrawer;
 
           const navLink = (
             <Link
               to={link.to}
+              data-nav-route={link.to}
               onClick={() => {
                 onNavigate?.();
               }}
@@ -2913,7 +3053,7 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex w-full items-center gap-2.5 rounded-[var(--radius-lg)] px-3 py-2 text-sm font-medium",
+                "relative group flex w-full items-center gap-[9px] rounded-[var(--radius-lg)] px-[9px] py-2 text-[13px] font-medium",
                 // Ховер підсвічує САМУ область, а не лише текст з іконкою.
                 // Було hover:bg-muted/40 — у світлій темі muted (95.5%) майже
                 // збігається з тлом сайдбару (96.4%), різниця 0.4% і плашки не
@@ -2926,10 +3066,12 @@ function SidebarGroup({
                 "motion-reduce:transition-none",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 collapsed
-                  ? "h-9 rounded-lg pl-[19px]"
+                  ? "h-8 rounded-lg pl-[19.5px]"
                   : isMobileDrawer
-                    ? "min-h-11 rounded-2xl px-4 py-2.5"
-                    : "h-9 rounded-lg",
+                    ? "min-h-11 rounded-2xl px-4 py-2.5 gap-2.5 text-sm"
+                    : // Праве поле тримає місце під шпильку постійно — інакше
+                      // підпис смикався б, обрізаючись на кожному ховері.
+                      "h-8 rounded-lg pr-8",
                 active
                   ? collapsed
                     ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
@@ -2944,7 +3086,8 @@ function SidebarGroup({
 
               <Icon
                 className={cn(
-                  "h-[18px] w-[18px] shrink-0 transition-colors pointer-events-none",
+                  "shrink-0 transition-colors pointer-events-none",
+                  isMobileDrawer ? "h-[18px] w-[18px]" : "h-[17px] w-[17px]",
                   active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
@@ -2989,6 +3132,38 @@ function SidebarGroup({
           return (
             <SidebarIconTooltip key={link.to} label={link.label} collapsed={collapsed}>
               {navLink}
+              {/* Шпилька — сусід посилання, а не вкладена в нього кнопка:
+                  <button> усередині <a> ламає і клавіатуру, і скрінрідер.
+                  Проявляється на ховері рядка й на власному фокусі, тож із
+                  клавіатури до неї теж можна дійти. */}
+              {showPin ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onTogglePin?.(link.to);
+                  }}
+                  aria-label={pinned ? `Відкріпити «${link.label}»` : `Закріпити «${link.label}» вгорі`}
+                  title={pinned ? "Відкріпити" : "Закріпити вгорі"}
+                  className={cn(
+                    "absolute right-1 top-1/2 z-[1] grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md",
+                    "text-muted-foreground/70 transition-[opacity,color,background-color] duration-150",
+                    "hover:bg-foreground/[0.07] hover:text-foreground",
+                    "focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-foreground/20",
+                    // Мовчить, поки на рядок не навели: те, що пункт
+                    // закріплений, і так видно з секції, у якій він стоїть, —
+                    // а стовпчик постійних шпильок праворуч це просто шум.
+                    "opacity-0 group-hover/row:opacity-100"
+                  )}
+                >
+                  {pinned ? (
+                    <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Pin className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                </button>
+              ) : null}
             </SidebarIconTooltip>
           );
         })}
