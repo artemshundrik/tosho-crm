@@ -5652,7 +5652,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
         <main
           className={cn(
-            "min-w-0 px-4 pt-0 md:px-5 lg:px-6 xl:flex xl:h-full xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-8",
+            // Відступи вдвічі менші за попередні (було px-4/5/6/8).
+            // Колонка стала вужчою після того, як розмова забрала праву
+            // частину, і поля по 24-32 px з'їдали ширину, якої бракує таблиці
+            // тиражів. Дихання лишається, порожнього канта — ні.
+            "min-w-0 px-2 pt-0 md:px-2.5 lg:px-3 xl:flex xl:h-full xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-4",
             // На телефоні вкладка «Деталі» живе в боковій колонці, і тіло тут
             // порожнє — нижній відступ у такому разі малює 40 px дірки між
             // вкладками й першою карткою.
@@ -6027,7 +6031,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           itemIndex > 0 && "mt-4"
                         )}
                       >
-                        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:gap-6">
+                        <div className="flex flex-col gap-3 p-2.5 sm:flex-row sm:items-start sm:gap-4 sm:p-3">
                           <div className="shrink-0">
                             {productPreview?.type === "image" ? (
                               <KanbanImageZoomPreview
