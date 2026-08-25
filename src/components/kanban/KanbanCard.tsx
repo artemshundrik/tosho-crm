@@ -25,19 +25,17 @@ import { cn } from "@/lib/utils";
  * двадцять пропсів, яких ніхто не наважиться чіпати. Оболонка володіє формою,
  * сторінка приносить вміст.
  *
- * СТАН ПЕРЕТЯГУВАННЯ переїхав сюди 26.08.2026 (REQ-159) — саме так, як тут і
- * було записано: спершу подивитись на три дошки поруч, обрати один рецепт, і аж
- * тоді зводити. Поруч вони давали три різні відповіді на одне питання:
+ * ВИГЛЯДУ «МЕНЕ ТЯГНУТЬ» ТУТ НЕМАЄ, І ЦЕ НЕ ПРОПУСК. Він жив тут недовго
+ * (REQ-159): три дошки давали три різні відповіді — ring-primary/30+opacity-90,
+ * ring-primary/40 і просто opacity-50, — і їх звели в один сірий рецепт.
+ * А потім перетягування переїхало на вказівникові події (kanbanDrag.tsx), і
+ * рецепт став зайвим: місце, з якого картку взяли, показує напівпрозора копія
+ * самої картки, і стоїть вона рівно там же. Дві позначки одного місця не просто
+ * надлишкові — вони ще й мигали, бо картка доганяла свій перехід прозорості в
+ * мить, коли їй повертали видимість.
  *
- *   прорахунки  ring-2 ring-primary/30 + opacity-90
- *   дизайн      ring-2 ring-primary/40
- *   беклог      opacity-50
- *
- * Обраний рецепт — СІРИЙ і той самий на всіх дошках. Взята картка не
- * підсвічується, а навпаки гасне й сідає: те, що ти тримаєш, зараз під курсором,
- * а на дошці лишилась ямка, з якої його вийняли. Пунктирна рамка каже те саме
- * без жодного кольору. Основний колір звідси прибрано свідомо: на дошці без
- * заливки колонок синя рамка ставала єдиною кольоровою плямою на весь екран.
+ * Тому картка про перетягування не знає нічого: рядок із нею на час руху просто
+ * схований, а всім іншим керує рушій.
  */
 
 /** Щільність вмісту. Три значення — рівно ті, що вже були на дошках. */
@@ -64,8 +62,6 @@ export type KanbanCardProps = PropsWithChildren<HTMLAttributes<HTMLDivElement>> 
   interactive?: boolean;
   /** Відкрити не можна (немає прав, немає куди): курсор-заборона й приглушення. */
   disabled?: boolean;
-  /** Саме цю картку зараз тягнуть: на дошці лишається приглушена ямка. */
-  dragging?: boolean;
 };
 
 export function KanbanCard({
@@ -75,13 +71,11 @@ export function KanbanCard({
   surface = "flat",
   interactive = true,
   disabled = false,
-  dragging = false,
   ...props
 }: KanbanCardProps) {
   return (
     <div
       data-kanban-card="true"
-      data-dragging={dragging ? "true" : undefined}
       className={cn(
         // `.kanban-estimate-card` (index.css) дає плаский фон картки; градієнт
         // із `surface="raised"` лягає поверх як background-image і не конфліктує.
@@ -89,23 +83,13 @@ export function KanbanCard({
         // Перелік властивостей поіменно, не `transition-all`: `all` возить і
         // відступи, через що картка «розгортається» після появи (та сама
         // причина, що в CONTROL_BASE). Opacity тут тому, що ним показують
-        // перетягування й недоступність.
-        //
-        // `scale`, А НЕ `transform` — це не синонім. Tailwind v4 віддає
-        // `scale-[0.98]` окремою властивістю `scale`, а не збирає її в
-        // `transform`. Перший захід перелічив тут `transform`, і заміром у
-        // браузері вийшло `scale: 0.98` при `transform: none`: властивість, яку
-        // ми анімуємо, не та, яка змінюється, — картка сідала стрибком.
-        "transition-[border-color,opacity,scale] duration-220 ease-out motion-reduce:transition-none",
+        // недоступність.
+        "transition-[border-color,opacity] duration-220 ease-out motion-reduce:transition-none",
         DENSITY[density],
         SURFACE[surface],
         disabled
           ? "cursor-not-allowed opacity-70"
           : interactive && "cursor-pointer hover:border-foreground/24 dark:hover:border-foreground/22",
-        // Після disabled/interactive, щоб перетягування перебивало ховер:
-        // курсор фізично стоїть над карткою, і без цього вона підсвічувалась би
-        // межею рівно тоді, коли має гаснути.
-        dragging && "scale-[0.98] border-dashed border-foreground/25 opacity-40",
         className
       )}
       {...props}

@@ -289,18 +289,6 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
           `[data-kanban-drop="${CSS.escape(targetColumn ?? "")}"] [data-kanban-row="${CSS.escape(drag.id)}"]`
         ) !== null;
 
-      /**
-       * Вигляд «мене тягнуть» з картки вже знято.
-       *
-       * Дошки, які працюють із цим рушієм, того вигляду картці не дають зовсім
-       * (місце показує напівпрозора копія), тож умова справджується одразу й
-       * прибирання йде тим самим кроком. Перевірка лишається сторожем на
-       * випадок, коли дошка все ж передасть `dragging`: тоді повертати картці
-       * видимість до того, як React зняв пунктир і приглушення, не можна —
-       * картка проявиться на очах, добираючи свій перехід.
-       */
-      const dragLookCleared = () => drag.sourceRow.querySelector('[data-dragging="true"]') === null;
-
       /** Чекати ФАКТ, а не час: як тільки настав — прибираємо тим самим кадром. */
       const waitFor = (ready: () => boolean, framesLeft: number) => {
         if (framesLeft <= 0 || ready()) {
@@ -323,7 +311,15 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
         }
         setDraggingId(null);
         setOverColumnId(null);
-        waitFor(moved ? landed : dragLookCleared, LANDING_WAIT_FRAMES);
+
+        // Не переїхали — чекати нема на що: картка про перетягування нічого не
+        // знає, тож у її вигляді після відпускання нічого не міняється. Привид
+        // стоїть рівно над нею, і обмін непомітний навіть без паузи.
+        if (!moved) {
+          cleanUp();
+          return;
+        }
+        waitFor(landed, LANDING_WAIT_FRAMES);
       };
 
       if (prefersReducedMotion()) {
