@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { HeroShell, SplitBar } from "@/components/app/bento";
 import { PageLoading } from "@/components/app/page-loading";
+import { PullToRefresh } from "@/components/app/PullToRefresh";
 import { PageCanvas, PageCanvasBody } from "@/components/canvas/PageCanvas";
 import { Badge } from "@/components/ui/badge";
 import { formatLastSeenAgo } from "@/lib/lastSeen";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
 import { usePageData } from "@/hooks/usePageData";
 
 import { buildOverview } from "@/features/overview/buildOverview";
@@ -71,7 +73,8 @@ export function OverviewPage() {
    * на екрані вже є що показувати. Вік даних видно підписом у шапці, а на
    * телефоні лишається звичний жест «потягнути вниз».
    */
-  const { data, loading, showSkeleton, updatedAt } = usePageData<OverviewData>({
+  const isNarrow = useIsNarrowViewport();
+  const { data, loading, showSkeleton, updatedAt, refetch } = usePageData<OverviewData>({
     cacheKey: `overview:${teamId ?? "none"}:${userId ?? "none"}:${lens}`,
     loadFn: () => loadOverviewData({ teamId, userId }),
     cacheTTL: 10 * 60 * 1000,
@@ -107,6 +110,10 @@ export function OverviewPage() {
   const now = new Date();
   const dateLine = now.toLocaleDateString("uk-UA", { weekday: "long", day: "numeric", month: "long" });
 
+  // `background: true` — оновлення БЕЗ каркаса: інакше на пів секунди зникало б
+  // рівно те, що людина щойно тягнула пальцем.
+  const handlePullRefresh = useCallback(() => refetch({ background: true }), [refetch]);
+
   if (showSkeleton || loading) {
     return <PageLoading />;
   }
@@ -114,6 +121,9 @@ export function OverviewPage() {
   return (
     <PageCanvas>
       <PageCanvasBody className="min-w-0 pb-16 md:pb-8">
+        {/* Жест лише на телефоні: мишею тягнути нема чим, а слухачі дотиків на
+            десктопі все одно ніколи б не спрацювали. */}
+        <PullToRefresh onRefresh={handlePullRefresh} enabled={isNarrow}>
         {/* Та сама ширина, що в «Релізах» і «Стеку»: дві колонки, а не суцільний
             текст, тож 1600px колонка макета була б завеликою. */}
         {/* grid-cols-1, а не просто grid: без явної колонки неявний трек має розмір
@@ -168,6 +178,7 @@ export function OverviewPage() {
             />
           </div>
         </div>
+        </PullToRefresh>
       </PageCanvasBody>
     </PageCanvas>
   );

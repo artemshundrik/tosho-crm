@@ -225,9 +225,16 @@ export function usePageData<T>({
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchOnFocus, cacheTTL, cacheKey]);
 
-  // Функція для ручного оновлення
-  const refetch = async () => {
-    return loadData(false);
+  /**
+   * Ручне оновлення.
+   *
+   * `background: true` — перечитати БЕЗ каркаса: дані міняються під тим, що
+   * вже на екрані. Це потрібно жесту «потягнути вниз» і будь-якому оновленню
+   * на місці: без цього `refetch()` піднімає `loading`, і сторінка на мить
+   * підміняється каркасом — тобто зникає рівно те, що людина щойно тягнула.
+   */
+  const refetch = async (options?: { background?: boolean }) => {
+    return loadData(options?.background ?? false);
   };
 
   // Функція для очищення кешу
