@@ -132,26 +132,47 @@ export type ApprovalGateInput = {
 export const APPROVAL_GATE_HINT =
   "Погоджує кнопка «Погодити» в рядку матеріалу. Галочка зліва лише вибирає рядки для масових дій.";
 
-export const getApprovalBlockers = ({
+export type DesignApprovalKind = "visualization" | "layout";
+
+/**
+ * Чого вимагає цей тип задачі. Один резолвер на три відповіді: перелік
+ * блокерів, тип, якого бракує, і мітка «обовʼязково» в самому розділі. Раніше
+ * ті самі три порівняння лежали ще й копією в картці задачі — а правило, яке
+ * живе у двох місцях, рано чи пізно розходиться.
+ */
+export const resolveApprovalRequirements = ({
   designTaskType,
-  approvedVisualizationCount,
-  approvedLayoutCount,
   hasLayoutOutputs,
-}: ApprovalGateInput): string[] => {
-  const requiresVisualization = designTaskType === "visualization";
-  const requiresLayout =
+}: Pick<ApprovalGateInput, "designTaskType" | "hasLayoutOutputs">) => ({
+  requiresVisualization: designTaskType === "visualization",
+  requiresLayout:
     designTaskType === "layout" ||
     designTaskType === "layout_adaptation" ||
-    (designTaskType === "visualization" && hasLayoutOutputs);
+    (designTaskType === "visualization" && hasLayoutOutputs),
+});
+
+export const getApprovalBlockers = (input: ApprovalGateInput): string[] => {
+  const { requiresVisualization, requiresLayout } = resolveApprovalRequirements(input);
 
   const blockers: string[] = [];
-  if (requiresVisualization && approvedVisualizationCount === 0) {
+  if (requiresVisualization && input.approvedVisualizationCount === 0) {
     blockers.push("Потрібно погодити хоча б один візуал");
   }
-  if (requiresLayout && approvedLayoutCount === 0) {
+  if (requiresLayout && input.approvedLayoutCount === 0) {
     blockers.push("Потрібно погодити хоча б один макет");
   }
   return blockers;
+};
+
+/**
+ * Тип матеріалу, якого бракує, — щоб заблокована кнопка «Затверджено
+ * замовником» відкривала потрібний таб «Результату», а не просто відмовляла.
+ */
+export const getMissingApprovalKind = (input: ApprovalGateInput): DesignApprovalKind | null => {
+  const { requiresVisualization, requiresLayout } = resolveApprovalRequirements(input);
+  if (requiresVisualization && input.approvedVisualizationCount === 0) return "visualization";
+  if (requiresLayout && input.approvedLayoutCount === 0) return "layout";
+  return null;
 };
 
 /* ────────────────────────────────────────────────────────────────────────────

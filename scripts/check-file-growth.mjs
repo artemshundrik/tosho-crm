@@ -104,14 +104,32 @@ const GIANT_THRESHOLD = 2000;
  * першою в групі (REQ-25: група росте вліво й штовхає курс на 51 px), і саме
  * цей коментар не дасть переставити її назад.
  *
+ * ПІДНЯТО 25.08.2026 для трьох файлів — скарга дизайну на завантаження й на
+ * гейт «Затверджено замовником» (REQ-152, REQ-153) плюс робота над боковим меню.
+ *
+ * DesignTaskPage (+26) і DesignPage (+3). Спершу винесено все, що виноситься:
+ * правило «чого вимагає цей тип задачі» поїхало з картки в `designTaskStatus`
+ * (`resolveApprovalRequirements`, `getMissingApprovalKind`) — воно лежало там
+ * копією, а правило у двох місцях рано чи пізно розходиться; заразом воно
+ * нарешті отримало тести. Те, що лишилось у сторінках, окремо жити не може:
+ * перехід на потрібний таб усередині обробника статусу (чотири виклики
+ * сеттерів), гілка тексту в смузі розділу й рядок `description` у тості на
+ * канбані.
+ *
+ * AppLayout (+308) — закріплення пунктів меню й хореографія згортання
+ * (a15b805, 07a85bb, c60674d). Чиста частина стану вже винесена окремим
+ * модулем `lib/sidebarPinnedState.ts`; решта — розмітка й анімація самого
+ * лейауту, яка поза ним не існує. Це найбільший стрибок за час ратчета: якщо
+ * бокове меню поповзе далі, наступний крок — не стеля, а окремий компонент.
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
 const CEILINGS = {
-  "src/pages/DesignTaskPage.tsx": 12802,
+  "src/pages/DesignTaskPage.tsx": 12828,
   "src/pages/QuoteDetailsPage.tsx": 9929,
   "src/pages/QuotesPage.tsx": 8445,
-  "src/pages/DesignPage.tsx": 6009,
+  "src/pages/DesignPage.tsx": 6012,
   // +1 рядок 23.08.2026: доданий імпорт типів таблиць. Це той рідкісний випадок,
   // коли зростання файлу зменшує ризик — два payload на 40 полів кожен
   // перестали бути `Record<string, unknown>` і тепер звіряються з базою.
@@ -120,7 +138,7 @@ const CEILINGS = {
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
   "src/features/finances/FinanceExpenses.tsx": 2858,
-  "src/layout/AppLayout.tsx": 2911,
+  "src/layout/AppLayout.tsx": 3219,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,

@@ -136,6 +136,8 @@ import {
   DESIGN_STATUS_LABELS,
   getApprovalBlockers,
   getDesignStatusActionLabel,
+  getMissingApprovalKind,
+  resolveApprovalRequirements,
   resolveDesignTaskActions,
   type DesignStatus,
   type DesignTaskAction,
@@ -7142,14 +7144,11 @@ export default function DesignTaskPage() {
     }),
     [designOutputFiles]
   );
-  const requiresVisualizationOutput = task?.designTaskType === "visualization";
   // Presence-based: "Візуалізація/адаптація" requires an approved layout only
   // when a layout output was actually added. Pure layout types always require one.
   const hasLayoutOutputs = designOutputCountByKind.layout > 0;
-  const requiresLayoutOutput =
-    task?.designTaskType === "layout" ||
-    task?.designTaskType === "layout_adaptation" ||
-    (task?.designTaskType === "visualization" && hasLayoutOutputs);
+  const { requiresVisualization: requiresVisualizationOutput, requiresLayout: requiresLayoutOutput } =
+    resolveApprovalRequirements({ designTaskType: task?.designTaskType ?? null, hasLayoutOutputs });
   const approvalBlockers = useMemo(
     () =>
       getApprovalBlockers({
@@ -7166,25 +7165,14 @@ export default function DesignTaskPage() {
     ]
   );
 
-  /**
-   * Якого саме типу матеріалу бракує — щоб клік по заблокованій «Затверджено
-   * замовником» відкрив потрібний таб «Результату», а не просто сказав «не можна».
-   *
-   * Гейт довго був тупиком: він називав, чого бракує, але не казав, ЧИМ це
-   * закривають. Люди тицяли галочку зліва від файлу (вона про масові дії) і
-   * тиснули «Затверджено замовником» ще раз — з тим самим текстом у відповідь.
-   * Погодження ставить кнопка «Погодити» в рядку матеріалу.
-   */
-  const missingApprovalKind: DesignOutputKind | null = useMemo(() => {
-    if (requiresVisualizationOutput && selectedVisualizationOutputFileIds.length === 0) return "visualization";
-    if (requiresLayoutOutput && selectedLayoutOutputFileIds.length === 0) return "layout";
-    return null;
-  }, [
-    requiresLayoutOutput,
-    requiresVisualizationOutput,
-    selectedLayoutOutputFileIds.length,
-    selectedVisualizationOutputFileIds.length,
-  ]);
+  // Без useMemo навмисно: правило дешеве, а React Compiler на такому `useMemo`
+  // спотикався й додавав три борги в `preserve-manual-memoization`.
+  const missingApprovalKind = getMissingApprovalKind({
+    designTaskType: task?.designTaskType ?? null,
+    approvedVisualizationCount: selectedVisualizationOutputFileIds.length,
+    approvedLayoutCount: selectedLayoutOutputFileIds.length,
+    hasLayoutOutputs,
+  });
 
   useEffect(() => {
     let active = true;
