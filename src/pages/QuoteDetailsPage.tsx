@@ -1914,6 +1914,19 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     return "Змішано";
   }, [activeRunPricingSummaries, selectedRunPricing.managerRate]);
 
+  /**
+   * Ставка менеджера різна між тиражами — єдиний випадок, коли її варто
+   * показувати рядком.
+   *
+   * Однакова ставка на всі тиражі це стала величина: вона не міняється від
+   * перегляду до перегляду, і власний рядок у вузькій колонці для неї — оренда
+   * місця під те, що ніхто не перечитує. Значення нікуди не зникає (воно в
+   * підказці суми), а на екран повертається саме тоді, коли з ним щось не так:
+   * «Змішано» означає, що тиражі одного прорахунку рахувались за різними
+   * ставками, і це або свідоме рішення, або помилка — але побачити її треба.
+   */
+  const managerRateNeedsAttention = activeManagerRateLabel === "Змішано";
+
   const quoteSectionsBootstrapping =
     (!itemsLoaded && items.length === 0) || (!runsLoaded && runs.length === 0);
 
@@ -8673,7 +8686,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             справді довге (стрічка повідомлень), а не вся колонка разом із
             заголовками.
           */}
-          <div className="flex flex-col gap-2.5 xl:h-full xl:min-h-0 xl:px-4 xl:pt-4">
+          <div className="flex flex-col gap-2 xl:h-full xl:min-h-0 xl:px-3 xl:pt-3">
             {/*
               Варіант Д2 — «ідентичність + доріжка дат».
               Раніше тут стояли вісім рядків «підпис — значення», і на живій
@@ -8688,7 +8701,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               <button
                 type="button"
                 onClick={() => setPartyCardOpen(true)}
-                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
                 <EntityAvatar
                   src={quote.customer_logo_url ?? null}
@@ -8732,7 +8745,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
               </button>
 
-              <div className="px-2 pb-2">
+              <div className="px-1.5 pb-1.5">
                 <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
                   {[
                     buildDeadlineTrackItem("Відповідь", quote?.deadline_at ?? null),
@@ -8744,7 +8757,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       type="button"
                       onClick={() => setActiveQuoteTab("deadlines")}
                       title={item.title}
-                      className="grid justify-items-center gap-0.5 bg-card px-1.5 py-1.5 text-center transition-colors hover:bg-muted/50"
+                      className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-muted/50"
                     >
                       <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
                         {item.label}
@@ -8766,7 +8779,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               {sideExtras.length > 0 ? (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 px-3 py-2 text-2xs text-muted-foreground">
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/40 px-2.5 py-1.5 text-2xs text-muted-foreground">
                   {sideExtras.map((extra) => (
                     <span key={extra.label} className="inline-flex items-center gap-1.5">
                       {extra.label}
@@ -8780,49 +8793,23 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             {canViewSummarySection ? (
               /*
                 Підсумок мовою «Витрат»: число → смуга часток → легенда.
-                Було велике число, а під ним шість однакових рядків «підпис —
-                сума». Рядки не давали головного: з чого ця ціна складається і
-                що в ній переважає. Смуга показує пропорцію з одного погляду,
-                легенда лишає всі ті самі шість величин до копійки. Жодне
-                число тут не рахується по-новому — це ті самі
+
+                Заголовка немає навмисно. Підпис «Активний підсумок» над сумою
+                в 26 px нічого не додавав — число й так єдине, чим ця картка
+                може бути, — але коштував рядок у колонці, де кожен рядок
+                віднімається від розмови. Керування згортанням переїхало вниз,
+                під роздільник: там воно не змагається з числом за увагу.
+
+                Жодна величина тут не рахується по-новому — це ті самі
                 `activeRunPricingTotals`, лише показані інакше.
               */
               <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
-                <button
-                  type="button"
-                  onClick={() => setSideSummaryOpen((open) => !open)}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
-                  aria-expanded={sideSummaryOpen}
-                >
-                  <span className="design-task-side-heading !mb-0 !mt-0">
-                    {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
-                  </span>
-                  {!sideSummaryOpen ? (
-                    // Згорнутий підсумок не має бути німим: сума — це те, заради
-                    // чого в цю картку взагалі дивляться.
-                    <span className="ml-auto font-mono text-xs font-semibold tabular-nums text-primary">
-                      {formatCurrency(totals.total, quote.currency)}
-                    </span>
-                  ) : null}
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                      sideSummaryOpen ? "ml-auto" : "-rotate-90"
-                    )}
-                    aria-hidden
-                  />
-                </button>
-
-                <div className={cn("border-t border-border/40 p-4", !sideSummaryOpen && "hidden")}>
-                  {/*
-                    Варіант П1: надцінка — текст поруч із числом, а не бейдж під ним.
-                    Зелений прямокутник забирав окремий рядок і читався наліпкою,
-                    хоча це просто друга величина того самого підсумку. Копійки
-                    прибрані: у колонці завширшки 380 px вони не вирішують нічого,
-                    а розряди числа роблять нечитабельними.
-                  */}
+                <div className="p-2.5">
                   <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                    <span className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary">
+                    <span
+                      className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary"
+                      title={`${hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}: ${formatCurrency(totals.total, quote.currency)} · ставка менеджера ${activeManagerRateLabel}`}
+                    >
                       {formatCurrencyCompact(totals.total, quote.currency)}
                     </span>
                     {activeRunPricingTotals.markupTotal > 0 ? (
@@ -8834,13 +8821,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         {markupShareLabel ? ` · ${markupShareLabel}` : ""}
                       </span>
                     ) : null}
+                    {managerRateNeedsAttention ? (
+                      // Різні ставки в тиражах одного прорахунку — те, що треба
+                      // побачити. Стала ставка лишається в підказці суми.
+                      <span
+                        className="tone-warning inline-flex items-center gap-1 rounded-full border px-1.5 text-3xs font-semibold"
+                        title="Тиражі рахувались за різними ставками менеджера"
+                      >
+                        <AlertTriangle className="h-2.5 w-2.5" aria-hidden />
+                        ставки різні
+                      </span>
+                    ) : null}
                   </div>
 
-                  {priceBreakdownParts.length > 0 ? (
+                  {sideSummaryOpen && priceBreakdownParts.length > 0 ? (
                     <>
                       {/* Смуга: `flexGrow` за величиною, `minWidth` щоб дрібна
                           частка не зникла в нуль і смуга не брехала складом. */}
-                      <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
+                      <div className="mt-3 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
                         {priceBreakdownParts.map((part) => (
                           <span
                             key={`bar-${part.key}`}
@@ -8849,7 +8847,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           />
                         ))}
                       </div>
-                      <dl className="mt-3 grid gap-1.5">
+                      <dl className="mt-2.5 grid gap-1">
                         {priceBreakdownParts.map((part) => (
                           <div key={`legend-${part.key}`} className="flex items-baseline gap-2 text-xs">
                             <span
@@ -8868,16 +8866,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       </dl>
                     </>
                   ) : null}
-
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
-                    <span>
-                      % менеджера{" "}
-                      <span className="font-mono font-medium tabular-nums text-foreground">
-                        {activeManagerRateLabel}
-                      </span>
-                    </span>
-                  </div>
                 </div>
+
+                {priceBreakdownParts.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setSideSummaryOpen((open) => !open)}
+                    className="flex w-full items-center justify-center border-t border-border/40 py-1 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                    aria-expanded={sideSummaryOpen}
+                    aria-label={sideSummaryOpen ? "Згорнути склад ціни" : "Показати склад ціни"}
+                  >
+                    <ChevronDown
+                      className={cn("h-3.5 w-3.5 transition-transform", !sideSummaryOpen && "-rotate-90")}
+                      aria-hidden
+                    />
+                  </button>
+                ) : null}
               </section>
             ) : null}
 
