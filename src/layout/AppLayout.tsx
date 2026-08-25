@@ -579,6 +579,18 @@ const ROUTES = {
 const SB_GEOM_TRANSITION =
   "[transition-duration:320ms] [transition-timing-function:cubic-bezier(0.34,1.4,0.45,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
 
+/**
+ * Те саме, але БЕЗ перельоту — для всього, що рухається по вертикалі.
+ *
+ * Пружина личить висувній ширині: вона їде вбік і нічого не штовхає. А на
+ * висоті заголовка чи вертикальному відступі той самий переліт означає, що
+ * значення на мить перескакує ціль і повертається, — і весь стовпчик пунктів
+ * під ним смикається вгору-вниз. Найгірше це чути на розгортанні, де висота
+ * росте з нуля і переліт нічим не обрізаний.
+ */
+const SB_STACK_TRANSITION =
+  "[transition-duration:280ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
+
 const baseSidebarLinks: SidebarLink[] = [
   // Головне
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
@@ -2174,7 +2186,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           ref={sidebarNavRef}
           className={cn(
             "min-h-0 flex-1 overflow-y-auto overflow-x-hidden transition-[padding]",
-            SB_GEOM_TRANSITION,
+            SB_STACK_TRANSITION,
             sidebarCollapsed ? "px-2 py-2" : "px-2.5 py-2.5"
           )}
         >
@@ -2196,7 +2208,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 про неї зі шпильки, що зʼявляється на ховері будь-якого
                 пункта. */}
             {pinnedLinks.length > 0 ? (
-              <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
+              <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
                 <SidebarGroup
                   label="Закріплене"
                   links={pinnedLinks}
@@ -2209,7 +2221,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 />
               </div>
             ) : null}
-            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
               <SidebarGroup
                 label="Головне"
                 links={unpinnedGroupLinks("overview")}
@@ -2222,7 +2234,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 hideLabel
               />
             </div>
-            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Збут"
                 links={unpinnedGroupLinks("orders")}
@@ -2236,7 +2248,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 onToggleGroup={() => toggleGroup("orders")}
               />
             </div>
-            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Операції"
                 links={unpinnedGroupLinks("operations")}
@@ -2250,7 +2262,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 onToggleGroup={() => toggleGroup("operations")}
               />
             </div>
-            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Акаунт"
                 links={unpinnedGroupLinks("account")}
@@ -2267,7 +2279,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             {/* «Dev» — найнижча група: це кухня самої CRM, а не робота
                 компанії, і бачать її двоє. SidebarGroup сам повертає null на
                 нуль посилань, тож у решти команди блок не займає й пікселя. */}
-            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 pb-0" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_STACK_TRANSITION, sidebarCollapsed ? "py-2.5 pb-0" : "")}>
               <SidebarGroup
                 label="Dev"
                 links={unpinnedGroupLinks("dev")}
@@ -2293,7 +2305,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 <div
   className={cn(
     "flex flex-col border-t border-border/40 transition-[padding,gap]",
-    SB_GEOM_TRANSITION,
+    SB_STACK_TRANSITION,
     sidebarCollapsed ? "gap-2 p-2" : "gap-2.5 p-4"
   )}
 >
@@ -2908,9 +2920,9 @@ function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
           {Array.from({ length: group.count }).map((_, itemIndex) => (
             <div
               key={`${groupIndex}-${itemIndex}`}
-              className={cn("flex items-center gap-[9px]", collapsed ? "h-8 pl-[19.5px]" : "h-8 px-[9px]")}
+              className={cn("flex items-center gap-[9px]", collapsed ? "h-8 pl-[19px]" : "h-8 px-[9px]")}
             >
-              <Skeleton className="h-[17px] w-[17px] shrink-0 rounded-md" />
+              <Skeleton className="h-[18px] w-[18px] shrink-0 rounded-md" />
               {!collapsed ? <Skeleton className="h-4 w-[100px] max-w-full rounded-md" /> : null}
             </div>
           ))}
@@ -2964,9 +2976,15 @@ function SidebarGroup({
      фазою хореографії (var(--sb-w-delay)), а текст гасне одразу. */
   const headerMorph = cn(
     "overflow-hidden",
-    "[transition:max-height_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),opacity_200ms_ease,transform_200ms_ease,color_150ms_linear]",
+    // Висота — спокійною кривою без перельоту: пружина тут смикала б увесь
+    // стовпчик пунктів під заголовком. Текст гасне швидше за складання
+    // висоти, тож напис не встигає розмазатись по русі.
+    "[transition:max-height_280ms_cubic-bezier(0.2,0.8,0.2,1)_var(--sb-w-delay,0ms),opacity_160ms_ease,transform_200ms_ease,color_150ms_linear]",
     "motion-reduce:transition-none",
-    collapsed ? "max-h-0 opacity-0 -translate-x-2 pointer-events-none" : "max-h-8"
+    // Стеля впритул до реальної висоти напису (19px): із запасом у 32px
+    // перші дві третини анімації йшли вхолосту, і рух читався як ривок
+    // наприкінці замість рівного розкладання.
+    collapsed ? "max-h-0 opacity-0 -translate-x-2 pointer-events-none" : "max-h-5"
   );
 
   /**
@@ -2990,8 +3008,12 @@ function SidebarGroup({
             tabIndex={collapsed ? -1 : undefined}
             title={collapsed ? undefined : isCollapsed ? `Розгорнути «${label}»` : `Згорнути «${label}»`}
             className={cn(
-              "group/grp flex w-full items-center gap-1 rounded-md py-0.5 text-3xs font-semibold uppercase tracking-wider",
-              "text-muted-foreground/65 hover:text-foreground",
+              // 11px замість 10: заголовок секції — клікабельний контрол, а в
+              // нашому ж розборі примітивів записано, що 11px на клікабельному
+              // підписі вже дрібно. Явний leading тримає висоту рівно 20px,
+              // щоб стеля складання (max-h-5) збігалася з нею піксель у піксель.
+              "group/grp flex w-full items-center gap-1 rounded-md py-0.5 text-2xs leading-4 font-semibold uppercase tracking-caps-tight",
+              "text-muted-foreground/75 hover:text-foreground",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
               headerMorph,
               // Підпис секції стоїть на одній вертикалі з текстом пунктів під
@@ -3016,7 +3038,7 @@ function SidebarGroup({
             {/* Скільки пунктів сховано — інакше згорнута секція виглядає як
                 порожня, а не як згорнута. */}
             {isCollapsed ? (
-              <span className="ml-auto font-mono text-3xs tabular-nums text-muted-foreground/50">
+              <span className="ml-auto font-mono text-2xs tabular-nums text-muted-foreground/60">
                 {links.length}
               </span>
             ) : null}
@@ -3024,7 +3046,7 @@ function SidebarGroup({
         ) : (
           <h4
             className={cn(
-              "px-[9px] text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
+              "px-[9px] text-2xs leading-4 font-semibold uppercase tracking-caps-tight text-muted-foreground/75",
               headerMorph,
               isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
             )}
@@ -3053,7 +3075,7 @@ function SidebarGroup({
               onFocus={() => preloadRoute(link.to)}
               onTouchStart={() => preloadRoute(link.to)}
               className={cn(
-                "relative group flex w-full items-center gap-[9px] rounded-[var(--radius-lg)] px-[9px] py-2 text-[13px] font-medium",
+                "relative group flex w-full items-center gap-[9px] rounded-[var(--radius-lg)] px-[9px] py-2 text-sm font-medium",
                 // Ховер підсвічує САМУ область, а не лише текст з іконкою.
                 // Було hover:bg-muted/40 — у світлій темі muted (95.5%) майже
                 // збігається з тлом сайдбару (96.4%), різниця 0.4% і плашки не
@@ -3066,12 +3088,14 @@ function SidebarGroup({
                 "motion-reduce:transition-none",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 collapsed
-                  ? "h-8 rounded-lg pl-[19.5px]"
+                  ? "h-8 rounded-lg pl-[19px]"
                   : isMobileDrawer
                     ? "min-h-11 rounded-2xl px-4 py-2.5 gap-2.5 text-sm"
                     : // Праве поле тримає місце під шпильку постійно — інакше
                       // підпис смикався б, обрізаючись на кожному ховері.
-                      "h-8 rounded-lg pr-8",
+                      // Рівно на кнопку (24px) плюс подих, не більше: кожен
+                      // зайвий піксель тут — це вкорочений підпис.
+                      "h-8 rounded-lg pr-7",
                 active
                   ? collapsed
                     ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
@@ -3086,8 +3110,7 @@ function SidebarGroup({
 
               <Icon
                 className={cn(
-                  "shrink-0 transition-colors pointer-events-none",
-                  isMobileDrawer ? "h-[18px] w-[18px]" : "h-[17px] w-[17px]",
+                  "h-[18px] w-[18px] shrink-0 transition-colors pointer-events-none",
                   active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
@@ -3099,7 +3122,10 @@ function SidebarGroup({
                 style={
                   {
                     "--sb-out": `${(stagger + index) * 10}ms`,
-                    "--sb-in": `${120 + (stagger + index) * 14}ms`,
+                    // Розгортання коротше за згортання і навмисно: ширина вже
+                    // стала, і чекати на хвіст хвилі до півсекунди — це та
+                    // сама затримка, яку читаєш як гальмо, а не як рух.
+                    "--sb-in": `${80 + (stagger + index) * 8}ms`,
                   } as React.CSSProperties
                 }
                 className={cn(
