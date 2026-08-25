@@ -122,6 +122,7 @@ import { buildToShoAiRouteContext, saveToShoAiLastContext } from "@/lib/toshoAi"
 
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { PageReveal } from "@/components/app/PageReveal";
+import { OnlineNowDropdown } from "@/components/app/workspace-presence-widgets";
 import { TabBar } from "@/components/app/TabBar";
 import { TabBarSettingsSheet } from "@/components/app/TabBarSettingsSheet";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
@@ -2401,12 +2402,27 @@ function AppLayoutInner({ children }: AppLayoutProps) {
 
             {/* RIGHT ACTIONS */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0 md:justify-self-end md:gap-2">
-              {/* Кнопка «онлайн» звідси прибрана (картка 146): шапка мусила
-                  вміщати назву сторінки й дії, а список присутніх з'їдав місце
-                  мінливою шириною — аватарок то одна, то дванадцять. Хто зараз
-                  на місці, видно в «Пульсі команди», де це й є темою сторінки.
-                  Разом із нею пішла й причина тримати групу в жорсткому
-                  порядку (REQ-25): решта елементів тут сталої ширини. */}
+              {/* ПЕРШИЙ У ГРУПІ — і це не про красу, а про REQ-25.
+                  Група має ml-auto й shrink-0: коли елемент усередині росте,
+                  вона розширюється ВЛІВО, штовхаючи все, що стоїть лівіше.
+                  Кнопка онлайну — єдина тут із мінливою шириною (аватарок то
+                  одна, то дванадцять), і поки вона стояла після курсу, курс
+                  їздив на 51 px сам собою, без жодної дії людини. Тепер ліворуч
+                  від неї лишається сам пошук — а він гнучкий і стискається без
+                  наслідків. Ширину кнопки фіксувати не треба: хай аватарок буде
+                  скільки є. Не переставляйте її назад.
+
+                  На ТЕЛЕФОНІ її немає (картка 146): там шапка вміщає лише назву
+                  сторінки й дві дії, і список присутніх з'їдав усе місце. Це
+                  єдина різниця — на десктопі кнопка лишається такою, якою була. */}
+              {isNarrowViewport ? null : (
+                <OnlineNowDropdown
+                  entries={workspacePresence.onlineEntries}
+                  loading={workspacePresence.loading}
+                  compact
+                />
+              )}
+
               {/* Заробіток — поруч із таймером; сам вирішує, чи показуватись
                   (рендерить null, якщо в людини немає чинної ставки). */}
               {permissions.isDesigner ? <DesignerEarningsWidget teamId={teamId} userId={viewUserId} /> : null}
