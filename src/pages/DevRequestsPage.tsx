@@ -1,9 +1,11 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Archive, KanbanSquare, Lightbulb, PlusCircle, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { LiveCursors } from "@/components/app/live-cursors";
+import { useDemoCursors } from "@/components/app/useDemoCursors";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
 import { CountBadge, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
@@ -112,6 +114,11 @@ export default function DevRequestsPage() {
   const canSee =
     (accessRole ?? "").trim().toLowerCase() === "owner" ||
     (jobRole ?? "").trim().toLowerCase() === "seo";
+
+  // Показ курсорів колег вмикається рядком в адресі: /dev/backlog?cursors=demo
+  // (REQ-163). У звичайній роботі цього немає — це макет, а не присутність.
+  const [searchParams] = useSearchParams();
+  const demoCursors = useDemoCursors(searchParams.get("cursors") === "demo");
 
   const board = useDevRequestBoard(teamId);
   /**
@@ -466,6 +473,7 @@ export default function DevRequestsPage() {
     // як на дизайні та прорахунках. Свій padding тут перекрив би це й
     // відрізав би колонки від правого краю.
     <div>
+      <LiveCursors cursors={demoCursors} />
       {/* Помилка окремим рядком, а не замість дошки: кеш міг лишитись із
           минулого відкриття, і показати його корисніше за порожній екран. */}
       {board.error ? (
