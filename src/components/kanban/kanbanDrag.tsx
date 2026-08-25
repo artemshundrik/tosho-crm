@@ -52,6 +52,14 @@ const DROP_EASING = "cubic-bezier(0.34, 1.42, 0.64, 1)";
 const GAP_MS = 180;
 const GAP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
+/**
+ * Скільки кадрів чекати, поки картка з'явиться на новому місці, перш ніж
+ * прибрати привида. ~15 кадрів ≈ чверть секунди: оптимістичне оновлення
+ * укладається в один-два, решта — запас на випадок, коли зміну відкотили і
+ * картка не приїде взагалі.
+ */
+const LANDING_WAIT_FRAMES = 15;
+
 /** Смуга біля краю дошки, у якій вона починає їхати сама. */
 const AUTOSCROLL_EDGE_PX = 72;
 const AUTOSCROLL_MAX_STEP = 18;
@@ -248,25 +256,62 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
        * дійсність — прибираємо привида, рамку місця й зсуви. Обмін відбувається
        * в межах одного кадру, тож порожнього проміжку не лишається.
        */
+      const cleanUp = () => {
+        clearGap(drag);
+        drag.sourceRow.style.removeProperty("opacity");
+        drag.slot.remove();
+        drag.ghost.remove();
+      };
+
+      /**
+       * Чи намальована вже картка на НОВОМУ місці.
+       *
+       * Одного кадру очікування виявилось мало, і ось чому. Оптимістичне
+       * оновлення в React Query асинхронне — усередині `onMutate` стоїть
+       * `await cancelQueries`, — тож на момент найближчого кадру дані ще старі,
+       * а `requestAnimationFrame` спрацьовує ДО перемальовки. Виходило рівно те
+       * саме, що й раніше: привида вже немає, картки на новому місці ще немає.
+       * Своє місце при цьому працювало бездоганно, бо там нічого й не мінялось —
+       * саме тому блимало тільки при переїзді в іншу колонку.
+       *
+       * Тому чекаємо не «кадр», а ФАКТ: рядок із цим ключем усередині цільової
+       * колонки. Стеля в кадрах потрібна на випадок, коли картка не приїде
+       * ніколи — сервер відмовив і зміну відкотили.
+       */
+      const landed = () =>
+        document.querySelector(
+          `[data-kanban-drop="${CSS.escape(targetColumn ?? "")}"] [data-kanban-row="${CSS.escape(drag.id)}"]`
+        ) !== null;
+
+      const waitForLanding = (framesLeft: number) => {
+        if (framesLeft <= 0 || landed()) {
+          cleanUp();
+          return;
+        }
+        requestAnimationFrame(() => waitForLanding(framesLeft - 1));
+      };
+
       const done = () => {
-        if (targetColumn && targetColumn !== drag.fromColumn) {
+        const moved = Boolean(targetColumn && targetColumn !== drag.fromColumn);
+        if (moved) {
           // ДРУГА АНІМАЦІЯ ТУТ ЗАЙВА. Картка щойно приїхала на місце руками
           // цього рушія; далі зміняться дані, список перемалюється — і його
           // власна хореографія (KanbanCardList) програла б від'їзд зі старої
           // колонки та приїзд у нову ПОВЕРХ уже зробленого руху. Саме це
           // виглядало як подвійне перетворення. Одну зміну пропускаємо.
           skipNextKanbanChoreography();
-          onDropRef.current(drag.id, targetColumn);
+          onDropRef.current(drag.id, targetColumn!);
         }
         setDraggingId(null);
         setOverColumnId(null);
 
-        requestAnimationFrame(() => {
-          clearGap(drag);
-          drag.sourceRow.style.removeProperty("opacity");
-          drag.slot.remove();
-          drag.ghost.remove();
-        });
+        // Не переїхали — прибирати можна вже наступним кадром: нової дійсності
+        // тут не буде, чекати нема на що.
+        if (!moved) {
+          requestAnimationFrame(cleanUp);
+          return;
+        }
+        waitForLanding(LANDING_WAIT_FRAMES);
       };
 
       if (prefersReducedMotion()) {
