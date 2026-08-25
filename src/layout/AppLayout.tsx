@@ -2615,9 +2615,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   ? "min-w-0"
                   : cn(
                       "mx-auto max-w-[1600px] min-w-0 space-y-6",
-                      // Відступ лише тоді, коли є що від чого відділяти.
+                      // Відступ лише тоді, коли є що від чого відділяти. На
+                      // телефоні вдвічі менший: 24px — десктопна міра, і вміст
+                      // помітно розходився зі сторінками-полотнами (картка 146).
                       hasToolbarAboveContent
-                        ? "pt-6"
+                        ? "pt-6 max-md:pt-3"
                         : hasColumnHeaderAboveContent
                           ? "pt-0 md:pt-6"
                           : "pt-0"

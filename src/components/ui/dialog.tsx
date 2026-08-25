@@ -238,7 +238,28 @@ DialogHeader.displayName = "DialogHeader";
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     data-slot="dialog-footer"
-    className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2", className)}
+    className={cn(
+      "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2",
+      /*
+       * ТЕЛЕФОН: кнопки на всю ширину, стосом, з тач-розміром.
+       *
+       * Десктопний підвал — це маленькі кнопки в рядку праворуч, і на
+       * телефоні вони лишались такими ж: у «Редагувати відсутність» три дії
+       * («Видалити», «Скасувати», «Зберегти») тіснились у два ряди дрібними
+       * прямокутниками. Тепер кожна кнопка — окремий рядок заввишки 48px.
+       *
+       * Порядок дає `flex-col-reverse` (він тут і був): у розмітці підвал
+       * іде «руйнівна → скасувати → головна», а на екрані читається згори
+       * вниз як ГОЛОВНА → скасувати → руйнівна. Внутрішню групу кнопок
+       * розвертаємо так само, інакше «Скасувати» опинялась би над
+       * «Зберегти».
+       */
+      "max-md:gap-2",
+      "max-md:[&>*]:w-full",
+      "max-md:[&>div]:flex max-md:[&>div]:flex-col-reverse max-md:[&>div]:gap-2",
+      "max-md:[&_button]:h-12 max-md:[&_button]:w-full max-md:[&_button]:justify-center max-md:[&_button]:text-[15px]",
+      className
+    )}
     {...props}
   />
 );

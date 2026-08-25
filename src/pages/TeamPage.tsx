@@ -1480,7 +1480,7 @@ export function TeamPage() {
           те саме, що ховати вкладки браузера (картка 146). Та сама стрічка,
           що й статуси на дошках, — щоб мова інтерфейсу не роздвоювалась. */}
       {isNarrowViewport ? (
-        <div className="pt-1">
+        <div>
           <MobileStatusChips
             chips={[
               { key: "people", label: "Люди", count: activeMembers.length },
