@@ -95,6 +95,15 @@ const GIANT_THRESHOLD = 2000;
  * не чіпає. Винести нема чого — це фільтр і рядок тексту в тому самому
  * обробнику.
  *
+ * ПІДНЯТО 25.08.2026 для AppLayout (+16) — повернення кнопки «хто онлайн» у
+ * шапку на десктопі (ef31f14). Прибираючи її з телефона, вирізали розмітку
+ * цілком, і кнопка зникла на обох ширинах. Код, що повернувся, окремо жити не
+ * може: це гілка тернарника мобільної/десктопної шапки та монтування вже
+ * наявного компонента з `workspace-presence-widgets`, тобто виносити нема чого
+ * — воно вже винесене. Більшість приросту — коментар про те, ЧОМУ кнопка стоїть
+ * першою в групі (REQ-25: група росте вліво й штовхає курс на 51 px), і саме
+ * цей коментар не дасть переставити її назад.
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
@@ -111,7 +120,7 @@ const CEILINGS = {
   "src/pages/OrdersProductionDetailsPage.tsx": 3067,
   "src/components/quotes/QuoteBatchBuilderDialog.tsx": 2887,
   "src/features/finances/FinanceExpenses.tsx": 2858,
-  "src/layout/AppLayout.tsx": 2861,
+  "src/layout/AppLayout.tsx": 2877,
   "src/components/quotes/NewQuoteDialog.tsx": 2732,
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
