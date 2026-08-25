@@ -8832,6 +8832,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         ставки різні
                       </span>
                     ) : null}
+                    {priceBreakdownParts.length > 0 ? (
+                      // Стрілка стоїть у рядку з числом, а не окремою смугою під
+                      // роздільником: там вона забирала повноцінний рядок колонки
+                      // заради одного гліфа. Праворуч від суми вона на тій самій
+                      // висоті, що й те, чим керує.
+                      <button
+                        type="button"
+                        onClick={() => setSideSummaryOpen((open) => !open)}
+                        className="ml-auto grid h-6 w-6 shrink-0 self-center place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        aria-expanded={sideSummaryOpen}
+                        aria-label={sideSummaryOpen ? "Згорнути склад ціни" : "Показати склад ціни"}
+                      >
+                        <ChevronDown
+                          className={cn("h-3.5 w-3.5 transition-transform", !sideSummaryOpen && "-rotate-90")}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : null}
                   </div>
 
                   {sideSummaryOpen && priceBreakdownParts.length > 0 ? (
@@ -8868,20 +8886,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   ) : null}
                 </div>
 
-                {priceBreakdownParts.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setSideSummaryOpen((open) => !open)}
-                    className="flex w-full items-center justify-center border-t border-border/40 py-1 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                    aria-expanded={sideSummaryOpen}
-                    aria-label={sideSummaryOpen ? "Згорнути склад ціни" : "Показати склад ціни"}
-                  >
-                    <ChevronDown
-                      className={cn("h-3.5 w-3.5 transition-transform", !sideSummaryOpen && "-rotate-90")}
-                      aria-hidden
-                    />
-                  </button>
-                ) : null}
               </section>
             ) : null}
 

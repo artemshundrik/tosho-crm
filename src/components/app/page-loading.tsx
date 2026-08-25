@@ -246,12 +246,93 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
   );
 }
 
+/**
+ * Картка прорахунку — власна форма, а не спільний RecordShape.
+ *
+ * Після редизайну 25.08.2026 сторінка перестала збігатися зі спільним каркасом
+ * одразу в чотирьох місцях: шапка з номером і статусом переїхала ВСЕРЕДИНУ лівої
+ * колонки (права тепер починається від самого верху), вкладки стали
+ * підкресленням замість рамкових пігулок, права колонка розширилась до 380 px і
+ * тримає три блоки замість двох, а поля колонки зменшились удвічі. Каркас, що
+ * малює вчорашню рамку, гірший за його відсутність: у момент готовності даних
+ * екран перебудовується — і це читається як стрибок.
+ */
 function QuoteRecordShape() {
   return (
-    <RecordShape
-      grid="xl:h-[calc(100dvh-112px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:overflow-hidden"
-      topBar
-    />
+    <div className="grid grid-cols-1 xl:h-[calc(100dvh-57px)] xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden">
+      <div className="flex min-w-0 flex-col">
+        {/* Шапка: назад · номер · тип · статус-контрол · ⋮ */}
+        <div className="border-b border-border/70 px-4 py-2 md:px-5 lg:px-6">
+          <div className="flex min-h-10 items-center gap-2">
+            <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
+            <Line w="w-32" h="h-4" />
+            <Skeleton className="h-6 w-16 rounded-full opacity-70" />
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <Skeleton className="h-8 w-32 rounded-lg opacity-80" />
+              <Skeleton className="h-8 w-8 rounded-lg opacity-60" />
+            </div>
+          </div>
+        </div>
+
+        {/* Вкладки — підкресленням, тому лише рядок написів */}
+        <div className="border-b border-border/50 px-3 md:px-4">
+          <div className="flex h-11 items-center gap-5">
+            {["w-16", "w-14", "w-20", "w-24", "w-20"].map((w, index) => (
+              <Line key={index} w={w} h="h-3" dim={index > 0} />
+            ))}
+          </div>
+        </div>
+
+        <div className="min-w-0 space-y-3 px-2 pb-10 pt-3 md:px-2.5 lg:px-3 2xl:px-4">
+          <SectionBlock rows={3} title="w-40" />
+          <SectionBlock rows={4} />
+        </div>
+      </div>
+
+      {/* Права колонка: ідентичність → підсумок → розмова */}
+      <div className="flex flex-col gap-2 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:px-3 xl:pb-3 xl:pt-3">
+        <div className="shrink-0 rounded-inner border border-border/40 bg-card/70 p-2.5">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Line w="w-[52%]" h="h-3.5" />
+              <Line w="w-[72%]" h="h-2.5" dim />
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="grid justify-items-center gap-1 bg-card/70 px-1 py-1.5">
+                <Line w="w-12" h="h-2" dim />
+                <Line w="w-8" h="h-2.5" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="shrink-0 space-y-2.5 rounded-inner border border-border/40 bg-card/70 p-2.5">
+          <Skeleton className="h-6 w-40 rounded-lg" />
+          <Skeleton className="h-2.5 w-full rounded-full opacity-80" />
+          <div className="space-y-1.5">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-[3px] opacity-70" />
+                <Line w={index % 2 === 0 ? "w-[46%]" : "w-[38%]"} h="h-2.5" dim />
+                <Line w="w-14" h="h-2.5" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex min-h-[220px] flex-1 flex-col rounded-inner border border-border/40 bg-card/70 p-2.5">
+          <Line w="w-28" h="h-3" dim />
+          <div className="mt-auto space-y-2">
+            <Skeleton className="h-8 w-[70%] rounded-2xl opacity-70" />
+            <Skeleton className="ml-auto h-8 w-[55%] rounded-2xl opacity-60" />
+            <Skeleton className="h-9 w-full rounded-3xl opacity-70" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
