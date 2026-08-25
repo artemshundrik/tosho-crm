@@ -13,31 +13,40 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~9 928 lines, 468 KB, as of 2026-08-25)
+## src/pages/QuoteDetailsPage.tsx (~10 154 lines, as of 2026-08-25, після редизайну шапки)
 
-Зміщення звірені grep-ом 25.08.2026. Попередня версія таблиці розійшлася з
-файлом на півтори тисячі рядків — обробники статусу шукались біля 3600, а
-лежали біля 4200. Якщо цифра нижче не сходиться, звіряй grep-ом і онови тут:
-мапа, якій не вірять, гірша за її відсутність.
+Зміщення звірені grep-ом 25.08.2026 (двічі за день: удруге — після редизайну
+шапки й вкладок, який зсунув усе нижче 2300 приблизно на +200 рядків).
+Попередня версія таблиці розійшлася з файлом на півтори тисячі рядків —
+обробники статусу шукались біля 3600, а лежали біля 4200. Якщо цифра нижче не
+сходиться, звіряй grep-ом і онови тут: мапа, якій не вірять, гірша за її
+відсутність.
 
 | Range | Content |
 |---|---|
-| 1–215 | imports |
-| 216–855 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `resizeTextareaToContent`, `formatBriefSelection`, `toggleWrappedFormatting`, `renderBriefRichText`) |
-| **856** | `export function QuoteDetailsPage(...)` — main component starts |
-| **1338** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
-| 1475 / 1479 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
-| 1626 / 1777 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
-| 2447 / 2494 | `handlePrimaryStatusAction`, `handleCreateOrder` |
-| 4018 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
-| 4220 / 4314 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
-| 4327 / 4443 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
-| 4655 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
-| 4770 / 5011 | items: `handleSaveItem`, `handleAddComment` |
-| ~5570 | картка «Товари і тиражі» — початок |
-| ~6080–6300 | ціни активного тиражу: чотири поля, «Погодив клієнт», підсумки |
-| ~6440–6800 | окрема картка «Тиражі» (список рядків + «Зберегти») |
-| ~9813 | діалог «Створити замовлення» |
+| 1–216 | imports |
+| 217–856 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `resizeTextareaToContent`, `formatBriefSelection`, `toggleWrappedFormatting`, `renderBriefRichText`) |
+| **857** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1340** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| 1474 / 1478 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
+| 1625 / 1776 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
+| **2302** | `statusBlockReason` — чому перехід статусу неможливий, людською мовою (права → чужий лок → незаповнені поля). Друкується в меню статусу замість сірої кнопки |
+| 2466 / 2513 | `handlePrimaryStatusAction`, `handleCreateOrder` |
+| 4037 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
+| 4239 / 4333 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
+| 4346 / 4462 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
+| 4674 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
+| 4789 / 5030 | items: `handleSaveItem`, `handleAddComment` |
+| ~5310–5360 | `quotePageTabs` — перелік вкладок; «Економіка» остання, з `soon: true` |
+| ~5430–5560 | шапка: статус-контрол (DropdownMenu) + меню «⋮» |
+| ~5600–5640 | вкладки (підкреслення, `after:` псевдоелемент) |
+| ~5685–5745 | банери: `EntityLockBanner`, помилка статусу, «чого бракує» списком міток |
+| ~5746 | вкладка «Товари» — початок |
+| ~5753 | картка «Товари і тиражі» — заголовок |
+| ~6250–6480 | ціни активного тиражу: чотири поля, «Погодив клієнт», підсумки |
+| ~6612–6980 | окрема картка «Тиражі» (`className="hidden"` — мертва, не рендериться) |
+| ~8380–8420 | вкладка «Економіка» — заглушка «скоро» |
+| ~10039 | діалог «Створити замовлення» |
 
 ## src/pages/DesignTaskPage.tsx (~12 801 lines, 579 KB, as of 2026-08-24)
 
