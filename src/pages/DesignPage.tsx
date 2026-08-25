@@ -5141,10 +5141,7 @@ export default function DesignPage() {
                 }
               >
                 <KanbanSkeleton
-                  columns={DESIGN_COLUMNS.map((column) => ({
-                    id: column.id,
-                    label: column.label,
-                  }))}
+                  columns={DESIGN_COLUMNS.map((column) => ({ id: column.id }))}
                   rowClassName="h-full items-stretch"
                 />
               </div>

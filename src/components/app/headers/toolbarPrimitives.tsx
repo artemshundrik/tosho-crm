@@ -255,10 +255,27 @@ export function ToolbarFilterSelect({
 }
 
 /** Бейдж кількості в segmented-табі: «Замовники [128]». Один стиль на всі сторінки. */
-export function CountBadge({ value, className }: { value: number | string; className?: string }) {
+export function CountBadge({
+  value,
+  className,
+  loading = false,
+}: {
+  value: number | string;
+  className?: string;
+  /**
+   * Даних ще немає — показуємо риску, а не число.
+   *
+   * НАВІЩО. Лічильники рахуються з порожнього списку, тож поки дані їдуть, у
+   * перемикачі стоять чесні нулі: «Дошка 0 · Ідеї 0 · Не робимо 0». За мить
+   * вони стають справжніми — і це той самий зайвий стан завантаження, що й
+   * підписи колонок у каркасі дошки: спершу одне, потім друге, потім третє.
+   * Нуль тут ще й бреше: він означає «порожньо», а насправді «ще не знаємо».
+   */
+  loading?: boolean;
+}) {
   return (
     <span className={cn("rounded-md bg-card px-1.5 py-0.5 text-2xs tabular-nums", className)}>
-      {value}
+      {loading ? <span className="text-muted-foreground/50">—</span> : value}
     </span>
   );
 }

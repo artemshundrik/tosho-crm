@@ -7213,10 +7213,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               }
             >
               <KanbanSkeleton
-                columns={KANBAN_COLUMNS.map((column) => ({
-                  id: column.id,
-                  label: column.label,
-                }))}
+                columns={KANBAN_COLUMNS.map((column) => ({ id: column.id }))}
               />
             </div>
           ) : error ? (

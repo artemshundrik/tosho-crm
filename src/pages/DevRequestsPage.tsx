@@ -346,7 +346,7 @@ export default function DevRequestsPage() {
             >
               <KanbanSquare className="h-4 w-4" />
               Дошка
-              <CountBadge value={counts.board} />
+              <CountBadge value={counts.board} loading={showBoardSkeleton} />
             </Button>
             <Button
               variant="segmented"
@@ -357,7 +357,7 @@ export default function DevRequestsPage() {
             >
               <Lightbulb className="h-4 w-4" />
               Ідеї
-              <CountBadge value={counts.someday} />
+              <CountBadge value={counts.someday} loading={showBoardSkeleton} />
             </Button>
             <Button
               variant="segmented"
@@ -368,7 +368,7 @@ export default function DevRequestsPage() {
             >
               <XCircle className="h-4 w-4" />
               Не робимо
-              <CountBadge value={counts.wont_do} />
+              <CountBadge value={counts.wont_do} loading={showBoardSkeleton} />
             </Button>
             {/*
              * Архів показуємо кнопкою лише коли в ньому щось є: порожній
@@ -441,6 +441,7 @@ export default function DevRequestsPage() {
     ),
     [
       board.isFetching,
+      showBoardSkeleton,
       changeGroupBy,
       counts,
       filters,
@@ -521,7 +522,6 @@ export default function DevRequestsPage() {
             <KanbanSkeleton
               columns={BOARD_COLUMNS.map((column) => ({
                 id: column.status,
-                label: column.label,
                 className: "w-[300px] basis-[300px]",
               }))}
               boardClassName="h-full pb-2 md:pb-3"

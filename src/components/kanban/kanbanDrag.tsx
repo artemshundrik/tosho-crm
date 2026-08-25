@@ -233,13 +233,22 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
       const targetColumn = commit ? drag.overColumn : null;
       const landing = findLandingRect(drag);
 
+      /**
+       * ПОРЯДОК ТУТ — ЦЕ І Є ЛІКИ ВІД МИГОТІННЯ.
+       *
+       * Перший захід прибирав сліди перетягування ПЕРШИМИ: знімав привида,
+       * повертав видимість вихідній картці й скидав зсуви — і аж потім міняв
+       * дані. Виходив щонайменше один кадр, у якому картка вже намальована на
+       * СТАРОМУ місці (дані ж іще старі), а привида, який її закривав, уже
+       * немає. Це й блимало: сильніше при переїзді в іншу колонку, слабше при
+       * поверненні на своє місце (там міняється лише вигляд «мене тягнуть»).
+       *
+       * Тепер навпаки: спершу міняємо дані, поки привид ще на екрані й закриває
+       * собою місце, і лише КАДРОМ ПІЗНІШЕ — коли React уже намалював нову
+       * дійсність — прибираємо привида, рамку місця й зсуви. Обмін відбувається
+       * в межах одного кадру, тож порожнього проміжку не лишається.
+       */
       const done = () => {
-        drag.ghost.remove();
-        drag.slot.remove();
-        drag.sourceRow.style.removeProperty("opacity");
-        clearGap(drag);
-        setDraggingId(null);
-        setOverColumnId(null);
         if (targetColumn && targetColumn !== drag.fromColumn) {
           // ДРУГА АНІМАЦІЯ ТУТ ЗАЙВА. Картка щойно приїхала на місце руками
           // цього рушія; далі зміняться дані, список перемалюється — і його
@@ -249,6 +258,15 @@ export function useKanbanDrag({ onDrop }: UseKanbanDragOptions): KanbanDragApi {
           skipNextKanbanChoreography();
           onDropRef.current(drag.id, targetColumn);
         }
+        setDraggingId(null);
+        setOverColumnId(null);
+
+        requestAnimationFrame(() => {
+          clearGap(drag);
+          drag.sourceRow.style.removeProperty("opacity");
+          drag.slot.remove();
+          drag.ghost.remove();
+        });
       };
 
       if (prefersReducedMotion()) {

@@ -1274,7 +1274,6 @@ export default function OrdersProductionPage() {
               <KanbanSkeleton
                 columns={ORDER_READINESS_COLUMNS.map((column) => ({
                   id: column.id,
-                  label: column.label,
                   className: "basis-1/3",
                 }))}
               />
