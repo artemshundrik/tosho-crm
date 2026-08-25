@@ -145,6 +145,19 @@ describe("стартове меню посади", () => {
     expect(defaultModuleAccess({ accessRole: "member", jobRole: "manager" }).shipping).toBe(false);
   });
 
+  it("прорахунки має і PM, і логіст — у них написано, що й куди їде", () => {
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "pm" }).quotes).toBe(true);
+    expect(defaultModuleAccess({ accessRole: "member", jobRole: "logistics" }).quotes).toBe(true);
+  });
+
+  it("«Огляд» і «Команда» — у кожної посади без винятку", () => {
+    for (const role of [...Object.keys(JOB_ROLE_NAMES), "вписана-руками", ""]) {
+      const access = defaultModuleAccess({ accessRole: "member", jobRole: role });
+      expect(access.overview, `overview / ${role}`).toBe(true);
+      expect(access.team, `team / ${role}`).toBe(true);
+    }
+  });
+
   it("власник відкриває все — Rule 0", () => {
     const access = defaultModuleAccess(OWNER);
     expect(Object.values(access).every(Boolean)).toBe(true);

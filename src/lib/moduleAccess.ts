@@ -215,7 +215,9 @@ const ROLE_MENUS: Record<string, ModuleKey[]> = {
 
   // — Логістика —
   head_of_logistics: [...SALES_MENU, "shipping", "logistics", "contractors"],
-  logistics: ["overview", "customers", "orders", "shipping", "catalog", "logistics"],
+  // Прорахунки логісту потрібні: у них лежить, що саме й куди їде, ще до того
+  // як прорахунок став замовленням.
+  logistics: ["overview", "customers", "quotes", "orders", "shipping", "catalog", "logistics"],
 
   // — Бухгалтерія —
   // Молодший бухгалтер без «Фінансів»: їх ріже RLS (has_finance_access), і
