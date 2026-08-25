@@ -32,7 +32,8 @@ export type MobileStatusChip = {
   label: string;
   icon?: ElementType;
   tone?: Tone;
-  count: number;
+  /** Без лічильника чип рендериться самою назвою — не всі вкладки їх мають. */
+  count?: number;
 };
 
 /**
@@ -102,14 +103,16 @@ export function MobileStatusChips({
               <span className={cn("h-2 w-2 shrink-0 rounded-full", toneDotClass[chip.tone])} />
             ) : null}
             <span className="whitespace-nowrap">{chip.label}</span>
-            <span
-              className={cn(
-                "min-w-5 rounded-full px-1.5 text-2xs font-semibold leading-5 tabular-nums",
-                isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
-              )}
-            >
-              {chip.count}
-            </span>
+            {chip.count === undefined ? null : (
+              <span
+                className={cn(
+                  "min-w-5 rounded-full px-1.5 text-2xs font-semibold leading-5 tabular-nums",
+                  isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
+                )}
+              >
+                {chip.count}
+              </span>
+            )}
           </button>
         );
       })}

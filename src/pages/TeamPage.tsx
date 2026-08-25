@@ -31,6 +31,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import { formatJobRole } from "@/lib/jobRoles";
 import { AvatarBase } from "@/components/app/avatar-kit";
 import { UnifiedPageToolbar } from "@/components/app/headers/UnifiedPageToolbar";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { MobileStatusChips } from "@/components/kanban";
 import { CountBadge, ToolbarFilterSelect, ToolbarMeta, ToolbarSearch } from "@/components/app/headers/toolbarPrimitives";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import {
@@ -332,6 +334,7 @@ export function TeamPage() {
     },
     [setSearchParams]
   );
+  const isNarrowViewport = useIsNarrowViewport();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
@@ -1208,7 +1211,53 @@ export function TeamPage() {
   const headerActions = useMemo(
     () => (
       <UnifiedPageToolbar
+        // Телефон: у рядку лишається пошук, «Фільтри» й одна головна дія.
+        // Вкладки сторінки стають окремою стрічкою в тілі, решта дій — в
+        // аркуші (картка 146).
+        mobileCompact
+        mobileFilterCount={
+          tab === "people"
+            ? (roleFilter !== "all" ? 1 : 0) + (peopleFilter !== "all" ? 1 : 0)
+            : 0
+        }
+        mobilePrimary={
+          <Button
+            onClick={() => openAbsenceDialog({ mode: "request", userId: userId ?? undefined })}
+            size="icon"
+            aria-label="Запросити відсутність"
+            className="h-11 w-11 shrink-0"
+          >
+            <Plus className="h-5 w-5" aria-hidden />
+          </Button>
+        }
+        mobileExtraActions={
+          canManageAbsences ? (
+            <>
+              <Button variant="outline" onClick={() => setReportDialogOpen(true)} className="justify-start gap-2">
+                <FileSpreadsheet className="h-4 w-4" aria-hidden />
+                Звіт
+              </Button>
+              <Button variant="outline" onClick={() => setQuotaDialogOpen(true)} className="justify-start gap-2">
+                <Settings2 className="h-4 w-4" aria-hidden />
+                Квоти
+              </Button>
+              <Button variant="outline" onClick={() => setHolidayDialogOpen(true)} className="justify-start gap-2">
+                <PartyPopper className="h-4 w-4" aria-hidden />
+                Свята
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => openAbsenceDialog({ mode: "manage" })}
+                className="justify-start gap-2"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                Внести за когось
+              </Button>
+            </>
+          ) : undefined
+        }
         topLeft={
+          isNarrowViewport ? undefined : (
           <div className="flex w-full items-center gap-2 lg:w-auto">
           <SegmentedGroup className={cn(SEGMENTED_GROUP, "w-full lg:w-auto")}>
             <Button
@@ -1276,6 +1325,7 @@ export function TeamPage() {
             </SegmentedGroup>
           ) : null}
           </div>
+          )
         }
         topRight={
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -1388,6 +1438,7 @@ export function TeamPage() {
       absencesLoading,
       activeMembers.length,
       canManageAbsences,
+      isNarrowViewport,
       filteredMembers.length,
       hasActiveFilters,
       myAbsences.length,
@@ -1424,9 +1475,34 @@ export function TeamPage() {
 
   return (
     <div className="space-y-4 pb-8">
+      {/* Вкладки сторінки на телефоні — окрема стрічка в тілі, а не в аркуші
+          фільтрів: це головна навігація розділу, і ховати її за кнопкою було б
+          те саме, що ховати вкладки браузера (картка 146). Та сама стрічка,
+          що й статуси на дошках, — щоб мова інтерфейсу не роздвоювалась. */}
+      {isNarrowViewport ? (
+        <div className="pt-1">
+          <MobileStatusChips
+            chips={[
+              { key: "people", label: "Люди", count: activeMembers.length },
+              // «Календар» без лічильника — його немає і в десктопній вкладці.
+              { key: "calendar", label: "Календар" },
+              {
+                key: "requests",
+                label: "Запити",
+                count: canManageAbsences ? pendingRequests.length : myAbsences.length,
+              },
+            ]}
+            activeKey={tab}
+            onSelect={(key) => setTab(key as typeof tab)}
+          />
+        </div>
+      ) : null}
+
       {tab === "people" ? (
         <>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          {/* [&>*]:min-w-0 — елемент сітки типово має min-width:auto, тож картка
+              з широким вмістом розпирала клітинку замість стискатись. */}
+          <div className="grid gap-4 [&>*]:min-w-0 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]">
             {myBalance ? (
               <Card>
                 <CardHeader className="pb-2">

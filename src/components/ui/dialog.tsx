@@ -3,6 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard";
+import { registerOverlay } from "@/components/ui/overlayPresence";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -74,6 +75,15 @@ const DialogContent = React.forwardRef<
   // того діалогу й закриє підтвердження замість модалки.
   const closeRef = React.useRef<HTMLButtonElement>(null);
 
+  /**
+   * Поки модалка відкрита, смуга вкладок на телефоні ховається.
+   *
+   * Radix монтує вміст лише на час відкриття, тож реєстрації на монтуванні
+   * досить. Без цього смуга висіла поверх нижнього краю модалки — а саме там
+   * тепер живуть її кнопки, бо на телефоні вікно прилипає до низу.
+   */
+  React.useEffect(() => registerOverlay(), []);
+
   return (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
@@ -104,6 +114,30 @@ const DialogContent = React.forwardRef<
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         "data-[state=open]:duration-slow data-[state=closed]:duration-fast ease-out",
         "motion-reduce:animate-none",
+        /*
+         * ТЕЛЕФОН: модалка стає нижнім аркушем.
+         *
+         * Центроване вікно на 375px — це або майже весь екран із полями по
+         * краях, або, коли вміст високий, штука, до якої не дотягнутись великим
+         * пальцем. Тому на вузькому екрані вона прилипає до низу, отримує
+         * заокруглення лише згори й виїжджає знизу — так само, як фільтри й
+         * помічник ToSho AI.
+         *
+         * `translate-x-0`/`translate-y-0` тут обов'язкові: у Tailwind v4
+         * центрування живе в окремій властивості `translate`, і без явного
+         * скидання воно лишилось би поверх `bottom-0` — вікно поїхало б за
+         * межі екрана ([[project_tailwind_v4_transform]]).
+         */
+        // `!` тут не забаганка: базові класи вікна — `left-1/2 top-1/2`,
+        // `w-[calc(100vw-20px)]` — це утиліти тієї ж ваги, і без важливості
+        // вони перемагають за порядком у зібраному CSS. Заміряно: без `!`
+        // вікно лишалось центрованим і вилазило на 27px під край екрана.
+        "max-md:!inset-x-0 max-md:!bottom-0 max-md:!top-auto max-md:!w-full max-md:!max-w-none",
+        "max-md:!translate-x-0 max-md:!translate-y-0",
+        "max-md:!max-h-[88dvh] max-md:!rounded-b-none max-md:!rounded-t-[28px] max-md:!border-x-0 max-md:!border-b-0",
+        "max-md:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
+        // Знизу вгору, а не «виринає з центру»: жест той самий, що в аркушів.
+        "max-md:data-[state=open]:slide-in-from-bottom-10",
         className
       )}
       translate="no"
@@ -158,6 +192,9 @@ const DialogContent = React.forwardRef<
           }}
           className={cn(
             "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground",
+            // На телефоні — коло з підкладкою, як в аркушів: голий значок
+            // у кутку не читався як кнопка й не мав тач-таргета.
+            "max-md:right-3 max-md:top-3 max-md:flex max-md:h-9 max-md:w-9 max-md:items-center max-md:justify-center max-md:rounded-full max-md:bg-muted/70 max-md:p-0 max-md:opacity-100",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           )}
         >

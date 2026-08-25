@@ -261,7 +261,10 @@ export function AbsenceBalanceMeters({
   year?: number;
 }) {
   return (
-    <div className={cn("grid grid-cols-3 gap-3", className)}>
+    // Три колонки на 375px не вміщають підписи («ЗАЛИШИЛОСЬ 10 / 10
+    // Лікарняний») і розпирали картку за межі екрана. Нижче 640px —
+    // стовпчик; на планшеті й ширше все як було.
+    <div className={cn("grid grid-cols-1 gap-3 sm:grid-cols-3", className)}>
       {QUOTA_ABSENCE_KINDS.map((kind) => (
         <Meter
           key={kind}

@@ -47,6 +47,14 @@ type UnifiedPageToolbarProps = {
    * Той самий вузол можна віддати в обидва слоти — одночасно вони не існують.
    */
   mobileViewSwitch?: ReactNode;
+  /**
+   * Другорядні дії сторінки для аркуша.
+   *
+   * `topRight` на телефоні не рендериться, а дій там буває більше за одну —
+   * на «Команді» це «Звіт», «Квоти», «Свята» й «Внести за когось». Головна
+   * лишається в рядку (`mobilePrimary`), решта живе тут.
+   */
+  mobileExtraActions?: ReactNode;
 };
 
 export function UnifiedPageToolbar({
@@ -67,6 +75,7 @@ export function UnifiedPageToolbar({
   mobilePrimary,
   mobileFilterCount = 0,
   mobileViewSwitch,
+  mobileExtraActions,
 }: UnifiedPageToolbarProps) {
   const isNarrow = useIsNarrowViewport();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -74,7 +83,7 @@ export function UnifiedPageToolbar({
   // Тернарник, а не `md:hidden`: React комітить обидві гілки, і десктопний
   // стос контролів жив би в DOM телефона (принцип картки 146).
   if (mobileCompact && isNarrow) {
-    const hasSheetContent = Boolean(topLeft || filters || mobileViewSwitch);
+    const hasSheetContent = Boolean(topLeft || filters || mobileViewSwitch || mobileExtraActions);
 
     return (
       <div className={cn("space-y-2", className)}>
@@ -113,6 +122,14 @@ export function UnifiedPageToolbar({
               ) : null}
               {topLeft ? <div className="min-w-0">{topLeft}</div> : null}
               {filters ? <div className="flex min-w-0 flex-col gap-2">{filters}</div> : null}
+              {mobileExtraActions ? (
+                <div className="min-w-0">
+                  <p className="pb-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Дії
+                  </p>
+                  <div className="flex min-w-0 flex-col gap-2">{mobileExtraActions}</div>
+                </div>
+              ) : null}
               {/*
                * `meta` (лічильник знайденого + скидання) в аркуші НЕ показуємо.
                * Скільки всього знайшлось, видно на самій сторінці — у смузі

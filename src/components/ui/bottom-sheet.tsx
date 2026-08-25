@@ -1,8 +1,7 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { registerOverlay } from "@/components/ui/overlayPresence";
 
 /**
  * Нижній аркуш — одна поверхня на всі мобільні «фільтри й налаштування».
@@ -48,13 +47,6 @@ export function BottomSheet({
   /** Клас на прокрутному тілі — коли потрібні власні відступи. */
   contentClassName?: string;
 }) {
-  // Реєструємо саме за `open`, а не в момент монтування: аркуш зазвичай живе
-  // в дереві весь час і лише перемикає видимість.
-  useEffect(() => {
-    if (!open) return;
-    return registerOverlay();
-  }, [open]);
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent

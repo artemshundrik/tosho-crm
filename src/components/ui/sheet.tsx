@@ -4,6 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { registerOverlay } from "@/components/ui/overlayPresence"
 import { UnsavedChangesPrompt, UnsavedGuardListener, useUnsavedGuard } from "@/components/ui/unsaved-guard"
 
 const Sheet = SheetPrimitive.Root
@@ -117,6 +118,10 @@ const SheetContent = React.forwardRef<
   // не можна: всередині AlertDialog він підхопив би контекст ТОГО діалогу й
   // закривав би підтвердження, а не дровер.
   const closeRef = React.useRef<HTMLButtonElement>(null)
+
+  // Поки панель відкрита, смуга вкладок ховається — та сама причина, що й у
+  // модалок: вона висить поверх нижнього краю й ловить дотики.
+  React.useEffect(() => registerOverlay(), [])
 
   return (
   <SheetPortal>
