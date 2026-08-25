@@ -9,17 +9,17 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-08-24T18:06:04.010Z",
+  "generatedAt": "2026-08-25T15:47:03.600Z",
   "packages": [
     {
       "name": "@eslint/js",
-      "version": "9.39.1",
+      "version": "10.0.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "8ecf8f8",
+        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Базовий набір правил лінту.",
       "homepage": "https://eslint.org",
@@ -46,8 +46,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "1.62.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-08-24T21:22:52+03:00",
+      "bumpCommit": {
+        "sha": "0b908f4",
+        "subject": "Застосунок тепер проклацується в справжньому браузері, а не лише перевіряється по коду"
+      },
       "description": "Ганяє зібраний застосунок у справжньому браузері й клацає по ньому, як людина: відкриває дошки, закриває вікна, шукає. Ловить те, чого не бачить жоден тест коду, — наприклад блимання сторінки при закритті вікна.",
       "homepage": "https://playwright.dev",
       "usedIn": 0,
@@ -245,7 +248,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 85,
+      "usedIn": 86,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -320,7 +323,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Дає тестам справді намалювати компонент, а не лише порахувати його логіку: без цього не перевіриш, чи закрилось вікно й чи не спитало зайвого.",
       "homepage": null,
-      "usedIn": 4,
+      "usedIn": 5,
       "iconUrl": "https://github.com/testing-library.png?size=64"
     },
     {
@@ -589,13 +592,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "eslint",
-      "version": "9.39.1",
+      "version": "10.9.1",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "8ecf8f8",
+        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Лінт: шукає підозрілі місця в коді за правилами.",
       "homepage": "https://eslint.org",
@@ -620,13 +623,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "eslint-plugin-react-refresh",
-      "version": "0.4.24",
+      "version": "0.5.4",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "8ecf8f8",
+        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Стежить, щоб компоненти можна було оновлювати без перезавантаження сторінки.",
       "homepage": null,
@@ -635,13 +638,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "globals",
-      "version": "16.5.0",
+      "version": "17.11.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2025-12-28T15:40:31+02:00",
+      "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "414eedf",
-        "subject": "Initial commit"
+        "sha": "8ecf8f8",
+        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Список глобальних імен різних середовищ, щоб лінт не лаявся на window чи process.",
       "homepage": null,
@@ -676,7 +679,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Набір іконок. Майже кожна іконка в CRM — звідси.",
       "homepage": "https://lucide.dev",
-      "usedIn": 183,
+      "usedIn": 186,
       "iconUrl": "https://www.google.com/s2/favicons?domain=lucide.dev&sz=128"
     },
     {
@@ -721,7 +724,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Основа всього інтерфейсу: перетворює дані на те, що видно на екрані, і сам вирішує, що перемалювати.",
       "homepage": "https://react.dev/",
-      "usedIn": 250,
+      "usedIn": 260,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
@@ -783,7 +786,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Адреси сторінок: що показати на /orders/estimates і як переходити між розділами без перезавантаження.",
       "homepage": null,
-      "usedIn": 47,
+      "usedIn": 49,
       "iconUrl": "https://github.com/remix-run.png?size=64"
     },
     {
@@ -894,7 +897,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "typescript",
-      "version": "5.9.3",
+      "version": "6.0.3",
       "layer": "build",
       "dev": true,
       "bumpedAt": "2025-12-28T15:40:31+02:00",
@@ -910,13 +913,13 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     },
     {
       "name": "typescript-eslint",
-      "version": "8.67.0",
+      "version": "8.68.0",
       "layer": "build",
       "dev": true,
-      "bumpedAt": "2026-08-23T17:47:00+03:00",
+      "bumpedAt": "2026-08-25T18:41:40+03:00",
       "bumpCommit": {
-        "sha": "e9a6e23",
-        "subject": "Оновлено півтора десятка бібліотек і викинуто ту, якою ніхто не користувався"
+        "sha": "8ecf8f8",
+        "subject": "Помилки в журналі тепер показують причину, а не лише наслідок"
       },
       "description": "Дає лінту розуміти TypeScript.",
       "homepage": "https://typescript-eslint.io/packages/typescript-eslint",
@@ -951,7 +954,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 83,
+      "usedIn": 92,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1073,12 +1076,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "group": "db"
     }
   ],
-  "tests": 1226,
-  "testFiles": 82,
-  "lintStubs": 29,
+  "tests": 1321,
+  "testFiles": 91,
+  "lintStubs": 30,
   "node": "24",
   "netlifyFunctions": 42,
-  "sourceLines": 235545,
+  "sourceLines": 240473,
   "automation": {
     "workflows": [
       {

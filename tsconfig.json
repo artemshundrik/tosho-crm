@@ -8,6 +8,11 @@
       "ESNext"
     ],
     "allowJs": false,
+    // TypeScript 6 більше не підтягує всі @types автоматично: типовим значенням
+    // стало [], тож перелік потрібен явний. Тут відтворено те, що завантажувалось
+    // само на 5.9 і справді використовується: vite/client дає import.meta.env,
+    // node — імпорти node:* у тестах (src/lib/catalogMethodName.test.ts).
+    "types": ["vite/client", "node"],
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
