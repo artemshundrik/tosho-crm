@@ -1,4 +1,4 @@
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
@@ -935,6 +935,48 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
+  /** Згортання карток бокової колонки — щоб віддати висоту розмові. */
+  const [sideDetailsOpen, setSideDetailsOpen] = useState(true);
+  const [sideSummaryOpen, setSideSummaryOpen] = useState(true);
+
+  /**
+   * Висота повноекранної розкладки — ВИМІРЯНА, а не порахована.
+   *
+   * Той самий рецепт, що на сторінці дизайн-задачі, і з тієї ж причини: над
+   * сторінкою може стояти не лише топбар, а й смуга «Дивитесь очима», і будь-яке
+   * `calc(100dvh - 112px)` тоді бреше рівно на її висоту — сторінка стає вищою
+   * за вікно, і з'являється скрол «на два пальці», хоча скролити нема чого.
+   * Міряємо фактичну відстань від верху сторінки до низу вікна.
+   *
+   * Висоту з `overflow: hidden` отримує КОРІНЬ: якщо обмежити саму сітку, вміст
+   * усередині все одно виштовхує сторінку, і замість скролу з'являється дірка
+   * знизу.
+   */
+  const layoutRootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = layoutRootRef.current;
+    if (!node) return;
+
+    const apply = () => {
+      // Нижче xl колонка йде під контентом — там сторінка скролиться як звичайна.
+      if (window.innerWidth < 1280) {
+        node.style.removeProperty("height");
+        node.style.removeProperty("overflow");
+        return;
+      }
+      const documentTop = node.getBoundingClientRect().top + window.scrollY;
+      const available = Math.max(360, Math.round(window.innerHeight - documentTop));
+      const next = `${available}px`;
+      if (node.style.height !== next) {
+        node.style.height = next;
+        node.style.overflow = "hidden";
+      }
+    };
+
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  });
   const [detailsTab, setDetailsTab] = useState<"comments" | "files" | "activity">("comments");
   const commentDraftKey = useMemo(() => buildDraftKey("quote-comment", quoteId), [quoteId]);
   const [commentText, setCommentText] = useState(() => readDraft<string>(commentDraftKey)?.value ?? "");
@@ -968,14 +1010,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [briefSelection, setBriefSelection] = useState({ start: 0, end: 0 });
   const briefTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const briefDialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // "Доповнення" — free-text addendum shown in quote details.
-  const [notesText, setNotesText] = useState("");
-  const [notesDirty, setNotesDirty] = useState(false);
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [notesError, setNotesError] = useState<string | null>(null);
-  const [notesEditing, setNotesEditing] = useState(false);
-  const notesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -1700,54 +1734,16 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     setBriefSaving(false);
   };
 
-  const saveNotes = async () => {
-    if (!quote || !teamId || notesSaving) return;
-    setNotesSaving(true);
-    setNotesError(null);
+  /*
+    «Доповнення» прибрано з картки 25.08.2026.
 
-    const fail = (message: string) => {
-      setNotesError(message);
-      toast.error(message);
-      setNotesSaving(false);
-    };
-
-    const nextNotes = notesText.trim();
-    const saved = await updateQuoteFields(
-      { quoteId, teamId, notes: nextNotes ? nextNotes : null },
-      "Не вдалося зберегти доповнення."
-    );
-    if (!saved.ok) return fail(saved.message);
-
-    setQuote((prev) =>
-      prev
-        ? {
-            ...prev,
-            notes: nextNotes ? nextNotes : null,
-            updated_at: saved.data?.updated_at ?? prev.updated_at,
-          }
-        : prev
-    );
-    setNotesDirty(false);
-    setNotesEditing(false);
-
-    const logged = await logQuoteActivity(
-      {
-        teamId,
-        action: "оновив доповнення",
-        entityType: "quotes",
-        entityId: quoteId,
-        title: `Оновив доповнення${quote?.number ? ` (#${quote.number})` : ""}`,
-        href: `/orders/estimates/${quoteId}`,
-        metadata: { source: "quote_notes" },
-      },
-      "Не вдалося зберегти доповнення."
-    );
-    if (!logged.ok) return fail(logged.message);
-
-    await loadActivityLog();
-    toast.success("Доповнення збережено");
-    setNotesSaving(false);
-  };
+    Поле quotes.notes лишається в базі — його читає інший код і воно ще може
+    знадобитись, — але окремого блока в боковій колонці більше немає: за
+    заміром на проді текст був заповнений в 1 прорахунку з 285, і той єдиний
+    запис читався як репліка в розмову («це має бути пошивна футболка… беремо
+    сітку малфіні»), а не як стан справи. Місце в колонці віддане обговоренню,
+    де такі уточнення й живуть.
+  */
 
   const updatedMinutes = minutesAgo(quote?.updated_at ?? null);
 
@@ -2169,7 +2165,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   // навіть коли жодне з цих полів не змінилось (REQ-109).
   const quoteIdentity = quote?.id ?? null;
   const briefSourceText = quote?.design_brief ?? quote?.comment ?? "";
-  const notesSourceText = quote?.notes ?? "";
 
   const briefInputChanged = useSignatureChanged(
     `${quoteIdentity ?? ""}\u0000${briefDirty ? "1" : "0"}\u0000${briefSourceText}`
@@ -2177,14 +2172,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   if (briefInputChanged && quoteIdentity && !briefDirty) {
     setBriefText(briefSourceText);
     setBriefError(null);
-  }
-
-  const notesInputChanged = useSignatureChanged(
-    `${quoteIdentity ?? ""}\u0000${notesDirty ? "1" : "0"}\u0000${notesSourceText}`
-  );
-  if (notesInputChanged && quoteIdentity && !notesDirty) {
-    setNotesText(notesSourceText);
-    setNotesError(null);
   }
 
   useEffect(() => {
@@ -5378,8 +5365,18 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   ];
 
   return (
-    <div className="text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border/70 bg-transparent">
+    <div ref={layoutRootRef} className="text-foreground">
+      {/*
+        Дві колонки на всю висоту вікна.
+
+        Шапка прорахунку живе ВСЕРЕДИНІ лівої колонки, а не над обома: інакше
+        права колонка починалась би на 81 px нижче й ніколи не діставала верху
+        екрана. Тепер розмова праворуч отримує всю висоту, а номер зі статусом
+        стоять рівно над тим, до чого належать — над вмістом прорахунку.
+      */}
+      <div className="grid grid-cols-1 xl:h-full xl:grid-cols-[minmax(0,1fr)_var(--quote-rail-w,380px)] xl:overflow-hidden">
+        <div className="flex min-w-0 flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur xl:static xl:shrink-0 xl:bg-transparent xl:backdrop-blur-none">
         <div className="px-4 py-2 md:px-5 lg:px-6">
           {/*
             Один ряд і на телефоні теж.
@@ -5653,8 +5650,15 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:h-[calc(100dvh-112px)] xl:grid-cols-[minmax(0,1.9fr)_360px] xl:items-start xl:overflow-hidden">
-        <main className="min-w-0 px-4 pb-10 pt-0 md:px-5 lg:px-6 xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-8">
+        <main
+          className={cn(
+            "min-w-0 px-4 pt-0 md:px-5 lg:px-6 xl:flex xl:h-full xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden xl:pb-0 2xl:px-8",
+            // На телефоні вкладка «Деталі» живе в боковій колонці, і тіло тут
+            // порожнє — нижній відступ у такому разі малює 40 px дірки між
+            // вкладками й першою карткою.
+            activeQuoteTab === "details" ? "pb-0" : "pb-10"
+          )}
+        >
           {/*
             Вкладки — підкресленням, а не рамковими пігулками.
             Рамка навколо кожної вкладки давала другу сітку поверх шапки: чотири
@@ -8582,16 +8586,52 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </section>
           </div>
         </main>
+        </div>
 
         <aside
           className={cn(
-            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:min-h-0 xl:h-full xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))] xl:w-[min(28vw,360px)] xl:min-w-[300px] xl:shrink-0 xl:px-0 xl:pb-0 xl:pt-0",
+            "self-start px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:flex xl:min-h-0 xl:h-full xl:flex-col xl:self-stretch xl:overflow-hidden xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:bg-[hsl(var(--design-task-details-bg))] xl:px-0 xl:pb-0 xl:pt-0",
             activeQuoteTab !== "details" && "max-xl:hidden"
           )}
         >
-          <div className="space-y-6 xl:h-full xl:overflow-y-auto xl:overscroll-contain xl:px-6 xl:pr-8 xl:pt-6 xl:pb-8">
-            <section>
-              <div className="design-task-side-heading">Деталі</div>
+          {/*
+            Колонка — flex-стовпчик на всю висоту: властивості й підсумок
+            тримають свою висоту, а розмова забирає весь залишок. Тому тут немає
+            спільного `overflow-y-auto` на всю колонку — скролиться те, що
+            справді довге (стрічка повідомлень), а не вся колонка разом із
+            заголовками.
+          */}
+          <div className="flex flex-col gap-2.5 xl:h-full xl:min-h-0 xl:px-4 xl:pt-4">
+            {/*
+              Властивості й підсумок — згортні картки: коли справа доходить до
+              розмови, обидві згортаються в один рядок, і стрічка отримує майже
+              всю висоту колонки. Стан згортання тримається в пам'яті вкладки
+              (`sideDetailsOpen`/`sideSummaryOpen`), тож звичка людини не
+              скидається на кожному відкритті картки.
+            */}
+            <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
+              <button
+                type="button"
+                onClick={() => setSideDetailsOpen((open) => !open)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                aria-expanded={sideDetailsOpen}
+              >
+                <span className="design-task-side-heading !mb-0 !mt-0">Деталі</span>
+                {!sideDetailsOpen ? (
+                  <span className="ml-auto flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+                    <span className="truncate">{quote.customer_name ?? "Без замовника"}</span>
+                  </span>
+                ) : null}
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                    sideDetailsOpen ? "" : "-rotate-90",
+                    sideDetailsOpen && "ml-auto"
+                  )}
+                  aria-hidden
+                />
+              </button>
+              <div className={cn("border-t border-border/40 px-1 pb-1", !sideDetailsOpen && "hidden")}>
               <div className="design-task-detail-list">
                 <button
                   type="button"
@@ -8708,102 +8748,6 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   </span>
                 </div>
               </div>
-            </section>
-
-            <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
-              <div className="flex items-center justify-between gap-2">
-                <div className="design-task-side-heading">Доповнення</div>
-                <div className="flex items-center gap-1">
-                  <DictationButton
-                    textareaRef={notesTextareaRef}
-                    value={notesText}
-                    onChange={(next) => {
-                      setNotesText(next);
-                      setNotesDirty(true);
-                      setNotesEditing(true);
-                    }}
-                    context="comment"
-                    disabled={notesSaving}
-                  />
-                  {!notesEditing && !notesDirty && notesText.trim() ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setNotesEditing(true)}
-                    >
-                      Редагувати
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {notesEditing || notesDirty ? (
-                  <>
-                    <Textarea
-                      ref={notesTextareaRef}
-                      value={notesText}
-                      onChange={(event) => {
-                        setNotesText(event.target.value);
-                        setNotesDirty(true);
-                      }}
-                      placeholder="Додаткова інформація до прорахунку: тези, нюанси, домовленості…"
-                      className="min-h-[120px] resize-y text-sm"
-                    />
-                    {notesError ? <div className="text-xs text-destructive">{notesError}</div> : null}
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setNotesText(quote?.notes ?? "");
-                          setNotesDirty(false);
-                          setNotesEditing(false);
-                          setNotesError(null);
-                        }}
-                        disabled={notesSaving}
-                      >
-                        Скасувати
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => void saveNotes()}
-                        disabled={!notesDirty || notesSaving}
-                      >
-                        {notesSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                        {notesSaving ? "Збереження..." : "Зберегти"}
-                      </Button>
-                    </div>
-                  </>
-                ) : notesText.trim() ? (
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setNotesEditing(true)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setNotesEditing(true);
-                      }
-                    }}
-                    className="cursor-text whitespace-pre-wrap break-words rounded-xl border border-border/50 bg-background/40 px-3.5 py-3 text-sm leading-relaxed text-foreground transition-colors hover:border-border"
-                  >
-                    {notesText}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setNotesEditing(true)}
-                    className="flex w-full items-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/5 px-3.5 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground"
-                  >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Додати доповнення
-                  </button>
-                )}
               </div>
             </section>
 
@@ -8817,12 +8761,33 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 число тут не рахується по-новому — це ті самі
                 `activeRunPricingTotals`, лише показані інакше.
               */
-              <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
-                <div className="design-task-side-heading">
-                  {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
-                </div>
+              <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
+                <button
+                  type="button"
+                  onClick={() => setSideSummaryOpen((open) => !open)}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                  aria-expanded={sideSummaryOpen}
+                >
+                  <span className="design-task-side-heading !mb-0 !mt-0">
+                    {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
+                  </span>
+                  {!sideSummaryOpen ? (
+                    // Згорнутий підсумок не має бути німим: сума — це те, заради
+                    // чого в цю картку взагалі дивляться.
+                    <span className="ml-auto font-mono text-xs font-semibold tabular-nums text-primary">
+                      {formatCurrency(totals.total, quote.currency)}
+                    </span>
+                  ) : null}
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                      sideSummaryOpen ? "ml-auto" : "-rotate-90"
+                    )}
+                    aria-hidden
+                  />
+                </button>
 
-                <div className="mt-3 rounded-inner border border-border/40 bg-card p-4">
+                <div className={cn("border-t border-border/40 p-4", !sideSummaryOpen && "hidden")}>
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
                     <span className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary">
                       {formatCurrency(totals.total, quote.currency)}
@@ -8893,7 +8858,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               // Обгортка навмисно `div`, а не `section`: рейка сама рендерить
               // <section>, і другий такий самий тег навколо неї дав би вкладену
               // секцію без власного заголовка — зайвий орієнтир для читача екрана.
-              <div className="flex min-h-[420px] flex-col border-t border-[hsl(var(--app-structure-divider))] pt-6">
+              <div className="flex min-h-[360px] flex-col pb-4 xl:min-h-0 xl:flex-1">
                 <TaskThreadRail
                   threadKey={threadKeyForQuote(quoteId)}
                   eventActions={THREAD_EVENT_ACTIONS}
