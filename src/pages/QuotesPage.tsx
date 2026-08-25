@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
+import { morphNavigate } from "@/lib/viewTransitionMorph";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
@@ -5938,7 +5939,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           setDragOverColumnId(null);
           setDragPlaceholder(null);
         }}
-        onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
+        // Картка не зникає, а розкривається в сторінку прорахунку (REQ-158).
+        // `currentTarget` — сама оболонка картки, тож тримати ref на кожну
+        // картку в колонці не потрібно.
+        onClick={
+          canOpen
+            ? (event) => morphNavigate(event.currentTarget, () => navigate(`/orders/estimates/${row.id}`))
+            : undefined
+        }
         // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
         onMouseEnter={preloadQuoteDetailsRoute}
         onFocus={preloadQuoteDetailsRoute}
@@ -7223,7 +7231,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                 columns={KANBAN_COLUMNS.map((column) => ({
                   id: column.id,
                   label: column.label,
-                  className: `kanban-column-status-${column.id}`,
                 }))}
               />
             </div>
@@ -7307,8 +7314,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       key={column.id}
                       data-quote-status-column={column.id}
                       className={cn(
-                        "kanban-column-surface",
-                        `kanban-column-status-${column.id}`,
+                        "kanban-column-surface transition-colors",
                         draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
                         "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
                       )}

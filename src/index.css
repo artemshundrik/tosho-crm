@@ -359,25 +359,11 @@
     --design-task-panel-card-strong-bg: 216 100% 98%;
     --design-task-panel-card-strong-border: 216 70% 88%;
 
-    /* --- KANBAN COLUMN TOKENS (LIGHT) --- */
-    --kanban-col-new-bg: 0 0% 98.1%;
-    --kanban-col-new-border: 0 0% 87%;
-    --kanban-col-new-accent: 0 0% 62%;
-    --kanban-col-estimating-bg: 207 58% 98%;
-    --kanban-col-estimating-border: 207 42% 88%;
-    --kanban-col-estimating-accent: 219 99.2% 52.7%;
-    --kanban-col-estimated-bg: 264 100% 97.8%;
-    --kanban-col-estimated-border: 264 82% 88%;
-    --kanban-col-estimated-accent: 264 96.9% 61.8%;
-    --kanban-col-awaiting-bg: 36 100% 96%;
-    --kanban-col-awaiting-border: 32 76% 80%;
-    --kanban-col-awaiting-accent: var(--warning-foreground);
-    --kanban-col-approved-bg: 137 40% 96%;
-    --kanban-col-approved-border: 137 30% 84%;
-    --kanban-col-approved-accent: 137 63.5% 38.6%;
-    --kanban-col-cancelled-bg: 357 88% 97.6%;
-    --kanban-col-cancelled-border: 357 60% 87%;
-    --kanban-col-cancelled-accent: 357 75.8% 48.6%;
+    /* --- KANBAN COLUMN TOKENS (LIGHT) ---
+       Один нейтральний набір на всі колонки всіх дошок: стан колонки показує
+       кольорова іконка в шапці, а не заливка стовпчика (див. .kanban-column-surface). */
+    --kanban-col-bg: 0 0% 98.1%;
+    --kanban-col-border: 0 0% 87%;
   }
 
   .dark {
@@ -622,24 +608,8 @@
     --design-task-panel-card-strong-border: 216 30% 24%;
 
     /* --- KANBAN COLUMN TOKENS (DARK) --- */
-    --kanban-col-new-bg: 0 0% 9.2%;
-    --kanban-col-new-border: 0 0% 16.8%;
-    --kanban-col-new-accent: 0 0% 42%;
-    --kanban-col-estimating-bg: 218 18% 9.4%;
-    --kanban-col-estimating-border: 218 20% 19.8%;
-    --kanban-col-estimating-accent: 218 100% 63.5%;
-    --kanban-col-estimated-bg: 264 18% 9.4%;
-    --kanban-col-estimated-border: 264 18% 19.8%;
-    --kanban-col-estimated-accent: 263 100% 79.2%;
-    --kanban-col-awaiting-bg: 32 26% 10.8%;
-    --kanban-col-awaiting-border: 33 44% 23%;
-    --kanban-col-awaiting-accent: var(--warning-foreground);
-    --kanban-col-approved-bg: 137 14% 9.4%;
-    --kanban-col-approved-border: 137 14% 19.4%;
-    --kanban-col-approved-accent: 137 48.8% 50.2%;
-    --kanban-col-cancelled-bg: 357 14% 9.4%;
-    --kanban-col-cancelled-border: 357 14% 19.4%;
-    --kanban-col-cancelled-accent: 357 94.5% 64.1%;
+    --kanban-col-bg: 0 0% 9.2%;
+    --kanban-col-border: 0 0% 16.8%;
   }
 
   * {
@@ -1327,10 +1297,28 @@
     background: transparent;
   }
 
+  /**
+   * Колонка канбану — НЕЙТРАЛЬНА на всіх чотирьох дошках.
+   *
+   * До 25.08.2026 прорахунки й дизайн додавали поверх цього ще
+   * `.kanban-column-status-<стан>`: заливку, рамку й верхню смужку в тоні
+   * статусу. Тобто стан колонки говорився двічі — кольором іконки в шапці й
+   * кольором усього стовпчика, — і гучніше говорив саме стовпчик. Шість
+   * залитих прямокутників поруч читаються як шість різних поверхонь, на яких
+   * білі картки тонуть, а погляд ловить не роботу, а смуги фону.
+   *
+   * Дошка запитів на доробку кольору колонок не мала ніколи, і на ній видно,
+   * що він і не потрібен: іконки в шапках достатньо, щоб упізнати стан, а
+   * однаковий фон дає карткам єдину сцену. Тепер так на всіх дошках.
+   *
+   * Кольору тут не лишилось узагалі — окрім підсвітки цілі перетягування
+   * (.kanban-column-drop-target). Це навмисно: колір на дошці тепер означає
+   * «щось відбувається», а не «такий стан».
+   */
   .kanban-column-surface {
     border-radius: calc(var(--radius-lg) + 2px);
-    border: 1px solid hsl(var(--kanban-col-new-border));
-    background-color: hsl(var(--kanban-col-new-bg));
+    border: 1px solid hsl(var(--kanban-col-border));
+    background-color: hsl(var(--kanban-col-bg));
     overflow: hidden;
   }
 
@@ -1339,7 +1327,7 @@
     top: 0;
     z-index: 2;
     border-bottom: 1px solid hsl(var(--border) / 0.45);
-    background-color: hsl(var(--kanban-col-new-bg));
+    background-color: hsl(var(--kanban-col-bg));
   }
 
   .kanban-estimate-card {
@@ -1410,101 +1398,6 @@
     transform: translateY(-50%);
     background: hsl(var(--primary) / 0.58);
     box-shadow: calc(100% + (100% - 16px)) 0 0 hsl(var(--primary) / 0.58);
-  }
-
-  .kanban-column-status-new {
-    border-color: hsl(var(--kanban-col-new-border));
-    background-color: hsl(var(--kanban-col-new-bg));
-  }
-
-  .kanban-column-status-estimating {
-    border-color: hsl(var(--kanban-col-estimating-border));
-    background-color: hsl(var(--kanban-col-estimating-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-estimating-accent) / 0.38);
-  }
-
-  .kanban-column-status-estimating .kanban-column-header {
-    background-color: hsl(var(--kanban-col-estimating-bg) / 0.92);
-  }
-
-  .kanban-column-status-estimated {
-    border-color: hsl(var(--kanban-col-estimated-border));
-    background-color: hsl(var(--kanban-col-estimated-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-estimated-accent) / 0.38);
-  }
-
-  .kanban-column-status-estimated .kanban-column-header {
-    background-color: hsl(var(--kanban-col-estimated-bg) / 0.92);
-  }
-
-  .kanban-column-status-changes {
-    border-color: hsl(var(--warning-soft-border));
-    background-color: hsl(var(--warning-soft) / 0.34);
-    box-shadow: inset 0 2px 0 hsl(var(--warning-foreground) / 0.28);
-  }
-
-  .kanban-column-status-changes .kanban-column-header {
-    background-color: hsl(var(--warning-soft) / 0.44);
-  }
-
-  .kanban-column-status-in_progress {
-    border-color: hsl(var(--info-soft-border));
-    background-color: hsl(var(--info-soft) / 0.34);
-    box-shadow: inset 0 2px 0 hsl(var(--info-foreground) / 0.28);
-  }
-
-  .kanban-column-status-in_progress .kanban-column-header {
-    background-color: hsl(var(--info-soft) / 0.44);
-  }
-
-  .kanban-column-status-pm_review {
-    border-color: hsl(var(--kanban-col-estimated-border));
-    background-color: hsl(var(--kanban-col-estimated-bg) / 0.42);
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-estimated-accent) / 0.34);
-  }
-
-  .kanban-column-status-pm_review .kanban-column-header {
-    background-color: hsl(var(--kanban-col-estimated-bg) / 0.6);
-  }
-
-  .kanban-column-status-client_review {
-    border-color: hsl(var(--warning-soft-border));
-    background-color: hsl(var(--warning-soft) / 0.3);
-    box-shadow: inset 0 2px 0 hsl(var(--warning-foreground) / 0.24);
-  }
-
-  .kanban-column-status-client_review .kanban-column-header {
-    background-color: hsl(var(--warning-soft) / 0.4);
-  }
-
-  .kanban-column-status-awaiting_approval {
-    border-color: hsl(var(--kanban-col-awaiting-border));
-    background-color: hsl(var(--kanban-col-awaiting-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-awaiting-accent) / 0.38);
-  }
-
-  .kanban-column-status-awaiting_approval .kanban-column-header {
-    background-color: hsl(var(--kanban-col-awaiting-bg) / 0.92);
-  }
-
-  .kanban-column-status-approved {
-    border-color: hsl(var(--kanban-col-approved-border));
-    background-color: hsl(var(--kanban-col-approved-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-approved-accent) / 0.38);
-  }
-
-  .kanban-column-status-approved .kanban-column-header {
-    background-color: hsl(var(--kanban-col-approved-bg) / 0.92);
-  }
-
-  .kanban-column-status-cancelled {
-    border-color: hsl(var(--kanban-col-cancelled-border));
-    background-color: hsl(var(--kanban-col-cancelled-bg));
-    box-shadow: inset 0 2px 0 hsl(var(--kanban-col-cancelled-accent) / 0.22);
-  }
-
-  .kanban-column-status-cancelled .kanban-column-header {
-    background-color: hsl(var(--kanban-col-cancelled-bg) / 0.92);
   }
 
   .entity-avatar-shell-tone-1 {
@@ -2319,6 +2212,81 @@ html[data-theme-switching]::view-transition-old(root) {
 }
 
 html[data-theme-switching]::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* ── Морфінг картки в сторінку (REQ-158) ──────────────────────────────────
+   Клік по картці канбану розкриває її в сторінку сутності: картка не зникає,
+   а стає сторінкою. Пара для анімації збирається за однаковим
+   `view-transition-name` з обох боків — картка на дошці й корінь сторінки,
+   що відкривається (у неї той самий атрибут стоїть постійно, у картки його
+   вішає morphNavigate у мить кліку).
+
+   ЧОМУ ІМЕНА ПІД ПРАПОРЦЕМ `data-morph-active`. Іменований елемент виймається
+   зі знімка предків. Якби ім'я висіло на сторінці завжди, воно ламало б хвилю
+   перемикання теми: та малює коло по ::view-transition-new(root), а сторінка,
+   винесена в окремий шар, у root уже не входить — тема на ній мінялася б
+   миттєво, обганяючи хвилю. Прапорець стоїть лише на час переходу картки.
+
+   ЧОМУ ТУТ ЧИСЛА, А НЕ ЗМІННІ. Рівно з тієї ж причини, що описана вище для
+   хвилі теми: у псевдодерево переходу CSS-змінні з <html> доїжджають не в
+   кожній збірці браузера, і замість заданого темпу береться запасне значення.
+   Тривалості й криві тут написані буквально й навмисно. */
+html[data-morph-active] [data-morph="surface"] {
+  view-transition-name: morph-surface;
+}
+
+/* Група веде коробку: з прямокутника картки в прямокутник сторінки. */
+::view-transition-group(morph-surface) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Знімки різні за формою — картка ~290×220, сторінка на весь екран. Без
+   object-fit браузер розтягнув би обидва до коробки групи, і замість
+   розкриття було б видно розчавлений кадр картки. */
+::view-transition-old(morph-surface),
+::view-transition-new(morph-surface) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: top left;
+}
+
+/* Стара картка йде швидко: її роль — дати рух старту, а не змагатися за увагу
+   зі сторінкою. Нова сторінка вступає з невеликою затримкою, вже коли коробка
+   помітно виросла, — інакше вона проступає ще в розмірі картки й читається як
+   мигтіння. */
+::view-transition-old(morph-surface) {
+  animation: morph-surface-out 160ms linear forwards;
+}
+
+::view-transition-new(morph-surface) {
+  animation: morph-surface-in 300ms 90ms linear backwards;
+}
+
+@keyframes morph-surface-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes morph-surface-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Решта екрана (бічне меню, тулбар) під час морфінгу мусить м'яко змінитись, а
+   не смикнутись: глобальне правило вище знімає з root будь-яку анімацію, тож
+   на час переходу картки повертаємо її власними кадрами. */
+html[data-morph-active]::view-transition-old(root) {
+  animation: morph-surface-out 200ms linear forwards;
+  z-index: 0;
+}
+
+html[data-morph-active]::view-transition-new(root) {
+  animation: morph-surface-in 260ms linear backwards;
   z-index: 1;
 }
 

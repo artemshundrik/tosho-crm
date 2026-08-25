@@ -184,7 +184,10 @@ function TableShape() {
  */
 function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
   return (
-    <div className="w-full">
+    // data-morph: у морфінгу з дошки саме каркас — той кадр «після», у який
+    // розкривається картка. Сторінка на цей момент ще вантажиться, тож ціллю
+    // мусить бути те, що вже намальовано (REQ-158).
+    <div data-morph="surface" className="w-full">
       {topBar ? (
         <div className="border-b border-border/70">
           <div className="flex items-center justify-between gap-3 px-4 py-2 md:px-5 lg:px-6">
@@ -259,7 +262,11 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
  */
 function QuoteRecordShape() {
   return (
-    <div className="grid grid-cols-1 xl:h-[calc(100dvh-57px)] xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden">
+    // data-morph — див. RecordShape: ціль морфінгу з картки прорахунку.
+    <div
+      data-morph="surface"
+      className="grid grid-cols-1 xl:h-[calc(100dvh-57px)] xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden"
+    >
       <div className="flex min-w-0 flex-col">
         {/* Шапка: назад · номер · тип · статус-контрол · ⋮ */}
         <div className="border-b border-border/70 px-4 py-2 md:px-5 lg:px-6">

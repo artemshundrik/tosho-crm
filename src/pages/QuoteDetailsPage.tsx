@@ -5444,7 +5444,9 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   ];
 
   return (
-    <div ref={layoutRootRef} className="text-foreground">
+    // data-morph — ціль морфінгу з картки на дошці (REQ-158). Ім'я переходу
+    // вмикається лише на час самого переходу, див. index.css.
+    <div ref={layoutRootRef} data-morph="surface" className="text-foreground">
       {/*
         Дві колонки на всю висоту вікна.
 
