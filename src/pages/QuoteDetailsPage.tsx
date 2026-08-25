@@ -149,22 +149,19 @@ import {
   Clock,
   Send,
   XCircle,
-  Building2,
-  Truck,
   Calendar,
-  User,
   Users,
   Upload,
   Download,
   Search,
   ChevronDown,
+  ChevronRight,
   Loader2,
   Package,
   Image,
   ExternalLink,
   Lock,
   Calculator,
-  TrendingUp,
   Palette,
   Bold,
   Italic,
@@ -935,8 +932,13 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [activeQuoteTab, setActiveQuoteTab] = useState<QuotePageTab>("products");
-  /** Згортання карток бокової колонки — щоб віддати висоту розмові. */
-  const [sideDetailsOpen, setSideDetailsOpen] = useState(true);
+  /**
+   * Згортання підсумку — щоб віддати висоту розмові.
+   *
+   * Деталі згортання не мають: після переходу на «ідентичність + доріжку» блок
+   * займає два рядки, і ховати там нічого — кнопка коштувала б стільки ж місця,
+   * скільки економила.
+   */
   const [sideSummaryOpen, setSideSummaryOpen] = useState(true);
 
   /**
@@ -1887,6 +1889,21 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     [activeRunPricingTotals]
   );
 
+
+  /**
+   * Частка надцінки в сумі продажу — рівно для підпису біля числа.
+   *
+   * Це арифметика показу, а не нове правило ціни: обидві величини вже пораховані
+   * тим самим computeRunSalePricing, і жодне збереження від цього рядка не
+   * залежить. Порожньо, коли ділити нема на що.
+   */
+  const markupShareLabel = useMemo(() => {
+    const sale = activeRunPricingTotals.saleTotal;
+    const markup = activeRunPricingTotals.markupTotal;
+    if (!Number.isFinite(sale) || sale <= 0 || markup <= 0) return null;
+    return `${Math.round((markup / sale) * 100)}%`;
+  }, [activeRunPricingTotals.markupTotal, activeRunPricingTotals.saleTotal]);
+
   const hasMultipleActiveProductSummaries = items.length > 1;
   const activeManagerRateLabel = useMemo(() => {
     const rates = Array.from(
@@ -1961,6 +1978,41 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     };
   };
 
+  /**
+   * Дедлайн для доріжки в боковій колонці — коротко.
+   *
+   * Повний підпис («Прострочено (15 дн.) · 14:00») у комірку завширшки третину
+   * колонки не влазить і переносився на два рядки, через що доріжка ставала
+   * вищою за все, що над нею. Тут лишається сам факт: скільки днів і в який
+   * бік. Повний текст живе в `title` — під курсором.
+   */
+  const buildDeadlineTrackItem = (label: string, value?: string | null) => {
+    const badge = getDeadlineBadge(value);
+    if (!value || badge.tone === "none") {
+      return { label, short: "—", tone: "none" as QuoteDeadlineTone, title: `${label}: не вказано` };
+    }
+    const date = parseDeadlineDate(value);
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfDeadline = date
+      ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
+      : startOfToday;
+    const diffDays = Math.round(
+      (startOfDeadline.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const short =
+      diffDays < 0
+        ? `−${Math.abs(diffDays)} дн`
+        : diffDays === 0
+          ? "Сьогодні"
+          : diffDays === 1
+            ? "Завтра"
+            : date
+              ? date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })
+              : badge.label;
+    return { label, short, tone: badge.tone, title: `${label}: ${formatDeadlineLabel(value)}` };
+  };
+
   const resolveDeadlinePreviewValue = (
     date?: string | null,
     time?: string | null,
@@ -1992,6 +2044,22 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
     if (value > 0) return `за ${value} хв`;
     return null;
   };
+
+  /**
+   * Доставка й нагадування — лише коли заповнені.
+   *
+   * Обидва поля порожні в переважній більшості прорахунків, і рядок «Доставка —
+   * Не вказано» не повідомляє нічого, крім того, що займає місце. Заповнені ж
+   * вони важливі, тому не ховаються в меню, а стають рядком під доріжкою.
+   */
+  const sideExtras = useMemo(() => {
+    const extras: Array<{ label: string; value: string }> = [];
+    const delivery = quote?.delivery_type ?? quote?.print_type ?? null;
+    if (delivery) extras.push({ label: "Доставка", value: formatDeliveryLabel(delivery) });
+    const reminder = formatReminderOffsetLabel(quote?.deadline_reminder_offset_minutes ?? null);
+    if (reminder) extras.push({ label: "Нагадування", value: reminder });
+    return extras;
+  }, [quote?.delivery_type, quote?.print_type, quote?.deadline_reminder_offset_minutes]);
 
   const getDeadlineBadge = (value?: string | null) => {
     if (!value) {
@@ -8607,152 +8675,106 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
           */}
           <div className="flex flex-col gap-2.5 xl:h-full xl:min-h-0 xl:px-4 xl:pt-4">
             {/*
-              Властивості й підсумок — згортні картки: коли справа доходить до
-              розмови, обидві згортаються в один рядок, і стрічка отримує майже
-              всю висоту колонки. Стан згортання тримається в пам'яті вкладки
-              (`sideDetailsOpen`/`sideSummaryOpen`), тож звичка людини не
-              скидається на кожному відкритті картки.
+              Варіант Д2 — «ідентичність + доріжка дат».
+              Раніше тут стояли вісім рядків «підпис — значення», і на живій
+              картці чотири з них казали «Не вказано»: половина висоти блока
+              йшла на повідомлення про порожнечу. Тепер зверху те, що
+              відповідає на питання «чия це справа», а знизу — три дедлайни
+              однією доріжкою, де незаповнений це тире завширшки в символ, а
+              не окремий рядок. Доставка й нагадування показуються лише тоді,
+              коли їх справді заповнили (див. sideExtras нижче).
             */}
             <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
               <button
                 type="button"
-                onClick={() => setSideDetailsOpen((open) => !open)}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
-                aria-expanded={sideDetailsOpen}
+                onClick={() => setPartyCardOpen(true)}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
-                <span className="design-task-side-heading !mb-0 !mt-0">Деталі</span>
-                {!sideDetailsOpen ? (
-                  <span className="ml-auto flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
-                    <span className="truncate">{quote.customer_name ?? "Без замовника"}</span>
-                  </span>
-                ) : null}
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                    sideDetailsOpen ? "" : "-rotate-90",
-                    sideDetailsOpen && "ml-auto"
-                  )}
-                  aria-hidden
+                <EntityAvatar
+                  src={quote.customer_logo_url ?? null}
+                  name={quote.customer_name ?? "Замовник / Лід"}
+                  fallback={getInitials(quote.customer_name)}
+                  size={28}
                 />
-              </button>
-              <div className={cn("border-t border-border/40 px-1 pb-1", !sideDetailsOpen && "hidden")}>
-              <div className="design-task-detail-list">
-                <button
-                  type="button"
-                  onClick={() => setPartyCardOpen(true)}
-                  className="group design-task-detail-row w-full text-left focus-visible:outline-none"
-                  data-interactive="true"
-                >
-                  <span className="design-task-detail-label">
-                    <Building2 className="h-4 w-4 text-muted-foreground/70" />
-                    Замовник
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-semibold leading-tight">
+                    {quote.customer_name ?? "Замовник не вказаний"}
                   </span>
-                  <div className="design-task-detail-value">
-                    <EntityAvatar
-                      src={quote.customer_logo_url ?? null}
-                      name={quote.customer_name ?? "Замовник / Лід"}
-                      fallback={getInitials(quote.customer_name)}
-                      size={24}
-                    />
-                    <span className="truncate">{quote.customer_name ?? "Не вказано"}</span>
-                  </div>
-                </button>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <User className="h-4 w-4 text-muted-foreground/70" />
-                    Менеджер
-                  </span>
-                  <div className="design-task-detail-value">
-                    <AvatarBase
-                      src={quote.assigned_to ? memberAvatarById.get(quote.assigned_to) ?? null : null}
-                      name={quote.assigned_to ? memberById.get(quote.assigned_to) ?? quote.assigned_to : "Не призначено"}
-                      fallback={quote.assigned_to ? getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to) : "Не вказано"}
-                      size={24}
-                      className="shrink-0 border-border/60"
-                    />
-                    <span className="truncate">
-                      {quote.assigned_to ? memberById.get(quote.assigned_to) ?? quote.assigned_to : "Не призначено"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Truck className="h-4 w-4 text-muted-foreground/70" />
-                    Доставка
-                  </span>
-                  <span className="design-task-detail-value">{formatDeliveryLabel(quote.delivery_type ?? quote.print_type)}</span>
-                </div>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Calendar className="h-4 w-4 text-muted-foreground/70" />
-                    Дедлайн клієнта
-                  </span>
-                  <span className="design-task-detail-value">
-                    {quote.customer_deadline_at ? formatDeadlineLabel(quote.customer_deadline_at) : "Не вказано"}
-                  </span>
-                </div>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Clock className="h-4 w-4 text-muted-foreground/70" />
-                    Нагадування
-                  </span>
-                  <span className="design-task-detail-value">
-                    {formatReminderOffsetLabel(quote.deadline_reminder_offset_minutes ?? null) ?? "Без нагадування"}
-                  </span>
-                </div>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Calendar className="h-4 w-4 text-muted-foreground/70" />
-                    Створено
-                  </span>
-                  <span className="design-task-detail-value">
-                    {quote.created_at
-                      ? new Date(quote.created_at).toLocaleDateString("uk-UA", {
+                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+                    {quote.assigned_to ? (
+                      <>
+                        <AvatarBase
+                          src={memberAvatarById.get(quote.assigned_to) ?? null}
+                          name={memberById.get(quote.assigned_to) ?? quote.assigned_to}
+                          fallback={getInitials(memberById.get(quote.assigned_to) ?? quote.assigned_to)}
+                          size={14}
+                          className="shrink-0 border-border/60"
+                          showStatusIndicator={false}
+                        />
+                        <span className="truncate">
+                          {memberById.get(quote.assigned_to) ?? quote.assigned_to}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="truncate">Менеджера не призначено</span>
+                    )}
+                    {quote.created_at ? (
+                      <span className="shrink-0 whitespace-nowrap">
+                        · створено{" "}
+                        {new Date(quote.created_at).toLocaleDateString("uk-UA", {
                           day: "numeric",
                           month: "long",
-                          year: "numeric",
-                        })
-                      : "Не вказано"}
+                        })}
+                      </span>
+                    ) : null}
                   </span>
-                </div>
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+              </button>
 
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Clock className="h-4 w-4 text-muted-foreground/70" />
-                    Внутр. дедлайн
-                  </span>
-                  <span className="design-task-detail-value">
-                    {(() => {
-                      const preview = buildDeadlineBadgePreview(quote?.deadline_at ?? null);
-                      return (
-                        <QuoteDeadlineBadge
-                          tone={preview.tone}
-                          label={preview.label}
-                          title={preview.title}
-                          compact
-                          className="justify-end"
-                        />
-                      );
-                    })()}
-                  </span>
-                </div>
-
-                <div className="design-task-detail-row">
-                  <span className="design-task-detail-label">
-                    <Palette className="h-4 w-4 text-muted-foreground/70" />
-                    Дизайн
-                  </span>
-                  <span className="design-task-detail-value">
-                    {quote?.design_deadline_at ? formatDeadlineLabel(quote.design_deadline_at) : "Не вказано"}
-                  </span>
+              <div className="px-2 pb-2">
+                <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border/40">
+                  {[
+                    buildDeadlineTrackItem("Відповідь", quote?.deadline_at ?? null),
+                    buildDeadlineTrackItem("Дизайн", quote?.design_deadline_at ?? null),
+                    buildDeadlineTrackItem("Відвантаження", quote?.customer_deadline_at ?? null),
+                  ].map((item) => (
+                    <button
+                      key={`deadline-track-${item.label}`}
+                      type="button"
+                      onClick={() => setActiveQuoteTab("deadlines")}
+                      title={item.title}
+                      className="grid justify-items-center gap-0.5 bg-card px-1.5 py-1.5 text-center transition-colors hover:bg-muted/50"
+                    >
+                      <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
+                        {item.label}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-2xs font-semibold tabular-nums",
+                          item.tone === "overdue" && "text-danger-foreground",
+                          item.tone === "today" && "text-warning-foreground",
+                          item.tone === "soon" && "text-warning-foreground",
+                          item.tone === "none" && "font-normal text-muted-foreground/50"
+                        )}
+                      >
+                        {item.short}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              </div>
+
+              {sideExtras.length > 0 ? (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/40 px-3 py-2 text-2xs text-muted-foreground">
+                  {sideExtras.map((extra) => (
+                    <span key={extra.label} className="inline-flex items-center gap-1.5">
+                      {extra.label}
+                      <span className="font-medium text-foreground">{extra.value}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </section>
 
             {canViewSummarySection ? (
@@ -8792,14 +8814,24 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 </button>
 
                 <div className={cn("border-t border-border/40 p-4", !sideSummaryOpen && "hidden")}>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+                  {/*
+                    Варіант П1: надцінка — текст поруч із числом, а не бейдж під ним.
+                    Зелений прямокутник забирав окремий рядок і читався наліпкою,
+                    хоча це просто друга величина того самого підсумку. Копійки
+                    прибрані: у колонці завширшки 380 px вони не вирішують нічого,
+                    а розряди числа роблять нечитабельними.
+                  */}
+                  <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                     <span className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary">
-                      {formatCurrency(totals.total, quote.currency)}
+                      {formatCurrencyCompact(totals.total, quote.currency)}
                     </span>
                     {activeRunPricingTotals.markupTotal > 0 ? (
-                      <span className="tone-success inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium tabular-nums">
-                        <TrendingUp className="h-3 w-3" aria-hidden />
-                        Надцінка {formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}
+                      <span
+                        className="text-xs font-semibold tabular-nums text-success-foreground"
+                        title={`Надцінка ${formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}`}
+                      >
+                        +{formatCurrencyCompact(activeRunPricingTotals.markupTotal, quote.currency)}
+                        {markupShareLabel ? ` · ${markupShareLabel}` : ""}
                       </span>
                     ) : null}
                   </div>
@@ -8825,8 +8857,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               aria-hidden
                             />
                             <dt className="text-muted-foreground">{part.label}</dt>
-                            <dd className="ml-auto font-mono font-medium tabular-nums">
-                              {formatCurrency(part.value, quote.currency)}
+                            <dd
+                              className="ml-auto font-mono font-medium tabular-nums"
+                              title={formatCurrency(part.value, quote.currency)}
+                            >
+                              {formatCurrencyCompact(part.value, quote.currency)}
                             </dd>
                           </div>
                         ))}
