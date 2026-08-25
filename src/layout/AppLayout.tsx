@@ -565,6 +565,17 @@ const ROUTES = {
 } as const;
 
 // --- Sidebar Config ---
+
+/**
+ * Хореографія згортання сайдбара — двофазна. Згортання: підписи гаснуть
+ * каскадом (затримки --sb-out на пунктах), і лише потім їде ширина — тому вся
+ * геометрія слухає var(--sb-w-delay) з кореня лейаута (80мс при згортанні,
+ * 0 при розгортанні). Розгортання навпаки: ширина одразу, підписи наздоганяють
+ * (--sb-in). Крива з перельотом — та сама, що погоджена в макеті «Фінал».
+ */
+const SB_GEOM_TRANSITION =
+  "[transition-duration:320ms] [transition-timing-function:cubic-bezier(0.34,1.4,0.45,1)] [transition-delay:var(--sb-w-delay,0ms)] motion-reduce:transition-none";
+
 const baseSidebarLinks: SidebarLink[] = [
   // Головне
   { label: "Огляд", to: ROUTES.overview, group: "overview", icon: LayoutGrid, moduleKey: "overview" },
@@ -1028,6 +1039,21 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       }),
     [moduleAccess, isFinanceJobRole, permissions.isAdmin, permissions.isSuperAdmin]
   );
+  /**
+   * Наскрізні зсуви каскаду підписів: затримка пункту при згортанні сайдбара
+   * рахується від його порядкового номера в усьому меню, а не в межах групи —
+   * інакше кожна група стартувала б з нуля і хвиля розсипалась.
+   */
+  const sidebarStagger = useMemo(() => {
+    const order: SidebarGroupKey[] = ["overview", "orders", "operations", "account", "dev"];
+    const offsets = { overview: 0, orders: 0, operations: 0, account: 0, dev: 0 };
+    let acc = 0;
+    for (const key of order) {
+      offsets[key] = acc;
+      acc += visibleSidebarLinks.filter((link) => link.group === key).length;
+    }
+    return offsets;
+  }, [visibleSidebarLinks]);
   /**
    * Згорнуті секції меню. Ключ — SidebarGroupKey, стан у localStorage.
    * Читаємо в ініціалізаторі, щоб на першому кадрі меню вже було таким, яким
@@ -1988,12 +2014,17 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           "min-h-screen min-h-[100dvh] text-foreground selection:bg-primary/20 selection:text-primary",
           "bg-[hsl(var(--page-underlay-bg))]"
         )}
+        /* Затримка другої фази згортання сайдбара — на корені, бо її слухають
+           і сам сайдбар, і сусіди по дереву: шапка, смуга «Дивитись як», <main>. */
+        style={{ "--sb-w-delay": sidebarCollapsed ? "80ms" : "0ms" } as React.CSSProperties}
       >
       {/* DESKTOP SIDEBAR */}
       <aside
+        data-collapsed={sidebarCollapsed}
         className={cn(
-          "hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
-          "transition-[width,background-color,border-color] duration-[220ms] ease-linear",
+          "group/sb hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
+          "transition-[width]",
+          SB_GEOM_TRANSITION,
           sidebarCollapsed ? "w-[72px]" : "w-[232px]"
         )}
       >
@@ -2041,7 +2072,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         {/* Nav */}
         <nav
           className={cn(
-            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden transition-[padding] duration-[220ms] ease-linear",
+            "min-h-0 flex-1 overflow-y-auto overflow-x-hidden transition-[padding]",
+            SB_GEOM_TRANSITION,
             sidebarCollapsed ? "px-2 py-2" : "px-4 py-3"
           )}
         >
@@ -2050,50 +2082,57 @@ function AppLayoutInner({ children }: AppLayoutProps) {
           ) : (
           <div
             className={cn(
-              sidebarCollapsed
-                ? "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70"
-                : "space-y-4"
+              /* Роздільники між групами живуть у DOM постійно й лише гаснуть у
+                 розгорнутому стані — інакше вони вискакували б стрибком на
+                 першому ж кадрі згортання, поки ширина ще їде. */
+              "[&>div+div]:relative [&>div+div]:before:absolute [&>div+div]:before:left-1/2 [&>div+div]:before:top-0 [&>div+div]:before:h-px [&>div+div]:before:w-6 [&>div+div]:before:-translate-x-1/2 [&>div+div]:before:bg-border/70",
+              "[&>div+div]:before:transition-opacity [&>div+div]:before:duration-300",
+              sidebarCollapsed ? "[&>div+div]:before:opacity-100" : "space-y-4 [&>div+div]:before:opacity-0"
             )}
           >
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 first:pt-0" : "")}>
               <SidebarGroup
                 label="Головне"
                 links={visibleSidebarLinks.filter((l) => l.group === "overview")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                stagger={sidebarStagger.overview}
                 hideLabel
               />
             </div>
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Збут"
                 links={visibleSidebarLinks.filter((l) => l.group === "orders")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                stagger={sidebarStagger.orders}
                 groupCollapsed={collapsedGroups.orders}
                 onToggleGroup={() => toggleGroup("orders")}
               />
             </div>
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Операції"
                 links={visibleSidebarLinks.filter((l) => l.group === "operations")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                stagger={sidebarStagger.operations}
                 groupCollapsed={collapsedGroups.operations}
                 onToggleGroup={() => toggleGroup("operations")}
               />
             </div>
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5" : "")}>
               <SidebarGroup
                 label="Акаунт"
                 links={visibleSidebarLinks.filter((l) => l.group === "account")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                stagger={sidebarStagger.account}
                 groupCollapsed={collapsedGroups.account}
                 onToggleGroup={() => toggleGroup("account")}
               />
@@ -2101,13 +2140,14 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             {/* «Dev» — найнижча група: це кухня самої CRM, а не робота
                 компанії, і бачать її двоє. SidebarGroup сам повертає null на
                 нуль посилань, тож у решти команди блок не займає й пікселя. */}
-            <div className={cn("relative", sidebarCollapsed ? "py-2.5 pb-0" : "")}>
+            <div className={cn("relative transition-[margin,padding]", SB_GEOM_TRANSITION, sidebarCollapsed ? "py-2.5 pb-0" : "")}>
               <SidebarGroup
                 label="Dev"
                 links={visibleSidebarLinks.filter((l) => l.group === "dev")}
                 currentPath={location.pathname}
                 notificationsUnreadCount={unreadCount}
                 collapsed={sidebarCollapsed}
+                stagger={sidebarStagger.dev}
                 groupCollapsed={collapsedGroups.dev}
                 onToggleGroup={() => toggleGroup("dev")}
               />
@@ -2123,7 +2163,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             відступ зникає разом із нею. */}
 <div
   className={cn(
-    "flex flex-col border-t border-border/40",
+    "flex flex-col border-t border-border/40 transition-[padding,gap]",
+    SB_GEOM_TRANSITION,
     sidebarCollapsed ? "gap-2 p-2" : "gap-2.5 p-4"
   )}
 >
@@ -2135,7 +2176,8 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       {/* MAIN */}
       <div
         className={cn(
-          "transition-[padding] duration-[220ms] ease-linear",
+          "transition-[padding]",
+          SB_GEOM_TRANSITION,
           sidebarCollapsed ? "md:pl-[72px]" : "md:pl-[232px]"
         )}
       >
@@ -2159,7 +2201,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         >
         {/* Нагадування про режим — НАД шапкою й фіксоване: усередині <main> воно
             їхало геть при першій же прокрутці. */}
-        <ViewAsBar className={cn("left-0", sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]")} />
+        <ViewAsBar
+          className={cn(
+            "left-0 transition-[left]",
+            SB_GEOM_TRANSITION,
+            sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]"
+          )}
+        />
         {/* HEADER */}
         <header
           key={theme}
@@ -2168,7 +2216,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // тримається її нижнього краю: `fixed` уже є позиціонованим
             // предком, тож окремий `relative` тут не потрібен (і не можна —
             // два класи позиції сперечались би).
-            "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40 transition-[background-color,backdrop-filter,border-color] duration-200",
+            // left їде разом із шириною сайдбара (та сама крива й затримка з
+            // var(--sb-w-delay)); кольори лишаються на своїх швидких 200мс.
+            "fixed top-[var(--view-as-offset,0px)] right-0 z-20 border-b border-border/40",
+            "[transition:left_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
+            "motion-reduce:transition-none",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
             sidebarCollapsed ? "md:left-[72px]" : "md:left-[232px]",
             "left-0"
@@ -2727,7 +2779,7 @@ function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
           {Array.from({ length: group.count }).map((_, itemIndex) => (
             <div
               key={`${groupIndex}-${itemIndex}`}
-              className={cn("flex items-center gap-2.5", collapsed ? "mx-auto h-10 w-10 justify-center" : "h-9 px-3")}
+              className={cn("flex items-center gap-2.5", collapsed ? "h-9 pl-[19px]" : "h-9 px-3")}
             >
               <Skeleton className="h-[18px] w-[18px] shrink-0 rounded-md" />
               {!collapsed ? <Skeleton className="h-4 w-[100px] max-w-full rounded-md" /> : null}
@@ -2749,6 +2801,7 @@ function SidebarGroup({
   hideLabel = false,
   groupCollapsed = false,
   onToggleGroup,
+  stagger = 0,
 }: {
   label: string;
   links: SidebarLink[];
@@ -2761,13 +2814,25 @@ function SidebarGroup({
   groupCollapsed?: boolean;
   /** Без обробника заголовок лишається звичайним написом, як і був. */
   onToggleGroup?: () => void;
+  /** Наскрізний номер першого пункта групи — база затримок каскаду підписів. */
+  stagger?: number;
 }) {
   if (links.length === 0) return null;
   const isMobileDrawer = !collapsed && Boolean(onNavigate);
-  // Згортати нема чого там, де немає заголовка: у вузькому сайдбарі (72px) і
-  // в групі «Головне», яка малюється без підпису.
-  const collapsible = Boolean(onToggleGroup) && !collapsed && !hideLabel;
-  const isCollapsed = collapsible && groupCollapsed;
+  // Заголовок існує і у вузькому сайдбарі — інакше його демонтаж стрибком
+  // зсував би пункти на першому ж кадрі анімації. Але поводиться як згортач
+  // секції він лише в розгорнутому стані: у рейці (72px) секції пунктів не
+  // ховають, як і було.
+  const collapsible = Boolean(onToggleGroup) && !hideLabel;
+  const isCollapsed = collapsible && groupCollapsed && !collapsed;
+  /* У вузькому стані заголовок плавно складається по висоті разом із другою
+     фазою хореографії (var(--sb-w-delay)), а текст гасне одразу. */
+  const headerMorph = cn(
+    "overflow-hidden",
+    "[transition:max-height_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),opacity_200ms_ease,transform_200ms_ease,color_150ms_linear]",
+    "motion-reduce:transition-none",
+    collapsed ? "max-h-0 opacity-0 -translate-x-2 pointer-events-none" : "max-h-8"
+  );
 
   /**
    * Активний пункт видно навіть у згорнутій секції.
@@ -2780,17 +2845,20 @@ function SidebarGroup({
 
   return (
     <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-2")}>
-      {!collapsed && !hideLabel ? (
+      {!hideLabel ? (
         collapsible ? (
           <button
             type="button"
-            onClick={onToggleGroup}
+            onClick={collapsed ? undefined : onToggleGroup}
             aria-expanded={!isCollapsed}
-            title={isCollapsed ? `Розгорнути «${label}»` : `Згорнути «${label}»`}
+            aria-hidden={collapsed}
+            tabIndex={collapsed ? -1 : undefined}
+            title={collapsed ? undefined : isCollapsed ? `Розгорнути «${label}»` : `Згорнути «${label}»`}
             className={cn(
               "group/grp flex w-full items-center gap-1 rounded-md py-0.5 text-3xs font-semibold uppercase tracking-wider",
-              "text-muted-foreground/65 transition-colors hover:text-foreground",
+              "text-muted-foreground/65 hover:text-foreground",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+              headerMorph,
               isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : "px-3"
             )}
           >
@@ -2820,6 +2888,7 @@ function SidebarGroup({
           <h4
             className={cn(
               "px-3 text-3xs font-semibold uppercase tracking-wider text-muted-foreground/65",
+              headerMorph,
               isMobileDrawer ? "px-4 tracking-widest text-muted-foreground/75" : undefined
             )}
           >
@@ -2829,7 +2898,7 @@ function SidebarGroup({
       ) : null}
 
       <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-1")}>
-        {shownLinks.map((link) => {
+        {shownLinks.map((link, index) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
           const showNotificationsBadge = link.to === ROUTES.notifications && notificationsUnreadCount > 0;
@@ -2850,10 +2919,14 @@ function SidebarGroup({
                 // збігається з тлом сайдбару (96.4%), різниця 0.4% і плашки не
                 // видно взагалі. bg-background світліший за сайдбар в обох
                 // темах, тож ефект однаковий і там, і там.
-                "transition-colors duration-150 ease-linear",
+                // Падінг їде другою фазою хореографії (var(--sb-w-delay)) —
+                // рядок лишається на всю ширину в обох станах, і іконка
+                // доцентровується самим звуженням, без демонтажу підпису.
+                "[transition:padding_320ms_cubic-bezier(0.34,1.4,0.45,1)_var(--sb-w-delay,0ms),background-color_150ms_linear,color_150ms_linear]",
+                "motion-reduce:transition-none",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                 collapsed
-                  ? "mx-auto h-10 w-10 justify-center gap-0 rounded-xl px-0 py-0"
+                  ? "h-9 rounded-lg pl-[19px]"
                   : isMobileDrawer
                     ? "min-h-11 rounded-2xl px-4 py-2.5"
                     : "h-9 rounded-lg",
@@ -2876,11 +2949,26 @@ function SidebarGroup({
                 )}
               />
 
-              {!collapsed ? (
-                <span className={cn("truncate", isMobileDrawer ? "text-[14px] font-medium" : undefined)}>
-                  {link.label}
-                </span>
-              ) : null}
+              {/* Підпис не демонтується у вузькому стані — гасне каскадом:
+                  затримки --sb-out/--sb-in рахуються від наскрізного номера
+                  пункта, тож хвиля йде згори вниз через усі групи. */}
+              <span
+                style={
+                  {
+                    "--sb-out": `${(stagger + index) * 10}ms`,
+                    "--sb-in": `${120 + (stagger + index) * 14}ms`,
+                  } as React.CSSProperties
+                }
+                className={cn(
+                  "min-w-0 flex-1 truncate text-left",
+                  "transition-[opacity,transform] duration-200 ease-out [transition-delay:var(--sb-in,0ms)] motion-reduce:transition-none",
+                  "group-data-[collapsed=true]/sb:pointer-events-none group-data-[collapsed=true]/sb:opacity-0",
+                  "group-data-[collapsed=true]/sb:-translate-x-2 group-data-[collapsed=true]/sb:[transition-delay:var(--sb-out,0ms)]",
+                  isMobileDrawer ? "text-[14px] font-medium" : undefined
+                )}
+              >
+                {link.label}
+              </span>
               {showNotificationsBadge ? (
                 collapsed ? (
                   <span className="pointer-events-none absolute right-1.5 top-1.5 inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
