@@ -36,6 +36,9 @@ const badgeVariants = cva(
         warning: "bg-warning-soft text-warning-foreground border-warning-soft-border",
         danger: "bg-danger-soft text-danger-foreground border-danger-soft-border",
         festive: "tone-festive",
+        // Восьмий тон із `statusTones.ts`. Бейдж підтримував сім із восьми, тож
+        // будь-яке місце, що бере тон із реєстру, не типізувалось без звуження.
+        teal: "tone-teal",
 
         /**
          * System destructive tone (keeps shadcn destructive palette)

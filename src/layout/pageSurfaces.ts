@@ -138,7 +138,7 @@ const KANBAN_FLUID_COLUMN = "clamp(224px, calc((100cqw - 52px) / 4.2), 312px)";
 export const PAGE_SURFACES: readonly PageSurface[] = [
   { id: "notifications", path: "/notifications", page: "src/pages/NotificationsPage.tsx", toolbar: "compact", shape: "list", canvas: true },
   { id: "activity", path: "/activity", page: "src/pages/ActivityPage.tsx", toolbar: "full", shape: "feed" },
-  { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard" },
+  { id: "overview", path: "/overview", page: "src/pages/OverviewPage.tsx", toolbar: "none", shape: "dashboard", maxWidth: 1180 },
   { id: "team", path: "/team", page: "src/pages/TeamPage.tsx", toolbar: "full", shape: "dashboard" },
 
   { id: "customers", path: "/orders/customers", page: "src/pages/OrdersCustomersPage.tsx", toolbar: "full", shape: "table", canvas: true },
