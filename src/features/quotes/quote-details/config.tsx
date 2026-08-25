@@ -253,7 +253,9 @@ export function formatQuoteType(value: string | null | undefined) {
 export function formatCurrency(value: number | null | undefined, currency?: string | null) {
   if (value === null || value === undefined) return "Не вказано";
   const label = currency ?? "UAH";
-  const rounded = Math.round(value * 100) / 100;
+  // `|| 0` прибирає мінус нуля: −0,004 округлюється до −0, і на екрані
+  // з'являлось «-0 UAH» — число, якого не буває.
+  const rounded = Math.round(value * 100) / 100 || 0;
   const fractionDigits = Number.isInteger(rounded) ? 0 : 2;
   return `${rounded.toLocaleString("uk-UA", {
     minimumFractionDigits: fractionDigits,

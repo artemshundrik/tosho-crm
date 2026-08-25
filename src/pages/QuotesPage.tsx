@@ -5126,11 +5126,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     if (selectedIds.size === 0) return;
     setBulkBusy(true);
     try {
+      // Ті, що вже в цьому статусі, пропускаємо: у базі це порожня операція,
+      // а сповіщення пішло б кожному вдруге. Рахуємо їх окремо, щоб тост не
+      // звітував про роботу, якої не було.
+      const idsToChange = Array.from(selectedIds).filter(
+        (id) => rows.find((row) => row.id === id)?.status !== nextStatus
+      );
       await Promise.all(
-        Array.from(selectedIds).map(async (id) => {
-          // Ті, що вже в цьому статусі, пропускаємо: у базі це порожня операція,
-          // а сповіщення пішло б кожному вдруге.
-          if (rows.find((row) => row.id === id)?.status === nextStatus) return;
+        idsToChange.map(async (id) => {
           await setQuoteStatus({ quoteId: id, status: nextStatus });
           try {
             await notifyQuoteInitiatorOnStatusChange({
@@ -5146,7 +5149,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           );
         })
       );
-      toast.success(`Статус оновлено (${selectedIds.size})`);
+      toast.success(
+        idsToChange.length > 0
+          ? `Статус оновлено (${idsToChange.length})`
+          : "Усі вибрані вже в цьому статусі"
+      );
       setSelectedIds(new Set());
     } catch (e: unknown) {
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(e, "") });
