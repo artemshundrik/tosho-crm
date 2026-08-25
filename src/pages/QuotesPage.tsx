@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ModalMount, useModalMount } from "@/components/ui/modal-mount";
 import { cn } from "@/lib/utils";
+import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { normalizeUnitLabel } from "@/lib/units";
 import { supabase } from "@/lib/supabaseClient";
 import type { Database, Json } from "@/lib/database.types";
@@ -668,12 +669,10 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
   const creatingRef = useRef(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [viewMode, setViewMode] = useState<"table" | "kanban">(() => initialViewMode);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const desktopKanbanViewportRef = useRef<HTMLDivElement | null>(null);
 
   const quotesKanbanAutoloadLockRef = useRef(false);
   const quotesKanbanAutoloadTimerRef = useRef<number | null>(null);
-  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
   const attachmentsInputRef = useRef<HTMLInputElement | null>(null);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>(
@@ -4552,45 +4551,44 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
     }
   }, [quoteListMode, selectedIds.size]);
 
-  const handleDragStart = (id: string) => {
-    setDraggingId(id);
-  };
-
-  const handleDropToStatus = async (status: string) => {
-    if (!draggingId) return;
+  const handleDropToStatus = async (quoteId: string, status: string) => {
     // КИНУЛИ ТУДИ, ДЕ Й БУЛО — НІЧОГО НЕ РОБИМО.
     //
     // База такий «перехід» проковтує мовчки (обидва тригери мають
     // `when (old.status is distinct from new.status)`), а от сповіщення
     // відправлялось щоразу. Звідси чотири однакові «Прорахунок затверджено»
     // о 09:52 25.08.2026 при одному-єдиному переході в історії статусів.
-    const currentStatus = rows.find((row) => row.id === draggingId)?.status ?? null;
-    if (currentStatus === status) {
-      setDraggingId(null);
-      setDragOverColumnId(null);
-      return;
-    }
+    const currentStatus = rows.find((row) => row.id === quoteId)?.status ?? null;
+    if (currentStatus === status) return;
+
+    // Картка переїжджає МИТТЄВО, ще до відповіді сервера: перетягування вже
+    // довезло її до місця, і чекати там нічого. Не вийшло — повертаємо статус
+    // назад і кажемо про це вголос.
+    setRows((prev) => prev.map((row) => (row.id === quoteId ? { ...row, status } : row)));
     try {
-      await setQuoteStatus({ quoteId: draggingId, status });
+      await setQuoteStatus({ quoteId, status });
       try {
         await notifyQuoteInitiatorOnStatusChange({
-          quoteId: draggingId,
+          quoteId,
           toStatus: status,
           actorUserId: currentUserId ?? null,
         });
       } catch (notifyError) {
         console.warn("Failed to notify quote initiator about status change", notifyError);
       }
-      setRows((prev) =>
-        prev.map((row) => (row.id === draggingId ? { ...row, status } : row))
-      );
     } catch (e: unknown) {
+      setRows((prev) =>
+        prev.map((row) => (row.id === quoteId ? { ...row, status: currentStatus } : row))
+      );
       toast.error("Не вдалося змінити статус", { description: getErrorMessage(e, "") });
-    } finally {
-      setDraggingId(null);
-      setDragOverColumnId(null);
     }
   };
+
+  const drag = useKanbanDrag({
+    onDrop: (quoteId, columnId) => {
+      void handleDropToStatus(quoteId, columnId);
+    },
+  });
 
   /**
    * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА (REQ-138).
@@ -5925,12 +5923,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
     return (
       <KanbanCard
-        draggable={canOpen}
-        onDragStart={canOpen ? () => handleDragStart(row.id) : undefined}
-        onDragEnd={() => {
-          setDraggingId(null);
-          setDragOverColumnId(null);
-        }}
+        {...drag.itemProps(row.id, canOpen)}
         onClick={canOpen ? () => navigate(`/orders/estimates/${row.id}`) : undefined}
         // Чанк картки прорахунку їде на наведенні, а не в мить кліку (REQ-136).
         onMouseEnter={preloadQuoteDetailsRoute}
@@ -5938,7 +5931,6 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
         onTouchStart={preloadQuoteDetailsRoute}
         interactive={canOpen}
         disabled={!canOpen}
-        dragging={draggingId === row.id}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -7295,10 +7287,11 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     <KanbanColumn
                       key={column.id}
                       data-quote-status-column={column.id}
+                      {...drag.columnProps(column.id)}
                       className={cn(
                         "kanban-column-surface transition-colors",
-                        draggingId && "kanban-column-armed",
-                        draggingId && dragOverColumnId === column.id && "kanban-column-drop-target",
+                        drag.draggingId && "kanban-column-armed",
+                        drag.overColumnId === column.id && "kanban-column-drop-target",
                         "basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] shrink-0 flex flex-col h-full"
                       )}
                       header={
@@ -7309,27 +7302,8 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           count={items.length}
                         />
                       }
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        if (dragOverColumnId !== column.id) {
-                          setDragOverColumnId(column.id);
-                        }
-                      }}
-                      onDragLeave={(e) => {
-                        const nextTarget = e.relatedTarget;
-                        if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) {
-                          return;
-                        }
-                        if (dragOverColumnId === column.id) {
-                          setDragOverColumnId(null);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDropToStatus(column.id);
-                      }}
                     >
-                      <div className={cn("px-2.5 pb-1.5 pt-2.5", draggingId && "pb-2")}>
+                      <div className={cn("px-2.5 pb-1.5 pt-2.5", drag.draggingId && "pb-2")}>
                         <KanbanCardList
                           items={items}
                           getKey={(row) => row.id}

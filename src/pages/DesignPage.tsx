@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
+import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -974,9 +975,6 @@ export default function DesignPage() {
   );
   const [hasMoreTasks, setHasMoreTasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dropTargetStatus, setDropTargetStatus] = useState<DesignStatus | null>(null);
-  const [suppressCardClick, setSuppressCardClick] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<DesignTask | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<DesignTask | null>(null);
@@ -3054,23 +3052,8 @@ export default function DesignPage() {
     }
   }, [createDialogOpen, userId, shouldForceSelfAssignee]);
 
-  const startDraggingTask = (event: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    setDraggingId(taskId);
-    setSuppressCardClick(true);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", taskId);
-  };
-
-  const stopDraggingTask = () => {
-    setDraggingId(null);
-    setDropTargetStatus(null);
-    // Prevent accidental navigation when mouseup fires click right after drag end.
-    window.setTimeout(() => setSuppressCardClick(false), 100);
-  };
-
-  const dropTaskToStatus = (nextStatus: DesignStatus) => {
-    if (!draggingId) return;
-    const draggedTask = tasks.find((task) => task.id === draggingId);
+  const dropTaskToStatus = (taskId: string, nextStatus: DesignStatus) => {
+    const draggedTask = tasks.find((task) => task.id === taskId);
     if (!draggedTask) return;
     if (draggedTask.status === nextStatus) return;
     if (!canChangeDesignStatus({
@@ -3085,6 +3068,10 @@ export default function DesignPage() {
     }
     void handleStatusChange(draggedTask, nextStatus);
   };
+
+  const drag = useKanbanDrag({
+    onDrop: (taskId, columnId) => dropTaskToStatus(taskId, columnId as DesignStatus),
+  });
 
   /**
    * СКАСОВАНІ — ОКРЕМИЙ СПИСОК, А НЕ КОЛОНКА (REQ-138).
@@ -4455,15 +4442,8 @@ export default function DesignPage() {
     const hasAssignmentGroup = showSelfAssign || showTakeInWork || canManageAssignments;
     return (
       <KanbanCard
-        draggable={options?.draggable}
-        onDragStart={
-          options?.draggable ? (event) => startDraggingTask(event as React.DragEvent<HTMLDivElement>, task.id) : undefined
-        }
-        onDragEnd={options?.draggable ? stopDraggingTask : undefined}
-        onClick={() => {
-          if (suppressCardClick) return;
-          openTask(task.id);
-        }}
+        {...drag.itemProps(task.id, options?.draggable)}
+        onClick={() => openTask(task.id)}
         // Чанк сторінки задачі (294 кБ) починає їхати на наведенні, а не в мить
         // кліку (REQ-136). Обробник сталий, тож у списку карток нічого не
         // створюється щорендер.
@@ -4473,18 +4453,15 @@ export default function DesignPage() {
         onAuxClick={(event) => {
           if (event.button !== 1) return;
           event.preventDefault();
-          if (suppressCardClick) return;
           openTask(task.id, true);
         }}
         onMouseDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.button === 0) {
             event.preventDefault();
-            if (suppressCardClick) return;
             openTask(task.id, true);
           }
         }}
         surface="raised"
-        dragging={draggingId === task.id}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -5225,10 +5202,11 @@ export default function DesignPage() {
                 return (
                   <KanbanColumn
                     key={col.id}
+                    {...drag.columnProps(col.id)}
                     className={cn(
                       "kanban-column-surface basis-[clamp(224px,calc((100cqw-52px)/4.2),312px)] h-full transition-colors",
-                      draggingId && "kanban-column-armed",
-                      dropTargetStatus === col.id && "kanban-column-drop-target"
+                      drag.draggingId && "kanban-column-armed",
+                      drag.overColumnId === col.id && "kanban-column-drop-target"
                     )}
                     header={
                       <KanbanColumnHeader
@@ -5239,26 +5217,6 @@ export default function DesignPage() {
                       />
                     }
                     bodyClassName="px-2.5 pb-1.5 pt-2.5"
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = "move";
-                      if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                    }}
-                    onDragEnter={(event) => {
-                      event.preventDefault();
-                      if (dropTargetStatus !== col.id) setDropTargetStatus(col.id);
-                    }}
-                    onDragLeave={(event) => {
-                      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                        setDropTargetStatus((current) => (current === col.id ? null : current));
-                      }
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      setDropTargetStatus(null);
-                      dropTaskToStatus(col.id);
-                      stopDraggingTask();
-                    }}
                   >
                     {
                       // Малюємо лише видимі картки: у найбільшій колонці їх
