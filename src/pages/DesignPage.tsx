@@ -1,9 +1,11 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useNavigationType } from "react-router-dom";
+import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import type { Json } from "@/lib/database.types";
 import { useAuth } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
+import { LiveCursors } from "@/components/app/live-cursors";
+import { useDemoCursors } from "@/components/app/useDemoCursors";
 import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { shouldRestorePageUiState } from "@/lib/pageUiState";
 import { Badge } from "@/components/ui/badge";
@@ -973,6 +975,12 @@ export default function DesignPage() {
   const [tasksFetchLimit, setTasksFetchLimit] = useState(() =>
     (restoredFilters?.viewMode ?? "kanban") === "kanban" ? DESIGN_KANBAN_INITIAL_PAGE_SIZE : DESIGN_LIST_PAGE_SIZE
   );
+  // Показ курсорів колег: /design?cursors=demo (REQ-163). У звичайній роботі
+  // цього немає — параметр в адресі, а не перемикач у налаштуваннях, саме щоб
+  // випадково не лишити ввімкненим на всіх.
+  const [cursorsSearchParams] = useSearchParams();
+  const demoCursors = useDemoCursors(cursorsSearchParams.get("cursors") === "demo");
+
   const [hasMoreTasks, setHasMoreTasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
@@ -5058,6 +5066,7 @@ export default function DesignPage() {
 
   return (
     <section className="space-y-3 notranslate" translate="no">
+      <LiveCursors cursors={demoCursors} />
 
       {error ? (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">

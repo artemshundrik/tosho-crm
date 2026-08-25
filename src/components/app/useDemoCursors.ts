@@ -25,12 +25,17 @@ const DEMO_PEOPLE = [
   { id: "demo-bohdan", name: "Богдан П." },
 ];
 
-/** Скільки привид відпочиває на місці, перш ніж рушити далі. */
-const PAUSE_MIN_MS = 700;
-const PAUSE_MAX_MS = 2200;
+/**
+ * Скільки привид відпочиває на картці, перш ніж рушити далі.
+ *
+ * Довше, ніж у першому заході (0.7–2.2 с): люди не бігають по дошці без упину,
+ * вони зупиняються почитати. З короткими паузами показ виглядав метушнею.
+ */
+const PAUSE_MIN_MS = 1800;
+const PAUSE_MAX_MS = 5200;
 
 /** Частка шляху, яку привид долає за кадр: менше — повільніше й плавніше. */
-const EASE = 0.055;
+const EASE = 0.022;
 
 /** Проста детермінована псевдовипадковість — щоб показ повторювався. */
 function makeRandom(seed: number) {
@@ -57,13 +62,40 @@ export function useDemoCursors(enabled: boolean): LiveCursor[] {
     }
 
     const random = makeRandom(20260826);
-    const pickX = () => 120 + random() * Math.max(240, window.innerWidth - 320);
-    const pickY = () => 120 + random() * Math.max(200, window.innerHeight - 260);
+
+    /**
+     * ЦІЛІ — КАРТКИ, А НЕ ВИПАДКОВІ ТОЧКИ.
+     *
+     * Привид, що блукає порожнім місцем, нічого не показує: у справжній роботі
+     * чужий курсор майже завжди стоїть НА чомусь — на картці, яку людина
+     * читає. Тому ціль береться з реальних карток на екрані, і видно саме те,
+     * що ми збираємось слати по мережі: не пікселі, а «дивлюсь на цю картку».
+     *
+     * Порожня дошка (усе відфільтровано, дані ще їдуть) — тоді випадкова точка:
+     * показ має працювати завжди, а не лише коли пощастило.
+     */
+    const pickTarget = (): { x: number; y: number } => {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>("[data-kanban-card='true']"))
+        .map((card) => card.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.top > 60 && rect.bottom < window.innerHeight - 20);
+      if (cards.length === 0) {
+        return {
+          x: 120 + random() * Math.max(240, window.innerWidth - 320),
+          y: 120 + random() * Math.max(200, window.innerHeight - 260),
+        };
+      }
+      const rect = cards[Math.floor(random() * cards.length)];
+      // Не в центр: жива рука зупиняється де завгодно в межах картки.
+      return {
+        x: rect.left + rect.width * (0.2 + random() * 0.6),
+        y: rect.top + rect.height * (0.2 + random() * 0.6),
+      };
+    };
 
     const ghosts: Ghost[] = DEMO_PEOPLE.map((person) => {
-      const x = pickX();
-      const y = pickY();
-      return { ...person, x, y, targetX: pickX(), targetY: pickY(), restUntil: 0 };
+      const start = pickTarget();
+      const target = pickTarget();
+      return { ...person, x: start.x, y: start.y, targetX: target.x, targetY: target.y, restUntil: 0 };
     });
 
     let frame = 0;
@@ -75,7 +107,7 @@ export function useDemoCursors(enabled: boolean): LiveCursor[] {
      * домальовує CSS-перехід у самому шарі курсорів, і це і є та економія, яку
      * ми збираємось робити по-справжньому.
      */
-    const SEND_EVERY_MS = 80;
+    const SEND_EVERY_MS = 90;
     let lastSent = 0;
 
     const step = (now: number) => {
@@ -85,8 +117,9 @@ export function useDemoCursors(enabled: boolean): LiveCursor[] {
         const dx = ghost.targetX - ghost.x;
         const dy = ghost.targetY - ghost.y;
         if (Math.hypot(dx, dy) < 6) {
-          ghost.targetX = pickX();
-          ghost.targetY = pickY();
+          const next = pickTarget();
+          ghost.targetX = next.x;
+          ghost.targetY = next.y;
           ghost.restUntil = now + PAUSE_MIN_MS + random() * (PAUSE_MAX_MS - PAUSE_MIN_MS);
           return;
         }
