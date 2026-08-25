@@ -48,8 +48,14 @@ import { join } from "node:path";
  * 29 на 2026-08-22, коли ратчет заводили. Найбільші купи: DesignTaskPage (7),
  * TeamMembersPage (4). У QuoteDetailsPage тепер НУЛЬ — вона єдина з чотирьох
  * сторінок-гігантів, яку лінт бачить (REQ-109).
+ *
+ * 30 з 2026-08-25: автооновлення «Огляду» додало заглушку в usePageData.ts.
+ * Прибрати її на місці не можна — `loadData` там звичайна функція, яку
+ * створюють щорендера, і в залежностях ефекту вона дала б нескінченний цикл.
+ * Справжній лік — обгорнути її в useCallback; доти число стоїть як факт, а
+ * не як дозвіл: наступна заглушка знову зупинить пуш.
  */
-const ALLOWED_HOOK_DISABLES = 29;
+const ALLOWED_HOOK_DISABLES = 30;
 
 const ROOT = "src";
 const RULE_PATTERN = /eslint-disable(?:-next-line|-line)?([^\n*]*)/g;
