@@ -1476,7 +1476,7 @@ export function TeamMembersPage() {
 
           const { data: sessionData } = await supabase.auth.getSession();
           const accessToken = sessionData.session?.access_token;
-          if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+          if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію", { cause: error });
           const response = await fetch("/.netlify/functions/create-workspace-invite", {
             method: "POST",
             headers: {
@@ -1502,12 +1502,12 @@ export function TeamMembersPage() {
           });
           if (response.status === 404) {
             setWorkspaceFunctionAvailable(false);
-            throw new Error(localProfileFallbackHint);
+            throw new Error(localProfileFallbackHint, { cause: error });
           }
           setWorkspaceFunctionAvailable(true);
           const payload = await parseJsonSafe<{ error?: string }>(response);
           if (!response.ok) {
-            throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`);
+            throw new Error(payload?.error || `Не вдалося оновити профіль (HTTP ${response.status})`, { cause: error });
           }
         }
       }
@@ -1820,7 +1820,7 @@ export function TeamMembersPage() {
 
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
-        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію");
+        if (!accessToken) throw new Error("Не вдалося підтвердити авторизацію", { cause: profileUpsertError });
         const response = await fetch("/.netlify/functions/create-workspace-invite", {
           method: "POST",
           headers: {
@@ -1846,12 +1846,12 @@ export function TeamMembersPage() {
         });
         if (response.status === 404) {
           setWorkspaceFunctionAvailable(false);
-          throw new Error(localProfileFallbackHint);
+          throw new Error(localProfileFallbackHint, { cause: profileUpsertError });
         }
         setWorkspaceFunctionAvailable(true);
         const payload = await parseJsonSafe<{ error?: string }>(response);
         if (!response.ok) {
-          throw new Error(payload?.error || `Не вдалося оновити статус (HTTP ${response.status})`);
+          throw new Error(payload?.error || `Не вдалося оновити статус (HTTP ${response.status})`, { cause: profileUpsertError });
         }
       }
       setMemberMetaByUserId((prev) => ({

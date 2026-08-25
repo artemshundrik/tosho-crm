@@ -554,7 +554,7 @@ async function listManagerDesignTaskActivityRows(params: {
   const rowById = new Map<string, DesignTaskListActivityRow>();
   const directLimit = params.fetchAll ? DESIGN_SEARCH_FETCH_PAGE_SIZE : params.offset + params.pageSize + 1;
   let directOffset = 0;
-  let directMayHaveMore = false;
+  let directMayHaveMore: boolean;
 
   while (true) {
     const directPageSize = params.fetchAll ? DESIGN_SEARCH_FETCH_PAGE_SIZE : directLimit;

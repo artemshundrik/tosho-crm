@@ -133,7 +133,7 @@ function extractRatesFromWidgetJson(html: string) {
   const match = html.match(/var\s+curWgtJSON\s*=\s*(\{[\s\S]*?\});/u);
   if (!match) return null;
 
-  let parsed: Record<string, CurrencyWidgetEntry> | null = null;
+  let parsed: Record<string, CurrencyWidgetEntry> | null;
   try {
     parsed = JSON.parse(match[1]) as Record<string, CurrencyWidgetEntry>;
   } catch {

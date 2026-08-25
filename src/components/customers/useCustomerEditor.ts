@@ -348,7 +348,7 @@ export const useCustomerEditor = (options?: UseCustomerEditorOptions) => {
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
 
-    let optimizedLogoUrl: string | null = null;
+    let optimizedLogoUrl: string | null;
     try {
       if (form.logoUploadMode === "file" && form.logoFile) {
         const optimized = await ingestCustomerLogoFromFile({

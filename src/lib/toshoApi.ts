@@ -2207,8 +2207,8 @@ export async function listQuoteItemsForQuotes(params: {
     return await query;
   };
 
-  let data: unknown[] | null = null;
-  let error: { message?: string | null } | null = null;
+  let data: unknown[] | null;
+  let error: { message?: string | null } | null;
   {
     const result = await readRows(true, true);
     data = (result.data as unknown[] | null) ?? null;
@@ -2565,11 +2565,12 @@ export async function createQuoteSet(params: {
     } catch (error: unknown) {
       const message = getErrorMessage(error).toLowerCase();
       if (message.includes("relation") && message.includes("quote_sets")) {
-        throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.");
+        throw new Error("Таблиця наборів ще не створена. Запусти scripts/quote-sets.sql.", { cause: error });
       }
       if (customerId === null && message.includes("customer_id") && message.includes("null")) {
         throw new Error(
-          "Щоб формувати КП для ліда, застосуйте міграцію scripts/quote-sets.sql (customer_id має стати nullable)."
+          "Щоб формувати КП для ліда, застосуйте міграцію scripts/quote-sets.sql (customer_id має стати nullable).",
+          { cause: error }
         );
       }
       let dropped = false;

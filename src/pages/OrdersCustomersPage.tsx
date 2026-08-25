@@ -999,7 +999,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
       const payload = await inspectCustomerDropboxFolder(fallbackPath).catch(() => null);
       const fallbackUrl = payload?.sharedUrl || payload?.clientSharedUrl || "";
       if (!fallbackUrl) {
-        throw new Error("Прив'язана Dropbox-папка недоступна. Переприв'яжіть її ще раз.");
+        throw new Error("Прив'язана Dropbox-папка недоступна. Переприв'яжіть її ще раз.", { cause: error });
       }
 
       await persistCustomerDropboxLink(customerId, {
@@ -2660,7 +2660,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     const primaryContact = contacts[0] ?? null;
     const legalEntities = serializeCustomerLegalEntities(form.legalEntities);
     const primaryLegalEntity = getPrimaryCustomerLegalEntity(form.legalEntities);
-    let optimizedLogoUrl: string | null = null;
+    let optimizedLogoUrl: string | null;
     const previousCustomer = editingId ? rows.find((row) => row.id === editingId) ?? null : null;
     const previousCustomerManagerMember = previousCustomer
       ? resolveManagerMember(previousCustomer.manager_user_id, previousCustomer.manager)
@@ -2899,7 +2899,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
     setLeadSaving(true);
     setLeadFormError(null);
 
-    let optimizedLogoUrl: string | null = null;
+    let optimizedLogoUrl: string | null;
     const previousLead = leadEditingId ? leads.find((lead) => lead.id === leadEditingId) ?? null : null;
     const previousLeadManagerMember = previousLead
       ? resolveManagerMember(previousLead.manager_user_id, previousLead.manager)

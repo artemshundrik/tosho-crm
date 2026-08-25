@@ -2182,8 +2182,8 @@ async function loadQuoteItemTotals(
       return await query;
     };
 
-    let data: unknown[] | null = null;
-    let error: { message?: string | null } | null = null;
+    let data: unknown[] | null;
+    let error: { message?: string | null } | null;
     {
       const result = await readRows(true);
       data = (result.data as unknown[] | null) ?? null;
@@ -2239,8 +2239,8 @@ async function loadQuoteRunTotals(
       return await query;
     };
 
-    let data: unknown[] | null = null;
-    let error: { message?: string | null } | null = null;
+    let data: unknown[] | null;
+    let error: { message?: string | null } | null;
     {
       const result = await readRows(true);
       data = (result.data as unknown[] | null) ?? null;

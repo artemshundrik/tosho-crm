@@ -2127,7 +2127,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       let imageUrl: string | null = null;
       let imageAsset: NonNullable<NonNullable<CatalogModel["metadata"]>["imageAsset"]> | null = null;
       let finalMetadata: NonNullable<CatalogModel["metadata"]> = { ...initialMetadata };
-      let linkedMethodIds: string[] = [];
+      let linkedMethodIds: string[];
       const uploadedCatalogAssetPaths: string[] = [];
       try {
         if (sourceImageUrl) {
@@ -2214,7 +2214,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             .delete()
             .eq("id", data.id)
             .eq("team_id", teamId);
-          throw new Error(getCatalogImageImportErrorMessage(importError));
+          throw new Error(getCatalogImageImportErrorMessage(importError), { cause: importError });
       }
 
       const createdModel: CatalogModel = {

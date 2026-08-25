@@ -257,7 +257,7 @@ export const useCustomerLeadCreate = ({
       // fall through to creation when duplicate precheck is temporarily unavailable
     }
 
-    let optimizedLogoUrl: string | null = null;
+    let optimizedLogoUrl: string | null;
     try {
       if (customerForm.logoUploadMode === "file" && customerForm.logoFile) {
         const optimized = await ingestCustomerLogoFromFile({
@@ -460,7 +460,7 @@ export const useCustomerLeadCreate = ({
       // fall through to creation when duplicate precheck is temporarily unavailable
     }
 
-    let optimizedLogoUrl: string | null = null;
+    let optimizedLogoUrl: string | null;
     try {
       if (leadForm.logoUploadMode === "file" && leadForm.logoFile) {
         const optimized = await ingestCustomerLogoFromFile({

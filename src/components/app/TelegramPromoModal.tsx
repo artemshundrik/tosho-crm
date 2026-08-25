@@ -38,7 +38,7 @@ export function TelegramPromoModal() {
     if (!userId) return;
     const count = readShowCount();
     if (count >= MAX_SHOWS) return; // ліміт показів вичерпано
-    let last = 0;
+    let last: number;
     try {
       last = Number(localStorage.getItem(LAST_KEY) || "0");
     } catch {

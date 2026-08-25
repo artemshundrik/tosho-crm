@@ -458,7 +458,6 @@ export const handler = async (event: HttpEvent) => {
       updatePayload: Record<string, string | null>,
       scope: "workspace_user" | "membership_id" | "team_user"
     ) => {
-      let wroteData = false;
       for (const schemaName of membershipUpdateSchemas) {
         if (scope === "membership_id" && !membershipId) {
           continue;
@@ -499,7 +498,6 @@ export const handler = async (event: HttpEvent) => {
           continue;
         }
 
-        wroteData = true;
         const updated = await verifyUpdatedEventually();
         if (updated) return { updated: true, wroteData: true };
 
@@ -508,7 +506,7 @@ export const handler = async (event: HttpEvent) => {
         return { updated: false, wroteData: true };
       }
 
-      return { updated: false, wroteData };
+      return { updated: false, wroteData: false };
     };
 
     try {

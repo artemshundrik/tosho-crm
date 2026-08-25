@@ -204,7 +204,7 @@ export const handler = async (event: HttpEvent) => {
     });
   }
 
-  let declined = "";
+  let declined: string;
   try {
     declined = await callOpenAi({ apiKey: openAiKey, model: DEFAULT_MODEL, source, targetCase });
   } catch (error) {

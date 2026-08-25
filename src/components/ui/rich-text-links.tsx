@@ -162,7 +162,7 @@ export function renderInlineRichText(
   }
 
   if (cursor < text.length) {
-    parts.push(...renderPlainText(text.slice(cursor), `tail-${key++}`));
+    parts.push(...renderPlainText(text.slice(cursor), `tail-${key}`));
   }
 
   return parts;

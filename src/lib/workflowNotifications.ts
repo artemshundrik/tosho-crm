@@ -117,10 +117,10 @@ async function resolveQuoteInitiator(quoteId: string): Promise<QuoteRecipient> {
   if (!isUuid(quoteId)) {
     return { teamId: null, createdBy: null, assignedTo: null, userId: null, quoteNumber: null };
   }
-  let teamId: string | null = null;
-  let createdBy: string | null = null;
-  let assignedTo: string | null = null;
-  let quoteNumber: string | null = null;
+  let teamId: string | null;
+  let createdBy: string | null;
+  let assignedTo: string | null;
+  let quoteNumber: string | null;
 
   const withCreatedBy = await supabase
     .schema("tosho")
