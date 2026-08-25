@@ -51,6 +51,10 @@ export function KanbanBoard({ className, rowClassName, children }: KanbanBoardPr
   return (
     <div
       ref={boardRef}
+      // Позначка для автопрокрутки під час перетягування: коли картку підносять
+      // до краю, дошка їде сама — інакше далекі колонки просто недосяжні
+      // (kanbanDrag.tsx).
+      data-kanban-board="true"
       className={cn(
         "overflow-x-auto overflow-y-hidden overscroll-x-contain px-4 pt-4 pb-6 md:px-5 md:pt-5 md:pb-7 [scrollbar-gutter:stable_both-edges]",
         className

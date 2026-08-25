@@ -215,7 +215,37 @@ export function useMoveDevRequest(teamId: string | null) {
       if (error) throw error;
       if (!data) throw new Error("Немає прав рухати цю картку");
     },
-    onSuccess: () => {
+    /**
+     * Картка переїжджає МИТТЄВО, ще до відповіді сервера.
+     *
+     * Раніше дошка чекала і запис, і повторний запит усього списку — тобто
+     * після відпускання картка ще пів секунди стояла на старому місці й аж тоді
+     * стрибала на нове. З перетягуванням, яке саме довозить картку до місця, це
+     * особливо помітно: рух закінчився, а картка «не приклеїлась».
+     *
+     * `cancelQueries` перед правкою обов'язковий: запит, що вже летить, міг би
+     * повернутись ПІСЛЯ нашої правки і мовчки затерти її старими даними.
+     */
+    onMutate: async ({ id, status }: { id: string; status: RequestStatus }) => {
+      const key = devRequestKeys.board(teamId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<DevRequest[]>(key);
+      if (previous) {
+        queryClient.setQueryData<DevRequest[]>(
+          key,
+          previous.map((request) => (request.id === id ? { ...request, status } : request))
+        );
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      // Не вийшло — повертаємо дошку такою, якою вона була до перетягування.
+      // Без цього картка лишилась би в колонці, куди її насправді не записали.
+      if (context?.previous) {
+        queryClient.setQueryData(devRequestKeys.board(teamId), context.previous);
+      }
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: devRequestKeys.board(teamId) });
     },
   });

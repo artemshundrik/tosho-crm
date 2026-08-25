@@ -73,6 +73,31 @@ const MAX_MOVE_PX = 640;
  */
 const BULK_CHANGE_LIMIT = 4;
 
+/**
+ * Вікно, у якому список НЕ анімує зміну даних, бо її вже показав хтось інший.
+ *
+ * Єдиний споживач — перетягування (kanbanDrag.tsx): воно саме довозить картку
+ * до місця й садить пружиною, і якщо після цього список ще раз програє від'їзд
+ * зі старої колонки та приїзд у нову, виходить подвійне перетворення на тому
+ * самому русі.
+ *
+ * Вікном, а не одноразовим прапорцем: одна зміна даних чіпає ДВА списки —
+ * колонку, з якої картка пішла, і ту, у яку прийшла, — і кожен має свій прохід
+ * хореографії. Одноразовий прапорець згасив би лише перший із них.
+ */
+const SKIP_WINDOW_MS = 150;
+/**
+ * −∞, а не 0. З нулем перевірка «зараз ще всередині вікна» (`now <= until`)
+ * ставала істинною будь-коли, коли годинник теж показує нуль, — а саме це й
+ * робить `vi.useFakeTimers()`. Рух глушився назавжди, і зловили це тести.
+ */
+let skipChoreographyUntil = Number.NEGATIVE_INFINITY;
+
+/** Наступну зміну даних не анімувати: рух уже показано (див. SKIP_WINDOW_MS). */
+export function skipNextKanbanChoreography() {
+  skipChoreographyUntil = performance.now() + SKIP_WINDOW_MS;
+}
+
 type LeavingEntry<T> = {
   key: string;
   item: T;
@@ -172,7 +197,10 @@ export function KanbanCardList<T>({
       if (item !== undefined) gone.push({ key, item, index });
     });
 
-    const bulk = gone.length > BULK_CHANGE_LIMIT;
+    // Привида не заводимо ні на перебудові списку, ні тоді, коли рух уже
+    // показав хтось інший: інакше після перетягування картка ще двісті
+    // мілісекунд висіла б у старій колонці, згортаючись удруге.
+    const bulk = gone.length > BULK_CHANGE_LIMIT || performance.now() <= skipChoreographyUntil;
     setSnapshot({ items, keys: liveKeys });
     setLeaving((current) => {
       // Картка, що повернулась у дані (скасування, відкат), більше не прощається.
@@ -287,7 +315,11 @@ function useCardChoreography(containerRef: RefObject<HTMLDivElement | null>, sig
       if (row.dataset.leaving === "true" || !rects.current.has(key)) churn += 1;
     });
 
-    const animate = changed && churn <= BULK_CHANGE_LIMIT && !prefersReducedMotion();
+    const animate =
+      changed &&
+      churn <= BULK_CHANGE_LIMIT &&
+      performance.now() > skipChoreographyUntil &&
+      !prefersReducedMotion();
 
     rows.forEach((row) => {
       const key = row.dataset.kanbanRow;

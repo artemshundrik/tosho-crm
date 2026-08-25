@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Lightbulb } from "lucide-react";
 
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { KanbanCard } from "@/components/kanban/KanbanCard";
 import { KanbanColumn } from "@/components/kanban/KanbanColumn";
 import { KanbanCardList } from "@/components/kanban/KanbanCardList";
+import { useKanbanDrag } from "@/components/kanban/kanbanDrag";
 import { KanbanColumnHeader } from "@/components/kanban/KanbanColumnHeader";
 import { MobileStatusBoard } from "@/components/kanban/MobileStatusBoard";
 import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
@@ -13,7 +14,7 @@ import { HoverCopyText } from "@/components/ui/hover-copy-text";
 import { toneTextClass } from "@/lib/statusTones";
 import { cn } from "@/lib/utils";
 import { CardActionsMenu } from "./CardActionsMenu";
-import { CARD_MENU_ATTR, buildCardMeta, isCardMenuTarget, isUrgentCard } from "./cardModel";
+import { CARD_MENU_ATTR, buildCardMeta, isUrgentCard } from "./cardModel";
 import { CardMetaChip } from "./CardMetaChip";
 import { ChecklistBar } from "./ChecklistBar";
 import { isPartlyShipped } from "./checklist";
@@ -68,33 +69,8 @@ export function DevRequestBoard({
   canManage,
   groupBy,
 }: DevRequestBoardProps) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [hoverStatus, setHoverStatus] = useState<RequestStatus | null>(null);
   const isNarrowViewport = useIsNarrowViewport();
   const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsedGroups);
-  // Після drop браузер стріляє click по картці-джерелу — без паузи кожне
-  // перетягування відкривало б обговорення. Той самий прийом, що й на дошці
-  // дизайну (DesignPage: suppressCardClick), але через ref: клік читає його в
-  // обробнику, тож зайвий рендер не потрібен.
-  const suppressClickRef = useRef(false);
-  const releaseTimerRef = useRef<number | null>(null);
-  /**
-   * Натиснули на меню — перетягування не починаємо.
-   *
-   * Пишеться на pointerdown (він приходить першим у ланцюжку
-   * pointerdown → mousedown → dragstart), бо в самому dragstart цього вже не
-   * видно: подія стріляє на КАРТЦІ, а не на кнопці. Пояснення —
-   * у cardModel.isCardMenuTarget.
-   */
-  const menuPressedRef = useRef(false);
-
-  useEffect(
-    () => () => {
-      if (releaseTimerRef.current !== null) window.clearTimeout(releaseTimerRef.current);
-    },
-    []
-  );
-
   const byStatus = useMemo(() => {
     const map = new Map<RequestStatus, DevRequest[]>();
     for (const column of BOARD_COLUMNS) map.set(column.status, []);
@@ -124,42 +100,15 @@ export function DevRequestBoard({
     });
   }, []);
 
-  const stopDragging = useCallback(() => {
-    setDraggingId(null);
-    setHoverStatus(null);
-    menuPressedRef.current = false;
-    if (releaseTimerRef.current !== null) window.clearTimeout(releaseTimerRef.current);
-    releaseTimerRef.current = window.setTimeout(() => {
-      suppressClickRef.current = false;
-      releaseTimerRef.current = null;
-    }, 100);
-  }, []);
 
-  const startDragging = useCallback((event: DragEvent<HTMLDivElement>, id: string) => {
-    // Жест почався на кнопці меню — це не перетягування картки.
-    if (menuPressedRef.current) {
-      event.preventDefault();
-      return;
-    }
-    setDraggingId(id);
-    suppressClickRef.current = true;
-    // Без dataTransfer Firefox взагалі не починає перетягування.
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", id);
-  }, []);
-
-  const handleDrop = useCallback(
-    (status: RequestStatus) => {
-      if (draggingId) {
-        const dragged = requests.find((request) => request.id === draggingId);
-        // Кидок у ту саму колонку — не переміщення: інакше промах по власній
-        // колонці ганяв би запис у базу і рефетч усієї дошки.
-        if (dragged && dragged.status !== status) onMove(draggingId, status);
-      }
-      stopDragging();
+  const drag = useKanbanDrag({
+    onDrop: (id, columnId) => {
+      const dragged = requests.find((request) => request.id === id);
+      // Кидок у ту саму колонку — не переміщення: інакше промах по власній
+      // колонці ганяв би запис у базу і рефетч усієї дошки.
+      if (dragged && dragged.status !== columnId) onMove(id, columnId as RequestStatus);
     },
-    [draggingId, onMove, requests, stopDragging]
-  );
+  });
 
   // Рендер картки винесений, бо колонка малює її двома шляхами — суцільним
   // списком і всередині груп. Дублювати сто рядків розмітки заради цього не
@@ -172,22 +121,17 @@ export function DevRequestBoard({
     return (
       <KanbanCard
         key={request.id}
-        draggable={canManage}
-        onClick={() => {
-          if (suppressClickRef.current) return;
-          onSelect(request);
-        }}
-        // pointerdown, а не mousedown: відкриваючись, Radix гасить типову дію
-        // pointerdown — а разом із нею й сам mousedown, тож на кнопці меню того
-        // обробника могло б і не бути. Capture-фаза (згори вниз) із тієї ж
-        // причини: перехопити треба ДО того, як подію обробить сама кнопка.
-        onPointerDownCapture={(event) => {
-          menuPressedRef.current = isCardMenuTarget(event.target);
-        }}
-        onDragStart={(event) => startDragging(event, request.id)}
-        onDragEnd={stopDragging}
+        {...drag.itemProps(request.id, canManage)}
+        // Ні гасіння кліку після перетягування, ні сторожа «натиснули на
+        // меню» тут більше немає, і обидва зникли з однієї причини. У
+        // нативному DnD подія `dragstart` стріляла на КАРТЦІ, тож із неї не
+        // було видно, що миша натиснула кнопку меню, — доводилось ловити
+        // pointerdown окремим рефом. У вказівникових подіях `event.target` —
+        // це сама кнопка, і рушій перетягування пропускає її сам. Клік після
+        // відпускання гасить теж рушій (kanbanDrag.tsx).
+        onClick={() => onSelect(request)}
         density="compact"
-        dragging={draggingId === request.id}
+        dragging={drag.draggingId === request.id}
         className={cn(
           urgent && "dev-request-card-urgent",
           canManage && "cursor-grab active:cursor-grabbing"
@@ -309,10 +253,11 @@ export function DevRequestBoard({
         return (
           <KanbanColumn
             key={column.status}
+            {...drag.columnProps(column.status)}
             className={cn(
               "kanban-column-surface h-full w-[300px] shrink-0 transition-colors",
-              draggingId && "kanban-column-armed",
-              hoverStatus === column.status && "kanban-column-drop-target"
+              drag.draggingId && "kanban-column-armed",
+              drag.overColumnId === column.status && "kanban-column-drop-target"
             )}
             header={
               <KanbanColumnHeader
@@ -323,28 +268,6 @@ export function DevRequestBoard({
               />
             }
             bodyClassName="space-y-2 px-2.5 pb-2.5 pt-2.5"
-            onDragOver={(event) => {
-              if (!canManage || !draggingId) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
-              if (hoverStatus !== column.status) setHoverStatus(column.status);
-            }}
-            onDragEnter={(event) => {
-              if (!canManage || !draggingId) return;
-              event.preventDefault();
-              if (hoverStatus !== column.status) setHoverStatus(column.status);
-            }}
-            onDragLeave={(event) => {
-              // Перехід курсора на картку всередині колонки теж піднімає
-              // dragleave — без перевірки на вкладеність підсвітка блимала б.
-              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-              setHoverStatus((current) => (current === column.status ? null : current));
-            }}
-            onDrop={(event) => {
-              if (!canManage) return;
-              event.preventDefault();
-              handleDrop(column.status);
-            }}
           >
             {groupBy === "none"
               ? (
