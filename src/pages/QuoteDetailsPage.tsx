@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils";
 import { withDesignTaskCollaboratorMetadata } from "@/lib/designTaskCollaborators";
 import { resolveWorkspaceId } from "@/lib/workspace";
 import { threadKeyForQuote } from "@/lib/taskThread";
+import { TaskThreadRail } from "@/features/taskChat/TaskThreadRail";
+import { THREAD_EVENT_ACTIONS } from "@/features/taskChat/threadEvents";
 import {
   getAttachmentDisplayFileName,
   getAttachmentDownloadFileName,
@@ -163,9 +165,6 @@ import {
   Lock,
   Calculator,
   TrendingUp,
-  Wallet,
-  Receipt,
-  PlusCircle,
   Palette,
   Bold,
   Italic,
@@ -1862,6 +1861,34 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }
       ),
     [activeRunPricingSummaries]
+  );
+
+  /**
+   * З чого складається ціна — для смуги часток у боковому підсумку.
+   *
+   * Порядок сегментів фіксований і йде від найбільшого за змістом до
+   * найдрібнішого: спершу те, що ми заплатили (собівартість), потім те, що
+   * заробляємо (потрібний ВП), далі накладні. Нулі відкидаємо — сегмент
+   * нульової ширини в смузі виглядав би як щілина між кольорами.
+   *
+   * Кольори — категоріальна палітра графіків, а не семантичні тони: це склад
+   * суми, а не оцінка «добре/погано». Собівартість не «погана», вона просто
+   * найбільша частка.
+   */
+  const priceBreakdownParts = useMemo(
+    () =>
+      [
+        { key: "cost", label: "Собівартість", value: activeRunPricingTotals.costTotal, color: "bg-chart-1" },
+        {
+          key: "gross",
+          label: "Потрібний ВП",
+          value: activeRunPricingTotals.requiredGrossProfit,
+          color: "bg-chart-3",
+        },
+        { key: "fixed", label: "Сталі витрати", value: activeRunPricingTotals.fixedCosts, color: "bg-chart-4" },
+        { key: "vat", label: "ПДВ", value: activeRunPricingTotals.vatAmount, color: "bg-chart-7" },
+      ].filter((part) => part.value > 0),
+    [activeRunPricingTotals]
   );
 
   const hasMultipleActiveProductSummaries = items.length > 1;
@@ -8781,73 +8808,100 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </section>
 
             {canViewSummarySection ? (
+              /*
+                Підсумок мовою «Витрат»: число → смуга часток → легенда.
+                Було велике число, а під ним шість однакових рядків «підпис —
+                сума». Рядки не давали головного: з чого ця ціна складається і
+                що в ній переважає. Смуга показує пропорцію з одного погляду,
+                легенда лишає всі ті самі шість величин до копійки. Жодне
+                число тут не рахується по-новому — це ті самі
+                `activeRunPricingTotals`, лише показані інакше.
+              */
               <section className="border-t border-[hsl(var(--app-structure-divider))] pt-6">
-                <div className="design-task-panel-card" data-strong="true">
-                  <div>
-                    <div className="design-task-side-heading text-primary">
-                      {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
-                    </div>
-                    <div className="mt-4 font-mono text-[24px] font-semibold leading-none tabular-nums text-primary">
-                      {formatCurrency(totals.total, quote.currency)}
-                    </div>
-                  </div>
+                <div className="design-task-side-heading">
+                  {hasMultipleActiveProductSummaries ? "Підсумок набору" : "Активний підсумок"}
                 </div>
 
-                <div className="design-task-detail-list mt-3">
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <Calculator className="h-4 w-4 text-muted-foreground/70" />
-                      Собівартість
+                <div className="mt-3 rounded-inner border border-border/40 bg-card p-4">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
+                    <span className="font-mono text-[26px] font-semibold leading-none tabular-nums tracking-tight text-primary">
+                      {formatCurrency(totals.total, quote.currency)}
                     </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">
-                      {formatCurrency(activeRunPricingTotals.costTotal, quote.currency)}
-                    </span>
+                    {activeRunPricingTotals.markupTotal > 0 ? (
+                      <span className="tone-success inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium tabular-nums">
+                        <TrendingUp className="h-3 w-3" aria-hidden />
+                        Надцінка {formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <TrendingUp className="h-4 w-4 text-muted-foreground/70" />
-                      Потрібний ВП
+
+                  {priceBreakdownParts.length > 0 ? (
+                    <>
+                      {/* Смуга: `flexGrow` за величиною, `minWidth` щоб дрібна
+                          частка не зникла в нуль і смуга не брехала складом. */}
+                      <div className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
+                        {priceBreakdownParts.map((part) => (
+                          <span
+                            key={`bar-${part.key}`}
+                            className={cn("rounded-[2px]", part.color)}
+                            style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }}
+                          />
+                        ))}
+                      </div>
+                      <dl className="mt-3 grid gap-1.5">
+                        {priceBreakdownParts.map((part) => (
+                          <div key={`legend-${part.key}`} className="flex items-baseline gap-2 text-xs">
+                            <span
+                              className={cn("h-2.5 w-2.5 shrink-0 translate-y-[1px] rounded-[3px]", part.color)}
+                              aria-hidden
+                            />
+                            <dt className="text-muted-foreground">{part.label}</dt>
+                            <dd className="ml-auto font-mono font-medium tabular-nums">
+                              {formatCurrency(part.value, quote.currency)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+                    <span>
+                      % менеджера{" "}
+                      <span className="font-mono font-medium tabular-nums text-foreground">
+                        {activeManagerRateLabel}
+                      </span>
                     </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">
-                      {formatCurrency(activeRunPricingTotals.requiredGrossProfit, quote.currency)}
-                    </span>
-                  </div>
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <Wallet className="h-4 w-4 text-muted-foreground/70" />
-                      Сталі витрати
-                    </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">
-                      {formatCurrency(activeRunPricingTotals.fixedCosts, quote.currency)}
-                    </span>
-                  </div>
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <Receipt className="h-4 w-4 text-muted-foreground/70" />
-                      ПДВ
-                    </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">
-                      {formatCurrency(activeRunPricingTotals.vatAmount, quote.currency)}
-                    </span>
-                  </div>
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <PlusCircle className="h-4 w-4 text-muted-foreground/70" />
-                      Надцінка
-                    </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">
-                      {formatCurrency(activeRunPricingTotals.markupTotal, quote.currency)}
-                    </span>
-                  </div>
-                  <div className="design-task-detail-row">
-                    <span className="design-task-detail-label">
-                      <User className="h-4 w-4 text-muted-foreground/70" />
-                      % менеджера
-                    </span>
-                    <span className="design-task-detail-value font-mono tabular-nums">{activeManagerRateLabel}</span>
                   </div>
                 </div>
               </section>
+            ) : null}
+
+            {/*
+              «Обговорення» — та сама рейка, що в дизайн-задачі.
+              Нитка одна на справу (`quote:<id>`), і коментарі зі сторінки
+              прорахунку вже сьогодні пишуться саме в неї — просто побачити їх
+              можна було лише з дизайн-задачі. Тепер розмова відкрита з обох
+              боків, без другої копії даних і без нової таблиці.
+
+              Файли поки не чіпляємо: завантажувач вкладень прорахунку кладе їх
+              у вкладення картки, а рейка чекає вкладення повідомлення — це
+              різні місця, і зшивати їх наосліп означало б втрачати файли.
+              Тому скріпка тут просто не показується (`canAttach` = false).
+            */}
+            {teamId ? (
+              // Обгортка навмисно `div`, а не `section`: рейка сама рендерить
+              // <section>, і другий такий самий тег навколо неї дав би вкладену
+              // секцію без власного заголовка — зайвий орієнтир для читача екрана.
+              <div className="flex min-h-[420px] flex-col border-t border-[hsl(var(--app-structure-divider))] pt-6">
+                <TaskThreadRail
+                  threadKey={threadKeyForQuote(quoteId)}
+                  eventActions={THREAD_EVENT_ACTIONS}
+                  quoteId={quoteId}
+                  teamId={teamId}
+                  canManage={accessRole === "owner" || jobRole === "seo"}
+                />
+              </div>
             ) : null}
           </div>
         </aside>
