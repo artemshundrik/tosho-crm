@@ -1369,8 +1369,27 @@ export async function listQuoteRunsForQuotes(params: {
 }
 
 export async function upsertQuoteRuns(quoteId: string, runs: QuoteRun[]) {
+  /**
+   * ПОРЯДОК РЯДКІВ ТУТ — НЕ КОСМЕТИКА, А УМОВА ТОГО, ЩО ЗАПИС УЗАГАЛІ ПРОЙДЕ.
+   *
+   * `is_approved` стереже частковий унікальний індекс «один погоджений тираж на
+   * позицію», і Postgres перевіряє його ПОРЯДКОВО, а не наприкінці запиту
+   * (частковий індекс не буває DEFERRABLE). Тож коли позначка переїжджає з
+   * тиражу Б на тираж А, а в масиві А стоїть першим, то в мить запису А
+   * позначка ще висить і на Б — і весь upsert падає з 23505.
+   *
+   * Відтворено на проді 25.08.2026: позначити 270 → перенести на 180 давало
+   * «duplicate key value violates unique constraint
+   * quote_item_runs_single_approved_per_item», і вибір мовчки не зберігався.
+   *
+   * Тому ті, хто позначку ВТРАЧАЄ, їдуть попереду тих, хто її отримує.
+   * Сортування стабільне, тож решта рядків лишається у своєму порядку.
+   */
+  const orderedRuns = [...runs].sort(
+    (a, b) => Number(a.is_approved === true) - Number(b.is_approved === true)
+  );
   // Ensure quote_id present
-  const payload = runs.map((run) => {
+  const payload = orderedRuns.map((run) => {
     const base = {
       quote_id: quoteId,
       quote_item_id: run.quote_item_id ?? null,

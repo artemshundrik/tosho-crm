@@ -84,6 +84,13 @@ const GIANT_THRESHOLD = 2000;
  * позиції (QuoteDetailsPage), два ранні виходи в обробниках дошки
  * (QuotesPage) і блокер готовності поруч із рештою блокерів (orderRecords).
  *
+ * ПІДНЯТО 25.08.2026 ще раз, і лише для toshoApi (+19): рецензія знайшла, що
+ * перенесення позначки «погоджено клієнтом» валило весь запис (частковий
+ * унікальний індекс перевіряється порядково й не буває DEFERRABLE). Виправлення
+ * — три рядки сортування, решта пʼятнадцять — пояснення, чому воно там стоїть.
+ * Саме такі коментарі й економлять наступний вечір: без них сортування виглядає
+ * як випадковість і зникає при першому ж рефакторингу.
+ *
  * Перші чотири — ті самі сторінки-гіганти, заради яких усе й затівалось.
  * Скорочувати їх ніхто не зобовʼязаний одним заходом; головне, щоб не росли.
  */
@@ -105,7 +112,7 @@ const CEILINGS = {
   "src/features/tosho-ai/ToShoAiConsole.tsx": 2721,
   "src/components/design/DesignersDashboard.tsx": 2702,
   "src/features/orders/orderRecords.ts": 2614,
-  "src/lib/toshoApi.ts": 2588,
+  "src/lib/toshoApi.ts": 2607,
   "src/pages/TeamPage.tsx": 2344,
   "src/pages/ProfilePage.tsx": 2156,
   "src/features/catalog/ProductCatalogPage/hooks/useModelEditor.ts": 2079,
