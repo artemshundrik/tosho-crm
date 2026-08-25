@@ -2915,8 +2915,16 @@ function SidebarNavSkeleton({ collapsed }: { collapsed: boolean }) {
   return (
     <div className={cn("space-y-3", collapsed && "space-y-0")}>
       {groups.map((group, groupIndex) => (
-        <div key={`${group.count}-${groupIndex}`} className="space-y-px">
-          {!collapsed && group.showLabel ? <Skeleton className="mx-[9px] mb-1 h-2.5 w-12 rounded-md" /> : null}
+        <div key={`${group.count}-${groupIndex}`} className="space-y-1">
+          {/* Плашка тримає РІВНО висоту справжнього заголовка (20px), а сама
+              смужка всередині — коротша. Інакше в мить, коли доїжджають
+              доступи, кожен заголовок підростав удвічі й усе меню під ним
+              підстрибувало — це й читалось як блимання при завантаженні. */}
+          {!collapsed && group.showLabel ? (
+            <div className="mb-1.5 flex h-5 items-center px-[9px]">
+              <Skeleton className="h-2.5 w-12 rounded-md" />
+            </div>
+          ) : null}
           {Array.from({ length: group.count }).map((_, itemIndex) => (
             <div
               key={`${groupIndex}-${itemIndex}`}
@@ -3014,7 +3022,7 @@ function SidebarGroup({
   const shownLinks = isCollapsed ? links.filter((link) => isActivePath(currentPath, link.to)) : links;
 
   return (
-    <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-1")}>
+    <div className={cn(hideLabel ? "space-y-1" : isMobileDrawer ? "space-y-2.5" : "space-y-1.5")}>
       {!hideLabel ? (
         collapsible ? (
           <button
@@ -3075,7 +3083,10 @@ function SidebarGroup({
         )
       ) : null}
 
-      <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-px")}>
+      {/* 4px між пунктами, а не 1: щільний макет тут перетягнув — рядки
+          злипались у суцільну смугу, і око перестало відділяти пункт від
+          пункта. 32 + 4 лягає в той самий крок на 4, що й решта відступів. */}
+      <div className={cn(isMobileDrawer ? "space-y-1.5" : "space-y-1")}>
         {shownLinks.map((link, index) => {
           const active = isActivePath(currentPath, link.to);
           const Icon = link.icon;
