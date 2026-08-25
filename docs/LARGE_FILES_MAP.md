@@ -13,23 +13,31 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 
 ---
 
-## src/pages/QuoteDetailsPage.tsx (~9 846 lines, 460 KB, as of 2026-08-24)
+## src/pages/QuoteDetailsPage.tsx (~9 928 lines, 468 KB, as of 2026-08-25)
+
+Зміщення звірені grep-ом 25.08.2026. Попередня версія таблиці розійшлася з
+файлом на півтори тисячі рядків — обробники статусу шукались біля 3600, а
+лежали біля 4200. Якщо цифра нижче не сходиться, звіряй grep-ом і онови тут:
+мапа, якій не вірять, гірша за її відсутність.
 
 | Range | Content |
 |---|---|
 | 1–215 | imports |
-| 216–710 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `resizeTextareaToContent`, `formatBriefSelection`, `toggleWrappedFormatting`, `renderBriefRichText`) |
-| **714** | `export function QuoteDetailsPage(...)` — main component starts |
-| 648 / 1179 / 1319 / 1368 | early handlers: `handleDeleteQuote`, `handleBriefInlineBlur`, `handlePrimaryStatusAction`, `handleCreateOrder` |
-| 3435–3454 | attachments drag/drop handlers |
-| 3454–3627 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` (2-arg options object form) |
-| 3628–3711 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
-| 3712 / 3915 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
-| 4130–4150 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
-| 4293 / 4464 / 4479 | items: `handleSaveItem`, `handleDeleteItem`, `handleAddComment` |
-| ~3568 | start of two-column layout (`flex flex-col lg:flex-row gap-6 items-start`) |
-| ~4377–4598 | Тиражі / runs card |
-| ~4662–4750 | Підсумок card |
+| 216–855 | types + module-level helpers (`sanitizeQuoteSummaryForCache`, `readQuoteDetailsCache`, `resizeTextareaToContent`, `formatBriefSelection`, `toggleWrappedFormatting`, `renderBriefRichText`) |
+| **856** | `export function QuoteDetailsPage(...)` — main component starts |
+| **1338** | `quoteRequirements` — ЄДИНИЙ гейт збереження: тиражі, автозбереження, ТЗ, зміна статусу. Тут же поріг економіки (`validateRunEconomics`) |
+| 1475 / 1479 | `toggleApprovedRun` (позначка «Погодив клієнт»), `saveRuns` |
+| 1626 / 1777 | `handleDeleteQuote`, `getSelectedRunForItem` (типово віддає погоджений тираж) |
+| 2447 / 2494 | `handlePrimaryStatusAction`, `handleCreateOrder` |
+| 4018 | deadline handlers: `handleSaveDeadline`, `handleSaveSecondaryDeadline` |
+| 4220 / 4314 | status change: `handleQuickStatusChange`, `handleConfirmCancel` |
+| 4327 / 4443 | `handleDuplicateQuote`, `handleEditQuoteSubmit` |
+| 4655 | catalog cascade: `handleTypeChange`, `handleKindChange`, `handleModelChange` |
+| 4770 / 5011 | items: `handleSaveItem`, `handleAddComment` |
+| ~5570 | картка «Товари і тиражі» — початок |
+| ~6080–6300 | ціни активного тиражу: чотири поля, «Погодив клієнт», підсумки |
+| ~6440–6800 | окрема картка «Тиражі» (список рядків + «Зберегти») |
+| ~9813 | діалог «Створити замовлення» |
 
 ## src/pages/DesignTaskPage.tsx (~12 801 lines, 579 KB, as of 2026-08-24)
 
